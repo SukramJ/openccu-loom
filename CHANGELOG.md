@@ -90,6 +90,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`GET /incidents` gained `central`/`since`/`until`/`limit` filtering.**
+  Previously an unbounded, unfiltered `SELECT` across every registered
+  central (unlike the equivalent `/audit` endpoint). The bounds are now
+  pushed down to SQL via a new `IncidentStore.GetIncidentsFiltered`;
+  `?limit=` defaults to 500 (max 5000).
+- **Master profiles, bulk incident clear, and service-message disable are
+  now reachable over REST**, not just the WS command protocol:
+  `GET /devices/{addr}/channels/{no}/master-profiles[/{id}]`,
+  `POST .../master-profiles/match`, `DELETE /incidents` (operator),
+  and `POST /service-messages/{id}/disable` (operator). All four share
+  their domain call with the equivalent WS command
+  (`master_profiles.list/get/match`, `incidents.clear`,
+  `service_messages.disable`) rather than re-implementing the logic.
 - **"Before you upgrade" guidance in `docs/admin/backup.md`.**
   Recommends `openccu-loom backup create` ahead of any upgrade and
   states the rollback reality: migrations carry `Down` blocks but the
@@ -120,6 +133,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   initial post-boot tick (covering values that changed before the
   flusher's event subscriptions were installed) and the final
   shutdown flush.
+- **The v1 token-admin API (`GET`/`POST /auth/tokens`) is now marked
+  `deprecated: true`** in the OpenAPI spec; it remains served (existing
+  external API consumers keep working, and `DELETE /auth/tokens/{id}`
+  still revokes v1 tokens) but new integrations should use
+  `/auth/tokens/v2`, which the Config UI already exclusively uses.
+  `docs/admin/auth.md` now documents v2 as the primary surface. Removed
+  the dead `listTokens()` v1 client wrapper (unused by the SPA).
 
 ## [0.27.2] — 2026-07-07
 

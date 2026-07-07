@@ -1231,6 +1231,56 @@ func TestAckServiceMessage_HappyPath_Returns202(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// DisableServiceMessage — hub-nil, error path, and happy path
+// ---------------------------------------------------------------------------
+
+func TestDisableServiceMessage_HubNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "S1"}))
+	w := httptest.NewRecorder()
+	DisableServiceMessage(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestDisableServiceMessage_Error_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages = hub.NewServiceMessages(&errMessageAcknowledger{err: errors.New("disable fail")})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "S1"}))
+	w := httptest.NewRecorder()
+	DisableServiceMessage(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDisableServiceMessage_HappyPath_Returns202(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages = hub.NewServiceMessages(okMessageAcknowledger{})
+	h.ServiceMessages.Replace([]hub.ServiceMessage{{ID: "S1", Timestamp: time.Now()}})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "S1"}))
+	w := httptest.NewRecorder()
+	DisableServiceMessage(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if h.ServiceMessages.Count() != 0 {
+		t.Fatalf("Count=%d after disable, want 0", h.ServiceMessages.Count())
+	}
+}
+
+// ---------------------------------------------------------------------------
 // CreateSysvar — error path (mutator error → 502)
 // ---------------------------------------------------------------------------
 

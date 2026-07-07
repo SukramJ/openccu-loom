@@ -151,6 +151,36 @@ func TestServiceMessagesAcknowledgeCallsAckerAndRemoves(t *testing.T) {
 	}
 }
 
+// TestServiceMessagesDisableDelegatesToAcknowledge verifies that Disable
+// shares Acknowledge's underlying call (the CCU has one dismiss
+// primitive) — same acker invocation, same removal from the live set.
+func TestServiceMessagesDisableDelegatesToAcknowledge(t *testing.T) {
+	t.Parallel()
+	ack := &stubAck{}
+	sm := NewServiceMessagesWithCentral("c1", ack)
+	sm.Replace([]ServiceMessage{{ID: "svc-3", Quittable: true, Timestamp: time.Now()}})
+	if err := sm.Disable(context.Background(), "svc-3"); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+	if sm.Count() != 0 {
+		t.Fatalf("Count=%d after disable, want 0", sm.Count())
+	}
+	if len(ack.ids) == 0 || ack.ids[0] != "svc-3" {
+		t.Errorf("acker not called with svc-3, got %v", ack.ids)
+	}
+}
+
+// TestServiceMessagesDisableRequiresAckInterface mirrors
+// TestServiceMessagesAcknowledgeRequiresAckInterface for Disable.
+func TestServiceMessagesDisableRequiresAckInterface(t *testing.T) {
+	t.Parallel()
+	sm := NewServiceMessages(nil)
+	sm.Replace([]ServiceMessage{{ID: "svc-4", Timestamp: time.Now()}})
+	if err := sm.Disable(context.Background(), "svc-4"); err == nil {
+		t.Fatal("expected error when Ack is nil")
+	}
+}
+
 func TestServiceMessagesLatestTimestamp(t *testing.T) {
 	t.Parallel()
 	sm := NewServiceMessages(nil)

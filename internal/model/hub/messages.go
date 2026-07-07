@@ -368,6 +368,18 @@ func (s *ServiceMessages) Acknowledge(ctx context.Context, id string) error {
 	return nil
 }
 
+// Disable suppresses a single service message by id. The CCU exposes
+// exactly one dismiss primitive for service messages (the same ReGa
+// acknowledge call [Acknowledge] uses) — there is no separate
+// "disable/suppress forever" operation on the wire, so Disable delegates
+// to Acknowledge. It exists as its own method (rather than an alias at
+// the call site) so REST `POST .../service-messages/{id}/disable` and the
+// WS `service_messages.disable` command both name the operation they
+// actually expose to callers while sharing one domain call.
+func (s *ServiceMessages) Disable(ctx context.Context, id string) error {
+	return s.Acknowledge(ctx, id)
+}
+
 // LegacyName returns the original pre-slug name stored on the CCU.
 // ServiceMessages is a structural aggregate without a CCU-side variable
 // name, so this always returns "".

@@ -87,8 +87,19 @@ type Deps struct {
 	SysvarRefresh handlers.SysvarRefreshService
 	Interfaces    handlers.InterfaceIndex
 	Incidents     handlers.IncidentsReader
-	Labels        handlers.ParameterLabeler
-	Metrics       *metrics.Registry
+	// IncidentsAdmin backs DELETE /incidents (admin-only bulk clear across
+	// every registered central). Nil disables the route (404); shares the
+	// domain call with the WS `incidents.clear` command.
+	IncidentsAdmin handlers.IncidentsClearer
+	Labels         handlers.ParameterLabeler
+	Metrics        *metrics.Registry
+	// MasterProfiles backs the read-only master-profile discovery routes:
+	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles
+	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles/{id}
+	//   POST /api/v1/devices/{addr}/channels/{no}/master-profiles/match
+	// Nil disables all three (404). Shares the domain call with the WS
+	// `master_profiles.list/get/match` commands.
+	MasterProfiles handlers.MasterProfilesService
 	// UISchema produces the data-driven rendering descriptor the SPA
 	// consumes at /api/v1/devices/{addr}/channels/{no}/ui-schema.
 	UISchema handlers.UISchemaService
@@ -642,6 +653,19 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// channel's week-program participation.
 				pr.With(op).Put("/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}",
 					handlers.PutWeekProfileChannelLock(d.Devices))
+				if d.MasterProfiles != nil {
+					// list/get/match are viewer-accessible, mirroring the WS
+					// master_profiles.list/get/match classification (readOnlyCommands
+					// in internal/north/rest/ws/commands.go) — no role gate. Nested
+					// under d.Devices != nil because the handlers resolve
+					// device_type/channel_type from the channel's owning device.
+					pr.Get("/devices/{addr}/channels/{no}/master-profiles",
+						handlers.ListMasterProfiles(d.Devices, d.MasterProfiles))
+					pr.Get("/devices/{addr}/channels/{no}/master-profiles/{id}",
+						handlers.GetMasterProfile(d.Devices, d.MasterProfiles))
+					pr.Post("/devices/{addr}/channels/{no}/master-profiles/match",
+						handlers.MatchMasterProfile(d.Devices, d.MasterProfiles))
+				}
 			}
 			if d.UISchema != nil {
 				pr.Get("/devices/{addr}/channels/{no}/ui-schema", handlers.UISchemaHandler(d.UISchema))
@@ -741,6 +765,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.Incidents != nil {
 				pr.Get("/incidents", handlers.ListIncidents(d.Incidents))
+			}
+			if d.IncidentsAdmin != nil {
+				// Mirrors the WS `incidents.clear` role (auth.RoleOperator in
+				// internal/north/rest/ws/commands.go's writeCommandRoles).
+				pr.With(op).Delete("/incidents", handlers.DeleteIncidents(d.IncidentsAdmin, d.AuditRecorder))
 			}
 			if d.SystemStatus != nil {
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))
@@ -872,6 +901,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))
 				pr.Get("/service-messages", handlers.ListServiceMessages(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/ack", handlers.AckServiceMessage(d.Hub))
+				pr.With(op).Post("/service-messages/{id}/disable", handlers.DisableServiceMessage(d.Hub))
 			}
 			if d.Hub != nil {
 				// Hub singletons for external clients: system-update info,

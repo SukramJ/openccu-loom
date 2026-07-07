@@ -7,6 +7,7 @@ import (
 	"context"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -227,6 +228,161 @@ func TestIncidentsStoreReaderCentralWithNoIncidents(t *testing.T) {
 	}
 	if got[0].Component != "ccu-with" {
 		t.Errorf("Component=%q want ccu-with", got[0].Component)
+	}
+}
+
+// TestIncidentsStoreReaderIncidentsFilteredScopesToOneCentral verifies
+// that a non-empty central argument reads only that CCU's rows even when
+// other centrals have incidents recorded.
+func TestIncidentsStoreReaderIncidentsFilteredScopesToOneCentral(t *testing.T) {
+	t.Parallel()
+	store := freshIncidentStoreForAdapter(t)
+	ctx := context.Background()
+
+	reg := central.NewRegistry()
+	for _, name := range []string{"ccu-a", "ccu-b"} {
+		unit, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%q): %v", name, err)
+		}
+		if err := reg.Register(unit); err != nil {
+			t.Fatalf("reg.Register(%q): %v", name, err)
+		}
+		if _, err := store.Record(ctx, sqlite.Incident{
+			CentralName: name,
+			Type:        hmenum.IncidentTypeRPCFault,
+			Severity:    hmenum.IncidentSeverityWarning,
+			Message:     name + " fault",
+		}); err != nil {
+			t.Fatalf("Record for %q: %v", name, err)
+		}
+	}
+
+	r := NewIncidentsStoreReader(store, reg, nil)
+	got := r.IncidentsFiltered("ccu-a", time.Time{}, time.Time{}, 0)
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1 (scoped to ccu-a)", len(got))
+	}
+	if got[0].Component != "ccu-a" {
+		t.Errorf("Component=%q want ccu-a", got[0].Component)
+	}
+}
+
+// TestIncidentsStoreReaderIncidentsFilteredEmptyCentralMergesAll verifies
+// that an empty central argument merges every registered central's rows,
+// newest-first.
+func TestIncidentsStoreReaderIncidentsFilteredEmptyCentralMergesAll(t *testing.T) {
+	t.Parallel()
+	store := freshIncidentStoreForAdapter(t)
+	ctx := context.Background()
+
+	reg := central.NewRegistry()
+	for _, name := range []string{"ccu-a", "ccu-b"} {
+		unit, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%q): %v", name, err)
+		}
+		if err := reg.Register(unit); err != nil {
+			t.Fatalf("reg.Register(%q): %v", name, err)
+		}
+		if _, err := store.Record(ctx, sqlite.Incident{
+			CentralName: name,
+			Type:        hmenum.IncidentTypeRPCFault,
+			Severity:    hmenum.IncidentSeverityWarning,
+			Message:     name + " fault",
+		}); err != nil {
+			t.Fatalf("Record for %q: %v", name, err)
+		}
+	}
+
+	r := NewIncidentsStoreReader(store, reg, nil)
+	got := r.IncidentsFiltered("", time.Time{}, time.Time{}, 0)
+	if len(got) != 2 {
+		t.Fatalf("len=%d want 2 (merged across centrals)", len(got))
+	}
+}
+
+// TestIncidentsStoreReaderIncidentsFilteredLimitAppliedAfterMerge verifies
+// that limit is honored on the merged, re-sorted result — not just
+// per-central — when multiple centrals are queried together.
+func TestIncidentsStoreReaderIncidentsFilteredLimitAppliedAfterMerge(t *testing.T) {
+	t.Parallel()
+	store := freshIncidentStoreForAdapter(t)
+	ctx := context.Background()
+
+	reg := central.NewRegistry()
+	for _, name := range []string{"ccu-a", "ccu-b"} {
+		unit, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%q): %v", name, err)
+		}
+		if err := reg.Register(unit); err != nil {
+			t.Fatalf("reg.Register(%q): %v", name, err)
+		}
+		for i := range 3 {
+			if _, err := store.Record(ctx, sqlite.Incident{
+				CentralName: name,
+				Type:        hmenum.IncidentTypeRPCFault,
+				Severity:    hmenum.IncidentSeverityWarning,
+				Message:     name + "-" + strconv.Itoa(i),
+			}); err != nil {
+				t.Fatalf("Record for %q: %v", name, err)
+			}
+		}
+	}
+
+	r := NewIncidentsStoreReader(store, reg, nil)
+	got := r.IncidentsFiltered("", time.Time{}, time.Time{}, 2)
+	if len(got) != 2 {
+		t.Fatalf("len=%d want 2 (limit applied after merge)", len(got))
+	}
+}
+
+// TestIncidentsStoreReaderIncidentsFilteredNilReaderReturnsNil mirrors the
+// nil-safety contract of Incidents().
+func TestIncidentsStoreReaderIncidentsFilteredNilReaderReturnsNil(t *testing.T) {
+	t.Parallel()
+	reg, _ := registryWithUnit(t, "ccu-a")
+	r := NewIncidentsStoreReader(nil, reg, nil)
+	got := r.IncidentsFiltered("", time.Time{}, time.Time{}, 0)
+	if got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+}
+
+// TestIncidentsStoreReaderClearIncidentsClearsEveryRegisteredCentral
+// verifies that ClearIncidents (backing both DELETE /incidents and the WS
+// incidents.clear command) empties every registered central's rows.
+func TestIncidentsStoreReaderClearIncidentsClearsEveryRegisteredCentral(t *testing.T) {
+	t.Parallel()
+	store := freshIncidentStoreForAdapter(t)
+	ctx := context.Background()
+
+	reg := central.NewRegistry()
+	for _, name := range []string{"ccu-a", "ccu-b"} {
+		unit, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%q): %v", name, err)
+		}
+		if err := reg.Register(unit); err != nil {
+			t.Fatalf("reg.Register(%q): %v", name, err)
+		}
+		if _, err := store.Record(ctx, sqlite.Incident{
+			CentralName: name,
+			Type:        hmenum.IncidentTypeRPCFault,
+			Severity:    hmenum.IncidentSeverityWarning,
+			Message:     name + " fault",
+		}); err != nil {
+			t.Fatalf("Record for %q: %v", name, err)
+		}
+	}
+
+	r := NewIncidentsStoreReader(store, reg, nil)
+	if err := r.ClearIncidents(ctx); err != nil {
+		t.Fatalf("ClearIncidents: %v", err)
+	}
+	if got := r.Incidents(); len(got) != 0 {
+		t.Fatalf("Incidents() after clear = %+v, want empty", got)
 	}
 }
 

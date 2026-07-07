@@ -123,6 +123,51 @@ ORDER BY last_seen DESC`
 	return out, rows.Err()
 }
 
+// GetIncidentsFiltered returns incidents for centralName bounded by
+// last_seen (the same column GetAllIncidents/Recent order by), newest
+// first. A zero since/until disables that bound; limit<=0 returns every
+// matching row. Mirrors the /audit durable-query shape (device/since/
+// until/limit pushed to SQL) so GET /incidents can filter without
+// pulling every row across every central into memory first.
+func (s *IncidentStore) GetIncidentsFiltered(ctx context.Context, centralName string, since, until time.Time, limit int) ([]Incident, error) {
+	q := `
+SELECT id, COALESCE(interface_id, ''), type, severity, message, COALESCE(details, ''), COALESCE(journal_excerpt, ''), first_seen, last_seen, count
+FROM incidents WHERE central_name = ?`
+	args := []any{centralName}
+	if !since.IsZero() {
+		q += " AND last_seen >= ?"
+		args = append(args, since.UTC().Format("2006-01-02 15:04:05"))
+	}
+	if !until.IsZero() {
+		q += " AND last_seen < ?"
+		args = append(args, until.UTC().Format("2006-01-02 15:04:05"))
+	}
+	q += " ORDER BY last_seen DESC"
+	if limit > 0 {
+		q += " LIMIT ?"
+		args = append(args, limit)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: get filtered incidents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Incident
+	for rows.Next() {
+		var inc Incident
+		inc.CentralName = centralName
+		var typ, sev string
+		if err := rows.Scan(&inc.ID, &inc.InterfaceID, &typ, &sev,
+			&inc.Message, &inc.Details, &inc.JournalExcerpt, &inc.FirstSeen, &inc.LastSeen, &inc.Count); err != nil {
+			return nil, fmt.Errorf("sqlite: scan filtered incident: %w", err)
+		}
+		inc.Type = hmenum.IncidentType(typ)
+		inc.Severity = hmenum.IncidentSeverity(sev)
+		out = append(out, inc)
+	}
+	return out, rows.Err()
+}
+
 // GetDiagnostics returns a summary of incidents for central.
 func (s *IncidentStore) GetDiagnostics(ctx context.Context, centralName string, maxPerType, maxAgeDays int) (map[string]any, error) {
 	all, err := s.GetAllIncidents(ctx, centralName)

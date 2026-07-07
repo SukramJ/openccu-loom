@@ -819,6 +819,25 @@ func AckServiceMessage(idx HubIndex) http.HandlerFunc {
 	}
 }
 
+// DisableServiceMessage suppresses a single service message, routing to
+// the central named by the `?central=` query parameter. Reuses the same
+// domain call as the WS `service_messages.disable` command
+// ([hub.ServiceMessages.Disable]).
+func DisableServiceMessage(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
+			return
+		}
+		id := chi.URLParam(r, "id")
+		if err := h.ServiceMessages.Disable(r.Context(), id); err != nil {
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Disable failed", err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
 // --- Interfaces ---
 
 // InterfaceState is an alias for the canonical DTO in pkg/hmapi.

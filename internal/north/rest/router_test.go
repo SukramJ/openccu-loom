@@ -20,9 +20,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
@@ -142,6 +144,54 @@ func (fakeCentralLinksService) CentralLinksStatus(_ string) (handlers.CentralLin
 type fakeIncidentsReader struct{}
 
 func (fakeIncidentsReader) Incidents() []handlers.Incident { return nil }
+
+// stubDeviceIndexForRouter is a minimal handlers.DeviceIndex for
+// router-level master-profiles route-mounting tests: one device "DEV1"
+// with one channel "DEV1:1".
+type stubDeviceIndexForRouter struct{}
+
+func (stubDeviceIndexForRouter) Devices() []*device.Device { return nil }
+
+func (stubDeviceIndexForRouter) Device(address string) (*device.Device, bool) {
+	if address != "DEV1" {
+		return nil, false
+	}
+	d := device.New(device.Config{
+		Address:     "DEV1",
+		Model:       "HmIP-eTRV",
+		Interface:   hmenum.InterfaceHmIPRF,
+		InterfaceID: "HmIP-RF@CCU",
+		Name:        "Test",
+	})
+	d.AddChannel("DEV1:1", 1, "CLIMATECONTROL", hmenum.ParamsetKeyMaster)
+	return d, true
+}
+
+func (stubDeviceIndexForRouter) CentralOf(string) string    { return "" }
+func (stubDeviceIndexForRouter) SerialSuffix(string) string { return "" }
+
+// fakeIncidentsClearer is a minimal handlers.IncidentsClearer for
+// router-level route-mounting tests.
+type fakeIncidentsClearer struct{ calls int }
+
+func (f *fakeIncidentsClearer) ClearIncidents(context.Context) error {
+	f.calls++
+	return nil
+}
+
+// fakeMasterProfilesService is a minimal handlers.MasterProfilesService
+// for router-level route-mounting tests.
+type fakeMasterProfilesService struct{}
+
+func (fakeMasterProfilesService) Profiles(_, _ string) ([]masterprofile.Profile, error) {
+	return []masterprofile.Profile{{ID: 1, Name: map[string]string{"en": "Eco"}}}, nil
+}
+
+func (fakeMasterProfilesService) Profile(_, _ string, id int) (masterprofile.Profile, error) {
+	return masterprofile.Profile{ID: id}, nil
+}
+
+func (fakeMasterProfilesService) MatchActiveProfile(_, _ string, _ map[string]any) int { return 0 }
 
 type fakeSystemStatusReader struct{}
 
@@ -751,6 +801,62 @@ func TestRouter_Incidents_route(t *testing.T) {
 	withoutDep := NewRouter(Deps{StartedAt: time.Now()})
 	if code := routerGET(withoutDep, "/api/v1/incidents"); code != http.StatusNotFound {
 		t.Fatalf("expected 404 without Incidents dep, got %d", code)
+	}
+}
+
+// TestRouter_IncidentsAdmin_route verifies DELETE /incidents is guarded by
+// IncidentsAdmin and actually invokes ClearIncidents when mounted.
+func TestRouter_IncidentsAdmin_route(t *testing.T) {
+	t.Parallel()
+	clearer := &fakeIncidentsClearer{}
+	r := NewRouter(Deps{StartedAt: time.Now(), IncidentsAdmin: clearer})
+	h := &handlerHarness{t: t, h: r}
+	rr := h.do(http.MethodDelete, "/api/v1/incidents", nil)
+	if rr.Code == http.StatusNotFound {
+		t.Fatal("DELETE /incidents route not mounted")
+	}
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if clearer.calls != 1 {
+		t.Fatalf("ClearIncidents calls=%d want 1", clearer.calls)
+	}
+
+	withoutDep := NewRouter(Deps{StartedAt: time.Now()})
+	if code := (&handlerHarness{t: t, h: withoutDep}).do(http.MethodDelete, "/api/v1/incidents", nil).Code; code != http.StatusNotFound {
+		t.Fatalf("expected 404 without IncidentsAdmin dep, got %d", code)
+	}
+}
+
+// TestRouter_MasterProfiles_route verifies the master-profiles routes are
+// guarded by both Devices and MasterProfiles (nested gating — the
+// handlers resolve device_type/channel_type from the channel's device).
+func TestRouter_MasterProfiles_route(t *testing.T) {
+	t.Parallel()
+	devIdx := &stubDeviceIndexForRouter{}
+	r := NewRouter(Deps{StartedAt: time.Now(), Devices: devIdx, MasterProfiles: fakeMasterProfilesService{}})
+	h := &handlerHarness{t: t, h: r}
+
+	if code := h.do(http.MethodGet, "/api/v1/devices/DEV1/channels/1/master-profiles", nil).Code; code == http.StatusNotFound {
+		t.Fatal("GET master-profiles route not mounted")
+	}
+	if code := h.do(http.MethodGet, "/api/v1/devices/DEV1/channels/1/master-profiles/1", nil).Code; code == http.StatusNotFound {
+		t.Fatal("GET master-profiles/{id} route not mounted")
+	}
+	if code := h.do(http.MethodPost, "/api/v1/devices/DEV1/channels/1/master-profiles/match", bytes.NewBufferString("{}")).Code; code == http.StatusNotFound {
+		t.Fatal("POST master-profiles/match route not mounted")
+	}
+
+	// MasterProfiles set but Devices nil: routes stay unmounted (nested gate).
+	withoutDevices := NewRouter(Deps{StartedAt: time.Now(), MasterProfiles: fakeMasterProfilesService{}})
+	if code := (&handlerHarness{t: t, h: withoutDevices}).do(http.MethodGet, "/api/v1/devices/DEV1/channels/1/master-profiles", nil).Code; code != http.StatusNotFound {
+		t.Fatalf("expected 404 without Devices dep, got %d", code)
+	}
+
+	// Devices set but MasterProfiles nil: routes stay unmounted.
+	withoutMP := NewRouter(Deps{StartedAt: time.Now(), Devices: devIdx})
+	if code := (&handlerHarness{t: t, h: withoutMP}).do(http.MethodGet, "/api/v1/devices/DEV1/channels/1/master-profiles", nil).Code; code != http.StatusNotFound {
+		t.Fatalf("expected 404 without MasterProfiles dep, got %d", code)
 	}
 }
 

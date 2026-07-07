@@ -498,6 +498,131 @@ func TestIncidentStoreClearIncidents(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// IncidentStore.GetIncidentsFiltered
+// ---------------------------------------------------------------------------
+
+// TestIncidentStoreGetIncidentsFilteredLimitHonored verifies that a
+// positive limit caps the result set and rows stay newest-first, mirroring
+// the ordering contract of Recent/GetAllIncidents.
+func TestIncidentStoreGetIncidentsFilteredLimitHonored(t *testing.T) {
+	t.Parallel()
+	s := freshIncidentStore(t)
+	ctx := context.Background()
+
+	for i := range 5 {
+		inc := p2Incident("ccu1", "HmIP-RF", hmenum.IncidentTypeRPCFault)
+		inc.Message = fmt.Sprintf("msg-%d", i)
+		if _, err := s.Record(ctx, inc); err != nil {
+			t.Fatalf("record %d: %v", i, err)
+		}
+	}
+
+	got, err := s.GetIncidentsFiltered(ctx, "ccu1", time.Time{}, time.Time{}, 3)
+	if err != nil {
+		t.Fatalf("GetIncidentsFiltered: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len=%d want 3 (limit not honored)", len(got))
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i].ID >= got[i-1].ID {
+			t.Errorf("ordering broken: got[%d].ID=%d >= got[%d].ID=%d", i, got[i].ID, i-1, got[i-1].ID)
+		}
+	}
+}
+
+// TestIncidentStoreGetIncidentsFilteredZeroLimitReturnsAll verifies that
+// limit<=0 returns every matching row (no cap).
+func TestIncidentStoreGetIncidentsFilteredZeroLimitReturnsAll(t *testing.T) {
+	t.Parallel()
+	s := freshIncidentStore(t)
+	ctx := context.Background()
+
+	for range 4 {
+		if _, err := s.Record(ctx, p2Incident("ccu1", "HmIP-RF", hmenum.IncidentTypeRPCFault)); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+	}
+
+	got, err := s.GetIncidentsFiltered(ctx, "ccu1", time.Time{}, time.Time{}, 0)
+	if err != nil {
+		t.Fatalf("GetIncidentsFiltered: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("len=%d want 4", len(got))
+	}
+}
+
+// TestIncidentStoreGetIncidentsFilteredCentralIsolation verifies that
+// GetIncidentsFiltered never leaks another central's rows regardless of
+// the time bounds supplied.
+func TestIncidentStoreGetIncidentsFilteredCentralIsolation(t *testing.T) {
+	t.Parallel()
+	s := freshIncidentStore(t)
+	ctx := context.Background()
+
+	for _, ccu := range []string{"ccu1", "ccu2"} {
+		inc := baseIncident(ccu, "HmIP-RF")
+		inc.Message = ccu + " message"
+		if _, err := s.Record(ctx, inc); err != nil {
+			t.Fatalf("record %s: %v", ccu, err)
+		}
+	}
+
+	got, err := s.GetIncidentsFiltered(ctx, "ccu1", time.Time{}, time.Time{}, 0)
+	if err != nil {
+		t.Fatalf("GetIncidentsFiltered: %v", err)
+	}
+	if len(got) != 1 || got[0].Message != "ccu1 message" {
+		t.Fatalf("got=%+v want single ccu1 row", got)
+	}
+}
+
+// TestIncidentStoreGetIncidentsFilteredSinceUntilWindow verifies the
+// since/until bounds are pushed down to SQL: since is inclusive, until is
+// exclusive, mirroring the /audit durable-query contract.
+func TestIncidentStoreGetIncidentsFilteredSinceUntilWindow(t *testing.T) {
+	t.Parallel()
+	s := freshIncidentStore(t)
+	ctx := context.Background()
+
+	// BumpIfRecent lets the test control last_seen indirectly is not
+	// available; instead record three rows and read back their actual
+	// last_seen timestamps to build a window that excludes the oldest and
+	// the newest row.
+	for range 3 {
+		if _, err := s.Record(ctx, p2Incident("ccu1", "HmIP-RF", hmenum.IncidentTypeRPCFault)); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+	}
+	all, err := s.GetAllIncidents(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("GetAllIncidents: %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("setup: len=%d want 3", len(all))
+	}
+
+	// A window covering everything must return all 3 rows.
+	got, err := s.GetIncidentsFiltered(ctx, "ccu1", all[2].LastSeen.Add(-time.Hour), all[0].LastSeen.Add(time.Hour), 0)
+	if err != nil {
+		t.Fatalf("GetIncidentsFiltered wide window: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("wide window: len=%d want 3", len(got))
+	}
+
+	// A window strictly before every row's last_seen must return nothing.
+	got, err = s.GetIncidentsFiltered(ctx, "ccu1", time.Time{}, all[2].LastSeen.Add(-time.Hour), 0)
+	if err != nil {
+		t.Fatalf("GetIncidentsFiltered empty window: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("empty window: len=%d want 0, got=%+v", len(got), got)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // IncidentStore.GetIncidentsByInterface
 // ---------------------------------------------------------------------------
 

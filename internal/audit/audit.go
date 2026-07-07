@@ -76,6 +76,11 @@ const (
 	ActionCentralCreate Action = "central_create"
 	ActionCentralUpdate Action = "central_update"
 	ActionCentralDelete Action = "central_delete"
+
+	// ActionIncidentsClear records a bulk incident-store clear across
+	// every registered central (DELETE /api/v1/incidents; shares the
+	// domain call with the WS `incidents.clear` command).
+	ActionIncidentsClear Action = "incidents_clear"
 )
 
 // Entry is one recorded change. The User field is filled by the REST

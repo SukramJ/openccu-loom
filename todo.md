@@ -158,18 +158,60 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   `GET /diagnostics/reliability` (breaker state per interface) + values-cache
   stats/reset routes have no `client.ts` wrapper or SPA surface. Add wrappers +
   a Diagnostics panel next to the interfaces table.
-- [ ] **A1 · GET /incidents has no filtering/pagination** (S, med)
+- [x] **A1 · GET /incidents has no filtering/pagination** (S, med)
   `internal/north/rest/handlers/incidents.go` — unbounded `SELECT`, unlike
   `/audit`. Add `central`/`since`/`until`/`limit` (SQL already scopes by central).
-- [ ] **A2 · WS-only capability families invisible to REST/OpenAPI** (M, med)
+  Implemented: `ListIncidents` now parses `?central=&since=&until=&limit=`
+  (default 500, max 5000) and, when the wired `IncidentsReader` also
+  implements the new `IncidentsQuerier` optional interface, pushes the
+  filter down to a new store method `IncidentStore.GetIncidentsFiltered`
+  (bounds pushed to SQL, mirroring `/audit`'s durable-query path); a reader
+  that only implements the base interface falls back to an in-memory
+  filter pass (`applyIncidentsFilter`) so behaviour stays correct without
+  the optional interface. `adapter.IncidentsStoreReader` implements the
+  querier, scoping to one central or merging + re-sorting newest-first
+  across every registered central when `central` is empty. New tests:
+  `TestIncidentStoreGetIncidentsFiltered*` (store),
+  `TestIncidentsStoreReaderIncidentsFiltered*` (adapter),
+  `TestListIncidents_FallbackFilter*`/`TestListIncidents_QuerierPath*`
+  (handler).
+- [x] **A2 · WS-only capability families invisible to REST/OpenAPI** (M, med)
   `master_profiles.list/get/match/apply`, `incidents.clear`,
   `service_messages.disable` (`assets/wsapi.json`) have no REST counterpart. Add
   `master-profiles` GET/list/match REST + `DELETE /incidents` +
   `POST /service-messages/{id}/disable`.
-- [ ] **A3 · Duplicate un-deprecated token-admin API (v1)** (S, med)
+  Implemented: `GET/POST /devices/{addr}/channels/{no}/master-profiles[/{id}|/match]`
+  (viewer-accessible, mirroring the WS read-only classification) resolve
+  device_type/channel_type from the channel's owning device and call the
+  same `*masterprofile.Store` methods the WS `master_profiles.list/get/match`
+  commands use. `DELETE /incidents` (operator role, mirroring WS
+  `incidents.clear`) clears every registered central's incident rows via a
+  new `IncidentsStoreReader.ClearIncidents`, audited under the new
+  `audit.ActionIncidentsClear`. `POST /service-messages/{id}/disable`
+  (operator role) calls a new `hub.ServiceMessages.Disable` method — the
+  CCU exposes exactly one dismiss primitive for service messages, so
+  Disable delegates to `Acknowledge` (documented explicitly; no separate
+  wire-level "disable forever" operation exists). All three route groups
+  wired into `cmd/openccu-loom` (`IncidentsAdmin`/`MasterProfiles` Deps
+  fields) so they are reachable in production, not just declared. New
+  tests: `TestListMasterProfiles_*`/`TestGetMasterProfile_*`/
+  `TestMatchMasterProfile_*`, `TestDeleteIncidents_*`,
+  `TestDisableServiceMessage_*`, `TestServiceMessagesDisable*` (model),
+  `TestRouter_IncidentsAdmin_route`/`TestRouter_MasterProfiles_route`.
+- [x] **A3 · Duplicate un-deprecated token-admin API (v1)** (S, med)
   `/auth/tokens` (v1) orphaned (SPA uses v2 only) but no `deprecated: true`;
   `docs/admin/auth.md` documents only v1. Mark v1 deprecated in openapi.yaml,
   fix the doc, remove the dead `listTokens()` client wrapper.
+  Implemented: `GET`/`POST /auth/tokens` now carry `deprecated: true` +
+  a description pointing at the v2 equivalents in `assets/openapi.yaml`;
+  `docs/admin/auth.md`'s "Managing tokens over REST" section now documents
+  the v2 endpoints as primary (with an `expires_in_days` example) and
+  calls out v1 as deprecated-but-still-served. Removed the dead
+  `listTokens()` v1 wrapper (and its now-unused `TokenListEntry` import)
+  from `assets/ui/src/lib/api/client.ts` after confirming via grep that no
+  caller referenced it (the SPA's `AccessControl.svelte` uses
+  `listTokensV2` exclusively). No behavior change to the v1 REST handlers
+  themselves — existing token-admin handler tests still pass.
 - [x] **P1 · values_cache periodic GC never wired** (S, med)
   `internal/store/sqlite/values_cache.go` `GCDeadRows` only called by tests →
   parameter/channel drift leaves orphan rows forever. Schedule from

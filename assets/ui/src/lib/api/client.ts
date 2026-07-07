@@ -11,7 +11,6 @@ import type {
   InboxDevice,
   InstallModeInterfaceEntry,
   RoomEntry,
-  TokenListEntry,
   UserListEntry,
   ClimateSchedule,
   CustomDPSummary,
@@ -622,9 +621,6 @@ export const api = {
   // --- Users (admin) -------------------------------------------
   listUsers() {
     return request<UserListEntry[]>(`/auth/users`);
-  },
-  listTokens() {
-    return request<TokenListEntry[]>(`/auth/tokens`);
   },
   // --- Edit-session locking ------------------------------------
   openEditSession(key: string, subject?: string) {

@@ -100,42 +100,52 @@ north:
 ### Managing tokens over REST
 
 All token-management endpoints are **admin-only** and live under
-`/api/v1/auth`:
+`/api/v1/auth`. There are two generations of the token-admin surface —
+**use v2** for anything new; v1 is deprecated but still served for
+existing external API consumers.
 
 | Method & path | Purpose |
 |---|---|
-| `GET /api/v1/auth/tokens` | List tokens (ID, fingerprint, subject, role — never the secret). |
-| `POST /api/v1/auth/tokens` | Mint a new token. |
-| `DELETE /api/v1/auth/tokens/{id}` | Revoke a token by its stable ID. |
+| `GET /api/v1/auth/tokens/v2` | List tokens with full fingerprint + `created_at`/`last_seen_at`/`expires_at`. |
+| `POST /api/v1/auth/tokens/v2` | Mint a new token; optional `expires_in_days`. |
+| `DELETE /api/v1/auth/tokens/v2/{fingerprint}` | Revoke a token by its fingerprint. |
 | `GET /api/v1/auth/users` | List configured usernames + roles (admin-only). |
 
-Create a token by posting a subject and role:
+!!! warning "v1 (`/api/v1/auth/tokens`) is deprecated"
+    `GET`/`POST /api/v1/auth/tokens` are marked `deprecated: true` in
+    the OpenAPI spec. They remain served — `DELETE
+    /api/v1/auth/tokens/{id}` still revokes tokens created through the
+    v1 path — but the in-tree Svelte SPA (`AccessControl.svelte`)
+    talks to v2 exclusively, and v1's elided fingerprint + lack of
+    expiry support make it strictly less useful. New integrations
+    should use v2.
+
+Create a token by posting a subject and role (optionally with a
+lifetime):
 
 ```bash
-curl -u admin:… -X POST https://loom.example/api/v1/auth/tokens \
+curl -u admin:… -X POST https://loom.example/api/v1/auth/tokens/v2 \
   -H 'Content-Type: application/json' \
-  -d '{"subject":"ci-runner","role":"operator"}'
+  -d '{"subject":"ci-runner","role":"operator","expires_in_days":90}'
 ```
 
 The response carries the raw token **once**:
 
 ```json
 {
-  "id": "9f2b1c0a4d5e6f70",
   "token": "rX3…urlsafe-base64…",
   "fingerprint": "…abc123",
-  "subject": "ci-runner",
-  "role": "operator"
+  "expires_at": "2026-10-05T00:00:00Z"
 }
 ```
 
 !!! warning "Store the token immediately"
     The raw token is returned only at creation. Subsequent list and
-    audit views show only the ID and a six-character fingerprint — the
-    daemon cannot reissue the secret. The token is 32 random bytes as
-    URL-safe base64 (~43 characters). Its ID is the first 16 hex
-    characters of its SHA-256, used as the `{id}` path segment for
-    revocation.
+    audit views show only the fingerprint — the daemon cannot reissue
+    the secret. The token is 32 random bytes as URL-safe base64
+    (~43 characters). Its fingerprint (sha256-derived) is the `{fingerprint}`
+    path segment for revocation. `expires_in_days` is optional; omitted
+    or non-positive creates a token that never expires.
 
 Valid roles are `viewer`, `operator`, `admin`; anything else is
 rejected with `422`.

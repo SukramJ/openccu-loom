@@ -621,6 +621,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		hubAdapter:              hubAdapter,
 		ifaceAdapter:            ifaceAdapter,
 		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
+		masterProfiles:          masterProfilesStore,
 		sysStatusBuf:            sysStatusBuf,
 		visFilter:               visFilter,
 		metricsReg:              metricsReg,
