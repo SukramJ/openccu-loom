@@ -12,14 +12,14 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// ValuesBatchQuery is one element of `POST /api/v1/devices/values/batch`.
+// ValuesBatchQuery is one element of `POST /api/v1/devices/values:batch`.
 type ValuesBatchQuery struct {
 	Address   string `json:"address"`
 	Channel   int    `json:"channel"`
 	Parameter string `json:"parameter"`
 }
 
-// ValuesBatchRequest is the body of `POST /api/v1/devices/values/batch`.
+// ValuesBatchRequest is the body of `POST /api/v1/devices/values:batch`.
 // The endpoint exists so external clients can avoid one round-trip
 // per data point during initial sync — a fleet of ~80k data points
 // would otherwise dominate the cold-start latency budget.

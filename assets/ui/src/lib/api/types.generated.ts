@@ -197,16 +197,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Paginated device list
-         * @description Returns a pagination *envelope* object (`items`/`page`/`per_page`/
-         *     `total`). This is a deliberate divergence from the hub list
-         *     endpoints (`/programs`, `/sysvars`, `/alarm-messages`,
-         *     `/service-messages`), which return a bare JSON array plus an
-         *     `X-Total-Count` header instead. Both shapes are stable, intentional,
-         *     and independently consumed by the SPA — do not "fix" one to match
-         *     the other without updating every caller on both sides.
-         */
+        /** Paginated device list */
         get: {
             parameters: {
                 query?: {
@@ -654,13 +645,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Returns a bare JSON array plus an `X-Total-Count` header. This is a
-         *     deliberate divergence from `/devices`, which wraps its list in a
-         *     `{items,page,per_page,total}` envelope — see the note there. The
-         *     other hub list endpoints (`/sysvars`, `/alarm-messages`,
-         *     `/service-messages`) share this same bare-array + header shape.
-         */
         get: {
             parameters: {
                 query?: {
@@ -867,10 +851,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Bare-array + `X-Total-Count` pagination, matching the other hub
-         *     list endpoints. See the pagination-envelope note on `/devices`.
-         */
         get: {
             parameters: {
                 query?: {
@@ -985,10 +965,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Bare-array + `X-Total-Count` pagination, matching the other hub
-         *     list endpoints. See the pagination-envelope note on `/devices`.
-         */
         get: {
             parameters: {
                 query?: {
@@ -1029,10 +1005,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * @description Bare-array + `X-Total-Count` pagination, matching the other hub
-         *     list endpoints. See the pagination-envelope note on `/devices`.
-         */
         get: {
             parameters: {
                 query?: {
@@ -1855,7 +1827,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/values/batch": {
+    "/devices/values:batch": {
         parameters: {
             query?: never;
             header?: never;
@@ -2191,7 +2163,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/{addr}/channels/{no}/week-profile": {
+    "/devices/{addr}/channels/{no}/week_profile": {
         parameters: {
             query?: never;
             header?: never;
@@ -2214,7 +2186,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/{addr}/channels/{no}/week-profile/channel-locks/{key}": {
+    "/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -2423,7 +2395,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/devices/{addr}/channels/{no}/week-profile/copy": {
+    "/devices/{addr}/channels/{no}/week_profile/copy": {
         parameters: {
             query?: never;
             header?: never;

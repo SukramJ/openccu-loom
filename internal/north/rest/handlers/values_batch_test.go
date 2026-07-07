@@ -19,7 +19,7 @@ import (
 func TestValuesBatch_NilIdx_Returns503(t *testing.T) {
 	t.Parallel()
 	body := `{"queries":[{"address":"DEV0001","channel":1,"parameter":"STATE"}]}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	ValuesBatch(nil, nil, nil).ServeHTTP(w, req)
 
@@ -32,7 +32,7 @@ func TestValuesBatch_EmptyQueries_Returns422(t *testing.T) {
 	t.Parallel()
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{}}
 	body := `{"queries":[]}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	ValuesBatch(idx, nil, nil).ServeHTTP(w, req)
 
@@ -49,7 +49,7 @@ func TestValuesBatch_OversizedQueries_Returns422(t *testing.T) {
 		queries[i] = ValuesBatchQuery{Address: fmt.Sprintf("DEV%04d", i), Channel: 1, Parameter: "STATE"}
 	}
 	body, _ := json.Marshal(ValuesBatchRequest{Queries: queries})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	ValuesBatch(idx, nil, nil).ServeHTTP(w, req)
 
@@ -61,7 +61,7 @@ func TestValuesBatch_OversizedQueries_Returns422(t *testing.T) {
 func TestValuesBatch_MalformedJSON_Returns400(t *testing.T) {
 	t.Parallel()
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{}}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(`{not valid json`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", strings.NewReader(`{not valid json`))
 	w := httptest.NewRecorder()
 	ValuesBatch(idx, nil, nil).ServeHTTP(w, req)
 
@@ -74,7 +74,7 @@ func TestValuesBatch_DeviceNotFound_ReturnsErrorInResult(t *testing.T) {
 	t.Parallel()
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{}}
 	body := `{"queries":[{"address":"MISSING001","channel":1,"parameter":"STATE"}]}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	ValuesBatch(idx, nil, nil).ServeHTTP(w, req)
 
@@ -102,7 +102,7 @@ func TestValuesBatch_ChannelNotFound_ReturnsErrorInResult(t *testing.T) {
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0001": d}}
 	// channel 99 does not exist on the device
 	body := `{"queries":[{"address":"DEV0001","channel":99,"parameter":"STATE"}]}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	ValuesBatch(idx, nil, nil).ServeHTTP(w, req)
 
@@ -128,7 +128,7 @@ func TestValuesBatch_ParameterNotFound_ReturnsErrorInResult(t *testing.T) {
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0002": d}}
 	// channel 1 exists but parameter MISSING_PARAM does not
 	body := `{"queries":[{"address":"DEV0002","channel":1,"parameter":"MISSING_PARAM"}]}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	ValuesBatch(idx, nil, nil).ServeHTTP(w, req)
 

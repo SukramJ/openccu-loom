@@ -622,7 +622,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Delete("/me/preferences/{key}", handlers.DeletePreference(d.Preferences))
 			}
 			if d.Devices != nil {
-				pr.Post("/devices/values/batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
+				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
 				pr.Get("/functions", handlers.ListFunctions(d.Devices))
 				pr.Get("/devices", handlers.ListDevices(d.Devices))
@@ -647,11 +647,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/devices/{addr}/channels/{no}/calc-dps/{name}",
 					handlers.GetCalculatedDataPoint(d.Devices, d.Labels))
 				// Week-profile metadata (read-only; full schedule data via schedule routes).
-				pr.Get("/devices/{addr}/channels/{no}/week-profile",
+				pr.Get("/devices/{addr}/channels/{no}/week_profile",
 					handlers.GetWeekProfile(d.Devices))
 				// Write half of the schedule_enabled map: toggle one target
 				// channel's week-program participation.
-				pr.With(op).Put("/devices/{addr}/channels/{no}/week-profile/channel-locks/{key}",
+				pr.With(op).Put("/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}",
 					handlers.PutWeekProfileChannelLock(d.Devices))
 				if d.MasterProfiles != nil {
 					// list/get/match are viewer-accessible, mirroring the WS
@@ -711,7 +711,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					handlers.PostCopySchedule(d.Schedules))
 				// Copy a single climate profile from the source channel /
 				// profile to a target channel / profile.
-				pr.With(op).Post("/devices/{addr}/channels/{no}/week-profile/copy",
+				pr.With(op).Post("/devices/{addr}/channels/{no}/week_profile/copy",
 					handlers.PostCopyProfile(d.Schedules))
 			}
 			if d.Audit != nil {

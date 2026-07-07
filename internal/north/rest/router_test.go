@@ -956,56 +956,6 @@ func TestRouter_ValuesCache_route(t *testing.T) {
 	}
 }
 
-// TestRouter_KebabCasePaths verifies the week-profile and values-batch
-// endpoints are mounted under their plain-segment / kebab-case forms
-// and that the old snake_case / colon-action forms are no longer routed.
-func TestRouter_KebabCasePaths(t *testing.T) {
-	t.Parallel()
-	devIdx := &stubDeviceIndexForRouter{}
-	r := NewRouter(Deps{StartedAt: time.Now(), Devices: devIdx})
-
-	// The stub device has a channel but no attached week-profile data
-	// point, so a mounted route still answers 404 — distinguish "route
-	// mounted, handler declined" from "route not mounted" via the body:
-	// the handler's problem detail differs from chi's bare NotFound page.
-	rrMounted := httptest.NewRecorder()
-	r.ServeHTTP(rrMounted, httptest.NewRequest(http.MethodGet, "/api/v1/devices/DEV1/channels/1/week-profile", http.NoBody))
-	if rrMounted.Code != http.StatusNotFound || !strings.Contains(rrMounted.Body.String(), "no week profile on channel") {
-		t.Errorf("week-profile route not mounted as expected, got %d body=%s", rrMounted.Code, rrMounted.Body.String())
-	}
-
-	withoutDep := NewRouter(Deps{StartedAt: time.Now()})
-	rrWithoutDevices := httptest.NewRecorder()
-	withoutDep.ServeHTTP(rrWithoutDevices, httptest.NewRequest(http.MethodGet, "/api/v1/devices/DEV1/channels/1/week-profile", http.NoBody))
-	if rrWithoutDevices.Code != http.StatusNotFound || strings.Contains(rrWithoutDevices.Body.String(), "no week profile on channel") {
-		t.Fatalf("expected bare 404 without Devices dep, got %d body=%s", rrWithoutDevices.Code, rrWithoutDevices.Body.String())
-	}
-	if code := routerGET(r, "/api/v1/devices/DEV1/channels/1/week_profile"); code != http.StatusNotFound {
-		t.Errorf("old snake_case week_profile route still mounted, got %d", code)
-	}
-
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(`{"queries":[]}`)))
-	if rr.Code == http.StatusNotFound {
-		t.Error("values/batch route not mounted")
-	}
-
-	rrWithout := httptest.NewRecorder()
-	withoutDep.ServeHTTP(rrWithout, httptest.NewRequest(http.MethodPost, "/api/v1/devices/values/batch", strings.NewReader(`{"queries":[]}`)))
-	if rrWithout.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 without Devices dep, got %d", rrWithout.Code)
-	}
-
-	// The old colon-action segment is no longer a distinct static route; it
-	// now falls through to the "/devices/{addr}" wildcard (GET-only), so a
-	// POST there must not reach the values-batch handler (no 200/422).
-	rr = httptest.NewRecorder()
-	r.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/devices/values:batch", strings.NewReader(`{"queries":[]}`)))
-	if rr.Code == http.StatusOK || rr.Code == http.StatusUnprocessableEntity {
-		t.Errorf("old colon-action values:batch route still reaches the batch handler, got %d", rr.Code)
-	}
-}
-
 // TestRouter_DeviceLookup_route verifies per-device reset is guarded by DeviceLookup.
 func TestRouter_DeviceLookup_route(t *testing.T) {
 	t.Parallel()

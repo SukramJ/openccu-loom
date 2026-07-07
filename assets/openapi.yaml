@@ -127,14 +127,6 @@ paths:
     get:
       tags: [devices]
       summary: Paginated device list
-      description: |
-        Returns a pagination *envelope* object (`items`/`page`/`per_page`/
-        `total`). This is a deliberate divergence from the hub list
-        endpoints (`/programs`, `/sysvars`, `/alarm-messages`,
-        `/service-messages`), which return a bare JSON array plus an
-        `X-Total-Count` header instead. Both shapes are stable, intentional,
-        and independently consumed by the SPA — do not "fix" one to match
-        the other without updating every caller on both sides.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -452,12 +444,6 @@ paths:
   /programs:
     get:
       tags: [hub]
-      description: |
-        Returns a bare JSON array plus an `X-Total-Count` header. This is a
-        deliberate divergence from `/devices`, which wraps its list in a
-        `{items,page,per_page,total}` envelope — see the note there. The
-        other hub list endpoints (`/sysvars`, `/alarm-messages`,
-        `/service-messages`) share this same bare-array + header shape.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -560,9 +546,6 @@ paths:
   /sysvars:
     get:
       tags: [hub]
-      description: |
-        Bare-array + `X-Total-Count` pagination, matching the other hub
-        list endpoints. See the pagination-envelope note on `/devices`.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -720,9 +703,6 @@ paths:
   /alarm-messages:
     get:
       tags: [messages]
-      description: |
-        Bare-array + `X-Total-Count` pagination, matching the other hub
-        list endpoints. See the pagination-envelope note on `/devices`.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -742,9 +722,6 @@ paths:
   /service-messages:
     get:
       tags: [messages]
-      description: |
-        Bare-array + `X-Total-Count` pagination, matching the other hub
-        list endpoints. See the pagination-envelope note on `/devices`.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -1494,7 +1471,7 @@ paths:
           description: OIDC configured but provider unreachable
 
   # ---- Devices: lifecycle, channels, schedule, links ----
-  /devices/values/batch:
+  /devices/values:batch:
     post:
       operationId: valuesBatch
       summary: Batch-read data-point values in one round trip
@@ -1883,7 +1860,7 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-  /devices/{addr}/channels/{no}/week-profile:
+  /devices/{addr}/channels/{no}/week_profile:
     get:
       operationId: getChannelWeekProfile
       summary: Week-profile metadata for one channel
@@ -1903,7 +1880,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/WeekProfileResponse" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /devices/{addr}/channels/{no}/week-profile/channel-locks/{key}:
+  /devices/{addr}/channels/{no}/week_profile/channel-locks/{key}:
     put:
       tags: [devices]
       description: |
@@ -2161,7 +2138,7 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-  /devices/{addr}/channels/{no}/week-profile/copy:
+  /devices/{addr}/channels/{no}/week_profile/copy:
     post:
       operationId: copyClimateProfile
       summary: Copy a single climate profile to another channel/profile

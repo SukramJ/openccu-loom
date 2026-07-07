@@ -15,7 +15,7 @@ import (
 )
 
 // WeekProfileResponse is the read-only metadata descriptor returned by
-// GET /api/v1/devices/{addr}/channels/{no}/week-profile.
+// GET /api/v1/devices/{addr}/channels/{no}/week_profile.
 //
 // It surfaces the pipeline-attached [weekprofile.ProfileDataPoint] so
 // north-bound consumers (SPA, external tooling) can discover schedule
@@ -73,14 +73,14 @@ type TargetChannelSummary struct {
 // GetWeekProfile returns the week-profile metadata descriptor for one
 // channel.
 //
-// Route: GET /api/v1/devices/{addr}/channels/{no}/week-profile
+// Route: GET /api/v1/devices/{addr}/channels/{no}/week_profile
 //
 // Error cases:
 //   - 404 when the device or channel cannot be found (via lookupChannel)
 //   - 404 with body {"error":"no week profile on channel"} when the channel
 //     exists but has no attached [weekprofile.ProfileDataPoint]
 //
-// Spec: assets/openapi.yaml → /devices/{addr}/channels/{no}/week-profile (GET).
+// Spec: assets/openapi.yaml → /devices/{addr}/channels/{no}/week_profile (GET).
 func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ch, err := lookupChannel(idx, r)
@@ -154,7 +154,7 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 }
 
 // ChannelLockRequest is the body of
-// PUT /devices/{addr}/channels/{no}/week-profile/channel-locks/{key}.
+// PUT /devices/{addr}/channels/{no}/week_profile/channel-locks/{key}.
 type ChannelLockRequest struct {
 	// Enabled includes (true) or excludes (false) the target channel
 	// from the device's week-program schedule.
@@ -166,7 +166,7 @@ type ChannelLockRequest struct {
 // [WeekProfileResponse]. External clients drive their schedule-channel
 // switch entities through it.
 //
-// Route: PUT /api/v1/devices/{addr}/channels/{no}/week-profile/channel-locks/{key}
+// Route: PUT /api/v1/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}
 func PutWeekProfileChannelLock(idx DeviceIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ch, err := lookupChannel(idx, r)
