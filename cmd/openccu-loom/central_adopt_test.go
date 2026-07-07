@@ -4,10 +4,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -564,6 +566,146 @@ func TestLiveCentralAdminDeleteRemovesLiveCentralBeforePersisting(t *testing.T) 
 	}
 	if store.deleteN != 1 {
 		t.Errorf("underlying store.Delete call count = %d, want 1", store.deleteN)
+	}
+}
+
+// TestLiveCentralAdminPutDisablesRegisteredCentralTearsDownLive verifies the
+// core B1 fix: PUT with enabled=false against a currently-registered
+// (live-adopted) central tears the running Unit down — mirroring Delete's
+// live-then-persisted order — instead of returning a silent no-op success
+// while the Unit keeps running underneath an operator-visible "disabled"
+// row.
+func TestLiveCentralAdminPutDisablesRegisteredCentralTearsDownLive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	reg := central.NewRegistry()
+	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
+	store := newFakeCentralAdmin()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	dec := newLiveCentralAdmin(store, orch, logger)
+
+	row := sqlitestore.CentralRow{
+		Name: "disable-live", Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}},
+	}
+	if err := dec.Put(ctx, row); err != nil {
+		t.Fatalf("Put(enabled): %v", err)
+	}
+	if _, ok := reg.Get("disable-live"); !ok {
+		t.Fatal("precondition: central not live after the initial enabled Put")
+	}
+
+	row.Enabled = false
+	if err := dec.Put(ctx, row); err != nil {
+		t.Fatalf("Put(disabled): %v", err)
+	}
+
+	if _, ok := reg.Get("disable-live"); ok {
+		t.Error("central still present in the shared registry after Put(enabled=false) — " +
+			"disabling a live central must tear the running Unit down (mirror Delete)")
+	}
+	if !strings.Contains(buf.String(), "central.disable.live") {
+		t.Errorf("log output = %q, want a central.disable.live entry", buf.String())
+	}
+}
+
+// TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired verifies that
+// editing an already-registered, still-enabled central's southbound-relevant
+// fields (host, in this case) surfaces a distinguishable "restart required"
+// signal instead of the same skip_already_live log a genuine no-op re-save
+// produces — an operator who edits the host of a live central must be able
+// to tell "saved but needs a restart" apart from "saved, nothing to do".
+func TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	reg := central.NewRegistry()
+	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
+	store := newFakeCentralAdmin()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	dec := newLiveCentralAdmin(store, orch, logger)
+
+	row := sqlitestore.CentralRow{
+		Name: "edit-live", Host: "127.0.0.1", Enabled: true,
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 1}},
+	}
+	if err := dec.Put(ctx, row); err != nil {
+		t.Fatalf("Put(initial): %v", err)
+	}
+	buf.Reset()
+
+	// A config edit that changes a southbound-relevant field: the running
+	// Unit was adopted with the old host and will not pick up the new one
+	// without a restart.
+	edited := row
+	edited.Host = "127.0.0.2"
+	if err := dec.Put(ctx, edited); err != nil {
+		t.Fatalf("Put(edited): %v", err)
+	}
+	if !strings.Contains(buf.String(), "central.edit.restart_required") {
+		t.Errorf("log output after host edit = %q, want a central.edit.restart_required entry", buf.String())
+	}
+	if !strings.Contains(buf.String(), "level=WARN") {
+		t.Errorf("log output after host edit = %q, want WARN level (an Info skip_already_live is not distinguishable)", buf.String())
+	}
+	buf.Reset()
+
+	// A re-save with no actual change must NOT claim a restart is required.
+	if err := dec.Put(ctx, edited); err != nil {
+		t.Fatalf("Put(unchanged resave): %v", err)
+	}
+	if strings.Contains(buf.String(), "central.edit.restart_required") {
+		t.Errorf("log output after unchanged resave = %q, want no restart_required entry", buf.String())
+	}
+	if !strings.Contains(buf.String(), "central.adopt.skip_already_live") {
+		t.Errorf("log output after unchanged resave = %q, want central.adopt.skip_already_live", buf.String())
+	}
+}
+
+// TestCentralConfigNeedsRestartDetectsSouthboundFieldChanges verifies the
+// diff helper flags a change in each southbound-relevant field, and
+// tolerates an identical row (including an identical interface slice
+// ordering) as "no restart needed".
+func TestCentralConfigNeedsRestartDetectsSouthboundFieldChanges(t *testing.T) {
+	t.Parallel()
+	base := sqlitestore.CentralRow{
+		Name: "x", Host: "10.0.0.1", Port: 2010, JSONRPCPort: 80,
+		Username: "Admin", PasswordPlain: "secret", PrimaryInterface: "HmIP-RF",
+		Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF", Port: 2010}},
+	}
+
+	if centralConfigNeedsRestart(base, base) {
+		t.Error("identical rows must not require a restart")
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(sqlitestore.CentralRow) sqlitestore.CentralRow
+	}{
+		{"host", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.Host = "10.0.0.2"; return r }},
+		{"port", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.Port = 2011; return r }},
+		{"json_rpc_port", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.JSONRPCPort = 443; return r }},
+		{"tls", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.TLS = true; return r }},
+		{"tls_insecure", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.TLSInsecureSkipVerify = true; return r }},
+		{"username", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.Username = "other"; return r }},
+		{"password_plain", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.PasswordPlain = "other"; return r }},
+		{"password_env", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.PasswordEnv = "ENV"; return r }},
+		{"primary_interface", func(r sqlitestore.CentralRow) sqlitestore.CentralRow { r.PrimaryInterface = "BidCos-RF"; return r }},
+		{"interfaces", func(r sqlitestore.CentralRow) sqlitestore.CentralRow {
+			r.Interfaces = []config.InterfaceSpec{{Name: "HmIP-RF", Port: 2011}}
+			return r
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if !centralConfigNeedsRestart(base, tc.mutate(base)) {
+				t.Errorf("changing %s did not report a restart requirement", tc.name)
+			}
+		})
 	}
 }
 

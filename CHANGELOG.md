@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Disabling or editing an already-live CCU in the Config UI no longer
+  silently leaves the old connection running.** `PUT /admin/centrals/{name}`
+  persisted the row but, for a central already registered at runtime,
+  returned success without touching the live `central.Unit` — disabling a
+  CCU left it fully connected and polling until the next daemon restart,
+  with no log line, while the Config UI showed a plain "CCU disabled"
+  toast. Disabling a currently-registered central now tears the live
+  connection down (mirroring the existing Delete order) and logs it. A
+  config edit to an already-live CCU still cannot be hot-applied, so it now
+  logs a `central.edit.restart_required` warning, and the Config UI shows
+  an explicit "a daemon restart is required" toast instead of an
+  unqualified "CCU updated" success when a southbound-relevant field
+  (host, ports, TLS, credentials, interfaces) actually changed.
 - **MQTT: command and HA-birth handlers no longer block the client's
   read loop, which could self-deadlock or stall unrelated commands.**
   `go-mqtt` runs every inbound `MessageHandler` synchronously on the

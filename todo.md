@@ -16,13 +16,30 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
 
 ## Tier 1 — Real correctness bugs
 
-- [ ] **B1 · Central edit/disable is a silent no-op until restart** (M, high)
+- [x] **B1 · Central edit/disable is a silent no-op until restart** (M, high)
   `cmd/openccu-loom/central_adopt.go` — `liveCentralAdmin.Put` persists the row
   but, for an already-registered central, returns without touching the running
   `central.Unit`; the `enabled:false` branch does so with no log and no teardown,
   while the SPA shows a success toast. Fix: call `orch.removeCentral` on disable
   (mirror `Delete`), and surface a "restart required" signal for a live config
   edit. Also `assets/ui/.../CentralsAdmin.svelte` toast wording.
+  Implemented: `Put` now tears the live `central.Unit` down via
+  `orch.removeCentral` (logging `central.disable.live`) when a currently-
+  registered central is saved with `enabled:false`. A still-enabled edit of an
+  already-live central is diffed against the previously persisted row via the
+  new `centralConfigNeedsRestart` helper (host/ports/TLS/credentials/primary
+  interface/interface set — the fields the running Unit only reads once, at
+  adopt time) and logs `central.edit.restart_required` at Warn instead of the
+  previous unconditional Info skip. `CentralsAdmin.svelte` mirrors the same
+  diff client-side (`centralNeedsRestartSignal`) so `saveModal` shows the new
+  `centrals.updated_restart_required` toast (EN+DE) instead of a bare success
+  toast when a live edit cannot be hot-applied; `toggleEnabled`'s existing
+  success toast is now honest for disable because the backend actually tears
+  the connection down. New tests:
+  `TestLiveCentralAdminPutDisablesRegisteredCentralTearsDownLive`,
+  `TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired`,
+  `TestCentralConfigNeedsRestartDetectsSouthboundFieldChanges` (Go); a new
+  `CentralsAdmin.edit.test.ts` (vitest) covering both toast paths.
 - [ ] **B2 · Manual backup/restore pinned to one central — breaks multi-CCU** (M, high)
   `internal/central/adapter/stubs.go`, `ccu_wiring.go` — `TriggerBackup` backs up
   only the first central; `HTTPBackupRestorer` uploads every `.sbk` to one fixed
