@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.27.0
+
+- **Security and reliability hardening.** This release rolls up the
+  fixes collected since 0.26.6: idempotent REST requests can no longer
+  leak one user's response to another, request bodies are size-capped
+  to prevent memory exhaustion, the OIDC login flow is hardened against
+  token replay, and server errors no longer echo internal details.
+- **Maintenance.** Refreshed the underlying software libraries and the
+  web-interface toolchain to their latest compatible versions. No
+  changes to how you use the add-on.
+
 ## 0.26.6
 
 - **Matter pairing: fixes "device not found" in networks with an mDNS

@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-07-07
+
 ### Security
 
 - **REST: idempotency replay cache no longer leaks responses across
@@ -88,6 +90,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of four independent opens, shared REST rate-limiter store, shared
   MQTT topic builder; repo-wide cleanup of truncated provenance
   comments.
+- Dependency maintenance: refreshed direct Go modules (`go-mqtt`
+  1.1.0 → 1.2.0, `go-chi/chi/v5` 5.3.0 → 5.3.1, `pressly/goose/v3`
+  3.27.1 → 3.27.2, `golang.org/x/text` 0.38.0 → 0.39.0) and updated the
+  Svelte SPA toolchain within its declared version ranges (Svelte, Vite,
+  Vitest, Tailwind, svelte-check, and related dev dependencies).
 
 ## [0.26.6] — 2026-07-05
 
