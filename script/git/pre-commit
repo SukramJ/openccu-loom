@@ -157,10 +157,23 @@ elif [[ $NO_GO -eq 0 ]]; then
         warn "$GOLANGCI_BIN not installed; skipping lint stage"
         note "install with: make setup"
     else
-        # --new-from-rev=HEAD restricts to issues introduced by the
-        # currently staged change. Keeps the hook fast on a noisy
-        # legacy codebase while still blocking new violations.
-        if ! "$GOLANGCI_BIN" run --new-from-rev=HEAD --timeout=120s ./... 2>&1 | sed 's/^/    /' >&2; then
+        # Scope the run to the packages touched by the staged change rather
+        # than the whole module. `run ./...` type-checks and builds SSA for
+        # every package before --new-from-rev filtering; on a cold analysis
+        # cache (first commit after a checkout) that alone blows past the
+        # timeout — golangci-lint prints "0 issues" and then fails with
+        # "Timeout exceeded", so a clean change is rejected. Scoping keeps the
+        # cold-cache cost proportional to the change with no loss of coverage:
+        # --new-from-rev=HEAD only reports issues on changed lines, and those
+        # live exclusively in the staged packages. The generous --timeout is a
+        # safety net for a large staged set built from cold.
+        declare -A lint_pkg_set=()
+        for f in "${STAGED_GO[@]}"; do
+            lint_pkg_set["./$(dirname -- "$f")/..."]=1
+        done
+        mapfile -t lint_pkgs < <(printf '%s\n' "${!lint_pkg_set[@]}" | sort)
+        # shellcheck disable=SC2086
+        if ! "$GOLANGCI_BIN" run --new-from-rev=HEAD --timeout=300s "${lint_pkgs[@]}" 2>&1 | sed 's/^/    /' >&2; then
             fail "golangci-lint reported issues; fix before committing"
             note "to skip once: GOHM_PRECOMMIT_SKIP_LINT=1 git commit ..."
             exit 1
