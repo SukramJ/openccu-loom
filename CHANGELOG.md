@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Backup docs no longer claim `secret.key` is bundled in the CLI
+  archive.** `docs/admin/backup.md` said the archive was
+  self-contained for decryption; `backup create` has always skipped
+  `secret.key` while sealing the archive with it instead. The doc now
+  states plainly that `secret.key` (or `OPENCCU_LOOM_SECRET_KEY`) must
+  be preserved out-of-band, and `backup create` prints a one-line
+  reminder of this to stderr after every successful run.
+
+### Added
+
+- **"Before you upgrade" guidance in `docs/admin/backup.md`.**
+  Recommends `openccu-loom backup create` ahead of any upgrade and
+  states the rollback reality: migrations carry `Down` blocks but the
+  daemon only runs `goose.UpContext` and exposes no rollback
+  subcommand, so recovering from a bad upgrade means restoring a
+  pre-upgrade backup.
+
 ## [0.27.2] — 2026-07-07
 
 ### Added

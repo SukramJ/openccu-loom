@@ -97,14 +97,14 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   `internal/central/adapter/values_cache_flush.go` marks a whole central dirty on
   any change and re-UPSERTs all live/stale DPs → write amplification at fleet
   scale (ADR 0019 sizes vs ~1000 DP). Track dirty `(channel, parameter)` keys.
-- [ ] **O1 · No backup-before-upgrade guidance / rollback path** (M, med)
+- [x] **O1 · No backup-before-upgrade guidance / rollback path** (M, med)
   All 26 migrations have `Down` blocks but nothing calls `DownContext`; no
   "backup before upgrade" callout. Add the callout to `docs/admin/backup.md` +
   release-notes template; decide (ADR) on downgrade support.
 
 ## Tier 4 — Low / cosmetic
 
-- [ ] **O2 · Backup docs claim secret.key is bundled in the CLI archive — it isn't** (S, high*)
+- [x] **O2 · Backup docs claim secret.key is bundled in the CLI archive — it isn't** (S, high*)
   `docs/admin/backup.md` vs `cmd/openccu-loom/backup.go` (skips `secret.key`, seals
   archive with it). DR correctness bug in docs. Correct the note + print a
   reminder from `backup create`. *(low effort, high impact — pulled forward.)*

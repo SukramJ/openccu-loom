@@ -10,6 +10,16 @@ round-trip.
     up the **CCU itself** is a separate, CCU-side operation, exposed
     over the REST API and described at the end.
 
+!!! warning "Before you upgrade"
+    Run `openccu-loom backup create` before upgrading the daemon to a
+    new version. Every schema migration under
+    `internal/store/sqlite/migrations/` carries a `Down` block, but the
+    daemon only ever runs `goose.UpContext` at startup — there is no
+    `backup rollback` or `migrate down` subcommand exposed to
+    operators. If a migration or the new version misbehaves, the only
+    supported recovery path is `openccu-loom backup restore` from a
+    backup taken **before** the upgrade, not an automatic downgrade.
+
 ## What to back up
 
 OpenCCU-Loom keeps all persistent state in its data directory
@@ -57,15 +67,29 @@ openccu-loom backup create --config /etc/openccu-loom/config.yaml
 | `--json` | off | emit a single-line JSON result for scripting |
 
 The archive contains `state/openccu-loom.db` (the VACUUMed snapshot),
-any other files under `data_dir` (so `secret.key` is included),
-optionally the `config.yaml` you passed, and `manifest.json`.
+any other files under `data_dir` **except `secret.key`**, optionally
+the `config.yaml` you passed, and `manifest.json`.
 
-!!! note "What is and isn't in the archive"
-    The walk over `data_dir` includes `secret.key`, so a CLI archive is
-    self-contained for decryption. Secrets that you supply only through
-    environment variables (e.g. `OPENCCU_LOOM_MQTT_PASSWORD`) are never
-    written to the database or the archive — re-supply those env vars
-    before starting the restored daemon.
+!!! danger "The archive is NOT self-contained for decryption"
+    `backup create` deliberately **skips `secret.key`** while walking
+    `data_dir` — bundling the at-rest master key alongside the
+    ciphertext it protects would let anyone who steals the archive
+    decrypt it, defeating the point of encrypting it. When a master
+    key is available, the whole archive is instead sealed with
+    AES-256-GCM using that key on the way out.
+
+    This means `secret.key` (or the `OPENCCU_LOOM_SECRET_KEY` value,
+    if that's how you provision it) **must be preserved out-of-band**,
+    separately from the archive. Without it you cannot open the
+    archive on restore, and even after a successful restore you
+    cannot decrypt the `enc:v1:`-prefixed secret fields inside the
+    database. `backup create` prints a one-line reminder of this to
+    stderr on every run.
+
+    Secrets that you supply only through environment variables (e.g.
+    `OPENCCU_LOOM_MQTT_PASSWORD`) are never written to the database or
+    the archive either — re-supply those env vars before starting the
+    restored daemon.
 
 ### Restore
 
