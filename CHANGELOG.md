@@ -72,6 +72,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   always reported zero. The client adapter now exposes
   `CommandTrackerSize`/`PingPongSize` and the aggregator sums them
   across every connected client.
+- **Manual backup/restore is now multi-CCU-correct.** `POST
+  /backups` triggered a create-and-download backup for only the
+  first registered central, and — worse — the CCU backup restorer
+  was wired once, globally, so restoring *any* stored `.sbk`
+  uploaded it to whichever central had come up first, regardless of
+  which CCU actually produced it. `BackupAdapter` now resolves a
+  backup's owning central from its id and holds one restorer per
+  central; `Restore` targets strictly that central's restorer and
+  never falls back to a different one. `POST /backups` accepts an
+  optional `{"central_name": "..."}` body to trigger a specific
+  central explicitly (the bare/empty-body call keeps backing up the
+  first registered central, unchanged); a new admin-only WS command
+  `backups.trigger` exposes the same central-scoped trigger. The
+  Config UI's Backups page shows a target-CCU picker once more than
+  one central is registered.
 
 ### Added
 

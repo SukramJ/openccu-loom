@@ -2567,7 +2567,14 @@ export interface paths {
         /** Locally stored CCU backups */
         get: operations["listBackups"];
         put?: never;
-        /** Trigger CCU backup (Rega create_backup_start) */
+        /**
+         * Trigger CCU backup (Rega create_backup_start)
+         * @description Starts the create-and-download backup flow. An optional
+         *     `central_name` in the request body selects the target central
+         *     explicitly (multi-CCU-correct); omitting it — or an empty
+         *     request body — backs up the first registered central for
+         *     backward compatibility.
+         */
         post: operations["triggerBackup"];
         delete?: never;
         options?: never;
@@ -8142,7 +8149,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Name of the central to back up. Omit to back up the first registered central. */
+                    central_name?: string;
+                };
+            };
+        };
         responses: {
             /** @description Job id returned */
             202: {
@@ -8151,6 +8165,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

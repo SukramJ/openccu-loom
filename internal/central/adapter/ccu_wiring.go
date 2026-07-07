@@ -87,10 +87,16 @@ type WireDeps struct {
 	// BINRPCCallbackServer is non-nil.
 	BINRPCCallbackPort int
 
-	// Backup, when non-nil, gets a [HTTPBackupRestorer] wired against
-	// the first successfully-initialised central's JSON-RPC session.
-	// Multi-CCU backup-source selection mirrors the BackupAdapter's
-	// "first registered central" rule and is a follow-up.
+	// Backup, when non-nil, gets one [HTTPBackupRestorer] wired per
+	// central via [BackupAdapter.SetRestorerForCentral] as each central's
+	// bring-up resolves its JSON-RPC session — so a fleet with several
+	// registered centrals restores every backup to the CCU that produced
+	// it (see ADR 0002; [BackupAdapter.Restore] resolves the owner from
+	// the backup id and never falls back to a different central's
+	// restorer). The unscoped [BackupAdapter.TriggerBackup] still targets
+	// only the first registered central for backward compatibility;
+	// callers that need a specific central use
+	// [BackupAdapter.TriggerBackupForCentral].
 	Backup *BackupAdapter
 
 	// Visibility, when non-nil, is installed on every per-central
@@ -336,11 +342,13 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 			deps.PersistSerial(ctx, cc.Name, serial)
 		}
 	}
-	// Wire the backup restorer the first time a central comes up successfully —
-	// the BackupAdapter selects the first central as its source. Idempotent on a
-	// re-gate: SetRestorer is skipped once a restorer exists.
-	if deps.Backup != nil && deps.Backup.Restorer() == nil {
-		deps.Backup.SetRestorer(&HTTPBackupRestorer{
+	// Wire this central's own backup restorer every time it comes up
+	// successfully. Keyed by cc.Name so each central gets exactly its own
+	// restorer — a re-gate after reconnect simply refreshes the wrapped
+	// JSON-RPC session, it never lets one central's restorer answer for
+	// another's backups.
+	if deps.Backup != nil {
+		deps.Backup.SetRestorerForCentral(cc.Name, &HTTPBackupRestorer{
 			BaseURL:               ccuBaseURLFor(*cc),
 			Session:               runner.Client(),
 			InsecureSkipTLSVerify: cc.TLSInsecureSkipVerify,

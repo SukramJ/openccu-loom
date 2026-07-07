@@ -1112,6 +1112,76 @@ func TestBackupTriggerAndStatus(t *testing.T) {
 	}
 }
 
+// stubBackups is an inline fake for [BackupsService]. It records every
+// central name it was invoked with, so tests can assert the handler
+// routed to exactly the requested central.
+type stubBackups struct {
+	id       string
+	err      error
+	calledOn []string
+}
+
+func (s *stubBackups) TriggerBackupForCentral(_ context.Context, centralName string) (string, error) {
+	s.calledOn = append(s.calledOn, centralName)
+	return s.id, s.err
+}
+
+// TestBackupsTriggerDelegatesToNamedCentral is the WS-side half of the
+// B2 multi-CCU fix: `backups.trigger` must call
+// BackupsService.TriggerBackupForCentral with exactly the central_name
+// the caller supplied — never a different central, and never the
+// legacy unscoped (first-central) `backup.trigger` path.
+func TestBackupsTriggerDelegatesToNamedCentral(t *testing.T) {
+	svc := &stubBackups{id: "beta-20260101-000000"}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Backups: svc})
+
+	args, _ := json.Marshal(map[string]any{"central_name": "beta"})
+	res := r.Dispatch(adminCtx(), "backups.trigger", args)
+	if res.Error != nil {
+		t.Fatalf("trigger err: %+v", res.Error)
+	}
+	if len(svc.calledOn) != 1 || svc.calledOn[0] != "beta" {
+		t.Fatalf("calledOn = %v, want [beta]", svc.calledOn)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok || data["id"] != "beta-20260101-000000" || data["central_name"] != "beta" {
+		t.Fatalf("unexpected data: %+v", res.Data)
+	}
+}
+
+// TestBackupsTriggerMissingCentralNameIsBadRequest ensures an operator
+// typo (empty/missing central_name) is rejected explicitly instead of
+// silently falling back to any particular central.
+func TestBackupsTriggerMissingCentralNameIsBadRequest(t *testing.T) {
+	svc := &stubBackups{id: "x"}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Backups: svc})
+
+	res := r.Dispatch(adminCtx(), "backups.trigger", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+	if len(svc.calledOn) != 0 {
+		t.Fatalf("service must not be invoked without a central_name, calledOn=%v", svc.calledOn)
+	}
+}
+
+// TestBackupsTriggerPropagatesServiceError checks that a backend failure
+// (e.g. unknown central) surfaces as a command error rather than a
+// silently-successful response.
+func TestBackupsTriggerPropagatesServiceError(t *testing.T) {
+	svc := &stubBackups{err: errors.New("backup: unknown central")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Backups: svc})
+
+	args, _ := json.Marshal(map[string]any{"central_name": "no-such-central"})
+	res := r.Dispatch(adminCtx(), "backups.trigger", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
+	}
+}
+
 func TestFirmwareInfoAndUpdate(t *testing.T) {
 	hub := &stubHub{firmwareInfo: map[string]any{"current": "1.0", "available": "1.1"}}
 	r := NewRouter()

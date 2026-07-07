@@ -63,6 +63,7 @@ const EN: Catalog = {
   "backup.subtitle": "CCU backups stored on the daemon host.",
   "backup.empty": "No backups yet.",
   "backup.trigger": "Trigger backup",
+  "backup.trigger_central": "Target CCU",
   "backup.triggering": "Starting…",
   "backup.confirm.title": "Restore backup?",
   "backup.confirm.body":
@@ -2050,6 +2051,7 @@ const DE: Catalog = {
   "backup.subtitle": "CCU-Sicherungen auf dem Daemon-Host.",
   "backup.empty": "Noch keine Backups vorhanden.",
   "backup.trigger": "Backup anstoßen",
+  "backup.trigger_central": "Ziel-CCU",
   "backup.triggering": "Erstelle…",
   "backup.confirm.title": "Backup wiederherstellen?",
   "backup.confirm.body":

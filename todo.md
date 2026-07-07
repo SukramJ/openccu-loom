@@ -40,12 +40,48 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   `TestLiveCentralAdminPutEditOfLiveCentralLogsRestartRequired`,
   `TestCentralConfigNeedsRestartDetectsSouthboundFieldChanges` (Go); a new
   `CentralsAdmin.edit.test.ts` (vitest) covering both toast paths.
-- [ ] **B2 · Manual backup/restore pinned to one central — breaks multi-CCU** (M, high)
+- [x] **B2 · Manual backup/restore pinned to one central — breaks multi-CCU** (M, high)
   `internal/central/adapter/stubs.go`, `ccu_wiring.go` — `TriggerBackup` backs up
   only the first central; `HTTPBackupRestorer` uploads every `.sbk` to one fixed
   CCU regardless of the backup's owning central (restore-to-wrong-CCU). Expose
   the existing per-central `CreateBackupForCentral`/`TriggerBackupForCentral` +
   a central-scoped restore over REST/WS; SPA picker. Violates ADR 0002.
+  Implemented: `BackupAdapter` now resolves a backup's owning central from its
+  id (`ownerCentralName`, via the existing `<central>-<timestamp>` id shape)
+  and holds one [`BackupRestorer`] per central (`SetRestorerForCentral` /
+  `restorers map[string]BackupRestorer`); `Restore` picks strictly by
+  resolved owner and never falls back to a different central's restorer —
+  only to the legacy single-`SetRestorer` fallback when an id's owner can't
+  be resolved at all (unknown shape / manually-imported archive), preserving
+  single-CCU behaviour. `ccu_wiring.go`'s `bringUpCentral` now calls
+  `SetRestorerForCentral(cc.Name, …)` for every central instead of wiring one
+  global restorer for "whichever central came up first". `List` backfills
+  `BackupEntry.Central` from the id via the same resolver so the SPA can
+  render an owning-CCU column/picker. REST `POST /backups` accepts an
+  optional `{"central_name": "..."}` body routed to
+  `TriggerBackupForCentral` (omitted/empty body keeps the unscoped
+  first-central default); openapi.yaml documents the new requestBody + 400
+  response. WS gets a new `backups.trigger` admin command
+  (`central_name` required) delegating to `TriggerBackupForCentral`,
+  registered in `writeCommandRoles` alongside the legacy `backup.trigger`.
+  SPA `BackupList.svelte` shows a central picker (mirroring `Energy.svelte`'s
+  pattern) only when more than one central is registered; `api.triggerBackup`
+  takes an optional `centralName`. `assets/openapi.yaml` / `APIVersion`
+  bumped to 2.16.0; `assets/wsapi.json` documents `backups.trigger`;
+  `internal/north/rest/handlers/schema_digest_gen.go` regenerated via
+  `make export-schemas`. New tests:
+  `TestBackupAdapterRestoreTargetsOwningCentralNotAnyOther`,
+  `TestBackupAdapterRestoreUnknownOwnerNeverFallsBackToOtherCentral`,
+  `TestBackupAdapterRestoreForCentralWithNoOwnerFallsBackToLegacyRestorer`,
+  `TestBackupAdapterRestorerForCentralGetter`,
+  `TestBackupAdapterListPopulatesCentralFromID` (Go, `internal/central/adapter`);
+  `TestTriggerBackup_NoBody_CallsUnscopedTrigger`,
+  `TestTriggerBackup_WithCentralName_CallsTriggerBackupForCentral`,
+  `TestTriggerBackup_MalformedBody_Returns400` (REST handlers);
+  `TestBackupsTriggerDelegatesToNamedCentral`,
+  `TestBackupsTriggerMissingCentralNameIsBadRequest`,
+  `TestBackupsTriggerPropagatesServiceError` (WS); `BackupList.test.ts`
+  (Svelte/vitest) for the picker visibility + trigger routing.
 - [x] **B3 · MQTT handlers run blocking I/O on the client read loop → deadlock** (M, high)
   `internal/north/mqtt/birth_sync.go`, `command_subscriber.go` — `go-mqtt`
   requires handlers to return fast; `BirthSync.handle` calls `RepublishDiscovery`

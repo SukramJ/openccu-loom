@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.15.0
+  version: 2.16.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2472,13 +2472,32 @@ paths:
     post:
       operationId: triggerBackup
       summary: Trigger CCU backup (Rega create_backup_start)
+      description: |
+        Starts the create-and-download backup flow. An optional
+        `central_name` in the request body selects the target central
+        explicitly (multi-CCU-correct); omitting it — or an empty
+        request body — backs up the first registered central for
+        backward compatibility.
       tags: [backup]
       security:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                central_name:
+                  type: string
+                  description: >
+                    Name of the central to back up. Omit to back up the
+                    first registered central.
       responses:
         "202": { description: Job id returned }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     get:

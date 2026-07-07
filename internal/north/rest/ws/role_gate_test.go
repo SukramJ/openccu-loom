@@ -27,6 +27,7 @@ var roleGateWriteCommands = []struct {
 	{"sysvars.set", `{"name":"PartyMode","value":true}`, auth.RoleOperator},
 	{"device.rename", `{"address":"ABC0001","name":"Test"}`, auth.RoleOperator},
 	{"backup.trigger", `{}`, auth.RoleAdmin},
+	{"backups.trigger", `{"central_name":"alpha"}`, auth.RoleAdmin},
 	{"ccu.cache_clear", `{}`, auth.RoleAdmin},
 }
 
@@ -41,6 +42,7 @@ func newRoleGateRouter() *Router {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{
 		Devices: &stubDeviceQuery{},
 		Hub:     &stubHub{},
+		Backups: &stubBackups{},
 	})
 	RegisterExtendedCommands(r, ExtendedCommandsConfig{
 		Devices:      &stubDevices{},
@@ -139,6 +141,7 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		SessionBackend:  &stubBackend{},
 		DeviceReloader:  &stubDeviceReloader{},
 		ChannelReloader: &stubChannelReloader{},
+		Backups:         &stubBackups{},
 	})
 
 	paramsets := &stubParamsetReaderWriter{}

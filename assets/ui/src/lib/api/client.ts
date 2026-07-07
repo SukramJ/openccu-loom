@@ -429,8 +429,14 @@ export const api = {
     );
   },
   // --- Backups --------------------------------------------------
-  triggerBackup() {
-    return request<{ id: string }>(`/backups`, { method: "POST" });
+  // centralName selects the target explicitly (multi-CCU-correct); omit
+  // to back up the first registered central for backward compatibility.
+  triggerBackup(centralName?: string) {
+    return request<{ id: string }>(`/backups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(centralName ? { central_name: centralName } : {}),
+    });
   },
   listBackups() {
     return request<BackupEntry[]>(`/backups`);

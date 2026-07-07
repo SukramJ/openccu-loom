@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
+  import type { CentralRow } from "$lib/api/client";
   import type { BackupEntry } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
@@ -10,6 +11,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -20,6 +22,30 @@
   let loadError = $state<string | null>(null);
   let triggering = $state(false);
   let restoring = $state<string | null>(null);
+
+  // Centrals feed the trigger-target picker. With a single registered
+  // central the picker is hidden and every trigger uses the
+  // backward-compatible unscoped default (first/only central); with
+  // several, the operator must pick one explicitly — see B2 (ADR 0002).
+  let centrals = $state<CentralRow[]>([]);
+  let triggerCentral = $state("");
+
+  async function loadCentrals() {
+    try {
+      centrals = await api.listCentralsV2();
+      if (!triggerCentral && centrals.length > 0) {
+        triggerCentral = centrals[0].name;
+      }
+    } catch {
+      // Non-fatal: the trigger button still works unscoped, and the
+      // backup list itself surfaces its own load error below.
+      centrals = [];
+    }
+  }
+
+  const centralOptions = $derived(
+    centrals.map((c) => ({ value: c.name, label: c.name })),
+  );
 
   async function load() {
     loading = true;
@@ -36,7 +62,9 @@
   async function trigger() {
     triggering = true;
     try {
-      const { id } = await api.triggerBackup();
+      const { id } = await api.triggerBackup(
+        centrals.length > 1 ? triggerCentral : undefined,
+      );
       toastStore.success(t("backup.started", { id }));
       await load();
     } catch (err) {
@@ -77,7 +105,10 @@
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    void load();
+    void loadCentrals();
+  });
 
   function formatBytes(n: number): string {
     if (n < 1024) return `${n} B`;
@@ -142,6 +173,12 @@
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
       </Button>
+      {#if centrals.length > 1}
+        <label class="flex flex-col gap-1 text-xs">
+          <span class="text-[var(--ha-secondary-text-color)]">{t("backup.trigger_central")}</span>
+          <Select options={centralOptions} bind:value={triggerCentral} class="w-40" />
+        </label>
+      {/if}
       <Button type="button" size="sm" onclick={() => void trigger()} disabled={triggering}>
         {triggering ? t("backup.triggering") : t("backup.trigger")}
       </Button>

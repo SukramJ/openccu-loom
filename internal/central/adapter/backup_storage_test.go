@@ -505,3 +505,170 @@ func TestBackupAdapterRestorerGetterNilSafe(t *testing.T) {
 		t.Fatal("nil receiver must return nil")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Multi-CCU restore-target resolution (ADR 0002)
+// ---------------------------------------------------------------------------
+
+// newMultiCentralRegistryForBackupTest registers one central per name and
+// returns the shared registry, for tests that need more than one central
+// to exercise owning-central resolution.
+func newMultiCentralRegistryForBackupTest(t *testing.T, names ...string) *central.Registry {
+	t.Helper()
+	reg := central.NewRegistry()
+	for _, n := range names {
+		c, err := central.New(central.Config{Name: n})
+		if err != nil {
+			t.Fatalf("central.New(%s): %v", n, err)
+		}
+		if err := reg.Register(c); err != nil {
+			t.Fatalf("register(%s): %v", n, err)
+		}
+	}
+	return reg
+}
+
+// TestBackupAdapterRestoreTargetsOwningCentralNotAnyOther is the core
+// multi-CCU regression guard for B2: with two registered centrals and a
+// per-central restorer wired for each, restoring a backup owned by the
+// second central must invoke only that central's restorer — never the
+// first one's. Before this fix, [BackupAdapter] held a single global
+// restorer so any backup id, regardless of the central that produced it,
+// was uploaded to whichever CCU happened to be wired first.
+func TestBackupAdapterRestoreTargetsOwningCentralNotAnyOther(t *testing.T) {
+	t.Parallel()
+
+	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
+	a := NewBackupAdapter(reg)
+
+	idBeta := backupID("beta")
+	a.SetStorage(&stubBackupStorage{content: map[string]string{idBeta: "beta payload"}})
+
+	restorerAlpha := &stubBackupRestorer{jobID: "alpha-job"}
+	restorerBeta := &stubBackupRestorer{jobID: "beta-job"}
+	a.SetRestorerForCentral("alpha", restorerAlpha)
+	a.SetRestorerForCentral("beta", restorerBeta)
+
+	jobID, err := a.Restore(context.Background(), idBeta)
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if jobID != "beta-job" {
+		t.Errorf("jobID: want %q, got %q", "beta-job", jobID)
+	}
+	if restorerBeta.capturedID != idBeta {
+		t.Errorf("beta restorer id: want %q, got %q", idBeta, restorerBeta.capturedID)
+	}
+	if string(restorerBeta.capturedPayload) != "beta payload" {
+		t.Errorf("beta restorer payload: want %q, got %q", "beta payload", restorerBeta.capturedPayload)
+	}
+	if restorerAlpha.capturedID != "" {
+		t.Errorf("alpha restorer must not be invoked for a beta-owned backup, got id %q", restorerAlpha.capturedID)
+	}
+}
+
+// TestBackupAdapterRestoreUnknownOwnerNeverFallsBackToOtherCentral checks
+// the failure mode adjacent to the happy path above: a backup id that
+// resolves to a known central (beta) with NO restorer of its own must
+// never fall back to a different central's restorer (alpha's), even when
+// alpha's restorer is wired and a legacy default restorer is wired too.
+func TestBackupAdapterRestoreUnknownOwnerNeverFallsBackToOtherCentral(t *testing.T) {
+	t.Parallel()
+
+	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
+	a := NewBackupAdapter(reg)
+
+	idBeta := backupID("beta")
+	a.SetStorage(&stubBackupStorage{content: map[string]string{idBeta: "beta payload"}})
+
+	restorerAlpha := &stubBackupRestorer{jobID: "alpha-job"}
+	a.SetRestorerForCentral("alpha", restorerAlpha)
+	// A legacy default restorer is wired too — it must only ever be
+	// consulted for an id whose owner cannot be resolved, not as a
+	// substitute for a resolved-but-unready owner.
+	a.SetRestorer(&stubBackupRestorer{jobID: "legacy-job"})
+
+	_, err := a.Restore(context.Background(), idBeta)
+	if !errors.Is(err, ErrRestoreUnsupported) {
+		t.Fatalf("want ErrRestoreUnsupported, got %v", err)
+	}
+	if restorerAlpha.capturedID != "" {
+		t.Errorf("alpha restorer must not be invoked for a beta-owned backup, got id %q", restorerAlpha.capturedID)
+	}
+}
+
+// TestBackupAdapterRestoreForCentralWithNoOwnerFallsBackToLegacyRestorer
+// preserves single-CCU / manually-placed-archive behaviour: an id that
+// does not resolve to any registered central's name still restores via
+// the legacy [BackupAdapter.SetRestorer] fallback.
+func TestBackupAdapterRestoreForCentralWithNoOwnerFallsBackToLegacyRestorer(t *testing.T) {
+	t.Parallel()
+
+	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
+	a := NewBackupAdapter(reg)
+
+	a.SetStorage(&stubBackupStorage{content: map[string]string{"manually-imported": "data"}})
+	legacy := &stubBackupRestorer{jobID: "legacy-job"}
+	a.SetRestorer(legacy)
+
+	jobID, err := a.Restore(context.Background(), "manually-imported")
+	if err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if jobID != "legacy-job" {
+		t.Errorf("jobID: want %q, got %q", "legacy-job", jobID)
+	}
+	if legacy.capturedID != "manually-imported" {
+		t.Errorf("legacy restorer id: want %q, got %q", "manually-imported", legacy.capturedID)
+	}
+}
+
+// TestBackupAdapterRestorerForCentralGetter exercises the getter used by
+// wiring code to check whether a given central already has a restorer
+// installed (the ccu_wiring re-gate on reconnect).
+func TestBackupAdapterRestorerForCentralGetter(t *testing.T) {
+	t.Parallel()
+
+	reg := newMultiCentralRegistryForBackupTest(t, "alpha")
+	a := NewBackupAdapter(reg)
+	if a.RestorerForCentral("alpha") != nil {
+		t.Fatal("fresh adapter must report no restorer for alpha")
+	}
+	rest := &stubBackupRestorer{}
+	a.SetRestorerForCentral("alpha", rest)
+	if a.RestorerForCentral("alpha") != rest {
+		t.Fatal("RestorerForCentral did not return the wired instance")
+	}
+}
+
+// TestBackupAdapterListPopulatesCentralFromID verifies that List
+// backfills BackupEntry.Central from the id when the storage backend
+// (e.g. [FilesystemBackupStorage], which has no registry access) leaves
+// it empty — the SPA's backup table and restore-target picker depend on
+// this field to show which CCU owns each backup.
+func TestBackupAdapterListPopulatesCentralFromID(t *testing.T) {
+	t.Parallel()
+
+	reg := newMultiCentralRegistryForBackupTest(t, "alpha", "beta")
+	a := NewBackupAdapter(reg)
+
+	idBeta := backupID("beta")
+	a.SetStorage(&stubBackupStorage{entries: []hmapi.BackupEntry{
+		{ID: idBeta, Bytes: 42},
+		{ID: "unresolvable-id", Bytes: 7},
+	}})
+
+	list, err := a.List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("want 2 entries, got %d", len(list))
+	}
+	if list[0].Central != "beta" {
+		t.Errorf("entry 0 central: want %q, got %q", "beta", list[0].Central)
+	}
+	if list[1].Central != "" {
+		t.Errorf("entry 1 central: want empty (unresolvable id), got %q", list[1].Central)
+	}
+}

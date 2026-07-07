@@ -33,7 +33,11 @@ const backupRunTimeout = 6 * time.Minute
 // flow (start → poll status → download the .sbk) and persists the archive
 // to local storage so it appears in the list and is downloadable. It treats
 // the first registered central as the backup source — multi-CCU backup
-// support is a follow-up.
+// support is a follow-up. TriggerBackupForCentral, CreateBackupForCentral,
+// and Restore are multi-CCU-correct: each backup id is minted from its
+// owning central's name (see [backupID]) and Restore resolves that owner
+// back out of the id before picking a restorer, so a fleet with several
+// registered centrals never uploads a backup to the wrong CCU.
 //
 // List / Stream / Restore consult the optional [BackupStorage] +
 // [BackupRestorer] hooks; when both are nil the adapter degrades
@@ -41,8 +45,18 @@ const backupRunTimeout = 6 * time.Minute
 type BackupAdapter struct {
 	registry *central.Registry
 	storage  BackupStorage
+	// restorer is the legacy single-restorer fallback, wired via
+	// [BackupAdapter.SetRestorer]. It is only consulted when a backup id's
+	// owning central cannot be resolved against the registry (e.g. a
+	// manually-placed archive, or a test id that does not follow the
+	// "<central>-<timestamp>" shape) — never as a substitute for a known
+	// owner's dedicated restorer.
 	restorer BackupRestorer
-	logger   *slog.Logger
+	// restorers holds one [BackupRestorer] per central name, wired via
+	// [BackupAdapter.SetRestorerForCentral]. Restore prefers the entry
+	// keyed by the backup id's resolved owning central.
+	restorers map[string]BackupRestorer
+	logger    *slog.Logger
 
 	// locksMu guards locks; locks holds one mutex per central so that a
 	// scheduled create and a manual trigger for the same central never run
@@ -270,14 +284,63 @@ func backupBelongsTo(id, safe string) bool {
 	return id[:len(id)-backupIDSuffixLen] == safe
 }
 
+// ownerCentralName resolves the central that minted id, by matching id
+// against every registered central's [backupSafeName] via
+// [backupBelongsTo]. Returns "" when no registered central's name
+// produced id (unknown shape, or the owning central has since been
+// removed from the registry).
+func (a *BackupAdapter) ownerCentralName(id string) string {
+	if a.registry == nil {
+		return ""
+	}
+	for _, u := range a.registry.List() {
+		if u == nil {
+			continue
+		}
+		if backupBelongsTo(id, backupSafeName(u.Name())) {
+			return u.Name()
+		}
+	}
+	return ""
+}
+
+// resolveRestorer picks the [BackupRestorer] that must handle a restore
+// of id. When id resolves to a known central via
+// [BackupAdapter.ownerCentralName] the lookup is strict: only that
+// central's own restorer (or nil, meaning "not yet available") is ever
+// returned — the legacy [BackupAdapter.restorer] fallback is not
+// consulted, so a central whose restorer has not (yet) come up cannot
+// silently receive another central's restore. When id's owner cannot be
+// resolved at all (unknown id shape, e.g. a manually-imported archive,
+// or a test double with no realistic id) the legacy single-restorer
+// fallback applies, preserving single-CCU behaviour.
+func (a *BackupAdapter) resolveRestorer(id string) BackupRestorer {
+	if owner := a.ownerCentralName(id); owner != "" {
+		return a.restorers[owner]
+	}
+	return a.restorer
+}
+
 // List implements handlers.BackupService. When a [BackupStorage] is
 // wired the adapter delegates; otherwise the SPA's "no backups yet"
-// placeholder renders.
+// placeholder renders. Entries the storage backend left without a
+// Central (e.g. [FilesystemBackupStorage], which has no registry access)
+// are backfilled from the id via [BackupAdapter.ownerCentralName] so the
+// SPA can render an owning-CCU column and a restore-target picker.
 func (a *BackupAdapter) List(ctx context.Context) ([]hmapi.BackupEntry, error) {
 	if a.storage == nil {
 		return nil, nil
 	}
-	return a.storage.List(ctx)
+	entries, err := a.storage.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range entries {
+		if entries[i].Central == "" {
+			entries[i].Central = a.ownerCentralName(entries[i].ID)
+		}
+	}
+	return entries, nil
 }
 
 // Stream implements handlers.BackupService.
@@ -295,12 +358,18 @@ func (a *BackupAdapter) Stream(ctx context.Context, id string, w io.Writer) erro
 }
 
 // Restore implements handlers.BackupService. Reads the named backup
-// from the configured storage and hands it to the configured
-// restorer for upload to the CCU. Either dependency missing → the
-// adapter surfaces [ErrRestoreUnsupported] so the SPA can render a
-// clear "manual restore required" message.
+// from the configured storage and hands it to the restorer that owns
+// the backup's originating central for upload to that CCU. Either
+// dependency missing, or a resolved owner with no dedicated restorer
+// wired, → the adapter surfaces [ErrRestoreUnsupported] rather than ever
+// falling back to a different central's restorer (which would upload
+// the archive to the wrong CCU — see ADR 0002).
 func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) {
-	if a.storage == nil || a.restorer == nil {
+	if a.storage == nil {
+		return "", ErrRestoreUnsupported
+	}
+	restorer := a.resolveRestorer(id)
+	if restorer == nil {
 		return "", ErrRestoreUnsupported
 	}
 	rc, err := a.storage.Open(ctx, id)
@@ -308,5 +377,5 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 		return "", err
 	}
 	defer func() { _ = rc.Close() }()
-	return a.restorer.Restore(ctx, id, rc)
+	return restorer.Restore(ctx, id, rc)
 }

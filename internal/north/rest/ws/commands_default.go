@@ -197,6 +197,19 @@ type HubQuery interface {
 	AcceptInboxDevice(ctx context.Context, deviceAddress string) error
 }
 
+// BackupsService is the minimal contract the `backups.trigger` command
+// needs: a central-scoped counterpart to the legacy Rega-script-based
+// [HubQuery.TriggerBackup]/[HubQuery.BackupStatus] pair. It targets the
+// create-and-download backup flow (mirrors the REST `POST /backups`
+// endpoint's `central_name` body field) so a multi-CCU daemon can back
+// up one specific central instead of only the first registered one —
+// see ADR 0002.
+type BackupsService interface {
+	// TriggerBackupForCentral starts the create-and-download backup flow
+	// for exactly the named central and returns the backup/job id.
+	TriggerBackupForCentral(ctx context.Context, centralName string) (string, error)
+}
+
 // DeviceReloader is the write surface for `config.reload_device_config`
 // and `ccu.reload_device_config`. Both Python commands call
 // `device.reload_device_config()` which re-pulls the device's parameter
@@ -236,6 +249,10 @@ type DefaultCommandsConfig struct {
 	Hub            HubQuery
 	Links          LinkQuery
 	Schedules      ScheduleQuery
+	// Backups backs `backups.trigger`, the central-scoped create-and-
+	// download backup command. Nil skips the command; the legacy
+	// `backup.trigger`/`backup.status` pair (backed by Hub) is unaffected.
+	Backups BackupsService
 	// DefinitionExport backs `devices.export_definition` (an the Python reference-
 	// compatible device-definition zip). Nil skips the command.
 	DefinitionExport DefinitionExporter
@@ -308,6 +325,10 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		router.Register("firmware.update", firmwareUpdateHandler(cfg.Hub))
 		router.Register("inbox.list", inboxListHandler(cfg.Hub))
 		router.Register("inbox.accept", inboxAcceptHandler(cfg.Hub))
+	}
+
+	if cfg.Backups != nil {
+		router.Register("backups.trigger", backupsTriggerHandler(cfg.Backups))
 	}
 
 	if cfg.Links != nil {
@@ -672,6 +693,31 @@ func backupTriggerHandler(q HubQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "trigger_backup: "+err.Error())
 		}
 		return map[string]any{"triggered": true}, nil
+	}
+}
+
+// backupsTriggerArgs is the required shape for `backups.trigger`.
+// Unlike the legacy `backup.trigger` (HubQuery, always the first
+// central), this command always targets exactly the named central —
+// see [BackupsService].
+type backupsTriggerArgs struct {
+	CentralName string `json:"central_name"`
+}
+
+func backupsTriggerHandler(svc BackupsService) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args backupsTriggerArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.CentralName == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "central_name required")
+		}
+		id, err := svc.TriggerBackupForCentral(ctx, args.CentralName)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "trigger_backup_for_central: "+err.Error())
+		}
+		return map[string]any{"id": id, "central_name": args.CentralName}, nil
 	}
 }
 
