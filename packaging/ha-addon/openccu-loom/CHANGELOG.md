@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.27.2
+
+- **New "About" page in the web interface.** The sidebar now shows the
+  daemon version at the bottom; clicking it (or the new About entry)
+  opens a page with everything a support question needs: version,
+  build details, uptime, your CCUs with their firmware versions and
+  pending CCU updates, and the license and project links.
+
 ## 0.27.1
 
 - **Maintenance release for the CCU/RaspberryMatic add-on variant.**

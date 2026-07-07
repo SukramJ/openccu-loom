@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/build"
 )
 
 func TestInfo_HappyPath(t *testing.T) {
@@ -138,5 +140,40 @@ func TestInfo_SchemaDigestIsServed(t *testing.T) {
 	}
 	if !strings.HasPrefix(body.SchemaDigest, "sha256:") || len(body.SchemaDigest) != len("sha256:")+64 {
 		t.Fatalf("schema_digest %q must be sha256: plus 64 hex chars", body.SchemaDigest)
+	}
+}
+
+func TestInfo_AddonBuild(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
+	w := httptest.NewRecorder()
+	Info(time.Now(), nil).ServeHTTP(w, req)
+
+	var body InfoResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.AddonBuild {
+		t.Fatalf("addon_build = %v, want false by default", body.AddonBuild)
+	}
+	if !strings.Contains(w.Body.String(), `"addon_build":false`) {
+		t.Fatalf("expected body to contain addon_build:false, got %s", w.Body.String())
+	}
+
+	original := build.AddonBuild
+	build.AddonBuild = "true"
+	t.Cleanup(func() { build.AddonBuild = original })
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
+	w = httptest.NewRecorder()
+	Info(time.Now(), nil).ServeHTTP(w, req)
+
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !body.AddonBuild {
+		t.Fatalf("addon_build = %v, want true after override", body.AddonBuild)
+	}
+	if !strings.Contains(w.Body.String(), `"addon_build":true`) {
+		t.Fatalf("expected body to contain addon_build:true, got %s", w.Body.String())
 	}
 }

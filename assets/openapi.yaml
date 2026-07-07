@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.14.0
+  version: 2.15.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4712,7 +4712,7 @@ components:
               max: {}
     Info:
       type: object
-      required: [version, commit, build_date, uptime, started_at, api_version, schema_digest, capabilities]
+      required: [version, commit, build_date, addon_build, uptime, started_at, api_version, schema_digest, capabilities]
       description: |
         Daemon build + runtime info plus a wire-contract version and a
         capability list. External clients should switch on
@@ -4723,6 +4723,12 @@ components:
         version: { type: string, description: "Daemon build version (semver)." }
         commit: { type: string }
         build_date: { type: string }
+        addon_build:
+          type: boolean
+          description: |
+            True when this binary was built as the CCU/RaspberryMatic
+            add-on (it then runs on the CCU itself). False for the
+            standalone binary, Docker image, and HA add-on builds.
         uptime: { type: string }
         started_at: { type: string, format: date-time }
         api_version:
