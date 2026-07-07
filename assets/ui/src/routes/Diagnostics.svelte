@@ -10,15 +10,18 @@
     LogLevelsResponse,
     RpcRecordingStatus,
   } from "$lib/api/types";
+  import type { ReliabilityRow, ValuesCacheStats } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   let health = $state<HealthSnapshot | null>(null);
@@ -34,6 +37,73 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let reconnecting = $state<string | null>(null);
+
+  // Reliability + values-cache admin panel. Loaded independently of the
+  // rest of the page so a broken breaker/cache read never blocks the
+  // interfaces table above it.
+  let reliability = $state<ReliabilityRow[]>([]);
+  let reliabilityLoading = $state(true);
+  let reliabilityError = $state<string | null>(null);
+  let valuesCacheStats = $state<ValuesCacheStats | null>(null);
+  let valuesCacheLoading = $state(true);
+  let valuesCacheError = $state<string | null>(null);
+  let valuesCacheResetting = $state(false);
+
+  async function loadReliability() {
+    reliabilityLoading = true;
+    reliabilityError = null;
+    try {
+      reliability = await api.getReliability();
+    } catch (err) {
+      reliabilityError = err instanceof ApiError ? err.message : String(err);
+    } finally {
+      reliabilityLoading = false;
+    }
+  }
+
+  async function loadValuesCacheStats() {
+    valuesCacheLoading = true;
+    valuesCacheError = null;
+    try {
+      valuesCacheStats = await api.getValuesCacheStats();
+    } catch (err) {
+      valuesCacheError = err instanceof ApiError ? err.message : String(err);
+    } finally {
+      valuesCacheLoading = false;
+    }
+  }
+
+  async function resetValuesCache() {
+    const ok = await confirmStore.ask({
+      title: t("diagnostics.values_cache.reset_confirm_title"),
+      body: t("diagnostics.values_cache.reset_confirm_body"),
+      confirmLabel: t("diagnostics.values_cache.reset"),
+      destructive: true,
+    });
+    if (!ok) return;
+    valuesCacheResetting = true;
+    try {
+      await api.resetValuesCache();
+      toastStore.success(t("diagnostics.values_cache.reset_success"));
+      await loadValuesCacheStats();
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      valuesCacheResetting = false;
+    }
+  }
+
+  function circuitLabel(state: number): string {
+    if (state === 1) return t("diagnostics.reliability.circuit.open");
+    if (state === 2) return t("diagnostics.reliability.circuit.half_open");
+    return t("diagnostics.reliability.circuit.closed");
+  }
+
+  function circuitVariant(state: number): "success" | "danger" | "muted" {
+    if (state === 1) return "danger";
+    if (state === 2) return "muted";
+    return "success";
+  }
 
   // Log-Level toggle form state
   let newLevelPath = $state("openccu-loom.client.transport.xmlrpc");
@@ -292,6 +362,8 @@
 
   onMount(() => {
     void load();
+    void loadReliability();
+    void loadValuesCacheStats();
     // Poll RPC recording status every 5 s while any recording is active.
     rpcPollTimer = setInterval(() => {
       void refreshRpcRecordings();
@@ -392,6 +464,31 @@
       get: (i) => [i.central_id, i.host, i.note].filter(Boolean).join(" · "),
     },
     { key: "action", label: t("diagnostics.col.action"), align: "right", cellClass: "reflow-actions" },
+  ]);
+
+  const reliabilityCols: DataColumn<ReliabilityRow>[] = $derived([
+    { key: "central", label: t("diagnostics.reliability.col.central"), sortable: true, title: true, get: (r) => r.central },
+    { key: "interface", label: t("diagnostics.reliability.col.interface"), sortable: true, get: (r) => r.interface },
+    { key: "circuit", label: t("diagnostics.reliability.col.circuit"), sortable: true, get: (r) => r.circuit_state },
+    { key: "state", label: t("diagnostics.reliability.col.state"), sortable: true, get: (r) => r.state?.state ?? "" },
+    {
+      key: "requests",
+      label: t("diagnostics.reliability.col.requests"),
+      align: "right",
+      get: (r) => r.state?.total_requests ?? 0,
+    },
+    {
+      key: "last_failure",
+      label: t("diagnostics.reliability.col.last_failure"),
+      sortable: true,
+      get: (r) => r.state?.last_failure_at ?? "",
+    },
+    {
+      key: "last_callback",
+      label: t("diagnostics.reliability.col.last_callback"),
+      sortable: true,
+      get: (r) => r.state?.last_callback_at ?? "",
+    },
   ]);
 
   const clientCols: DataColumn<DiagnosticsClient>[] = $derived([
@@ -640,6 +737,102 @@
         {/if}
       {/snippet}
     </DataTable>
+  </Card>
+
+  <Card class="p-4">
+    <header class="mb-3 flex items-center justify-between gap-2">
+      <h2 class="text-lg font-semibold">{t("diagnostics.reliability.title")}</h2>
+      <span class="text-xs text-[var(--ha-secondary-text-color)]">{reliability.length}</span>
+    </header>
+    <p class="mb-3 text-sm text-[var(--ha-secondary-text-color)]">
+      {t("diagnostics.reliability.help")}
+    </p>
+    {#if reliabilityLoading}
+      <LoadingState />
+    {:else if reliabilityError}
+      <ErrorState message={reliabilityError} onRetry={() => void loadReliability()} />
+    {:else}
+      <DataTable
+        rows={reliability}
+        columns={reliabilityCols}
+        rowKey={(r) => `${r.central}/${r.interface}`}
+        emptyMessage={t("diagnostics.reliability.empty")}
+      >
+        {#snippet cell(row, col)}
+          {#if col.key === "central"}
+            <span class="font-mono text-sm">{row.central}</span>
+          {:else if col.key === "interface"}
+            <span class="font-mono text-sm">{row.interface}</span>
+          {:else if col.key === "circuit"}
+            <Badge variant={circuitVariant(row.circuit_state)}>{circuitLabel(row.circuit_state)}</Badge>
+          {:else if col.key === "state"}
+            <span class="text-xs">{row.state?.state ?? "—"}</span>
+          {:else if col.key === "requests"}
+            <span class="text-xs tabular-nums">
+              {row.state?.total_requests ?? 0} / {row.state?.executed_requests ?? 0} / {row.state?.pending_requests ?? 0}
+            </span>
+          {:else if col.key === "last_failure"}
+            <span class="text-xs">{row.state?.last_failure_at ? formatDate(row.state.last_failure_at) : "—"}</span>
+          {:else if col.key === "last_callback"}
+            <span class="text-xs">{row.state?.last_callback_at ? formatDate(row.state.last_callback_at) : "—"}</span>
+          {/if}
+        {/snippet}
+      </DataTable>
+    {/if}
+  </Card>
+
+  <Card class="p-4">
+    <header class="mb-3 flex items-center justify-between gap-2">
+      <h2 class="text-lg font-semibold">{t("diagnostics.values_cache.title")}</h2>
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        onclick={() => void resetValuesCache()}
+        disabled={valuesCacheResetting || valuesCacheLoading || !!valuesCacheError}
+      >
+        {valuesCacheResetting ? "…" : t("diagnostics.values_cache.reset")}
+      </Button>
+    </header>
+    <p class="mb-3 text-sm text-[var(--ha-secondary-text-color)]">
+      {t("diagnostics.values_cache.help")}
+    </p>
+    {#if valuesCacheLoading}
+      <LoadingState />
+    {:else if valuesCacheError}
+      <ErrorState message={valuesCacheError} onRetry={() => void loadValuesCacheStats()} />
+    {:else if valuesCacheStats}
+      <dl class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div>
+          <dt class="text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.values_cache.rows")}</dt>
+          <dd class="font-semibold tabular-nums">{valuesCacheStats.rows}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.values_cache.bytes")}</dt>
+          <dd class="font-semibold tabular-nums">{valuesCacheStats.value_json_bytes}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.values_cache.restored")}</dt>
+          <dd class="font-semibold tabular-nums">{valuesCacheStats.restored_rows}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.values_cache.cast_failures")}</dt>
+          <dd class="font-semibold tabular-nums">{valuesCacheStats.cast_failures}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.values_cache.gc_deleted")}</dt>
+          <dd class="font-semibold tabular-nums">{valuesCacheStats.gc_rows_deleted}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.values_cache.flush_batches")}</dt>
+          <dd class="font-semibold tabular-nums">{valuesCacheStats.flush_batches}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.values_cache.flushed_entries")}</dt>
+          <dd class="font-semibold tabular-nums">{valuesCacheStats.flushed_entries}</dd>
+        </div>
+      </dl>
+    {/if}
   </Card>
 
   <Card class="p-4">

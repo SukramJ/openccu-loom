@@ -124,10 +124,20 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
 
 ## Tier 2 — High-value UX & test gaps
 
-- [ ] **U1 · ProgramList/SysvarList silently truncate at 50 items** (S, high)
+- [x] **U1 · ProgramList/SysvarList silently truncate at 50 items** (S, high)
   `assets/ui/src/lib/api/client.ts` — `listPrograms`/`listSysvars` (and
   `Favorites.svelte:36`) call paginated endpoints with no page params → only
   page 1. Loop pages like `devices.svelte.ts` or add a pager (`AuditLog` pattern).
+  Implemented: added a shared `fetchAllPages` helper in `client.ts` (pages via
+  `page`/`per_page` until a short page signals the end — both endpoints reply
+  with a bare array, not a `{items,total}` envelope, so it can't reuse
+  `devices.svelte.ts`'s total-driven loop verbatim) and wired both
+  `listPrograms()`/`listSysvars()` through it. `ProgramList.svelte`,
+  `SysvarList.svelte`, `Favorites.svelte` needed no changes — the fix is
+  fully centralized in the client. New tests in `client.test.ts`
+  (`listPrograms pages through more than one page's worth of programs`,
+  `listSysvars pages through more than one page's worth of sysvars`,
+  `listPrograms stops after a single short page`).
 - [ ] **T1 · MQTT combined-DP timer/sensor + schedule-entity discovery: 0% tests** (M, high)
   `internal/north/mqtt/discovery_combined.go`, `discovery_schedule.go` (~685 LoC,
   live-wired, errors discarded). Add table-driven discovery/state tests +
@@ -146,18 +156,41 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   `packaging/ccu-addon/ccu/update_script` — exit-code contract (0=no reboot,
   10=reboot) unguarded; exact subject of the 0.27.1 bug. Add a shell/bats test
   stubbing `uname`/`mount`/etc. and asserting exit code per `$1`.
-- [ ] **U2 · Settings.svelte breaks the shared operating concept** (S, med)
+- [x] **U2 · Settings.svelte breaks the shared operating concept** (S, med)
   `assets/ui/src/routes/Settings.svelte` — inline MQTT-reload banner instead of
   toast; `schemaError` as ad-hoc Card instead of `ErrorState`. Only route with no
   Loading/Empty/ErrorState. Replace with `toastStore` + `<ErrorState onRetry>`.
-- [ ] **U3 · ConfirmDialog has no focus trap** (S, med, a11y)
+  Implemented: `reloadMQTT()` now calls `toastStore.success`/`.error` instead
+  of setting `mqttReloadBanner` (state + the inline `<span>` removed); the
+  `schemaError` ad-hoc `<Card>` is replaced with the shared `<ErrorState
+  message={schemaError} onRetry={() => void loadSchema()} />`. New
+  `Settings.test.ts` covers both (ErrorState render + retry re-invoking
+  `getConfigSchema`; MQTT reload success/error toasts with no inline banner).
+- [x] **U3 · ConfirmDialog has no focus trap** (S, med, a11y)
   `assets/ui/src/lib/components/ui/ConfirmDialog.svelte` — `aria-modal` but never
   focuses itself, no Tab trap, no focus restore. One fix benefits every
   destructive flow. Focus cancel on open, trap Tab, restore on close.
-- [ ] **U4 · Reliability + values-cache admin endpoints have no UI** (M, med)
+  Implemented: an `$effect` on `pending` saves `document.activeElement` and
+  focuses the first dialog button (Cancel) once the dialog's DOM commits;
+  `onKey`'s existing Escape/Enter handling gained a `Tab` branch that cycles
+  between the two buttons (wraps at each edge) and refocuses the saved
+  trigger element once the dialog closes. New `ConfirmDialog.test.ts`
+  (focus-into-dialog-on-open, focus-restored-on-close).
+- [x] **U4 · Reliability + values-cache admin endpoints have no UI** (M, med)
   `GET /diagnostics/reliability` (breaker state per interface) + values-cache
   stats/reset routes have no `client.ts` wrapper or SPA surface. Add wrappers +
   a Diagnostics panel next to the interfaces table.
+  Implemented: `client.ts` gained `getReliability(central?)`,
+  `getValuesCacheStats()`, `resetValuesCache(address?)` plus the
+  `ReliabilityRow`/`ReliabilityClientState`/`ValuesCacheStats` types.
+  `Diagnostics.svelte` loads both independently of the rest of the page (own
+  loading/error state so a broken breaker/cache read never blocks the
+  interfaces table) and renders a reliability `DataTable` (circuit-state
+  badge, live-client state, request counters, last failure/callback) plus a
+  values-cache stats card with a `confirmStore`-gated, `toastStore`-reported
+  reset action. All new strings localized EN+DE in `i18n.ts`. New
+  `Diagnostics.test.ts` (row rendering, ErrorState+retry on a failed
+  reliability read, cache-stats rendering, reset-with-confirm success/decline).
 - [x] **A1 · GET /incidents has no filtering/pagination** (S, med)
   `internal/north/rest/handlers/incidents.go` — unbounded `SELECT`, unlike
   `/audit`. Add `central`/`since`/`until`/`limit` (SQL already scopes by central).

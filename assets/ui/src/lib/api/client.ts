@@ -209,6 +209,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+// fetchAllPages pages through an endpoint whose body is a bare JSON array
+// (no `{items,total}` wrapper) and whose pagination is expressed purely via
+// `page`/`per_page` query params — e.g. /programs, /sysvars. A page shorter
+// than `perPage` signals the end; a safety cap prevents unbounded looping on
+// unexpected server behaviour. Mirrors the `Paginated<T>` loop in
+// devices.svelte.ts, adapted for endpoints that don't echo a `total`.
+async function fetchAllPages<T>(
+  fetchPage: (page: number, perPage: number) => Promise<T[]>,
+  perPage = 200,
+  maxPages = 100,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const items = await fetchPage(page, perPage);
+    all.push(...items);
+    if (items.length < perPage) return all;
+  }
+  console.warn(
+    `[api] paginated fetch capped at ${maxPages} pages (${maxPages * perPage} items).`,
+  );
+  return all;
+}
+
 // editLockHeaders builds the header set for a configuration paramset
 // write: always JSON, plus the X-Edit-Token when the caller holds an
 // edit-lock token. The daemon rejects a MASTER/LINK write without a
@@ -445,7 +468,9 @@ export const api = {
   },
   // --- Sysvars / programs / messages ----------------------------
   listSysvars() {
-    return request<SysvarEntry[]>(`/sysvars`);
+    return fetchAllPages<SysvarEntry>((page, perPage) =>
+      request<SysvarEntry[]>(`/sysvars?page=${page}&per_page=${perPage}`),
+    );
   },
   getSysvar(name: string) {
     return request<SysvarEntry>(`/sysvars/${encodeURIComponent(name)}`);
@@ -508,7 +533,9 @@ export const api = {
     });
   },
   listPrograms() {
-    return request<ProgramEntry[]>(`/programs`);
+    return fetchAllPages<ProgramEntry>((page, perPage) =>
+      request<ProgramEntry[]>(`/programs?page=${page}&per_page=${perPage}`),
+    );
   },
   executeProgram(id: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
@@ -1165,6 +1192,28 @@ export const api = {
       body: JSON.stringify(body),
     });
   },
+  // Per-(central,interface) circuit-breaker + connection-state snapshot.
+  // Optionally scoped to one central.
+  getReliability(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<ReliabilityRow[]>(`/diagnostics/reliability${qs}`);
+  },
+  // Persistent VALUES-cache statistics (row count, byte size, cumulative
+  // restore/cast/gc/flush counters since process start). See ADR 0018.
+  getValuesCacheStats() {
+    return request<ValuesCacheStats>(`/admin/values-cache/stats`);
+  },
+  // Drop every row from the persistent VALUES cache, or — when `address`
+  // is given — only the rows for that one device.
+  resetValuesCache(address?: string) {
+    if (address) {
+      return request<void>(
+        `/devices/${encodeURIComponent(address)}/values-cache/reset`,
+        { method: "POST" },
+      );
+    }
+    return request<void>(`/admin/values-cache/reset`, { method: "POST" });
+  },
   // User CRUD ----------------------------------------------------
   listUsersV2() {
     return request<UserSummaryV2[]>(`/users`);
@@ -1571,4 +1620,35 @@ export type CacheClearReport = {
   master: number;
   centrals_reinit: number;
   errors: number;
+};
+
+// Live InterfaceClient state embedded in a ReliabilityRow, when the client
+// exposes one. Mirrors GET /diagnostics/reliability's `state` object.
+export type ReliabilityClientState = {
+  state?: string;
+  closed?: boolean;
+  total_requests?: number;
+  executed_requests?: number;
+  pending_requests?: number;
+  last_failure_at?: string;
+  last_callback_at?: string;
+};
+
+// One row of GET /diagnostics/reliability: circuit-breaker + connection
+// state for a single (central, interface) pair.
+export type ReliabilityRow = {
+  central: string;
+  interface: string;
+  circuit_state: number;
+  state?: ReliabilityClientState;
+};
+
+export type ValuesCacheStats = {
+  rows: number;
+  value_json_bytes: number;
+  restored_rows: number;
+  cast_failures: number;
+  gc_rows_deleted: number;
+  flush_batches: number;
+  flushed_entries: number;
 };

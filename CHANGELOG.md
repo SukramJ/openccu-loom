@@ -87,8 +87,36 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `backups.trigger` exposes the same central-scoped trigger. The
   Config UI's Backups page shows a target-CCU picker once more than
   one central is registered.
+- **Config UI: Programs and Sysvars lists no longer silently cap at
+  one page.** `listPrograms()`/`listSysvars()` fired a single
+  unparameterized request; the client now pages through `/programs`
+  and `/sysvars` (`page`/`per_page`) until a short page signals the
+  end, mirroring the loop `devices.svelte.ts` already used for
+  `/devices`. `Favorites.svelte`'s pinned-sysvar lookup benefits for
+  free since it shares the same client call.
+- **Config UI: Settings now matches the shared operating concept.**
+  The MQTT-reload result was an inline coloured `<span>`; it is now a
+  `toastStore.success`/`.error` call like every other action result.
+  The schema-load failure was an ad-hoc `<Card>` with red text; it is
+  now the shared `ErrorState` component with a working retry button.
+- **Config UI: the shared `ConfirmDialog` now traps focus.** Opening
+  the dialog moves focus to the Cancel button and restores it to the
+  triggering element on close; Tab/Shift+Tab now cycle only between
+  the dialog's two buttons instead of leaking focus to the page
+  behind the modal backdrop. Every destructive-action flow in the SPA
+  reuses this one component, so the fix applies everywhere at once.
 
 ### Added
+
+- **Config UI: reliability + values-cache admin panel on the
+  Diagnostics page.** New `client.ts` wrappers (`getReliability`,
+  `getValuesCacheStats`, `resetValuesCache`) surface the existing
+  `GET /diagnostics/reliability` and `/admin/values-cache/*` /
+  `/devices/{addr}/values-cache/reset` endpoints, which previously had
+  no Config UI surface at all. The Diagnostics page now shows a
+  per-`(central, interface)` circuit-breaker/connection-state table
+  next to the interfaces table, plus a values-cache stats card with a
+  confirm-gated reset action.
 
 - **`GET /incidents` gained `central`/`since`/`until`/`limit` filtering.**
   Previously an unbounded, unfiltered `SELECT` across every registered
