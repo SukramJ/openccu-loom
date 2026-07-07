@@ -416,6 +416,15 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 // — up to 900 s commissioned, or 48 h for an uncommissioned bridge.
 const paseMaxErrors = 20
 
+// maxUnsecuredWindows caps the number of per-SourceNodeID duplicate-detection
+// windows tracked for unsecured PASE traffic within one commissioning window.
+// SourceNodeID is attacker-controlled and unauthenticated at this stage, so
+// without a cap a spoofed-source flood grows unsecuredWindows without bound.
+// A real commissioning window sees only a handful of commissioners; 256 is far
+// above that. Past the cap a new source is treated as fresh — the PASE
+// handshake handler's own state-replay guard still rejects a genuine replay.
+const maxUnsecuredWindows = 256
+
 // pasePairingTimeout bounds how long a single PASE handshake may hold
 // the single-active-PASE claim. Mirrors matter.js PaseServer.ts:33
 // PASE_PAIRING_TIMEOUT (60 s) — an abandoned handshake (commissioner
@@ -482,6 +491,7 @@ func (b *Bridge) recordPaseFailure() {
 func (b *Bridge) resetPaseFailures() {
 	b.paseFailures.Store(0)
 	b.unsecuredWindows.Clear()
+	b.unsecuredWindowCount.Store(0)
 }
 
 // handlePase + handleCase share the handler-invocation + reply-send

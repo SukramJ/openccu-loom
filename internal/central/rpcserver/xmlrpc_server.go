@@ -91,9 +91,16 @@ func NewXMLRPCServer(cfg XMLRPCConfig) (*XMLRPCServer, error) {
 	if s.shutdown <= 0 {
 		s.shutdown = 5 * time.Second
 	}
+	// Finite timeouts so a slow or idle peer cannot pin a callback connection
+	// indefinitely. ReadHeaderTimeout alone bounds only the header phase; a
+	// slow request body or an idle keep-alive would otherwise hold the socket
+	// forever. Values are generous relative to LAN event callbacks.
 	s.srv = &http.Server{
 		Handler:           s,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	return s, nil
 }

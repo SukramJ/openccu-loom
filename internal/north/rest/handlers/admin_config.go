@@ -269,6 +269,16 @@ func secretPathSet() map[string]struct{} {
 }
 
 func maskPath(v any, prefix string, set map[string]struct{}) {
+	// Slice-of-struct secrets (e.g. centrals[].password) are classified
+	// under the singular slice prefix ("centrals.password"), so each element
+	// is re-walked under the same prefix — without this, array-nested secrets
+	// are never masked and leak in cleartext to every authenticated reader.
+	if arr, ok := v.([]any); ok {
+		for _, e := range arr {
+			maskPath(e, prefix, set)
+		}
+		return
+	}
 	m, ok := v.(map[string]any)
 	if !ok {
 		return

@@ -856,8 +856,16 @@ func (c *ConnectionRecoveryCoordinator) Run(ctx context.Context, interfaceID str
 
 func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfaceID string, pipeline []Pipeline) hmenum.RecoveryResult { //nolint:funlen // single-purpose connection recovery state machine with many pipeline branches
 	c.mu.Lock()
-	// Serialise per interface.
-	if existing, ok := c.active[interfaceID]; ok {
+	// Serialise per interface. Wait in a loop, re-checking c.active after each
+	// wake: a single close() releases every goroutine blocked on that channel,
+	// so without the re-check two or more waiters would each register their own
+	// slot and run the recovery pipeline concurrently against the same
+	// interface. The loop guarantees exactly one winner per iteration.
+	for {
+		existing, ok := c.active[interfaceID]
+		if !ok {
+			break
+		}
 		c.mu.Unlock()
 		<-existing
 		c.mu.Lock()
@@ -875,7 +883,13 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 
 	defer func() {
 		c.mu.Lock()
-		delete(c.active, interfaceID)
+		// Only remove our own registration. Comparing channel identity guards
+		// against deleting a different, still-running invocation's slot, which
+		// would make InRecoveryFor report "idle" mid-recovery and admit a
+		// second concurrent run.
+		if c.active[interfaceID] == done {
+			delete(c.active, interfaceID)
+		}
 		c.mu.Unlock()
 		closeDone()
 	}()

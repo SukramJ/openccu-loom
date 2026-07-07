@@ -348,3 +348,83 @@ func TestPutConfigSection_RestoresInboundWebhookToken(t *testing.T) {
 		t.Errorf("masked inbound token not restored: %q", saved.Inbound.Token)
 	}
 }
+
+// TestMaskSecrets_MasksCentralsArrayPassword is the regression test for the
+// slice-nested secret leak: centrals[].password is classified under the
+// singular path "centrals.password", but maskPath used to only descend into
+// map[string]any, so a []any of centrals was never walked and every central's
+// password reached GET /api/v1/config/effective in cleartext. Two centrals
+// are used to prove the fix applies per-element, not just to a first entry.
+func TestMaskSecrets_MasksCentralsArrayPassword(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Centrals: []config.CentralConfig{
+			{Name: "ccu-1", Host: "ccu-1.example", Username: "admin", Password: "cleartext-pw-1"},
+			{Name: "ccu-2", Host: "ccu-2.example", Username: "admin", Password: "cleartext-pw-2"},
+		},
+	}
+
+	out := maskSecrets(cfg)
+
+	centrals, ok := out["centrals"].([]any)
+	if !ok {
+		t.Fatalf("centrals field missing or wrong type: %v", out["centrals"])
+	}
+	if len(centrals) != 2 {
+		t.Fatalf("want 2 centrals in masked output, got %d", len(centrals))
+	}
+
+	wantNames := []string{"ccu-1", "ccu-2"}
+	wantHosts := []string{"ccu-1.example", "ccu-2.example"}
+	wantPasswords := []string{"cleartext-pw-1", "cleartext-pw-2"}
+	for i, c := range centrals {
+		central, ok := c.(map[string]any)
+		if !ok {
+			t.Fatalf("centrals[%d] wrong type: %v", i, c)
+		}
+		if central["password"] != maskSentinel {
+			t.Errorf("centrals[%d].password leaked cleartext: got %v, want %q", i, central["password"], maskSentinel)
+		}
+		if central["password"] == wantPasswords[i] {
+			t.Errorf("centrals[%d].password still equals the cleartext value %q", i, wantPasswords[i])
+		}
+		if central["name"] != wantNames[i] {
+			t.Errorf("centrals[%d].name must pass through unchanged, got %v", i, central["name"])
+		}
+		if central["host"] != wantHosts[i] {
+			t.Errorf("centrals[%d].host must pass through unchanged, got %v", i, central["host"])
+		}
+	}
+}
+
+// TestMaskSecrets_MasksTopLevelMapSecret guards the map-path (non-array) leg
+// of maskPath alongside the new array leg above: north.webhook.secret is a
+// plain string secret reached purely through map[string]any descent, so this
+// pins that the array-recursion change did not regress the existing path.
+func TestMaskSecrets_MasksTopLevelMapSecret(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		North: config.NorthConfig{
+			Webhook: config.NorthWebhook{Enabled: true, URL: "https://hook.example", Secret: "real-signing-key"},
+		},
+	}
+
+	out := maskSecrets(cfg)
+
+	north, ok := out["north"].(map[string]any)
+	if !ok {
+		t.Fatalf("north field missing or wrong type: %v", out["north"])
+	}
+	webhook, ok := north["webhook"].(map[string]any)
+	if !ok {
+		t.Fatalf("north.webhook field missing or wrong type: %v", north["webhook"])
+	}
+	if webhook["secret"] != maskSentinel {
+		t.Errorf("north.webhook.secret should be masked to %q, got %v", maskSentinel, webhook["secret"])
+	}
+	if webhook["url"] != "https://hook.example" {
+		t.Errorf("non-secret field must pass through unchanged, got %v", webhook["url"])
+	}
+}

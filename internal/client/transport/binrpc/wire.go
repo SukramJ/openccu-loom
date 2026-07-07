@@ -42,6 +42,20 @@ const (
 	// few levels (a struct of values, an array of structs); 64 is far
 	// above any legitimate Homematic response.
 	maxDecodeDepth = 64
+
+	// minValueWireBytes and minMemberWireBytes are the smallest number of
+	// wire bytes an array element / struct member is guaranteed to consume
+	// before it can be satisfied: every value starts with a 4-byte type tag,
+	// and every struct member additionally starts with a 4-byte name-length
+	// field. Element/member counts are bounded by remaining()/min so a
+	// crafted count cannot (a) truncate past the guard on 32-bit builds and
+	// panic make(), nor (b) drive make() to pre-allocate a slice far larger
+	// than the payload can ever fill (each xmlrpc.Member/Value slot is
+	// ~16-32 bytes, so an unbounded count amplifies allocation ~4-8x). The
+	// bound never rejects a legitimate message: a real payload holding N
+	// elements always carries at least min*N bytes.
+	minValueWireBytes  = 4
+	minMemberWireBytes = 8
 )
 
 // marker is the fixed 3-byte preamble of every BIN-RPC packet.

@@ -29,6 +29,17 @@ const MatterPort = 5540
 // rebuild times out.
 const MaxDatagramSize = 2048
 
+// maxConcurrentDispatch bounds the number of in-flight per-datagram handler
+// goroutines. The operational UDP socket (:5540) is LAN-exposed and processes
+// datagrams before PASE/CASE authentication, so an unauthenticated flood would
+// otherwise spawn one goroutine per packet without limit and exhaust memory.
+// Legitimate operation needs only a handful of concurrent exchanges; 1024 is
+// far above that yet caps a flood. When saturated the read loop drops the
+// datagram rather than blocking — UDP is unreliable and Matter peers
+// retransmit, so dropping preserves the receive loop's liveness (the whole
+// point of dispatching off the read goroutine).
+const maxConcurrentDispatch = 1024
+
 // Errors.
 var (
 	// ErrListenerClosed is returned by [Listener.Send] after Close.
@@ -58,6 +69,10 @@ type Config struct {
 // transmit, [Listener.Close] to tear down. The zero value is unusable.
 type Listener struct {
 	conn *net.UDPConn
+
+	// sem bounds concurrent per-datagram dispatch goroutines; see
+	// [maxConcurrentDispatch].
+	sem chan struct{}
 
 	mu     sync.Mutex
 	closed bool
@@ -97,7 +112,7 @@ func New(cfg Config) (*Listener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("udp: listen %s: %w", addr, err)
 	}
-	return &Listener{conn: conn}, nil
+	return &Listener{conn: conn, sem: make(chan struct{}, maxConcurrentDispatch)}, nil
 }
 
 // LocalAddr returns the effective bound address — useful for tests
@@ -162,7 +177,17 @@ func (l *Listener) Serve(ctx context.Context, handler Handler) error {
 		// copy before handing off.
 		datagram := make([]byte, n)
 		copy(datagram, buf[:n])
-		go safeDispatch(handler, datagram, src)
+		// Bound concurrent dispatch: acquire a slot without blocking so the
+		// read loop never stalls. When the pool is saturated (flood or genuine
+		// burst) drop the datagram — UDP is unreliable and peers retransmit.
+		select {
+		case l.sem <- struct{}{}:
+			go func() {
+				defer func() { <-l.sem }()
+				safeDispatch(handler, datagram, src)
+			}()
+		default:
+		}
 	}
 }
 

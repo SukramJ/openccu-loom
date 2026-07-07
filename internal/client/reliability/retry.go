@@ -160,6 +160,12 @@ type Retrier struct {
 	active  map[hmtypes.DataPointKey]chan struct{}
 	metrics CommandRetryMetrics // parity metrics
 
+	// jitterMu guards cfg.Rand: a *rand.Rand is not safe for concurrent use,
+	// and DoForKey runs independent per-key retry chains in parallel, so two
+	// goroutines can compute jitter at the same time. A dedicated mutex keeps
+	// this off the r.mu hot path and only wraps the pure jitter computation.
+	jitterMu sync.Mutex
+
 	// enabled is the runtime kill-switch. When false, Do and DoForKey execute
 	// the operation once and return without retrying regardless of the error.
 	// Default is true.
@@ -288,7 +294,7 @@ func (r *Retrier) Do(ctx context.Context, fn func(ctx context.Context, attempt i
 		r.mu.Unlock()
 		wait := r.specialDelayFor(err)
 		if wait <= 0 {
-			wait = applyJitter(delay, r.cfg.Jitter, r.cfg.Rand)
+			wait = r.jitter(delay)
 		}
 
 		// Recovery-aware sleep: when the failure was a circuit-breaker rejection
@@ -558,7 +564,7 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 		r.mu.Unlock()
 		wait := r.specialDelayFor(err)
 		if wait <= 0 {
-			wait = applyJitter(delay, r.cfg.Jitter, r.cfg.Rand)
+			wait = r.jitter(delay)
 		}
 		if r.cfg.RecoveryWaiter != nil && shouldWaitForRecovery(err) {
 			r.mu.Lock()
@@ -711,6 +717,14 @@ func nextDelay(cur time.Duration, mult float64, limit time.Duration) time.Durati
 		return limit
 	}
 	return next
+}
+
+// jitter applies configured jitter to d, serialising access to the shared
+// (non-concurrency-safe) cfg.Rand.
+func (r *Retrier) jitter(d time.Duration) time.Duration {
+	r.jitterMu.Lock()
+	defer r.jitterMu.Unlock()
+	return applyJitter(d, r.cfg.Jitter, r.cfg.Rand)
 }
 
 func applyJitter(d time.Duration, frac float64, rng *rand.Rand) time.Duration {

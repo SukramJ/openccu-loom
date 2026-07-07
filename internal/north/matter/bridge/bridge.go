@@ -289,6 +289,12 @@ type Bridge struct {
 	// bounded to the current window's transient commissioners. Mirrors
 	// matter.js UnsecuredSession's MessageReceptionState.
 	unsecuredWindows sync.Map
+	// unsecuredWindowCount tracks the live entry count of unsecuredWindows so
+	// creation can be capped at [maxUnsecuredWindows]: SourceNodeID is
+	// attacker-controlled in unsecured PASE traffic, and within a single open
+	// commissioning window a spoofed-source flood would otherwise grow the map
+	// without bound. Reset to 0 alongside the Clear at each window boundary.
+	unsecuredWindowCount atomic.Int64
 
 	// commissioningInstanceName remembers the mDNS instance name the
 	// bridge published via [Bridge.AnnounceCommissioning] so the
