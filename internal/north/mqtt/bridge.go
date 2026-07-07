@@ -398,6 +398,14 @@ type Bridge struct {
 	// rebroadcasts to clients, but a bridge-side gate keeps the
 	// outbound traffic genuinely small.
 	configCache map[string][]byte
+	// rawTopics tracks every retained per-data-point raw-plane state
+	// topic this bridge has published (canonical PerDPState + custom-DP
+	// slot state + the legacy-alias mirror). Device removal walks this
+	// set the same way [Bridge.RetractDiscoveryForDevice] walks
+	// declared — an address-scoped needle match — so a removed
+	// device's retained state does not linger on the broker for
+	// non-HA consumers that never see the HA-Discovery retraction.
+	rawTopics map[string][]byte
 	// collector is the optional MqttCollector for per-bridge counters.
 	// Nil when no collector was wired in BridgeConfig.Collector.
 	collector *metrics.MqttCollector
@@ -429,6 +437,7 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 		client:      client,
 		declared:    make(map[string][]byte),
 		configCache: make(map[string][]byte),
+		rawTopics:   make(map[string][]byte),
 		collector:   cfg.Collector,
 	}
 }
@@ -565,6 +574,7 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 		// Best-effort mirror — the canonical PerDPState publish via
 		// PublishSlotState is the source of truth.
 		_ = b.client.Publish(ctx, legacyTopic, payloadBytes, b.cfg.QoS.State, true)
+		b.rememberRawTopic(legacyTopic)
 	}
 	if b.cfg.HADiscoveryEnabled && b.cfg.DiscoveryBuilder != nil {
 		component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
@@ -672,7 +682,12 @@ func (b *Bridge) PublishCustomDPState(ctx context.Context, centralName, iface st
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.SlotState(centralName, iface, slot), body, b.cfg.QoS.State, true)
+	topic := b.topics.SlotState(centralName, iface, slot)
+	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
+		return err
+	}
+	b.rememberRawTopic(topic)
+	return nil
 }
 
 // PublishSlotConfig publishes a [pload.Source.ConfigPayload] map at the
@@ -736,6 +751,7 @@ func (b *Bridge) PublishSlotState(ctx context.Context, centralName, iface string
 		b.incPublishErrors()
 		return err
 	}
+	b.rememberRawTopic(topic)
 	b.incMessagesSent()
 	return nil
 }
@@ -1033,6 +1049,12 @@ func (b *Bridge) EvictState(
 // specific command topics.
 func (b *Bridge) Topics() *TopicBuilder { return b.topics }
 
+// CommandQoS exposes the configured inbound-command QoS
+// ([QoSProfile.Commands]) so a [CommandSubscriber] wired against this
+// bridge (via [CommandSubscriber.WithQoS]) subscribes at the operator's
+// configured level instead of a hardcoded default.
+func (b *Bridge) CommandQoS() QoS { return b.cfg.QoS.Commands }
+
 // PublishSystemStatus publishes payload to the per-central system-status
 // topic (`<base>/<central>/system/status`). Non-retained, QoS 0 — the
 // topic carries live events, not persistent state. Returns nil when
@@ -1240,24 +1262,92 @@ func (b *Bridge) RetractDiscoveryForDevice(ctx context.Context, deviceAddress st
 		return 0
 	}
 	needle := "_" + strings.ToLower(deviceAddress) + "/"
+	return b.retractTopicsMatching(ctx, b.declared, needle, b.cfg.QoS.Discovery)
+}
+
+// retractTopicsMatching walks m for every topic containing needle,
+// publishes an empty retained payload to clear it from the broker, and
+// removes the matched entries from m so a re-declare (e.g. the same
+// address re-pairing later) is not suppressed by a stale dedup entry.
+// Shared by [Bridge.RetractDiscoveryForDevice] (declared map) and
+// [Bridge.RetractRawStateForDevice] (rawTopics / configCache maps).
+//
+// Best-effort: a publish error is counted but does not abort the sweep
+// — a boot-time orphan-cleanup pass (where one exists) is the backstop.
+func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte, needle string, qos QoS) int {
 	b.mu.Lock()
 	topics := make([]string, 0)
-	for topic := range b.declared {
+	for topic := range m {
 		if strings.Contains(topic, needle) {
 			topics = append(topics, topic)
-			delete(b.declared, topic)
+			delete(m, topic)
 		}
 	}
 	b.mu.Unlock()
 	for _, topic := range topics {
-		// Empty retained payload clears the retained config so HA drops the
-		// entity. Best-effort: a publish error leaves the boot orphan-cleanup
-		// pass as the backstop.
-		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true); err != nil {
+		if err := b.client.Publish(ctx, topic, nil, qos, true); err != nil {
 			b.incPublishErrors()
 		}
 	}
 	return len(topics)
+}
+
+// rememberRawTopic records topic in the address-scoped raw-topic index
+// used by [Bridge.RetractRawStateForDevice] to find every retained
+// per-data-point state topic a removed device declared, without
+// needing the device's channel/parameter list to still exist in the
+// domain model at removal time.
+func (b *Bridge) rememberRawTopic(topic string) {
+	if topic == "" {
+		return
+	}
+	b.mu.Lock()
+	b.rawTopics[topic] = nil
+	b.mu.Unlock()
+}
+
+// RetractRawStateForDevice clears every retained raw-plane topic this
+// bridge has published for deviceAddress: the per-data-point state
+// topics tracked in rawTopics (canonical PerDPState, custom-DP slot
+// state, and the legacy-alias mirror), the descriptor-companion
+// `/config` topics tracked in configCache, and the device-scoped
+// availability / info / diagnostics topics computed directly from
+// (centralName, iface, deviceAddress).
+//
+// Called from the DeviceRemovedEvent path alongside
+// [Bridge.RetractDiscoveryForDevice] so non-HA raw-plane consumers see
+// a removed device disappear immediately instead of reading a
+// permanently stale `available:true` / last-known value. No-op when
+// the raw plane is disabled or deviceAddress is empty.
+func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, iface, deviceAddress string) int {
+	if deviceAddress == "" || !b.cfg.RawEnabled {
+		return 0
+	}
+	if centralName == "" {
+		centralName = b.cfg.CentralName
+	}
+	needle := "/" + deviceAddress + "/"
+	n := b.retractTopicsMatching(ctx, b.rawTopics, needle, b.cfg.QoS.State)
+	n += b.retractTopicsMatching(ctx, b.configCache, needle, b.cfg.QoS.State)
+	for _, topic := range []string{
+		b.topics.DeviceAvailability(centralName, iface, deviceAddress),
+		b.topics.DeviceInfo(centralName, iface, deviceAddress),
+		b.topics.DeviceDiagnostics(centralName, iface, deviceAddress),
+	} {
+		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
+			b.incPublishErrors()
+			continue
+		}
+		n++
+	}
+	if b.legacy != nil {
+		if err := b.client.Publish(ctx, b.legacy.DeviceAvailability(deviceAddress), nil, b.cfg.QoS.State, true); err != nil {
+			b.incPublishErrors()
+		} else {
+			n++
+		}
+	}
+	return n
 }
 
 func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {

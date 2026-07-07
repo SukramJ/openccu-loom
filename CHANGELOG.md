@@ -8,6 +8,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **MQTT: removed devices no longer keep stale retained raw-plane
+  topics.** `onDeviceRemoved` only retracted the device's
+  HA-Discovery `/config` entries; the retained raw-plane
+  `values`/`master`/`calculated`/custom-DP state topics plus the
+  device-scoped `availability`/`info`/`diagnostics` topics survived
+  forever, so non-HA MQTT consumers kept seeing a removed device as
+  permanently `available:true` with a stale last value. Device
+  removal now also calls the new `Bridge.RetractRawStateForDevice`,
+  which publishes an empty retained payload to every raw-plane topic
+  the bridge declared for that device address.
+- **MQTT: `QoSProfile.Commands` is no longer dead configuration.**
+  `command_subscriber.go` hardcoded QoS 1 on every inbound `/set` /
+  `/trigger` / `/invoke` subscription regardless of the configured
+  `QoS.Commands` value. `CommandSubscriber` now subscribes at a
+  configurable QoS (default QoS 1, unchanged) via `WithQoS` /
+  `Bridge.CommandQoS()`; `docs/mqtt-topic-schema.md` corrected — it
+  previously and incorrectly described command topics as QoS 0.
 - **Backup docs no longer claim `secret.key` is bundled in the CLI
   archive.** `docs/admin/backup.md` said the archive was
   self-contained for decryption; `backup create` has always skipped

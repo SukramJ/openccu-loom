@@ -255,11 +255,13 @@ func (b *EventBridge) onSourceChanged(centralName string, e hmevent.DataPointSou
 	})
 }
 
-// onDeviceRemoved retracts the removed device's HA-Discovery configs from the
-// broker immediately (empty retained payload) and prunes the MQTT bridge's
-// declared map, so the device's entities disappear from Home Assistant at once
-// instead of lingering as "unavailable" until the next boot's orphan-cleanup
-// pass. Called from the DeviceRemovedEvent subscription wired in Start.
+// onDeviceRemoved retracts the removed device's HA-Discovery configs AND
+// raw-plane topics from the broker immediately (empty retained payload),
+// so the device's entities disappear from Home Assistant and every other
+// MQTT consumer at once instead of lingering as "unavailable" (HA) or
+// permanently `available:true` with a stale last value (raw-plane / non-HA
+// consumers) until the next boot's orphan-cleanup pass. Called from the
+// DeviceRemovedEvent subscription wired in Start.
 func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemovedEvent) {
 	if b == nil || b.mqtt == nil {
 		return
@@ -269,6 +271,7 @@ func (b *EventBridge) onDeviceRemoved(ctx context.Context, e hmevent.DeviceRemov
 		return
 	}
 	bridge.RetractDiscoveryForDevice(ctx, e.Address)
+	bridge.RetractRawStateForDevice(ctx, e.CentralName, e.InterfaceID, e.Address)
 }
 
 // PublishInitialSnapshot walks every registered central's device

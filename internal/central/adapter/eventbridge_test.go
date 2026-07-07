@@ -111,6 +111,76 @@ func TestEventBridgeValueChangedFansOut(t *testing.T) {
 	}
 }
 
+// TestEventBridgeDeviceRemovedRetractsRawState reproduces the B4 bug: the
+// raw-plane per-DP state topic a device published while alive survived a
+// DeviceRemovedEvent forever because onDeviceRemoved only retracted
+// HA-Discovery configs. It publishes a real value, fires DeviceRemovedEvent
+// on the owning central's bus, and asserts the bridge clears both the
+// per-DP state topic and the device-scoped availability/info/diagnostics
+// topics with an empty retained publish.
+func TestEventBridgeDeviceRemovedRetractsRawState(t *testing.T) {
+	reg, d := registryWithDevice(t)
+
+	pub := mqtt.NewNoopClient()
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{Base: "openccu-loom", CentralName: "ccu-01", RawEnabled: true}, pub)
+	mw := mqtt.NewWiring(bridge, nil)
+
+	ebridge := NewEventBridge(reg, ws.NewHub(), mw)
+	ebridge.Start(context.Background())
+	defer ebridge.Stop()
+
+	list := reg.List()
+	if len(list) != 1 {
+		t.Fatalf("registry size %d", len(list))
+	}
+	unit := list[0]
+
+	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+		Base: hmevent.NewBaseAt(time.Now()),
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: d.Address + ":1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
+		},
+		NewValue: hmtypes.BoolValue(true),
+	})
+	ebridge.Flush()
+
+	before := nonAvailabilityPublishes(pub.Published())
+	if len(before) != 1 {
+		t.Fatalf("setup: expected 1 state publish before removal, got %+v", before)
+	}
+	stateTopic := before[0].Topic
+
+	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+		Base:        hmevent.NewBaseAt(time.Now()),
+		CentralName: "ccu-01",
+		InterfaceID: d.InterfaceID,
+		Address:     d.Address,
+	})
+	ebridge.Flush()
+
+	seen := map[string]mqtt.Publication{}
+	for _, p := range pub.Published() {
+		seen[p.Topic] = p
+	}
+	wantTopics := []string{
+		stateTopic,
+		bridge.Topics().DeviceAvailability("ccu-01", d.InterfaceID, d.Address),
+		bridge.Topics().DeviceInfo("ccu-01", d.InterfaceID, d.Address),
+		bridge.Topics().DeviceDiagnostics("ccu-01", d.InterfaceID, d.Address),
+	}
+	for _, topic := range wantTopics {
+		p, ok := seen[topic]
+		if !ok {
+			t.Fatalf("expected a retracting publish to %q after DeviceRemovedEvent, none seen (got %+v)", topic, pub.Published())
+		}
+		if len(p.Payload) != 0 {
+			t.Fatalf("retract %q: payload not empty (%q)", topic, p.Payload)
+		}
+	}
+}
+
 func TestEventBridgeCentralStateFansOutWS(t *testing.T) {
 	c, _ := central.New(central.Config{Name: "ccu-01"})
 	reg := central.NewRegistry()

@@ -35,11 +35,16 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   (per-entity QoS1 publish, blocks on PUBACK processed by the same loop) → self-
   deadlock on every HA restart; command handlers block up to seconds on CCU stall.
   Fix: dispatch handler bodies onto a bounded worker queue.
-- [ ] **B4 · MQTT raw-plane state topics never retracted on device removal** (M, high)
+- [x] **B4 · MQTT raw-plane state topics never retracted on device removal** (M, high)
   `internal/central/adapter/eventbridge.go` `onDeviceRemoved` only clears
   HA-Discovery `/config`; retained raw topics (`values`/`master`/`availability`/
   `info`/`diagnostics`) stay forever → non-HA consumers see removed devices as
   `available:true`. Reuse `Bridge.EvictState` per data point + availability topics.
+  Implemented as `Bridge.RetractRawStateForDevice`: an address-scoped needle
+  match over a new `rawTopics` index (mirrors `RetractDiscoveryForDevice`'s
+  `declared`-map sweep) plus direct clears of the device-scoped availability/
+  info/diagnostics topics; wired into `onDeviceRemoved` alongside the existing
+  discovery retraction.
 
 ## Tier 2 — High-value UX & test gaps
 
@@ -115,10 +120,16 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   `internal/metrics/aggregator.go` `Cache()` placeholder loop. Extend the
   `InterfaceClientMetrics` interface (+ `internal/metrics/wiring`) and sum
   `CommandTracker().Size()` / `PingPong().Size()`, or delete the dead metric.
-- [ ] **M2 · Dead `QoSProfile.Commands` field; doc contradicts code** (S, low)
+- [x] **M2 · Dead `QoSProfile.Commands` field; doc contradicts code** (S, low)
   `internal/north/mqtt/bridge.go`/`command_subscriber.go` hardcode QoS1;
   `docs/mqtt-topic-schema.md` says QoS0. Wire `cfg.QoS.Commands` + fix the doc,
   or remove the field and reconcile the doc.
+  `CommandSubscriber` now carries a `qos` field (default `QoS1`, overridable
+  via `WithQoS`, source `Bridge.CommandQoS()`) that every `Start` Subscribe
+  call uses; doc corrected to state the real QoS1-default/configurable policy.
+  Wiring `WithQoS(bridge.CommandQoS())` at the daemon composition root
+  (`cmd/openccu-loom/mqtt_supervisor.go`) is a follow-up — out of this group's
+  file scope.
 - [ ] **A4 · Two different pagination envelopes across list endpoints** (S, low)
   `/devices` returns `{items,page,per_page,total}`; hub lists return a bare array
   + `X-Total-Count`. Pick one (header form is more common) and align.

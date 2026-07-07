@@ -609,3 +609,64 @@ func TestCommandSubscriberValuesBucketStillRoutes(t *testing.T) {
 		t.Fatalf("SetMasterValue must not be called for values bucket; got %d calls", sink.masterValues.Load())
 	}
 }
+
+// qosRecordingSubscriber wraps NoopClient's storage but also records the
+// QoS every Subscribe call registered at — NoopClient itself discards it.
+type qosRecordingSubscriber struct {
+	*NoopClient
+	qosByFilter map[string]QoS
+}
+
+func newQoSRecordingSubscriber() *qosRecordingSubscriber {
+	return &qosRecordingSubscriber{NoopClient: NewNoopClient(), qosByFilter: map[string]QoS{}}
+}
+
+func (s *qosRecordingSubscriber) Subscribe(ctx context.Context, filter string, qos QoS, handler MessageHandler, opts ...SubscribeOption) (SubscribeResult, error) {
+	s.qosByFilter[filter] = qos
+	return s.NoopClient.Subscribe(ctx, filter, qos, handler, opts...)
+}
+
+// TestCommandSubscriberWiresConfiguredQoS reproduces the M2 bug: every
+// inbound command Subscribe call hardcoded QoS1, so QoSProfile.Commands was
+// dead configuration. It sets a non-default QoS via WithQoS and asserts
+// every registered subscription (data-point, legacy, sysvar, program,
+// install-mode, CDP invoke, service-method, week-profile, combined-DP,
+// schedule-switch) uses it instead of the QoS1 default.
+func TestCommandSubscriberWiresConfiguredQoS(t *testing.T) {
+	t.Parallel()
+	sub := newQoSRecordingSubscriber()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	const wantQoS = QoS0
+	cs := NewCommandSubscriber(sub, topics, sink, nil).WithQoS(wantQoS)
+	if err := cs.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if len(sub.qosByFilter) == 0 {
+		t.Fatal("no subscriptions were recorded")
+	}
+	for filter, qos := range sub.qosByFilter {
+		if qos != wantQoS {
+			t.Fatalf("filter %q subscribed at QoS %d, want %d", filter, qos, wantQoS)
+		}
+	}
+}
+
+// TestCommandSubscriberDefaultQoSIsQoS1 locks in the backward-compatible
+// default so existing deployments that never call WithQoS keep the
+// historical at-least-once behavior.
+func TestCommandSubscriberDefaultQoSIsQoS1(t *testing.T) {
+	t.Parallel()
+	sub := newQoSRecordingSubscriber()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	cs := NewCommandSubscriber(sub, topics, sink, nil)
+	if err := cs.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	for filter, qos := range sub.qosByFilter {
+		if qos != QoS1 {
+			t.Fatalf("filter %q subscribed at QoS %d, want default QoS1", filter, qos)
+		}
+	}
+}
