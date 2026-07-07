@@ -9,8 +9,10 @@ OpenCCU-Loom. The release pipeline assembles it into
 1. Download `openccu-loom-ccu-<version>.tar.gz` from the
    [releases page](https://github.com/SukramJ/openccu-loom/releases).
 2. On the CCU web UI: **Settings → Control panel → Additional software**,
-   choose the tarball, and install. CCU3 / RaspberryMatic reboot to
-   finalise the add-on registration.
+   choose the tarball, and install. On RaspberryMatic / OpenCCU the
+   add-on installs and starts in place — **no reboot**. Only the stock
+   CCU3 firmware reboots: its WebUI restarts unconditionally on every
+   add-on install and performs the installation during that boot.
 3. Open the **OpenCCU-Loom** entry (or `http://<ccu>:8119/app/`) and
    complete the first-run setup. Everything — centrals, MQTT, auth — is
    configured through the UI; add a central pointing at `127.0.0.1` to

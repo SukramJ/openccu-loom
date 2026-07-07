@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.27.1] — 2026-07-07
+
+### Fixed
+
+- **CCU add-on: installing or updating no longer reboots the CCU on
+  RaspberryMatic / OpenCCU.** The add-on's `update_script` returned the
+  exit code that explicitly requests a reboot, although nothing in the
+  add-on needs a boot-time hook (no ReGa patch, no interface
+  registration). It now starts the daemon in place and reloads monit,
+  returning the no-reboot exit code; RaspberryMatic / OpenCCU install
+  and update the add-on without restarting the CCU. The stock CCU3
+  firmware is unchanged — its WebUI reboots unconditionally and
+  performs the installation during that boot, which an add-on cannot
+  influence.
+
 ## [0.27.0] — 2026-07-07
 
 ### Security
