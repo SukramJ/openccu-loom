@@ -31,6 +31,12 @@ type InterfaceClientMetrics interface {
 	// LastFailureTime returns the wall time of the most recent failure; nil
 	// if no failure has occurred.
 	LastFailureTime() *any //nolint:gocritic // *time.Time boxed as *interface{} to avoid import cycle; callers cast
+	// CommandTrackerSize returns the number of entries currently held in
+	// this client's optimistic-update command tracker.
+	CommandTrackerSize() int
+	// PingPongSize returns the number of pending/unknown entries currently
+	// held in this client's ping/pong tracker.
+	PingPongSize() int
 }
 
 // DeviceForMetrics is the minimal interface needed to collect model metrics.

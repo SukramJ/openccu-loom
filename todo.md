@@ -108,7 +108,7 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   `docs/admin/backup.md` vs `cmd/openccu-loom/backup.go` (skips `secret.key`, seals
   archive with it). DR correctness bug in docs. Correct the note + print a
   reminder from `backup create`. *(low effort, high impact — pulled forward.)*
-- [ ] **M1 · Command-tracker/ping-pong cache metrics never populated** (S, low)
+- [x] **M1 · Command-tracker/ping-pong cache metrics never populated** (S, low)
   `internal/metrics/aggregator.go` `Cache()` placeholder loop. Extend the
   `InterfaceClientMetrics` interface (+ `internal/metrics/wiring`) and sum
   `CommandTracker().Size()` / `PingPong().Size()`, or delete the dead metric.

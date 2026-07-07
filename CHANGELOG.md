@@ -15,6 +15,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   states plainly that `secret.key` (or `OPENCCU_LOOM_SECRET_KEY`) must
   be preserved out-of-band, and `backup create` prints a one-line
   reminder of this to stderr after every successful run.
+- **Cache metrics: command-tracker/ping-pong sizes now populated.**
+  `metrics.Aggregator.Cache()` looped over connected interface clients
+  but discarded each one, so `CacheMetricsSnapshot.CommandTracker` and
+  `.PingPongTracker` (and therefore `TotalEntries`/`OverallHitRate`)
+  always reported zero. The client adapter now exposes
+  `CommandTrackerSize`/`PingPongSize` and the aggregator sums them
+  across every connected client.
 
 ### Added
 
