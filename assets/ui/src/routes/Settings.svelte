@@ -4,6 +4,7 @@
   import type { ConfigSchemaField, ConfigFieldSource } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import SectionEditor from "$lib/components/settings/SectionEditor.svelte";
   import UsersAdmin from "$lib/components/settings/UsersAdmin.svelte";
   import TokensAdmin from "$lib/components/settings/TokensAdmin.svelte";
@@ -105,22 +106,18 @@
   // values; this button makes them take effect without waiting for
   // the file-watcher poll or a full daemon restart.
   let mqttReloading = $state(false);
-  let mqttReloadBanner = $state<string | null>(null);
-  let mqttReloadBannerVariant = $state<"success" | "error">("success");
 
   async function reloadMQTT() {
     mqttReloading = true;
-    mqttReloadBanner = null;
     try {
       const res = await api.reloadMQTT();
-      mqttReloadBannerVariant = "success";
-      mqttReloadBanner = t("settings.mqtt.reload_success", { ms: String(res.took_ms) });
+      toastStore.success(t("settings.mqtt.reload_success", { ms: String(res.took_ms) }));
     } catch (err) {
-      mqttReloadBannerVariant = "error";
-      mqttReloadBanner =
+      toastStore.error(
         err instanceof ApiError
           ? t("settings.mqtt.reload_failed", { err: err.message })
-          : String(err);
+          : String(err),
+      );
     } finally {
       mqttReloading = false;
     }
@@ -292,11 +289,7 @@
   </header>
 
   {#if schemaError}
-    <Card class="mb-4 p-3">
-      <p class="text-sm text-red-600 dark:text-red-400">
-        {t("common.error")} {schemaError}
-      </p>
-    </Card>
+    <ErrorState class="mb-4" message={schemaError} onRetry={() => void loadSchema()} />
   {/if}
 
   {#snippet tabButton(tab: Tab, full: boolean)}
@@ -467,15 +460,6 @@
                     ? t("settings.mqtt.reload_running")
                     : t("settings.mqtt.reload")}
                 </Button>
-                {#if mqttReloadBanner}
-                  <span
-                    class="text-sm"
-                    class:text-green-700={mqttReloadBannerVariant === "success"}
-                    class:text-red-700={mqttReloadBannerVariant === "error"}
-                  >
-                    {mqttReloadBanner}
-                  </span>
-                {/if}
               </div>
             </div>
           </Card>

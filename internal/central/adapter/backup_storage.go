@@ -160,19 +160,49 @@ func (a *BackupAdapter) SetStorage(s BackupStorage) *BackupAdapter {
 	return a
 }
 
-// SetRestorer swaps the restore client. Default is no restorer; calls
-// to [BackupAdapter.Restore] then return [ErrRestoreUnsupported].
-// Returns the receiver for chaining.
+// SetRestorer swaps the legacy fallback restore client, used only when
+// a restore's owning central cannot be resolved from the backup id (see
+// [BackupAdapter.resolveRestorer]). Default is no restorer; calls to
+// [BackupAdapter.Restore] for an unresolvable id then return
+// [ErrRestoreUnsupported]. Returns the receiver for chaining.
 func (a *BackupAdapter) SetRestorer(r BackupRestorer) *BackupAdapter {
 	a.restorer = r
 	return a
 }
 
-// Restorer returns the currently wired restorer, or nil. The wiring
-// path consults this to decide whether to install one.
+// SetRestorerForCentral wires the restorer that owns restores for
+// centralName. This is the multi-CCU-correct wiring path: the daemon
+// composition root calls it once per central as each one comes up, so a
+// fleet with several registered centrals always uploads a restore to
+// the CCU that produced the backup, never to a different one. Returns
+// the receiver for chaining.
+func (a *BackupAdapter) SetRestorerForCentral(centralName string, r BackupRestorer) *BackupAdapter {
+	if centralName == "" {
+		return a
+	}
+	if a.restorers == nil {
+		a.restorers = make(map[string]BackupRestorer)
+	}
+	a.restorers[centralName] = r
+	return a
+}
+
+// Restorer returns the currently wired legacy fallback restorer, or
+// nil. The wiring path consults this to decide whether the fallback has
+// already been installed.
 func (a *BackupAdapter) Restorer() BackupRestorer {
 	if a == nil {
 		return nil
 	}
 	return a.restorer
+}
+
+// RestorerForCentral returns the restorer wired for centralName via
+// [BackupAdapter.SetRestorerForCentral], or nil when none has been
+// wired yet (the central has not finished bring-up, or is unknown).
+func (a *BackupAdapter) RestorerForCentral(centralName string) BackupRestorer {
+	if a == nil {
+		return nil
+	}
+	return a.restorers[centralName]
 }

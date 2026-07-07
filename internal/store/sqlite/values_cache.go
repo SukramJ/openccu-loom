@@ -572,9 +572,11 @@ func (s *ValuesCacheStore) GCDeadRows(
 
 // AliveKey is the deterministic encoding used by GCDeadRows. Callers
 // build the alive set with this helper so the format stays in sync
-// with the scan comparison.
-//
-// loom:reachable:reason="key encoder paired with GCDeadRows so alive-set construction stays in sync with the scan comparison; the GC job is not production-wired yet — callers are integration tests"
+// with the scan comparison. The periodic GC pass driven by
+// [ValuesCacheStore.GCDeadRows] (see the adapter package's
+// values_cache_flush.go) is the production caller; tests use it
+// directly to build expected alive sets.
+// loom:reachable:reason="called in production by buildAliveKeySet on the periodic values-cache GC path (internal/central/adapter/values_cache_flush.go), which runs inside the flusher goroutine closure the static reachability pass does not trace"
 func AliveKey(centralName, interfaceID, channelAddress, parameterName string) string {
 	return centralName + "|" + interfaceID + "|" + channelAddress + "|" + parameterName
 }

@@ -6,6 +6,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -165,16 +166,16 @@
           <span class="font-mono">{u.subject}</span>
         {:else if col.key === "role"}
           <span class="inline-flex items-center gap-1">
-            <select
+            <Select
+              class="h-9 w-auto min-h-[36px] sm:min-h-0"
               value={u.role}
-              onchange={(e) =>
-                void changeRole(u.subject, (e.target as HTMLSelectElement).value)}
-              class="min-h-[36px] rounded border border-slate-300 bg-white px-2 py-0.5 text-xs sm:min-h-0 dark:border-slate-700 dark:bg-slate-900"
-            >
-              <option value="viewer">viewer</option>
-              <option value="operator">operator</option>
-              <option value="admin">admin</option>
-            </select>
+              onValueChange={(v) => void changeRole(u.subject, v)}
+              options={[
+                { value: "viewer", label: "viewer" },
+                { value: "operator", label: "operator" },
+                { value: "admin", label: "admin" },
+              ]}
+            />
             <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>
           </span>
         {:else if col.key === "created"}
@@ -245,14 +246,15 @@
         </label>
         <label class="flex flex-col gap-1 text-sm">
           <span>{t("users.col.role")}</span>
-          <select
+          <Select
+            class="h-10"
             bind:value={addRole}
-            class="h-10 rounded border border-slate-300 px-2 text-base sm:text-sm dark:border-slate-700 dark:bg-slate-900"
-          >
-            <option value="viewer">viewer</option>
-            <option value="operator">operator</option>
-            <option value="admin">admin</option>
-          </select>
+            options={[
+              { value: "viewer", label: "viewer" },
+              { value: "operator", label: "operator" },
+              { value: "admin", label: "admin" },
+            ]}
+          />
         </label>
         {#if addError}
           <p class="text-xs text-red-600 dark:text-red-400">{addError}</p>

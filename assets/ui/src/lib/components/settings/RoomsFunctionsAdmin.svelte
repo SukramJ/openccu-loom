@@ -9,6 +9,7 @@
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -178,19 +179,18 @@
   <div class="space-y-4">
     {#if centrals.length > 1}
       <div class="flex items-center gap-2">
-        <label for="groups-central-select" class="text-sm font-medium text-[var(--ha-secondary-text-color)]">
+        <span class="text-sm font-medium text-[var(--ha-secondary-text-color)]">
           {t("groups.central_label")}
-        </label>
-        <select
-          id="groups-central-select"
-          bind:value={selectedCentral}
-          class="rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
-        >
-          <option value={undefined}>—</option>
-          {#each centrals as c (c.name)}
-            <option value={c.name}>{c.name}</option>
-          {/each}
-        </select>
+        </span>
+        <Select
+          class="w-auto"
+          value={selectedCentral ?? ""}
+          onValueChange={(v) => (selectedCentral = v || undefined)}
+          options={[
+            { value: "", label: "—" },
+            ...centrals.map((c) => ({ value: c.name, label: c.name })),
+          ]}
+        />
       </div>
     {/if}
 

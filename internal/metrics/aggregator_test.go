@@ -14,18 +14,22 @@ import (
 // -----------------------------------------------------------------------
 
 type stubClient struct {
-	total     int
-	pending   int
-	executed  int
-	cbState   int
-	failureTS *any
+	total      int
+	pending    int
+	executed   int
+	cbState    int
+	failureTS  *any
+	cmdTracker int
+	pingPongSz int
 }
 
-func (s *stubClient) TotalRequests() int    { return s.total }
-func (s *stubClient) PendingRequests() int  { return s.pending }
-func (s *stubClient) ExecutedRequests() int { return s.executed }
-func (s *stubClient) CircuitState() int     { return s.cbState }
-func (s *stubClient) LastFailureTime() *any { return s.failureTS } //nolint:gocritic // protocol contract; see InterfaceClientMetrics
+func (s *stubClient) TotalRequests() int      { return s.total }
+func (s *stubClient) PendingRequests() int    { return s.pending }
+func (s *stubClient) ExecutedRequests() int   { return s.executed }
+func (s *stubClient) CircuitState() int       { return s.cbState }
+func (s *stubClient) LastFailureTime() *any   { return s.failureTS } //nolint:gocritic // protocol contract; see InterfaceClientMetrics
+func (s *stubClient) CommandTrackerSize() int { return s.cmdTracker }
+func (s *stubClient) PingPongSize() int       { return s.pingPongSz }
 
 type stubClientProvider struct{ clients []InterfaceClientMetrics }
 
@@ -576,10 +580,42 @@ func TestAggregatorCacheWithClientProvider(t *testing.T) {
 		WithClientProvider(clients),
 	)
 	cache := a.Cache()
-	// The CommandTracker and PingPongTracker remain zero (placeholder loop);
-	// just verify no panic and basic fields are correct.
 	if cache.DeviceDescriptions.Size != 3 {
 		t.Errorf("dd_size=%d, want 3", cache.DeviceDescriptions.Size)
+	}
+}
+
+// TestAggregatorCacheAggregatesCommandAndPingPongTrackerSizes verifies that
+// Aggregator.Cache() sums CommandTrackerSize/PingPongSize across every
+// connected client into CommandTracker.Size / PingPongTracker.Size, and
+// that TotalEntries/OverallHitRate reflect the aggregated snapshot.
+func TestAggregatorCacheAggregatesCommandAndPingPongTrackerSizes(t *testing.T) {
+	t.Parallel()
+	cp := &stubCacheProvider{dataSize: 5, ddSize: 3, pdSize: 2, vcSize: 1}
+	clients := &stubClientProvider{clients: []InterfaceClientMetrics{
+		&stubClient{cmdTracker: 4, pingPongSz: 2},
+		&stubClient{cmdTracker: 6, pingPongSz: 3},
+	}}
+	a := NewAggregator(
+		"ccu1", NewObserver(),
+		WithCacheProvider(cp),
+		WithClientProvider(clients),
+	)
+	cache := a.Cache()
+	if cache.CommandTracker.Size != 10 {
+		t.Errorf("command_tracker.size=%d, want 10", cache.CommandTracker.Size)
+	}
+	if cache.PingPongTracker.Size != 5 {
+		t.Errorf("ping_pong_tracker.size=%d, want 5", cache.PingPongTracker.Size)
+	}
+	wantTotal := cache.DeviceDescriptions.Size + cache.ParamsetDescriptions.Size +
+		cache.VisibilityRegistry.Size + cache.PingPongTracker.Size +
+		cache.CommandTracker.Size + cache.DataCache.Size
+	if got := cache.TotalEntries(); got != wantTotal {
+		t.Errorf("TotalEntries()=%d, want %d", got, wantTotal)
+	}
+	if got := cache.OverallHitRate(); got != cache.DataCache.HitRate() {
+		t.Errorf("OverallHitRate()=%v, want %v", got, cache.DataCache.HitRate())
 	}
 }
 

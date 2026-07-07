@@ -88,8 +88,11 @@ func TestBirthSyncHandleOnlineRepublishes(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	// Deliver "online" → should trigger RepublishDiscovery.
+	// Deliver "online" → should trigger RepublishDiscovery. handle() now
+	// enqueues the republish onto BirthSync's dispatcher instead of running
+	// it inline, so wait for the worker to finish before asserting.
 	sub.deliver(HABirthTopic, []byte("online"))
+	bs.dispatcher.flush()
 
 	pubs := mp.publications()
 	found := false
@@ -832,6 +835,7 @@ func TestCommandSubscriberServiceMethodSuccess(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", cdpSink.calls.Load())
 	}
@@ -849,6 +853,7 @@ func TestCommandSubscriberServiceMethodSinkError(t *testing.T) {
 	// Error from sink must not panic.
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call even on error, got %d", cdpSink.calls.Load())
 	}
@@ -1012,6 +1017,7 @@ func TestCommandSubscriberDataPointBucketAwareValues(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("expected 1 SetValue call; got %d", sink.setValues.Load())
 	}
@@ -1064,6 +1070,7 @@ func TestCommandSubscriberWeekProfileSinkError(t *testing.T) {
 	// Sink error should be logged, not propagated.
 	noop.DeliverInbound("gh/+/+/+/+/week_profile/set",
 		"gh/ccu/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P1"))
+	sub.dispatcher.flush()
 	if errSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", errSink.calls.Load())
 	}
@@ -1107,6 +1114,7 @@ func TestCommandSubscriberSysvarSinkError(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/hub/sysvars/+/set",
 		"gh/ccu/hub/sysvars/PartyMode/set", []byte("true"))
+	sub.dispatcher.flush()
 	if sink.sysvars.Load() != 1 {
 		t.Fatalf("expected 1 SetSysvar call; got %d", sink.sysvars.Load())
 	}
@@ -1140,6 +1148,7 @@ func TestCommandSubscriberProgramSinkError(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/hub/programs/+/trigger",
 		"gh/ccu/hub/programs/Morning/trigger", nil)
+	sub.dispatcher.flush()
 	if sink.programs.Load() != 1 {
 		t.Fatalf("expected 1 TriggerProgram call; got %d", sink.programs.Load())
 	}
@@ -3110,6 +3119,92 @@ func TestRetractDiscoveryForDeviceDiscoveryDisabledIsNoop(t *testing.T) {
 	}
 	if len(mp.publications()) != 0 {
 		t.Fatalf("discovery disabled must not publish anything, got %d", len(mp.publications()))
+	}
+}
+
+// TestRetractRawStateForDeviceClearsPublishedTopics reproduces the B4 bug:
+// a device's raw-plane per-DP state survives forever because nothing ever
+// retracts it on removal. It publishes a real per-DP state (populating
+// Bridge.rawTopics the way normal traffic would), then asserts
+// RetractRawStateForDevice clears that exact topic plus the device-scoped
+// availability/info/diagnostics topics with an empty retained payload,
+// while leaving an unrelated device's state untouched.
+func TestRetractRawStateForDeviceClearsPublishedTopics(t *testing.T) {
+	t.Parallel()
+
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", RawEnabled: true, CentralName: "ccu01"}, mp)
+
+	const (
+		iface       = "HmIP-RF"
+		addr        = "AABBCCDD1122"
+		otherAddr   = "0000000000FF"
+		centralName = "ccu01"
+	)
+	slot := pload.TopicSlot{Address: addr, Channel: 1, Bucket: pload.BucketValues, Parameter: "STATE"}
+	if err := b.PublishSlotState(context.Background(), centralName, iface, slot, pload.PerDPState{Value: true, Available: true}); err != nil {
+		t.Fatalf("PublishSlotState: %v", err)
+	}
+	otherSlot := pload.TopicSlot{Address: otherAddr, Channel: 1, Bucket: pload.BucketValues, Parameter: "STATE"}
+	if err := b.PublishSlotState(context.Background(), centralName, iface, otherSlot, pload.PerDPState{Value: false, Available: true}); err != nil {
+		t.Fatalf("PublishSlotState (other device): %v", err)
+	}
+	stateTopic := b.topics.SlotState(centralName, iface, slot)
+	otherStateTopic := b.topics.SlotState(centralName, iface, otherSlot)
+	before := len(mp.publications())
+
+	n := b.RetractRawStateForDevice(context.Background(), centralName, iface, addr)
+	if n == 0 {
+		t.Fatal("expected at least one topic retracted")
+	}
+
+	pubs := mp.publications()[before:]
+	seen := map[string]publishRecord{}
+	for _, p := range pubs {
+		seen[p.topic] = p
+	}
+	for _, wantTopic := range []string{
+		stateTopic,
+		b.topics.DeviceAvailability(centralName, iface, addr),
+		b.topics.DeviceInfo(centralName, iface, addr),
+		b.topics.DeviceDiagnostics(centralName, iface, addr),
+	} {
+		p, ok := seen[wantTopic]
+		if !ok {
+			t.Fatalf("expected an empty retained publish to %q, none seen (got %+v)", wantTopic, pubs)
+		}
+		if p.payload != "" {
+			t.Fatalf("retract %q: payload not empty (%q)", wantTopic, p.payload)
+		}
+		if !p.retain {
+			t.Fatalf("retract %q: must be a retained publish", wantTopic)
+		}
+	}
+	if _, ok := seen[otherStateTopic]; ok {
+		t.Fatalf("unrelated device's state topic %q must not be retracted", otherStateTopic)
+	}
+
+	b.mu.Lock()
+	if _, ok := b.rawTopics[stateTopic]; ok {
+		t.Fatal("removed device's raw topic should have been pruned from rawTopics")
+	}
+	if _, ok := b.rawTopics[otherStateTopic]; !ok {
+		t.Fatal("unrelated device's raw topic should still be tracked")
+	}
+	b.mu.Unlock()
+}
+
+// TestRetractRawStateForDeviceEmptyAddressIsNoop mirrors the discovery-side
+// empty-address guard.
+func TestRetractRawStateForDeviceEmptyAddressIsNoop(t *testing.T) {
+	t.Parallel()
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", RawEnabled: true}, mp)
+	if n := b.RetractRawStateForDevice(context.Background(), "ccu01", "HmIP-RF", ""); n != 0 {
+		t.Fatalf("empty address should retract 0, got %d", n)
+	}
+	if len(mp.publications()) != 0 {
+		t.Fatalf("empty address must not publish anything, got %d", len(mp.publications()))
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -25,6 +24,31 @@ import (
 // 1000-DP installation) while bounding crash data loss to roughly
 // the same window the daemon's other periodic jobs already use.
 const DefaultValuesCacheFlushInterval = 60 * time.Second
+
+// valuesCacheGCMultiplier is how many flush ticks separate one GC tick.
+// GC is a maintenance sweep, not part of the hot persistence path: a row
+// only becomes dead when a device or parameter permanently disappears
+// from the model, which is rare compared to ordinary value churn.
+const valuesCacheGCMultiplier = 30
+
+// DefaultValuesCacheGCInterval is the GC cadence produced by
+// [gcTickInterval] under the default flush interval (60 s × 30 = 30 min).
+// Documented as a named constant so tests and operators have a stable
+// reference point; the actual cadence always derives from the flusher's
+// configured interval, not this constant directly.
+const DefaultValuesCacheGCInterval = DefaultValuesCacheFlushInterval * valuesCacheGCMultiplier
+
+// gcTickInterval derives the GC cadence from the configured flush
+// interval so a single `interval` argument to [WireValuesCacheFlusher]
+// drives both tickers proportionally: the default flush interval yields
+// [DefaultValuesCacheGCInterval], and a custom (e.g. test) interval scales
+// the same way without needing a second configuration knob.
+func gcTickInterval(flushInterval time.Duration) time.Duration {
+	if flushInterval <= 0 {
+		flushInterval = DefaultValuesCacheFlushInterval
+	}
+	return flushInterval * valuesCacheGCMultiplier
+}
 
 // sourcedDP is the subset of methods [values_cache_flush] needs from
 // each wire data point. The generic.DataPoint satisfies it.
@@ -49,65 +73,107 @@ type addressed interface {
 	DataPointKey() hmtypes.DataPointKey
 }
 
-// dirtyTracker scopes the "needs flush" flag per central name. The
-// flusher's periodic tick reads the flag for each central and walks
-// only the dirty ones, then resets the flag. Quiet centrals are
-// skipped entirely so the periodic flusher's cost is proportional to
-// the activity, not the fleet size. See ADR 0019, "Future work".
+// dirtyKey identifies a single (channel, parameter) VALUES data point for
+// dirty-tracking purposes. Central scoping is implicit — each central owns
+// its own entry in [dirtyTracker.centrals], so the key does not need to
+// carry the central name.
+type dirtyKey struct {
+	channelAddress string
+	parameter      string
+}
+
+// dirtyClaim is what [dirtyTracker.SwapClean] hands the flusher for one
+// central: either invalidateAll (walk every channel of the central,
+// regardless of keys — used for the initial post-Register state) or the
+// exact set of (channel, parameter) keys that changed since the previous
+// claim.
+type dirtyClaim struct {
+	keys          map[dirtyKey]struct{}
+	invalidateAll bool
+}
+
+// dirtyState is the mutable per-central bookkeeping [dirtyTracker] guards
+// with its mutex.
+type dirtyState struct {
+	keys          map[dirtyKey]struct{}
+	invalidateAll bool
+}
+
+// dirtyTracker scopes the "needs flush" state per central down to the
+// individual (channel, parameter) keys that changed, so a central with one
+// hot data point does not force flushOnce to re-serialise every other
+// live/stale DP on that central every tick — only the tick's own claim.
+// Quiet centrals are skipped entirely so the periodic flusher's cost is
+// proportional to the activity, not the fleet size. See ADR 0019, "Future
+// work".
 //
-// Operations are atomic; the tracker itself is lock-free in the hot
-// path (Mark) and only locks for the rare add-central path.
+// Mark is on the event-dispatch hot path but only ever does a map lookup
+// plus (at most) one map insert under the tracker's mutex — cheap relative
+// to the event-bus dispatch that invokes it, and multi-CCU installs already
+// get natural parallelism from each central owning its own EventBus.
 type dirtyTracker struct {
-	mu       sync.RWMutex
-	centrals map[string]*atomic.Bool
+	mu       sync.Mutex
+	centrals map[string]*dirtyState
 }
 
 func newDirtyTracker() *dirtyTracker {
-	return &dirtyTracker{centrals: make(map[string]*atomic.Bool)}
+	return &dirtyTracker{centrals: make(map[string]*dirtyState)}
 }
 
-// Register adds central to the tracker. Returns the *atomic.Bool that
-// represents the central's dirty flag — callers can stash this and
-// avoid the per-event map lookup. Initially set to true so the first
-// post-boot tick still runs even if no events fire in the warm-up
-// window (the restore pass may have populated DPs that the flusher
-// would otherwise consider unchanged).
-func (t *dirtyTracker) Register(centralName string) *atomic.Bool {
+// Register adds central to the tracker in the invalidateAll state, so the
+// first post-boot tick still performs a full walk even if no events fire
+// in the warm-up window (the restore pass may have populated DPs that the
+// flusher would otherwise consider unchanged). A central that is already
+// registered keeps its current state — re-registering must not re-arm an
+// already-drained claim.
+func (t *dirtyTracker) Register(centralName string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if flag, ok := t.centrals[centralName]; ok {
-		return flag
+	if _, ok := t.centrals[centralName]; ok {
+		return
 	}
-	flag := &atomic.Bool{}
-	flag.Store(true)
-	t.centrals[centralName] = flag
-	return flag
+	t.centrals[centralName] = &dirtyState{invalidateAll: true}
 }
 
-// Mark flips the central's dirty flag. Cheap: a single atomic store
-// after a read-locked map lookup. Unknown centrals are silently
-// ignored — the tracker only follows centrals that registered.
-func (t *dirtyTracker) Mark(centralName string) {
-	t.mu.RLock()
-	flag, ok := t.centrals[centralName]
-	t.mu.RUnlock()
+// Mark records that (channelAddress, parameter) changed for centralName.
+// Unknown centrals are silently ignored — the tracker only follows
+// centrals that registered. A no-op when the central is already flagged
+// invalidateAll: the pending full walk already covers this key, so there
+// is nothing to narrow or widen.
+func (t *dirtyTracker) Mark(centralName, channelAddress, parameter string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st, ok := t.centrals[centralName]
 	if !ok {
 		return
 	}
-	flag.Store(true)
+	if st.invalidateAll {
+		return
+	}
+	if st.keys == nil {
+		st.keys = make(map[dirtyKey]struct{})
+	}
+	st.keys[dirtyKey{channelAddress: channelAddress, parameter: parameter}] = struct{}{}
 }
 
-// SwapClean returns the previous dirty state for centralName and
-// resets it to clean. Used by the flusher to atomically claim a
-// tick's worth of work.
-func (t *dirtyTracker) SwapClean(centralName string) bool {
-	t.mu.RLock()
-	flag, ok := t.centrals[centralName]
-	t.mu.RUnlock()
+// SwapClean returns the accumulated [dirtyClaim] for centralName and
+// resets it to clean. ok is false when centralName never registered or
+// nothing changed since the previous claim — the flusher uses that to skip
+// the central entirely. Used by the flusher to atomically claim a tick's
+// worth of work.
+func (t *dirtyTracker) SwapClean(centralName string) (dirtyClaim, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	st, ok := t.centrals[centralName]
 	if !ok {
-		return false
+		return dirtyClaim{}, false
 	}
-	return flag.Swap(false)
+	if !st.invalidateAll && len(st.keys) == 0 {
+		return dirtyClaim{}, false
+	}
+	claim := dirtyClaim{keys: st.keys, invalidateAll: st.invalidateAll}
+	t.centrals[centralName] = &dirtyState{}
+	return claim, true
 }
 
 // WireValuesCacheFlusher starts a background goroutine that flushes
@@ -131,6 +197,14 @@ func (t *dirtyTracker) SwapClean(centralName string) bool {
 // marks itself dirty when one fires. The flusher walks only the
 // dirty centrals, claims their flag via SwapClean, and skips the
 // rest. Quiet daemons therefore pay only the per-tick noop cost.
+//
+// The same goroutine also drives the dead-row garbage collector on a
+// much lower-frequency second ticker (see [gcTickInterval]): every GC
+// tick it rebuilds the alive-key set from the current device model
+// across every central and deletes any values_cache row that no
+// longer maps to a live parameter. GC does not run on the shutdown
+// flush — see [gcOnce] for the rationale and the empty-alive-set
+// safety guard.
 func WireValuesCacheFlusher(
 	reg *central.Registry,
 	store *sqlite.ValuesCacheStore,
@@ -153,11 +227,11 @@ func WireValuesCacheFlusher(
 		name := unit.Name()
 		tracker.Register(name)
 		bus := unit.EventBus
-		unsubVal := events.Subscribe(bus, func(_ hmevent.DataPointValueChangedEvent) {
-			tracker.Mark(name)
+		unsubVal := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+			tracker.Mark(name, e.Key.ChannelAddress, e.Key.Parameter)
 		})
-		unsubSrc := events.Subscribe(bus, func(_ hmevent.DataPointSourceChangedEvent) {
-			tracker.Mark(name)
+		unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
+			tracker.Mark(name, e.ChannelAddress, e.Parameter)
 		})
 		unsubs = append(unsubs, unsubVal, unsubSrc)
 	}
@@ -167,19 +241,29 @@ func WireValuesCacheFlusher(
 
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+		flushTicker := time.NewTicker(interval)
+		defer flushTicker.Stop()
+		// The GC ticker shares this goroutine rather than spawning a
+		// second one: both tickers touch the same store and registry, and
+		// a shared select loop keeps the shutdown path (below) the single
+		// place that has to reason about in-flight work.
+		gcTicker := time.NewTicker(gcTickInterval(interval))
+		defer gcTicker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				// Shutdown flush ignores the dirty flag — the daemon
 				// is going down, every central gets one final write
-				// so the next boot sees the very latest snapshot.
+				// so the next boot sees the very latest snapshot. GC does
+				// not run on shutdown: it is a maintenance sweep, not
+				// part of the data-loss-prevention path the flush covers.
 				//nolint:contextcheck // shutdown path must not inherit the cancelled flusher ctx
 				flushOnce(context.Background(), reg, store, nil, logger, "shutdown")
 				return
-			case <-ticker.C:
+			case <-flushTicker.C:
 				flushOnce(ctx, reg, store, tracker, logger, "tick")
+			case <-gcTicker.C:
+				gcOnce(ctx, reg, store, logger)
 			}
 		}
 	}()
@@ -196,19 +280,29 @@ func WireValuesCacheFlusher(
 	}
 }
 
-// flushOnce walks every dirty central + interface + channel and
-// pushes the wire-DP snapshot into the store in one SQLite
-// transaction. trigger is logged for diagnostics ("tick" /
-// "shutdown"). When tracker is non-nil only centrals that signalled
-// activity since the last tick are visited; the tracker is
-// SwapCleaned per central so a Mark that arrives during the walk
-// keeps the central dirty for the next tick. Passing tracker == nil
-// (shutdown path) walks every central regardless so the final flush
-// catches everything.
+// valuesCacheSaver is the subset of [*sqlite.ValuesCacheStore] flushOnce
+// needs. Narrowed to an interface so tests can spy on exactly which keys a
+// tick persists without a real SQLite-backed store; [WireValuesCacheFlusher]
+// always passes a concrete *[sqlite.ValuesCacheStore], which satisfies it.
+type valuesCacheSaver interface {
+	SaveBatch(ctx context.Context, entries []sqlite.SaveEntry) error
+}
+
+// flushOnce walks every dirty central and pushes the wire-DP snapshot into
+// the store in one SQLite transaction. trigger is logged for diagnostics
+// ("tick" / "shutdown"). When tracker is non-nil, only centrals that
+// signalled activity since the last tick are visited, and each one
+// contributes only the entries its [dirtyClaim] calls for — either the
+// exact (channel, parameter) keys that changed (the common case) or every
+// persistable DP when the claim is invalidateAll (the post-boot safety
+// net). The tracker is SwapCleaned per central so a Mark that arrives
+// during the walk keeps the central dirty for the next tick. Passing
+// tracker == nil (shutdown path) walks every central in full regardless so
+// the final flush catches everything.
 func flushOnce(
 	ctx context.Context,
 	reg *central.Registry,
-	store *sqlite.ValuesCacheStore,
+	store valuesCacheSaver,
 	tracker *dirtyTracker,
 	logger *slog.Logger,
 	trigger string,
@@ -223,20 +317,22 @@ func flushOnce(
 			continue
 		}
 		name := unit.Name()
-		if tracker != nil && !tracker.SwapClean(name) {
+		if tracker == nil {
+			walked++
+			collectAllChannelEntries(name, unit, &entries)
+			continue
+		}
+		claim, dirty := tracker.SwapClean(name)
+		if !dirty {
 			continue
 		}
 		walked++
-		for _, d := range unit.ModelRegistry.List() {
-			if d == nil {
-				continue
-			}
-			for _, ch := range d.Channels() {
-				if ch == nil {
-					continue
-				}
-				collectChannelEntries(name, d.InterfaceID, ch, &entries)
-			}
+		if claim.invalidateAll {
+			collectAllChannelEntries(name, unit, &entries)
+			continue
+		}
+		for key := range claim.keys {
+			collectKeyEntry(name, unit, key, &entries)
 		}
 	}
 	if len(entries) == 0 {
@@ -265,49 +361,183 @@ func flushOnce(
 	}
 }
 
-// collectChannelEntries appends one SaveEntry per persistable DP of ch.
-// A DP is persistable when its source is `live` or `stale` and the
-// concrete value can be coerced into `any` via UntypedValue. Other
-// states (cache / unobserved) hold either re-restored data with no
-// new information, or no data at all.
+// collectAllChannelEntries walks every device/channel currently registered
+// on unit and appends one SaveEntry per persistable VALUES DP. Used for the
+// invalidateAll claim and the tracker-less shutdown flush, where the whole
+// central must be re-serialised regardless of which specific keys changed.
+func collectAllChannelEntries(centralName string, unit *central.Unit, out *[]sqlite.SaveEntry) {
+	for _, d := range unit.ModelRegistry.List() {
+		if d == nil {
+			continue
+		}
+		for _, ch := range d.Channels() {
+			if ch == nil {
+				continue
+			}
+			collectChannelEntries(centralName, d.InterfaceID, ch, out)
+		}
+	}
+}
+
+// collectKeyEntry looks up exactly the VALUES DP identified by key on
+// unit's current device model and appends a SaveEntry when it is still
+// persistable. A key whose channel or parameter no longer exists (removed
+// between the Mark and this tick) or whose DP is no longer live/stale
+// (rolled back to unobserved) silently contributes nothing — the flusher
+// only ever adds entries, deletions are handled by
+// [sqlite.ValuesCacheStore.DeleteDevice] / [sqlite.ValuesCacheStore.DeleteChannel]
+// and the periodic GC pass (see gcOnce), not by a dirty-key flush tick.
+func collectKeyEntry(centralName string, unit *central.Unit, key dirtyKey, out *[]sqlite.SaveEntry) {
+	ch := unit.GetChannel(key.channelAddress)
+	if ch == nil {
+		return
+	}
+	dp := ch.Parameter(hmenum.Parameter(key.parameter))
+	if dp == nil {
+		return
+	}
+	appendPersistableEntry(centralName, ch.Device().InterfaceID, dp, out)
+}
+
+// collectChannelEntries appends one SaveEntry per persistable DP of ch. A
+// DP is persistable when its source is `live` or `stale` and the concrete
+// value can be coerced into `any` via UntypedValue. Other states (cache /
+// unobserved) hold either re-restored data with no new information, or no
+// data at all.
 func collectChannelEntries(
 	centralName, interfaceID string,
 	ch *device.Channel,
 	out *[]sqlite.SaveEntry,
 ) {
 	for _, dp := range ch.DataPoints() {
-		if dp == nil {
-			continue
-		}
-		sourced, ok := dp.(sourcedDP)
-		if !ok {
-			continue
-		}
-		src := sourced.Source()
-		if src != hmenum.ValueSourceLive && src != hmenum.ValueSourceStale {
-			continue
-		}
-		reader, ok := dp.(valueReader)
-		if !ok {
-			continue
-		}
-		v, observed := reader.RawValue()
-		if !observed || v == nil {
-			continue
-		}
-		addr, ok := dp.(addressed)
-		if !ok {
-			continue
-		}
-		key := addr.DataPointKey()
-		*out = append(*out, sqlite.SaveEntry{
-			CentralName:    centralName,
-			InterfaceID:    interfaceID,
-			ChannelAddress: key.ChannelAddress,
-			ParameterName:  key.Parameter,
-			Value:          v,
-			LastSeenAt:     sourced.LastSeenAt(),
-			LastChangedAt:  sourced.LastChangedAt(),
-		})
+		appendPersistableEntry(centralName, interfaceID, dp, out)
 	}
+}
+
+// appendPersistableEntry appends one SaveEntry for dp when it qualifies:
+// source `live` or `stale`, and an observed non-nil raw value. Shared by
+// the full-channel walk ([collectChannelEntries]) and the single-key
+// lookup ([collectKeyEntry]) so both paths apply the exact same
+// persistability rule.
+func appendPersistableEntry(
+	centralName, interfaceID string,
+	dp device.ParameterDataPoint,
+	out *[]sqlite.SaveEntry,
+) {
+	if dp == nil {
+		return
+	}
+	sourced, ok := dp.(sourcedDP)
+	if !ok {
+		return
+	}
+	src := sourced.Source()
+	if src != hmenum.ValueSourceLive && src != hmenum.ValueSourceStale {
+		return
+	}
+	reader, ok := dp.(valueReader)
+	if !ok {
+		return
+	}
+	v, observed := reader.RawValue()
+	if !observed || v == nil {
+		return
+	}
+	addr, ok := dp.(addressed)
+	if !ok {
+		return
+	}
+	key := addr.DataPointKey()
+	*out = append(*out, sqlite.SaveEntry{
+		CentralName:    centralName,
+		InterfaceID:    interfaceID,
+		ChannelAddress: key.ChannelAddress,
+		ParameterName:  key.Parameter,
+		Value:          v,
+		LastSeenAt:     sourced.LastSeenAt(),
+		LastChangedAt:  sourced.LastChangedAt(),
+	})
+}
+
+// gcOnce builds the current alive-key set across every registered central
+// and deletes any values_cache row whose (central, interface, channel,
+// parameter) tuple is no longer part of that set — e.g. a channel whose
+// parameter list shrank after a firmware/profile update, or a device
+// removal that raced the eviction handler in values_cache_evict.go. Unlike
+// [collectChannelEntries], the alive set here includes every data point
+// regardless of its current [hmenum.ValueSource]: a `cache`-sourced row
+// that has not yet received a fresh live value in this run is still a
+// legitimate row, not an orphan.
+//
+// A GC pass is skipped entirely when the alive set comes back empty. That
+// is the defensive case a bug in the walk (or a GC tick that fires before
+// any central finished loading its device model, e.g. during a slow CCU
+// boot) would otherwise turn into wiping the entire cache on the next
+// tick; the low default cadence (see [gcTickInterval]) makes a genuine
+// still-booting central an unlikely false negative in practice.
+func gcOnce(
+	ctx context.Context,
+	reg *central.Registry,
+	store *sqlite.ValuesCacheStore,
+	logger *slog.Logger,
+) {
+	if reg == nil || store == nil {
+		return
+	}
+	alive := buildAliveKeySet(reg)
+	if len(alive) == 0 {
+		if logger != nil {
+			logger.Debug("values_cache.gc_skipped", slog.String("reason", "empty_alive_set"))
+		}
+		return
+	}
+	result, err := store.GCDeadRows(ctx, alive)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("values_cache.gc_err", slog.String("err", err.Error()))
+		}
+		return
+	}
+	if logger != nil {
+		logger.Debug("values_cache.gc_done",
+			slog.Int("scanned", result.Scanned),
+			slog.Int("deleted", result.Deleted))
+	}
+}
+
+// buildAliveKeySet walks every registered central's current device model
+// and returns the set of [sqlite.AliveKey] tuples GC must preserve. Devices
+// or channels not present in the walk (removed, renamed address, dropped
+// parameter) leave no key behind, so their cache rows fall out of the set
+// and become eligible for deletion on the next [gcOnce].
+func buildAliveKeySet(reg *central.Registry) map[string]struct{} {
+	alive := make(map[string]struct{})
+	for _, unit := range reg.List() {
+		if unit == nil || unit.ModelRegistry == nil {
+			continue
+		}
+		name := unit.Name()
+		for _, d := range unit.ModelRegistry.List() {
+			if d == nil {
+				continue
+			}
+			for _, ch := range d.Channels() {
+				if ch == nil {
+					continue
+				}
+				for _, dp := range ch.DataPoints() {
+					if dp == nil {
+						continue
+					}
+					addr, ok := dp.(addressed)
+					if !ok {
+						continue
+					}
+					key := addr.DataPointKey()
+					alive[sqlite.AliveKey(name, d.InterfaceID, key.ChannelAddress, key.Parameter)] = struct{}{}
+				}
+			}
+		}
+	}
+	return alive
 }

@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"log/slog"
 	"maps"
 	"strconv"
 	"strings"
@@ -398,6 +400,14 @@ type Bridge struct {
 	// rebroadcasts to clients, but a bridge-side gate keeps the
 	// outbound traffic genuinely small.
 	configCache map[string][]byte
+	// rawTopics tracks every retained per-data-point raw-plane state
+	// topic this bridge has published (canonical PerDPState + custom-DP
+	// slot state + the legacy-alias mirror). Device removal walks this
+	// set the same way [Bridge.RetractDiscoveryForDevice] walks
+	// declared — an address-scoped needle match — so a removed
+	// device's retained state does not linger on the broker for
+	// non-HA consumers that never see the HA-Discovery retraction.
+	rawTopics map[string][]byte
 	// collector is the optional MqttCollector for per-bridge counters.
 	// Nil when no collector was wired in BridgeConfig.Collector.
 	collector *metrics.MqttCollector
@@ -429,8 +439,156 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 		client:      client,
 		declared:    make(map[string][]byte),
 		configCache: make(map[string][]byte),
+		rawTopics:   make(map[string][]byte),
 		collector:   cfg.Collector,
 	}
+}
+
+// dispatchJob is one unit of deferred work handed to a
+// [boundedDispatcher] worker.
+type dispatchJob func()
+
+// boundedDispatcher runs jobs on a fixed pool of worker goroutines so a
+// caller on the MQTT client's synchronous read loop (see
+// [go-mqtt]'s dispatch, which runs every inbound MessageHandler and the
+// PUBACK/PINGRESP bookkeeping on one goroutine) can hand off blocking
+// downstream I/O — a QoS1 discovery republish, a CCU write behind the
+// circuit breaker/retry stack — and return immediately instead of
+// stalling the ack path.
+//
+// Same-key jobs always land on the same worker (selected by an FNV-1a
+// hash of key), so per-key submission order is preserved — two writes
+// for the same MQTT topic (the same data point) never reorder — while
+// jobs for different keys may run concurrently across workers.
+//
+// Lifecycle: workers start in newBoundedDispatcher and run until Close
+// has drained every already-queued job on every worker. Each of
+// [BirthSync] and [CommandSubscriber] owns exactly one instance and is
+// responsible for calling Close on its own teardown.
+type boundedDispatcher struct {
+	name   string // log-line identity, e.g. "birth_sync" / "command"
+	logger *slog.Logger
+	queues []chan dispatchJob
+	wg     sync.WaitGroup
+
+	closeMu sync.RWMutex
+	closed  bool
+}
+
+// newBoundedDispatcher starts `workers` goroutines, each backed by a
+// FIFO queue of depth `queueDepth`. workers and queueDepth are clamped
+// to at least 1 so a misconfigured caller still gets a working (if
+// serial) dispatcher rather than a panic.
+func newBoundedDispatcher(workers, queueDepth int, name string, logger *slog.Logger) *boundedDispatcher {
+	if workers < 1 {
+		workers = 1
+	}
+	if queueDepth < 1 {
+		queueDepth = 1
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	d := &boundedDispatcher{
+		name:   name,
+		logger: logger,
+		queues: make([]chan dispatchJob, workers),
+	}
+	for i := range d.queues {
+		d.queues[i] = make(chan dispatchJob, queueDepth)
+		d.wg.Add(1)
+		go d.runWorker(d.queues[i])
+	}
+	return d
+}
+
+// runWorker drains one queue until it is closed (by Close), running
+// every already-queued job first — a graceful drain, not an abrupt
+// stop.
+func (d *boundedDispatcher) runWorker(q chan dispatchJob) {
+	defer d.wg.Done()
+	for job := range q {
+		job()
+	}
+}
+
+// Enqueue routes job to the worker selected by key's hash. It never
+// silently drops job: a full queue first logs one bounded warning
+// (visible proof of backpressure instead of a silent stall) and then
+// blocks until the worker has room. Once Close has been called,
+// Enqueue logs a warning and returns without running job — the
+// dispatcher is shutting down and no worker remains to run it.
+func (d *boundedDispatcher) Enqueue(key string, job dispatchJob) {
+	d.closeMu.RLock()
+	defer d.closeMu.RUnlock()
+	if d.closed {
+		d.logger.Warn("mqtt.dispatch.dropped_after_close",
+			slog.String("dispatcher", d.name), slog.String("key", key))
+		return
+	}
+	q := d.queues[dispatchWorkerIndex(key, len(d.queues))]
+	select {
+	case q <- job:
+		return
+	default:
+	}
+	d.logger.Warn("mqtt.dispatch.queue_full",
+		slog.String("dispatcher", d.name), slog.String("key", key))
+	q <- job
+}
+
+// Close stops accepting new jobs and blocks until every worker has
+// drained its queue and exited. Safe to call more than once (later
+// calls are no-ops) and safe to call on a nil receiver.
+func (d *boundedDispatcher) Close() {
+	if d == nil {
+		return
+	}
+	d.closeMu.Lock()
+	if d.closed {
+		d.closeMu.Unlock()
+		return
+	}
+	d.closed = true
+	for _, q := range d.queues {
+		close(q)
+	}
+	d.closeMu.Unlock()
+	d.wg.Wait()
+}
+
+// flush blocks until every job enqueued before this call has been
+// drained by its worker. It is a test barrier: production code never
+// needs deterministic proof that async work landed, so it drives a
+// per-worker sentinel job through every queue. A no-op once Close has
+// run.
+func (d *boundedDispatcher) flush() {
+	d.closeMu.RLock()
+	if d.closed {
+		d.closeMu.RUnlock()
+		return
+	}
+	dones := make([]chan struct{}, len(d.queues))
+	for i, q := range d.queues {
+		done := make(chan struct{})
+		dones[i] = done
+		q <- func() { close(done) }
+	}
+	d.closeMu.RUnlock()
+	for _, done := range dones {
+		<-done
+	}
+}
+
+// dispatchWorkerIndex hashes key to a worker slot in [0, n). A single
+// worker (n<=1) always returns 0 without hashing.
+func dispatchWorkerIndex(key string, n int) int {
+	if n <= 1 {
+		return 0
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return int(h.Sum32() % uint32(n)) //nolint:gosec // n is a small worker count, no overflow risk
 }
 
 // SetHubInfo updates the central-level metadata stored on the
@@ -565,6 +723,7 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 		// Best-effort mirror — the canonical PerDPState publish via
 		// PublishSlotState is the source of truth.
 		_ = b.client.Publish(ctx, legacyTopic, payloadBytes, b.cfg.QoS.State, true)
+		b.rememberRawTopic(legacyTopic)
 	}
 	if b.cfg.HADiscoveryEnabled && b.cfg.DiscoveryBuilder != nil {
 		component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
@@ -672,7 +831,12 @@ func (b *Bridge) PublishCustomDPState(ctx context.Context, centralName, iface st
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.SlotState(centralName, iface, slot), body, b.cfg.QoS.State, true)
+	topic := b.topics.SlotState(centralName, iface, slot)
+	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
+		return err
+	}
+	b.rememberRawTopic(topic)
+	return nil
 }
 
 // PublishSlotConfig publishes a [pload.Source.ConfigPayload] map at the
@@ -736,6 +900,7 @@ func (b *Bridge) PublishSlotState(ctx context.Context, centralName, iface string
 		b.incPublishErrors()
 		return err
 	}
+	b.rememberRawTopic(topic)
 	b.incMessagesSent()
 	return nil
 }
@@ -1033,6 +1198,12 @@ func (b *Bridge) EvictState(
 // specific command topics.
 func (b *Bridge) Topics() *TopicBuilder { return b.topics }
 
+// CommandQoS exposes the configured inbound-command QoS
+// ([QoSProfile.Commands]) so a [CommandSubscriber] wired against this
+// bridge (via [CommandSubscriber.WithQoS]) subscribes at the operator's
+// configured level instead of a hardcoded default.
+func (b *Bridge) CommandQoS() QoS { return b.cfg.QoS.Commands }
+
 // PublishSystemStatus publishes payload to the per-central system-status
 // topic (`<base>/<central>/system/status`). Non-retained, QoS 0 — the
 // topic carries live events, not persistent state. Returns nil when
@@ -1240,24 +1411,92 @@ func (b *Bridge) RetractDiscoveryForDevice(ctx context.Context, deviceAddress st
 		return 0
 	}
 	needle := "_" + strings.ToLower(deviceAddress) + "/"
+	return b.retractTopicsMatching(ctx, b.declared, needle, b.cfg.QoS.Discovery)
+}
+
+// retractTopicsMatching walks m for every topic containing needle,
+// publishes an empty retained payload to clear it from the broker, and
+// removes the matched entries from m so a re-declare (e.g. the same
+// address re-pairing later) is not suppressed by a stale dedup entry.
+// Shared by [Bridge.RetractDiscoveryForDevice] (declared map) and
+// [Bridge.RetractRawStateForDevice] (rawTopics / configCache maps).
+//
+// Best-effort: a publish error is counted but does not abort the sweep
+// — a boot-time orphan-cleanup pass (where one exists) is the backstop.
+func (b *Bridge) retractTopicsMatching(ctx context.Context, m map[string][]byte, needle string, qos QoS) int {
 	b.mu.Lock()
 	topics := make([]string, 0)
-	for topic := range b.declared {
+	for topic := range m {
 		if strings.Contains(topic, needle) {
 			topics = append(topics, topic)
-			delete(b.declared, topic)
+			delete(m, topic)
 		}
 	}
 	b.mu.Unlock()
 	for _, topic := range topics {
-		// Empty retained payload clears the retained config so HA drops the
-		// entity. Best-effort: a publish error leaves the boot orphan-cleanup
-		// pass as the backstop.
-		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true); err != nil {
+		if err := b.client.Publish(ctx, topic, nil, qos, true); err != nil {
 			b.incPublishErrors()
 		}
 	}
 	return len(topics)
+}
+
+// rememberRawTopic records topic in the address-scoped raw-topic index
+// used by [Bridge.RetractRawStateForDevice] to find every retained
+// per-data-point state topic a removed device declared, without
+// needing the device's channel/parameter list to still exist in the
+// domain model at removal time.
+func (b *Bridge) rememberRawTopic(topic string) {
+	if topic == "" {
+		return
+	}
+	b.mu.Lock()
+	b.rawTopics[topic] = nil
+	b.mu.Unlock()
+}
+
+// RetractRawStateForDevice clears every retained raw-plane topic this
+// bridge has published for deviceAddress: the per-data-point state
+// topics tracked in rawTopics (canonical PerDPState, custom-DP slot
+// state, and the legacy-alias mirror), the descriptor-companion
+// `/config` topics tracked in configCache, and the device-scoped
+// availability / info / diagnostics topics computed directly from
+// (centralName, iface, deviceAddress).
+//
+// Called from the DeviceRemovedEvent path alongside
+// [Bridge.RetractDiscoveryForDevice] so non-HA raw-plane consumers see
+// a removed device disappear immediately instead of reading a
+// permanently stale `available:true` / last-known value. No-op when
+// the raw plane is disabled or deviceAddress is empty.
+func (b *Bridge) RetractRawStateForDevice(ctx context.Context, centralName, iface, deviceAddress string) int {
+	if deviceAddress == "" || !b.cfg.RawEnabled {
+		return 0
+	}
+	if centralName == "" {
+		centralName = b.cfg.CentralName
+	}
+	needle := "/" + deviceAddress + "/"
+	n := b.retractTopicsMatching(ctx, b.rawTopics, needle, b.cfg.QoS.State)
+	n += b.retractTopicsMatching(ctx, b.configCache, needle, b.cfg.QoS.State)
+	for _, topic := range []string{
+		b.topics.DeviceAvailability(centralName, iface, deviceAddress),
+		b.topics.DeviceInfo(centralName, iface, deviceAddress),
+		b.topics.DeviceDiagnostics(centralName, iface, deviceAddress),
+	} {
+		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.State, true); err != nil {
+			b.incPublishErrors()
+			continue
+		}
+		n++
+	}
+	if b.legacy != nil {
+		if err := b.client.Publish(ctx, b.legacy.DeviceAvailability(deviceAddress), nil, b.cfg.QoS.State, true); err != nil {
+			b.incPublishErrors()
+		} else {
+			n++
+		}
+	}
+	return n
 }
 
 func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {

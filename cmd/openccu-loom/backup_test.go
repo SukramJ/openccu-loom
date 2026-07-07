@@ -363,6 +363,10 @@ func TestBackupCreateExcludesSecretKey(t *testing.T) {
 	if !foundState {
 		t.Errorf("archive missing ordinary state file %q; entries: %v", filepath.Base(stateFile), names)
 	}
+
+	if !strings.Contains(stderr.String(), secret.KeyFileName) {
+		t.Errorf("backup create did not print a secret.key preservation reminder to stderr; got: %q", stderr.String())
+	}
 }
 
 // archiveEntryNames returns the tar entry names (archive-internal paths)

@@ -31,6 +31,7 @@ var writeCommandRoles = map[string]auth.Role{
 	// Admin-tier: backup + cache invalidation mirror the REST
 	// `/backups` and `/admin/cache/clear` routes (both `.With(admin)`).
 	"backup.trigger":  auth.RoleAdmin,
+	"backups.trigger": auth.RoleAdmin,
 	"ccu.cache_clear": auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.

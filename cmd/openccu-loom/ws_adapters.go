@@ -57,6 +57,9 @@ type wsCommandWiring struct {
 	// ccu.reload_device_config. The same adapter also backs
 	// config.reload_channel_config / ccu.reload_channel_config.
 	deviceReloader *adapter.DeviceReloaderAdapter
+	// backups backs backups.trigger — *adapter.BackupAdapter satisfies
+	// ws.BackupsService directly via TriggerBackupForCentral.
+	backups *adapter.BackupAdapter
 	// cacheResetSvc backs ccu.cache_clear — scope-aware cache clear + re-pull.
 	cacheResetSvc *cachereset.Service
 	// editSessions is the shared edit-lock registry (also wired into the
@@ -118,6 +121,9 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// ccu.reload_channel_config — re-pulls a single channel's paramset
 		// descriptions + MASTER values and refreshes its data points.
 		ChannelReloader: w.deviceReloader,
+		// Backups backs backups.trigger — the central-scoped counterpart to
+		// the legacy Hub-backed backup.trigger (always first central).
+		Backups: w.backups,
 	})
 
 	ws.RegisterExtendedCommands(router, ws.ExtendedCommandsConfig{

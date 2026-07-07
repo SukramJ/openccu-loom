@@ -88,6 +88,7 @@ func TestCommandSubscriberDataPointTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("calls=%d", sink.setValues.Load())
 	}
@@ -105,6 +106,7 @@ func TestCommandSubscriberSysvarTopic(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/sysvars/+/set",
 		"openccu-loom/ccu-01/hub/sysvars/PartyMode/set", []byte("false"))
+	sub.dispatcher.flush()
 	if sink.setSysvars.Load() != 1 || sink.lastSysvar.name != "PartyMode" || sink.lastSysvar.value != false {
 		t.Fatalf("sysvar call: %+v", sink.lastSysvar)
 	}
@@ -118,6 +120,7 @@ func TestCommandSubscriberProgramTopic(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
 		"openccu-loom/ccu-01/hub/programs/Morning/trigger", nil)
+	sub.dispatcher.flush()
 	if sink.triggers.Load() != 1 || sink.lastProgram.id != "Morning" {
 		t.Fatalf("program: %+v", sink.lastProgram)
 	}
@@ -184,6 +187,7 @@ func TestCommandSubscriberCDPInvoke(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 CDP call, got %d", cdpSink.calls.Load())
 	}
@@ -273,6 +277,7 @@ func TestCommandSubscriberCDPInvokeEmptyPayload(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_off/invoke",
 		[]byte(""))
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call on empty payload, got %d", cdpSink.calls.Load())
 	}
@@ -294,6 +299,7 @@ func TestCommandSubscriberCDPInvokeSinkError(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/UNKNOWN/cdps/x/turn_on/invoke",
 		[]byte(`{}`))
+	sub.dispatcher.flush()
 	// Should not panic or block; error is swallowed.
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call even on error, got %d", cdpSink.calls.Load())
@@ -388,6 +394,7 @@ func TestCommandSubscriberWeekProfileTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if wpSink.calls.Load() != 1 {
 		t.Fatalf("calls=%d, want 1", wpSink.calls.Load())
 	}
@@ -474,6 +481,7 @@ func TestCommandSubscriberInstallModePressTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if imSink.calls.Load() != 1 {
 		t.Fatalf("calls=%d, want 1", imSink.calls.Load())
 	}
@@ -495,6 +503,7 @@ func TestCommandSubscriberInstallModeNumericDuration(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
 		"openccu-loom/ccu-01/hub/install_mode/BidCos-RF/set", []byte("120"))
+	sub.dispatcher.flush()
 	if imSink.calls.Load() != 1 || imSink.last.seconds != 120 || imSink.last.iface != "BidCos-RF" {
 		t.Fatalf("last=%+v", imSink.last)
 	}
@@ -543,6 +552,7 @@ func TestCommandSubscriberMasterBucketRoutes(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if sink.masterValues.Load() != 1 {
 		t.Fatalf("SetMasterValue calls=%d, want 1", sink.masterValues.Load())
 	}
@@ -602,10 +612,72 @@ func TestCommandSubscriberValuesBucketStillRoutes(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE/set", []byte("true"))
+	sub.dispatcher.flush()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("SetValue calls=%d, want 1", sink.setValues.Load())
 	}
 	if sink.masterValues.Load() != 0 {
 		t.Fatalf("SetMasterValue must not be called for values bucket; got %d calls", sink.masterValues.Load())
+	}
+}
+
+// qosRecordingSubscriber wraps NoopClient's storage but also records the
+// QoS every Subscribe call registered at — NoopClient itself discards it.
+type qosRecordingSubscriber struct {
+	*NoopClient
+	qosByFilter map[string]QoS
+}
+
+func newQoSRecordingSubscriber() *qosRecordingSubscriber {
+	return &qosRecordingSubscriber{NoopClient: NewNoopClient(), qosByFilter: map[string]QoS{}}
+}
+
+func (s *qosRecordingSubscriber) Subscribe(ctx context.Context, filter string, qos QoS, handler MessageHandler, opts ...SubscribeOption) (SubscribeResult, error) {
+	s.qosByFilter[filter] = qos
+	return s.NoopClient.Subscribe(ctx, filter, qos, handler, opts...)
+}
+
+// TestCommandSubscriberWiresConfiguredQoS reproduces the M2 bug: every
+// inbound command Subscribe call hardcoded QoS1, so QoSProfile.Commands was
+// dead configuration. It sets a non-default QoS via WithQoS and asserts
+// every registered subscription (data-point, legacy, sysvar, program,
+// install-mode, CDP invoke, service-method, week-profile, combined-DP,
+// schedule-switch) uses it instead of the QoS1 default.
+func TestCommandSubscriberWiresConfiguredQoS(t *testing.T) {
+	t.Parallel()
+	sub := newQoSRecordingSubscriber()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	const wantQoS = QoS0
+	cs := NewCommandSubscriber(sub, topics, sink, nil).WithQoS(wantQoS)
+	if err := cs.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if len(sub.qosByFilter) == 0 {
+		t.Fatal("no subscriptions were recorded")
+	}
+	for filter, qos := range sub.qosByFilter {
+		if qos != wantQoS {
+			t.Fatalf("filter %q subscribed at QoS %d, want %d", filter, qos, wantQoS)
+		}
+	}
+}
+
+// TestCommandSubscriberDefaultQoSIsQoS1 locks in the backward-compatible
+// default so existing deployments that never call WithQoS keep the
+// historical at-least-once behavior.
+func TestCommandSubscriberDefaultQoSIsQoS1(t *testing.T) {
+	t.Parallel()
+	sub := newQoSRecordingSubscriber()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	cs := NewCommandSubscriber(sub, topics, sink, nil)
+	if err := cs.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	for filter, qos := range sub.qosByFilter {
+		if qos != QoS1 {
+			t.Fatalf("filter %q subscribed at QoS %d, want default QoS1", filter, qos)
+		}
 	}
 }

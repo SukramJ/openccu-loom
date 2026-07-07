@@ -1741,17 +1741,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List API tokens with elided fingerprints (admin) */
+        /**
+         * List API tokens with elided fingerprints (admin)
+         * @deprecated
+         * @description Deprecated — use `GET /auth/tokens/v2`, which carries the full
+         *     fingerprint plus `created_at`/`expires_at` metadata instead of
+         *     an elided fingerprint. The in-tree Svelte SPA already uses only
+         *     the v2 surface (`AccessControl.svelte`); this v1 read path is
+         *     kept for existing external API consumers.
+         */
         get: operations["listTokens"];
         put?: never;
         /**
          * Issue a new bearer token (admin)
-         * @description Generates a fresh bearer token bound to the supplied subject
-         *     and role. The raw token value is returned exactly once in
-         *     the 201 response — the daemon stores only an opaque
-         *     fingerprint thereafter, so the client MUST capture the
-         *     `token` field on creation. Use the returned `id` for
-         *     subsequent management (`DELETE /auth/tokens/{id}`).
+         * @deprecated
+         * @description Deprecated — use `POST /auth/tokens/v2`, which additionally
+         *     accepts `expires_in_days`. Generates a fresh bearer token bound
+         *     to the supplied subject and role. The raw token value is
+         *     returned exactly once in the 201 response — the daemon stores
+         *     only an opaque fingerprint thereafter, so the client MUST
+         *     capture the `token` field on creation. Use the returned `id`
+         *     for subsequent management (`DELETE /auth/tokens/{id}`).
          */
         post: operations["createToken"];
         delete?: never;
@@ -2226,6 +2236,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/channels/{no}/master-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List master profiles for one channel
+         * @description Master profiles available for the channel's (device_type,
+         *     channel_type) pair — resolved from the channel's owning device's
+         *     model and the channel's own type. Shares the domain call
+         *     (`masterprofile.Store.Profiles`) with the WS
+         *     `master_profiles.list` command. An unknown pair (no profiles
+         *     catalogued for this device/channel type) returns an empty array,
+         *     not 404.
+         */
+        get: operations["listMasterProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/master-profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Full parameter set of a single master profile
+         * @description Shares the domain call (`masterprofile.Store.Profile`) with the
+         *     WS `master_profiles.get` command.
+         */
+        get: operations["getMasterProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/master-profiles/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match observed values against a channel's master-profile constraints
+         * @description Matches the `current_values` in the request body against the
+         *     master-profile constraint set for the channel's (device_type,
+         *     channel_type) pair and returns the active profile id (0 = Expert
+         *     / no match). Shares the domain call
+         *     (`masterprofile.Store.MatchActiveProfile`) with the WS
+         *     `master_profiles.match` command.
+         */
+        post: operations["matchMasterProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/channels/{no}/schedule": {
         parameters: {
             query?: never;
@@ -2557,6 +2639,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/service-messages/{id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable (suppress) a service message
+         * @description The CCU exposes exactly one dismiss primitive for service
+         *     messages — there is no separate wire-level "disable/suppress
+         *     forever" operation — so this shares the same domain call as
+         *     `POST .../ack` (`hub.ServiceMessages.Disable` delegates to
+         *     `Acknowledge`). Exposed as its own operation (rather than an
+         *     alias) so callers can name the intent, and shares the domain
+         *     call with the WS `service_messages.disable` command.
+         */
+        post: operations["disableServiceMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backups": {
         parameters: {
             query?: never;
@@ -2567,7 +2675,14 @@ export interface paths {
         /** Locally stored CCU backups */
         get: operations["listBackups"];
         put?: never;
-        /** Trigger CCU backup (Rega create_backup_start) */
+        /**
+         * Trigger CCU backup (Rega create_backup_start)
+         * @description Starts the create-and-download backup flow. An optional
+         *     `central_name` in the request body selects the target central
+         *     explicitly (multi-CCU-correct); omitting it — or an empty
+         *     request body — backs up the first registered central for
+         *     backward compatibility.
+         */
         post: operations["triggerBackup"];
         delete?: never;
         options?: never;
@@ -2729,7 +2844,13 @@ export interface paths {
         get: operations["listIncidents"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Clear every stored incident across every registered central (admin)
+         * @description Removes all rows from the incident store for every registered
+         *     central. Mirrors the WS `incidents.clear` command — both share
+         *     the same domain call (`adapter.IncidentsStoreReader.ClearIncidents`).
+         */
+        delete: operations["clearIncidents"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4783,6 +4904,36 @@ export interface components {
         ChannelLockRequest: {
             /** @description Include (true) / exclude (false) the channel from the week-program schedule. */
             enabled: boolean;
+        };
+        /** @description One entry in `GET .../master-profiles` — the list shape (no full parameter map). */
+        MasterProfileSummary: {
+            id: number;
+            /** @description Localised profile name. */
+            name: string;
+            /** @description Localised profile description. */
+            description: string;
+            /** @description Number of MASTER parameters this profile sets. */
+            param_count: number;
+        };
+        /** @description Full master-profile shape returned by `GET .../master-profiles/{id}`. */
+        MasterProfile: {
+            id: number;
+            /** @description Locale-keyed profile name (e.g. `{"en": "Eco", "de": "Eco"}`). */
+            name: {
+                [key: string]: string;
+            };
+            /** @description Locale-keyed profile description. */
+            description: {
+                [key: string]: string;
+            };
+            /** @description MASTER parameter name to constraint. */
+            params: {
+                [key: string]: {
+                    /** @description Usually "fixed"; other kinds appear sporadically. */
+                    constraint_type?: string;
+                    value?: unknown;
+                };
+            };
         };
         InterfaceState: {
             id: string;
@@ -7340,6 +7491,94 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listMasterProfiles: {
+        parameters: {
+            query?: {
+                /** @description Locale for the localised name/description. Defaults to "en". */
+                locale?: string;
+            };
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Master profiles for the channel (may be empty) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterProfileSummary"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getMasterProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Master profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MasterProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    matchMasterProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    current_values?: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Active profile id (0 = no match) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        active_id: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getChannelSchedule: {
         parameters: {
             query?: never;
@@ -8114,6 +8353,28 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    disableServiceMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     listBackups: {
         parameters: {
             query?: never;
@@ -8142,7 +8403,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Name of the central to back up. Omit to back up the first registered central. */
+                    central_name?: string;
+                };
+            };
+        };
         responses: {
             /** @description Job id returned */
             202: {
@@ -8151,6 +8419,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -8425,14 +8694,23 @@ export interface operations {
     };
     listIncidents: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only return incidents belonging to the named CCU. Matches both central-level entries (`component == central`) and interface-scoped entries (`component == "<central>/<interface>"`). */
+                central?: string;
+                /** @description Only return incidents at-or-after this value (inclusive, RFC3339). Returns 400 if the value cannot be parsed. */
+                since?: string;
+                /** @description Only return incidents strictly before this value (exclusive, RFC3339). Returns 400 if the value cannot be parsed. */
+                until?: string;
+                /** @description Maximum entries to return. 0 or absent uses the default (500). Values above 5000 are capped to 5000. */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Incidents */
+            /** @description Filtered list of diagnostic incidents (newest first). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8441,6 +8719,27 @@ export interface operations {
                     "application/json": components["schemas"]["Incident"][];
                 };
             };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    clearIncidents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incidents cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     metrics: {

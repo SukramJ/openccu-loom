@@ -10,6 +10,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
 
@@ -228,27 +229,24 @@
   <!-- External filters: action, central, date range, export. DataTable
        provides the free-text search box on top of these filters. -->
   <div class="mb-4 flex flex-wrap items-center gap-2">
-    <select
+    <Select
+      class="w-auto"
       bind:value={actionFilter}
-      class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-    >
-      <option value="">{t("audit.filter.all")}</option>
-      {#each actions as a (a)}
-        <option value={a}>{actionLabel(a)}</option>
-      {/each}
-    </select>
+      options={[
+        { value: "", label: t("audit.filter.all") },
+        ...actions.map((a) => ({ value: a, label: actionLabel(a) })),
+      ]}
+    />
     {#if centrals.length > 0}
-      <select
+      <Select
+        class="w-auto"
         bind:value={centralFilter}
-        class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-        title="CCU"
-      >
-        <option value="">{t("common.all_ccus")}</option>
-        {#each centrals as c (c)}
-          <option value={c}>{c}</option>
-        {/each}
-        <option value="__global__">{t("audit.filter.global")}</option>
-      </select>
+        options={[
+          { value: "", label: t("common.all_ccus") },
+          ...centrals.map((c) => ({ value: c, label: c })),
+          { value: "__global__", label: t("audit.filter.global") },
+        ]}
+      />
     {/if}
     <label class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
       {t("audit.from")}

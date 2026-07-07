@@ -188,5 +188,8 @@ typed descriptor in `internal/payload/descriptor.go`.
 ## Retain and QoS policy
 
 OpenCCU-Loom retains all state, availability, info, diagnostics,
-config, and discovery topics. Command (`/set`) and event topics are
-non-retained QoS 0.
+config, and discovery topics. Event topics (`/event`, pulse topics)
+are non-retained QoS 0. Command (`/set`, `/trigger`, `/invoke`) topics
+are non-retained and subscribed at QoS 1 (at-least-once) by default —
+configurable via `QoSProfile.Commands` — so an inbound write is not
+silently dropped on a flaky broker connection.

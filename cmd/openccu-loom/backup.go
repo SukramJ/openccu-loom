@@ -351,6 +351,14 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:goco
 		}
 		_, _ = fmt.Fprintf(stdout, "backup created: %s  (%d bytes, %s, sha256=%s)\n", dest, fi.Size(), enc, archiveSHA)
 	}
+
+	// The archive never contains secret.key (see the walk skip above) — remind
+	// the operator on every run so the out-of-band copy is not forgotten until
+	// a restore fails to decrypt.
+	_, _ = fmt.Fprintf(stderr, "reminder: this archive does NOT contain %s; preserve it "+
+		"(or the OPENCCU_LOOM_SECRET_KEY value) out-of-band or the archive cannot be decrypted on restore\n",
+		secret.KeyFileName)
+
 	return nil
 }
 

@@ -25,6 +25,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
+	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
@@ -65,13 +66,18 @@ type restMountDeps struct {
 	// editSessions is the shared edit-lock registry — backs both the
 	// `/sessions/edit` endpoints and the strict MASTER/LINK paramset-write
 	// gate, and is shared with the WS `paramset.put` enforcement.
-	editSessions           *handlers.EditSessions
-	dpWriterAdapter        *adapter.DataPointWriterAdapter
-	customDPDispatcher     *adapter.CustomDPDispatcher
-	paramsetsDomain        *adapter.ParamsetsDomain
-	hubAdapter             *adapter.HubAdapter
-	ifaceAdapter           *adapter.InterfacesAdapter
-	incidents              handlers.IncidentsReader
+	editSessions       *handlers.EditSessions
+	dpWriterAdapter    *adapter.DataPointWriterAdapter
+	customDPDispatcher *adapter.CustomDPDispatcher
+	paramsetsDomain    *adapter.ParamsetsDomain
+	hubAdapter         *adapter.HubAdapter
+	ifaceAdapter       *adapter.InterfacesAdapter
+	incidents          handlers.IncidentsReader
+	// masterProfiles backs the read-only master-profiles REST routes
+	// (GET .../master-profiles[/{id}], POST .../master-profiles/match) —
+	// the same *masterprofile.Store instance the WS
+	// master_profiles.list/get/match commands are wired against.
+	masterProfiles         *masterprofile.Store
 	sysStatusBuf           *handlers.SystemStatusBuffer
 	visFilter              filter.VisibilitySet
 	metricsReg             *metrics.Registry
@@ -188,6 +194,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		SysvarRefresh:         adapter.NewSysvarFetchAdapter(d.reg),
 		Interfaces:            d.ifaceAdapter,
 		Incidents:             d.incidents,
+		IncidentsAdmin:        incidentsClearerFrom(d.incidents),
+		MasterProfiles:        d.masterProfiles,
 		SystemStatus:          d.sysStatusBuf,
 		Labels:                adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
 		DataPointVis:          d.visFilter,
@@ -357,6 +365,18 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		}
 	}
 	return teardown
+}
+
+// incidentsClearerFrom narrows the wired IncidentsReader down to the
+// optional handlers.IncidentsClearer surface DELETE /incidents needs.
+// *adapter.IncidentsStoreReader (the concrete type behind d.incidents)
+// implements both, so REST's bulk clear and the WS `incidents.clear`
+// command share the same domain call; a reader that only satisfies
+// IncidentsReader (e.g. a future non-SQLite-backed implementation)
+// simply leaves the route unmounted (nil → 404).
+func incidentsClearerFrom(r handlers.IncidentsReader) handlers.IncidentsClearer {
+	c, _ := r.(handlers.IncidentsClearer)
+	return c
 }
 
 // mountMCP wraps the REST router so the configured MCP path serves the

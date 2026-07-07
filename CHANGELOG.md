@@ -6,6 +6,207 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-07-07
+
+### Fixed
+
+- **Disabling or editing an already-live CCU in the Config UI no longer
+  silently leaves the old connection running.** `PUT /admin/centrals/{name}`
+  persisted the row but, for a central already registered at runtime,
+  returned success without touching the live `central.Unit` — disabling a
+  CCU left it fully connected and polling until the next daemon restart,
+  with no log line, while the Config UI showed a plain "CCU disabled"
+  toast. Disabling a currently-registered central now tears the live
+  connection down (mirroring the existing Delete order) and logs it. A
+  config edit to an already-live CCU still cannot be hot-applied, so it now
+  logs a `central.edit.restart_required` warning, and the Config UI shows
+  an explicit "a daemon restart is required" toast instead of an
+  unqualified "CCU updated" success when a southbound-relevant field
+  (host, ports, TLS, credentials, interfaces) actually changed.
+- **MQTT: command and HA-birth handlers no longer block the client's
+  read loop, which could self-deadlock or stall unrelated commands.**
+  `go-mqtt` runs every inbound `MessageHandler` synchronously on the
+  single goroutine that also processes PUBACK/PINGRESP for the same
+  connection. `BirthSync.handle` called `Bridge.RepublishDiscovery`
+  inline — a blocking QoS1 `Publish` per declared discovery topic,
+  each waiting on a PUBACK only that same (now-busy) goroutine could
+  ever deliver — a guaranteed self-deadlock on every Home Assistant
+  restart once more than a handful of entities were declared.
+  `CommandSubscriber`'s handlers (`SetValue`/`SetMasterValue`/
+  `InvokeChannelService`/…) called the sink inline too, so a CCU
+  write stuck for seconds behind the circuit breaker/retry stack
+  stalled every other in-flight MQTT message on the same connection.
+  Both now dispatch the actual downstream call onto a small bounded
+  worker pool (`boundedDispatcher`) and return immediately; per-worker
+  routing is keyed by the inbound MQTT topic so writes to the same
+  data point never reorder, and a full queue blocks briefly with a
+  logged warning rather than silently dropping the command. Both
+  `BirthSync` and `CommandSubscriber` now expose `Close()` for a clean
+  goroutine drain on teardown.
+- **MQTT: removed devices no longer keep stale retained raw-plane
+  topics.** `onDeviceRemoved` only retracted the device's
+  HA-Discovery `/config` entries; the retained raw-plane
+  `values`/`master`/`calculated`/custom-DP state topics plus the
+  device-scoped `availability`/`info`/`diagnostics` topics survived
+  forever, so non-HA MQTT consumers kept seeing a removed device as
+  permanently `available:true` with a stale last value. Device
+  removal now also calls the new `Bridge.RetractRawStateForDevice`,
+  which publishes an empty retained payload to every raw-plane topic
+  the bridge declared for that device address.
+- **MQTT: `QoSProfile.Commands` is no longer dead configuration.**
+  `command_subscriber.go` hardcoded QoS 1 on every inbound `/set` /
+  `/trigger` / `/invoke` subscription regardless of the configured
+  `QoS.Commands` value. `CommandSubscriber` now subscribes at a
+  configurable QoS (default QoS 1, unchanged) via `WithQoS` /
+  `Bridge.CommandQoS()`; `docs/mqtt-topic-schema.md` corrected — it
+  previously and incorrectly described command topics as QoS 0.
+- **Backup docs no longer claim `secret.key` is bundled in the CLI
+  archive.** `docs/admin/backup.md` said the archive was
+  self-contained for decryption; `backup create` has always skipped
+  `secret.key` while sealing the archive with it instead. The doc now
+  states plainly that `secret.key` (or `OPENCCU_LOOM_SECRET_KEY`) must
+  be preserved out-of-band, and `backup create` prints a one-line
+  reminder of this to stderr after every successful run.
+- **Cache metrics: command-tracker/ping-pong sizes now populated.**
+  `metrics.Aggregator.Cache()` looped over connected interface clients
+  but discarded each one, so `CacheMetricsSnapshot.CommandTracker` and
+  `.PingPongTracker` (and therefore `TotalEntries`/`OverallHitRate`)
+  always reported zero. The client adapter now exposes
+  `CommandTrackerSize`/`PingPongSize` and the aggregator sums them
+  across every connected client.
+- **Manual backup/restore is now multi-CCU-correct.** `POST
+  /backups` triggered a create-and-download backup for only the
+  first registered central, and — worse — the CCU backup restorer
+  was wired once, globally, so restoring *any* stored `.sbk`
+  uploaded it to whichever central had come up first, regardless of
+  which CCU actually produced it. `BackupAdapter` now resolves a
+  backup's owning central from its id and holds one restorer per
+  central; `Restore` targets strictly that central's restorer and
+  never falls back to a different one. `POST /backups` accepts an
+  optional `{"central_name": "..."}` body to trigger a specific
+  central explicitly (the bare/empty-body call keeps backing up the
+  first registered central, unchanged); a new admin-only WS command
+  `backups.trigger` exposes the same central-scoped trigger. The
+  Config UI's Backups page shows a target-CCU picker once more than
+  one central is registered.
+- **Config UI: Programs and Sysvars lists no longer silently cap at
+  one page.** `listPrograms()`/`listSysvars()` fired a single
+  unparameterized request; the client now pages through `/programs`
+  and `/sysvars` (`page`/`per_page`) until a short page signals the
+  end, mirroring the loop `devices.svelte.ts` already used for
+  `/devices`. `Favorites.svelte`'s pinned-sysvar lookup benefits for
+  free since it shares the same client call.
+- **Config UI: Settings now matches the shared operating concept.**
+  The MQTT-reload result was an inline coloured `<span>`; it is now a
+  `toastStore.success`/`.error` call like every other action result.
+  The schema-load failure was an ad-hoc `<Card>` with red text; it is
+  now the shared `ErrorState` component with a working retry button.
+- **Config UI: the shared `ConfirmDialog` now traps focus.** Opening
+  the dialog moves focus to the Cancel button and restores it to the
+  triggering element on close; Tab/Shift+Tab now cycle only between
+  the dialog's two buttons instead of leaking focus to the page
+  behind the modal backdrop. Every destructive-action flow in the SPA
+  reuses this one component, so the fix applies everywhere at once.
+
+### Added
+
+- **Config UI: reliability + values-cache admin panel on the
+  Diagnostics page.** New `client.ts` wrappers (`getReliability`,
+  `getValuesCacheStats`, `resetValuesCache`) surface the existing
+  `GET /diagnostics/reliability` and `/admin/values-cache/*` /
+  `/devices/{addr}/values-cache/reset` endpoints, which previously had
+  no Config UI surface at all. The Diagnostics page now shows a
+  per-`(central, interface)` circuit-breaker/connection-state table
+  next to the interfaces table, plus a values-cache stats card with a
+  confirm-gated reset action.
+
+- **`GET /incidents` gained `central`/`since`/`until`/`limit` filtering.**
+  Previously an unbounded, unfiltered `SELECT` across every registered
+  central (unlike the equivalent `/audit` endpoint). The bounds are now
+  pushed down to SQL via a new `IncidentStore.GetIncidentsFiltered`;
+  `?limit=` defaults to 500 (max 5000).
+- **Master profiles, bulk incident clear, and service-message disable are
+  now reachable over REST**, not just the WS command protocol:
+  `GET /devices/{addr}/channels/{no}/master-profiles[/{id}]`,
+  `POST .../master-profiles/match`, `DELETE /incidents` (operator),
+  and `POST /service-messages/{id}/disable` (operator). All four share
+  their domain call with the equivalent WS command
+  (`master_profiles.list/get/match`, `incidents.clear`,
+  `service_messages.disable`) rather than re-implementing the logic.
+- **"Before you upgrade" guidance in `docs/admin/backup.md`.**
+  Recommends `openccu-loom backup create` ahead of any upgrade and
+  states the rollback reality: migrations carry `Down` blocks but the
+  daemon only runs `goose.UpContext` and exposes no rollback
+  subcommand, so recovering from a bad upgrade means restoring a
+  pre-upgrade backup.
+- **Values cache: periodic dead-row garbage collection.**
+  `ValuesCacheStore.GCDeadRows` used to be exercised only by tests —
+  nothing in the daemon ever called it, so a row whose channel or
+  parameter permanently disappeared from a device's model (firmware
+  update, profile change) stayed in `values_cache` forever. The
+  background flusher goroutine now also drives a much lower-frequency
+  GC ticker (derived from the flush interval; 30 min under the
+  default 60 s flush cadence) that rebuilds the alive-key set from
+  every central's current device model and deletes rows that no
+  longer map to a live parameter.
+- **Test coverage: MQTT combined-DP/schedule discovery, SSDP
+  discoverer lifecycle, the DeviceDetail/Diagnostics SPA routes, and
+  the CCU add-on `update_script` exit-code contract.** Closes four
+  previously-untested surfaces: table-driven `Build*`/`Publish*`
+  discovery + state tests for `internal/north/mqtt/discovery_combined.go`
+  and `discovery_schedule.go`, plus an eventbridge-level check proving a
+  broker-publish failure during schedule/combined-DP discovery still
+  increments the bridge's `publish_errors` counter even though the call
+  sites discard the error value; `internal/north/discovery/ssdp`'s
+  `New`/`fetch`/`List`/stale-eviction paths via `httptest` and an
+  injectable clock; `DeviceDetail.test.ts` (loading/error/happy-path) and
+  a `Diagnostics.test.ts` page-load case, plus a new
+  `tests/e2e/device-detail.spec.ts` Playwright spec driving a real MASTER
+  paramset write and asserting the success toast; and a hermetic
+  `tests/contract/ccu_addon_update_script_test.go` that runs the real
+  `packaging/ccu-addon/ccu/update_script` against stubbed system commands
+  and locks its 0=no-reboot / 10=reboot exit-code contract per platform
+  identifier — the exact contract that regressed in 0.27.1.
+
+### Changed
+
+- **Values cache: dirty tracking is now per-`(channel, parameter)`
+  key, not per-central.** The periodic flusher used to mark an
+  entire central dirty on any single data-point change and then
+  re-serialise every live/stale data point of that central on the
+  next tick — on a ~1000-DP install, one hot data point forced a
+  full-fleet SQLite UPSERT every tick. The flusher now tracks the
+  exact set of changed `(channel, parameter)` keys per central and
+  persists only those, falling back to a full walk only for the
+  initial post-boot tick (covering values that changed before the
+  flusher's event subscriptions were installed) and the final
+  shutdown flush.
+- **The v1 token-admin API (`GET`/`POST /auth/tokens`) is now marked
+  `deprecated: true`** in the OpenAPI spec; it remains served (existing
+  external API consumers keep working, and `DELETE /auth/tokens/{id}`
+  still revokes v1 tokens) but new integrations should use
+  `/auth/tokens/v2`, which the Config UI already exclusively uses.
+  `docs/admin/auth.md` now documents v2 as the primary surface. Removed
+  the dead `listTokens()` v1 client wrapper (unused by the SPA).
+- **Config UI: hand-rolled native `<select>` filter dropdowns migrated
+  to the shared `lib/components/ui/Select.svelte` primitive.** Covers
+  the static central/action/role/interface pickers in `AuditLog`,
+  `MessageList`, `ProgramList`, `SignalQualityList`, `UnIgnoreList`,
+  `FirmwareList`, `Inbox`, `DeviceDetail` (history channel/parameter
+  pickers), and the `UsersAdmin`/`TokensAdmin`/`CentralsAdmin`/
+  `RoomsFunctionsAdmin` settings panels — all now match the rest of
+  the SPA's themed dropdown look instead of the browser's native
+  control chrome. `DeviceList`, `Overview`, `Diagnostics`, and the
+  `Settings` general-tab language picker keep their native `<select>`
+  deliberately: each sits on a route with a committed Playwright
+  visual-regression baseline that this branch cannot regenerate, so
+  swapping the control there risked an unverified layout diff.
+  `Logs.svelte`'s two selects also stay native — they share a toolbar
+  styled entirely off `--ha-*` CSS custom properties, and the shared
+  `Select` primitive uses fixed Tailwind slate colors, so migrating
+  only those two controls would have made that one toolbar row look
+  inconsistent with its neighbors.
+
 ## [0.27.2] — 2026-07-07
 
 ### Added

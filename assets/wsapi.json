@@ -50,6 +50,15 @@
     },
     {
       "args": {
+        "central_name": "string"
+      },
+      "category": "backup",
+      "description": "Trigger the create-and-download backup flow for exactly the named central (multi-CCU-correct counterpart to backup.trigger, which always targets the first registered central). Returns the backup/job id.",
+      "name": "backups.trigger",
+      "result": { "id": "string", "central_name": "string" }
+    },
+    {
+      "args": {
         "central": "string?",
         "device": "string?",
         "interface": "string?",

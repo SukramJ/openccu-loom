@@ -28,9 +28,16 @@ type stubBackupService struct {
 	restoreErr error
 	streamData string
 	streamErr  error
+
+	// unscopedTriggerCalls / forCentralCalls record which trigger method
+	// the handler invoked and, for the scoped call, which central name it
+	// was given — so tests can assert the handler routed to the right one.
+	unscopedTriggerCalls int
+	forCentralCalls      []string
 }
 
 func (s *stubBackupService) TriggerBackup(_ context.Context) (string, error) {
+	s.unscopedTriggerCalls++
 	return s.triggerID, s.triggerErr
 }
 
@@ -42,7 +49,8 @@ func (s *stubBackupService) Restore(_ context.Context, _ string) (string, error)
 	return s.restoreID, s.restoreErr
 }
 
-func (s *stubBackupService) TriggerBackupForCentral(_ context.Context, _ string) (string, error) {
+func (s *stubBackupService) TriggerBackupForCentral(_ context.Context, centralName string) (string, error) {
+	s.forCentralCalls = append(s.forCentralCalls, centralName)
 	return s.triggerID, s.triggerErr
 }
 
@@ -108,6 +116,71 @@ func TestTriggerBackup_ServiceError_Returns502(t *testing.T) {
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d", w.Code)
+	}
+}
+
+// TestTriggerBackup_NoBody_CallsUnscopedTrigger locks in the
+// backward-compatible default: a bare `POST /backups` (no body) still
+// backs up the first registered central via TriggerBackup, not
+// TriggerBackupForCentral.
+func TestTriggerBackup_NoBody_CallsUnscopedTrigger(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{triggerID: "backup-001"}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups", http.NoBody)
+	w := httptest.NewRecorder()
+	TriggerBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.unscopedTriggerCalls != 1 {
+		t.Errorf("unscopedTriggerCalls = %d, want 1", svc.unscopedTriggerCalls)
+	}
+	if len(svc.forCentralCalls) != 0 {
+		t.Errorf("forCentralCalls = %v, want none", svc.forCentralCalls)
+	}
+}
+
+// TestTriggerBackup_WithCentralName_CallsTriggerBackupForCentral is the
+// REST-side half of the B2 multi-CCU fix: a body carrying central_name
+// must route to TriggerBackupForCentral with exactly that name, not the
+// unscoped (first-central) trigger.
+func TestTriggerBackup_WithCentralName_CallsTriggerBackupForCentral(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{triggerID: "beta-20260101-000000"}
+	body := strings.NewReader(`{"central_name":"beta"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TriggerBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.unscopedTriggerCalls != 0 {
+		t.Errorf("unscopedTriggerCalls = %d, want 0", svc.unscopedTriggerCalls)
+	}
+	if want := []string{"beta"}; len(svc.forCentralCalls) != 1 || svc.forCentralCalls[0] != want[0] {
+		t.Errorf("forCentralCalls = %v, want %v", svc.forCentralCalls, want)
+	}
+}
+
+// TestTriggerBackup_MalformedBody_Returns400 checks that an unparsable
+// body is rejected as a client error, not silently ignored (which would
+// mask an operator typo as an unscoped, wrong-central trigger).
+func TestTriggerBackup_MalformedBody_Returns400(t *testing.T) {
+	t.Parallel()
+	svc := &stubBackupService{triggerID: "backup-001"}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups", strings.NewReader(`{not json`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	TriggerBackup(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.unscopedTriggerCalls != 0 || len(svc.forCentralCalls) != 0 {
+		t.Error("service must not be invoked when the body fails to decode")
 	}
 }
 

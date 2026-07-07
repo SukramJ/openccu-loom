@@ -86,6 +86,12 @@ func (c clientAdapter) LastFailureTime() *any { //nolint:gocritic // *interface{
 	return &v
 }
 
+// CommandTrackerSize implements metrics.InterfaceClientMetrics.
+func (c clientAdapter) CommandTrackerSize() int { return c.ic.CommandTracker().Size() }
+
+// PingPongSize implements metrics.InterfaceClientMetrics.
+func (c clientAdapter) PingPongSize() int { return c.ic.PingPong().Size() }
+
 // CacheProvider adapts a *coordinators.CacheCoordinator to the
 // metrics.CacheProviderForMetrics protocol.
 type CacheProvider struct {

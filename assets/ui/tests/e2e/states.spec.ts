@@ -4,7 +4,7 @@ import { mockAllApis } from './helpers/mock-api';
 test.describe('Shared States', () => {
   test('shows empty state when sysvars returns empty array', async ({ page }) => {
     await mockAllApis(page);
-    await page.route('**/api/v1/sysvars', async (route) => {
+    await page.route('**/api/v1/sysvars*', async (route) => {
       await route.fulfill({ json: [] });
     });
 
@@ -18,7 +18,7 @@ test.describe('Shared States', () => {
 
   test('shows error state when sysvars returns 500', async ({ page }) => {
     await mockAllApis(page);
-    await page.route('**/api/v1/sysvars', async (route) => {
+    await page.route('**/api/v1/sysvars*', async (route) => {
       await route.fulfill({ status: 500, body: JSON.stringify({ detail: 'internal error' }) });
     });
 
@@ -35,7 +35,7 @@ test.describe('Shared States', () => {
     let resolveDelay!: () => void;
     const delay = new Promise<void>((res) => { resolveDelay = res; });
 
-    await page.route('**/api/v1/sysvars', async (route) => {
+    await page.route('**/api/v1/sysvars*', async (route) => {
       await delay;
       await route.fulfill({ json: [] });
     });

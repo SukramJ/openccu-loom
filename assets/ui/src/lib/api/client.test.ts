@@ -87,6 +87,46 @@ describe("api request — 401 session-expiry hook", () => {
   });
 });
 
+describe("listPrograms / listSysvars — pagination", () => {
+  // Both endpoints page via `page`/`per_page` query params and reply with a
+  // bare JSON array (no `{items,total}` wrapper). A client that fires a
+  // single unparameterized request only gets whatever the server's default
+  // page holds back; page through until a short page signals the end, the
+  // same shape devices.svelte.ts already uses for /devices.
+  it("listPrograms pages through more than one page's worth of programs", async () => {
+    const page1 = Array.from({ length: 200 }, (_, i) => ({ id: `p${i}` }));
+    const page2 = Array.from({ length: 30 }, (_, i) => ({ id: `p${200 + i}` }));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(page1))
+      .mockResolvedValueOnce(jsonResponse(page2));
+
+    const result = await api.listPrograms();
+    expect(result).toHaveLength(230);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("listSysvars pages through more than one page's worth of sysvars", async () => {
+    const page1 = Array.from({ length: 200 }, (_, i) => ({ name: `s${i}` }));
+    const page2 = Array.from({ length: 5 }, (_, i) => ({ name: `s${200 + i}` }));
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(page1))
+      .mockResolvedValueOnce(jsonResponse(page2));
+
+    const result = await api.listSysvars();
+    expect(result).toHaveLength(205);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("listPrograms stops after a single short page", async () => {
+    const page1 = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}` }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(page1));
+
+    const result = await api.listPrograms();
+    expect(result).toHaveLength(12);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("api endpoint paths", () => {
   // triggerBackup must POST to /backups (plural) — the singular /backup is
   // not described in the OpenAPI spec and the validator rejects it with 404.
@@ -94,6 +134,47 @@ describe("api endpoint paths", () => {
     await api.triggerBackup();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/v1/backups");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+});
+
+describe("api — reliability + values-cache admin wrappers", () => {
+  it("getReliability GETs /diagnostics/reliability with no central filter", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    await api.getReliability();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/diagnostics/reliability");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+  });
+
+  it("getReliability scopes to ?central= when given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    await api.getReliability("alpha");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/diagnostics/reliability?central=alpha");
+  });
+
+  it("getValuesCacheStats GETs /admin/values-cache/stats", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ rows: 0 }));
+    await api.getValuesCacheStats();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/admin/values-cache/stats");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+  });
+
+  it("resetValuesCache() with no address POSTs the global reset route", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 204));
+    await api.resetValuesCache();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/admin/values-cache/reset");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("resetValuesCache(address) POSTs the per-device reset route", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 204));
+    await api.resetValuesCache("00021BE9957782");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/00021BE9957782/values-cache/reset");
     expect((init.method ?? "GET").toUpperCase()).toBe("POST");
   });
 });

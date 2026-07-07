@@ -210,7 +210,7 @@ func TestServiceDiscoveryShape_Light_SchemaJson(t *testing.T) {
 	// registerLightServices set_level handler which understands both forms.
 
 	sink := &contractFakeSink{}
-	_, noop := newSubscriberWithNoop(t, sink, nil)
+	sub, noop := newSubscriberWithNoop(t, sink, nil)
 
 	// Build per-parameter LEVEL discovery (DataPointCategoryLight → light).
 	tb := mqtt.NewTopicBuilder("openccu-loom")
@@ -261,6 +261,7 @@ func TestServiceDiscoveryShape_Light_SchemaJson(t *testing.T) {
 	if !ok {
 		t.Fatalf("subscription filter %q did not match topic %q — 8-segment topic is NOT subscribed", filter, cmdTopic)
 	}
+	sub.WaitIdle()
 
 	// 5. Verify the wire received a call — the value should be the decoded
 	// JSON map (parseCommandPayload returns any for JSON).
@@ -291,7 +292,7 @@ func TestServiceDiscoveryShape_Light_SchemaJson_State_OFF(t *testing.T) {
 	t.Parallel()
 
 	sink := &contractFakeSink{}
-	_, noop := newSubscriberWithNoop(t, sink, nil)
+	sub, noop := newSubscriberWithNoop(t, sink, nil)
 
 	tb := mqtt.NewTopicBuilder("openccu-loom")
 	db := mqtt.NewDefaultDiscoveryBuilder(tb, "ccu")
@@ -321,6 +322,7 @@ func TestServiceDiscoveryShape_Light_SchemaJson_State_OFF(t *testing.T) {
 	if !ok {
 		t.Fatalf("subscription filter %q did not match topic %q — 8-segment topic not subscribed", filter, cmdTopic)
 	}
+	sub.WaitIdle()
 	if sink.calls == 0 {
 		t.Fatal("CommandSubscriber did not call SetValue for OFF command")
 	}
@@ -346,7 +348,7 @@ func TestServiceDiscoveryShape_Switch_Bucket8Segment(t *testing.T) {
 	t.Parallel()
 
 	sink := &contractFakeSink{}
-	_, noop := newSubscriberWithNoop(t, sink, nil)
+	sub, noop := newSubscriberWithNoop(t, sink, nil)
 
 	// Build per-parameter STATE discovery (writable → switch).
 	tb := mqtt.NewTopicBuilder("openccu-loom")
@@ -392,6 +394,7 @@ func TestServiceDiscoveryShape_Switch_Bucket8Segment(t *testing.T) {
 	if !ok {
 		t.Fatalf("switch command_topic %q NOT subscribed via filter %q — 8-segment subscription missing", cmdTopic, filter)
 	}
+	sub.WaitIdle()
 	if sink.calls == 0 {
 		t.Fatal("switch payload_on command not dispatched to SetValue")
 	}
@@ -409,6 +412,7 @@ func TestServiceDiscoveryShape_Switch_Bucket8Segment(t *testing.T) {
 	if !ok {
 		t.Fatal("second delivery failed")
 	}
+	sub.WaitIdle()
 	if sink.calls == 0 {
 		t.Fatal("switch payload_off command not dispatched to SetValue")
 	}
@@ -435,7 +439,7 @@ func TestServiceDiscoveryShape_Lock_Bucket8Segment(t *testing.T) {
 	t.Parallel()
 
 	sink := &contractFakeSink{}
-	_, noop := newSubscriberWithNoop(t, sink, nil)
+	sub, noop := newSubscriberWithNoop(t, sink, nil)
 
 	// Per-parameter LOCK_TARGET_LEVEL discovery → HAComponentLock.
 	tb := mqtt.NewTopicBuilder("openccu-loom")
@@ -491,6 +495,7 @@ func TestServiceDiscoveryShape_Lock_Bucket8Segment(t *testing.T) {
 	if !ok {
 		t.Fatalf("lock command_topic %q NOT subscribed via filter %q — 8-segment subscription missing", cmdTopic, filter)
 	}
+	sub.WaitIdle()
 	if sink.calls == 0 {
 		t.Fatal("lock ON/lock payload not dispatched to SetValue")
 	}
@@ -504,6 +509,7 @@ func TestServiceDiscoveryShape_Lock_Bucket8Segment(t *testing.T) {
 	if !ok {
 		t.Fatal("second delivery failed")
 	}
+	sub.WaitIdle()
 	if sink.calls == 0 {
 		t.Fatal("lock OFF/unlock payload not dispatched to SetValue")
 	}
@@ -524,7 +530,7 @@ func TestServiceDiscoveryShape_Climate_HvacMode(t *testing.T) {
 
 	sink := &contractFakeSink{}
 	cdpSink := &contractFakeCDPSink{}
-	_, noop := newSubscriberWithNoop(t, sink, cdpSink)
+	sub, noop := newSubscriberWithNoop(t, sink, cdpSink)
 
 	// Build the canonical ADR-0011 per-method command topic shape:
 	//   openccu-loom/ccu/HmIP-RF/AABBCC/1/custom/climate/set/set_mode  (9 parts)
@@ -552,6 +558,7 @@ func TestServiceDiscoveryShape_Climate_HvacMode(t *testing.T) {
 	if !ok {
 		t.Fatalf("service-method topic %q NOT subscribed via filter %q", modeCmd, svcFilter)
 	}
+	sub.WaitIdle()
 	if cdpSink.calls == 0 {
 		t.Fatal("InvokeChannelService was not called — set_mode command not dispatched")
 	}
@@ -585,7 +592,7 @@ func TestServiceDiscoveryShape_Cover_Position(t *testing.T) {
 
 	sink := &contractFakeSink{}
 	cdpSink := &contractFakeCDPSink{}
-	_, noop := newSubscriberWithNoop(t, sink, cdpSink)
+	sub, noop := newSubscriberWithNoop(t, sink, cdpSink)
 
 	// set_position canonical service method topic shape (ADR 0011).
 	tb := mqtt.NewTopicBuilder("openccu-loom")
@@ -607,6 +614,7 @@ func TestServiceDiscoveryShape_Cover_Position(t *testing.T) {
 	if !ok {
 		t.Fatalf("set_position topic %q NOT subscribed via filter %q", setPosCmd, svcFilter)
 	}
+	sub.WaitIdle()
 	if cdpSink.calls == 0 {
 		t.Fatal("InvokeChannelService was not called for set_position")
 	}

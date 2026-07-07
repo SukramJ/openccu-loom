@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -323,29 +324,77 @@ func (l *liveCentralAdmin) List(ctx context.Context) ([]sqlite.CentralRow, error
 	return l.store.List(ctx)
 }
 
-// Put persists row (create or full-replace update) then adopts it live when
-// enabled. An update to an already-registered central (boot-time or already
-// live-adopted) skips adopt — live in-place reconfiguration of a running
-// central is out of scope for now — so
-// PUT stays a safe no-op-adopt for the common "edit an already-live central"
-// case instead of surfacing central.ErrAlreadyRegistered to the operator.
+// Put persists row (create or full-replace update) then reconciles the live
+// state: a newly-enabled row that is not yet registered gets adopted; a
+// disabled row that IS currently registered gets torn down (mirroring
+// Delete's live-then-persisted order, just with the persist happening
+// first here since the row itself is not removed); an edit to a row that
+// stays enabled AND already registered cannot be hot-applied — live
+// in-place reconfiguration of a running central is out of scope for now —
+// so that case is logged instead of silently doing nothing. Every branch
+// leaves an audit trail; none of them return a success signal that masks a
+// live state the operator did not ask for.
 func (l *liveCentralAdmin) Put(ctx context.Context, row sqlite.CentralRow) error {
+	// Read the previously persisted row (if any) BEFORE the write so the
+	// still-enabled/already-live branch below can tell an actual config
+	// change (needs a restart to apply) apart from a no-op re-save.
+	prev, prevErr := l.store.Get(ctx, row.Name)
+	hadPrev := prevErr == nil
+
 	if err := l.store.Put(ctx, row); err != nil {
 		return err
 	}
+
+	live := l.orch.isRegistered(row.Name)
+
 	if !row.Enabled {
+		if !live {
+			return nil
+		}
+		if err := l.orch.removeCentral(ctx, row.Name); err != nil && !errors.Is(err, errCentralNotLive) {
+			l.logger.Error("central.disable.failed", slog.String("central", row.Name), slog.String("err", err.Error()))
+			return err
+		}
+		l.logger.Info("central.disable.live", slog.String("central", row.Name))
 		return nil
 	}
-	if l.orch.isRegistered(row.Name) {
-		l.logger.Info("central.adopt.skip_already_live", slog.String("central", row.Name))
+
+	if live {
+		if hadPrev && centralConfigNeedsRestart(prev, row) {
+			l.logger.Warn("central.edit.restart_required", slog.String("central", row.Name))
+		} else {
+			l.logger.Info("central.adopt.skip_already_live", slog.String("central", row.Name))
+		}
 		return nil
 	}
+
 	cc, _ := configstore.RowToCentralConfig(row, os.Getenv)
 	if err := l.orch.adoptCentral(ctx, cc); err != nil {
 		l.logger.Error("central.adopt.failed", slog.String("central", row.Name), slog.String("err", err.Error()))
 		return err
 	}
 	return nil
+}
+
+// centralConfigNeedsRestart reports whether next's southbound-relevant
+// fields differ from prev in a way the running central.Unit cannot pick up
+// without a full adopt/remove cycle: host, ports, TLS, credentials, and the
+// interface set are all read once at adoptCentral time and never re-read
+// afterward. Fields that only affect model/scheduler behavior (Behavior,
+// Visibility) are intentionally excluded — those are out of scope for the
+// restart signal because whether they are ever hot-reloadable is a separate
+// question from this fix.
+func centralConfigNeedsRestart(prev, next sqlite.CentralRow) bool {
+	return prev.Host != next.Host ||
+		prev.Port != next.Port ||
+		prev.JSONRPCPort != next.JSONRPCPort ||
+		prev.TLS != next.TLS ||
+		prev.TLSInsecureSkipVerify != next.TLSInsecureSkipVerify ||
+		prev.Username != next.Username ||
+		prev.PasswordPlain != next.PasswordPlain ||
+		prev.PasswordEnv != next.PasswordEnv ||
+		prev.PrimaryInterface != next.PrimaryInterface ||
+		!slices.Equal(prev.Interfaces, next.Interfaces)
 }
 
 // Delete tears the central down live BEFORE removing the persisted row, so a

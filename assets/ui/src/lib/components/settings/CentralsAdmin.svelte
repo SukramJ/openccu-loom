@@ -17,6 +17,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -153,6 +154,11 @@
   let isEdit = $state(false);
   let saving = $state(false);
   let modalError = $state<string | null>(null);
+  // Snapshot of the row as loaded when an Edit was opened — kept so
+  // saveModal can tell "nothing southbound-relevant changed" apart from
+  // "the running connection cannot pick this up without a restart"
+  // (see centralNeedsRestartSignal below). null outside an edit flow.
+  let editOriginal = $state<CentralRow | null>(null);
 
   // Form fields
   let fName = $state("");
@@ -215,6 +221,7 @@
 
   function prefillFromDiscovered(ccu: DiscoveredCCU) {
     isEdit = false;
+    editOriginal = null;
     fName = ccu.name;
     // Prefer the daemon's suggested address (localhost for a co-located CCU, a
     // stable docker hostname for an HA add-on); fall back to the raw host.
@@ -256,6 +263,7 @@
 
   function openAdd() {
     isEdit = false;
+    editOriginal = null;
     fName = "";
     fHost = "";
     fSerial = "";
@@ -276,6 +284,7 @@
 
   function openEdit(row: CentralRow) {
     isEdit = true;
+    editOriginal = row;
     fName = row.name;
     fHost = row.host;
     fSerial = row.serial ?? "";
@@ -351,6 +360,40 @@
     };
   }
 
+  // interfaceSetKey normalises an interface list to a sorted, order-independent
+  // key so a reload that happens to reorder entries doesn't read as a change,
+  // and resolves an omitted port to the catalogue default so "no override"
+  // and "override equal to the default" compare equal too.
+  function interfaceSetKey(list: InterfaceSpec[]): string {
+    return [...list]
+      .map((i) => {
+        const port = i.port ?? INTERFACE_CATALOGUE.find((s) => s.name === i.name)?.defaultPort ?? 0;
+        return `${i.name}:${port}`;
+      })
+      .sort()
+      .join("|");
+  }
+
+  // centralNeedsRestartSignal mirrors centralConfigNeedsRestart
+  // (cmd/openccu-loom/central_adopt.go): the fields the running southbound
+  // connection only reads once, at adopt time. Editing any of them on an
+  // already-enabled CCU cannot be hot-applied — the daemon keeps the OLD
+  // connection running until restarted — so a save that changes one of
+  // these must not claim an unqualified "updated" success.
+  function centralNeedsRestartSignal(before: CentralRow, after: CentralRow): boolean {
+    return (
+      before.host !== after.host ||
+      (before.json_rpc_port ?? 0) !== (after.json_rpc_port ?? 0) ||
+      (before.tls ?? false) !== (after.tls ?? false) ||
+      (before.tls_insecure_skip_verify ?? false) !== (after.tls_insecure_skip_verify ?? false) ||
+      (before.username ?? "") !== (after.username ?? "") ||
+      (before.password_plain ?? "") !== (after.password_plain ?? "") ||
+      (before.password_env ?? "") !== (after.password_env ?? "") ||
+      (before.primary_interface ?? "") !== (after.primary_interface ?? "") ||
+      interfaceSetKey(before.interfaces) !== interfaceSetKey(after.interfaces)
+    );
+  }
+
   async function saveModal() {
     if (buildInterfaces().length === 0) {
       modalError = t("centrals.error.no_interface");
@@ -362,7 +405,14 @@
       const row = buildRow();
       if (isEdit) {
         await api.updateCentralV2(row.name, row);
-        toastStore.success(t("centrals.updated"));
+        const before = editOriginal;
+        const needsRestart =
+          !!before && before.enabled && row.enabled && centralNeedsRestartSignal(before, row);
+        if (needsRestart) {
+          toastStore.warn(t("centrals.updated_restart_required"));
+        } else {
+          toastStore.success(t("centrals.updated"));
+        }
       } else {
         await api.createCentralV2(row);
         toastStore.success(t("centrals.created"));
@@ -642,16 +692,15 @@
 
         <label class="flex flex-col gap-1">
           <span>{t("centrals.field.primary_interface")}</span>
-          <select
+          <Select
+            class="h-9"
             bind:value={fPrimaryInterface}
-            class="h-9 rounded border border-slate-300 px-2 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
             disabled={selectedNames.length === 0}
-          >
-            <option value="">—</option>
-            {#each selectedNames as name (name)}
-              <option value={name}>{name}</option>
-            {/each}
-          </select>
+            options={[
+              { value: "", label: "—" },
+              ...selectedNames.map((name) => ({ value: name, label: name })),
+            ]}
+          />
         </label>
 
         <!-- Per-central behaviour toggles (CentralConfig.Behavior). -->

@@ -5,14 +5,18 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
+	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -108,6 +112,76 @@ func TestEventBridgeValueChangedFansOut(t *testing.T) {
 	// inferInterface returns "" for these synthetic events so the iface segment is empty.
 	if got := nonAvailabilityPublishes(pub.Published()); len(got) != 1 || got[0].Topic != "openccu-loom/ccu-01//0001ABCD/1/values/STATE" {
 		t.Fatalf("mqtt published=%+v", got)
+	}
+}
+
+// TestEventBridgeDeviceRemovedRetractsRawState reproduces the B4 bug: the
+// raw-plane per-DP state topic a device published while alive survived a
+// DeviceRemovedEvent forever because onDeviceRemoved only retracted
+// HA-Discovery configs. It publishes a real value, fires DeviceRemovedEvent
+// on the owning central's bus, and asserts the bridge clears both the
+// per-DP state topic and the device-scoped availability/info/diagnostics
+// topics with an empty retained publish.
+func TestEventBridgeDeviceRemovedRetractsRawState(t *testing.T) {
+	reg, d := registryWithDevice(t)
+
+	pub := mqtt.NewNoopClient()
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{Base: "openccu-loom", CentralName: "ccu-01", RawEnabled: true}, pub)
+	mw := mqtt.NewWiring(bridge, nil)
+
+	ebridge := NewEventBridge(reg, ws.NewHub(), mw)
+	ebridge.Start(context.Background())
+	defer ebridge.Stop()
+
+	list := reg.List()
+	if len(list) != 1 {
+		t.Fatalf("registry size %d", len(list))
+	}
+	unit := list[0]
+
+	events.Publish(unit.EventBus, hmevent.DataPointValueChangedEvent{
+		Base: hmevent.NewBaseAt(time.Now()),
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: d.Address + ":1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
+		},
+		NewValue: hmtypes.BoolValue(true),
+	})
+	ebridge.Flush()
+
+	before := nonAvailabilityPublishes(pub.Published())
+	if len(before) != 1 {
+		t.Fatalf("setup: expected 1 state publish before removal, got %+v", before)
+	}
+	stateTopic := before[0].Topic
+
+	events.Publish(unit.EventBus, hmevent.DeviceRemovedEvent{
+		Base:        hmevent.NewBaseAt(time.Now()),
+		CentralName: "ccu-01",
+		InterfaceID: d.InterfaceID,
+		Address:     d.Address,
+	})
+	ebridge.Flush()
+
+	seen := map[string]mqtt.Publication{}
+	for _, p := range pub.Published() {
+		seen[p.Topic] = p
+	}
+	wantTopics := []string{
+		stateTopic,
+		bridge.Topics().DeviceAvailability("ccu-01", d.InterfaceID, d.Address),
+		bridge.Topics().DeviceInfo("ccu-01", d.InterfaceID, d.Address),
+		bridge.Topics().DeviceDiagnostics("ccu-01", d.InterfaceID, d.Address),
+	}
+	for _, topic := range wantTopics {
+		p, ok := seen[topic]
+		if !ok {
+			t.Fatalf("expected a retracting publish to %q after DeviceRemovedEvent, none seen (got %+v)", topic, pub.Published())
+		}
+		if len(p.Payload) != 0 {
+			t.Fatalf("retract %q: payload not empty (%q)", topic, p.Payload)
+		}
 	}
 }
 
@@ -469,4 +543,97 @@ func TestEventBridgeDataPointValueChangedUniqueID(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("DataPointValueChangedEvent did not reach the WS hub within deadline")
+}
+
+// ============================================================
+// Combined-DP / schedule discovery publish errors are observable
+// ============================================================
+
+// failingPublisher is a [mqtt.Publisher] that always fails. Used to prove
+// that a broker-level publish failure from the discardable
+// `_ = bridge.PublishXxxDiscovery(...)` call sites in this file is not
+// silently swallowed end-to-end — it still lands on the bridge's
+// publish_errors counter.
+type failingPublisher struct{}
+
+func (failingPublisher) Publish(context.Context, string, []byte, mqtt.QoS, bool, ...mqtt.PublishOption) error {
+	return errors.New("broker unavailable")
+}
+
+// TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted verifies that
+// publishScheduleEntitySnapshot's discarded
+// `_ = bridge.PublishScheduleEntityDiscovery(...)` error still increments
+// the bridge's publish_errors metric, so a broker outage during schedule
+// discovery is observable even though the call site ignores the error
+// value.
+func TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted(t *testing.T) {
+	t.Parallel()
+
+	reg := metrics.NewRegistry()
+	collector := metrics.NewMqttCollector(reg, "ccu-01")
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+		Collector: collector,
+	}, failingPublisher{})
+	mw := mqtt.NewWiring(bridge, nil)
+
+	eb := NewEventBridge(nil, nil, mw)
+	dev := device.New(device.Config{Address: "SCHEDDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-eTRV-2"})
+	ch := dev.AddChannel("SCHEDDEV001:1", 1, "CLIMATECONTROL_VENT_DRIVE", hmenum.ParamsetKeyValues)
+	ch.AttachWeekProfile(weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		ScheduleType:   weekprofile.ScheduleTypeClimate,
+		CentralName:    "ccu-01",
+		ChannelAddress: ch.Address,
+	}))
+
+	if before := collector.PublishErrors.Value(); before != 0 {
+		t.Fatalf("publish_errors before call = %d, want 0", before)
+	}
+
+	eb.publishScheduleEntitySnapshot(context.Background(), "ccu-01", "HmIP-RF", dev, ch)
+
+	if after := collector.PublishErrors.Value(); after == 0 {
+		t.Fatal("publish_errors counter did not increment after a failing PublishScheduleEntityDiscovery call — the discarded error is unobservable")
+	}
+}
+
+// TestPublishCombinedDPSnapshotDiscardedErrorIsCounted mirrors
+// TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted for the
+// combined-DP (Timer) discovery path.
+func TestPublishCombinedDPSnapshotDiscardedErrorIsCounted(t *testing.T) {
+	t.Parallel()
+
+	reg := metrics.NewRegistry()
+	collector := metrics.NewMqttCollector(reg, "ccu-01")
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+		Collector: collector,
+	}, failingPublisher{})
+	mw := mqtt.NewWiring(bridge, nil)
+
+	eb := NewEventBridge(nil, nil, mw)
+	dev := device.New(device.Config{Address: "TIMERDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-ASIR"})
+	ch := dev.AddChannel("TIMERDEV001:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	timer := combined.NewTimer(ch.Address, &noopCombinedWriter{}, "DURATION_VALUE", "DURATION_UNIT")
+	ch.AttachCalculatedDataPoint(timer)
+
+	if before := collector.PublishErrors.Value(); before != 0 {
+		t.Fatalf("publish_errors before call = %d, want 0", before)
+	}
+
+	eb.publishCombinedDPSnapshot(context.Background(), "ccu-01", "HmIP-RF", dev, ch)
+
+	if after := collector.PublishErrors.Value(); after == 0 {
+		t.Fatal("publish_errors counter did not increment after a failing PublishCombinedTimerDiscovery call — the discarded error is unobservable")
+	}
+}
+
+// noopCombinedWriter is a no-op [combined.Writer] — the discovery-publish
+// paths under test never invoke SetValue.
+type noopCombinedWriter struct{}
+
+func (noopCombinedWriter) SetValue(context.Context, string, hmenum.Parameter, any, hmenum.CommandPriority) error {
+	return nil
 }

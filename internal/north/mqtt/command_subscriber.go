@@ -129,6 +129,20 @@ type CDPInvokePayload struct {
 	Priority string         `json:"priority"`
 }
 
+// commandDispatchWorkers bounds how many command jobs (SetValue /
+// SetMasterValue / SetSysvar / TriggerProgram / … — every one of them
+// potentially a CCU write behind the circuit breaker/retry stack) can run
+// concurrently. Kept modest: high enough that one stalled interface does
+// not stall unrelated devices, low enough to bound goroutine + CCU-request
+// fan-out from a single command burst.
+const commandDispatchWorkers = 8
+
+// commandDispatchQueueDepth bounds the per-worker backlog before Enqueue
+// starts blocking (with a logged warning) the go-mqtt read loop that
+// delivered the message. Sized for a burst of commands across many
+// data points landing on the same worker slot.
+const commandDispatchQueueDepth = 32
+
 // CommandSubscriber wires the bridge's inbound /set and /invoke topics
 // back into the domain. It subscribes to four wildcards and dispatches
 // based on the topic shape (raw-plane schema; see ADR 0011):
@@ -147,21 +161,75 @@ type CommandSubscriber struct {
 	cmbSink   CombinedDPSink         // may be nil; combined-DP commands are dropped with a debug log when nil
 	schedSink ScheduleSwitchSink     // may be nil; schedule-switch commands are dropped with a debug log when nil
 	imSink    InstallModeSink        // may be nil; install-mode button presses are dropped with a debug log when nil
-	logger    *slog.Logger
+	// qos is the QoS level every inbound command subscription registers
+	// at. Defaults to QoS1 (at-least-once) in [NewCommandSubscriber] —
+	// matching [DefaultQoS.Commands] — and can be overridden via
+	// [CommandSubscriber.WithQoS], typically from the bridge's own
+	// [BridgeConfig.QoS.Commands] so the two stay in lockstep.
+	qos    QoS
+	logger *slog.Logger
 	// lifecycleCtx is the daemon-lifetime context wired via
 	// WithLifecycleContext; command handlers derive each per-command
 	// context from it so an in-flight CCU write is cancelled when the
 	// daemon shuts down instead of running on a detached background
 	// context. Defaults to context.Background() until wired.
 	lifecycleCtx context.Context
+
+	// dispatcher runs every sink call (the downstream I/O: SetValue,
+	// SetMasterValue, InvokeCustomDP, …) off the go-mqtt client's
+	// synchronous read loop, so a CCU write that blocks for seconds behind
+	// the circuit breaker/retry stack never stalls PUBACK/PINGRESP
+	// processing on that same goroutine. Jobs are keyed by the inbound
+	// topic string, so repeated writes to the same data point never
+	// reorder while unrelated data points dispatch concurrently. See
+	// [boundedDispatcher].
+	dispatcher *boundedDispatcher
 }
 
-// NewCommandSubscriber constructs the subscriber.
+// NewCommandSubscriber constructs the subscriber. Call
+// [CommandSubscriber.Close] on teardown to drain the dispatcher's worker
+// goroutines cleanly.
 func NewCommandSubscriber(sub Subscriber, topics *TopicBuilder, sink CommandSink, logger *slog.Logger) *CommandSubscriber {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &CommandSubscriber{sub: sub, topics: topics, sink: sink, logger: logger, lifecycleCtx: context.Background()}
+	return &CommandSubscriber{
+		sub: sub, topics: topics, sink: sink, qos: QoS1, logger: logger, lifecycleCtx: context.Background(),
+		dispatcher: newBoundedDispatcher(commandDispatchWorkers, commandDispatchQueueDepth, "command", logger),
+	}
+}
+
+// Close stops accepting new commands and blocks until every in-flight or
+// already-queued command has finished running. Safe to call on a
+// zero-value or nil *CommandSubscriber.
+func (c *CommandSubscriber) Close() {
+	if c == nil {
+		return
+	}
+	c.dispatcher.Close()
+}
+
+// WaitIdle blocks until every command enqueued before this call has been
+// dispatched to the sink. It is a deterministic test barrier for callers
+// that assert on a fake sink right after delivering a message (commands
+// now run off the caller's goroutine — see [CommandSubscriber.dispatcher])
+// — production code does not need it, since commands are fire-and-forget
+// by design. Safe to call on a nil *CommandSubscriber (no-op).
+func (c *CommandSubscriber) WaitIdle() {
+	if c == nil {
+		return
+	}
+	c.dispatcher.flush()
+}
+
+// WithQoS overrides the QoS level every Subscribe call in [Start]
+// registers at (default QoS1). Callers typically pass the bridge's own
+// [BridgeConfig.QoS.Commands] so the inbound command subscriptions and
+// the bridge's own QoS policy do not drift apart. Returns the receiver
+// for call-site chaining.
+func (c *CommandSubscriber) WithQoS(qos QoS) *CommandSubscriber {
+	c.qos = qos
+	return c
 }
 
 // WithCollector attaches the metrics collector so the subscriber can
@@ -234,64 +302,64 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	// the subscriber MUST register the 8-segment shape — without it
 	// HA's `payload_on=true` to a Custom-DP switch arrives at the
 	// broker but never reaches the daemon.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/+/set", QoS1, LegacyHandler(c.handleDataPoint)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/+/set", c.qos, LegacyHandler(c.handleDataPoint)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe datapoint bucket-aware: %w", err)
 	}
 	// Legacy 7-segment shape (no bucket infix) — still emitted by
 	// some hand-built tools and by the legacy alias mirror on the
 	// raw plane. Keep it active so existing automations don't break.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/set", QoS1, LegacyHandler(c.handleDataPoint)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/set", c.qos, LegacyHandler(c.handleDataPoint)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe datapoint legacy: %w", err)
 	}
 	// Canonical (ADR 0011): {base}/{central}/hub/sysvars/{name}/set.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/sysvars/+/set", QoS1, LegacyHandler(c.handleSysvar)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/sysvars/+/set", c.qos, LegacyHandler(c.handleSysvar)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_sysvar: %w", err)
 	}
 	// Canonical (ADR 0011): {base}/{central}/hub/programs/{id}/trigger.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", QoS1, LegacyHandler(c.handleProgram)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", c.qos, LegacyHandler(c.handleProgram)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_program: %w", err)
 	}
 	// Per-interface install-mode activation button:
 	// {base}/{central}/hub/install_mode/{iface}/set — HA publishes the
 	// press token; the handler activates pairing on the named interface.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/install_mode/+/set", QoS1, LegacyHandler(c.handleInstallMode)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/install_mode/+/set", c.qos, LegacyHandler(c.handleInstallMode)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_install_mode: %w", err)
 	}
 	// {base}/{central}/devices/{device}/cdps/{name}/{operation}/invoke
 	// MQTT wildcards cannot span /; use +/+/+/+/+/+/+/invoke to catch all.
-	if _, err := c.sub.Subscribe(ctx, base+"/+/devices/+/cdps/+/+/invoke", QoS1, LegacyHandler(c.handleCDPInvoke)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/devices/+/cdps/+/+/invoke", c.qos, LegacyHandler(c.handleCDPInvoke)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe cdp_invoke: %w", err)
 	}
 	// Canonical ADR-0011 per-service-method form:
 	// {base}/{central}/{interface}/{address}/{channel}/custom/{kind}/set/{method}
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/custom/+/set/+", QoS1, LegacyHandler(c.handleServiceMethod)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/custom/+/set/+", c.qos, LegacyHandler(c.handleServiceMethod)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe service_method: %w", err)
 	}
 	// {base}/{central}/{interface}/{address}/{channel}/week_profile/set
 	// — the active-profile selector for climate channels (paired with
 	// the discovery built by [DefaultDiscoveryBuilder.BuildWeekProfileDiscovery]).
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/week_profile/set", QoS1, LegacyHandler(c.handleWeekProfile)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/week_profile/set", c.qos, LegacyHandler(c.handleWeekProfile)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe week_profile: %w", err)
 	}
 	// {base}/{central}/{interface}/{address}/{channel}/combined/{kind}/set
 	// — combined-DP writes (Timer SetDuration etc.). Paired with the
 	// discovery built by [DefaultDiscoveryBuilder.BuildCombinedTimerDiscovery].
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/combined/+/set", QoS1, LegacyHandler(c.handleCombinedDP)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/combined/+/set", c.qos, LegacyHandler(c.handleCombinedDP)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe combined_dp: %w", err)
 	}
 	// {base}/{central}/{interface}/{address}/{channel}/schedule/{key}/set
 	// — schedule-channel-switch writes (ScheduleChannelSwitch TurnOn/Off).
 	// Paired with discovery from [DefaultDiscoveryBuilder.BuildScheduleSwitchDiscovery].
-	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/schedule/+/set", QoS1, LegacyHandler(c.handleScheduleSwitch)); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/schedule/+/set", c.qos, LegacyHandler(c.handleScheduleSwitch)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe schedule_switch: %w", err)
 	}
@@ -351,15 +419,17 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 			slog.String("detail", "ScheduleSwitchSink not wired"))
 		return
 	}
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.schedSink.SetScheduleSwitch(ctx, centralName, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
-		c.logger.Warn("mqtt.command.schedule.set",
-			slog.String("topic", topic),
-			slog.String("key", key),
-			slog.Bool("enabled", enabled),
-			slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.schedSink.SetScheduleSwitch(ctx, centralName, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
+			c.logger.Warn("mqtt.command.schedule.set",
+				slog.String("topic", topic),
+				slog.String("key", key),
+				slog.Bool("enabled", enabled),
+				slog.String("err", err.Error()))
+		}
+	})
 }
 
 // handleWeekProfile dispatches a payload from
@@ -394,14 +464,16 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 			slog.String("detail", "WeekProfileSink not wired; ignoring active-profile command"))
 		return
 	}
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.wpSink.SetActiveProfile(ctx, centralName, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
-		c.logger.Warn("mqtt.command.wp.set_active_profile",
-			slog.String("topic", topic),
-			slog.String("profile", profile),
-			slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.wpSink.SetActiveProfile(ctx, centralName, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
+			c.logger.Warn("mqtt.command.wp.set_active_profile",
+				slog.String("topic", topic),
+				slog.String("profile", profile),
+				slog.String("err", err.Error()))
+		}
+	})
 }
 
 // handleCombinedDP dispatches a payload from
@@ -440,15 +512,17 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 			slog.String("detail", "CombinedDPSink not wired; ignoring combined-DP write"))
 		return
 	}
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.cmbSink.SetCombinedTimerSeconds(ctx, centralName, iface, deviceAddr, channel, kind, seconds, hmenum.CommandPriorityHigh); err != nil {
-		c.logger.Warn("mqtt.command.combined.set",
-			slog.String("topic", topic),
-			slog.String("kind", kind),
-			slog.Float64("seconds", seconds),
-			slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.cmbSink.SetCombinedTimerSeconds(ctx, centralName, iface, deviceAddr, channel, kind, seconds, hmenum.CommandPriorityHigh); err != nil {
+			c.logger.Warn("mqtt.command.combined.set",
+				slog.String("topic", topic),
+				slog.String("kind", kind),
+				slog.Float64("seconds", seconds),
+				slog.String("err", err.Error()))
+		}
+	})
 }
 
 // handleServiceMethod dispatches a payload from the canonical
@@ -488,14 +562,16 @@ func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retain
 			slog.String("err", err.Error()))
 		return
 	}
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.cdpSink.InvokeChannelService(ctx, centralName, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
-		c.logger.Warn("mqtt.command.svc.invoke",
-			slog.String("topic", topic),
-			slog.String("method", method),
-			slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.cdpSink.InvokeChannelService(ctx, centralName, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
+			c.logger.Warn("mqtt.command.svc.invoke",
+				slog.String("topic", topic),
+				slog.String("method", method),
+				slog.String("err", err.Error()))
+		}
+	})
 }
 
 func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained bool) {
@@ -560,23 +636,25 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	value := parseCommandPayload(body)
 	channelAddress := fmt.Sprintf("%s:%d", device, channel)
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if isMaster {
-		if err := c.sink.SetMasterValue(ctx, centralName, iface, channelAddress,
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if isMaster {
+			if err := c.sink.SetMasterValue(ctx, centralName, iface, channelAddress,
+				hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
+				c.logger.Warn("mqtt.command.setmasterparam",
+					slog.String("topic", topic),
+					slog.String("err", err.Error()))
+			}
+			return
+		}
+		if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
 			hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
-			c.logger.Warn("mqtt.command.setmasterparam",
+			c.logger.Warn("mqtt.command.setvalue",
 				slog.String("topic", topic),
 				slog.String("err", err.Error()))
 		}
-		return
-	}
-	if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
-		hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
-		c.logger.Warn("mqtt.command.setvalue",
-			slog.String("topic", topic),
-			slog.String("err", err.Error()))
-	}
+	})
 }
 
 func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained bool) {
@@ -592,12 +670,14 @@ func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained boo
 	centralName, name := parts[1], parts[4]
 	value := parseCommandPayload(body)
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.sink.SetSysvar(ctx, centralName, name, value); err != nil {
-		c.logger.Warn("mqtt.command.setsysvar",
-			slog.String("topic", topic), slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.sink.SetSysvar(ctx, centralName, name, value); err != nil {
+			c.logger.Warn("mqtt.command.setsysvar",
+				slog.String("topic", topic), slog.String("err", err.Error()))
+		}
+	})
 }
 
 func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool) {
@@ -612,12 +692,14 @@ func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool)
 	}
 	centralName, id := parts[1], parts[4]
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
-		c.logger.Warn("mqtt.command.program",
-			slog.String("topic", topic), slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
+			c.logger.Warn("mqtt.command.program",
+				slog.String("topic", topic), slog.String("err", err.Error()))
+		}
+	})
 }
 
 // handleInstallMode activates pairing/install mode on one interface from
@@ -653,14 +735,16 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 		}
 	}
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.imSink.ActivateInstallMode(ctx, centralName, iface, seconds); err != nil {
-		c.logger.Warn("mqtt.command.install_mode.activate",
-			slog.String("topic", topic),
-			slog.String("interface", iface),
-			slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.imSink.ActivateInstallMode(ctx, centralName, iface, seconds); err != nil {
+			c.logger.Warn("mqtt.command.install_mode.activate",
+				slog.String("topic", topic),
+				slog.String("interface", iface),
+				slog.String("err", err.Error()))
+		}
+	})
 }
 
 func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained bool) {
@@ -694,13 +778,15 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 	}
 
 	priority := parseMQTTPriority(body.Priority)
-	ctx, cancel := context.WithCancel(c.lifecycleCtx)
-	defer cancel()
-	if err := c.cdpSink.InvokeCustomDP(ctx, centralName, deviceAddr, name, operation, body.Params, priority); err != nil {
-		c.logger.Warn("mqtt.command.cdp.invoke",
-			slog.String("topic", topic),
-			slog.String("err", err.Error()))
-	}
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.cdpSink.InvokeCustomDP(ctx, centralName, deviceAddr, name, operation, body.Params, priority); err != nil {
+			c.logger.Warn("mqtt.command.cdp.invoke",
+				slog.String("topic", topic),
+				slog.String("err", err.Error()))
+		}
+	})
 }
 
 // parseMQTTPriority converts the optional priority string from the

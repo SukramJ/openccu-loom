@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.15.0
+  version: 2.16.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1342,6 +1342,13 @@ paths:
     get:
       operationId: listTokens
       summary: List API tokens with elided fingerprints (admin)
+      description: |
+        Deprecated — use `GET /auth/tokens/v2`, which carries the full
+        fingerprint plus `created_at`/`expires_at` metadata instead of
+        an elided fingerprint. The in-tree Svelte SPA already uses only
+        the v2 surface (`AccessControl.svelte`); this v1 read path is
+        kept for existing external API consumers.
+      deprecated: true
       tags: [auth]
       security:
         - basicAuth: []
@@ -1361,12 +1368,14 @@ paths:
       operationId: createToken
       summary: Issue a new bearer token (admin)
       description: |
-        Generates a fresh bearer token bound to the supplied subject
-        and role. The raw token value is returned exactly once in
-        the 201 response — the daemon stores only an opaque
-        fingerprint thereafter, so the client MUST capture the
-        `token` field on creation. Use the returned `id` for
-        subsequent management (`DELETE /auth/tokens/{id}`).
+        Deprecated — use `POST /auth/tokens/v2`, which additionally
+        accepts `expires_in_days`. Generates a fresh bearer token bound
+        to the supplied subject and role. The raw token value is
+        returned exactly once in the 201 response — the daemon stores
+        only an opaque fingerprint thereafter, so the client MUST
+        capture the `token` field on creation. Use the returned `id`
+        for subsequent management (`DELETE /auth/tokens/{id}`).
+      deprecated: true
       tags: [auth]
       security:
         - basicAuth: []
@@ -1897,6 +1906,92 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
+
+  /devices/{addr}/channels/{no}/master-profiles:
+    get:
+      operationId: listMasterProfiles
+      summary: List master profiles for one channel
+      description: |
+        Master profiles available for the channel's (device_type,
+        channel_type) pair — resolved from the channel's owning device's
+        model and the channel's own type. Shares the domain call
+        (`masterprofile.Store.Profiles`) with the WS
+        `master_profiles.list` command. An unknown pair (no profiles
+        catalogued for this device/channel type) returns an empty array,
+        not 404.
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: "no", required: true, schema: { type: integer } }
+        - in: query
+          name: locale
+          schema: { type: string }
+          description: Locale for the localised name/description. Defaults to "en".
+      responses:
+        "200":
+          description: Master profiles for the channel (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MasterProfileSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/channels/{no}/master-profiles/{id}:
+    get:
+      operationId: getMasterProfile
+      summary: Full parameter set of a single master profile
+      description: |
+        Shares the domain call (`masterprofile.Store.Profile`) with the
+        WS `master_profiles.get` command.
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: "no", required: true, schema: { type: integer } }
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Master profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MasterProfile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/channels/{no}/master-profiles/match:
+    post:
+      operationId: matchMasterProfile
+      summary: Match observed values against a channel's master-profile constraints
+      description: |
+        Matches the `current_values` in the request body against the
+        master-profile constraint set for the channel's (device_type,
+        channel_type) pair and returns the active profile id (0 = Expert
+        / no match). Shares the domain call
+        (`masterprofile.Store.MatchActiveProfile`) with the WS
+        `master_profiles.match` command.
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: "no", required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current_values:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Active profile id (0 = no match)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [active_id]
+                properties:
+                  active_id: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /devices/{addr}/channels/{no}/schedule:
     get:
@@ -2466,19 +2561,61 @@ paths:
         "202": { description: Scheduled }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /service-messages/{id}/disable:
+    post:
+      operationId: disableServiceMessage
+      summary: Disable (suppress) a service message
+      description: |
+        The CCU exposes exactly one dismiss primitive for service
+        messages — there is no separate wire-level "disable/suppress
+        forever" operation — so this shares the same domain call as
+        `POST .../ack` (`hub.ServiceMessages.Disable` delegates to
+        `Acknowledge`). Exposed as its own operation (rather than an
+        alias) so callers can name the intent, and shares the domain
+        call with the WS `service_messages.disable` command.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   # ---- Backups ----
   /backups:
     post:
       operationId: triggerBackup
       summary: Trigger CCU backup (Rega create_backup_start)
+      description: |
+        Starts the create-and-download backup flow. An optional
+        `central_name` in the request body selects the target central
+        explicitly (multi-CCU-correct); omitting it — or an empty
+        request body — backs up the first registered central for
+        backward compatibility.
       tags: [backup]
       security:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                central_name:
+                  type: string
+                  description: >
+                    Name of the central to back up. Omit to back up the
+                    first registered central.
       responses:
         "202": { description: Job id returned }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     get:
@@ -2794,14 +2931,59 @@ paths:
       operationId: listIncidents
       summary: Diagnostic incidents
       tags: [diagnostics]
+      parameters:
+        - in: query
+          name: central
+          schema: { type: string }
+          description: >
+            Only return incidents belonging to the named CCU. Matches
+            both central-level entries (`component == central`) and
+            interface-scoped entries (`component == "<central>/<interface>"`).
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+          description: >
+            Only return incidents at-or-after this value (inclusive, RFC3339).
+            Returns 400 if the value cannot be parsed.
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+          description: >
+            Only return incidents strictly before this value (exclusive, RFC3339).
+            Returns 400 if the value cannot be parsed.
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 500 }
+          description: >
+            Maximum entries to return. 0 or absent uses the default (500).
+            Values above 5000 are capped to 5000.
       responses:
         "200":
-          description: Incidents
+          description: Filtered list of diagnostic incidents (newest first).
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Incident" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    delete:
+      operationId: clearIncidents
+      summary: Clear every stored incident across every registered central (admin)
+      description: |
+        Removes all rows from the incident store for every registered
+        central. Mirrors the WS `incidents.clear` command — both share
+        the same domain call (`adapter.IncidentsStoreReader.ClearIncidents`).
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: Incidents cleared
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /metrics:
     get:
       operationId: metrics
@@ -5756,6 +5938,37 @@ components:
         enabled:
           type: boolean
           description: Include (true) / exclude (false) the channel from the week-program schedule.
+    MasterProfileSummary:
+      type: object
+      required: [id, name, description, param_count]
+      description: One entry in `GET .../master-profiles` — the list shape (no full parameter map).
+      properties:
+        id: { type: integer }
+        name: { type: string, description: Localised profile name. }
+        description: { type: string, description: Localised profile description. }
+        param_count: { type: integer, description: Number of MASTER parameters this profile sets. }
+    MasterProfile:
+      type: object
+      required: [id, name, description, params]
+      description: Full master-profile shape returned by `GET .../master-profiles/{id}`.
+      properties:
+        id: { type: integer }
+        name:
+          type: object
+          additionalProperties: { type: string }
+          description: 'Locale-keyed profile name (e.g. `{"en": "Eco", "de": "Eco"}`).'
+        description:
+          type: object
+          additionalProperties: { type: string }
+          description: Locale-keyed profile description.
+        params:
+          type: object
+          description: MASTER parameter name to constraint.
+          additionalProperties:
+            type: object
+            properties:
+              constraint_type: { type: string, description: 'Usually "fixed"; other kinds appear sporadically.' }
+              value: {}
     InterfaceState:
       type: object
       required: [id, name, connected, interface]

@@ -11,6 +11,30 @@
   // is called.
   const pending = $derived(confirmStore.pending);
 
+  // Focus-trap bookkeeping. `dialogEl` roots the search for the two
+  // focusable buttons; `previouslyFocused` is the element that had focus
+  // before the dialog opened, so it can be restored once it closes.
+  let dialogEl = $state<HTMLDivElement | null>(null);
+  let previouslyFocused: HTMLElement | null = null;
+
+  function focusableButtons(): HTMLElement[] {
+    if (!dialogEl) return [];
+    return Array.from(dialogEl.querySelectorAll<HTMLElement>("button"));
+  }
+
+  $effect(() => {
+    if (pending) {
+      previouslyFocused = document.activeElement as HTMLElement | null;
+      // The dialog's DOM is inserted by the {#if} block that guards this
+      // effect's dependency, so it exists once this runs; queue past the
+      // current microtask to let Svelte finish committing it either way.
+      queueMicrotask(() => focusableButtons()[0]?.focus());
+    } else if (previouslyFocused) {
+      previouslyFocused.focus();
+      previouslyFocused = null;
+    }
+  });
+
   function onKey(e: KeyboardEvent) {
     if (!pending) return;
     if (e.key === "Escape") {
@@ -19,6 +43,18 @@
     } else if (e.key === "Enter") {
       e.preventDefault();
       confirmStore.resolve(true);
+    } else if (e.key === "Tab") {
+      const els = focusableButtons();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      const active = document.activeElement;
+      const atEdge = e.shiftKey ? active === first : active === last;
+      const outside = !els.includes(active as HTMLElement);
+      if (atEdge || outside) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      }
     }
   }
 </script>
@@ -42,6 +78,7 @@
     }}
   >
     <div
+      bind:this={dialogEl}
       class="w-full max-w-md p-5"
       style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
     >

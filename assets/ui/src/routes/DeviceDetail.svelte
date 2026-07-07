@@ -25,6 +25,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
 
   type Props = {
     address: string;
@@ -801,36 +802,32 @@
             <div>
               <div class="mb-2 flex flex-wrap items-center gap-2">
                 <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">{t("history.label_channel")}</span>
-                <select
-                  class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  value={historyChannelNo ?? userChannels[0]?.number}
-                  onchange={(e) => {
-                    const no = Number((e.target as HTMLSelectElement).value);
+                <Select
+                  class="w-auto"
+                  value={String(historyChannelNo ?? userChannels[0]?.number)}
+                  onValueChange={(v) => {
+                    const no = Number(v);
                     historyChannelNo = no;
                     void loadHistoryDPs(no);
                   }}
-                >
-                  {#each userChannels as ch (ch.number)}
-                    <option value={ch.number}>
-                      {ch.name?.trim() || ch.type_label || t("history.channel_n", { n: ch.number })} ({ch.number})
-                    </option>
-                  {/each}
-                </select>
+                  options={userChannels.map((ch) => ({
+                    value: String(ch.number),
+                    label: `${ch.name?.trim() || ch.type_label || t("history.channel_n", { n: ch.number })} (${ch.number})`,
+                  }))}
+                />
                 {#if historyDPs.length > 0}
                   <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">{t("history.label_parameter")}</span>
-                  <select
-                    class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  <Select
+                    class="w-auto"
                     value={historyParameter ?? historyDPs[0]?.parameter}
-                    onchange={(e) => {
-                      historyParameter = (e.target as HTMLSelectElement).value;
+                    onValueChange={(v) => {
+                      historyParameter = v;
                     }}
-                  >
-                    {#each historyDPs as dp (dp.parameter)}
-                      <option value={dp.parameter}>
-                        {dp.parameter_label || dp.parameter}{dp.unit ? ` (${dp.unit})` : ""}
-                      </option>
-                    {/each}
-                  </select>
+                    options={historyDPs.map((dp) => ({
+                      value: dp.parameter,
+                      label: `${dp.parameter_label || dp.parameter}${dp.unit ? ` (${dp.unit})` : ""}`,
+                    }))}
+                  />
                 {:else if historyDPsLoading}
                   <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.loading_parameters")}</span>
                 {:else if historyChannelNo !== null}

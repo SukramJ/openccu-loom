@@ -406,11 +406,14 @@ func (a *Aggregator) Cache() CacheMetricsSnapshot {
 	snap.VisibilityRegistry = SizeOnlySnapshot{Size: a.cacheProvider.VisibilityCacheSize()}
 
 	if a.clientProvider != nil {
-		var cmdSize, cmdEvictions, ppSize int
+		var cmdSize, ppSize int
 		for _, c := range a.clientProvider.Clients() {
-			_ = c // placeholder: real clients will expose tracker sizes
+			cmdSize += c.CommandTrackerSize()
+			ppSize += c.PingPongSize()
 		}
-		snap.CommandTracker = SizeOnlySnapshot{Size: cmdSize, Evictions: cmdEvictions}
+		// No cumulative eviction counter is exposed by CommandTracker today;
+		// Evictions stays at its zero value until that source exists.
+		snap.CommandTracker = SizeOnlySnapshot{Size: cmdSize}
 		snap.PingPongTracker = SizeOnlySnapshot{Size: ppSize}
 	}
 	return snap

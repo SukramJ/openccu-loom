@@ -563,6 +563,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		valueWriter:      valueWriter,
 		registry:         reg,
 		deviceReloader:   deviceReloader,
+		backups:          backupAdapter,
 		editSessions:     editSessions,
 		// cacheResetSvc backs ccu.cache_clear — scope-aware clear + re-pull.
 		cacheResetSvc: cacheResetSvc,
@@ -620,6 +621,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		hubAdapter:              hubAdapter,
 		ifaceAdapter:            ifaceAdapter,
 		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
+		masterProfiles:          masterProfilesStore,
 		sysStatusBuf:            sysStatusBuf,
 		visFilter:               visFilter,
 		metricsReg:              metricsReg,

@@ -6,6 +6,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -196,14 +197,15 @@
         </label>
         <label class="flex flex-col gap-1 text-sm">
           <span>{t("tokens.col.role")}</span>
-          <select
+          <Select
+            class="h-10"
             bind:value={createRole}
-            class="h-10 rounded border border-slate-300 px-2 text-base sm:text-sm dark:border-slate-700 dark:bg-slate-900"
-          >
-            <option value="viewer">viewer</option>
-            <option value="operator">operator</option>
-            <option value="admin">admin</option>
-          </select>
+            options={[
+              { value: "viewer", label: "viewer" },
+              { value: "operator", label: "operator" },
+              { value: "admin", label: "admin" },
+            ]}
+          />
         </label>
         {#if createError}
           <p class="text-xs text-red-600 dark:text-red-400">{createError}</p>
