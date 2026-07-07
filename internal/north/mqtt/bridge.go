@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"log/slog"
 	"maps"
 	"strconv"
 	"strings"
@@ -440,6 +442,153 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 		rawTopics:   make(map[string][]byte),
 		collector:   cfg.Collector,
 	}
+}
+
+// dispatchJob is one unit of deferred work handed to a
+// [boundedDispatcher] worker.
+type dispatchJob func()
+
+// boundedDispatcher runs jobs on a fixed pool of worker goroutines so a
+// caller on the MQTT client's synchronous read loop (see
+// [go-mqtt]'s dispatch, which runs every inbound MessageHandler and the
+// PUBACK/PINGRESP bookkeeping on one goroutine) can hand off blocking
+// downstream I/O — a QoS1 discovery republish, a CCU write behind the
+// circuit breaker/retry stack — and return immediately instead of
+// stalling the ack path.
+//
+// Same-key jobs always land on the same worker (selected by an FNV-1a
+// hash of key), so per-key submission order is preserved — two writes
+// for the same MQTT topic (the same data point) never reorder — while
+// jobs for different keys may run concurrently across workers.
+//
+// Lifecycle: workers start in newBoundedDispatcher and run until Close
+// has drained every already-queued job on every worker. Each of
+// [BirthSync] and [CommandSubscriber] owns exactly one instance and is
+// responsible for calling Close on its own teardown.
+type boundedDispatcher struct {
+	name   string // log-line identity, e.g. "birth_sync" / "command"
+	logger *slog.Logger
+	queues []chan dispatchJob
+	wg     sync.WaitGroup
+
+	closeMu sync.RWMutex
+	closed  bool
+}
+
+// newBoundedDispatcher starts `workers` goroutines, each backed by a
+// FIFO queue of depth `queueDepth`. workers and queueDepth are clamped
+// to at least 1 so a misconfigured caller still gets a working (if
+// serial) dispatcher rather than a panic.
+func newBoundedDispatcher(workers, queueDepth int, name string, logger *slog.Logger) *boundedDispatcher {
+	if workers < 1 {
+		workers = 1
+	}
+	if queueDepth < 1 {
+		queueDepth = 1
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	d := &boundedDispatcher{
+		name:   name,
+		logger: logger,
+		queues: make([]chan dispatchJob, workers),
+	}
+	for i := range d.queues {
+		d.queues[i] = make(chan dispatchJob, queueDepth)
+		d.wg.Add(1)
+		go d.runWorker(d.queues[i])
+	}
+	return d
+}
+
+// runWorker drains one queue until it is closed (by Close), running
+// every already-queued job first — a graceful drain, not an abrupt
+// stop.
+func (d *boundedDispatcher) runWorker(q chan dispatchJob) {
+	defer d.wg.Done()
+	for job := range q {
+		job()
+	}
+}
+
+// Enqueue routes job to the worker selected by key's hash. It never
+// silently drops job: a full queue first logs one bounded warning
+// (visible proof of backpressure instead of a silent stall) and then
+// blocks until the worker has room. Once Close has been called,
+// Enqueue logs a warning and returns without running job — the
+// dispatcher is shutting down and no worker remains to run it.
+func (d *boundedDispatcher) Enqueue(key string, job dispatchJob) {
+	d.closeMu.RLock()
+	defer d.closeMu.RUnlock()
+	if d.closed {
+		d.logger.Warn("mqtt.dispatch.dropped_after_close",
+			slog.String("dispatcher", d.name), slog.String("key", key))
+		return
+	}
+	q := d.queues[dispatchWorkerIndex(key, len(d.queues))]
+	select {
+	case q <- job:
+		return
+	default:
+	}
+	d.logger.Warn("mqtt.dispatch.queue_full",
+		slog.String("dispatcher", d.name), slog.String("key", key))
+	q <- job
+}
+
+// Close stops accepting new jobs and blocks until every worker has
+// drained its queue and exited. Safe to call more than once (later
+// calls are no-ops) and safe to call on a nil receiver.
+func (d *boundedDispatcher) Close() {
+	if d == nil {
+		return
+	}
+	d.closeMu.Lock()
+	if d.closed {
+		d.closeMu.Unlock()
+		return
+	}
+	d.closed = true
+	for _, q := range d.queues {
+		close(q)
+	}
+	d.closeMu.Unlock()
+	d.wg.Wait()
+}
+
+// flush blocks until every job enqueued before this call has been
+// drained by its worker. It is a test barrier: production code never
+// needs deterministic proof that async work landed, so it drives a
+// per-worker sentinel job through every queue. A no-op once Close has
+// run.
+func (d *boundedDispatcher) flush() {
+	d.closeMu.RLock()
+	if d.closed {
+		d.closeMu.RUnlock()
+		return
+	}
+	dones := make([]chan struct{}, len(d.queues))
+	for i, q := range d.queues {
+		done := make(chan struct{})
+		dones[i] = done
+		q <- func() { close(done) }
+	}
+	d.closeMu.RUnlock()
+	for _, done := range dones {
+		<-done
+	}
+}
+
+// dispatchWorkerIndex hashes key to a worker slot in [0, n). A single
+// worker (n<=1) always returns 0 without hashing.
+func dispatchWorkerIndex(key string, n int) int {
+	if n <= 1 {
+		return 0
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return int(h.Sum32() % uint32(n)) //nolint:gosec // n is a small worker count, no overflow risk
 }
 
 // SetHubInfo updates the central-level metadata stored on the

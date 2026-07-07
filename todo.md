@@ -29,12 +29,35 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   CCU regardless of the backup's owning central (restore-to-wrong-CCU). Expose
   the existing per-central `CreateBackupForCentral`/`TriggerBackupForCentral` +
   a central-scoped restore over REST/WS; SPA picker. Violates ADR 0002.
-- [ ] **B3 · MQTT handlers run blocking I/O on the client read loop → deadlock** (M, high)
+- [x] **B3 · MQTT handlers run blocking I/O on the client read loop → deadlock** (M, high)
   `internal/north/mqtt/birth_sync.go`, `command_subscriber.go` — `go-mqtt`
   requires handlers to return fast; `BirthSync.handle` calls `RepublishDiscovery`
   (per-entity QoS1 publish, blocks on PUBACK processed by the same loop) → self-
   deadlock on every HA restart; command handlers block up to seconds on CCU stall.
   Fix: dispatch handler bodies onto a bounded worker queue.
+  Implemented as a new `boundedDispatcher` primitive in `bridge.go` (fixed
+  worker pool, per-key FIFO queues hashed by topic so same-datapoint writes
+  never reorder, blocks + logs a bounded warning instead of dropping when a
+  queue is full, `Close()` drains cleanly). `BirthSync` gets a dedicated
+  single-worker instance (republish is idempotent); `CommandSubscriber` gets
+  an 8-worker instance keyed by the inbound topic string across every
+  handler (`handleDataPoint`, `handleScheduleSwitch`, `handleWeekProfile`,
+  `handleCombinedDP`, `handleServiceMethod`, `handleSysvar`, `handleProgram`,
+  `handleInstallMode`, `handleCDPInvoke`). Both types expose `Close()`; a
+  new `CommandSubscriber.WaitIdle()` gives external test packages a
+  deterministic barrier. Updated the tests that previously asserted
+  synchronously right after delivering a message
+  (`command_subscriber_test.go`, `command_subscriber_lifecycle_test.go`,
+  `bridge_edge_cases_test.go`, `retained_filter_test.go`,
+  `tests/contract/service_discovery_shape_test.go`,
+  `tests/integration/svc_method_topic_test.go`) to wait on the dispatcher
+  before asserting. New tests: `bridge_dispatcher_test.go` (the primitive:
+  prompt-return, per-key order, Close-drains, post-Close no-op, flush
+  barrier), `birth_sync_test.go` (slow-publisher deadlock reproducer +
+  Close-drains), `command_subscriber_dispatch_test.go` (slow-sink
+  reproducer, per-topic order, Close-drains). `go test -race` green on
+  `internal/north/mqtt`, `tests/contract`, and `tests/integration`
+  (`-tags=integration`).
 - [x] **B4 · MQTT raw-plane state topics never retracted on device removal** (M, high)
   `internal/central/adapter/eventbridge.go` `onDeviceRemoved` only clears
   HA-Discovery `/config`; retained raw topics (`values`/`master`/`availability`/

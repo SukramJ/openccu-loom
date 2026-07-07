@@ -88,6 +88,7 @@ func TestCommandSubscriberDataPointTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("calls=%d", sink.setValues.Load())
 	}
@@ -105,6 +106,7 @@ func TestCommandSubscriberSysvarTopic(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/sysvars/+/set",
 		"openccu-loom/ccu-01/hub/sysvars/PartyMode/set", []byte("false"))
+	sub.dispatcher.flush()
 	if sink.setSysvars.Load() != 1 || sink.lastSysvar.name != "PartyMode" || sink.lastSysvar.value != false {
 		t.Fatalf("sysvar call: %+v", sink.lastSysvar)
 	}
@@ -118,6 +120,7 @@ func TestCommandSubscriberProgramTopic(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/programs/+/trigger",
 		"openccu-loom/ccu-01/hub/programs/Morning/trigger", nil)
+	sub.dispatcher.flush()
 	if sink.triggers.Load() != 1 || sink.lastProgram.id != "Morning" {
 		t.Fatalf("program: %+v", sink.lastProgram)
 	}
@@ -184,6 +187,7 @@ func TestCommandSubscriberCDPInvoke(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 CDP call, got %d", cdpSink.calls.Load())
 	}
@@ -273,6 +277,7 @@ func TestCommandSubscriberCDPInvokeEmptyPayload(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/0001ABCD/cdps/light_dp/turn_off/invoke",
 		[]byte(""))
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call on empty payload, got %d", cdpSink.calls.Load())
 	}
@@ -294,6 +299,7 @@ func TestCommandSubscriberCDPInvokeSinkError(t *testing.T) {
 	noop.DeliverInbound("openccu-loom/+/devices/+/cdps/+/+/invoke",
 		"openccu-loom/ccu-01/devices/UNKNOWN/cdps/x/turn_on/invoke",
 		[]byte(`{}`))
+	sub.dispatcher.flush()
 	// Should not panic or block; error is swallowed.
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call even on error, got %d", cdpSink.calls.Load())
@@ -388,6 +394,7 @@ func TestCommandSubscriberWeekProfileTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if wpSink.calls.Load() != 1 {
 		t.Fatalf("calls=%d, want 1", wpSink.calls.Load())
 	}
@@ -474,6 +481,7 @@ func TestCommandSubscriberInstallModePressTopic(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if imSink.calls.Load() != 1 {
 		t.Fatalf("calls=%d, want 1", imSink.calls.Load())
 	}
@@ -495,6 +503,7 @@ func TestCommandSubscriberInstallModeNumericDuration(t *testing.T) {
 	_ = sub.Start(context.Background())
 	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
 		"openccu-loom/ccu-01/hub/install_mode/BidCos-RF/set", []byte("120"))
+	sub.dispatcher.flush()
 	if imSink.calls.Load() != 1 || imSink.last.seconds != 120 || imSink.last.iface != "BidCos-RF" {
 		t.Fatalf("last=%+v", imSink.last)
 	}
@@ -543,6 +552,7 @@ func TestCommandSubscriberMasterBucketRoutes(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if sink.masterValues.Load() != 1 {
 		t.Fatalf("SetMasterValue calls=%d, want 1", sink.masterValues.Load())
 	}
@@ -602,6 +612,7 @@ func TestCommandSubscriberValuesBucketStillRoutes(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE/set", []byte("true"))
+	sub.dispatcher.flush()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("SetValue calls=%d, want 1", sink.setValues.Load())
 	}

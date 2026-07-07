@@ -63,8 +63,12 @@ func TestServiceMethodTopicEndToEnd(t *testing.T) {
 		t.Fatalf("publish: %v", err)
 	}
 
-	// Wait for dispatch.
+	// Wait for dispatch. handleServiceMethod now enqueues the sink call
+	// onto CommandSubscriber's dispatcher instead of running it inline, so
+	// waiting for Publish's callback to return (WaitDispatch) is not
+	// enough — wait for the dispatcher to actually run the job too.
 	pub.WaitDispatch()
+	sub.WaitIdle()
 
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 InvokeChannelService call, got %d", cdpSink.calls.Load())
@@ -105,6 +109,7 @@ func TestServiceMethodTopicJSONPayload(t *testing.T) {
 		t.Fatalf("publish: %v", err)
 	}
 	pub.WaitDispatch()
+	sub.WaitIdle()
 
 	hours, _ := cdpSink.lastParams["hours"].(float64)
 	if hours != 4 {

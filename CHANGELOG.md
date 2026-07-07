@@ -8,6 +8,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **MQTT: command and HA-birth handlers no longer block the client's
+  read loop, which could self-deadlock or stall unrelated commands.**
+  `go-mqtt` runs every inbound `MessageHandler` synchronously on the
+  single goroutine that also processes PUBACK/PINGRESP for the same
+  connection. `BirthSync.handle` called `Bridge.RepublishDiscovery`
+  inline — a blocking QoS1 `Publish` per declared discovery topic,
+  each waiting on a PUBACK only that same (now-busy) goroutine could
+  ever deliver — a guaranteed self-deadlock on every Home Assistant
+  restart once more than a handful of entities were declared.
+  `CommandSubscriber`'s handlers (`SetValue`/`SetMasterValue`/
+  `InvokeChannelService`/…) called the sink inline too, so a CCU
+  write stuck for seconds behind the circuit breaker/retry stack
+  stalled every other in-flight MQTT message on the same connection.
+  Both now dispatch the actual downstream call onto a small bounded
+  worker pool (`boundedDispatcher`) and return immediately; per-worker
+  routing is keyed by the inbound MQTT topic so writes to the same
+  data point never reorder, and a full queue blocks briefly with a
+  logged warning rather than silently dropping the command. Both
+  `BirthSync` and `CommandSubscriber` now expose `Close()` for a clean
+  goroutine drain on teardown.
 - **MQTT: removed devices no longer keep stale retained raw-plane
   topics.** `onDeviceRemoved` only retracted the device's
   HA-Discovery `/config` entries; the retained raw-plane

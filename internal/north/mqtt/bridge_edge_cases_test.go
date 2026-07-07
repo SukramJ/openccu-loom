@@ -88,8 +88,11 @@ func TestBirthSyncHandleOnlineRepublishes(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	// Deliver "online" → should trigger RepublishDiscovery.
+	// Deliver "online" → should trigger RepublishDiscovery. handle() now
+	// enqueues the republish onto BirthSync's dispatcher instead of running
+	// it inline, so wait for the worker to finish before asserting.
 	sub.deliver(HABirthTopic, []byte("online"))
+	bs.dispatcher.flush()
 
 	pubs := mp.publications()
 	found := false
@@ -832,6 +835,7 @@ func TestCommandSubscriberServiceMethodSuccess(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", cdpSink.calls.Load())
 	}
@@ -849,6 +853,7 @@ func TestCommandSubscriberServiceMethodSinkError(t *testing.T) {
 	// Error from sink must not panic.
 	noop.DeliverInbound("gh/+/+/+/+/custom/+/set/+",
 		"gh/ccu/HmIP-RF/0001ABCD/1/custom/climate/set/boost", []byte("true"))
+	sub.dispatcher.flush()
 	if cdpSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call even on error, got %d", cdpSink.calls.Load())
 	}
@@ -1012,6 +1017,7 @@ func TestCommandSubscriberDataPointBucketAwareValues(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
+	sub.dispatcher.flush()
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("expected 1 SetValue call; got %d", sink.setValues.Load())
 	}
@@ -1064,6 +1070,7 @@ func TestCommandSubscriberWeekProfileSinkError(t *testing.T) {
 	// Sink error should be logged, not propagated.
 	noop.DeliverInbound("gh/+/+/+/+/week_profile/set",
 		"gh/ccu/HmIP-RF/0001ABCD/1/week_profile/set", []byte("P1"))
+	sub.dispatcher.flush()
 	if errSink.calls.Load() != 1 {
 		t.Fatalf("expected 1 call, got %d", errSink.calls.Load())
 	}
@@ -1107,6 +1114,7 @@ func TestCommandSubscriberSysvarSinkError(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/hub/sysvars/+/set",
 		"gh/ccu/hub/sysvars/PartyMode/set", []byte("true"))
+	sub.dispatcher.flush()
 	if sink.sysvars.Load() != 1 {
 		t.Fatalf("expected 1 SetSysvar call; got %d", sink.sysvars.Load())
 	}
@@ -1140,6 +1148,7 @@ func TestCommandSubscriberProgramSinkError(t *testing.T) {
 
 	noop.DeliverInbound("gh/+/hub/programs/+/trigger",
 		"gh/ccu/hub/programs/Morning/trigger", nil)
+	sub.dispatcher.flush()
 	if sink.programs.Load() != 1 {
 		t.Fatalf("expected 1 TriggerProgram call; got %d", sink.programs.Load())
 	}
