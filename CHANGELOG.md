@@ -177,6 +177,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   endpoints (bare array + `X-Total-Count`) is now called out explicitly
   in `assets/openapi.yaml` as an intentional, independently-consumed
   split rather than undocumented drift.
+- **Config UI: hand-rolled native `<select>` filter dropdowns migrated
+  to the shared `lib/components/ui/Select.svelte` primitive.** Covers
+  the static central/action/role/interface pickers in `AuditLog`,
+  `MessageList`, `ProgramList`, `SignalQualityList`, `UnIgnoreList`,
+  `FirmwareList`, `Inbox`, `DeviceDetail` (history channel/parameter
+  pickers), and the `UsersAdmin`/`TokensAdmin`/`CentralsAdmin`/
+  `RoomsFunctionsAdmin` settings panels — all now match the rest of
+  the SPA's themed dropdown look instead of the browser's native
+  control chrome. `DeviceList`, `Overview`, `Diagnostics`, and the
+  `Settings` general-tab language picker keep their native `<select>`
+  deliberately: each sits on a route with a committed Playwright
+  visual-regression baseline that this branch cannot regenerate, so
+  swapping the control there risked an unverified layout diff.
+  `Logs.svelte`'s two selects also stay native — they share a toolbar
+  styled entirely off `--ha-*` CSS custom properties, and the shared
+  `Select` primitive uses fixed Tailwind slate colors, so migrating
+  only those two controls would have made that one toolbar row look
+  inconsistent with its neighbors.
 
 ## [0.27.2] — 2026-07-07
 

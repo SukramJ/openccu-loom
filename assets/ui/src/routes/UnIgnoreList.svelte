@@ -12,6 +12,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
 
   let selectedCentral = $state<string>("");
   let customPattern = $state("");
@@ -148,17 +149,14 @@
     <Card>
       <!-- Central selector + include-master toggle -->
       <div class="flex flex-wrap items-center gap-3 p-4">
-        <label class="text-sm font-medium">
+        <span class="flex items-center gap-2 text-sm font-medium">
           {t("unignore.central_label")}
-          <select
+          <Select
+            class="w-auto"
             bind:value={selectedCentral}
-            class="ml-2 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          >
-            {#each centralOptions as name (name)}
-              <option value={name}>{name}</option>
-            {/each}
-          </select>
-        </label>
+            options={centralOptions.map((name) => ({ value: name, label: name }))}
+          />
+        </span>
 
         <label class="flex items-center gap-2 text-sm sm:ml-auto">
           <input

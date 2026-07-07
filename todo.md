@@ -302,9 +302,16 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   path literally, so no runtime SPA change was needed. MQTT topic segments and
   the `week_profile` unique-ID prefix are a separate naming scheme (not a REST
   path) and were left untouched.
-- [ ] **U5 · ~20 routes hand-roll native `<select>` instead of the shared primitive** (M, low)
-  Migrate the static filter-dropdown usages to `lib/components/ui/Select.svelte`;
-  leave genuine native-only cases documented. *(mechanical; isolated commit.)*
+- [x] **U5 · ~20 routes hand-roll native `<select>` instead of the shared primitive** (M, low)
+  Migrated the static filter-dropdown usages to `lib/components/ui/Select.svelte` in
+  `AuditLog`, `MessageList`, `ProgramList`, `SignalQualityList`, `UnIgnoreList`,
+  `FirmwareList`, `Inbox`, `DeviceDetail`, and the `UsersAdmin`/`TokensAdmin`/
+  `CentralsAdmin`/`RoomsFunctionsAdmin` settings panels. Left `DeviceList`,
+  `Overview`, `Diagnostics`, and the `Settings` general-tab language select native
+  (each sits on a route with a committed Playwright visual baseline this branch
+  cannot regenerate); left `Logs.svelte`'s two selects native (its toolbar is
+  styled entirely off `--ha-*` tokens, inconsistent with `Select`'s fixed Tailwind
+  palette). *(mechanical; isolated commit.)*
 
 ## Release
 

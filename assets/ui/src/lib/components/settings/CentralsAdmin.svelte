@@ -17,6 +17,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -691,16 +692,15 @@
 
         <label class="flex flex-col gap-1">
           <span>{t("centrals.field.primary_interface")}</span>
-          <select
+          <Select
+            class="h-9"
             bind:value={fPrimaryInterface}
-            class="h-9 rounded border border-slate-300 px-2 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
             disabled={selectedNames.length === 0}
-          >
-            <option value="">—</option>
-            {#each selectedNames as name (name)}
-              <option value={name}>{name}</option>
-            {/each}
-          </select>
+            options={[
+              { value: "", label: "—" },
+              ...selectedNames.map((name) => ({ value: name, label: name })),
+            ]}
+          />
         </label>
 
         <!-- Per-central behaviour toggles (CentralConfig.Behavior). -->

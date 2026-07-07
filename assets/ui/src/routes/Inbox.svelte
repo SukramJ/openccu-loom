@@ -10,6 +10,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
@@ -199,29 +200,24 @@
         <span class="text-xs text-slate-500 dark:text-slate-400">{installModeStore.banner}</span>
       {/if}
       {#if centrals.length > 1}
-        <select
+        <Select
+          class="w-auto"
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          title="CCU"
-        >
-          <option value="">{t("common.all_ccus")}</option>
-          {#each centrals as c (c)}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
+          options={[
+            { value: "", label: t("common.all_ccus") },
+            ...centrals.map((c) => ({ value: c, label: c })),
+          ]}
+        />
       {/if}
       {#if installModeStore.interfaces.length > 0}
-        <select
+        <Select
+          class="w-auto"
           bind:value={selectedInterface}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          title={t("inbox.install_mode_interface_label")}
-        >
-          {#each installModeStore.interfaces as iface ((iface.central ?? "") + "/" + iface.interface)}
-            <option value={iface.interface}>
-              {iface.interface}{iface.active ? " ●" : ""}
-            </option>
-          {/each}
-        </select>
+          options={installModeStore.interfaces.map((iface) => ({
+            value: iface.interface,
+            label: `${iface.interface}${iface.active ? " ●" : ""}`,
+          }))}
+        />
       {/if}
       <Button
         type="button"

@@ -10,6 +10,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -208,16 +209,17 @@
   >
     {#snippet actions()}
       {#if (tab === "alarm" ? alarmCentrals : serviceCentrals).length > 1}
-        <select
+        <Select
+          class="w-auto"
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          title="CCU"
-        >
-          <option value="">{t("common.all_ccus")}</option>
-          {#each (tab === "alarm" ? alarmCentrals : serviceCentrals) as c (c)}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
+          options={[
+            { value: "", label: t("common.all_ccus") },
+            ...(tab === "alarm" ? alarmCentrals : serviceCentrals).map((c) => ({
+              value: c,
+              label: c,
+            })),
+          ]}
+        />
       {/if}
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
@@ -310,30 +312,27 @@
     </Card>
   {:else}
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
-      <select
+      <Select
+        class="w-auto"
         bind:value={typeFilter}
-        class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-      >
-        <option value="">{t("messages.all_types")}</option>
-        {#each serviceTypes as st (st)}
-          <option value={st}>{serviceTypeLabel(st)}</option>
-        {/each}
-      </select>
+        options={[
+          { value: "", label: t("messages.all_types") },
+          ...serviceTypes.map((st) => ({ value: st, label: serviceTypeLabel(st) })),
+        ]}
+      />
       <label class="flex items-center gap-1 text-slate-600 dark:text-slate-400">
         <input type="checkbox" bind:checked={onlyQuittable} />
         {t("messages.quittable_only")}
       </label>
       {#if serviceCentrals.length > 1}
-        <select
+        <Select
+          class="w-auto"
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          title="CCU"
-        >
-          <option value="">{t("common.all_ccus")}</option>
-          {#each serviceCentrals as c (c)}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
+          options={[
+            { value: "", label: t("common.all_ccus") },
+            ...serviceCentrals.map((c) => ({ value: c, label: c })),
+          ]}
+        />
       {/if}
     </div>
     <Card class="p-4">

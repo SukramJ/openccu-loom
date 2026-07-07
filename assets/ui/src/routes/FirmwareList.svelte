@@ -11,6 +11,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -215,16 +216,14 @@
     </div>
 
     {#if centrals.length > 1}
-      <select
+      <Select
+        class="h-8 w-auto"
         bind:value={centralFilter}
-        class="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-        title="CCU"
-      >
-        <option value="">{t("common.all_ccus")}</option>
-        {#each centrals as c (c)}
-          <option value={c}>{c}</option>
-        {/each}
-      </select>
+        options={[
+          { value: "", label: t("common.all_ccus") },
+          ...centrals.map((c) => ({ value: c ?? "", label: c ?? "" })),
+        ]}
+      />
     {/if}
   </div>
 

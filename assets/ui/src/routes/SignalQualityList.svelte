@@ -9,6 +9,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
 
@@ -82,16 +83,14 @@
   >
     {#snippet actions()}
       {#if centrals.length > 1}
-        <select
+        <Select
+          class="w-auto"
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          title="CCU"
-        >
-          <option value="">{t("common.all_ccus")}</option>
-          {#each centrals as c (c)}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
+          options={[
+            { value: "", label: t("common.all_ccus") },
+            ...centrals.map((c) => ({ value: c, label: c })),
+          ]}
+        />
       {/if}
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
