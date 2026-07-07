@@ -576,6 +576,7 @@ func (s *ValuesCacheStore) GCDeadRows(
 // [ValuesCacheStore.GCDeadRows] (see the adapter package's
 // values_cache_flush.go) is the production caller; tests use it
 // directly to build expected alive sets.
+// loom:reachable:reason="called in production by buildAliveKeySet on the periodic values-cache GC path (internal/central/adapter/values_cache_flush.go), which runs inside the flusher goroutine closure the static reachability pass does not trace"
 func AliveKey(centralName, interfaceID, channelAddress, parameterName string) string {
 	return centralName + "|" + interfaceID + "|" + channelAddress + "|" + parameterName
 }

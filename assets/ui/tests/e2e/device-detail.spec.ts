@@ -140,7 +140,9 @@ test.describe('Device detail — MASTER parameter write', () => {
     page,
   }) => {
     let putBody: unknown = null;
-    await page.route(`**/api/v1/devices/${DEVICE_ADDRESS}:1/paramsets/MASTER`, async (route) => {
+    // The channel address (…:1) is percent-encoded in the request URL, so
+    // match the address segment with a wildcard rather than a literal colon.
+    await page.route('**/api/v1/devices/*/paramsets/MASTER', async (route) => {
       putBody = route.request().postDataJSON();
       await route.fulfill({ json: { status: 'ok' } });
     });
@@ -158,7 +160,9 @@ test.describe('Device detail — MASTER parameter write', () => {
     await input.blur();
 
     // The sticky save bar shows the dirty-field count and becomes enabled.
-    const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ });
+    // ChannelPanel renders the Save control twice (header + sticky footer
+    // bar), so scope to the first match to stay out of strict-mode.
+    const saveButton = page.getByRole('button', { name: /Save \(\d+\)/ }).first();
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
 
