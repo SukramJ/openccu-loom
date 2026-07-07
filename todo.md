@@ -138,24 +138,67 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   (`listPrograms pages through more than one page's worth of programs`,
   `listSysvars pages through more than one page's worth of sysvars`,
   `listPrograms stops after a single short page`).
-- [ ] **T1 · MQTT combined-DP timer/sensor + schedule-entity discovery: 0% tests** (M, high)
+- [x] **T1 · MQTT combined-DP timer/sensor + schedule-entity discovery: 0% tests** (M, high)
   `internal/north/mqtt/discovery_combined.go`, `discovery_schedule.go` (~685 LoC,
   live-wired, errors discarded). Add table-driven discovery/state tests +
   assert the eventbridge discarded error is at least logged.
-- [ ] **T2 · Largest live-control routes have no dedicated test** (M, high)
+  Implemented: table-driven `Build*`/`Publish*`/state tests for both files
+  covering happy path, decline/no-op branches, and publisher-error
+  propagation (`discovery_combined_test.go`, `discovery_schedule_test.go`).
+  The eventbridge-level observability gap is closed by two new tests in
+  `internal/central/adapter/eventbridge_test.go`
+  (`TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted`,
+  `TestPublishCombinedDPSnapshotDiscardedErrorIsCounted`) that wire a
+  failing `mqtt.Publisher` + `metrics.MqttCollector` and prove the
+  discarded `_ = bridge.PublishXxxDiscovery(...)` error still increments
+  the bridge's `publish_errors` counter — a broker outage during schedule
+  or combined-DP discovery is observable even though the call sites
+  ignore the error value directly. No production code changed.
+- [x] **T2 · Largest live-control routes have no dedicated test** (M, high)
   `assets/ui/src/routes/DeviceDetail.svelte` (861) and `Diagnostics.svelte` (934)
   — no vitest/functional Playwright spec. Add `DeviceDetail.test.ts` +
   a `device-detail.spec.ts` covering a parameter write + toast feedback.
+  Implemented: `DeviceDetail.test.ts` covers the loading indicator, the
+  ErrorState+retry path, the happy-path header render, the no-channels
+  EmptyState, and the channel tab strip. `Diagnostics.test.ts` gained a
+  new "page load" describe block covering the top-level `health()`
+  load/error/retry path (the reliability + values-cache panels already
+  had coverage). `tests/e2e/device-detail.spec.ts` drives a real MASTER
+  paramset write (FLOAT field) through the Configure tab and asserts both
+  the PUT payload and the "Saved." toast — mirrors `energy.spec.ts` and
+  the `doc-screenshots.spec.ts` device-detail fixture shape. `svelte-check`
+  and the full `vitest run` suite (255 tests) are green; the Playwright
+  spec itself needs the CI Docker Playwright image to execute for real and
+  was not run in this environment (per project convention).
 
 ## Tier 3 — Medium
 
-- [ ] **T3 · SSDP Discoverer lifecycle untested** (S, med)
+- [x] **T3 · SSDP Discoverer lifecycle untested** (S, med)
   `internal/north/discovery/ssdp` at 30% — `New/Start/Stop/loop/scan/fetch/List`
   0%. `http`/`now` are injectable; add `discoverer_test.go` (httptest + fake clock).
-- [ ] **T4 · CCU add-on `update_script` has no test** (S, med)
+  Implemented: `discoverer_test.go` covers `New` defaults, `fetch` against
+  an `httptest.Server` (valid CCU, non-200, unparseable body, non-CCU
+  manufacturer, oversized body, malformed/unreachable location), `List`'s
+  nil-receiver guard + never-nil-empty behaviour + name/serial sort order,
+  stale-entry eviction and fresh-entry retention via the injectable `now`
+  func, and a `Start`/`Stop` lifecycle smoke test. Real-UDP paths
+  (`multicastSourceIPs`/`searchFrom`) are left untested as directed.
+- [x] **T4 · CCU add-on `update_script` has no test** (S, med)
   `packaging/ccu-addon/ccu/update_script` — exit-code contract (0=no reboot,
   10=reboot) unguarded; exact subject of the 0.27.1 bug. Add a shell/bats test
   stubbing `uname`/`mount`/etc. and asserting exit code per `$1`.
+  Implemented: `tests/contract/ccu_addon_update_script_test.go` runs the
+  real `update_script` via `exec.Command("sh", ...)` in a hermetic
+  subprocess — PATH is pointed at stub replacements for every external
+  command it shells out to (`uname`, `mount`, `lcdtool`, `cp`, `mkdir`,
+  `chmod`, `sync`), and its relative source directories (`addon/`, `rc.d/`,
+  `www/`, `etc/`) are seeded as an empty fixture tree in a scratch working
+  directory, so `/usr/local` is never touched. Asserts the exit code for
+  `$1` in `{"", "CCU2", "HM-RASPBERRYMATIC", "CCU3"}` against the script's
+  actual contract (1 / 1 / 0 / 10). Bats is not installed in this
+  environment, so the harness runs as a plain Go test (`go test
+  ./tests/contract/...`) rather than a `.bats` file — no separate runner
+  needed.
 - [x] **U2 · Settings.svelte breaks the shared operating concept** (S, med)
   `assets/ui/src/routes/Settings.svelte` — inline MQTT-reload banner instead of
   toast; `schemaError` as ad-hoc Card instead of `ErrorState`. Only route with no

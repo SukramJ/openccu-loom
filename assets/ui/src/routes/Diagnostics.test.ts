@@ -100,6 +100,39 @@ beforeEach(() => {
 
 afterEach(() => cleanup());
 
+describe("Diagnostics — page load", () => {
+  it("renders the health status once load() resolves", async () => {
+    mockHealth.mockResolvedValue({
+      status: "healthy",
+      components: [{ name: "central-01", status: "healthy" }],
+    });
+    render(Diagnostics);
+
+    await waitFor(() => expect(mockHealth).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(screen.getByText("central-01")).toBeInTheDocument();
+    });
+  });
+
+  it("shows ErrorState with retry when health() fails", async () => {
+    mockHealth.mockRejectedValueOnce(new Error("daemon unreachable"));
+    render(Diagnostics);
+
+    await waitFor(() => {
+      expect(screen.getByText(/daemon unreachable/)).toBeInTheDocument();
+    });
+
+    mockHealth.mockResolvedValueOnce({ status: "healthy", components: [] });
+    const retryButtons = screen.getAllByText("common.reload");
+    retryButtons[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    await waitFor(() => expect(mockHealth).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(screen.queryByText(/daemon unreachable/)).not.toBeInTheDocument();
+    });
+  });
+});
+
 describe("Diagnostics — reliability panel", () => {
   it("renders a row per (central, interface) breaker snapshot", async () => {
     mockGetReliability.mockResolvedValue([

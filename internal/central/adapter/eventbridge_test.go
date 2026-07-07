@@ -5,14 +5,18 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
+	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -539,4 +543,97 @@ func TestEventBridgeDataPointValueChangedUniqueID(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("DataPointValueChangedEvent did not reach the WS hub within deadline")
+}
+
+// ============================================================
+// Combined-DP / schedule discovery publish errors are observable
+// ============================================================
+
+// failingPublisher is a [mqtt.Publisher] that always fails. Used to prove
+// that a broker-level publish failure from the discardable
+// `_ = bridge.PublishXxxDiscovery(...)` call sites in this file is not
+// silently swallowed end-to-end — it still lands on the bridge's
+// publish_errors counter.
+type failingPublisher struct{}
+
+func (failingPublisher) Publish(context.Context, string, []byte, mqtt.QoS, bool, ...mqtt.PublishOption) error {
+	return errors.New("broker unavailable")
+}
+
+// TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted verifies that
+// publishScheduleEntitySnapshot's discarded
+// `_ = bridge.PublishScheduleEntityDiscovery(...)` error still increments
+// the bridge's publish_errors metric, so a broker outage during schedule
+// discovery is observable even though the call site ignores the error
+// value.
+func TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted(t *testing.T) {
+	t.Parallel()
+
+	reg := metrics.NewRegistry()
+	collector := metrics.NewMqttCollector(reg, "ccu-01")
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+		Collector: collector,
+	}, failingPublisher{})
+	mw := mqtt.NewWiring(bridge, nil)
+
+	eb := NewEventBridge(nil, nil, mw)
+	dev := device.New(device.Config{Address: "SCHEDDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-eTRV-2"})
+	ch := dev.AddChannel("SCHEDDEV001:1", 1, "CLIMATECONTROL_VENT_DRIVE", hmenum.ParamsetKeyValues)
+	ch.AttachWeekProfile(weekprofile.NewProfileDataPoint(weekprofile.ProfileDataPointConfig{
+		ScheduleType:   weekprofile.ScheduleTypeClimate,
+		CentralName:    "ccu-01",
+		ChannelAddress: ch.Address,
+	}))
+
+	if before := collector.PublishErrors.Value(); before != 0 {
+		t.Fatalf("publish_errors before call = %d, want 0", before)
+	}
+
+	eb.publishScheduleEntitySnapshot(context.Background(), "ccu-01", "HmIP-RF", dev, ch)
+
+	if after := collector.PublishErrors.Value(); after == 0 {
+		t.Fatal("publish_errors counter did not increment after a failing PublishScheduleEntityDiscovery call — the discarded error is unobservable")
+	}
+}
+
+// TestPublishCombinedDPSnapshotDiscardedErrorIsCounted mirrors
+// TestPublishScheduleEntitySnapshotDiscardedErrorIsCounted for the
+// combined-DP (Timer) discovery path.
+func TestPublishCombinedDPSnapshotDiscardedErrorIsCounted(t *testing.T) {
+	t.Parallel()
+
+	reg := metrics.NewRegistry()
+	collector := metrics.NewMqttCollector(reg, "ccu-01")
+	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
+		Base: "openccu-loom", CentralName: "ccu-01",
+		RawEnabled: true, HADiscoveryEnabled: true,
+		Collector: collector,
+	}, failingPublisher{})
+	mw := mqtt.NewWiring(bridge, nil)
+
+	eb := NewEventBridge(nil, nil, mw)
+	dev := device.New(device.Config{Address: "TIMERDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-ASIR"})
+	ch := dev.AddChannel("TIMERDEV001:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	timer := combined.NewTimer(ch.Address, &noopCombinedWriter{}, "DURATION_VALUE", "DURATION_UNIT")
+	ch.AttachCalculatedDataPoint(timer)
+
+	if before := collector.PublishErrors.Value(); before != 0 {
+		t.Fatalf("publish_errors before call = %d, want 0", before)
+	}
+
+	eb.publishCombinedDPSnapshot(context.Background(), "ccu-01", "HmIP-RF", dev, ch)
+
+	if after := collector.PublishErrors.Value(); after == 0 {
+		t.Fatal("publish_errors counter did not increment after a failing PublishCombinedTimerDiscovery call — the discarded error is unobservable")
+	}
+}
+
+// noopCombinedWriter is a no-op [combined.Writer] — the discovery-publish
+// paths under test never invoke SetValue.
+type noopCombinedWriter struct{}
+
+func (noopCombinedWriter) SetValue(context.Context, string, hmenum.Parameter, any, hmenum.CommandPriority) error {
+	return nil
 }

@@ -147,6 +147,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   default 60 s flush cadence) that rebuilds the alive-key set from
   every central's current device model and deletes rows that no
   longer map to a live parameter.
+- **Test coverage: MQTT combined-DP/schedule discovery, SSDP
+  discoverer lifecycle, the DeviceDetail/Diagnostics SPA routes, and
+  the CCU add-on `update_script` exit-code contract.** Closes four
+  previously-untested surfaces: table-driven `Build*`/`Publish*`
+  discovery + state tests for `internal/north/mqtt/discovery_combined.go`
+  and `discovery_schedule.go`, plus an eventbridge-level check proving a
+  broker-publish failure during schedule/combined-DP discovery still
+  increments the bridge's `publish_errors` counter even though the call
+  sites discard the error value; `internal/north/discovery/ssdp`'s
+  `New`/`fetch`/`List`/stale-eviction paths via `httptest` and an
+  injectable clock; `DeviceDetail.test.ts` (loading/error/happy-path) and
+  a `Diagnostics.test.ts` page-load case, plus a new
+  `tests/e2e/device-detail.spec.ts` Playwright spec driving a real MASTER
+  paramset write and asserting the success toast; and a hermetic
+  `tests/contract/ccu_addon_update_script_test.go` that runs the real
+  `packaging/ccu-addon/ccu/update_script` against stubbed system commands
+  and locks its 0=no-reboot / 10=reboot exit-code contract per platform
+  identifier — the exact contract that regressed in 0.27.1.
 
 ### Changed
 
