@@ -89,11 +89,14 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   `/auth/tokens` (v1) orphaned (SPA uses v2 only) but no `deprecated: true`;
   `docs/admin/auth.md` documents only v1. Mark v1 deprecated in openapi.yaml,
   fix the doc, remove the dead `listTokens()` client wrapper.
-- [ ] **P1 · values_cache periodic GC never wired** (S, med)
+- [x] **P1 · values_cache periodic GC never wired** (S, med)
   `internal/store/sqlite/values_cache.go` `GCDeadRows` only called by tests →
   parameter/channel drift leaves orphan rows forever. Schedule from
-  `RegisterStandardJobs` with the alive-key set.
-- [ ] **P2 · values_cache flush re-persists whole central per tick** (M, med)
+  `RegisterStandardJobs` with the alive-key set. Wired instead as a
+  low-frequency second ticker inside `WireValuesCacheFlusher`
+  (`internal/central/adapter/values_cache_flush.go`), reusing the same
+  registry walk pattern; no daemon wiring call site changed.
+- [x] **P2 · values_cache flush re-persists whole central per tick** (M, med)
   `internal/central/adapter/values_cache_flush.go` marks a whole central dirty on
   any change and re-UPSERTs all live/stale DPs → write amplification at fleet
   scale (ADR 0019 sizes vs ~1000 DP). Track dirty `(channel, parameter)` keys.

@@ -31,6 +31,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   daemon only runs `goose.UpContext` and exposes no rollback
   subcommand, so recovering from a bad upgrade means restoring a
   pre-upgrade backup.
+- **Values cache: periodic dead-row garbage collection.**
+  `ValuesCacheStore.GCDeadRows` used to be exercised only by tests —
+  nothing in the daemon ever called it, so a row whose channel or
+  parameter permanently disappeared from a device's model (firmware
+  update, profile change) stayed in `values_cache` forever. The
+  background flusher goroutine now also drives a much lower-frequency
+  GC ticker (derived from the flush interval; 30 min under the
+  default 60 s flush cadence) that rebuilds the alive-key set from
+  every central's current device model and deletes rows that no
+  longer map to a live parameter.
+
+### Changed
+
+- **Values cache: dirty tracking is now per-`(channel, parameter)`
+  key, not per-central.** The periodic flusher used to mark an
+  entire central dirty on any single data-point change and then
+  re-serialise every live/stale data point of that central on the
+  next tick — on a ~1000-DP install, one hot data point forced a
+  full-fleet SQLite UPSERT every tick. The flusher now tracks the
+  exact set of changed `(channel, parameter)` keys per central and
+  persists only those, falling back to a full walk only for the
+  initial post-boot tick (covering values that changed before the
+  flusher's event subscriptions were installed) and the final
+  shutdown flush.
 
 ## [0.27.2] — 2026-07-07
 
