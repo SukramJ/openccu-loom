@@ -367,9 +367,24 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   2.16.0 (set by group A2 when it added the master-profiles/incidents/
   service-message REST endpoints), so no further bump was needed there —
   verified idempotent.
-- [ ] **R2 · Verify** — `make fmt`, `make lint`, `make test`/`make contract` green;
+- [x] **R2 · Verify** — `make fmt`, `make lint`, `make test`/`make contract` green;
   record result here. Then push + open the PR. Actual git tag + goreleaser happen
   after PR review/merge onto protected `main` (not part of this branch).
+  Result: all four targets green on the tip of `fix/codebase-sweep-0.28.0`
+  (14 commits ahead of `main`, sweep groups A1–A5/B1–B4/M1–M2/O1–O2/P1–P2/
+  R1/T1–T4/U1–U5 already landed). `make fmt` (`gofumpt -l -w .` +
+  `goimports -w -local github.com/SukramJ/openccu-loom .`) made no changes —
+  tree already clean. `make lint` (`golangci-lint run ./...`,
+  `golangci-lint has version 2.12.2`) → `0 issues.`. `make contract`
+  (`go test ./tests/contract/...`) → all packages `ok`
+  (`tests/contract` 27–36s, `tests/contract/wire_snapshots`,
+  `tests/contract/wiring_pins`). `make test` (`go test ./...`) → every
+  package `ok` or `[no test files]`, no `FAIL`/panic anywhere, `EXIT:0`
+  (`internal/store/sqlite` the longest single package at ~39s). No real
+  failures encountered, so none of the known-flaky tests (rpcserver
+  port-range, hmcli httptest, central health-heartbeat) needed a rerun —
+  they simply passed on this run. No production code touched; no
+  CHANGELOG entry added (verification-only, no user-visible change).
 
 ---
 
