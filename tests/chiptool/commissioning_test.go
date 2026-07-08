@@ -125,7 +125,12 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 	})
 
 	ctl := harness.NewController(t, chipBin, 0x2000) // distinct node ID
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Full second-fabric commissioning (PASE + CASE + attestation + the
+	// post-commission cluster reads) is the heaviest chip-tool flow in the
+	// suite; on a loaded arm64 CI runner it can take well over a minute
+	// amid mDNS resolution and MRP retransmits. Give the outer deadline
+	// enough headroom to not cap the per-command ceiling in [Controller.Run].
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	out, err := ctl.PairFullWithPasscode(ctx, t, harness.PairTargetHost, b.MatterPort(), openResp.Passcode)
