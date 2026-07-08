@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"strings"
 	"sync"
@@ -66,6 +67,19 @@ type XMLRPCConfig struct {
 
 	// Logger for slog events. Defaults to slog.Default().
 	Logger *slog.Logger
+
+	// PeerAllowlist, when non-empty, restricts accepted TCP connections
+	// to source IPs covered by one of the listed CIDR prefixes. A
+	// connection from an unlisted peer is closed at Accept time, before
+	// the HTTP server reads it. Nil or empty means accept all peers (the
+	// default, preserving the current open-LAN behaviour).
+	PeerAllowlist []netip.Prefix
+
+	// MaxConnections caps the number of simultaneously-accepted TCP
+	// connections. Accept blocks once the cap is reached and resumes as
+	// connections close. <= 0 means uncapped; the daemon supplies a
+	// secure default from cfg.Callback.MaxConnections.
+	MaxConnections int
 }
 
 // NewXMLRPCServer binds a listener immediately so callers can read
@@ -82,6 +96,10 @@ func NewXMLRPCServer(cfg XMLRPCConfig) (*XMLRPCServer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("rpcserver: xmlrpc listen %s: %w", cfg.Addr, err)
 	}
+	// Reject disallowed peers first, then cap concurrency: the limit
+	// listener wraps the filter so rejected peers never consume a slot.
+	ln = newPeerFilterListener(ln, cfg.PeerAllowlist, logger)
+	ln = limitListener(ln, cfg.MaxConnections)
 	s := &XMLRPCServer{
 		logger:   logger,
 		routes:   make(map[string]Handlers),

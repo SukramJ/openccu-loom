@@ -85,6 +85,31 @@ centrals:
 	}
 }
 
+// TestValidate_CallbackMaxConnectionsNegativeRejected verifies that a
+// negative callback.max_connections is rejected. applyDefaults only
+// substitutes the secure default (64) for the zero value, so a
+// negative operator override survives to Validate.
+func TestValidate_CallbackMaxConnectionsNegativeRejected(t *testing.T) {
+	t.Parallel()
+	const yaml = `
+logging:
+  level: info
+  format: text
+callback:
+  max_connections: -1
+centrals:
+  - name: ccu1
+    host: 192.168.1.1
+    port: 2001
+    interfaces:
+      - HmIP-RF
+`
+	_, err := config.Parse([]byte(yaml))
+	if err == nil || !strings.Contains(err.Error(), "callback.max_connections") {
+		t.Fatalf("expected error containing 'callback.max_connections', got %v", err)
+	}
+}
+
 // TestLoad_NonexistentFile verifies that Load returns an error when the
 // specified config file does not exist.
 func TestLoad_NonexistentFile(t *testing.T) {

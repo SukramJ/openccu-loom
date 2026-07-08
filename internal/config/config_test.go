@@ -29,6 +29,26 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+// TestDefaults_CallbackMaxConnections verifies applyDefaults sets
+// Callback.MaxConnections to the secure default (64) when left at its
+// zero value, and leaves an operator-supplied non-zero value untouched
+// — the same idempotent zero-value-guard pattern as every other
+// Callback default.
+func TestDefaults_CallbackMaxConnections(t *testing.T) {
+	c := Default()
+	if c.Callback.MaxConnections != 64 {
+		t.Fatalf("Callback.MaxConnections = %d, want 64", c.Callback.MaxConnections)
+	}
+}
+
+func TestDefaults_CallbackMaxConnectionsExplicitValueUntouched(t *testing.T) {
+	c := &Config{Callback: CallbackConfig{MaxConnections: 8}}
+	c.applyDefaults()
+	if c.Callback.MaxConnections != 8 {
+		t.Fatalf("Callback.MaxConnections = %d, want 8 (explicit value must survive applyDefaults)", c.Callback.MaxConnections)
+	}
+}
+
 func TestParseValidYAML(t *testing.T) {
 	buf := []byte(`
 locale: de

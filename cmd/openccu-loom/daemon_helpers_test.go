@@ -24,6 +24,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"testing"
@@ -243,6 +244,92 @@ func TestNewFullLoggerStack_NoOverrides_NoError(t *testing.T) {
 	}
 	if stack.Logger == nil {
 		t.Error("expected non-nil stack.Logger")
+	}
+}
+
+// ── buildCallbackAllowlist ───────────────────────────────────────────────────
+
+// TestBuildCallbackAllowlist_RestrictDisabled_ReturnsNil verifies the
+// default open-LAN behaviour: with RestrictSourceIPs unset (false), the
+// allowlist is nil (accept-all) regardless of configured centrals.
+func TestBuildCallbackAllowlist_RestrictDisabled_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.Callback.RestrictSourceIPs = false
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "192.168.1.50"}}
+	logger := slog.New(slog.DiscardHandler)
+
+	got := buildCallbackAllowlist(context.Background(), cfg, logger)
+	if got != nil {
+		t.Errorf("expected nil allowlist when RestrictSourceIPs=false, got %v", got)
+	}
+}
+
+// TestBuildCallbackAllowlist_RestrictEnabled_IncludesLoopbackAndCentralIPLiteral
+// verifies that enabling RestrictSourceIPs always seeds the allowlist with
+// loopback (IPv4 + IPv6) and adds a /32 for every central whose Host is an
+// IP literal. Hostnames are deliberately not exercised here — they would
+// route through net.LookupIP and make the test depend on DNS.
+func TestBuildCallbackAllowlist_RestrictEnabled_IncludesLoopbackAndCentralIPLiteral(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.Callback.RestrictSourceIPs = true
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "192.168.1.50"}}
+	logger := slog.New(slog.DiscardHandler)
+
+	got := buildCallbackAllowlist(context.Background(), cfg, logger)
+
+	want := []netip.Prefix{
+		netip.MustParsePrefix("127.0.0.0/8"),
+		netip.MustParsePrefix("::1/128"),
+		netip.MustParsePrefix("192.168.1.50/32"),
+	}
+	if len(got) != len(want) {
+		t.Fatalf("allowlist = %v, want exactly %v", got, want)
+	}
+	for _, w := range want {
+		found := false
+		for _, g := range got {
+			if g == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("allowlist %v is missing expected prefix %v", got, w)
+		}
+	}
+}
+
+// TestBuildCallbackAllowlist_RestrictEnabled_NoCentrals_StillIncludesLoopback
+// verifies loopback is always present even with zero configured centrals —
+// a co-located CCU pushing from 127.0.0.1 must keep working.
+func TestBuildCallbackAllowlist_RestrictEnabled_NoCentrals_StillIncludesLoopback(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.Callback.RestrictSourceIPs = true
+	cfg.Centrals = nil
+	logger := slog.New(slog.DiscardHandler)
+
+	got := buildCallbackAllowlist(context.Background(), cfg, logger)
+	want := []netip.Prefix{
+		netip.MustParsePrefix("127.0.0.0/8"),
+		netip.MustParsePrefix("::1/128"),
+	}
+	if len(got) != len(want) {
+		t.Fatalf("allowlist = %v, want exactly %v", got, want)
+	}
+	for _, w := range want {
+		found := false
+		for _, g := range got {
+			if g == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("allowlist %v is missing expected prefix %v", got, w)
+		}
 	}
 }
 

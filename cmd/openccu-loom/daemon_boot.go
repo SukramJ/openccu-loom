@@ -268,8 +268,10 @@ func wireBINRPCCallback(callbackCtx context.Context, cfg *config.Config, logger 
 	}
 	binAddr := fmt.Sprintf("%s:%d", binHost, cfg.Callback.BinPort)
 	binCfg := rpcserver.BINRPCConfig{
-		Addr:   binAddr,
-		Logger: logger.With(slog.String("component", "callback.binrpc")),
+		Addr:           binAddr,
+		Logger:         logger.With(slog.String("component", "callback.binrpc")),
+		MaxConnections: cfg.Callback.MaxConnections,
+		PeerAllowlist:  buildCallbackAllowlist(callbackCtx, cfg, logger),
 	}
 	srv, binErr := rpcserver.NewBINRPCServer(binCfg) //nolint:contextcheck // NewBINRPCServer/bindAddr has no ctx parameter; bind is instantaneous
 	if binErr != nil {

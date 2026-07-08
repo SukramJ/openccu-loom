@@ -6,6 +6,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-07-08
+
+### Security
+
+- **The two unauthenticated callback listeners now cap concurrent
+  connections and no longer eager-allocate an attacker-declared frame
+  size.** The XML-RPC (`:8120`) and BIN-RPC (`:8129`) callback listeners
+  bind on the LAN without authentication. Neither had a concurrent-
+  connection limit, so a host on the same segment could open thousands of
+  sockets and pin one goroutine (plus its read buffers) per connection.
+  BIN-RPC additionally allocated the payload size declared in the 8-byte
+  frame header up front (`make([]byte, size)`, up to 10 MiB) before any
+  body byte arrived, so a flood of stalled headers amplified memory use.
+  Both listeners now honour `callback.max_connections` (default 64) via a
+  connection cap, and BIN-RPC grows the payload buffer with the bytes that
+  actually arrive instead of the declared size. The BIN-RPC source-IP
+  allowlist is now enforced in the accept loop (before a handler goroutine
+  is spawned), and a new opt-in `callback.restrict_source_ips` extends the
+  same allowlist — resolved from the configured CCU hosts plus loopback —
+  to the XML-RPC listener as well. Defaults preserve existing open-LAN
+  behaviour except for the new connection cap.
+
 ## [0.28.0] — 2026-07-07
 
 ### Fixed

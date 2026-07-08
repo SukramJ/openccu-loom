@@ -4,6 +4,7 @@
 package binrpc
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -109,11 +110,21 @@ func readFrame(r io.Reader) (msgType uint8, payload []byte, err error) {
 	if int64(size) > MaxMessageSize {
 		return 0, nil, fmt.Errorf("binrpc: payload size %d exceeds limit %d", size, MaxMessageSize)
 	}
-	payload = make([]byte, size)
-	if _, err := io.ReadFull(r, payload); err != nil {
+	// Grow the buffer with the bytes that actually arrive rather than
+	// committing the attacker-declared size up front. A crafted 8-byte
+	// header can claim size == MaxMessageSize (10 MiB) while sending no
+	// body; make([]byte, size) would zero-allocate the full 10 MiB per
+	// connection before the first payload byte is read, so N stalled
+	// connections pin N×10 MiB. io.CopyN reads in bounded chunks and
+	// errors (ErrUnexpectedEOF) if fewer than size bytes arrive, matching
+	// the previous io.ReadFull semantics, but a lying header now costs
+	// only initialPayloadCap until real bytes back the claim.
+	var buf bytes.Buffer
+	buf.Grow(int(min(int64(size), initialPayloadCap)))
+	if _, err := io.CopyN(&buf, r, int64(size)); err != nil {
 		return 0, nil, fmt.Errorf("binrpc: read payload: %w", err)
 	}
-	return msgType, payload, nil
+	return msgType, buf.Bytes(), nil
 }
 
 // readValue reads one type-tagged value. depth tracks array/struct

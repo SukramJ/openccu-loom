@@ -71,6 +71,12 @@ type BINRPCConfig struct {
 	// BIN-RPC data is read. Nil or empty means accept all peers (the
 	// default, preserving the current open-LAN behaviour).
 	PeerAllowlist []netip.Prefix
+
+	// MaxConnections caps the number of simultaneously-accepted TCP
+	// connections. Accept blocks once the cap is reached and resumes as
+	// connections close. <= 0 means uncapped; the daemon supplies a
+	// secure default from cfg.Callback.MaxConnections.
+	MaxConnections int
 }
 
 // NewBINRPCServer binds a listener.
@@ -88,6 +94,7 @@ func NewBINRPCServer(cfg BINRPCConfig) (*BINRPCServer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("rpcserver: binrpc listen %s: %w", cfg.Addr, err)
 	}
+	ln = limitListener(ln, cfg.MaxConnections)
 	ioTimeout := cfg.IOTimeout
 	if ioTimeout <= 0 {
 		ioTimeout = 15 * time.Second
@@ -152,6 +159,15 @@ func (s *BINRPCServer) Serve(ctx context.Context) error {
 			_ = conn.Close()
 			continue
 		}
+		// Enforce the source-IP allowlist before spawning a handler
+		// goroutine so a disallowed peer costs nothing but an immediate
+		// close (defence in depth on top of the connection cap).
+		if !peerAllowed(s.allowlist, conn.RemoteAddr()) {
+			s.logger.Debug("binrpc callback: peer not in allowlist, closing",
+				slog.String("remote", conn.RemoteAddr().String()))
+			_ = conn.Close()
+			continue
+		}
 		s.wg.Add(1)
 		s.activeTasks.Add(1)
 		go func() {
@@ -180,40 +196,11 @@ func (s *BINRPCServer) Close() error {
 	return nil
 }
 
-// peerAllowed reports whether the connection's remote address is
-// permitted by the server's optional allowlist. When the allowlist is
-// empty every peer is allowed.
-func (s *BINRPCServer) peerAllowed(conn net.Conn) bool {
-	if len(s.allowlist) == 0 {
-		return true
-	}
-	remote := conn.RemoteAddr().String()
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		return false
-	}
-	addr, err := netip.ParseAddr(host)
-	if err != nil {
-		return false
-	}
-	for _, prefix := range s.allowlist {
-		if prefix.Contains(addr) {
-			return true
-		}
-	}
-	return false
-}
-
 // handleConn reads exactly one request, dispatches it, writes one
-// response.
+// response. The peer allowlist is enforced earlier, in the [Serve]
+// accept loop, so a disallowed peer never reaches this goroutine.
 func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 	defer func() { _ = conn.Close() }()
-
-	if !s.peerAllowed(conn) {
-		s.logger.Debug("binrpc callback: peer not in allowlist, closing",
-			slog.String("remote", conn.RemoteAddr().String()))
-		return
-	}
 
 	_ = conn.SetDeadline(time.Now().Add(s.ioTimeout))
 
