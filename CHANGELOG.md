@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.28.1] — 2026-07-08
 
+### Fixed
+
+- **JSON-RPC cold-start session storm: concurrent callers no longer each open
+  a separate CCU session.** `loginOrRenew` read the cached session ID under a
+  short lock but released it before the actual `Session.login` round-trip, so a
+  burst of concurrent calls at start-up (or after a session expiry) all saw an
+  empty session and fired parallel logins — opening several CCU sessions at once
+  and tripping the CCU's "too many sessions" limit. Login/renew is now serialized
+  through a dedicated lock with a lock-free fast path for a valid, recently
+  refreshed session and a re-check under the lock, so a cold-start burst performs
+  exactly one login; the auth-failure retry path dedupes the same way. Ports the
+  hardening from the aiohomematic reference client (login-storm serialization).
+
 ### Security
 
 - **The two unauthenticated callback listeners now cap concurrent
