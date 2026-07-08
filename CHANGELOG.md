@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-07-08
+
 ### Added
 
 - **HmIP-LSC lights now expose colour temperature alongside full colour.** The

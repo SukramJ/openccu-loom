@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.29.0
+
+- **HmIP-LSC colour lamps now offer a warm/cold white (colour temperature)
+  control.** The HmIP-LSC supports both full colour and colour temperature at
+  the same time; it was previously shown as a plain colour light, so the white
+  slider never appeared. It now exposes both, and Home Assistant shows whichever
+  is currently active.
+- **Doorbell buttons are recognised as doorbells.** The ring of an HmIP-DBB or
+  HmIP-DSD-PCB is now published as a doorbell event instead of a generic button
+  press, so it appears with the right icon and can trigger doorbell automations.
+
 ## 0.28.2
 
 - **Fixed the device control tiles in the Config UI.** Several buttons and
