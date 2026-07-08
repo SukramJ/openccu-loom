@@ -528,9 +528,14 @@ func (c *ebConn) serve() {
 
 		switch pkType {
 		case 1: // CONNECT
-			// Send CONNACK 0x00 (accepted, no session present).
+			// Send CONNACK 0x00 (accepted, no session present). The
+			// go-mqtt client negotiates MQTT 5.0, whose CONNACK carries a
+			// third byte — the properties length (0 = no properties) —
+			// after the ack flags and reason code. Omitting it makes the
+			// client's decoder run off the end of the packet ("truncated
+			// byte").
 			c.mu.Lock()
-			_ = ebWritePacket(c.writer, 0x20, []byte{0, 0})
+			_ = ebWritePacket(c.writer, 0x20, []byte{0, 0, 0})
 			_ = c.writer.Flush()
 			c.mu.Unlock()
 
@@ -547,6 +552,18 @@ func (c *ebConn) serve() {
 				}
 				pktID = binary.BigEndian.Uint16(body[idx : idx+2])
 				idx += 2
+			}
+			// MQTT 5.0 PUBLISH carries a properties block (a varint length
+			// followed by that many property bytes) between the packet
+			// identifier and the payload. Skip it so the payload we capture
+			// is the raw discovery JSON, not JSON with a leading 0x00.
+			propLen, pn, err := ebReadVarint(body, idx)
+			if err != nil {
+				return
+			}
+			idx += pn + propLen
+			if idx > len(body) {
+				return
 			}
 			payload := body[idx:]
 
@@ -569,12 +586,22 @@ func (c *ebConn) serve() {
 			}
 
 		case 8: // SUBSCRIBE
-			// body: [pktID(2)] + [filterLen(2) + filter + qos] * n
+			// body: [pktID(2)] + [MQTT5 properties] + [filterLen(2) + filter + options] * n
 			if len(body) < 2 {
 				return
 			}
 			pktID := binary.BigEndian.Uint16(body[:2])
 			idx := 2
+			// MQTT 5.0 SUBSCRIBE carries a properties block after the packet
+			// identifier and before the first topic filter. Skip it.
+			subPropLen, spn, err := ebReadVarint(body, idx)
+			if err != nil {
+				return
+			}
+			idx += spn + subPropLen
+			if idx > len(body) {
+				return
+			}
 			var returnCodes []byte
 			for idx < len(body) {
 				filter, n, err := ebReadString(body, idx)
@@ -602,8 +629,9 @@ func (c *ebConn) serve() {
 					c.mu.Unlock()
 				}
 			}
-			// SUBACK.
-			subAckBody := append([]byte{body[0], body[1]}, returnCodes...)
+			// SUBACK. MQTT 5.0 inserts a properties length (0 = none)
+			// between the packet identifier and the per-filter reason codes.
+			subAckBody := append([]byte{body[0], body[1], 0x00}, returnCodes...)
 			_ = binary.Write(bytes.NewBuffer(nil), binary.BigEndian, pktID) // just for reference
 			c.mu.Lock()
 			_ = ebWritePacket(c.writer, 0x90, subAckBody)
@@ -649,8 +677,33 @@ func ebPublishTo(w *bufio.Writer, topic string, payload []byte, qos byte) error 
 	binary.BigEndian.PutUint16(ts, uint16(len(topic))) //nolint:gosec
 	body.Write(ts)
 	body.WriteString(topic)
+	// A QoS>0 PUBLISH would carry a 2-byte packet identifier here; this
+	// broker only delivers to subscribers at QoS 0, so none is emitted.
+	// MQTT 5.0 then requires a properties block: an empty one is a single
+	// 0x00 length byte, which the go-mqtt subscriber decoder expects
+	// before the payload.
+	body.WriteByte(0x00)
 	body.Write(payload)
 	return ebWritePacket(w, head, body.Bytes())
+}
+
+// ebReadVarint decodes an MQTT variable-length integer from b starting at
+// offset, returning (value, bytesConsumed, err). Used to read and skip the
+// MQTT 5.0 properties-length prefix on inbound SUBSCRIBE/PUBLISH packets.
+func ebReadVarint(b []byte, offset int) (value int, consumed int, err error) {
+	mult := 1
+	for i := 0; i < 4; i++ {
+		if offset+i >= len(b) {
+			return 0, 0, fmt.Errorf("ebReadVarint: short varint at offset %d", offset)
+		}
+		digit := b[offset+i]
+		value += int(digit&0x7F) * mult
+		if digit&0x80 == 0 {
+			return value, i + 1, nil
+		}
+		mult *= 128
+	}
+	return 0, 0, fmt.Errorf("ebReadVarint: malformed varint at offset %d", offset)
 }
 
 // ebEncodeLength encodes the MQTT remaining length.
