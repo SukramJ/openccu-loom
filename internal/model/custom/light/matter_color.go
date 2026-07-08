@@ -607,6 +607,14 @@ func (s rgbwColorServer) MatterRead(attrID uint32) (any, bool) {
 		// attributes are currently determining the device output. Mirrors
 		// the per-mode return from `ctColorServer` (always CT) and
 		// `hsColorServer` (always HS).
+		if s.l.colorTempCombined {
+			// HmIP-LSC runs HS and CT simultaneously; the active axis is the
+			// one currently carrying a value (see colorTempKelvinActive).
+			if s.l.colorTempKelvinActive() {
+				return matterColorModeColorTemp, true
+			}
+			return matterColorModeHueSaturation, true
+		}
 		switch s.l.Mode() {
 		case RGBWModeTunableWhite:
 			return matterColorModeColorTemp, true

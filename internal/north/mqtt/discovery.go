@@ -741,7 +741,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// processing payload 'press_long'`. Drop value_template so HA
 		// receives the raw `{"event_type":...}` envelope.
 		body["event_types"] = pressEventTypesFor(ev.Parameter)
-		body["device_class"] = "button"
+		body["device_class"] = EventDeviceClassForModel(ev.Model)
 		delete(body, "value_template")
 	default:
 		// Climate / valve / siren / select / button / update / text are rendered
