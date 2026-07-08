@@ -97,6 +97,15 @@ func (w *dispatchWriter) callCount() int {
 	return len(w.sets) + len(w.puts)
 }
 
+func (w *dispatchWriter) lastPut() (putCall, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.puts) == 0 {
+		return putCall{}, false
+	}
+	return w.puts[len(w.puts)-1], true
+}
+
 // floatDP creates a minimal *generic.Float for the given address and parameter.
 func floatDP(address string, param hmenum.Parameter, w generic.Writer) *generic.Float {
 	return generic.NewFloat(generic.Spec{
@@ -2068,5 +2077,169 @@ func TestRecordAudit_NoParams(t *testing.T) {
 	}
 	if note := spy.entries[0].Note; strings.Contains(note, "params=") {
 		t.Errorf("empty params must not emit a params= segment: %q", note)
+	}
+}
+
+// ============================================================
+// Tests: onTimeParam / requireOnTime — "seconds" vs "duration" shapes
+// ============================================================
+
+// TestDispatchSwitch_TurnOnFor_SecondsParam is the SPA regression guard: the
+// SPA's timed-action widget sends {seconds: N}, and N must be interpreted as
+// seconds — not milliseconds. Before onTimeParam/requireOnTime existed, the
+// dispatcher only understood "duration" and rejected {seconds: 30} with a
+// 422 "missing required param duration".
+func TestDispatchSwitch_TurnOnFor_SecondsParam(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW007", w)
+	disp, _ := buildDispatcher(t, "SW007", "STATE", s)
+
+	params := map[string]any{"seconds": 30.0}
+	if err := disp.InvokeCustomDP(context.Background(), "SW007", "STATE", "turn_on_for", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_on_for: %v", err)
+	}
+
+	// TurnOnFor bundles ON_TIME + STATE into one put_paramset (see
+	// switch.TurnOnFor). Assert the written ON_TIME is ~30 (seconds), not
+	// ~0.03 (30 misread as milliseconds).
+	put, ok := w.lastPut()
+	if !ok {
+		t.Fatal("expected a put_paramset call")
+	}
+	v, ok := put.values[string(hmenum.ParameterOnTime)].(float64)
+	if !ok {
+		t.Fatalf("ON_TIME missing or wrong type in %v", put.values)
+	}
+	if v < 29.9 || v > 30.1 {
+		t.Errorf("ON_TIME=%v, want ~30 (seconds), got something consistent with milliseconds", v)
+	}
+}
+
+// TestDispatchSwitch_TurnOnFor_DurationStringAlias verifies the "duration"
+// alias keeps working (time.ParseDuration shape) alongside the canonical
+// "seconds" key.
+func TestDispatchSwitch_TurnOnFor_DurationStringAlias(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW008", w)
+	disp, _ := buildDispatcher(t, "SW008", "STATE", s)
+
+	params := map[string]any{"duration": "10s"}
+	if err := disp.InvokeCustomDP(context.Background(), "SW008", "STATE", "turn_on_for", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_on_for: %v", err)
+	}
+	if w.callCount() == 0 {
+		t.Fatal("expected a write")
+	}
+}
+
+// TestDispatchSwitch_TurnOnFor_DurationBareNumberMilliseconds verifies the
+// legacy "duration" shape: a bare JSON number (no "seconds" key present) is
+// interpreted as milliseconds, unlike "seconds" which is always seconds.
+func TestDispatchSwitch_TurnOnFor_DurationBareNumberMilliseconds(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW009", w)
+	disp, _ := buildDispatcher(t, "SW009", "STATE", s)
+
+	params := map[string]any{"duration": 5000.0}
+	if err := disp.InvokeCustomDP(context.Background(), "SW009", "STATE", "turn_on_for", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_on_for: %v", err)
+	}
+
+	put, ok := w.lastPut()
+	if !ok {
+		t.Fatal("expected a put_paramset call")
+	}
+	v, ok := put.values[string(hmenum.ParameterOnTime)].(float64)
+	if !ok {
+		t.Fatalf("ON_TIME missing or wrong type in %v", put.values)
+	}
+	if v < 4.9 || v > 5.1 {
+		t.Errorf("ON_TIME=%v, want ~5 (5000ms), the legacy bare-number-as-milliseconds shape", v)
+	}
+}
+
+// TestDispatchSwitch_TurnOnForMissingDuration_ErrorNamesSecondsKey confirms
+// requireOnTime's error names the canonical "seconds" key (not the legacy
+// "duration" alias) so an operator/log reader is pointed at the shape the
+// SPA actually sends.
+func TestDispatchSwitch_TurnOnForMissingDuration_ErrorNamesSecondsKey(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW010", w)
+	disp, _ := buildDispatcher(t, "SW010", "STATE", s)
+
+	err := disp.InvokeCustomDP(context.Background(), "SW010", "STATE", "turn_on_for", nil, hmenum.CommandPriorityHigh, "test")
+	if !errors.Is(err, hmapi.ErrBadParam) {
+		t.Fatalf("expected ErrBadParam, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "seconds") {
+		t.Errorf("error must name the canonical %q key: %v", "seconds", err)
+	}
+}
+
+// TestDispatchIrrigation_Open_SecondsParam is the valve-side counterpart of
+// the switch seconds-vs-milliseconds regression guard: {seconds: 600} must
+// open the valve for 600 seconds (10 minutes), not 600 milliseconds.
+func TestDispatchIrrigation_Open_SecondsParam(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	v := buildIrrigationDP("VLV007", w)
+	disp, _ := buildDispatcher(t, "VLV007", "STATE", v)
+
+	params := map[string]any{"seconds": 600.0}
+	if err := disp.InvokeCustomDP(context.Background(), "VLV007", "STATE", "open", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	// duration > 0 routes Irrigation.Open through TurnOnWithTimer, which
+	// bundles ON_TIME + STATE into one put_paramset (mirrors switch.TurnOnFor).
+	put, ok := w.lastPut()
+	if !ok {
+		t.Fatal("expected a put_paramset call")
+	}
+	got, ok := put.values[string(hmenum.ParameterOnTime)].(float64)
+	if !ok {
+		t.Fatalf("ON_TIME missing or wrong type in %v", put.values)
+	}
+	if got < 599.9 || got > 600.1 {
+		t.Errorf("ON_TIME=%v, want ~600 (seconds), got something consistent with milliseconds", got)
+	}
+}
+
+// TestDispatchIrrigation_Open_NilParamsIndefinite verifies "open" without
+// any duration param still opens the valve indefinitely (onTimeParam's
+// present=false path; duration stays optional for "open", unlike
+// "set_on_time" which requires it).
+func TestDispatchIrrigation_Open_NilParamsIndefinite(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	v := buildIrrigationDP("VLV008", w)
+	disp, _ := buildDispatcher(t, "VLV008", "STATE", v)
+
+	if err := disp.InvokeCustomDP(context.Background(), "VLV008", "STATE", "open", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if w.callCount() == 0 {
+		t.Fatal("expected a write")
+	}
+}
+
+// TestDispatchIrrigation_SetOnTime_SecondsParam verifies "set_on_time"
+// accepts the canonical "seconds" key (not just the legacy "duration" alias).
+func TestDispatchIrrigation_SetOnTime_SecondsParam(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	v := buildIrrigationDP("VLV009", w)
+	disp, spy := buildDispatcher(t, "VLV009", "STATE", v)
+
+	params := map[string]any{"seconds": 5.0}
+	if err := disp.InvokeCustomDP(context.Background(), "VLV009", "STATE", "set_on_time", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("set_on_time: %v", err)
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
 	}
 }

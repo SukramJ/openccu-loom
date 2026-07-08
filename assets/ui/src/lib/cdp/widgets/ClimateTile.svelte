@@ -220,7 +220,7 @@
   let awayTemp = $state<number>(12);
 
   function quickAway24h() {
-    invoke("set_away_for_duration", { hours: awayHours, away_temperature: awayTemp });
+    invoke("enable_away_by_duration", { hours: awayHours, away_temperature: awayTemp });
     awayOpen = false;
   }
 

@@ -6,6 +6,39 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.2] — 2026-07-08
+
+### Fixed
+
+- **Config-UI control tiles: several Custom-DP actions were silently sending the
+  wrong parameter or operation name, so the click either returned HTTP 422 or did
+  the wrong thing.** The Svelte CDP widgets and the Go custom-DP dispatcher had
+  drifted apart on the parameter/operation contract, and the only test that
+  looked like it covered the path (`spa_e2e_switch`) exercised the backend keys
+  rather than the payload the SPA actually emits — so the divergence went
+  unnoticed. Fixed across the board:
+  - **Switch → "on for" and Valve → "open for":** the widgets sent
+    `{seconds: …}` / `{duration: 600}` while the dispatcher required `duration`
+    (and interpreted a bare number as *milliseconds*), so the switch button
+    returned `422 missing required param "duration"` and the valve's 10-minute
+    preset actually opened for 0.6 s. The dispatcher now accepts a canonical
+    `seconds` key (a number of seconds) for `turn_on_for` / `set_on_time` /
+    timed valve `open`, keeping the `duration` string form as a
+    backward-compatible alias for API/MQTT clients.
+  - **Light → brightness slider** sent `{level}` but the dispatcher reads
+    `brightness`; **fixed-colour palette** sent the colour *name* while the
+    dispatcher expects the numeric `slot`; **effect dropdown** sent `{effect}`
+    instead of the accepted `{label}`; and the **HSV saturation** was sent on a
+    0..1 scale while the dispatcher treats it as 0..100 (so saturation landed
+    ~100× too low). All corrected in the widget.
+  - **Climate → "away for duration"** invoked a non-existent operation
+    (`set_away_for_duration`); it now calls the real `enable_away_by_duration`.
+  - The Switch/Valve timed actions are now driven by a shared input-plus-presets
+    control (30 s / 1 min / 5 min, or a free value) instead of a single fixed
+    preset button. A new contract test pins every SPA CDP widget's emitted
+    operation and parameter keys against the dispatcher's accepted set so this
+    class of drift fails the build.
+
 ## [0.28.1] — 2026-07-08
 
 ### Fixed

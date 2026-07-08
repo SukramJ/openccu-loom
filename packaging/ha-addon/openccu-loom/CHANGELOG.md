@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.28.2
+
+- **Fixed the device control tiles in the Config UI.** Several buttons and
+  sliders were sending the wrong command under the hood, so they either did
+  nothing (with an error) or did the wrong thing: the switch "on for" button,
+  the valve's timed-open preset (which opened for a fraction of a second
+  instead of minutes), the light brightness slider, the fixed-colour and
+  effect pickers, colour saturation, and the thermostat's "away for a while"
+  action. All of these now work as expected. The switch and valve timed
+  actions also gained a proper duration input with quick presets instead of a
+  single fixed button.
+
 ## 0.28.1
 
 - **Fixed a start-up hiccup with the CCU connection.** When the daemon
