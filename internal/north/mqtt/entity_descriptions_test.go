@@ -307,3 +307,34 @@ func TestEntityDescriptionLookupRuleCount(t *testing.T) {
 		t.Errorf("haRegistryDescriptionRules = %d entries; expected ≥100 (homematicip_local has ~147)", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// EventDeviceClassForModel — doorbell vs. generic button
+// ---------------------------------------------------------------------------
+
+// TestEventDeviceClassForModel pins the doorbell/button split:
+// HmIP-DBB (wireless doorbell button) and HmIP-DSD-PCB (doorbell sensor
+// PCB) report device_class "doorbell"; every other model — including the
+// empty string — falls back to the generic "button".
+func TestEventDeviceClassForModel(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		model string
+		want  string
+	}{
+		{model: "HmIP-DBB", want: "doorbell"},
+		{model: "HmIP-DSD-PCB", want: "doorbell"},
+		{model: "HmIP-WRC2", want: "button"},
+		{model: "", want: "button"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.model, func(t *testing.T) {
+			t.Parallel()
+			if got := EventDeviceClassForModel(tc.model); got != tc.want {
+				t.Errorf("EventDeviceClassForModel(%q) = %q, want %q", tc.model, got, tc.want)
+			}
+		})
+	}
+}

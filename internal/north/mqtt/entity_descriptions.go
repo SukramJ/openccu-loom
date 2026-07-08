@@ -242,6 +242,25 @@ func LookupEvent(parameter string) (EntityDescription, bool) {
 	return desc, ok
 }
 
+// doorbellEventModels lists the device models whose press/ring channel is a
+// doorbell rather than a generic button. Mirrors the reference EVENT_RULES
+// doorbell rule (entity_helpers/descriptions/events.py): HmIP-DBB is a wireless
+// doorbell button, HmIP-DSD-PCB a doorbell sensor PCB.
+var doorbellEventModels = map[string]struct{}{
+	"HmIP-DBB":     {},
+	"HmIP-DSD-PCB": {},
+}
+
+// EventDeviceClassForModel returns the HA `device_class` for a channel-level
+// press/ring event entity: "doorbell" for the doorbell models, else the
+// generic "button". The HA mqtt.event component accepts both values.
+func EventDeviceClassForModel(model string) string {
+	if _, ok := doorbellEventModels[model]; ok {
+		return "doorbell"
+	}
+	return "button"
+}
+
 // ---------------------------------------------------------------------------
 // TextDisplay entity descriptions
 // ---------------------------------------------------------------------------

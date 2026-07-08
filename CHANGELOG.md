@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-07-08
+
+### Added
+
+- **HmIP-LSC lights now expose colour temperature alongside full colour.** The
+  HmIP-LSC uses RGBW hardware but, unlike the HmIP-RGBW, has no
+  `DEVICE_OPERATION_MODE` — it runs hue/saturation and colour temperature at the
+  same time and reports whichever axis is currently inactive as an empty value.
+  It was previously treated as a plain colour light, so its white/colour-
+  temperature control never surfaced. It is now modelled as a combined
+  colour + colour-temperature light: MQTT discovery advertises both
+  `color_temp` and `hs`, the state stream reports the active `color_mode`
+  (derived from which value is set), and the Matter Color Control cluster
+  reflects the active mode. Ports aiohomematic's `CustomDpIpRGBWColorTempLight`.
+- **Doorbell devices are announced as doorbells, not generic buttons.** The ring
+  event of the HmIP-DBB and HmIP-DSD-PCB now carries the `doorbell` event
+  device class in Home-Assistant MQTT discovery instead of the generic `button`,
+  matching the reference stack (homematicip_local #3276).
+
 ## [0.28.2] — 2026-07-08
 
 ### Fixed

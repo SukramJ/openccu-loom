@@ -124,7 +124,7 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 	body := map[string]any{
 		"state_topic":  stateTopic,
 		"event_types":  toAnySlice(types),
-		"device_class": "button",
+		"device_class": EventDeviceClassForModel(ev.Model),
 	}
 	maps.Copy(body, base)
 	out, err := json.Marshal(body)

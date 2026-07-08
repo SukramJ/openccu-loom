@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -14,6 +15,14 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
+
+// lscModel is the device model whose RGBW hardware carries no
+// DEVICE_OPERATION_MODE and runs hs colour + colour temperature at once.
+// The reference keys this variant by model
+// (light.py: models="HmIP-LSC" → CustomDpIpRGBWColorTempLight); we mirror that
+// model key rather than the descriptor-absence rationale, which is not reliably
+// modelled in synthetic channels.
+const lscModel = "HmIP-LSC"
 
 // RGBWMode enumerates the operating modes a HmIP-RGBW (and friends) channel
 // can run in. The DEVICE_OPERATION_MODE parameter selects which sub-set of
@@ -72,6 +81,13 @@ type RGBWLight struct {
 	hasMode bool
 	current RGBWMode
 
+	// colorTempCombined marks an RGBW-hardware light that has NO
+	// DEVICE_OPERATION_MODE parameter (the HmIP-LSC): it exposes hs colour AND
+	// colour temperature at once and the active HA colour mode is derived from
+	// which wire value is currently non-empty. Mirrors the reference
+	// CustomDpIpRGBWColorTempLight (light.py:662).
+	colorTempCombined bool
+
 	effects []string
 }
 
@@ -107,7 +123,22 @@ func NewRGBWLight(cfg Config) *RGBWLight {
 	if r.kelvin != nil {
 		_ = r.kelvin.OnConfirmedUpdate(func(_, _ int32) { r.dataVersion.Bump() })
 	}
+	// The HmIP-LSC runs hs colour and colour temperature simultaneously (no
+	// DEVICE_OPERATION_MODE); keyed by model to match the reference registry.
+	if cfg.Channel != nil && cfg.Channel.Device() != nil {
+		r.colorTempCombined = strings.EqualFold(cfg.Channel.Device().Model, lscModel)
+	}
 	return r
+}
+
+// colorTempKelvinActive reports whether the colour-temperature axis currently
+// carries a real value. On a combined light (HmIP-LSC) the inactive axis reports
+// an empty wire value, so a present, non-zero KELVIN means colour temperature is
+// the active colour mode. Mirrors the reference `color_temp_kelvin is not None`
+// (light.py:604 — empty value coerces to None).
+func (r *RGBWLight) colorTempKelvinActive() bool {
+	k, ok := r.Kelvin()
+	return ok && k != 0
 }
 
 // NamePostfix returns the suffix appended in
@@ -242,6 +273,9 @@ func (r *RGBWLight) recordMode(s string) {
 
 // HasColor reports whether the current mode honours HUE / SATURATION.
 func (r *RGBWLight) HasColor() bool {
+	if r.colorTempCombined {
+		return true
+	}
 	m := r.effectiveMode()
 	return m == RGBWModeRGB || m == RGBWModeRGBW
 }
@@ -274,6 +308,9 @@ func (r *RGBWLight) CurrentHsColor() (hue int32, sat float64, ok bool) {
 // For the mutually-exclusive HA colour-mode capability use
 // [HasColorTempColorMode] instead.
 func (r *RGBWLight) HasColorTemperature() bool {
+	if r.colorTempCombined {
+		return true
+	}
 	m := r.effectiveMode()
 	return m == RGBWModeTunableWhite || m == RGBWModeRGBW
 }
@@ -284,6 +321,11 @@ func (r *RGBWLight) HasColorTemperature() bool {
 // modes are mutually exclusive, so RGBW mode advertises hs colour even though
 // the wire profile also carries a KELVIN field.
 func (r *RGBWLight) HasColorTempColorMode() bool {
+	if r.colorTempCombined {
+		// HmIP-LSC: hs and colour temperature are both wired; the active HA
+		// colour mode follows whichever axis currently carries a value.
+		return r.colorTempKelvinActive()
+	}
 	return r.effectiveMode() == RGBWModeTunableWhite
 }
 

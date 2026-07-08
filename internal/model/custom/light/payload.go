@@ -498,6 +498,22 @@ func (r *RGBWLight) State() payload.StatePayload {
 		base = &payload.ColorLightState{LightState: payload.LightState{State: "OFF"}}
 	}
 	out := &payload.RGBWLightState{LightState: base.LightState}
+	if r.colorTempCombined {
+		// HmIP-LSC: hs and colour temperature coexist; report the active axis
+		// (the inactive one carries an empty wire value). Mirrors the reference
+		// CustomDpIpRGBWColorTempLight.has_color_temperature.
+		if r.colorTempKelvinActive() {
+			out.ColorMode = "color_temp"
+			if k, ok := r.Kelvin(); ok {
+				kv := int(k)
+				out.ColorTempKelvin = &kv
+			}
+		} else {
+			out.ColorMode = "hs"
+			out.Color = base.Color
+		}
+		return out
+	}
 	switch r.Mode() { //nolint:exhaustive // Unknown and RGB modes fall through to the base ColorLight payload unchanged
 	case RGBWModeTunableWhite:
 		// Pure white-temperature: hs is meaningless — omit Color.
@@ -756,6 +772,23 @@ func (r *RGBWLight) HADiscoveryPayload(ctx payload.HADiscoveryContext) (componen
 	_, body = r.ColorLight.HADiscoveryPayload(ctx)
 	if body == nil {
 		body = map[string]any{}
+	}
+
+	if r.colorTempCombined {
+		// HmIP-LSC: RGBW hardware without DEVICE_OPERATION_MODE advertises hs
+		// AND colour temperature at once; HA picks the active one via
+		// color_mode. Mirrors the reference CustomDpIpRGBWColorTempLight
+		// (_compute_capabilities sets hs_color and color_temperature both true).
+		body["supported_color_modes"] = []string{"color_temp", "hs"}
+		body["hs"] = true
+		body["color_temp_kelvin"] = true
+		body["min_kelvin"] = r.MinKelvin
+		body["max_kelvin"] = r.MaxKelvin
+		if effects := r.Effects(); len(effects) > 0 {
+			body["effect"] = true
+			body["effect_list"] = effects
+		}
+		return "light", body
 	}
 
 	// Compute supported_color_modes from the current operating mode. HA colour
