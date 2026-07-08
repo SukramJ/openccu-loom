@@ -165,14 +165,25 @@ func randomToken() string {
 }
 
 // Run executes chip-tool with the given args under the controller's
-// KVS directory and a hard 30 s wall-clock timeout. Returns the
-// captured stdout+stderr (merged), and an error that wraps the exit
-// status when chip-tool reports failure. Tests inspect the returned
-// string for attribute values, event reports, or status markers via
-// the [parser] helpers in the same package.
+// KVS directory and a 90 s wall-clock timeout. Returns the captured
+// stdout+stderr (merged), and an error that wraps the exit status when
+// chip-tool reports failure. Tests inspect the returned string for
+// attribute values, event reports, or status markers via the [parser]
+// helpers in the same package.
+//
+// The ceiling is generous because the heaviest caller — a full
+// commissioning (PASE + CASE + attestation + the post-commission
+// cluster reads) — can legitimately run tens of seconds on a loaded
+// arm64 CI runner amid mDNS resolution and MRP retransmits. A tighter
+// 30 s budget killed chip-tool mid-commission before it could either
+// finish or surface a real protocol error, turning a slow-but-correct
+// run into a timeout failure. Successful fast commands still return
+// immediately, so the higher ceiling only affects the failure/hang
+// path; callers that deliberately want a short fail-fast ceiling use
+// [RunWithTimeout] directly.
 func (c *Controller) Run(ctx context.Context, t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	return c.RunWithTimeout(ctx, t, 30*time.Second, args...)
+	return c.RunWithTimeout(ctx, t, 90*time.Second, args...)
 }
 
 // RunWithTimeout is the [Run] variant that lets the caller pin a

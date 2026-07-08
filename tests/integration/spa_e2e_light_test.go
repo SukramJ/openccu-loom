@@ -129,27 +129,29 @@ func TestSPAE2E_Light_RGBW_HmIPRGBW(t *testing.T) {
 					hmenum.ParameterLevel: 0.4,
 				},
 			},
-			// set_color requires the device to be in an RGB-capable mode.
-			// godevccu initialises HmIP-RGBW in mode 0 (PWM), which does
-			// not support HSV. Accept no error only — wire check is nil.
-			// A real device would be switched into RGB/RGBW mode first.
+			// DEVICE_OPERATION_MODE is not observed in the harness (it lives
+			// on the MASTER paramset and no update is replayed), so the light
+			// falls back to its richest surface — RGBW mode — mirroring the
+			// reference CustomDpIpRGBWLight._device_operation_mode default.
+			// RGBW mode honours HS colour, so set_color writes HUE +
+			// SATURATION on the primary channel.
 			{
 				op:     "set_color",
 				params: map[string]any{"hue": int32(120), "saturation": 100.0},
-				// Mode 0 = PWM: SetColor returns "current mode does not
-				// support HSV colour". Accept as a known godevccu-only
-				// limitation without failing the test.
-				wantErrContains: "does not support HSV",
+				wantWire: map[hmenum.Parameter]any{
+					hmenum.ParameterHue:        int32(120),
+					hmenum.ParameterSaturation: 1.0,
+				},
 			},
 			// The dispatcher operation for kelvin is "set_color_temperature"
-			// (not "set_kelvin"). godevccu initialises HmIP-RGBW in mode 0
-			// (PWM), which also does not support colour temperature. Accept
-			// the mode-error as expected; a real device configured for
-			// TunableWhite mode would succeed.
+			// (not "set_kelvin"). RGBW mode also honours COLOR_TEMPERATURE, so
+			// the write lands on the primary channel's COLOR_TEMPERATURE field.
 			{
-				op:              "set_color_temperature",
-				params:          map[string]any{"kelvin": int32(4000)},
-				wantErrContains: "does not support colour temperature",
+				op:     "set_color_temperature",
+				params: map[string]any{"kelvin": int32(4000)},
+				wantWire: map[hmenum.Parameter]any{
+					hmenum.ParameterColorTemperature: int32(4000),
+				},
 			},
 			{
 				op: "turn_off",
