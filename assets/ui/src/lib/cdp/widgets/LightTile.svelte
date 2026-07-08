@@ -171,7 +171,7 @@
           color={tileColor}
           disabled={!levelDP.operations.write}
           label={t("cdp.light.brightness")}
-          onChange={(v) => invoke("set_brightness", { level: v })}
+          onChange={(v) => invoke("set_brightness", { brightness: v })}
         />
       {/if}
       {#if hasHsvColor && hasColorTemp}
@@ -199,7 +199,7 @@
             max={360}
             disabled={!hueDP.operations.write}
             label={t("cdp.light.hue")}
-            onChange={(v) => invoke("set_color", { hue: v, saturation })}
+            onChange={(v) => invoke("set_color", { hue: v, saturation: saturation * 100 })}
           />
         </div>
         <div class="flex flex-col gap-1">
@@ -209,7 +209,7 @@
             {hue}
             disabled={!satDP.operations.write}
             label={t("cdp.light.saturation")}
-            onChange={(v) => invoke("set_color", { hue, saturation: v })}
+            onChange={(v) => invoke("set_color", { hue, saturation: v * 100 })}
           />
         </div>
       {/if}
@@ -230,7 +230,13 @@
           options={colorOptions}
           disabled={!colorDP.operations.write}
           label={t("cdp.light.color")}
-          onChange={(v) => invoke("set_color", { color: v })}
+          onChange={(v) => {
+            // The fixed-colour dispatch takes a numeric slot (the COLOR enum
+            // index); ControlColorPalette emits the option label, so map it
+            // back to its index in the descriptor's value list.
+            const slot = colorOptions.indexOf(v);
+            if (slot >= 0) invoke("set_color", { slot });
+          }}
         />
       {/if}
       {#if hasEffects && effectDP && effectOptions.length > 0}
@@ -239,7 +245,7 @@
           options={effectOptions}
           disabled={!effectDP.operations.write}
           label={t("cdp.light.effect")}
-          onChange={(v) => invoke("set_effect", { effect: v })}
+          onChange={(v) => invoke("set_effect", { label: v })}
         />
       {/if}
     {/snippet}

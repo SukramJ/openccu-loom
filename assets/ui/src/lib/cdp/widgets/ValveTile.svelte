@@ -17,6 +17,7 @@
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
   import NumericInputFeature from "$lib/control/features/NumericInputFeature.svelte";
+  import TimedActionFeature from "$lib/control/features/TimedActionFeature.svelte";
   import ControlButtonGroup from "$lib/control/controls/ControlButtonGroup.svelte";
   import ControlButton from "$lib/control/controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -121,15 +122,17 @@
           label={t("cdp.valve.open")}
           onClick={() => invoke("open")}
         >{t("cdp.valve.open")}</ControlButton>
-        {#if !isModulating}
-          <ControlButton
-            active={false}
-            color={tileColor}
-            label={t("cdp.valve.open_10min")}
-            onClick={() => invoke("open", { duration: 600 })}
-          >{t("cdp.valve.open_10min")}</ControlButton>
-        {/if}
       </ControlButtonGroup>
+      {#if !isModulating}
+        <TimedActionFeature
+          label={t("cdp.valve.open_for")}
+          presets={[60, 300, 600]}
+          defaultSeconds={600}
+          color={tileColor}
+          disabled={!(stateDP?.operations.write ?? true)}
+          onSubmit={(seconds) => invoke("open", { seconds })}
+        />
+      {/if}
       {#if isModulating && levelDP}
         <NumericInputFeature
           value={level}

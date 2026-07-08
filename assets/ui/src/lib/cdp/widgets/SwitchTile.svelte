@@ -15,6 +15,7 @@
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
   import ToggleFeature from "$lib/control/features/ToggleFeature.svelte";
+  import TimedActionFeature from "$lib/control/features/TimedActionFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
 
   type Props = {
@@ -103,13 +104,12 @@
         onChange={(next) => invoke(next ? "turn_on" : "turn_off")}
       />
       {#if cdp.supported_operations?.includes("turn_on_for")}
-        <button
-          type="button"
-          class="min-h-10 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm text-[var(--ha-primary-text-color)] hover:bg-[var(--ha-divider-color)]"
-          onclick={() => invoke("turn_on_for", { seconds: 30 })}
-        >
-          30 s an
-        </button>
+        <TimedActionFeature
+          label={t("cdp.switch.on_for")}
+          color={tileColor}
+          disabled={!(stateDP?.operations.write ?? true)}
+          onSubmit={(seconds) => invoke("turn_on_for", { seconds })}
+        />
       {/if}
     {/snippet}
   </ControlTile>

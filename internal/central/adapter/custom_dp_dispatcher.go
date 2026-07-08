@@ -294,7 +294,7 @@ func (d *CustomDPDispatcher) dispatchLight(
 	case "set_on_time":
 		// Encodes ON_TIME_VALUE / ON_TIME_UNIT for the next on cycle. The
 		// Light carries the writer + channel address it writes through.
-		dur, err := paramDuration(p, "duration")
+		dur, err := requireOnTime(p)
 		if err != nil {
 			return err
 		}
@@ -721,19 +721,16 @@ func (d *CustomDPDispatcher) dispatchIrrigation(
 ) error {
 	switch op {
 	case "open":
-		var dur time.Duration
-		if _, ok := p["duration"]; ok {
-			dur2, err := anyToDuration(p["duration"])
-			if err != nil {
-				return fmt.Errorf("%w: duration: %w", hmapi.ErrBadParam, err)
-			}
-			dur = dur2
+		// Optional timed open: with no duration the valve opens indefinitely.
+		dur, _, err := onTimeParam(p)
+		if err != nil {
+			return err
 		}
 		return v.Open(ctx, dur, prio)
 	case "set_on_time":
 		// Timed open: ON_TIME + STATE are bundled into one atomic
 		// put_paramset. A duration is required here (unlike "open").
-		dur, err := paramDuration(p, "duration")
+		dur, err := requireOnTime(p)
 		if err != nil {
 			return err
 		}
@@ -777,7 +774,7 @@ func (d *CustomDPDispatcher) dispatchSwitch(
 	case "turn_off":
 		return s.Set(ctx, false, prio)
 	case "turn_on_for", "set_on_time":
-		dur, err := paramDuration(p, "duration")
+		dur, err := requireOnTime(p)
 		if err != nil {
 			return err
 		}
@@ -906,17 +903,43 @@ func paramStringOptional(params map[string]any, key string) (string, bool) { //n
 	return s, true
 }
 
-// paramDuration extracts a [time.Duration] from params[key]. Accepts:
-//   - a string parseable by [time.ParseDuration] ("5s", "1m30s", …)
-//   - a JSON number treated as milliseconds
-func paramDuration(params map[string]any, key string) (time.Duration, error) {
-	v, ok := params[key]
-	if !ok {
-		return 0, fmt.Errorf("%w: missing required param %q", hmapi.ErrBadParam, key)
+// onTimeParam resolves a timed-action duration from a service payload. The
+// canonical key is "seconds" (a JSON number of seconds) — the shape every SPA
+// CDP widget emits for turn_on_for / timed open. "duration" is accepted as a
+// backward-compatible alias for API/MQTT clients: a string is parsed by
+// [time.ParseDuration] ("30s", "1m30s"), a bare number is treated as
+// milliseconds (the legacy shape). Returns (dur, true, nil) when a value was
+// supplied, (0, false, nil) when neither key is present (callers that make the
+// duration optional rely on the bool), and a wrapped [hmapi.ErrBadParam] when a
+// supplied value cannot be parsed.
+func onTimeParam(params map[string]any) (time.Duration, bool, error) {
+	if raw, ok := params["seconds"]; ok {
+		secs, err := toFloat64(raw)
+		if err != nil {
+			return 0, true, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, "seconds", err)
+		}
+		return time.Duration(secs * float64(time.Second)), true, nil
 	}
-	dur, err := anyToDuration(v)
+	if raw, ok := params["duration"]; ok {
+		dur, err := anyToDuration(raw)
+		if err != nil {
+			return 0, true, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, "duration", err)
+		}
+		return dur, true, nil
+	}
+	return 0, false, nil
+}
+
+// requireOnTime is [onTimeParam] for operations where the duration is
+// mandatory; it returns [hmapi.ErrBadParam] naming the canonical "seconds" key
+// when neither "seconds" nor the "duration" alias is present.
+func requireOnTime(params map[string]any) (time.Duration, error) {
+	dur, ok, err := onTimeParam(params)
 	if err != nil {
-		return 0, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, key, err)
+		return 0, err
+	}
+	if !ok {
+		return 0, fmt.Errorf("%w: missing required param %q", hmapi.ErrBadParam, "seconds")
 	}
 	return dur, nil
 }

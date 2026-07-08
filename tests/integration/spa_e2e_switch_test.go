@@ -44,9 +44,19 @@ func TestSPAE2E_Switch_HmIPBSM(t *testing.T) {
 					hmenum.ParameterState: false,
 				},
 			},
-			// turn_on_for arms a timer and sets STATE. The dispatcher param
-			// key is "duration" (parsed by time.ParseDuration); ON_TIME is
+			// turn_on_for arms a timer and sets STATE. This mirrors the exact
+			// payload the SPA SwitchTile emits — the canonical "seconds" key
+			// (a number of seconds), NOT the "duration" alias. ON_TIME is
 			// write-only in most CCU profiles so only STATE is asserted.
+			{
+				op:     "turn_on_for",
+				params: map[string]any{"seconds": 5},
+				wantWire: map[hmenum.Parameter]any{
+					hmenum.ParameterState: true,
+				},
+			},
+			// The "duration" alias (string form) stays supported for
+			// API/MQTT clients that predate the canonical "seconds" key.
 			{
 				op:     "turn_on_for",
 				params: map[string]any{"duration": "5s"},
