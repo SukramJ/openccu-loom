@@ -46,20 +46,22 @@ jobs:
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/refstack"
           "$RUNNER_TEMP/refstack/bin/python" -m pip install --upgrade pip wheel
-          # aiohomematic + pydevccu are published on PyPI; openccu-data ships
-          # the metadata extracts as a package from its repo (pyproject.toml).
-          # aiohomematic is pinned for reproducibility (so a future PyPI
-          # release cannot silently change the comparison). NOTE: the
-          # aiohomematic version is NOT what drives the current drift —
-          # 2026.5.7 and 2026.6.2 both produce identical generic-DP drift
-          # (760) against the Go model, while openccu-data matches (2026.5.0).
-          # The 760-vs-baseline-70 gap is a baseline-vs-CI-environment
-          # calibration matter (pydevccu version / snapshot scope / a stale
-          # local baseline), to be resolved by recalibrating the baselines in
-          # model_snapshot_drift_check.py against this environment — see
-          # docs/adr/0038-cross-stack-ci-gate.md.
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.6.2" pydevccu
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install "git+https://github.com/SukramJ/openccu-data@main"
+          # aiohomematic + pydevccu + openccu-data are all published on PyPI.
+          # ALL THREE are pinned for reproducibility: the cross-stack gate
+          # compares the reference stack against the metadata the Go binary
+          # embeds (internal/ccudata/embedded, snapshot 2026-06-27), so the
+          # reference packages must be pinned to the versions those extracts
+          # were generated from. openccu-data was previously installed from
+          # `main`, whose HEAD moves independently of any PR — when main ran
+          # ahead of the embedded extracts the diff reported version-skew
+          # drift (channel_fields / generic_data_points) and failed the gate
+          # on unrelated commits. Pinning openccu-data to the matching release
+          # makes the gate deterministic. ADR 0038 documents this pin as the
+          # sanctioned fix for version-skew drift; bump all three here (and
+          # the baselines in model_snapshot_drift_check.py) when the embedded
+          # extracts are regenerated. See docs/adr/0038-cross-stack-ci-gate.md.
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.6.2" "pydevccu==0.2.5"
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install "openccu-data==2026.6.1"
           # Make the venv's python the `python3` the Makefile targets invoke,
           # and expose it explicitly for aiohomematic_snapshot.py's re-exec.
           echo "$RUNNER_TEMP/refstack/bin" >> "$GITHUB_PATH"
