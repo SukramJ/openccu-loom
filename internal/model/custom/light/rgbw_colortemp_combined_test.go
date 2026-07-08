@@ -9,6 +9,7 @@
 package light
 
 import (
+	"context"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -201,5 +202,95 @@ func TestLSCMatterColorModeFollowsKelvin(t *testing.T) {
 	}
 	if got.(uint8) != matterColorModeColorTemp {
 		t.Errorf("ColorMode after kelvin = %d, want %d (ColorTemp)", got.(uint8), matterColorModeColorTemp)
+	}
+}
+
+// writtenParams collects the distinct parameters w observed a write for.
+// Regression guards below only care whether a parameter was touched at all
+// — not the write count or the wire value — so they check membership in
+// this set rather than walking w.calls directly.
+func writtenParams(w *colorStubWriter) map[hmenum.Parameter]bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make(map[hmenum.Parameter]bool, len(w.calls))
+	for _, c := range w.calls {
+		out[c.param] = true
+	}
+	return out
+}
+
+// TestLSCSetKelvinWritesOnlyColorTemperature guards the HmIP-LSC combined
+// light against the reference-stack bug where a colour-temperature command
+// bundled HUE/SATURATION into the same write and stomped the device's
+// active mode: SetKelvin must write COLOR_TEMPERATURE only.
+func TestLSCSetKelvinWritesOnlyColorTemperature(t *testing.T) {
+	w := &colorStubWriter{}
+	r := newLSCLightRig(t, w)
+
+	if err := r.SetKelvin(context.Background(), 3300, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatal(err)
+	}
+
+	got := writtenParams(w)
+	if !got[hmenum.ParameterColorTemperature] {
+		t.Error("expected a write to COLOR_TEMPERATURE")
+	}
+	if got[hmenum.ParameterHue] {
+		t.Error("SetKelvin must not write HUE")
+	}
+	if got[hmenum.ParameterSaturation] {
+		t.Error("SetKelvin must not write SATURATION")
+	}
+}
+
+// TestLSCSetColorWritesOnlyHueSaturation is the counterpart of
+// TestLSCSetKelvinWritesOnlyColorTemperature: an hs-colour command must
+// write HUE + SATURATION only, never dragging COLOR_TEMPERATURE along and
+// silently switching the device out of its active colour-temp mode.
+func TestLSCSetColorWritesOnlyHueSaturation(t *testing.T) {
+	w := &colorStubWriter{}
+	r := newLSCLightRig(t, w)
+
+	if err := r.SetColor(context.Background(), 180, 50, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatal(err)
+	}
+
+	got := writtenParams(w)
+	if !got[hmenum.ParameterHue] {
+		t.Error("expected a write to HUE")
+	}
+	if !got[hmenum.ParameterSaturation] {
+		t.Error("expected a write to SATURATION")
+	}
+	if got[hmenum.ParameterColorTemperature] {
+		t.Error("SetColor must not write COLOR_TEMPERATURE")
+	}
+}
+
+// TestLSCTurnOnWritesOnlyLevelPreservingActiveMode verifies a plain TurnOn
+// on a fresh (off) HmIP-LSC combined light writes LEVEL only. A bare
+// on-command never carries colour intent, so it must not bundle HUE,
+// SATURATION or COLOR_TEMPERATURE — doing so would silently flip whichever
+// colour mode the device was last left in.
+func TestLSCTurnOnWritesOnlyLevelPreservingActiveMode(t *testing.T) {
+	w := &colorStubWriter{}
+	r := newLSCLightRig(t, w)
+
+	if err := r.TurnOn(context.Background(), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatal(err)
+	}
+
+	got := writtenParams(w)
+	if !got[hmenum.ParameterLevel] {
+		t.Error("expected a write to LEVEL")
+	}
+	if got[hmenum.ParameterHue] {
+		t.Error("TurnOn must not write HUE")
+	}
+	if got[hmenum.ParameterSaturation] {
+		t.Error("TurnOn must not write SATURATION")
+	}
+	if got[hmenum.ParameterColorTemperature] {
+		t.Error("TurnOn must not write COLOR_TEMPERATURE")
 	}
 }
