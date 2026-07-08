@@ -377,11 +377,13 @@ type LoggingConfig struct {
 
 // CallbackConfig governs the XML-RPC + BIN-RPC callback servers.
 type CallbackConfig struct {
-	Host       string `yaml:"host" json:"host" cfg:"expert"`
-	Port       int    `yaml:"port" json:"port" cfg:"expert"`               // XML-RPC; 0 = dynamic
-	BinPort    int    `yaml:"bin_port" json:"bin_port" cfg:"expert"`       // BIN-RPC; 0 = dynamic
-	PortRange  string `yaml:"port_range" json:"port_range" cfg:"expert"`   // e.g. "30000-30099"
-	PublicHost string `yaml:"public_host" json:"public_host" cfg:"expert"` // optional NAT override
+	Host              string `yaml:"host" json:"host" cfg:"expert"`
+	Port              int    `yaml:"port" json:"port" cfg:"expert"`                               // XML-RPC; 0 = dynamic
+	BinPort           int    `yaml:"bin_port" json:"bin_port" cfg:"expert"`                       // BIN-RPC; 0 = dynamic
+	PortRange         string `yaml:"port_range" json:"port_range" cfg:"expert"`                   // e.g. "30000-30099"
+	PublicHost        string `yaml:"public_host" json:"public_host" cfg:"expert"`                 // optional NAT override
+	MaxConnections    int    `yaml:"max_connections" json:"max_connections" cfg:"expert"`         // per-listener concurrent-connection cap; 0 = default (64)
+	RestrictSourceIPs bool   `yaml:"restrict_source_ips" json:"restrict_source_ips" cfg:"expert"` // only accept callbacks from configured CCU IPs (+loopback)
 }
 
 // NorthConfig bundles north-bound server settings.
@@ -1422,6 +1424,9 @@ func (c *Config) applyDefaults() {
 	if c.Callback.BinPort == 0 {
 		c.Callback.BinPort = 8129
 	}
+	if c.Callback.MaxConnections == 0 {
+		c.Callback.MaxConnections = 64
+	}
 	if c.North.REST.Listen == "" {
 		c.North.REST.Listen = ":8119"
 	}
@@ -1468,6 +1473,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Callback.BinPort < 0 || c.Callback.BinPort > 65535 {
 		return fmt.Errorf("config: callback.bin_port out of range: %d", c.Callback.BinPort)
+	}
+	if c.Callback.MaxConnections < 0 {
+		return fmt.Errorf("config: callback.max_connections must be >= 0: %d", c.Callback.MaxConnections)
 	}
 	if err := validatePublicURL(c.North.REST.PublicURL); err != nil {
 		return err

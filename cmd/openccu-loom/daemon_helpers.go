@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"time"
 
@@ -56,8 +57,10 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 	addr := fmt.Sprintf("%s:%d", host, cfg.Callback.Port)
 
 	xcfg := rpcserver.XMLRPCConfig{
-		Addr:   addr,
-		Logger: logger.With(slog.String("component", "callback.xmlrpc")),
+		Addr:           addr,
+		Logger:         logger.With(slog.String("component", "callback.xmlrpc")),
+		MaxConnections: cfg.Callback.MaxConnections,
+		PeerAllowlist:  buildCallbackAllowlist(ctx, cfg, logger),
 	}
 	if cfg.Callback.Port == 0 && cfg.Callback.PortRange != "" {
 		lo, hi, err := config.ParsePortRange(cfg.Callback.PortRange)
@@ -82,6 +85,51 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 		port = tcpAddr.Port
 	}
 	return srv, port, nil
+}
+
+// buildCallbackAllowlist resolves the source-IP allowlist for both
+// callback listeners from the configured CCU hosts plus loopback. It
+// returns nil (accept-all) unless cfg.Callback.RestrictSourceIPs is set,
+// preserving the default open-LAN behaviour. Loopback is always included
+// so a co-located CCU (e.g. the RaspberryMatic add-on pushing from
+// 127.0.0.1) keeps working. A configured host that is an IP literal is
+// added as a /32 or /128; a hostname is resolved to all of its A/AAAA
+// records. A host that fails to resolve is skipped with a warning rather
+// than silently blackholing its callbacks — the operator opted in, so a
+// visible log beats an invisible drop.
+func buildCallbackAllowlist(ctx context.Context, cfg *config.Config, logger *slog.Logger) []netip.Prefix {
+	if !cfg.Callback.RestrictSourceIPs {
+		return nil
+	}
+	out := []netip.Prefix{
+		netip.MustParsePrefix("127.0.0.0/8"),
+		netip.MustParsePrefix("::1/128"),
+	}
+	for i := range cfg.Centrals {
+		host := cfg.Centrals[i].Host
+		if host == "" {
+			continue
+		}
+		if addr, err := netip.ParseAddr(host); err == nil {
+			addr = addr.Unmap()
+			out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
+			continue
+		}
+		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		if err != nil || len(ips) == 0 {
+			logger.Warn("callback.allowlist.resolve.failed",
+				slog.String("central", cfg.Centrals[i].Name),
+				slog.String("host", host))
+			continue
+		}
+		for _, ip := range ips {
+			if addr, ok := netip.AddrFromSlice(ip.IP); ok {
+				addr = addr.Unmap()
+				out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
+			}
+		}
+	}
+	return out
 }
 
 // callbackHostFor resolves the host the CCU `cc` should push callbacks

@@ -34,6 +34,14 @@ const (
 	// bytes. Applied to both the client (response) and server (request).
 	MaxMessageSize int64 = 10 * 1024 * 1024
 
+	// initialPayloadCap is the buffer capacity readFrame reserves up
+	// front for a frame payload. The buffer then grows with the bytes
+	// that actually arrive, so a header declaring a large size but
+	// sending no body costs at most this much per connection rather than
+	// the full declared size. 64 KiB comfortably holds a real
+	// CUxD/CCU callback frame without an early re-grow.
+	initialPayloadCap int64 = 64 * 1024
+
 	// maxDecodeDepth bounds how deeply nested arrays/structs may be in
 	// a single decoded value. Without it, a crafted message of ~1.3M
 	// nested arrays (≈10 MB, under MaxMessageSize) drives readValue into

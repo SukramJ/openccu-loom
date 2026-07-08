@@ -122,6 +122,14 @@ type Client struct {
 	sessionID          string    // empty when logged out
 	lastSessionRefresh time.Time // zero when never renewed
 
+	// sessionLoginMu serializes the login/renew decision so a cold-start
+	// burst of concurrent callers does not race into multiple parallel
+	// Session.login calls — each would open a separate CCU session at once
+	// and trip the CCU's "too many sessions" limit. It guards only the
+	// establish-a-session critical section; ordinary field access stays on
+	// mu. Lock order is always sessionLoginMu → mu, never the reverse.
+	sessionLoginMu sync.Mutex
+
 	// supportedMethods caches the result of CheckSupportedMethods. nil
 	// means "not yet probed"; non-nil is the set of method names the CCU
 	// responded with in system.listMethods.
@@ -276,9 +284,10 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	case http.StatusOK:
 		// fall through
 	case http.StatusUnauthorized, http.StatusForbidden:
+		stale := c.SessionID()
 		c.invalidateSession()
 		if allowRetry && c.cfg.Username != "" {
-			if loginErr := c.Login(ctx); loginErr == nil {
+			if loginErr := c.reloginLocked(ctx, stale); loginErr == nil {
 				return c.callOnce(ctx, method, params, out, false)
 			}
 		}
@@ -304,8 +313,9 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 		// session self-heals, a genuine privilege mismatch fails again
 		// with 400 on the fresh session and propagates below.
 		if parsed.Error.Code == ccuAccessDeniedCode && allowRetry && c.cfg.Username != "" {
+			stale := c.SessionID()
 			c.invalidateSession()
-			if loginErr := c.Login(ctx); loginErr == nil {
+			if loginErr := c.reloginLocked(ctx, stale); loginErr == nil {
 				return c.callOnce(ctx, method, params, out, false)
 			}
 		}
@@ -456,6 +466,21 @@ func (c *Client) loginOrRenew(ctx context.Context) error {
 	if c.cfg.Username == "" {
 		return nil
 	}
+	// Fast path: a valid, recently refreshed session needs neither a
+	// network round-trip nor the login lock.
+	if c.hasFreshSession() {
+		return nil
+	}
+	// Serialize so a burst of concurrent callers at cold start does not
+	// race into multiple parallel Session.login calls, which would create
+	// several CCU sessions at once and trip the "too many sessions" limit.
+	c.sessionLoginMu.Lock()
+	defer c.sessionLoginMu.Unlock()
+	// Re-check under the lock: another goroutine may have logged in or
+	// renewed the session while we were waiting for it.
+	if c.hasFreshSession() {
+		return nil
+	}
 	c.mu.Lock()
 	session := c.sessionID
 	c.mu.Unlock()
@@ -469,6 +494,35 @@ func (c *Client) loginOrRenew(ctx context.Context) error {
 		return c.Login(ctx)
 	}
 	return nil
+}
+
+// hasFreshSession reports whether a non-empty session was refreshed
+// within the [jsonSessionAge] freshness window — the condition under
+// which neither a login nor a renew round-trip is needed.
+func (c *Client) hasFreshSession() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.sessionID != "" &&
+		!c.lastSessionRefresh.IsZero() &&
+		time.Since(c.lastSessionRefresh) < jsonSessionAge
+}
+
+// reloginLocked performs a fresh login serialized against concurrent
+// callers. staleSession is the session ID the caller saw fail; if another
+// goroutine has already established a newer session under the lock, this
+// is a no-op so a burst of simultaneous auth failures triggers a single
+// Session.login rather than one per caller.
+func (c *Client) reloginLocked(ctx context.Context, staleSession string) error {
+	c.sessionLoginMu.Lock()
+	defer c.sessionLoginMu.Unlock()
+	c.mu.Lock()
+	current := c.sessionID
+	c.mu.Unlock()
+	if current != "" && current != staleSession {
+		// Another goroutine already replaced the stale session; reuse it.
+		return nil
+	}
+	return c.Login(ctx)
 }
 
 // SessionID returns the currently cached session ID (empty when logged out).

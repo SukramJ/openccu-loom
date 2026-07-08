@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.28.1
+
+- **Fixed a start-up hiccup with the CCU connection.** When the daemon
+  started (or a CCU session expired), several requests could each open
+  their own CCU login at the same moment and trip the CCU's session
+  limit, leaving devices briefly unavailable. The daemon now shares a
+  single login instead of racing, so start-up is reliable.
+- **Hardened the CCU callback listeners against LAN abuse.** The two
+  ports the daemon opens for the CCU to push events to (XML-RPC and
+  BIN-RPC) now limit how many connections a single host can hold open at
+  once, so another device on your network can no longer exhaust the
+  daemon's memory by flooding them. A new expert option lets you restrict
+  those ports to accept callbacks only from your configured CCUs. No
+  action is needed — the defaults keep working as before.
+
 ## 0.28.0
 
 - **CCU disable/edit in the Config UI now actually takes effect

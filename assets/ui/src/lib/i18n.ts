@@ -465,6 +465,8 @@ const EN: Catalog = {
   "config.field.callback.bin_port": "BIN-RPC callback port",
   "config.field.callback.port_range": "Ephemeral port range",
   "config.field.callback.public_host": "Public hostname (NAT)",
+  "config.field.callback.max_connections": "Max callback connections",
+  "config.field.callback.restrict_source_ips": "Restrict callbacks to CCU IPs",
   "config.field.ccu_data.translations_path": "Translations archive path",
   "config.field.ccu_data.easymode_path": "Easymode archive path",
   "config.field.north.rest.auth.users": "Bootstrap users",
@@ -648,6 +650,8 @@ const EN: Catalog = {
   "config.help.callback.bin_port": "BIN-RPC callback listener port (CUxD). Same dynamic-port semantics as the XML-RPC port.",
   "config.help.callback.port_range": "Optional port range <lo>-<hi> for the dynamic-port policy. Use when the daemon sits behind a narrow firewall range.",
   "config.help.callback.public_host": "Hostname the daemon announces to the CCU in every init() call. Set when running behind NAT.",
+  "config.help.callback.max_connections": "Cap on simultaneous connections per callback listener (XML-RPC and BIN-RPC). Bounds memory/goroutine use if an untrusted LAN host floods the socket. 0 uses the default (64).",
+  "config.help.callback.restrict_source_ips": "Only accept callbacks from the configured CCU IPs plus loopback. Adds a source-IP allowlist on top of the connection cap. Off by default; enable when no legitimate host other than your CCUs reaches the callback ports.",
   "config.help.ccu_data.translations_path":
     "Filesystem path to the OCCU translations ZIP. Defaults to the embedded archive bundled with the binary; override only when testing a custom extract.",
   "config.help.ccu_data.easymode_path":
@@ -2502,6 +2506,8 @@ const DE: Catalog = {
   "config.field.callback.bin_port": "BIN-RPC-Callback-Port",
   "config.field.callback.port_range": "Ephemerer Port-Bereich",
   "config.field.callback.public_host": "Öffentlicher Hostname (NAT)",
+  "config.field.callback.max_connections": "Max. Callback-Verbindungen",
+  "config.field.callback.restrict_source_ips": "Callbacks auf CCU-IPs beschränken",
   "config.field.ccu_data.translations_path": "Pfad zum Übersetzungsarchiv",
   "config.field.ccu_data.easymode_path": "Pfad zum Easymode-Archiv",
   "config.field.north.rest.auth.users": "Bootstrap-Benutzer",
@@ -2681,6 +2687,8 @@ const DE: Catalog = {
   "config.help.callback.bin_port": "Port des BIN-RPC-Callback-Listeners (CUxD). Gleiche Dynamic-Port-Semantik wie der XML-RPC-Port.",
   "config.help.callback.port_range": "Optionaler Port-Bereich <lo>-<hi> für die Dynamic-Port-Policy. Wenn der Daemon hinter einer engen Firewall sitzt.",
   "config.help.callback.public_host": "Hostname, den der Daemon der CCU bei init() ansagt. Setzen wenn der Daemon hinter NAT läuft.",
+  "config.help.callback.max_connections": "Obergrenze gleichzeitiger Verbindungen pro Callback-Listener (XML-RPC und BIN-RPC). Begrenzt Speicher-/Goroutine-Verbrauch, falls ein nicht vertrauenswürdiger LAN-Host den Socket flutet. 0 = Standard (64).",
+  "config.help.callback.restrict_source_ips": "Nur Callbacks von den konfigurierten CCU-IPs plus Loopback annehmen. Ergänzt eine Quell-IP-Allowlist zusätzlich zum Verbindungslimit. Standardmäßig aus; aktivieren, wenn außer den CCUs kein legitimer Host die Callback-Ports erreicht.",
   "config.help.ccu_data.translations_path":
     "Dateisystempfad zum OCCU-Übersetzungs-ZIP. Standard ist das im Binary eingebettete Archiv; nur überschreiben, um ein eigenes Extrakt zu testen.",
   "config.help.ccu_data.easymode_path":

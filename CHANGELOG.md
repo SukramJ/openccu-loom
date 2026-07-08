@@ -6,6 +6,41 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-07-08
+
+### Fixed
+
+- **JSON-RPC cold-start session storm: concurrent callers no longer each open
+  a separate CCU session.** `loginOrRenew` read the cached session ID under a
+  short lock but released it before the actual `Session.login` round-trip, so a
+  burst of concurrent calls at start-up (or after a session expiry) all saw an
+  empty session and fired parallel logins — opening several CCU sessions at once
+  and tripping the CCU's "too many sessions" limit. Login/renew is now serialized
+  through a dedicated lock with a lock-free fast path for a valid, recently
+  refreshed session and a re-check under the lock, so a cold-start burst performs
+  exactly one login; the auth-failure retry path dedupes the same way. Ports the
+  hardening from the aiohomematic reference client (login-storm serialization).
+
+### Security
+
+- **The two unauthenticated callback listeners now cap concurrent
+  connections and no longer eager-allocate an attacker-declared frame
+  size.** The XML-RPC (`:8120`) and BIN-RPC (`:8129`) callback listeners
+  bind on the LAN without authentication. Neither had a concurrent-
+  connection limit, so a host on the same segment could open thousands of
+  sockets and pin one goroutine (plus its read buffers) per connection.
+  BIN-RPC additionally allocated the payload size declared in the 8-byte
+  frame header up front (`make([]byte, size)`, up to 10 MiB) before any
+  body byte arrived, so a flood of stalled headers amplified memory use.
+  Both listeners now honour `callback.max_connections` (default 64) via a
+  connection cap, and BIN-RPC grows the payload buffer with the bytes that
+  actually arrive instead of the declared size. The BIN-RPC source-IP
+  allowlist is now enforced in the accept loop (before a handler goroutine
+  is spawned), and a new opt-in `callback.restrict_source_ips` extends the
+  same allowlist — resolved from the configured CCU hosts plus loopback —
+  to the XML-RPC listener as well. Defaults preserve existing open-LAN
+  behaviour except for the new connection cap.
+
 ## [0.28.0] — 2026-07-07
 
 ### Fixed
