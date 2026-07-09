@@ -18,6 +18,7 @@ package eligibility
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
@@ -142,10 +143,26 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 		displayName = dev.Address
 	}
 
-	emit := func(kind store.DPKind, source any, key string) {
+	emit := func(kind store.DPKind, source any) {
 		if source == nil {
 			return
 		}
+		// A structurally-incomplete device — e.g. a custom light whose LEVEL
+		// data point never materialised, leaving a nil embedded pointer that
+		// a promoted accessor (Name / MatterClusterServers) dereferences —
+		// must not crash the whole exposable enumeration. Isolate each
+		// candidate: recover, log, and skip the broken one so every healthy
+		// device still surfaces on GET /matter/exposable and in the bridge.
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Warn("matter.eligibility.candidate_skipped",
+					slog.String("device", dev.Address),
+					slog.Int("channel", ch.Number),
+					slog.String("dp_kind", string(kind)),
+					slog.Any("recovered", r))
+			}
+		}()
+		key := dpKey(source)
 		v := Classify(source)
 		// Skip entries that are unmappable AND have no Matter projection
 		// hint (i.e. truly opaque sources). Sources with a real reason
@@ -169,17 +186,17 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 
 	// Custom DP (max one per channel).
 	if cdp := ch.CustomDataPoint(); cdp != nil {
-		emit(store.DPKindCustom, cdp, dpKey(cdp))
+		emit(store.DPKindCustom, cdp)
 	}
 
 	// Calculated DPs (derived sensors).
 	for _, calc := range ch.CalculatedDataPoints() {
-		emit(store.DPKindCalculated, calc, dpKey(calc))
+		emit(store.DPKindCalculated, calc)
 	}
 
 	// Combined DPs (fan-out aggregations).
 	for _, comb := range ch.CombinedDataPoints() {
-		emit(store.DPKindCombined, comb, dpKey(comb))
+		emit(store.DPKindCombined, comb)
 	}
 
 	// Generic DPs from VALUES paramset. MASTER DPs are config-only and
@@ -187,15 +204,8 @@ func collectChannelCandidates(centralName string, dev *device.Device, ch *device
 	// Unmappable for them anyway, but skipping the iteration keeps
 	// the candidate list lean.
 	for _, dp := range ch.DataPoints() {
-		emit(store.DPKindGeneric, dp, genericDPKey(dp))
+		emit(store.DPKindGeneric, dp)
 	}
-}
-
-// genericDPKey is preserved for symmetry with the per-kind callers; it
-// now delegates to [dpKey], which itself prefers
-// [hmtypes.DataPointKey.Parameter] when present.
-func genericDPKey(dp any) string {
-	return dpKey(dp)
 }
 
 // dpKey resolves the per-DP component of the candidate key tuple

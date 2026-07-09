@@ -43,6 +43,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its Matter listener. The assignment now retries on a BUSY/locked error with a
   bounded backoff, so bring-up no longer fails when many devices are assembled
   at once.
+- **A structurally-incomplete device no longer crashes the Matter exposable
+  list.** Enumerating exposure candidates calls promoted accessors on each
+  device; a custom device with a nil embedded data point (e.g. a colour light
+  whose LEVEL DP never materialised) panicked `GET /api/v1/matter/exposable`
+  with a `500`, which in turn left the Matter bridge with no bridged endpoints.
+  Candidate collection now isolates each device — a panicking one is logged and
+  skipped — so every healthy device still surfaces on the exposable list and in
+  the bridge.
 
 ## [0.30.0] — 2026-07-09
 
