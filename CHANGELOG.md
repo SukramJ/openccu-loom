@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Matter commissioning no longer spins after CommissioningComplete.** When a
+  commissioner (Apple Home, Google Home, chip-tool) finished pairing, the
+  commissioning-window auto-close routed through `RevokeWindow`, which disarmed
+  the fail-safe via `ArmFailSafeFor(…, 0, …)`. That path treated a zero-second
+  arm as "arm for 0 seconds" — immediately expired — so it spawned an expiry
+  watcher that fired the expiry hook, which itself calls `RevokeWindow`: an
+  unbounded loop that pegged a CPU core and flooded the log. The bridge stopped
+  answering the commissioner's post-commissioning reads, so the pairing aborted
+  ("could not add accessory"). A zero-second `ArmFailSafeFor` is now a pure
+  disarm (no watcher, no expiry hook), matching the cluster-wire disarm
+  semantics. Verified end-to-end against a real Apple Home commissioner.
+
 ## [0.30.0] — 2026-07-09
 
 ### Fixed
