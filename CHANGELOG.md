@@ -35,6 +35,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   class now implement `OnMatterValueChanged`, and a source-walking contract test
   guarantees no future device type reopens the gap. Verified end-to-end against
   Apple Home.
+- **Matter bridge survives boot-time database contention with a large device
+  fleet.** Endpoint-ID assignment runs a read-then-write SQLite transaction;
+  under WAL a concurrent boot writer (the device-load pipeline) could fail the
+  upgrade with `SQLITE_BUSY` — a case `busy_timeout` does not cover — so the
+  bridge logged `matter.bridge.start … database is locked` and never brought up
+  its Matter listener. The assignment now retries on a BUSY/locked error with a
+  bounded backoff, so bring-up no longer fails when many devices are assembled
+  at once.
 
 ## [0.30.0] — 2026-07-09
 
