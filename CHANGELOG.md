@@ -19,6 +19,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ("could not add accessory"). A zero-second `ArmFailSafeFor` is now a pure
   disarm (no watcher, no expiry hook), matching the cluster-wire disarm
   semantics. Verified end-to-end against a real Apple Home commissioner.
+- **Matter thermostat setpoint / mode writes from a controller now take
+  effect.** The Climate Thermostat cluster asserted `value.(int16)` /
+  `value.(uint8)` on writes, but the bridge's TLV decoder delivers write values
+  as `int64` / `uint64`, so every Apple/Google `OccupiedHeatingSetpoint` or
+  `SystemMode` write failed with IM status `Failure`. The handler now coerces via
+  `cluster.AsInt16` / `cluster.AsUint8` (matching every other cluster), so the
+  setpoint and mode actually reach the CCU.
+- **External CCU changes now propagate to Matter controllers for every bridged
+  device class.** Only generic sensors/switches implemented the
+  `MatterChangeNotifier`, so a change made at the wall switch or by a CCU program
+  never reached a controller's Subscribe for custom-DP-backed accessories
+  (dimmers, thermostats, covers, locks, sirens) — they reflected only the
+  commands the controller itself sent. `generic.Float` and every custom endpoint
+  class now implement `OnMatterValueChanged`, and a source-walking contract test
+  guarantees no future device type reopens the gap. Verified end-to-end against
+  Apple Home.
 
 ## [0.30.0] — 2026-07-09
 

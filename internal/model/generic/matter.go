@@ -221,3 +221,20 @@ func (s *Switch) OnMatterValueChanged(cb func()) func() {
 	}
 	return s.OnConfirmedUpdate(func(_, _ bool) { cb() })
 }
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier]
+// for the writable Float specialisation (LEVEL / dimmer brightness /
+// cover position / setpoint). Custom device types that embed *Float —
+// Light, Cover and their variants — inherit this method, so an external
+// CCU-confirmed level change dirty-marks the OnOff / LevelControl /
+// WindowCovering attributes and Apple's Subscribe sees the new value.
+// Without it a bridged dimmer or blind only ever reflected commands
+// Apple itself sent, never a change made at the wall switch or via the
+// CCU. Wraps OnConfirmedUpdate for the same optimistic-transition
+// rationale as [Switch.OnMatterValueChanged].
+func (f *Float) OnMatterValueChanged(cb func()) func() {
+	if f == nil || f.DataPoint == nil || cb == nil {
+		return func() {}
+	}
+	return f.OnConfirmedUpdate(func(_, _ float64) { cb() })
+}

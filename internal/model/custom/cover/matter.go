@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -25,7 +26,29 @@ var (
 	_ interfaces.MatterEndpointSource     = (*Garage)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Cover)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Garage)(nil)
+	// Cover and Blind inherit OnMatterValueChanged from the embedded
+	// *generic.Float (LEVEL / lift position); Garage carries its own DPs
+	// and implements it explicitly below.
+	_ interfaces.MatterChangeNotifier = (*Cover)(nil)
+	_ interfaces.MatterChangeNotifier = (*Blind)(nil)
+	_ interfaces.MatterChangeNotifier = (*Garage)(nil)
 )
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
+// Garage. Unlike Cover/Blind it does not embed a *generic.Float; its
+// WindowCovering projection is driven by the door state (open/closed/venting)
+// and the optional section DP. Fan both in so a door operated at the wall
+// button or by a CCU program reaches Apple's Subscribe rather than only the
+// commands Apple itself sent.
+func (g *Garage) OnMatterValueChanged(cb func()) func() {
+	if g == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		g.doorStateDp.OnMatterValueChanged(cb),
+		g.sectionDp.OnMatterValueChanged(cb),
+	)
+}
 
 // Matter Device Type IDs and WindowCovering cluster IDs follow the
 // Matter 1.5.1 Application Cluster Specification. They live here next

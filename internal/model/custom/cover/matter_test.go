@@ -316,3 +316,71 @@ func TestReportableAttributes(t *testing.T) {
 		t.Errorf("Garage reportable=%v, want 2 attrs", r)
 	}
 }
+
+// --- OnMatterValueChanged (MatterChangeNotifier) ---
+//
+// Cover and Blind inherit OnMatterValueChanged from the embedded
+// *generic.Float (LEVEL) — that confirmed-only contract is already
+// locked by the Float tests in internal/model/generic/matter_test.go.
+// Garage carries its own DPs (DOOR_STATE / SECTION) and implements the
+// method explicitly, so it gets dedicated coverage here.
+
+// TestGarageOnMatterValueChangedFiresOnConfirmedDoorStateChange verifies
+// that a CCU-confirmed DOOR_STATE change (e.g. the door operated at the
+// wall button, not through Apple) reaches a registered
+// OnMatterValueChanged callback.
+func TestGarageOnMatterValueChangedFiresOnConfirmedDoorStateChange(t *testing.T) {
+	g, doorStateDP, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
+	var count int
+	_ = g.OnMatterValueChanged(func() { count++ })
+	doorStateDP.OnEvent(string(DoorStateOpen))
+	doorStateDP.OnEvent(string(DoorStateClosed))
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations, got %d", count)
+	}
+}
+
+// TestGarageOnMatterValueChangedUnsubscribeStopsCallback verifies that
+// the returned closure detaches every wired DP so a further confirmed
+// change does not fire the callback again.
+func TestGarageOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
+	g, doorStateDP, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
+	var count int
+	unsub := g.OnMatterValueChanged(func() { count++ })
+	doorStateDP.OnEvent(string(DoorStateOpen))
+	unsub()
+	doorStateDP.OnEvent(string(DoorStateClosed))
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
+	}
+}
+
+// TestGarageOnMatterValueChangedFansSection confirms the section DP
+// (SECTION) also fans into the same callback, not just DOOR_STATE.
+func TestGarageOnMatterValueChangedFansSection(t *testing.T) {
+	g, _, sectionDP := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
+	var count int
+	_ = g.OnMatterValueChanged(func() { count++ })
+	sectionDP.OnEvent(1)
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation from section change, got %d", count)
+	}
+}
+
+// TestGarageOnMatterValueChangedNilSafe verifies nil-receiver and
+// nil-callback safety.
+func TestGarageOnMatterValueChangedNilSafe(t *testing.T) {
+	var g *Garage
+	unsub := g.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil Garage: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+
+	gg, doorStateDP, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
+	unsub2 := gg.OnMatterValueChanged(nil)
+	if unsub2 == nil {
+		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
+	}
+	doorStateDP.OnEvent(string(DoorStateOpen)) // must not panic with no subscriber
+}

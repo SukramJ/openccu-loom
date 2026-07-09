@@ -199,3 +199,52 @@ func TestLockReportable(t *testing.T) {
 		t.Fatalf("Reportable = %v, want [0x0000]", rep)
 	}
 }
+
+// --- OnMatterValueChanged (MatterChangeNotifier) ---
+
+// TestLockOnMatterValueChangedFiresOnConfirmedStateChange verifies that a
+// CCU-confirmed LOCK_STATE change (e.g. operated at the door, not through
+// Apple) reaches a registered OnMatterValueChanged callback.
+func TestLockOnMatterValueChangedFiresOnConfirmedStateChange(t *testing.T) {
+	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
+	var count int
+	_ = r.lock.OnMatterValueChanged(func() { count++ })
+	r.stateDP.OnEvent(string(StateLocked))
+	r.stateDP.OnEvent(string(StateUnlocked))
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations, got %d", count)
+	}
+}
+
+// TestLockOnMatterValueChangedUnsubscribeStopsCallback verifies that the
+// returned closure detaches every wired DP so a further confirmed change
+// does not fire the callback again.
+func TestLockOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
+	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
+	var count int
+	unsub := r.lock.OnMatterValueChanged(func() { count++ })
+	r.stateDP.OnEvent(string(StateLocked))
+	unsub()
+	r.stateDP.OnEvent(string(StateUnlocked))
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
+	}
+}
+
+// TestLockOnMatterValueChangedNilSafe verifies nil-receiver and
+// nil-callback safety.
+func TestLockOnMatterValueChangedNilSafe(t *testing.T) {
+	var l *Lock
+	unsub := l.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil Lock: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+
+	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
+	unsub2 := r.lock.OnMatterValueChanged(nil)
+	if unsub2 == nil {
+		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
+	}
+	r.stateDP.OnEvent(string(StateLocked)) // must not panic with no subscriber
+}

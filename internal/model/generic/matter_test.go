@@ -475,3 +475,63 @@ func TestSensor_OnMatterValueChanged_SkipsIdempotentEcho(t *testing.T) {
 		t.Fatalf("idempotent confirmed echo must not re-fire: want 1, got %d", matterCount)
 	}
 }
+
+// --- Float OnMatterValueChanged ---
+//
+// Float backs LEVEL / dimmer brightness / cover position / setpoint on
+// every custom type that embeds it (Cover, Blind, Light, Climate's
+// setpoint field). These tests lock the same confirmed-only contract
+// the Sensor/BinarySensor/Switch specializations already carry above.
+
+// TestFloat_OnMatterValueChanged_FiresOnConfirmedChange verifies that a
+// registered callback is invoked whenever a fresh confirmed value
+// arrives via OnEvent.
+func TestFloat_OnMatterValueChanged_FiresOnConfirmedChange(t *testing.T) {
+	f := NewFloat(baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+	var count int
+	_ = f.OnMatterValueChanged(func() { count++ })
+	f.OnEvent(0.5)
+	f.OnEvent(0.75)
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations, got %d", count)
+	}
+}
+
+// TestFloat_OnMatterValueChanged_UnsubscribeStopsCallback verifies that
+// calling the returned closure detaches the callback so subsequent
+// value pushes do not fire it.
+func TestFloat_OnMatterValueChanged_UnsubscribeStopsCallback(t *testing.T) {
+	f := NewFloat(baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+	var count int
+	unsub := f.OnMatterValueChanged(func() { count++ })
+	f.OnEvent(0.5)
+	unsub()
+	f.OnEvent(0.75)
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
+	}
+}
+
+// TestFloat_OnMatterValueChanged_NilFloatSafe verifies that calling
+// OnMatterValueChanged on a nil *Float does not panic and returns a
+// non-nil, safe-to-call unsubscribe closure.
+func TestFloat_OnMatterValueChanged_NilFloatSafe(t *testing.T) {
+	var f *Float
+	unsub := f.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil Float: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+}
+
+// TestFloat_OnMatterValueChanged_NilCallbackSafe verifies that a nil
+// callback is accepted without panic and returns a callable unsub.
+func TestFloat_OnMatterValueChanged_NilCallbackSafe(t *testing.T) {
+	f := NewFloat(baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent))
+	unsub := f.OnMatterValueChanged(nil)
+	if unsub == nil {
+		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
+	}
+	// OnEvent must not panic when callback is nil (no subscriber stored).
+	f.OnEvent(0.5)
+}

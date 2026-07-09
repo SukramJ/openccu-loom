@@ -25,6 +25,13 @@ var (
 	_ interfaces.MatterEndpointSource = (*ColorLight)(nil)
 	_ interfaces.MatterEndpointSource = (*ColorTempLight)(nil)
 	_ interfaces.MatterEndpointSource = (*RGBWLight)(nil)
+	// The colour variants embed *Light (→ *generic.Float), so they inherit
+	// OnMatterValueChanged and propagate external on/off + brightness
+	// changes. Colour-attribute (hue / saturation / colour-temperature)
+	// change propagation is a separate additive refinement.
+	_ interfaces.MatterChangeNotifier = (*ColorLight)(nil)
+	_ interfaces.MatterChangeNotifier = (*ColorTempLight)(nil)
+	_ interfaces.MatterChangeNotifier = (*RGBWLight)(nil)
 )
 
 // Matter ColorControl constants follow the Matter 1.5.1 Application
