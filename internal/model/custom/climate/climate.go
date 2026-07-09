@@ -1094,10 +1094,10 @@ func (c *Climate) DisableBoost(ctx context.Context, priority hmenum.CommandPrior
 // SetAway activates the device's away/party mode through the wire parameters
 // appropriate for the Kind.
 //
-// - KindIP: writes the `PARTY_*` paramset entries together with
-// `SET_POINT_MODE = 2` (AWAY) and `PARTY_TEMPERATURE`. The CCU returns to the
-// previous mode at `until`. - KindRF: writes `PARTY_MODE_SUBMIT` with the
-// encoded code. - KindSimpleRF: returns [ErrModeNotSupported].
+// - KindIP: writes `SET_POINT_MODE = 2` (AWAY), `SET_POINT_TEMPERATURE`, and
+// the `PARTY_TIME_START/END` window. The CCU returns to the previous mode at
+// `until`. - KindRF: writes `PARTY_MODE_SUBMIT` with the encoded code. -
+// KindSimpleRF: returns [ErrModeNotSupported].
 //
 // `away` is the temperature held while away; pass 0 for the device default.
 func (c *Climate) SetAway(ctx context.Context, until time.Time, away float64, priority hmenum.CommandPriority) error {
@@ -1117,18 +1117,18 @@ func (c *Climate) SetAway(ctx context.Context, until time.Time, away float64, pr
 		if c.writer == nil {
 			return ErrModeNotSupported
 		}
-		// All four PARTY_* parameters apply atomically through one
-		// Put_paramset
-		// `enable_away_mode_by_calendar` (climate.py:797). The CCU
-		// honours PARTY_TEMPERATURE / PARTY_TIME_* together with
-		// SET_POINT_MODE=AWAY.
+		// The away window applies atomically through one PutParamset,
+		// mirroring the reference model/custom/climate.py
+		// enable_away_mode_by_calendar: SET_POINT_MODE=AWAY (2),
+		// SET_POINT_TEMPERATURE (the held temperature), and the
+		// PARTY_TIME_START/END window.
 		params := map[hmenum.Parameter]any{
 			hmenum.ParameterPartyTimeStart: encodePartyTime(time.Now()),
 			hmenum.ParameterPartyTimeEnd:   encodePartyTime(until),
 			hmenum.ParameterSetPointMode:   int32(2),
 		}
 		if away > 0 {
-			params[hmenum.ParameterPartyTemperature] = away
+			params[hmenum.ParameterSetPointTemperature] = away
 		}
 		if err := custom.PutOrSet(ctx, c.writer, c.Address, hmenum.ParamsetKeyValues, params, priority); err != nil {
 			return fmt.Errorf("climate: SetAway IP: %w", err)
@@ -1217,11 +1217,10 @@ func (c *Climate) AwayUntil() (time.Time, bool) {
 }
 
 // encodePartyTime renders a timestamp in the CCU PARTY_TIME format
-// `dd.mm.yy hh:mm`. The format is documented.
-// `model/custom/climate.py` (party time helpers) and matches the
-// HmIP-WRC firmware encoding.
+// `yyyy_mm_dd hh:mm`, mirroring the reference model/custom/climate.py
+// _PARTY_DATE_FORMAT = "%Y_%m_%d %H:%M" used for PARTY_TIME_START/END.
 func encodePartyTime(t time.Time) string {
-	return t.Format("02.01.06 15:04")
+	return t.Format("2006_01_02 15:04")
 }
 
 // partyModeCode renders the PARTY_MODE_SUBMIT payload the HM-CC-RT firmware

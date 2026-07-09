@@ -74,6 +74,16 @@ func brokerSnapshotDevices(t *testing.T) []string {
 	return defaultBrokerSnapshotDevices
 }
 
+// brokerReferencePath is the COMMITTED, smoke-fleet-scoped reference
+// snapshot the field diff runs against. Unlike the full ~25 MB
+// discovery_snapshot_openccu-loom.json (gitignored, regenerated on
+// demand), this projection is small enough to commit — which is what
+// makes the device_class / entity_category / enabled_by_default field
+// diff execute in CI instead of being skipped for want of a reference.
+// Regenerate after an intentional builder change with
+// OPENCCU_LOOM_WRITE_BROKER_REF=1 (see [writeBrokerReference]).
+const brokerReferencePath = "testdata/broker_discovery_reference.json"
+
 // ---------------------------------------------------------------------------
 // TestBrokerSnapshotDiff
 // ---------------------------------------------------------------------------
@@ -239,12 +249,23 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 		brokerEntities[ent.JoinKey] = ent
 	}
 
-	// --- load reference snapshot ------------------------------------------
-	refEntities, refErr := loadBrokerReferenceSnapshot(
-		"testdata/discovery_snapshot_openccu-loom.json",
-	)
+	// --- regeneration mode ------------------------------------------------
+	// Refresh the committed reference from the current builder output after
+	// an intentional device_class / entity_category / enabled_by_default /
+	// model_id change; the diff below then guards against unintended drift.
+	if os.Getenv("OPENCCU_LOOM_WRITE_BROKER_REF") != "" {
+		writeBrokerReference(t, brokerReferencePath, brokerEntities)
+		return
+	}
+
+	// --- load committed reference snapshot --------------------------------
+	// Committing this small projection is what makes the field diff run in
+	// CI (the full snapshot is gitignored and absent there).
+	refEntities, refErr := loadBrokerReferenceSnapshot(brokerReferencePath)
 	if refErr != nil {
-		t.Logf("reference snapshot not available (%v); running invariant-only checks", refErr)
+		t.Fatalf("committed broker reference %s missing/invalid — regenerate with "+
+			"OPENCCU_LOOM_WRITE_BROKER_REF=1 go test -tags=integration -run TestBrokerSnapshotDiff ./tests/integration/: %v",
+			brokerReferencePath, refErr)
 	}
 
 	// --- invariant: model_id must not be empty ----------------------------
@@ -273,11 +294,9 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 	}
 
 	// --- field diff against reference snapshot ----------------------------
-	if refEntities == nil {
-		t.Logf("skipping field diff: no reference snapshot")
-		return
-	}
-
+	// refEntities is guaranteed non-nil here (a load error already fataled),
+	// so the device_class / entity_category / enabled_by_default diff always
+	// runs — it is no longer skipped for want of a committed reference.
 	type diffRow struct {
 		joinKey string
 		field   string
@@ -994,4 +1013,68 @@ func boolPtrStr(b *bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// writeBrokerReference projects the collected broker entities down to the
+// diff-relevant fields (device.model_id, device_class, entity_category,
+// enabled_by_default, name) and writes a small, committed reference
+// snapshot in the [discoverySnapshotRoot] shape that
+// [loadBrokerReferenceSnapshot] reads back. The projection keeps the
+// committed file tiny (the diff only ever inspects these fields) and
+// deterministic (entities sorted by join key, volatile fields dropped).
+func writeBrokerReference(t *testing.T, path string, entities map[string]brokerEntity) {
+	t.Helper()
+	keys := make([]string, 0, len(entities))
+	for k := range entities {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	out := make([]snapshotEntity, 0, len(keys))
+	for _, k := range keys {
+		ent := entities[k]
+		// device.model_id is always emitted (even when empty) so the
+		// tolerated-empty-model_id set derived from the reference stays
+		// accurate.
+		p := map[string]any{
+			"device": map[string]any{"model_id": ent.ModelID},
+		}
+		if ent.DeviceClass != "" {
+			p["device_class"] = ent.DeviceClass
+		}
+		if ent.EntityCategory != "" {
+			p["entity_category"] = ent.EntityCategory
+		}
+		if ent.EnabledByDefault != nil {
+			p["enabled_by_default"] = *ent.EnabledByDefault
+		}
+		if ent.Name != "" {
+			p["name"] = ent.Name
+		}
+		out = append(out, snapshotEntity{
+			JoinKey: ent.JoinKey,
+			Model:   ent.Model,
+			Payload: p,
+		})
+	}
+
+	root := discoverySnapshotRoot{
+		Stack:    "openccu-loom",
+		Devccu:   "godevccu",
+		Entities: out,
+	}
+	if err := os.MkdirAll("testdata", 0o755); err != nil {
+		t.Fatalf("mkdir testdata: %v", err)
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(root); err != nil {
+		t.Fatalf("encode broker reference: %v", err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatalf("write broker reference %s: %v", path, err)
+	}
+	t.Logf("wrote broker reference snapshot: %s (entities=%d)", path, len(out))
 }

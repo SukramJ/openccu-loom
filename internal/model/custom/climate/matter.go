@@ -20,10 +20,10 @@ import (
 // with four cluster servers: Thermostat (0x0201),
 // ThermostatUserInterfaceConfiguration (0x0204), TemperatureMeasurement
 // (0x0402), and RelativeHumidityMeasurement (0x0405) — the last is
-// emitted only when the channel carries a HUMIDITY parameter.
-// The Schedules cluster (0x0024) is also included; the week-profile
-// mapping is a stub returning an empty slice until the full conversion
-// from the CCU week-program format is implemented (post-0.1.0, see ADR 0012).
+// emitted only when the channel carries a HUMIDITY parameter. The
+// Schedules cluster (0x0024) is intentionally NOT emitted (the
+// week-profile mapping is not surfaced as a Matter cluster; see the
+// composition at buildClusters below and its unit test).
 var (
 	_ interfaces.MatterEndpointSource     = (*Climate)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Climate)(nil)

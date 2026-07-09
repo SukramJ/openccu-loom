@@ -1,0 +1,986 @@
+{
+  "stack": "openccu-loom",
+  "stack_version": "",
+  "devccu": "godevccu",
+  "devccu_version": "",
+  "locale": "",
+  "captured_at": "",
+  "entities": [
+    {
+      "join_key": "VCU1236184:0:param:VALUES.DUTY_CYCLE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "problem",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Duty Cycle"
+      }
+    },
+    {
+      "join_key": "VCU1236184:0:param:VALUES.OPERATING_VOLTAGE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "voltage",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Operating Voltage"
+      }
+    },
+    {
+      "join_key": "VCU1236184:0:param:VALUES.RSSI_DEVICE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Device"
+      }
+    },
+    {
+      "join_key": "VCU1236184:0:param:VALUES.RSSI_PEER",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Peer"
+      }
+    },
+    {
+      "join_key": "VCU1236184:0:param:VALUES.SABOTAGE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "tamper",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Sabotage"
+      }
+    },
+    {
+      "join_key": "VCU1236184:1:param:MASTER.MOTION_DETECTION_ACTIVE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "switch",
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Motion Detection Active"
+      }
+    },
+    {
+      "join_key": "VCU1236184:1:param:MASTER.RESET_MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Reset Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:1:param:VALUES.ILLUMINATION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "illuminance",
+        "name": "Illumination"
+      }
+    },
+    {
+      "join_key": "VCU1236184:1:param:VALUES.MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "motion",
+        "name": "Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:2:param:MASTER.MOTION_DETECTION_ACTIVE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "switch",
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Motion Detection Active"
+      }
+    },
+    {
+      "join_key": "VCU1236184:2:param:MASTER.RESET_MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Reset Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:2:param:VALUES.ILLUMINATION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "illuminance",
+        "name": "Illumination"
+      }
+    },
+    {
+      "join_key": "VCU1236184:2:param:VALUES.MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "motion",
+        "name": "Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:3:param:MASTER.MOTION_DETECTION_ACTIVE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "switch",
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Motion Detection Active"
+      }
+    },
+    {
+      "join_key": "VCU1236184:3:param:MASTER.RESET_MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Reset Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:3:param:VALUES.ILLUMINATION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "illuminance",
+        "name": "Illumination"
+      }
+    },
+    {
+      "join_key": "VCU1236184:3:param:VALUES.MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "motion",
+        "name": "Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:4:param:MASTER.MOTION_DETECTION_ACTIVE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "switch",
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Motion Detection Active"
+      }
+    },
+    {
+      "join_key": "VCU1236184:4:param:MASTER.RESET_MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "enabled_by_default": false,
+        "entity_category": "config",
+        "name": "Reset Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:4:param:VALUES.ILLUMINATION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "illuminance",
+        "name": "Illumination"
+      }
+    },
+    {
+      "join_key": "VCU1236184:4:param:VALUES.MOTION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "device_class": "motion",
+        "name": "Motion"
+      }
+    },
+    {
+      "join_key": "VCU1236184:9:param:VALUES.STATE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SMO230-A",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Motion Detector, outdoor, 230V"
+        },
+        "name": "State"
+      }
+    },
+    {
+      "join_key": "VCU1769958:0:agg:lock",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BWTH",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Wall Thermostat with Humidity Sensor"
+        },
+        "enabled_by_default": false,
+        "entity_category": "config"
+      }
+    },
+    {
+      "join_key": "VCU1769958:1:agg:climate",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BWTH",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Wall Thermostat with Humidity Sensor"
+        }
+      }
+    },
+    {
+      "join_key": "VCU1769958:9:param:VALUES.STATE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BWTH",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Wall Thermostat with Humidity Sensor"
+        },
+        "name": "State"
+      }
+    },
+    {
+      "join_key": "VCU2128127:0:param:VALUES.ACTUAL_TEMPERATURE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "temperature",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Actual Temperature"
+      }
+    },
+    {
+      "join_key": "VCU2128127:0:param:VALUES.DUTY_CYCLE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "problem",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Duty Cycle"
+      }
+    },
+    {
+      "join_key": "VCU2128127:0:param:VALUES.OPERATING_VOLTAGE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "voltage",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Operating Voltage"
+      }
+    },
+    {
+      "join_key": "VCU2128127:0:param:VALUES.RSSI_DEVICE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Device"
+      }
+    },
+    {
+      "join_key": "VCU2128127:0:param:VALUES.RSSI_PEER",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Peer"
+      }
+    },
+    {
+      "join_key": "VCU2128127:1:event:channel",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "button",
+        "name": "ch1"
+      }
+    },
+    {
+      "join_key": "VCU2128127:2:event:channel",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "button",
+        "name": "ch2"
+      }
+    },
+    {
+      "join_key": "VCU2128127:3:param:VALUES.STATE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "name": "State"
+      }
+    },
+    {
+      "join_key": "VCU2128127:7:param:VALUES.CURRENT",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "current",
+        "name": "Current"
+      }
+    },
+    {
+      "join_key": "VCU2128127:7:param:VALUES.ENERGY_COUNTER",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "energy",
+        "name": "Energy Counter"
+      }
+    },
+    {
+      "join_key": "VCU2128127:7:param:VALUES.FREQUENCY",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "frequency",
+        "name": "Frequency"
+      }
+    },
+    {
+      "join_key": "VCU2128127:7:param:VALUES.POWER",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "power",
+        "name": "Power"
+      }
+    },
+    {
+      "join_key": "VCU2128127:7:param:VALUES.VOLTAGE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BSM",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Switch Actuator with power measurement"
+        },
+        "device_class": "voltage",
+        "name": "Voltage"
+      }
+    },
+    {
+      "join_key": "VCU2822385:0:param:VALUES.DUTY_CYCLE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SWSD",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Smoke Detector"
+        },
+        "device_class": "problem",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Duty Cycle"
+      }
+    },
+    {
+      "join_key": "VCU2822385:0:param:VALUES.LOW_BAT",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SWSD",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Smoke Detector"
+        },
+        "device_class": "battery",
+        "entity_category": "diagnostic",
+        "name": "Low Bat"
+      }
+    },
+    {
+      "join_key": "VCU2822385:0:param:VALUES.RSSI_DEVICE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SWSD",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Smoke Detector"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Device"
+      }
+    },
+    {
+      "join_key": "VCU2822385:0:param:VALUES.RSSI_PEER",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SWSD",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Smoke Detector"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Peer"
+      }
+    },
+    {
+      "join_key": "VCU2822385:0:param:VALUES.TIME_OF_OPERATION",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SWSD",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Smoke Detector"
+        },
+        "device_class": "duration",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Time Of Operation"
+      }
+    },
+    {
+      "join_key": "VCU2822385:1:agg:siren",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-SWSD",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Smoke Detector"
+        },
+        "enabled_by_default": false
+      }
+    },
+    {
+      "join_key": "VCU8537918:0:param:VALUES.ACTUAL_TEMPERATURE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BROLL",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Blind Actuator for brand switch systems, flush-mount"
+        },
+        "device_class": "temperature",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Actual Temperature"
+      }
+    },
+    {
+      "join_key": "VCU8537918:0:param:VALUES.DUTY_CYCLE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BROLL",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Blind Actuator for brand switch systems, flush-mount"
+        },
+        "device_class": "problem",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Duty Cycle"
+      }
+    },
+    {
+      "join_key": "VCU8537918:0:param:VALUES.OPERATING_VOLTAGE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BROLL",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Blind Actuator for brand switch systems, flush-mount"
+        },
+        "device_class": "voltage",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Operating Voltage"
+      }
+    },
+    {
+      "join_key": "VCU8537918:0:param:VALUES.RSSI_DEVICE",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BROLL",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Blind Actuator for brand switch systems, flush-mount"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Device"
+      }
+    },
+    {
+      "join_key": "VCU8537918:0:param:VALUES.RSSI_PEER",
+      "kind": "",
+      "discovery_topic": "",
+      "component": "",
+      "node_id": "",
+      "object_id": "",
+      "unique_id": "",
+      "device_address": "",
+      "channel_no": 0,
+      "model": "HmIP-BROLL",
+      "payload": {
+        "device": {
+          "model_id": "Homematic IP Blind Actuator for brand switch systems, flush-mount"
+        },
+        "device_class": "signal_strength",
+        "enabled_by_default": false,
+        "entity_category": "diagnostic",
+        "name": "Rssi Peer"
+      }
+    }
+  ]
+}

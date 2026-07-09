@@ -43,15 +43,22 @@ func (f *fakeCustomDP) DataPointKey() hmtypes.DataPointKey { return f.key }
 func (f *fakeCustomDP) HAComponent() string                { return f.haComponent }
 
 // ─── displayChannelName ───────────────────────────────────────────────────────
-// Local replica of the unexported displayChannelName function in
-// internal/north/mqtt/discovery_aggregate.go. Must be kept in sync
-// with the production implementation.
+// Replica of the unexported displayChannelName function in
+// internal/north/mqtt/discovery_aggregate.go. Kept in sync with the production
+// implementation; the multi-primary IgnoreMultipleChannelsForName opt-out branch
+// is additionally exercised directly against the real device.Channel methods in
+// ignore_multiple_channels_name_test.go.
 func displayChannelName(ch *device.Channel, channelNo int) string {
 	if ch.IsCustomDPSecondaryChannel() {
 		return fmt.Sprintf("vch%d", channelNo)
 	}
 	if ch.IsCustomDPPrimaryChannel() {
 		if ch.HasSinglePrimaryCustomDP() {
+			return ""
+		}
+		// A custom DP may opt out of the ch<N> suffix even on a multi-primary
+		// device (locks render as "<Lock>" / "<Lock>", not "<Lock> ch1" / ch2).
+		if ch.IgnoreMultipleChannelsForName() {
 			return ""
 		}
 		return fmt.Sprintf("ch%d", channelNo)
@@ -439,6 +446,29 @@ func TestNamingContract(t *testing.T) {
 				return ch2, 2
 			},
 			wantSuffix:       "2",
+			wantEnabledByDef: true,
+		},
+		// ── Multi-primary lock: IgnoreMultipleChannelsForName opt-out ─────
+		// Two lock primaries (ch1, ch2) share the "lock" HA component, so
+		// HasSinglePrimaryCustomDP is false. Without the opt-out this would
+		// render "ch1"/"ch2"; the lock DP opts out via
+		// IgnoreMultipleChannelsForName, so the suffix is suppressed.
+		{
+			name: "multi-lock ch1 with IgnoreMultipleChannelsForName → no suffix",
+			setupDevice: func() (*device.Channel, int) {
+				ch1, _ := newMultiLockDevice("VCU0013000")
+				return ch1, 1
+			},
+			wantSuffix:       "",
+			wantEnabledByDef: true,
+		},
+		{
+			name: "multi-lock ch2 with IgnoreMultipleChannelsForName → no suffix",
+			setupDevice: func() (*device.Channel, int) {
+				_, ch2 := newMultiLockDevice("VCU0013001")
+				return ch2, 2
+			},
+			wantSuffix:       "",
 			wantEnabledByDef: true,
 		},
 		// ── HmIP-PSM regression: secondary ch4 named "vch4" not "ch4" ─────

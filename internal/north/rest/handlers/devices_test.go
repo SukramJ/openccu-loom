@@ -651,7 +651,7 @@ func TestPutDataPointValue_DeviceNotFound_Returns404(t *testing.T) {
 // PutDataPointValue with no channel writer — the binary sensor is read-only
 // (Operations has no Write bit), so ch.Set returns a non-writer-related error
 // which maps to 502. This test verifies the 502 path.
-func TestPutDataPointValue_ReadOnlyParam_Returns502(t *testing.T) {
+func TestPutDataPointValue_ReadOnlyParam_Returns400(t *testing.T) {
 	t.Parallel()
 	d := newDeviceWithDP(t, "0001ABCD", "HmIP-BSM", 1, hmenum.ParameterState)
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
@@ -666,10 +666,11 @@ func TestPutDataPointValue_ReadOnlyParam_Returns502(t *testing.T) {
 	w := httptest.NewRecorder()
 	PutDataPointValue(idx, nil).ServeHTTP(w, req)
 
-	// The parameter is read-only (no Write bit) so Set fails.
-	// This maps to 502 (or 503 when ErrNoChannelWriter fires first).
-	if w.Code != http.StatusBadGateway && w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 502 or 503, got %d body=%s", w.Code, w.Body.String())
+	// The parameter is read-only (no Write bit): the write is rejected by
+	// validation before it ever reaches the wire, so it is a client error
+	// (400), not a 502 upstream failure.
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

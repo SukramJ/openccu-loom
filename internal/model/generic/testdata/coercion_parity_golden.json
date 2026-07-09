@@ -1,0 +1,458 @@
+{
+  "_provenance": "Generated from aiohomematic HEAD. typed value = aiohomematic/model/support.py convert_value (support.py:565-581); in_range = transcription of aiohomematic/model/data_point.py:900-934 is_value_in_range (pure MIN/MAX + enum, NO SPECIAL bypass); empty-string FLOAT/INTEGER -> None mirrors data_point.py:1449 _convert_value. compare_in_range=false marks the documented loom divergence where loom bypasses MIN/MAX for declared SPECIAL values (pydevccu ccu.py _clamp_numeric_value) while aiohomematic is_value_in_range does not.",
+  "cases": [
+    {
+      "name": "float_in_range",
+      "type": "FLOAT",
+      "value_list": null,
+      "min": 0.0,
+      "max": 100.0,
+      "special": null,
+      "raw": {
+        "kind": "float",
+        "v": 42.5
+      },
+      "expected": {
+        "kind": "float",
+        "v": 42.5
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "numeric within [min,max]"
+    },
+    {
+      "name": "float_above_max",
+      "type": "FLOAT",
+      "value_list": null,
+      "min": 0.0,
+      "max": 10.0,
+      "special": null,
+      "raw": {
+        "kind": "float",
+        "v": 11.0
+      },
+      "expected": {
+        "kind": "float",
+        "v": 11.0
+      },
+      "in_range": false,
+      "compare_in_range": true,
+      "note": "numeric above max -> invalid"
+    },
+    {
+      "name": "float_below_min",
+      "type": "FLOAT",
+      "value_list": null,
+      "min": 5.0,
+      "max": 10.0,
+      "special": null,
+      "raw": {
+        "kind": "float",
+        "v": 1.0
+      },
+      "expected": {
+        "kind": "float",
+        "v": 1.0
+      },
+      "in_range": false,
+      "compare_in_range": true,
+      "note": "numeric below min -> invalid"
+    },
+    {
+      "name": "float_from_string",
+      "type": "FLOAT",
+      "value_list": null,
+      "min": 0.0,
+      "max": 100.0,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "1.5"
+      },
+      "expected": {
+        "kind": "float",
+        "v": 1.5
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "string cast to float (convert_value float(value))"
+    },
+    {
+      "name": "float_empty_string_none",
+      "type": "FLOAT",
+      "value_list": null,
+      "min": 0.0,
+      "max": 100.0,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": ""
+      },
+      "expected": {
+        "kind": "none",
+        "v": null
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "empty string FLOAT -> None (_convert_value)"
+    },
+    {
+      "name": "float_special_below_min",
+      "type": "FLOAT",
+      "value_list": null,
+      "min": 0.5,
+      "max": 15.5,
+      "special": {
+        "NOT_USED": 0.0
+      },
+      "raw": {
+        "kind": "float",
+        "v": 0.0
+      },
+      "expected": {
+        "kind": "float",
+        "v": 0.0
+      },
+      "in_range": false,
+      "compare_in_range": false,
+      "note": "SPECIAL NOT_USED=0.0 below min: aiohomematic is_value_in_range=false (pure min/max); loom bypasses"
+    },
+    {
+      "name": "int_in_range",
+      "type": "INTEGER",
+      "value_list": null,
+      "min": 1.0,
+      "max": 254.0,
+      "special": null,
+      "raw": {
+        "kind": "int",
+        "v": 100
+      },
+      "expected": {
+        "kind": "int",
+        "v": 100
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "integer within [min,max]"
+    },
+    {
+      "name": "int_above_max",
+      "type": "INTEGER",
+      "value_list": null,
+      "min": 1.0,
+      "max": 10.0,
+      "special": null,
+      "raw": {
+        "kind": "int",
+        "v": 20
+      },
+      "expected": {
+        "kind": "int",
+        "v": 20
+      },
+      "in_range": false,
+      "compare_in_range": true,
+      "note": "integer above max -> invalid"
+    },
+    {
+      "name": "int_from_string",
+      "type": "INTEGER",
+      "value_list": null,
+      "min": 0.0,
+      "max": 300.0,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "255"
+      },
+      "expected": {
+        "kind": "int",
+        "v": 255
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "string cast to int (int(float(value)))"
+    },
+    {
+      "name": "int_empty_string_none",
+      "type": "INTEGER",
+      "value_list": null,
+      "min": 0.0,
+      "max": 300.0,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": ""
+      },
+      "expected": {
+        "kind": "none",
+        "v": null
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "empty string INTEGER -> None (_convert_value)"
+    },
+    {
+      "name": "int_special_above_max",
+      "type": "INTEGER",
+      "value_list": null,
+      "min": 1.0,
+      "max": 254.0,
+      "special": {
+        "PERMANENT": 255
+      },
+      "raw": {
+        "kind": "int",
+        "v": 255
+      },
+      "expected": {
+        "kind": "int",
+        "v": 255
+      },
+      "in_range": false,
+      "compare_in_range": false,
+      "note": "SPECIAL PERMANENT=255 above max: pure min/max=false; loom bypasses"
+    },
+    {
+      "name": "bool_int_true",
+      "type": "BOOL",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "int",
+        "v": 1
+      },
+      "expected": {
+        "kind": "bool",
+        "v": true
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "int 1 -> bool true"
+    },
+    {
+      "name": "bool_int_false",
+      "type": "BOOL",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "int",
+        "v": 0
+      },
+      "expected": {
+        "kind": "bool",
+        "v": false
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "int 0 -> bool false"
+    },
+    {
+      "name": "bool_string_true",
+      "type": "BOOL",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "true"
+      },
+      "expected": {
+        "kind": "bool",
+        "v": true
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "to_bool('true')=true"
+    },
+    {
+      "name": "bool_string_yes",
+      "type": "BOOL",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "yes"
+      },
+      "expected": {
+        "kind": "bool",
+        "v": true
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "to_bool('yes')=true"
+    },
+    {
+      "name": "bool_string_off",
+      "type": "BOOL",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "off"
+      },
+      "expected": {
+        "kind": "bool",
+        "v": false
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "to_bool('off')=false ('off' not in true-set)"
+    },
+    {
+      "name": "bool_string_garbage",
+      "type": "BOOL",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "banana"
+      },
+      "expected": {
+        "kind": "bool",
+        "v": false
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "to_bool('banana')=false (unknown -> false, no error)"
+    },
+    {
+      "name": "enum_index_in_range",
+      "type": "ENUM",
+      "value_list": [
+        "CLOSED",
+        "OPEN"
+      ],
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "int",
+        "v": 1
+      },
+      "expected": {
+        "kind": "int",
+        "v": 1
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "enum index 1 (OPEN) in bounds"
+    },
+    {
+      "name": "enum_index_out_of_range",
+      "type": "ENUM",
+      "value_list": [
+        "CLOSED",
+        "OPEN"
+      ],
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "int",
+        "v": 5
+      },
+      "expected": {
+        "kind": "int",
+        "v": 5
+      },
+      "in_range": false,
+      "compare_in_range": true,
+      "note": "enum index 5 out of bounds -> invalid"
+    },
+    {
+      "name": "enum_label_open",
+      "type": "ENUM",
+      "value_list": [
+        "CLOSED",
+        "OPEN"
+      ],
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "OPEN"
+      },
+      "expected": {
+        "kind": "string",
+        "v": "OPEN"
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "enum label OPEN unchanged; in value_list"
+    },
+    {
+      "name": "enum_label_missing",
+      "type": "ENUM",
+      "value_list": [
+        "CLOSED",
+        "OPEN"
+      ],
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "MISSING"
+      },
+      "expected": {
+        "kind": "string",
+        "v": "MISSING"
+      },
+      "in_range": false,
+      "compare_in_range": true,
+      "note": "enum label not in value_list -> invalid"
+    },
+    {
+      "name": "string_plain",
+      "type": "STRING",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "string",
+        "v": "hello"
+      },
+      "expected": {
+        "kind": "string",
+        "v": "hello"
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "string passthrough"
+    },
+    {
+      "name": "action_bool",
+      "type": "ACTION",
+      "value_list": null,
+      "min": null,
+      "max": null,
+      "special": null,
+      "raw": {
+        "kind": "bool",
+        "v": true
+      },
+      "expected": {
+        "kind": "bool",
+        "v": true
+      },
+      "in_range": true,
+      "compare_in_range": true,
+      "note": "ACTION bool passthrough; no range constraint"
+    }
+  ]
+}

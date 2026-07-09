@@ -17,6 +17,7 @@ concurrency:
 env:
   CGO_ENABLED: "0"
   GO_VERSION: "1.26.5"
+  PYTHON_VERSION: "3.14"
 
 jobs:
   integration:
@@ -32,6 +33,16 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - uses: actions/setup-python@v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # The datasource diff below compares pydevccu's wire data against the
+      # godevccu Go module. pydevccu is the ONLY reference package this step
+      # needs (no aiohomematic / openccu-data), so install just it — pinned to
+      # the version godevccu's embedded data was generated from. Mirrors the
+      # pin in cross-stack-parity.yml; bump both together on a data refresh.
+      - name: provision pydevccu (wire-data reference)
+        run: python3 -m pip install "pydevccu==0.2.5"
       # `make coverage` runs the full suite with -tags=integration and
       # writes coverage.out. This both exercises the godevccu integration
       # tests (functional failures fail the step) and produces the
@@ -43,17 +54,31 @@ jobs:
       - name: coverage threshold (per package)
         run: make coverage-check-per-package
 
+      # Point datasource_diff.py at the provisioned trees: the pip-installed
+      # pydevccu package and the godevccu Go module in the build cache. The
+      # sibling-checkout defaults do not exist on the runner, and the min-key
+      # floor now fails a vacuous run — so these roots are mandatory.
+      - name: resolve provisioned datasource roots
+        run: |
+          set -euo pipefail
+          # Ensure the godevccu module zip is extracted before reading its
+          # local .Dir — `go list -m -f {{.Dir}}` reports an empty dir for a
+          # module still in go.mod but not yet unpacked into the build cache.
+          go mod download github.com/SukramJ/godevccu
+          echo "PYDEVCCU_ROOT=$(python3 -c 'import pydevccu, os; print(os.path.dirname(pydevccu.__file__))')" >> "$GITHUB_ENV"
+          echo "GODEVCCU_ROOT=$(go list -m -f '{{.Dir}}' github.com/SukramJ/godevccu)/internal/embed/data" >> "$GITHUB_ENV"
+
       - name: datasource diff (pydevccu vs godevccu wire data)
         run: make datasource-diff
 
       - name: openccu-loom model snapshot (against godevccu)
         run: make snapshot-go
 
-      # The aiohomematic snapshot is intentionally NOT run in CI:
-      # it requires the aiohomematic + pydevccu + openccu_data
-      # Python stack which is not provisioned on the runner. The
-      # datasource diff above already proves the wire-data layer
-      # matches; the aiohomematic snapshot is for local
-      # cross-stack regression checks (see
+      # The aiohomematic snapshot is intentionally NOT run in this job: it
+      # requires the full aiohomematic + pydevccu + openccu_data Python stack.
+      # The datasource diff above proves the wire-data layer matches; the
+      # cross-stack MODEL parity (openccu-loom vs aiohomematic) runs in two
+      # dedicated workflows — a SCOPED subset on every PR (model-parity.yml)
+      # and the FULL fleet nightly (cross-stack-parity.yml). See
       # docs/parity/model_snapshot_schema.md + CLAUDE.md
-      # "Cross-stack model-snapshot verification").
+      # "Cross-stack model-snapshot verification".

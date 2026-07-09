@@ -1,0 +1,24 @@
+{
+  "dp_type": "ClimateIP",
+  "setter": "SetAway",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.7.4",
+  "inputs": [
+    {
+      "label": "until=2024-12-01T00:00:00Z,away=17.0",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "BWTH0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "PARTY_TIME_START": "<now>",
+            "PARTY_TIME_END": "2024_12_01 00:00",
+            "SET_POINT_MODE": 2,
+            "SET_POINT_TEMPERATURE": 17.0
+          }
+        }
+      ]
+    }
+  ]
+}

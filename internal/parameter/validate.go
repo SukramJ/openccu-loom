@@ -4,6 +4,7 @@
 package parameter
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,7 +135,7 @@ func validateValue(desc hmproto.ParameterData, v hmtypes.ParamValue, opts Valida
 			return fmt.Errorf("parameter: want int, got %s", v.Kind)
 		}
 		fv := float64(v.Int)
-		if opts.AllowSpecialValues && isSpecialValue(desc, fv) {
+		if opts.AllowSpecialValues && MatchesSpecialValue(desc, fv) {
 			return nil
 		}
 		return checkNumericRange(desc, fv)
@@ -146,7 +147,7 @@ func validateValue(desc hmproto.ParameterData, v hmtypes.ParamValue, opts Valida
 		if math.IsNaN(v.Float) || math.IsInf(v.Float, 0) {
 			return ErrNaNOrInf
 		}
-		if opts.AllowSpecialValues && isSpecialValue(desc, v.Float) {
+		if opts.AllowSpecialValues && MatchesSpecialValue(desc, v.Float) {
 			return nil
 		}
 		if err := checkNumericRange(desc, v.Float); err != nil {
@@ -203,35 +204,73 @@ func validateValue(desc hmproto.ParameterData, v hmtypes.ParamValue, opts Valida
 
 // ---------- helpers ----------
 
-// isSpecialValue reports whether fv matches any entry in the descriptor's
-// SPECIAL list. The CCU encodes SPECIAL as a JSON array of
-// {"ID": "<label>", "VALUE": <number>} objects. A match allows the value
-// to bypass the normal MIN/MAX range check.
+// MatchesSpecialValue reports whether fv equals one of the descriptor's
+// declared SPECIAL sentinel values, in which case the value is allowed to
+// bypass the MIN/MAX range check. It is the single source of truth for the
+// SPECIAL-bypass rule so that every range-checking path — the write-coerce
+// path ([Coerce]), the validation path ([Validate]/[validateValue]), and the
+// runtime read path (internal/model/generic bounds) — agrees on identical
+// inputs.
 //
-// This mirrors the Python reference implementation's SPECIAL handling
-// and the matchesSpecial function in internal/model/generic/bounds.go.
-func isSpecialValue(desc hmproto.ParameterData, fv float64) bool {
-	if len(desc.Special) == 0 {
+// The CCU family encodes SPECIAL in two shapes; both are mirrored by the
+// reference schema (schemas/parameter_description.py:66,
+// `special: dict[str, Any] | list[dict[str, Any]] | None`):
+//
+//   - object: {"NOT_USED": 0.0}                  (JSON-RPC / metadata extracts)
+//   - list:   [{"ID": "NOT_USED", "VALUE": 0.0}] (XML-RPC struct array)
+//
+// Only numeric sentinel values participate; non-numeric markers such as
+// {"OPTIONAL": true} are ignored. Bypassing MIN/MAX for a declared special
+// value matches the CCU server's own clamp behaviour (the reference CCU
+// simulator ccu.py _clamp_numeric_value keeps declared special values
+// unclamped) and the write-side special handling in the reference
+// (model/generic/number.py _prepare_number_for_sending, which accepts a
+// declared special where the plain MIN/MAX check would reject it).
+// loom:reachable:reason="single source of truth for the SPECIAL MIN/MAX-bypass rule; called by the write-coerce path (coerce.go), the validation path (validate.go), and the runtime read path (internal/model/generic bounds.go) — the reachability heuristic does not resolve the delegated cross-package call"
+func MatchesSpecialValue(desc hmproto.ParameterData, fv float64) bool {
+	raw := bytes.TrimSpace(desc.Special)
+	if len(raw) == 0 {
 		return false
 	}
-	type entry struct {
-		ID    string      `json:"ID"`
-		Value json.Number `json:"VALUE"`
-	}
-	var list []entry
-	if err := json.Unmarshal(desc.Special, &list); err != nil {
-		return false
-	}
-	for _, e := range list {
-		f, err := e.Value.Float64()
-		if err != nil {
-			continue
+	switch raw[0] {
+	case '[':
+		var list []map[string]json.RawMessage
+		if json.Unmarshal(raw, &list) != nil {
+			return false
 		}
-		if f == fv {
-			return true
+		for _, e := range list {
+			if numberEquals(e["VALUE"], fv) {
+				return true
+			}
+		}
+	case '{':
+		var obj map[string]json.RawMessage
+		if json.Unmarshal(raw, &obj) != nil {
+			return false
+		}
+		for _, v := range obj {
+			if numberEquals(v, fv) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// numberEquals reports whether raw decodes to a JSON number equal to fv.
+// A non-numeric value (missing key, string, nested object) yields false so a
+// mixed SPECIAL blob such as {"NOT_USED": 0.0, "OPTIONAL": {...}} still
+// matches its numeric sentinels without tripping on the marker entry.
+func numberEquals(raw json.RawMessage, fv float64) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) != nil {
+		return false
+	}
+	f, err := n.Float64()
+	return err == nil && f == fv
 }
 
 // checkFloatPrecision rejects a float value that has a fractional part when

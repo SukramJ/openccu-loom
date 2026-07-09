@@ -53,6 +53,22 @@ GODEVCCU_ROOT = Path(os.environ.get("GODEVCCU_ROOT") or (_PARENT / "godevccu" / 
 
 SECTIONS = ("device_descriptions", "paramset_descriptions")
 
+# Vacuous-run floor. When the roots are mis-provisioned (e.g. a CI job
+# never checks out the sibling trees), glob() finds zero JSON files, the
+# diff compares nothing, and the script would otherwise exit 0 — a green
+# parity gate that verified nothing. Below these floors the run is treated
+# as a configuration error and fails NON-zero. The real fleet compares 399
+# common files per section and ~93k parameters; the floors sit far below
+# that so a legitimately scoped fleet still passes, while an empty/near-
+# empty run cannot masquerade as parity. Override for unusual layouts via
+# the two env vars.
+_MIN_COMMON_FILES = int(os.environ.get("DATASOURCE_DIFF_MIN_FILES") or 50)
+_MIN_COMPARED_PARAMS = int(os.environ.get("DATASOURCE_DIFF_MIN_PARAMS") or 1000)
+
+# Distinct non-zero exit for a vacuous/mis-provisioned run so logs tell it
+# apart from a genuine-drift failure (1).
+_EXIT_VACUOUS = 2
+
 # Per-parameter descriptor fields the downstream consumers care about.
 # Mirrors what aiohomematic2mqtt / homematicip_local read off the wire
 # (`hmproto.ParameterData` in Go) and what discovery payloads ultimately
@@ -250,6 +266,26 @@ def main():
         "attribution_layer": attribution,
     }
     print(json.dumps(report, indent=2))
+
+    # Fail loudly on a vacuous run before the drift verdict: a run that
+    # compared (almost) nothing cannot certify parity, regardless of the
+    # 0-drift tally it would otherwise report.
+    min_common = min((r["common"] for r in identity_summary.values()), default=0)
+    compared_params = attribution["summary"]["parameter_keys_compared"]
+    if min_common < _MIN_COMMON_FILES or compared_params < _MIN_COMPARED_PARAMS:
+        print(
+            "[datasource-diff] VACUOUS RUN — refusing to certify parity.\n"
+            f"  common files (min across sections) = {min_common} "
+            f"(floor {_MIN_COMMON_FILES})\n"
+            f"  parameters compared                = {compared_params} "
+            f"(floor {_MIN_COMPARED_PARAMS})\n"
+            f"  PYDEVCCU_ROOT = {PYDEVCCU_ROOT}\n"
+            f"  GODEVCCU_ROOT = {GODEVCCU_ROOT}\n"
+            "Both roots must point at provisioned pydevccu / godevccu data "
+            "trees (device_descriptions/ + paramset_descriptions/).",
+            file=sys.stderr,
+        )
+        return _EXIT_VACUOUS
 
     identity_drift = sum(
         s["drifted"] + s["only_pydevccu"] + s["only_godevccu"]

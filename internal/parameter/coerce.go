@@ -44,8 +44,13 @@ func Coerce(desc hmproto.ParameterData, raw any) (hmtypes.ParamValue, error) {
 		if err != nil {
 			return hmtypes.ParamValue{}, err
 		}
-		if err := checkNumericRange(desc, float64(i)); err != nil {
-			return hmtypes.ParamValue{}, err
+		// A declared SPECIAL sentinel bypasses MIN/MAX, keeping this
+		// write-coerce path in lockstep with [Validate] and the runtime
+		// read path (internal/model/generic bounds). See [MatchesSpecialValue].
+		if !MatchesSpecialValue(desc, float64(i)) {
+			if err := checkNumericRange(desc, float64(i)); err != nil {
+				return hmtypes.ParamValue{}, err
+			}
 		}
 		return hmtypes.IntValue(i), nil
 
@@ -54,8 +59,10 @@ func Coerce(desc hmproto.ParameterData, raw any) (hmtypes.ParamValue, error) {
 		if err != nil {
 			return hmtypes.ParamValue{}, err
 		}
-		if err := checkNumericRange(desc, f); err != nil {
-			return hmtypes.ParamValue{}, err
+		if !MatchesSpecialValue(desc, f) {
+			if err := checkNumericRange(desc, f); err != nil {
+				return hmtypes.ParamValue{}, err
+			}
 		}
 		return hmtypes.FloatValue(f), nil
 

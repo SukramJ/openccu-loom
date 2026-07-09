@@ -308,14 +308,35 @@ def diff_channel(go_ch: dict, py_ch: dict) -> dict:
     return drifts
 
 
+# aiohomematic reports a device that carries no wire FIRMWARE as the
+# canonical default "0.0" (aiohomematic model/device.py:1790 —
+# `self._device_description.get("FIRMWARE") or "0.0"`); the openccu-loom
+# snapshot leaves the same "no reported firmware" state as the empty string.
+# Both encode the identical wire condition, so the two sentinels are
+# canonicalised to compare equal. A genuine firmware mismatch (e.g. "1.2.0"
+# vs "1.4.0") still differs after canonicalisation and surfaces as
+# device_fields drift.
+_NO_FIRMWARE = frozenset({None, "", "0.0"})
+
+
+def _canon_firmware(value: Any) -> Any:
+    return "" if value in _NO_FIRMWARE else value
+
+
 def diff_device(go_dev: dict, py_dev: dict) -> dict:
     drifts: dict[str, Any] = {}
     for field in ("address", "model", "interface_id", "firmware",
                   "version", "product_group"):
         go_v = go_dev.get(field)
         py_v = py_dev.get(field)
-        if go_v != py_v:
-            drifts.setdefault("device_fields", {})[field] = (go_v, py_v)
+        if field == "firmware":
+            if _canon_firmware(go_v) == _canon_firmware(py_v):
+                continue
+        elif go_v == py_v:
+            continue
+        # Report the raw values; the comparison above already canonicalised
+        # the no-firmware sentinel so only a genuine divergence lands here.
+        drifts.setdefault("device_fields", {})[field] = (go_v, py_v)
 
     go_chs = index_channels(go_dev)
     py_chs = index_channels(py_dev)
@@ -383,6 +404,22 @@ def main(argv: list[str]) -> int:
         # only_in_openccu-loom is reported under a separate "extras"
         # heading and does NOT contribute to the exit code.
         has_real_drift = False
+
+        # Device-identity drift (model / firmware / version / product_group /
+        # interface_id) and channels aiohomematic exposes that openccu-loom
+        # lacks are real model regressions. diff_device already computes them;
+        # fold their counts into drift_counts so total_drift reflects them —
+        # otherwise a whole missing channel or a device model/firmware
+        # mismatch scores zero and passes the gate green.
+        if "device_fields" in d:
+            drift_counts["device_fields"] += len(d["device_fields"])
+            has_real_drift = True
+        if "only_in_aiohomematic_channels" in d:
+            drift_counts["only_in_aiohomematic_channels"] += len(
+                d["only_in_aiohomematic_channels"]
+            )
+            has_real_drift = True
+
         for ch_num, ch_drift in (d.get("channels") or {}).items():
             if "channel_fields" in ch_drift:
                 drift_counts["channel_fields"] += len(ch_drift["channel_fields"])
