@@ -6,15 +6,18 @@
 package harness
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -413,4 +416,169 @@ func stripANSI(s string) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
+}
+
+// WriteAttr executes a `write <attribute> <value>` against the given
+// cluster and endpoint on the commissioned bridge. Value precedes the
+// node-id/endpoint tail, mirroring chip-tool's own argv order and the
+// same node-id/endpoint tail convention [Controller.ReadAttr] and
+// [Controller.Invoke] already use.
+func (c *Controller) WriteAttr(ctx context.Context, t *testing.T, cluster, attr, value string, endpointID uint16) (string, error) {
+	t.Helper()
+	return c.Run(
+		ctx, t,
+		cluster, "write", attr, value,
+		fmt.Sprintf("0x%X", c.NodeID),
+		fmt.Sprintf("%d", endpointID),
+	)
+}
+
+// ReadAttrRaw is a thin passthrough to [Controller.Run] for
+// chip-tool invocations that need an argv shape [Controller.ReadAttr]
+// does not model — extra flags, wildcard attribute selectors, or any
+// command that doesn't fit the single-attribute calling convention.
+// Callers assemble the full argument list themselves; ReadAttrRaw
+// only supplies the shared timeout + KVS-directory plumbing
+// [Controller.Run] already provides.
+func (c *Controller) ReadAttrRaw(ctx context.Context, t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	return c.Run(ctx, t, args...)
+}
+
+// SubscribeAndAwait runs a Subscribe against cluster/attr and returns
+// as soon as the accumulated, ANSI-stripped output satisfies
+// want(out) — or errors out once timeout elapses. Unlike
+// [Controller.Subscribe], which waits for chip-tool's own exit before
+// returning, this variant scans stdout incrementally so a
+// RECEIVE-direction test reacts the moment the daemon actually pushes
+// the report a simulated device event triggered, instead of racing a
+// fixed sleep window against it.
+//
+// The subprocess is torn down (context cancellation → chip-tool
+// killed) as soon as want() matches or the timeout fires; chip-tool's
+// subscribe commands otherwise run until interrupted.
+func (c *Controller) SubscribeAndAwait(
+	ctx context.Context, t *testing.T,
+	cluster, attr string, endpointID uint16,
+	minIntervalSec, maxIntervalSec int,
+	want func(out string) bool,
+	timeout time.Duration,
+) (string, error) {
+	t.Helper()
+	return c.subscribeAndAwait(
+		ctx, t, want, timeout,
+		cluster, "subscribe", attr,
+		fmt.Sprintf("%d", minIntervalSec),
+		fmt.Sprintf("%d", maxIntervalSec),
+		fmt.Sprintf("0x%X", c.NodeID),
+		fmt.Sprintf("%d", endpointID),
+	)
+}
+
+// SubscribeEventAndAwait is the event-report variant of
+// [Controller.SubscribeAndAwait], used for event-driven clusters such
+// as GenericSwitch — a button press has no attribute to poll, chip-
+// tool only surfaces it through `subscribe-event`.
+func (c *Controller) SubscribeEventAndAwait(
+	ctx context.Context, t *testing.T,
+	cluster, evt string, endpointID uint16,
+	minIntervalSec, maxIntervalSec int,
+	want func(out string) bool,
+	timeout time.Duration,
+) (string, error) {
+	t.Helper()
+	return c.subscribeAndAwait(
+		ctx, t, want, timeout,
+		cluster, "subscribe-event", evt,
+		fmt.Sprintf("%d", minIntervalSec),
+		fmt.Sprintf("%d", maxIntervalSec),
+		fmt.Sprintf("0x%X", c.NodeID),
+		fmt.Sprintf("%d", endpointID),
+	)
+}
+
+// subscribeAndAwait is the shared implementation behind
+// [Controller.SubscribeAndAwait] and [Controller.SubscribeEventAndAwait].
+// It runs chip-tool with a pipe-connected, merged stdout+stderr
+// stream (mirroring [Controller.Run]'s TERM=dumb / NO_COLOR=1 /
+// --storage-directory conventions), scans it line-by-line, and
+// returns the moment the ANSI-stripped accumulated output satisfies
+// want(). The subprocess is cancelled — not just abandoned — as soon
+// as a match lands or the timeout expires, so a caller looping over
+// many send/receive cases does not leak one long-lived chip-tool
+// process per case.
+func (c *Controller) subscribeAndAwait(
+	parent context.Context, t *testing.T,
+	want func(out string) bool, timeout time.Duration,
+	args ...string,
+) (string, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+
+	full := append([]string{}, args...)
+	full = append(full, "--storage-directory", c.StorageDir)
+
+	cmd := exec.CommandContext(ctx, c.ChipBin, full...)
+	cmd.Env = append(os.Environ(), "TERM=dumb", "NO_COLOR=1")
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("stdout pipe: %w", err)
+	}
+	cmd.Stderr = cmd.Stdout // merge stderr into the same scanned stream
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start chip-tool: %w", err)
+	}
+
+	var (
+		mu  sync.Mutex
+		buf bytes.Buffer
+	)
+	matched := make(chan struct{})
+	scanDone := make(chan struct{})
+	var matchOnce sync.Once
+
+	go func() {
+		defer close(scanDone)
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			mu.Lock()
+			buf.WriteString(scanner.Text())
+			buf.WriteByte('\n')
+			snapshot := stripANSI(buf.String())
+			mu.Unlock()
+			if want(snapshot) {
+				matchOnce.Do(func() { close(matched) })
+				return
+			}
+		}
+	}()
+
+	var runErr error
+	select {
+	case <-matched:
+	case <-scanDone:
+		runErr = errors.New("chip-tool exited before the expected report arrived")
+	case <-ctx.Done():
+		runErr = fmt.Errorf("timeout after %s waiting for expected report", timeout)
+	}
+
+	// Stop the subprocess before Wait — in the matched case chip-tool
+	// is still running the live subscription and would otherwise
+	// block Wait forever.
+	cancel()
+	_ = cmd.Wait()
+	<-scanDone
+
+	mu.Lock()
+	out := stripANSI(buf.String())
+	mu.Unlock()
+
+	if runErr != nil {
+		return out, fmt.Errorf("%w\n--- output ---\n%s", runErr, out)
+	}
+	return out, nil
 }

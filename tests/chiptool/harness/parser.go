@@ -364,3 +364,36 @@ func HexUint(s string) (uint64, bool) {
 // hex literal — handy for tests that assemble chip-tool argv
 // directly.
 func FormatNodeID(n uint64) string { return fmt.Sprintf("0x%X", n) }
+
+// reWriteStatus matches the status code chip-tool prints for a Write
+// or Invoke response, e.g. "Status: 0x86" (CONSTRAINT_ERROR) or
+// "Status: 0x87" (UNSUPPORTED_WRITE). Anchored on the same "Status:
+// 0x<hex>" token [CommandSuccess] already matches for the success
+// (0x0) case.
+var reWriteStatus = regexp.MustCompile(`Status:\s+(0x[0-9A-Fa-f]+)`)
+
+// FindAttrInt parses a signed attribute value — such as
+// TemperatureMeasurement.MeasuredValue (int16, hundredths of a degree
+// C, negative below freezing) — out of chip-tool's "[TOO]   AttrName:
+// <number>" marker line. Kept as a distinct entry point from
+// [FindAttrUint] so callers reach for the helper matching the
+// attribute's declared sign/width rather than relying on an
+// unsigned-named function to also happen to accept a leading minus.
+func FindAttrInt(out, name string) (int64, bool) {
+	return FindAttrUint(out, name)
+}
+
+// WriteStatus returns the last IM status code chip-tool printed for a
+// WriteResponse or InvokeResponse (e.g. "0x87" UNSUPPORTED_WRITE,
+// "0x88" UNSUPPORTED_ACCESS, "0x86" CONSTRAINT_ERROR) as the raw
+// "0xNN" hex literal. Returns the LAST match rather than the first —
+// a Subscribe priming report or an earlier command in the same
+// invocation can echo its own "Status: 0x0" before the actual
+// write/invoke status line appears.
+func WriteStatus(out string) (statusHex string, ok bool) {
+	matches := reWriteStatus.FindAllStringSubmatch(out, -1)
+	if len(matches) == 0 {
+		return "", false
+	}
+	return matches[len(matches)-1][1], true
+}

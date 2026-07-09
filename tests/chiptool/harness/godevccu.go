@@ -26,6 +26,21 @@ import (
 //   - HmIP-PS     — Plug-in switch → OnOff (mirrors the sanctioned
 //     write target on the real CCU)
 //   - HmIP-BDT    — Brand-recessed dimmer → OnOff + LevelControl
+//   - HmIP-DLD    — Door lock drive → DoorLock
+//   - HmIP-LSC    — Light strip / combined light → ColorControl
+//     (hue/saturation + colour temperature simultaneously)
+//   - HmIP-FBL    — Tilting blind → WindowCovering (tilt variant)
+//   - HmIP-MOD-HO — Garage door module → WindowCovering with
+//     EndProductType=GarageDoor
+//   - HmIP-SMI    — Motion detector → OccupancySensing
+//   - HmIP-SWDO   — Shutter contact (window/door sensor) →
+//     BooleanState (second fixture on this cluster, distinct wire
+//     shape from HmIP-SWSD)
+//   - HmIP-STHO   — Outdoor temperature/humidity sensor →
+//     TemperatureMeasurement, RelativeHumidity
+//   - HmIP-SCTH230 — CO2 + temperature + humidity sensor →
+//     CarbonDioxideConcentrationMeasurement, TemperatureMeasurement,
+//     RelativeHumidity
 var DefaultDevices = []string{
 	"HmIP-SWSD",
 	"HmIP-BWTH",
@@ -33,6 +48,14 @@ var DefaultDevices = []string{
 	"HmIP-BROLL",
 	"HmIP-PS",
 	"HmIP-BDT",
+	"HmIP-DLD",
+	"HmIP-LSC",
+	"HmIP-FBL",
+	"HmIP-MOD-HO",
+	"HmIP-SMI",
+	"HmIP-SWDO",
+	"HmIP-STHO",
+	"HmIP-SCTH230",
 }
 
 // MockCCU wraps a running godevccu instance bound to OS-assigned
