@@ -226,6 +226,7 @@ func validateValue(desc hmproto.ParameterData, v hmtypes.ParamValue, opts Valida
 // unclamped) and the write-side special handling in the reference
 // (model/generic/number.py _prepare_number_for_sending, which accepts a
 // declared special where the plain MIN/MAX check would reject it).
+// loom:reachable:reason="single source of truth for the SPECIAL MIN/MAX-bypass rule; called by the write-coerce path (coerce.go), the validation path (validate.go), and the runtime read path (internal/model/generic bounds.go) — the reachability heuristic does not resolve the delegated cross-package call"
 func MatchesSpecialValue(desc hmproto.ParameterData, fv float64) bool {
 	raw := bytes.TrimSpace(desc.Special)
 	if len(raw) == 0 {

@@ -41,6 +41,7 @@ var ErrParameterNotWritable = errors.New("channel: parameter not writable")
 // — which never reached the wire — apart from a genuine upstream failure, and
 // answer 4xx instead of 5xx. The underlying sentinel (e.g. parameter.ErrStringTooLong)
 // stays reachable via errors.Is through the wrap chain.
+// loom:reachable:reason="matched by the REST PUT /value handler (internal/north/rest/handlers/devices.go) via errors.Is to map a client-side validation rejection to 400 instead of a 502 upstream failure; the reachability heuristic does not follow sentinel-var references through errors.Is"
 var ErrValidation = errors.New("channel: value rejected by validation")
 
 // validateForSet runs the value validation shared by Set and SetMany. It uses
