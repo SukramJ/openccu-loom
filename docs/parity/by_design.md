@@ -280,6 +280,39 @@ device families above.
 | `ce_visible`) signature on `DIRECTION` / `SMOKE_DETECTOR_ALARM_STATUS`; any
 other usage combination on these parameters still surfaces.
 
+### BD-Snapshot-UnnamedChannelName — unnamed channels: null (openccu-loom) vs stringified number (aiohomematic)
+
+Against the name-less pydevccu / godevccu simulators no channel carries a
+custom name. aiohomematic reports an unnamed channel's `name` as the channel
+number stringified (channel N → `"N"`, `model/support.py` `get_channel_name`
+fallback); openccu-loom leaves it `null`. Both encode "no custom name
+assigned"; on a real CCU the operator-assigned names populate both stacks
+identically. This is a snapshot-representation difference, not a model gap.
+
+**Snapshot tolerance:** `script/model_snapshot_diff.py` (`_is_unnamed_channel`)
+canonicalises the `name` field so `null` / `""` ↔ `str(channel_number)` compare
+equal. A real assigned name (neither null nor the channel number) still surfaces
+as a `channel_fields` drift.
+
+### BD-Snapshot-InterfaceTopology — interface_id / product_group reflect simulator topology, not the model port
+
+`interface_id` and `product_group` record which XML-RPC interface served a
+device. Against the two simulators this is a property of the *simulator's*
+fixture topology: godevccu and pydevccu organise the same classic BidCos-RF
+devices (`263 x`, `ZEL STG RM DWT 10`, `ASH550`, `IS-WDS-TH-OD-S-R3`, …) under
+different interface endpoints, so the two stacks report `HmIP-RF` vs
+`BidCos-RF` for the same address (69 devices in the current fleet). On a real
+CCU a device is received on exactly one interface and both stacks read the same
+value, so these fields agree in production — the divergence carries no
+model-fidelity meaning. Aligning the godevccu fixtures' interface assignment to
+pydevccu would close it at the source; tracked separately.
+
+**Snapshot tolerance:** `script/model_snapshot_diff.py`
+(`_TOLERATED_DEVICE_FIELDS`) excludes `interface_id` and `product_group` from
+the `device_fields` drift, so it stays sensitive to a genuine `model` /
+`firmware` / `version` regression and to channels aiohomematic exposes that
+openccu-loom lacks.
+
 ---
 
 ## A2 — Custom DPs

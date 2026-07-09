@@ -267,8 +267,24 @@ def diff_dp(go_dp: dict, py_dp: dict) -> dict:
     return drift
 
 
+def _is_unnamed_channel(name: Any, number: Any) -> bool:
+    """Report whether a channel carries no custom name.
+
+    aiohomematic represents an unnamed channel's name as the channel number
+    stringified (channel N -> "N", model/support.py get_channel_name fallback);
+    openccu-loom leaves it null. Against the name-less pydevccu/godevccu
+    simulators every channel is unnamed, so the two stacks emit the same
+    "no custom name" state in different shapes. A real assigned name (e.g.
+    "Living Room") is neither null nor the channel number and still differs.
+    """
+    if name in (None, ""):
+        return True
+    return number is not None and str(name) == str(number)
+
+
 def diff_channel(go_ch: dict, py_ch: dict) -> dict:
     drifts: dict[str, Any] = {}
+    ch_number = py_ch.get("number", go_ch.get("number"))
 
     # Channel-level scalar fields.
     #
@@ -284,6 +300,14 @@ def diff_channel(go_ch: dict, py_ch: dict) -> dict:
         py_v = py_ch.get(field)
         # Treat empty list and missing as equal.
         if go_v in (None, "", [], 0) and py_v in (None, "", [], 0):
+            continue
+        # An unnamed channel is null (openccu-loom) vs the channel number
+        # stringified (aiohomematic); both encode "no custom name".
+        if (
+            field == "name"
+            and _is_unnamed_channel(go_v, ch_number)
+            and _is_unnamed_channel(py_v, ch_number)
+        ):
             continue
         if go_v != py_v:
             drifts.setdefault("channel_fields", {})[field] = (go_v, py_v)
@@ -323,10 +347,25 @@ def _canon_firmware(value: Any) -> Any:
     return "" if value in _NO_FIRMWARE else value
 
 
+# interface_id / product_group record which XML-RPC interface served a device,
+# which is a property of the *simulator's* fixture topology, not the
+# openccu-loom model port: godevccu and pydevccu organise the same classic
+# BidCos-RF devices (e.g. `263 x`, `ZEL STG RM DWT 10`, `ASH550`) under
+# different interface endpoints, so the two stacks report HmIP-RF vs BidCos-RF
+# for the same address. On a real CCU a device is received on one interface and
+# both stacks read the same value, so these fields agree in production; against
+# the two simulators they diverge with no model-fidelity meaning. Tolerating
+# them keeps device_fields sensitive to a genuine model / firmware / version
+# regression. See docs/parity/by_design.md.
+_TOLERATED_DEVICE_FIELDS = frozenset({"interface_id", "product_group"})
+
+
 def diff_device(go_dev: dict, py_dev: dict) -> dict:
     drifts: dict[str, Any] = {}
     for field in ("address", "model", "interface_id", "firmware",
                   "version", "product_group"):
+        if field in _TOLERATED_DEVICE_FIELDS:
+            continue
         go_v = go_dev.get(field)
         py_v = py_dev.get(field)
         if field == "firmware":
