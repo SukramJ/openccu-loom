@@ -25,6 +25,7 @@ type validityRig struct {
 	valveState *generic.Sensor[float64] // non-nil for RF rigs
 	level      *generic.Sensor[float64] // non-nil for IP rigs
 	state      *generic.BinarySensor    // non-nil for IP rigs
+	humidity   *generic.Sensor[int32]   // non-nil for IP rigs
 }
 
 func buildRFValidityRig(t *testing.T) *validityRig {
@@ -145,6 +146,23 @@ func buildIPValidityRig(t *testing.T) *validityRig {
 	})
 	ch.Put(st)
 
+	// HUMIDITY on HmIP channels is an integer sensor DP; it is an
+	// aggregate value slot alongside setpoint and ACTUAL_TEMPERATURE
+	// (see climate.go aggregate()), but a valve-only heating group never
+	// receives events for it.
+	hu := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: addr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterHumidity),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(hu)
+
 	c := New(Config{
 		Channel:      ch,
 		Writer:       &stubWriter{},
@@ -157,6 +175,7 @@ func buildIPValidityRig(t *testing.T) *validityRig {
 		actualTemp: at,
 		level:      lv,
 		state:      st,
+		humidity:   hu,
 	}
 }
 
@@ -229,5 +248,62 @@ func TestClimateValidityRequiresAtLeastOneValueSlotObserved(t *testing.T) {
 
 	if r.climate.IsRefreshed() {
 		t.Error("climate must not be refreshed when no value slot has been observed")
+	}
+}
+
+// TestClimateValidityIgnoresUnobservedHumidityIP pins the any-slot refresh
+// semantics for a valve-only heating group: HUMIDITY is a wired aggregate
+// value slot on IP channels, but a group built from valves alone never
+// receives events for it (no wall thermostat in the group). Observing
+// ACTUAL_TEMPERATURE alone must still flip the climate to refreshed, so
+// current_temperature never freezes behind a HUMIDITY DP that will never
+// be observed.
+func TestClimateValidityIgnoresUnobservedHumidityIP(t *testing.T) {
+	r := buildIPValidityRig(t)
+
+	// Sanity: nothing observed yet — climate must not report refreshed.
+	if r.climate.IsRefreshed() {
+		t.Fatal("climate must not be refreshed before any observation")
+	}
+
+	// Confirm HUMIDITY is a real, unobserved aggregate slot before driving
+	// any observation.
+	if _, huObserved := r.humidity.RawValue(); huObserved {
+		t.Fatal("HUMIDITY must not be observed — test precondition violated")
+	}
+
+	// Observe only the actual temperature value slot. HUMIDITY, LEVEL and
+	// STATE are deliberately left unobserved, mirroring a valve-only group.
+	r.actualTemp.OnEvent(20.0)
+
+	// Confirm that HUMIDITY is still unobserved.
+	if _, huObserved := r.humidity.RawValue(); huObserved {
+		t.Fatal("HUMIDITY must not be observed — test precondition violated")
+	}
+
+	// Climate must report refreshed: the any-slot aggregate does not wait
+	// for every value slot, so an unobserved HUMIDITY must not block
+	// availability once ACTUAL_TEMPERATURE has landed.
+	if !r.climate.IsRefreshed() {
+		t.Error("climate must be refreshed once ACTUAL_TEMPERATURE is observed, " +
+			"even when HUMIDITY is never observed (valve-only heating group)")
+	}
+}
+
+// TestClimateValidityHumidityAloneRefreshesIP is the mirror case: observing
+// only HUMIDITY (no temperature, no actuator DPs) must also flip the
+// climate to refreshed, confirming the aggregate is genuinely any-slot
+// rather than silently depending on ACTUAL_TEMPERATURE.
+func TestClimateValidityHumidityAloneRefreshesIP(t *testing.T) {
+	r := buildIPValidityRig(t)
+
+	if r.climate.IsRefreshed() {
+		t.Fatal("climate must not be refreshed before any observation")
+	}
+
+	r.humidity.OnEvent(45)
+
+	if !r.climate.IsRefreshed() {
+		t.Error("climate must be refreshed once HUMIDITY alone is observed")
 	}
 }
