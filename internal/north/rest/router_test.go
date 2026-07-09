@@ -11,9 +11,16 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -1340,4 +1347,178 @@ func TestIdempotencyReplays(t *testing.T) {
 		t.Fatalf("replay body=%q code=%d", rr2.Body.String(), rr2.Code)
 	}
 	_ = time.Now
+}
+
+// ---------------------------------------------------------------------------
+// Response-schema conformance. middleware.OpenAPIValidator (see
+// middleware/openapi.go) only ever validates the REQUEST side against
+// assets/openapi.yaml — a handler that drops or renames a response field
+// previously had no test surface that would catch it. These tests replay a
+// representative response through the same kin-openapi machinery so a DTO
+// drift fails a test instead of shipping silently to external clients.
+// ---------------------------------------------------------------------------
+
+// openAPIResponseRouter loads and validates assets/openapi.yaml and builds
+// the gorillamux router kin-openapi needs to resolve a request to its
+// documented operation, mirroring middleware.NewOpenAPIValidator's own
+// construction path so response checks exercise the identical schema the
+// production request validator enforces.
+func openAPIResponseRouter(t *testing.T) routers.Router {
+	t.Helper()
+	_, thisFile, _, _ := runtime.Caller(0)
+	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..")
+	specPath := filepath.Join(repoRoot, "assets", "openapi.yaml")
+
+	loader := openapi3.NewLoader()
+	loader.IsExternalRefsAllowed = false
+	doc, err := loader.LoadFromFile(specPath)
+	if err != nil {
+		t.Fatalf("load spec: %v", err)
+	}
+	if err := doc.Validate(context.Background()); err != nil {
+		t.Fatalf("validate spec: %v", err)
+	}
+	rtr, err := gorillamux.NewRouter(doc)
+	if err != nil {
+		t.Fatalf("build router: %v", err)
+	}
+	return rtr
+}
+
+// assertResponseMatchesOpenAPISchema resolves req to its documented
+// operation in rtr and validates rr's status/body against that operation's
+// declared response schema. Fails the test on any mismatch: a status code
+// the spec doesn't document for the path, a missing required property, or a
+// property whose JSON type disagrees with the schema.
+func assertResponseMatchesOpenAPISchema(t *testing.T, rtr routers.Router, req *http.Request, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	route, pathParams, err := rtr.FindRoute(req)
+	if err != nil {
+		t.Fatalf("FindRoute(%s %s): %v", req.Method, req.URL.Path, err)
+	}
+	respInput := &openapi3filter.ResponseValidationInput{
+		RequestValidationInput: &openapi3filter.RequestValidationInput{
+			Request:    req,
+			PathParams: pathParams,
+			Route:      route,
+		},
+		Status: rr.Code,
+		Header: rr.Header(),
+	}
+	respInput.SetBodyBytes(rr.Body.Bytes())
+	if err := openapi3filter.ValidateResponse(context.Background(), respInput); err != nil {
+		t.Fatalf("response for %s %s (status %d) does not match assets/openapi.yaml: %v\nbody=%s",
+			req.Method, req.URL.Path, rr.Code, err, rr.Body.String())
+	}
+}
+
+// TestRESTResponsesMatchOpenAPISchema exercises a representative slice of
+// endpoints across the core/devices/hub/incidents/backup surfaces and checks
+// each response against its documented schema. Not exhaustive — the goal is
+// a standing regression guard against dropped/renamed response fields on the
+// most heavily used surfaces, not full endpoint coverage (which the
+// per-handler unit tests already provide for behavior).
+func TestRESTResponsesMatchOpenAPISchema(t *testing.T) {
+	rtr := openAPIResponseRouter(t)
+
+	t.Run("info", func(t *testing.T) {
+		h := newTestRouter(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
+		rr := h.do(http.MethodGet, "/api/v1/info", nil)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("health healthy", func(t *testing.T) {
+		h := newTestRouter(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+		rr := h.do(http.MethodGet, "/api/v1/health", nil)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("health unhealthy", func(t *testing.T) {
+		tr := health.NewTracker()
+		tr.Record("central", health.Sample{Healthy: false})
+		tr.Record("central", health.Sample{Healthy: false})
+		r := NewRouter(Deps{Health: tr})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("config", func(t *testing.T) {
+		h := newTestRouter(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/config", http.NoBody)
+		rr := h.do(http.MethodGet, "/api/v1/config", nil)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("devices list", func(t *testing.T) {
+		r := newDeviceRouter(t, nil, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("device detail", func(t *testing.T) {
+		r := newDeviceRouter(t, nil, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("incidents", func(t *testing.T) {
+		reader := &fakeIncidents{items: []handlers.Incident{{ID: "inc-1", Severity: "warn"}}}
+		r := NewRouter(Deps{Incidents: reader})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/incidents", http.NoBody)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("backups list", func(t *testing.T) {
+		bak := &fakeBackup{jobs: []handlers.BackupEntry{{ID: "b1", Bytes: 7}}}
+		r := NewRouter(Deps{Backup: bak})
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/backups", http.NoBody)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
+
+	t.Run("programs list", func(t *testing.T) {
+		h := newHubRouter(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+		rr := httptest.NewRecorder()
+		h.handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status=%d", rr.Code)
+		}
+		assertResponseMatchesOpenAPISchema(t, rtr, req, rr)
+	})
 }

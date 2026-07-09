@@ -266,7 +266,7 @@ func TestClimateSetAwayIPAtomicPutParamset(t *testing.T) {
 		hmenum.ParameterPartyTimeStart,
 		hmenum.ParameterPartyTimeEnd,
 		hmenum.ParameterSetPointMode,
-		hmenum.ParameterPartyTemperature,
+		hmenum.ParameterSetPointTemperature,
 	} {
 		if _, ok := got[string(p)]; !ok {
 			t.Errorf("missing %s in atomic batch", p)

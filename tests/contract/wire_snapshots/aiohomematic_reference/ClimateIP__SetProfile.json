@@ -1,0 +1,41 @@
+{
+  "dp_type": "ClimateIP",
+  "setter": "SetProfile",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.7.4",
+  "inputs": [
+    {
+      "label": "profile=WeekProgram1",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BWTH0001:1",
+          "parameter": "ACTIVE_PROFILE",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "profile=WeekProgram2",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BWTH0001:1",
+          "parameter": "ACTIVE_PROFILE",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "label": "profile=WeekProgram3",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BWTH0001:1",
+          "parameter": "ACTIVE_PROFILE",
+          "value": 3
+        }
+      ]
+    }
+  ]
+}

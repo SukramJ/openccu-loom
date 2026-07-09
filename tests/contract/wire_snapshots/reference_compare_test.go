@@ -26,6 +26,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -604,6 +605,60 @@ func newClimateIPFixtureRef(t *testing.T, w *fakeWriter) *climate.Climate {
 		TemperatureStep: 0.5,
 	}
 	return climate.New(climate.Config{Channel: ch, Writer: w, Capabilities: caps, Kind: climate.KindIP})
+}
+
+// newClimateIPAwayFixtureRef is newClimateIPFixtureRef plus SupportsAway, kept
+// as a separate constructor so the away-mode case does not change the
+// capability surface exercised by the other ClimateIP cases above.
+func newClimateIPAwayFixtureRef(t *testing.T, w *fakeWriter) *climate.Climate {
+	t.Helper()
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "BWTH0001"})
+	ch := d.AddChannel("BWTH0001:1", 1, "CLIMATE", hmenum.ParamsetKeyValues)
+	for _, fp := range []struct {
+		param hmenum.Parameter
+		ops   hmenum.Operations
+	}{
+		{hmenum.ParameterSetPointTemperature, hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent},
+		{hmenum.ParameterActualTemperature, hmenum.OperationsRead | hmenum.OperationsEvent},
+	} {
+		dp := generic.NewFloat(generic.Spec{
+			Key:         hmtypes.DataPointKey{ChannelAddress: "BWTH0001:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(fp.param)},
+			Descriptor:  hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: fp.ops},
+			Writer:      w,
+			CentralName: "testcentral",
+		})
+		ch.Put(dp)
+	}
+	caps := custom.ClimateCapabilities{
+		SupportsAway:    true,
+		SupportsAuto:    true,
+		SupportsHeat:    true,
+		SupportsOff:     true,
+		MinTemperature:  5,
+		MaxTemperature:  30,
+		TemperatureStep: 0.5,
+	}
+	return climate.New(climate.Config{Channel: ch, Writer: w, Capabilities: caps, Kind: climate.KindIP})
+}
+
+// partyTimeStartPlaceholder replaces the non-deterministic PARTY_TIME_START
+// value (encoded from time.Now() by Climate.SetAway) with a fixed sentinel so
+// the reference comparison stays deterministic across runs. Only this one
+// field is masked; every other field in the batch is compared verbatim.
+const partyTimeStartPlaceholder = "<now>"
+
+func maskPartyTimeStart(wc WireCapture) WireCapture {
+	out := make(WireCapture, len(wc))
+	for i, call := range wc {
+		if _, ok := call.PutValues[string(hmenum.ParameterPartyTimeStart)]; ok {
+			cp := make(map[string]any, len(call.PutValues))
+			maps.Copy(cp, call.PutValues)
+			cp[string(hmenum.ParameterPartyTimeStart)] = partyTimeStartPlaceholder
+			call.PutValues = cp
+		}
+		out[i] = call
+	}
+	return out
 }
 
 func newSoundPlayerLEDFixtureRef(t *testing.T, w *fakeWriter) (*light.SoundPlayerLED, string) {
@@ -1187,6 +1242,52 @@ func TestReferenceCompare(t *testing.T) {
 				return []WireCapture{w.Capture()}
 			},
 		},
+		// ClimateIP SetProfile: KindIP writes 1-based ACTIVE_PROFILE as a single
+		// SetValue once the device reports AUTO mode (the default state of a
+		// freshly-constructed fixture). Mirrors the reference implementation's
+		// CustomDpIpThermostat.set_profile (model/custom/climate.py:880-893);
+		// confirmed by tests/test_model_climate.py:1228-1237, which asserts
+		// `set_value(parameter="ACTIVE_PROFILE", value=1)` for WEEK_PROGRAM_1
+		// once SET_POINT_MODE reports AUTO.
+		{
+			dpType: "ClimateIP", setter: "SetProfile",
+			run: func(t *testing.T, w *fakeWriter) []WireCapture {
+				t.Helper()
+				var out []WireCapture
+				for _, p := range []climate.Profile{climate.ProfileWeekProgram1, climate.ProfileWeekProgram2, climate.ProfileWeekProgram3} {
+					c := newClimateIPFixtureRef(t, w)
+					_ = c.SetProfile(ctx, p, pri)
+					out = append(out, w.Capture())
+				}
+				return out
+			},
+		},
+		// ClimateIP SetAway: KindIP batches the away-mode fields into one
+		// PutParamset. Mirrors the reference implementation's
+		// CustomDpIpThermostat.enable_away_mode_by_calendar
+		// (model/custom/climate.py:841-852); confirmed by
+		// tests/test_model_climate.py:1253-1265, which asserts
+		// put_paramset(values={"SET_POINT_MODE": 2, "SET_POINT_TEMPERATURE": 17.0,
+		// "PARTY_TIME_START": ..., "PARTY_TIME_END": ...}).
+		//
+		// Two known drifts are pinned here until the production code is
+		// corrected: Go writes PARTY_TEMPERATURE instead of
+		// SET_POINT_TEMPERATURE, and Go's PARTY_TIME_* encoding
+		// ("02.01.06 15:04") does not match the reference's "%Y_%m_%d %H:%M".
+		// PARTY_TIME_START is masked to a fixed placeholder (see
+		// maskPartyTimeStart) because Climate.SetAway encodes it from
+		// time.Now() and would otherwise make this case non-deterministic
+		// regardless of the drift.
+		{
+			dpType: "ClimateIP", setter: "SetAway",
+			run: func(t *testing.T, w *fakeWriter) []WireCapture {
+				t.Helper()
+				c := newClimateIPAwayFixtureRef(t, w)
+				until := time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC)
+				_ = c.SetAway(ctx, until, 17.0, pri)
+				return []WireCapture{maskPartyTimeStart(w.Capture())}
+			},
+		},
 		{
 			dpType: "ClimateRF", setter: "SetMode",
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
@@ -1288,9 +1389,17 @@ func TestReferenceCompare(t *testing.T) {
 		t.Run(rc.dpType+"/"+rc.setter, func(t *testing.T) {
 			t.Parallel()
 
+			// A missing reference file for a registered case must fail the
+			// build, not silently skip: an unreviewed setter would otherwise
+			// carry no ground-truth comparison at all and nobody would
+			// notice. Every dpType/setter pair added to `cases` above must
+			// ship a matching aiohomematic_reference/<DPType>__<Setter>.json
+			// file in the same change.
 			ref, ok := loadReferenceSnapshot(t, refDir, rc.dpType, rc.setter)
 			if !ok {
-				t.Skipf("no reference snapshot for %s/%s — run: python3 script/aiohomematic_wire_snapshots.py", rc.dpType, rc.setter)
+				t.Fatalf("missing aiohomematic reference snapshot for %s/%s — every registered case must ship one; "+
+					"run: python3 script/aiohomematic_wire_snapshots.py, or hand-author aiohomematic_reference/%s__%s.json "+
+					"from the aiohomematic source (see README.md)", rc.dpType, rc.setter, rc.dpType, rc.setter)
 			}
 
 			w := NewFakeWriter()

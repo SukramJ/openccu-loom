@@ -6,12 +6,14 @@ package device
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -32,6 +34,31 @@ var ErrUnknownParameter = errors.New("channel: parameter not in paramset")
 // ErrParameterNotWritable is returned when the data point reports
 // non-writable through [writableReporter.IsWritable].
 var ErrParameterNotWritable = errors.New("channel: parameter not writable")
+
+// ErrValidation wraps a client-side value rejection surfaced by Set/SetMany
+// when opts.Validate is set (type / range / enum / length / writability). It
+// lets callers such as the REST PUT handler tell a value the client got wrong
+// — which never reached the wire — apart from a genuine upstream failure, and
+// answer 4xx instead of 5xx. The underlying sentinel (e.g. parameter.ErrStringTooLong)
+// stays reachable via errors.Is through the wrap chain.
+var ErrValidation = errors.New("channel: value rejected by validation")
+
+// validateForSet runs the value validation shared by Set and SetMany. It uses
+// ValidateWithDP when dp reports its own writability (so the IsForcedSensor
+// overlay is honoured) and falls back to the descriptor-only Validate
+// otherwise. Any rejection is wrapped in ErrValidation.
+func validateForSet(dp any, desc hmproto.ParameterData, v hmtypes.ParamValue) error {
+	var err error
+	if wr, ok := dp.(parameter.WritabilityReporter); ok {
+		err = parameter.ValidateWithDP(wr, desc, v, parameter.ValidateOptions{AllowSpecialValues: true})
+	} else {
+		err = parameter.Validate(desc, v)
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrValidation, err)
+	}
+	return nil
+}
 
 // writableReporter is the narrow contract a [ParameterDataPoint]
 // satisfies to participate in the early-reject gate. Every
@@ -212,20 +239,12 @@ func (c *Channel) Set(ctx context.Context, key hmenum.ParamsetKey, p hmenum.Para
 		return ErrParameterNotWritable
 	}
 	if opts.Validate {
-		// Use ValidateWithDP so that the IsForcedSensor overlay is
-		// respected in addition to the descriptor's OPERATIONS mask.
-		// This is the complement of the writableReporter gate above:
-		// the gate rejects non-writable DPs early; ValidateWithDP
-		// re-checks writable (redundantly but safely) and then runs
-		// all type / range / enum checks against the descriptor.
-		if wr, ok := dp.(parameter.WritabilityReporter); ok {
-			if err := parameter.ValidateWithDP(wr, dp.ParameterData(), v, parameter.ValidateOptions{AllowSpecialValues: true}); err != nil {
-				return err
-			}
-		} else {
-			if err := parameter.Validate(dp.ParameterData(), v); err != nil {
-				return err
-			}
+		// Validate against the descriptor (type / range / enum / length) with
+		// the IsForcedSensor overlay respected. A rejection here is a
+		// client-side error that never reaches the wire; validateForSet wraps
+		// it in ErrValidation so the caller can answer 4xx, not 5xx.
+		if err := validateForSet(dp, dp.ParameterData(), v); err != nil {
+			return err
 		}
 	}
 
@@ -316,15 +335,8 @@ func (c *Channel) SetMany(ctx context.Context, key hmenum.ParamsetKey, values ma
 			return ErrParameterNotWritable
 		}
 		if opts.Validate {
-			// Mirror the Set path: use ValidateWithDP when possible.
-			if wr, ok := dp.(parameter.WritabilityReporter); ok {
-				if err := parameter.ValidateWithDP(wr, dp.ParameterData(), v, parameter.ValidateOptions{AllowSpecialValues: true}); err != nil {
-					return err
-				}
-			} else {
-				if err := parameter.Validate(dp.ParameterData(), v); err != nil {
-					return err
-				}
+			if err := validateForSet(dp, dp.ParameterData(), v); err != nil {
+				return err
 			}
 		}
 		entries = append(entries, entry{dp: dp, p: p, val: v})

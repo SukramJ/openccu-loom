@@ -1,5 +1,21 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.30.0
+
+- **Thermostat away mode now takes effect.** Setting an away/holiday period on an
+  HmIP thermostat previously sent the wrong values, so the away temperature and
+  end time were ignored by the CCU. It now sends the correct parameters and the
+  away setpoint and end time work as expected.
+- **Clearer errors when a value is rejected.** Writing an invalid value to a data
+  point (e.g. a read-only parameter or a value outside the allowed range) now
+  returns a "bad request" instead of misreporting it as a temporary CCU outage.
+- **Timed durations shown in the editor match what was set.** The value picked
+  for on-time / ramp durations now matches the reference implementation, so the
+  editor shows the same value the device stores.
+- Under the hood: a large batch of test and CI hardening across the device model
+  and the MQTT, REST, WebSocket, SPA, and Matter surfaces — no functional change
+  for you, but future regressions in those areas are now caught automatically.
+
 ## 0.29.0
 
 - **HmIP-LSC colour lamps now offer a warm/cold white (colour temperature)

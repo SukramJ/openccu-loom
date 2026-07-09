@@ -746,22 +746,54 @@ func TargetChannelsBitmaskToList(mask int) []string {
 // Duration / ramp-time encoding helpers
 // ---------------------------------------------------------------------------
 
-// timeBaseTable maps a CCU TimeBase integer to (unit string, multiplier in
-// that unit). The multiplier converts the factor to the concrete duration.
-// Mirrors Python `TimeBase` enum + `_TIME_BASE_IN_100MS` mapping.
+// maxTimeBaseFactor is the largest DURATION_FACTOR / RAMP_TIME_FACTOR the CCU
+// firmware accepts (factor=31 is reserved as a "permanent" sentinel for lock
+// channels). The encoder promotes to a larger TimeBase rather than emit a
+// factor above this cap. Mirrors `_MAX_DURATION_FACTOR` in schedule_models.py.
+const maxTimeBaseFactor = 30
+
+// timeBaseTable maps a CCU TimeBase integer to (unit string, multiplier in that
+// unit, base expressed in 100ms units). `mult` converts a factor to a concrete
+// duration for decoding; `in100ms` is the encoder's divisor. Ordered by
+// ascending granularity. Mirrors `TimeBase` enum + `_TIME_BASE_IN_100MS` in
+// schedule_models.py:208.
 var timeBaseTable = []struct {
-	id   int
-	unit string
-	mult int // factor × mult = duration in unit
+	id      int
+	unit    string
+	mult    int // factor × mult = duration in unit
+	in100ms int // base expressed in 100ms units (encoder divisor)
 }{
-	{0, "ms", 100}, // MS_100: factor × 100 ms
-	{1, "s", 1},    // SEC_1
-	{2, "s", 5},    // SEC_5
-	{3, "s", 10},   // SEC_10
-	{4, "min", 1},  // MIN_1
-	{5, "min", 5},  // MIN_5
-	{6, "min", 10}, // MIN_10
-	{7, "h", 1},    // HOUR_1
+	{0, "ms", 100, 1},    // MS_100: factor × 100 ms
+	{1, "s", 1, 10},      // SEC_1: 1s = 10 × 100ms
+	{2, "s", 5, 50},      // SEC_5
+	{3, "s", 10, 100},    // SEC_10
+	{4, "min", 1, 600},   // MIN_1
+	{5, "min", 5, 3000},  // MIN_5
+	{6, "min", 10, 6000}, // MIN_10
+	{7, "h", 1, 36000},   // HOUR_1
+}
+
+// naturalBaseIndex is the index into [timeBaseTable] where the encoder starts
+// its search for a given input unit. Starting at the natural base (rather than
+// the finest base) makes "2min" encode as (MIN_1, 2) instead of being needlessly
+// promoted to a finer base like (SEC_5, 24) — both are 120s, but the CCU editor
+// surfaces the emitted base/factor, so the coarser natural base matches what the
+// reference writes. Mirrors `_NATURAL_BASE_INDEX` in schedule_models.py:223.
+var naturalBaseIndex = map[string]int{
+	"ms":  0, // MS_100
+	"s":   1, // SEC_1
+	"min": 4, // MIN_1
+	"h":   7, // HOUR_1
+}
+
+// durationUnitIn100ms converts a duration unit to 100ms steps. "ms" is
+// special-cased (the literal millisecond value is collapsed to 100ms steps by
+// the caller). Mirrors `_DURATION_UNIT_IN_100MS` in schedule_models.py:231.
+var durationUnitIn100ms = map[string]int{
+	"ms":  1,
+	"s":   10,
+	"min": 600,
+	"h":   36000,
 }
 
 // FormatTimeBaseFactor converts a (base, factor) pair from the CCU
@@ -781,21 +813,22 @@ func FormatTimeBaseFactor(base, factor int) string {
 }
 
 // parseDurationToBaseFactorInts converts a human-readable duration string
-// ("10s", "5min", "1h", "500ms") to the (base id, factor) pair written
-// into the CCU paramset. Picks the smallest base whose factor is ≤ 30.
-// Returns (0, 0) for unparseable strings.
-// Mirrors `convert_duration_to_base_factor` in schedule_models.py.
+// ("10s", "5min", "1h", "500ms") to the (base id, factor) pair written into the
+// CCU paramset. It starts the search at the *natural* base for the input unit
+// and promotes to a larger base only when the factor would exceed the CCU cap,
+// so "2min" encodes as (MIN_1, 2) — not the finer (SEC_5, 24) a smallest-base
+// search would pick. Returns (0, 0) for unparseable or non-representable
+// strings. Mirrors `convert_duration_to_base_factor` in schedule_models.py:706.
 func parseDurationToBaseFactorInts(d string) (base, factor int) {
 	if d == "" {
 		return 0, 0
 	}
-	// Parse trailing unit.
-	var unit string
-	var numStr string
+	// Parse trailing unit. Order matters: the three-letter "min" suffix must be
+	// tested before the "ms"/"s" suffixes so it wins.
+	var unit, numStr string
 	for _, u := range []string{"min", "ms", "h", "s"} {
 		if strings.HasSuffix(d, u) {
-			unit = u
-			numStr = strings.TrimSuffix(d, u)
+			unit, numStr = u, strings.TrimSuffix(d, u)
 			break
 		}
 	}
@@ -806,40 +839,24 @@ func parseDurationToBaseFactorInts(d string) (base, factor int) {
 	if err != nil || n <= 0 {
 		return 0, 0
 	}
-	// Convert n in `unit` to milliseconds, then pick smallest viable base.
-	var ms int
-	switch unit {
-	case "ms":
-		ms = n
-	case "s":
-		ms = n * 1000
-	case "min":
-		ms = n * 60 * 1000
-	case "h":
-		ms = n * 3600 * 1000
-	}
-	for _, row := range timeBaseTable {
-		baseMS := row.mult * 100
-		if unit == "ms" {
-			baseMS = row.mult * 100
-		} else {
-			// Convert row.mult to ms
-			switch row.unit {
-			case "ms":
-				baseMS = row.mult
-			case "s":
-				baseMS = row.mult * 1000
-			case "min":
-				baseMS = row.mult * 60 * 1000
-			case "h":
-				baseMS = row.mult * 3600 * 1000
-			}
+
+	total100ms := n * durationUnitIn100ms[unit]
+	if unit == "ms" {
+		// ms carries a literal millisecond value; collapse it to 100ms steps.
+		// Sub-100ms granularity is not representable on the CCU.
+		if total100ms%100 != 0 {
+			return 0, 0
 		}
-		if baseMS == 0 || ms%baseMS != 0 {
+		total100ms /= 100
+	}
+
+	// Start at the natural base for the input unit and promote to a larger base
+	// only when the factor would overflow the CCU cap.
+	for _, row := range timeBaseTable[naturalBaseIndex[unit]:] {
+		if total100ms%row.in100ms != 0 {
 			continue
 		}
-		f := ms / baseMS
-		if f >= 1 && f <= 30 {
+		if f := total100ms / row.in100ms; f >= 1 && f <= maxTimeBaseFactor {
 			return row.id, f
 		}
 	}

@@ -1,0 +1,98 @@
+# Scoped cross-stack model-parity gate for pull requests.
+#
+# The full cross-stack pipeline (cross-stack-parity.yml) dumps ~80k DPs and
+# runs nightly — too slow to block a PR. This workflow runs the SAME four
+# steps (datasource diff + both model snapshots + drift gate) but scopes the
+# two model snapshots to a small representative device subset via
+# OPENCCU_LOOM_SNAPSHOT_DEVICES, so a model regression in those devices fails
+# the PR in minutes instead of surfacing hours later in the nightly run.
+#
+# The reference stack is pinned to the same versions as the nightly gate so
+# the two agree; bump both together on an embedded-data refresh. See
+# docs/adr/0038-cross-stack-ci-gate.md and CLAUDE.md
+# "Cross-stack model-snapshot verification".
+name: model-parity
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GO_VERSION: "1.26.5"
+  PYTHON_VERSION: "3.14"
+  # Representative smoke subset. Spans climate / switch+meter / cover / sensor
+  # across the HmIP-RF, BidCos-RF and HmIP-Wired transports, and deliberately
+  # includes the product-group interface_id edge case (HmIPW-DRBL4) plus the
+  # by-design visibility variants (HmIP-SWSD smoke-detector, HM-LC-Bl1-FM
+  # local-button events) so those model paths are actually exercised. Both
+  # snapshot sides honour this env var, so the Go and Python snapshots load
+  # the identical fleet and the diff stays an apples-to-apples intersection.
+  OPENCCU_LOOM_SNAPSHOT_DEVICES: "HmIP-BWTH,HM-CC-RT-DN,HmIP-BSM,HmIP-BROLL,HM-LC-Bl1-FM,HmIP-SWSD,HmIPW-DRBL4,HmIP-SWDO"
+
+jobs:
+  model-parity:
+    name: scoped cross-stack model parity (openccu-loom vs aiohomematic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: actions/setup-python@v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: provision Python reference stack (aiohomematic + pydevccu + openccu-data)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/refstack"
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install --upgrade pip wheel
+          # All three reference packages are pinned to the versions the
+          # embedded Go extracts were generated from. Mirrors the pins in
+          # cross-stack-parity.yml; keep the two workflows in lockstep so a
+          # PR and the nightly run compare against the same reference.
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.6.2" "pydevccu==0.2.5"
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install "openccu-data==2026.6.1"
+          # Make the venv python the `python3` the Makefile targets invoke,
+          # and expose it for aiohomematic_snapshot.py's venv re-exec guard.
+          echo "$RUNNER_TEMP/refstack/bin" >> "$GITHUB_PATH"
+
+      # Point datasource_diff.py at the provisioned trees: the pip-installed
+      # pydevccu package and the godevccu Go module in the build cache. The
+      # min-key floor in datasource_diff.py fails a vacuous run, so these
+      # roots are mandatory. (The datasource diff itself is NOT scoped — it
+      # compares the full wire fleet, which is fast.)
+      - name: resolve provisioned datasource roots
+        run: |
+          set -euo pipefail
+          # Ensure the godevccu module zip is extracted before reading its
+          # local .Dir — `go list -m -f {{.Dir}}` reports an empty dir for a
+          # module still in go.mod but not yet unpacked into the build cache.
+          go mod download github.com/SukramJ/godevccu
+          echo "PYDEVCCU_ROOT=$(python3 -c 'import pydevccu, os; print(os.path.dirname(pydevccu.__file__))')" >> "$GITHUB_ENV"
+          echo "GODEVCCU_ROOT=$(go list -m -f '{{.Dir}}' github.com/SukramJ/godevccu)/internal/embed/data" >> "$GITHUB_ENV"
+
+      - name: "step 1/4 — datasource diff (pydevccu vs godevccu wire data)"
+        run: make datasource-diff
+
+      - name: "step 2/4 — openccu-loom model snapshot (scoped subset)"
+        run: make snapshot-go
+
+      - name: "step 3/4 — aiohomematic model snapshot (scoped subset)"
+        env:
+          AIOHOMEMATIC_VENV_PYTHON: ${{ runner.temp }}/refstack/bin/python
+        run: make snapshot-py
+
+      - name: "step 4/4 — scoped cross-stack drift gate (exit 0 = intersection parity within baseline)"
+        run: make snapshot-diff

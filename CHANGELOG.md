@@ -6,6 +6,51 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-07-09
+
+### Fixed
+
+- **HmIP climate away/party mode now writes the reference wire parameters.**
+  `SetAway` on an IP thermostat wrote `PARTY_TEMPERATURE` and a `dd.mm.yy hh:mm`
+  time format that the CCU did not honour; it now writes `SET_POINT_MODE=2`,
+  `SET_POINT_TEMPERATURE`, and the `PARTY_TIME_START/END` window in the CCU's
+  `yyyy_mm_dd hh:mm` format, matching aiohomematic — so the away setpoint and end
+  time actually take effect.
+- **`PUT /devices/.../value` reports client mistakes as `400`, not `502`.** A
+  value rejected by validation (read-only parameter, out-of-range, wrong type,
+  string too long) never reaches the CCU, but was being surfaced as a `502`
+  upstream failure. Such rejections now return `400` (validation); genuine
+  upstream failures still return `502`.
+- **SPECIAL values bypass MIN/MAX consistently.** A parameter value equal to a
+  declared SPECIAL sentinel is now accepted on the REST write-coerce path, the
+  validation path, and the runtime validity check alike (previously the write
+  path rejected a special-below-MIN that the runtime accepted). The rule handles
+  both the object (`{"NOT_USED":0.0}`) and list (`[{"ID":…,"VALUE":…}]`) wire
+  encodings, mirroring the CCU's own clamp behaviour.
+
+### Changed
+
+- **Duration/ramp editor values match the CCU.** The time base/factor encoder now
+  selects the same natural base as the reference (e.g. 2 min → `MIN_1 × 2` rather
+  than `SEC_5 × 24`), so the value the CCU editor displays matches what was set.
+
+### Internal
+
+- **Cross-stack model-parity gate is no longer vacuous and now guards pull
+  requests.** The datasource wire-identity step provisions the pydevccu/godevccu
+  data roots and fails a zero-key run instead of passing silently; a scoped
+  model-parity check runs on PRs; and `model_snapshot_diff.py` now counts missing
+  channels and device-field mismatches toward the drift total.
+- **Broad test hardening across the model core and every north-bound surface:**
+  a runtime value-coercion parity golden against the reference; a chi-router ↔
+  OpenAPI route walk; a WebSocket broadcast-emitter binding contract and
+  model→WS fan-out assertion; an MQTT command write-roundtrip and a committed
+  broker-discovery reference; a matter.js schema-staleness contract and per-
+  category (Thermostat/DoorLock/WindowCovering/ColorControl/SmokeCoAlarm) bridge
+  smoke; custom-profile constructor-resolution and wire-reference guards; and
+  Svelte channel-editor undo/redo, cross-validation, edit-lock, schedule,
+  preset, and login/OIDC coverage.
+
 ## [0.29.0] — 2026-07-08
 
 ### Added

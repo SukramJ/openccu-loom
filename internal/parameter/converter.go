@@ -6,6 +6,8 @@ package parameter
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -119,12 +121,19 @@ func FromHomematicValue(value any, targetType string) (any, error) {
 }
 
 // ConvertReadValue casts a raw wire value returned by GetValue to the
-// canonical Go type for the given parameter type. This mirrors the
-// convert_value / convert_from_pd type-casting logic:
+// canonical Go type for the given parameter type. It mirrors the reference
+// wire→typed conversion — model/support.py convert_value (support.py:565-581)
+// wrapped by the empty-string guard in model/data_point.py _convert_value
+// (data_point.py:1449):
 //
-//   - FLOAT → float64
-//   - INTEGER, ENUM → int (via float64 intermediate for JSON-decoded numbers)
-//   - BOOL → bool
+//   - FLOAT → float64; a numeric string is parsed (Python `float(value)`);
+//     an empty string yields nil (LEVEL_2 with no slats → None)
+//   - INTEGER → int; a numeric string is parsed (Python `int(float(value))`);
+//     an empty string yields nil
+//   - ENUM → value unchanged (convert_value leaves ENUM untouched: an int
+//     index stays int, a label string stays string)
+//   - BOOL → bool; a string is coerced via the to_bool truth set
+//     (support/__init__.py:129)
 //   - STRING → string
 //
 // Values that are already the correct Go type pass through unchanged.
@@ -144,8 +153,25 @@ func ConvertReadValue(paramType hmenum.ParameterType, raw any) any {
 			return float64(v)
 		case int64:
 			return float64(v)
+		case string:
+			return parseReadFloat(v)
 		}
-	case hmenum.ParameterTypeInteger, hmenum.ParameterTypeEnum:
+	case hmenum.ParameterTypeInteger:
+		switch v := raw.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		case float32:
+			return int(v)
+		case string:
+			return parseReadInt(v)
+		}
+	case hmenum.ParameterTypeEnum:
+		// convert_value leaves ENUM values unchanged: an integer index stays
+		// int, a label string stays string. Narrow only the numeric forms.
 		switch v := raw.(type) {
 		case int:
 			return v
@@ -164,6 +190,8 @@ func ConvertReadValue(paramType hmenum.ParameterType, raw any) any {
 			return v != 0
 		case float64:
 			return v != 0
+		case string:
+			return isBoolTrueString(v)
 		}
 	case hmenum.ParameterTypeString:
 		if s, ok := raw.(string); ok {
@@ -173,6 +201,49 @@ func ConvertReadValue(paramType hmenum.ParameterType, raw any) any {
 		// No type-specific conversion for dummy/empty parameters.
 	}
 	return raw
+}
+
+// parseReadFloat mirrors the FLOAT branch of the reference _convert_value:
+// an empty string maps to None (model/data_point.py:1449), any other string
+// is cast via `float(value)` (model/support.py:575). An unparseable non-empty
+// string maps to nil — the reference catches the ValueError and returns None.
+func parseReadFloat(s string) any {
+	if s == "" {
+		return nil
+	}
+	if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+		return f
+	}
+	return nil
+}
+
+// parseReadInt mirrors the INTEGER branch of the reference _convert_value:
+// an empty string maps to None (model/data_point.py:1449), any other string
+// is cast via `int(float(value))` (model/support.py:577) so "255" and "12.0"
+// both yield an int. An unparseable non-empty string maps to nil.
+func parseReadInt(s string) any {
+	if s == "" {
+		return nil
+	}
+	if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+		return int(f)
+	}
+	return nil
+}
+
+// isBoolTrueString mirrors the reference to_bool (support/__init__.py:129):
+// the lower-cased string is true only when it is one of y, yes, t, true, on,
+// or 1; every other string (including the empty string) is false, without an
+// error. This is the READ-path cast for CCU-reported values and is
+// intentionally more permissive than the strict write-coerce asBool in
+// coerce.go, which rejects an unrecognised token rather than silently
+// treating it as false.
+func isBoolTrueString(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "y", "yes", "t", "true", "on", "1":
+		return true
+	}
+	return false
 }
 
 // ConvertHMLevelToCPV converts a float-level value (0.0–1.0) to the

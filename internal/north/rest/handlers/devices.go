@@ -729,16 +729,24 @@ func PutDataPointValue(idx DeviceIndex, _ DataPointWriter) http.HandlerFunc {
 			Source:     "rest:PUT /value",
 		}
 		if err := ch.Set(r.Context(), hmenum.ParamsetKeyValues, param, pv, opts); err != nil {
-			if errors.Is(err, device.ErrNoChannelWriter) {
+			switch {
+			case errors.Is(err, device.ErrNoChannelWriter):
 				problem.Write(w, http.StatusServiceUnavailable,
 					problem.New(problem.TypeServiceUnready, r, "Writer not wired", err.Error()))
-				return
-			}
-			if problem.IsUpstreamUnavailable(err) {
+			case errors.Is(err, device.ErrValidation), errors.Is(err, device.ErrParameterNotWritable):
+				// Client-side rejection (type / range / enum / length /
+				// writability): the value never reached the wire, so this is a
+				// 400, not a 502 upstream failure.
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeValidation, r, "Value rejected", err.Error()))
+			case errors.Is(err, device.ErrUnknownParameter):
+				problem.Write(w, http.StatusNotFound,
+					problem.New(problem.TypeNotFound, r, "Parameter not found", err.Error()))
+			case problem.IsUpstreamUnavailable(err):
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Upstream temporarily unavailable", err)
-				return
+			default:
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Set failed", err)
 			}
-			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Set failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

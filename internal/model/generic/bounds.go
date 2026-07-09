@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -46,30 +47,12 @@ func checkIntBounds(desc hmproto.ParameterData, v int64) error {
 
 // matchesSpecial reports whether v matches one of the descriptor's
 // SPECIAL sentinel values (e.g. NaN-replacement marker, "manu" sentinel
-// for set-temperature). The CCU encodes SPECIAL as a list of
-// {"ID": "X", "VALUE": <number>} objects.
+// for set-temperature). It delegates to [parameter.MatchesSpecialValue] so
+// the runtime read path uses byte-for-byte the same SPECIAL-bypass rule —
+// and both accepted wire encodings (object and list) — as the write-coerce
+// and validation paths.
 func matchesSpecial(raw []byte, v float64) bool {
-	if len(raw) == 0 {
-		return false
-	}
-	type entry struct {
-		ID    string      `json:"ID"`
-		Value json.Number `json:"VALUE"`
-	}
-	var list []entry
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return false
-	}
-	for _, e := range list {
-		f, err := e.Value.Float64()
-		if err != nil {
-			continue
-		}
-		if f == v {
-			return true
-		}
-	}
-	return false
+	return parameter.MatchesSpecialValue(hmproto.ParameterData{Special: raw}, v)
 }
 
 func parseFloat(raw json.RawMessage) (float64, bool) {

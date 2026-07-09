@@ -22,19 +22,35 @@
 // The Jinja2 engine is approximated by a minimal Go renderer (see
 // jinja_helpers.go) covering the exact filter/test subset openccu-loom's
 // templates use: `lower`, `int`, `float`, `default`, `is defined`,
-// `tojson`. For templates whose output is a raw JSON field (light JSON-
-// schema, climate per-field templates) we verify structural correctness
-// without full Jinja execution.
+// `tojson`, plus the `{% if value_json.<field> %}…{% else %}…{% endif %}`
+// truthiness branch the irrigation-valve builder emits (renderJinjaBoolIfElse).
+//
+// The aggregate components (cover / climate / siren / valve) are driven
+// from their REAL custom-DP HADiscoveryPayload builders (ADR 0010) — the
+// tests construct the concrete custom-DP against a minimal channel rig and
+// round-trip the builder's own emitted templates rather than hand-written
+// approximations, so a builder-side template regression is caught here.
 package contract
 
 import (
+	"context"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
+	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
+	"github.com/SukramJ/openccu-loom/internal/model/custom/siren"
+	"github.com/SukramJ/openccu-loom/internal/model/custom/valve"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	mqtt "github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // --- helpers ----------------------------------------------------------------
@@ -77,6 +93,150 @@ func mapKeys(m map[string]any) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// --- aggregate builder rigs -------------------------------------------------
+//
+// The aggregate components (cover / climate / siren / valve) do not flow
+// through the per-parameter [mqtt.DefaultDiscoveryBuilder.Build] fast
+// path — their templates come from each custom-DP type's own
+// HADiscoveryPayload builder (ADR 0010). To round-trip the REAL emitted
+// templates (rather than hand-written approximations) these helpers
+// construct the concrete custom-DP against a minimal channel rig — the
+// same assembly the device pipeline performs — and return the builder's
+// body map. Mirrors the per-package rigs (e.g.
+// internal/model/custom/cover/cover_test.go:newRig).
+
+// roundtripWriter is a no-op [generic.Writer]; the round-trip tests
+// never assert on the wire, only on the discovery-payload templates.
+type roundtripWriter struct{}
+
+func (roundtripWriter) SetValue(context.Context, string, hmenum.Parameter, any, hmenum.CommandPriority) error {
+	return nil
+}
+
+// roundtripDiscoveryCtx is a minimal [pload.HADiscoveryContext] whose
+// topic strings are deterministic stand-ins — the round-trip tests
+// exercise the value_template / state-string fields, not the topic
+// wiring. Mirrors internal/model/custom/cover/payload_discovery_test.go:discoveryCtx.
+type roundtripDiscoveryCtx struct{}
+
+func (roundtripDiscoveryCtx) AggregatedStateTopic() string { return "rt/state" }
+func (roundtripDiscoveryCtx) CustomDPStateTopic() string   { return "rt/custom/state" }
+
+func (roundtripDiscoveryCtx) ServiceMethodCommandTopic(m string) string {
+	return "rt/svc/" + m + "/set"
+}
+
+func (roundtripDiscoveryCtx) WireParameterCommandTopic(p string) string { return "rt/" + p + "/set" }
+func (roundtripDiscoveryCtx) WireParameterStateTopic(p string) string   { return "rt/" + p }
+
+var _ pload.HADiscoveryContext = roundtripDiscoveryCtx{}
+
+// rtPutFloat registers a writable FLOAT wire DP on ch under parameter.
+func rtPutFloat(ch *device.Channel, address string, parameter hmenum.Parameter, w generic.Writer) {
+	ch.Put(generic.NewFloat(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(parameter),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+		Writer: w,
+	}))
+}
+
+// rtPutFloatSensor registers a read-only FLOAT sensor DP on ch (climate
+// ACTUAL_TEMPERATURE is a sensor, resolved via custom.FloatSensorField).
+func rtPutFloatSensor(ch *device.Channel, address string, parameter hmenum.Parameter) {
+	ch.Put(generic.NewFloatSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(parameter),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	}))
+}
+
+// rtPutSwitch registers a writable BOOL STATE wire DP on ch.
+func rtPutSwitch(ch *device.Channel, address string, parameter hmenum.Parameter, w generic.Writer) {
+	ch.Put(generic.NewSwitch(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(parameter),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+		Writer: w,
+	}))
+}
+
+// buildAggregateBody validates that a custom-DP HADiscoveryPayload
+// builder produced a non-nil body and returns it. Fatals otherwise.
+func buildAggregateBody(t *testing.T, comp string, body map[string]any) map[string]any {
+	t.Helper()
+	if body == nil {
+		t.Fatalf("%s HADiscoveryPayload returned nil body", comp)
+	}
+	return body
+}
+
+// mustBodyString extracts a required string field from a builder body
+// (the aggregate state-string / template keys are plain strings).
+func mustBodyString(t *testing.T, body map[string]any, key string) string {
+	t.Helper()
+	s, ok := body[key].(string)
+	if !ok {
+		t.Fatalf("builder body missing string field %q; got keys: %v", key, mapKeys(body))
+	}
+	return s
+}
+
+// boolIfElseRe matches the minimal `{% if value_json.<field> %}A{% else
+// %}B{% endif %}` truthiness branch the irrigation-valve builder emits
+// (internal/model/custom/valve/payload.go:167). The stock renderJinja
+// only handles the `is defined` guard, so this dedicated renderer covers
+// the boolean if/else shape without pulling a full Jinja engine into the
+// contract suite.
+var boolIfElseRe = regexp.MustCompile(`(?s)\{%\s*if\s+value_json\.(\w+)\s*%\}(.*?)\{%\s*else\s*%\}(.*?)\{%\s*endif\s*%\}`)
+
+// renderJinjaBoolIfElse renders the valve/irrigation truthiness template
+// against a PerDPState envelope, returning the true-branch text when the
+// referenced boolean field is truthy and the false-branch otherwise.
+func renderJinjaBoolIfElse(t *testing.T, template, envelope string) string {
+	t.Helper()
+	m := boolIfElseRe.FindStringSubmatch(template)
+	if m == nil {
+		t.Fatalf("template %q is not a value_json.<field> if/else branch", template)
+	}
+	field, truePart, falsePart := m[1], m[2], m[3]
+	var vj map[string]any
+	if err := json.Unmarshal([]byte(envelope), &vj); err != nil {
+		t.Fatalf("envelope %q is not JSON: %v", envelope, err)
+	}
+	truthy := false
+	switch v := vj[field].(type) {
+	case bool:
+		truthy = v
+	case float64:
+		truthy = v != 0
+	case string:
+		truthy = v != "" && v != "false"
+	}
+	if truthy {
+		return strings.TrimSpace(truePart)
+	}
+	return strings.TrimSpace(falsePart)
 }
 
 // --- switch -----------------------------------------------------------------
@@ -299,67 +459,238 @@ func TestDiscoveryRoundTrip_Light(t *testing.T) {
 
 // --- cover ------------------------------------------------------------------
 
-// TestDiscoveryRoundTrip_Cover_PerParameter verifies the per-parameter
-// cover path (LEVEL → light → writable-override → not cover at this layer;
-// the cover aggregate is tested structurally). We test that a numeric
-// sensor state renders cleanly for ACTUAL_TEMPERATURE as a proxy for
-// the pattern and separately assert the cover state_topic machinery.
-//
-// For the aggregated Cover the HA discovery builder is driven through
-// aggregateChannel() which requires a HADiscoveryPayloadBuilder Source
-// on the Event. That path is tested by the custom-DP payload tests
-// (internal/model/custom/cover/payload.go tests). Here we pin the
-// structural contract from the per-parameter discovery perspective.
-func TestDiscoveryRoundTrip_Cover_StateTemplate(t *testing.T) {
+// buildCoverBody assembles a real [cover.Cover] against a LEVEL-carrying
+// channel (SupportsPosition so the position_template is emitted) and
+// returns its actual HADiscoveryPayload body — the same builder output
+// the MQTT bridge marshals for a shutter.
+func buildCoverBody(t *testing.T) map[string]any {
+	t.Helper()
+	const addr = "COVER0001:3"
+	w := roundtripWriter{}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "COVER0001"})
+	ch := d.AddChannel(addr, 3, "BLIND", hmenum.ParamsetKeyValues)
+	rtPutFloat(ch, addr, hmenum.ParameterLevel, w)
+	c := cover.New(cover.Config{Channel: ch, Writer: w, Capabilities: custom.CoverCapabilities{SupportsPosition: true}})
+	comp, body := c.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	if comp != "cover" {
+		t.Fatalf("cover component = %q, want cover", comp)
+	}
+	return buildAggregateBody(t, "cover", body)
+}
+
+// TestDiscoveryRoundTrip_Cover drives the ACTUAL cover-builder output
+// (not a hand-written template string): the value_template
+// `{{ value_json.state }}` must render the HA-canonical state strings
+// the builder also advertises via state_open / state_closed, and the
+// position_template must render the numeric current_position. A bug in
+// either half leaves the HA cover card stuck on "unknown" / no slider.
+func TestDiscoveryRoundTrip_Cover(t *testing.T) {
 	t.Parallel()
-	// A cover's state_topic carries `{"state":"open","current_position":75}`.
-	// The value_template "{{ value_json.state }}" must render "open" (not a bool).
-	stateTemplate := "{{ value_json.state }}"
-	stateEnvelope := `{"state":"open","current_position":75}`
-	rendered := renderJinja(t, stateTemplate, stateEnvelope)
-	if rendered != "open" {
-		t.Errorf("cover state_template render = %q, want %q", rendered, "open")
+	body := buildCoverBody(t)
+
+	valueTemplate := mustBodyString(t, body, "value_template")
+	stateOpen := mustBodyString(t, body, "state_open")
+	stateClosed := mustBodyString(t, body, "state_closed")
+
+	// Round-trip the aggregated envelope through the builder's own template.
+	openEnv := `{"state":"open","current_position":75}`
+	if got := renderJinja(t, valueTemplate, openEnv); got != stateOpen {
+		t.Errorf("cover value_template render = %q, want state_open %q", got, stateOpen)
+	}
+	closedEnv := `{"state":"closed","current_position":0}`
+	if got := renderJinja(t, valueTemplate, closedEnv); got != stateClosed {
+		t.Errorf("cover value_template render = %q, want state_closed %q", got, stateClosed)
 	}
 
-	// position_template "{{ value_json.current_position }}" → "75".
-	posTemplate := "{{ value_json.current_position }}"
-	posRendered := renderJinja(t, posTemplate, stateEnvelope)
-	if posRendered != "75" {
-		t.Errorf("cover position_template render = %q, want %q", posRendered, "75")
+	// position_template must render the numeric current_position field.
+	posTemplate := mustBodyString(t, body, "position_template")
+	if got := renderJinja(t, posTemplate, openEnv); got != "75" {
+		t.Errorf("cover position_template render = %q, want %q", got, "75")
+	}
+
+	// optimistic must be false so HA waits for the CCU echo.
+	if body["optimistic"] != false {
+		t.Errorf("cover optimistic = %v, want false", body["optimistic"])
 	}
 }
 
 // --- climate ----------------------------------------------------------------
 
-// TestDiscoveryRoundTrip_Climate_TemperatureTemplate verifies that the
-// climate per-DP temperature templates render float values correctly.
-// climate uses "{{ value_json.value }}" for wire-DP fields
-// (current_temperature_template, temperature_state_template).
-func TestDiscoveryRoundTrip_Climate_TemperatureTemplate(t *testing.T) {
+// buildClimateBody assembles a real [climate.Climate] (RF kind) against a
+// channel carrying SET_TEMPERATURE + ACTUAL_TEMPERATURE and returns its
+// actual HADiscoveryPayload body.
+func buildClimateBody(t *testing.T) map[string]any {
+	t.Helper()
+	const addr = "CLIMATE001:1"
+	w := roundtripWriter{}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "CLIMATE001"})
+	ch := d.AddChannel(addr, 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	rtPutFloat(ch, addr, hmenum.ParameterSetTemperature, w)
+	rtPutFloatSensor(ch, addr, hmenum.ParameterActualTemperature)
+	c := climate.New(climate.Config{Channel: ch, Writer: w, Kind: climate.KindRF})
+	comp, body := c.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	if comp != "climate" {
+		t.Fatalf("climate component = %q, want climate", comp)
+	}
+	return buildAggregateBody(t, "climate", body)
+}
+
+// TestDiscoveryRoundTrip_Climate drives the ACTUAL climate-builder output
+// (not hand-written strings). The per-DP wire templates
+// (current_temperature_template, temperature_state_template) extract the
+// `value` scalar from the slot envelope; the mode_state_template reads
+// hvac_mode from the aggregate. All three must render cleanly or the HA
+// climate card shows a null temperature / unknown mode.
+func TestDiscoveryRoundTrip_Climate(t *testing.T) {
 	t.Parallel()
-	// The per-DP state template for climate is the standard value extractor.
-	// Simulate the envelope published on the ACTUAL_TEMPERATURE slot.
-	tempTemplate := "{{ value_json.value }}"
-	tempEnvelope := `{"value":21.5,"available":true,"unit":"°C"}`
-	rendered := renderJinja(t, tempTemplate, tempEnvelope)
-	if rendered != "21.5" {
-		t.Errorf("climate current_temperature render = %q, want %q", rendered, "21.5")
+	body := buildClimateBody(t)
+
+	curTempTemplate := mustBodyString(t, body, "current_temperature_template")
+	if got := renderJinja(t, curTempTemplate, `{"value":21.5,"available":true,"unit":"°C"}`); got != "21.5" {
+		t.Errorf("climate current_temperature render = %q, want %q", got, "21.5")
 	}
 
-	// mode_state_template reads hvac_mode from the custom-DP aggregate.
-	modeTemplate := "{{ value_json.hvac_mode }}"
-	modeEnvelope := `{"hvac_mode":"auto","action":"heating","preset_mode":"comfort"}`
-	modeRendered := renderJinja(t, modeTemplate, modeEnvelope)
-	if modeRendered != "auto" {
-		t.Errorf("climate mode_template render = %q, want %q", modeRendered, "auto")
+	setpointTemplate := mustBodyString(t, body, "temperature_state_template")
+	if got := renderJinja(t, setpointTemplate, `{"value":19.5,"available":true,"unit":"°C"}`); got != "19.5" {
+		t.Errorf("climate temperature_state render = %q, want %q", got, "19.5")
 	}
 
-	// preset_mode_value_template.
-	presetTemplate := "{{ value_json.preset_mode }}"
-	presetRendered := renderJinja(t, presetTemplate, modeEnvelope)
-	if presetRendered != "comfort" {
-		t.Errorf("climate preset render = %q, want %q", presetRendered, "comfort")
+	modeTemplate := mustBodyString(t, body, "mode_state_template")
+	if got := renderJinja(t, modeTemplate, `{"hvac_mode":"heat","action":"heating"}`); got != "heat" {
+		t.Errorf("climate mode_state render = %q, want %q", got, "heat")
 	}
+
+	// optimistic must be false so HA waits for the CCU echo.
+	if body["optimistic"] != false {
+		t.Errorf("climate optimistic = %v, want false", body["optimistic"])
+	}
+}
+
+// --- siren ------------------------------------------------------------------
+
+// TestDiscoveryRoundTrip_Siren drives the ACTUAL siren-builder output.
+// HA's strict siren schema requires the value_template output to match
+// state_on / state_off; the builder emits `{{ value_json.state }}` and
+// the StatePayload publishes `{"state":"on"|"off"}`. A mismatch leaves
+// HA logging `Payload received … is not one of [on, off]`.
+func TestDiscoveryRoundTrip_Siren(t *testing.T) {
+	t.Parallel()
+	s := siren.New(siren.Config{Writer: roundtripWriter{}})
+	comp, body := s.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	if comp != "siren" {
+		t.Fatalf("siren component = %q, want siren", comp)
+	}
+	body = buildAggregateBody(t, "siren", body)
+
+	valueTemplate := mustBodyString(t, body, "value_template")
+	stateOn := mustBodyString(t, body, "state_on")
+	stateOff := mustBodyString(t, body, "state_off")
+
+	if got := renderJinja(t, valueTemplate, `{"state":"on"}`); got != stateOn {
+		t.Errorf("siren value_template render = %q, want state_on %q", got, stateOn)
+	}
+	if got := renderJinja(t, valueTemplate, `{"state":"off"}`); got != stateOff {
+		t.Errorf("siren value_template render = %q, want state_off %q", got, stateOff)
+	}
+	// The command surface HA sends payload_on/payload_off to must be present.
+	if _, has := body["command_topic"]; !has {
+		t.Error("siren must have command_topic")
+	}
+}
+
+// --- valve ------------------------------------------------------------------
+
+// buildIrrigationBody assembles a real [valve.Irrigation] against a
+// STATE-carrying channel and returns its actual HADiscoveryPayload body.
+func buildIrrigationBody(t *testing.T) map[string]any {
+	t.Helper()
+	const addr = "VALVE0001:1"
+	w := roundtripWriter{}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "VALVE0001"})
+	ch := d.AddChannel(addr, 1, "IRRIGATION_VALVE", hmenum.ParamsetKeyValues)
+	rtPutSwitch(ch, addr, hmenum.ParameterState, w)
+	v := valve.NewIrrigation(ch)
+	if v == nil {
+		t.Fatal("valve.NewIrrigation returned nil (STATE switch not resolved)")
+	}
+	comp, body := v.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	if comp != "valve" {
+		t.Fatalf("irrigation component = %q, want valve", comp)
+	}
+	return buildAggregateBody(t, "valve", body)
+}
+
+// buildModulatingBody assembles a real [valve.Modulating] against a
+// LEVEL-carrying channel and returns its actual HADiscoveryPayload body.
+func buildModulatingBody(t *testing.T) map[string]any {
+	t.Helper()
+	const addr = "VALVE0002:1"
+	w := roundtripWriter{}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "VALVE0002"})
+	ch := d.AddChannel(addr, 1, "MODULATING_VALVE", hmenum.ParamsetKeyValues)
+	rtPutFloat(ch, addr, hmenum.ParameterLevel, w)
+	v := valve.NewModulating(ch)
+	if v == nil {
+		t.Fatal("valve.NewModulating returned nil (LEVEL float not resolved)")
+	}
+	comp, body := v.HADiscoveryPayload(roundtripDiscoveryCtx{})
+	if comp != "valve" {
+		t.Fatalf("modulating component = %q, want valve", comp)
+	}
+	return buildAggregateBody(t, "valve", body)
+}
+
+// TestDiscoveryRoundTrip_Valve drives the ACTUAL valve-builder output for
+// both flavours. The irrigation builder emits the `{% if
+// value_json.is_open %}open{% else %}closed{% endif %}` truthiness branch
+// (internal/model/custom/valve/payload.go:167) — the bare
+// `{{ value_json.is_open }}` form would render Python's `True`/`False`
+// and match no state_open / state_closed permutation, leaving HA logging
+// `Payload received … is not one of [open, closed, opening, closing]`.
+// The modulating builder emits `{{ value_json.current_level_pct }}` for
+// the 0..100 position.
+func TestDiscoveryRoundTrip_Valve(t *testing.T) {
+	t.Parallel()
+
+	t.Run("irrigation_if_else", func(t *testing.T) {
+		t.Parallel()
+		body := buildIrrigationBody(t)
+
+		valueTemplate := mustBodyString(t, body, "value_template")
+		stateOpen := mustBodyString(t, body, "state_open")
+		stateClosed := mustBodyString(t, body, "state_closed")
+
+		// The template MUST be the if/else branch, not the bare accessor —
+		// pin the shape so a regression back to `{{ value_json.is_open }}`
+		// is caught.
+		if !strings.Contains(valueTemplate, "{% if") {
+			t.Errorf("irrigation value_template %q must use the {%% if %%} branch", valueTemplate)
+		}
+		if got := renderJinjaBoolIfElse(t, valueTemplate, `{"is_open":true}`); got != stateOpen {
+			t.Errorf("irrigation open render = %q, want state_open %q", got, stateOpen)
+		}
+		if got := renderJinjaBoolIfElse(t, valueTemplate, `{"is_open":false}`); got != stateClosed {
+			t.Errorf("irrigation closed render = %q, want state_closed %q", got, stateClosed)
+		}
+		// Binary irrigation must NOT report a position.
+		if body["reports_position"] != false {
+			t.Errorf("irrigation reports_position = %v, want false", body["reports_position"])
+		}
+	})
+
+	t.Run("modulating_position", func(t *testing.T) {
+		t.Parallel()
+		body := buildModulatingBody(t)
+
+		valueTemplate := mustBodyString(t, body, "value_template")
+		if got := renderJinja(t, valueTemplate, `{"current_level_pct":42}`); got != "42" {
+			t.Errorf("modulating value_template render = %q, want %q", got, "42")
+		}
+		// Modulating valves report position.
+		if body["reports_position"] != true {
+			t.Errorf("modulating reports_position = %v, want true", body["reports_position"])
+		}
+	})
 }
 
 // --- event ------------------------------------------------------------------

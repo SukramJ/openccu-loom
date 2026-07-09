@@ -69,6 +69,22 @@ jobs:
       - name: "routing-key parity (aiohomematic == Go-pinned golden fixtures)"
         run: make routing-key-parity
 
+      # Point datasource_diff.py at the ALREADY-PROVISIONED reference trees:
+      # the pip-installed pydevccu package and the godevccu Go module in the
+      # build cache. Without these the script's sibling-checkout defaults do
+      # not exist on the runner, glob() finds nothing, and the gate passes
+      # vacuously. The min-key floor in datasource_diff.py now fails such a
+      # run, so these roots are mandatory, not cosmetic.
+      - name: resolve provisioned datasource roots
+        run: |
+          set -euo pipefail
+          # Ensure the godevccu module zip is extracted before reading its
+          # local .Dir — `go list -m -f {{.Dir}}` reports an empty dir for a
+          # module still in go.mod but not yet unpacked into the build cache.
+          go mod download github.com/SukramJ/godevccu
+          echo "PYDEVCCU_ROOT=$(python3 -c 'import pydevccu, os; print(os.path.dirname(pydevccu.__file__))')" >> "$GITHUB_ENV"
+          echo "GODEVCCU_ROOT=$(go list -m -f '{{.Dir}}' github.com/SukramJ/godevccu)/internal/embed/data" >> "$GITHUB_ENV"
+
       - name: "step 1/4 — datasource diff (pydevccu vs godevccu wire data)"
         run: make datasource-diff
 

@@ -261,6 +261,112 @@ func TestPutDataPointValue(t *testing.T) {
 	}
 }
 
+// TestPutDataPointValueAppliesOptimisticUpdateImmediately proves that
+// PutDataPointValue's device.SetOptions{Optimistic: true} (devices.go's
+// PutDataPointValue handler) actually reaches Channel.Set: a GET of the same
+// data point immediately after the PUT must already reflect the new value,
+// even though fakeChannelWriter never fires a confirming event — the CCU
+// echo path is entirely bypassed by the client-visible read.  Without the
+// optimistic tracker the GET would still read the pre-PUT value until an
+// (in this test, never-arriving) wire confirmation lands.
+func TestPutDataPointValueAppliesOptimisticUpdateImmediately(t *testing.T) {
+	chw := &fakeChannelWriter{}
+	r := newDeviceRouter(t, nil, chw)
+
+	get := func() handlers.DataPointSummary {
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/v1/devices/0001ABCD/channels/1/data-points/STATE", http.NoBody)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("GET status=%d body=%s", rr.Code, rr.Body.String())
+		}
+		var dp handlers.DataPointSummary
+		if err := json.Unmarshal(rr.Body.Bytes(), &dp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return dp
+	}
+
+	before := get()
+	if before.Value != true {
+		t.Fatalf("precondition: STATE=%v, want true (see newDeviceWithDP)", before.Value)
+	}
+
+	req := httptest.NewRequest(http.MethodPut,
+		"/api/v1/devices/0001ABCD/channels/1/data-points/STATE/value",
+		strings.NewReader(`{"value": false}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("PUT status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	after := get()
+	if after.Value != false {
+		t.Fatalf("STATE after PUT=%v, want false — optimistic update did not apply", after.Value)
+	}
+}
+
+// TestPutDataPointValueRejectsStringOverMaxLength proves that
+// PutDataPointValue's device.SetOptions{Validate: true} reaches
+// Channel.Set's parameter.ValidateWithDP gate, not merely the upstream
+// parameter.Coerce step. Coerce only type-checks and range-checks numeric
+// values; STRING max-length is enforced solely inside Channel.Set's Validate
+// path (see parameter.validateValue's ErrStringTooLong case), so a value
+// that clears Coerce but violates the descriptor's declared MAX length is
+// the one case that can only be caught if Validate is actually wired.
+func TestPutDataPointValueRejectsStringOverMaxLength(t *testing.T) {
+	chw := &fakeChannelWriter{}
+	d := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0001ABCD",
+		Model:       "HmIP-BDT",
+	})
+	ch := d.AddChannel("0001ABCD:4", 4, "", hmenum.ParamsetKeyValues)
+	ch.SetWriter(chw)
+	dp := generic.NewText(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: "0001ABCD:4",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "TEXT",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeString,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+			Max:        json.RawMessage(`5`),
+		},
+	})
+	ch.Put(dp)
+	idx := &fakeDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+	r := NewRouter(Deps{Devices: idx})
+
+	req := httptest.NewRequest(http.MethodPut,
+		"/api/v1/devices/0001ABCD/channels/4/data-points/TEXT/value",
+		strings.NewReader(`{"value": "toolongstring"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	// The core contract this test locks: an over-length value must never
+	// reach the wire. The exact HTTP status the rejection is bucketed under
+	// is a separate, already-tracked concern (currently 502
+	// upstream_unavailable — arguably a client-error/400 case, since the
+	// value never left the daemon — see PutDataPointValue's generic
+	// writeServerError(..., http.StatusBadGateway, ...) fallback in
+	// devices.go); this test intentionally only pins the write-gate, not
+	// that classification, so it does not need updating if the status
+	// mapping is refined later.
+	if chw.calls.Load() != 0 {
+		t.Fatalf("channel writer calls=%d, want 0 — over-length string must be rejected before dispatch", chw.calls.Load())
+	}
+	if rr.Code < http.StatusBadRequest {
+		t.Fatalf("status=%d, want an error status — over-length string must not be accepted (body=%s)", rr.Code, rr.Body.String())
+	}
+}
+
 // TestPutDataPointValueFloatAcceptsIntegerJSON locks the coercion bug
 // fix: a Float-typed LEVEL parameter receiving the integer-valued JSON
 // number `1` must land on the wire as a float64, not collapse to int
