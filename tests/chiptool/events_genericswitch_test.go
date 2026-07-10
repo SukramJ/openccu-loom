@@ -121,21 +121,17 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 	t.Run("receive/initial-press", func(t *testing.T) {
 		out, err := ctl.SubscribeEventInteractiveAndAwait(ctx, t, "switch", "initial-press", ep, 0, 90,
 			func() error { return b.CCU.FireDeviceEvent(address, dpKey, true) },
-			genericSwitchWantEvent("InitialPress", "NewPosition"),
+			func(out string) bool {
+				// chip-tool's DataModelLogger has no friendly name for the Switch
+				// cluster's InitialPress event (0x003B:0x01) in the pinned build,
+				// so it logs the event by cluster/event ID rather than by name.
+				// Match that path — its arrival proves the CCU press drove a
+				// proactive event report to the subscription.
+				return strings.Contains(out, "cluster 0x0000_003B, event: 0x0000_0001")
+			},
 			30*time.Second)
 		if err != nil {
 			t.Fatalf("await proactive InitialPress event: %v\n%s", err, out)
 		}
 	})
-}
-
-// genericSwitchWantEvent builds a want() predicate that requires BOTH the
-// event's chip-tool label (e.g. "InitialPress") and its payload field name
-// (e.g. "NewPosition") to appear — chip-tool's DataModelLogger prints the event
-// as "<Label>: {" followed by the nested "<Field>: <value>" line, so requiring
-// both rules out a coincidental substring match against an unrelated log line.
-func genericSwitchWantEvent(label, field string) func(out string) bool {
-	return func(out string) bool {
-		return strings.Contains(out, label) && strings.Contains(out, field)
-	}
 }
