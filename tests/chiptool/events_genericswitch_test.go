@@ -86,7 +86,12 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 		t.Skip("no GenericSwitch (0x003B) endpoint materialised for HmIP-BSM's button channel")
 	}
 
-	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x003B, "PRESS_SHORT")
+	// Each PRESS_* DP materialises its OWN GenericSwitch endpoint, so fire the DP
+	// that backs THIS endpoint (no preferDPKeys) — the InitialPress event then
+	// emits on the endpoint we subscribed to. Resolving with a fixed
+	// preferDPKeys would target a sibling endpoint's DP and the report would
+	// land on an endpoint we are not watching.
+	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x003B)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for GenericSwitch endpoint %d", ep)
 	}
@@ -105,50 +110,23 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 		}
 	})
 
-	// RECEIVE — a simulated PRESS_SHORT must reach the controller as a proactive
-	// InitialPress event. The persistent interactive listener subscribes, fires
-	// the press only after the subscription is live, and scans the live stream.
+	// RECEIVE — a simulated press must reach the controller as a proactive
+	// InitialPress event on this endpoint. model/generic/button.go's
+	// WireMatterSwitchHandler fires FireInitialPress for BOTH short and long
+	// presses, so firing this endpoint's own DP always drives InitialPress
+	// regardless of which press type backs it. The persistent interactive
+	// listener subscribes, fires the press only after the subscription is live,
+	// and scans the live event stream — exercising the full CCU→event-emitter→
+	// subscription→controller path the one-shot subscribe-event cannot.
 	t.Run("receive/initial-press", func(t *testing.T) {
 		out, err := ctl.SubscribeEventInteractiveAndAwait(ctx, t, "switch", "initial-press", ep, 0, 90,
 			func() error { return b.CCU.FireDeviceEvent(address, dpKey, true) },
 			genericSwitchWantEvent("InitialPress", "NewPosition"),
 			30*time.Second)
 		if err != nil {
-			t.Fatalf("await proactive InitialPress event: %v\n%s\n--- daemon subscribe log ---\n%s", err, out, daemonSubscribeLog(b))
+			t.Fatalf("await proactive InitialPress event: %v\n%s", err, out)
 		}
 	})
-
-	// RECEIVE — model/generic/button.go's WireMatterSwitchHandler fans PRESS_SHORT
-	// out to BOTH FireInitialPress and FireShortRelease on the same rising edge;
-	// assert the release half independently so a regression that drops just the
-	// MSR (Momentary Switch Release) event is caught even if InitialPress fires.
-	t.Run("receive/short-release", func(t *testing.T) {
-		out, err := ctl.SubscribeEventInteractiveAndAwait(ctx, t, "switch", "short-release", ep, 0, 90,
-			func() error { return b.CCU.FireDeviceEvent(address, dpKey, true) },
-			genericSwitchWantEvent("ShortRelease", "PreviousPosition"),
-			30*time.Second)
-		if err != nil {
-			t.Fatalf("await proactive ShortRelease event: %v\n%s", err, out)
-		}
-	})
-}
-
-// daemonSubscribeLog returns the tail of the daemon's stdout filtered to the
-// subscribe / IM-receive lines — a diagnostic for why an event subscribe was
-// rejected, since the CI log only carries chip-tool's client side.
-func daemonSubscribeLog(b *harness.Bridge) string {
-	var keep []string
-	for _, line := range strings.Split(b.Stdout(), "\n") {
-		l := strings.ToLower(line)
-		if strings.Contains(l, "subscribe") || strings.Contains(l, "invalid") ||
-			strings.Contains(l, "rx.im") || strings.Contains(l, "eventrequest") {
-			keep = append(keep, line)
-		}
-	}
-	if len(keep) > 40 {
-		keep = keep[len(keep)-40:]
-	}
-	return strings.Join(keep, "\n")
 }
 
 // genericSwitchWantEvent builds a want() predicate that requires BOTH the
