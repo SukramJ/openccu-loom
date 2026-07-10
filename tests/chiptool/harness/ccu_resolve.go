@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -117,6 +118,50 @@ func (b *Bridge) ResolveCCUAddress(ctx context.Context, t *testing.T, endpointID
 		}
 	}
 	return fmt.Sprintf("%s:%d", pick.DeviceAddress, pick.ChannelNo), pick.DPKey, true
+}
+
+// FireDeviceEventEnum injects a device-originated ENUM change identified by
+// its VALUE_LIST label. It reads the parameter's VALUE_LIST off the daemon
+// (GET /devices/{dev}/channels/{ch}/data-points/{param}) and fires the
+// resolved 0-based index — mirroring how a real CCU delivers an ENUM event
+// (always the numeric index, never the label). A label-valued inject is
+// silently wrong: godevccu / the daemon coerce an unrecognised string to
+// index 0, so e.g. firing "LOCKED" lands as UNKNOWN(0) rather than LOCKED(1).
+// address is ADDRESS:CHANNEL.
+func (b *Bridge) FireDeviceEventEnum(t *testing.T, address, param, label string) error {
+	t.Helper()
+	dev, ch, ok := splitChannelAddress(address)
+	if !ok {
+		return fmt.Errorf("bad channel address %q", address)
+	}
+	var dp struct {
+		ValueList []string `json:"value_list"`
+	}
+	path := fmt.Sprintf("/api/v1/devices/%s/channels/%s/data-points/%s", dev, ch, param)
+	if status := b.RESTGet(t, path, &dp); status != http.StatusOK {
+		return fmt.Errorf("GET %s: status=%d", path, status)
+	}
+	idx := -1
+	for i, v := range dp.ValueList {
+		if v == label {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("ENUM label %q not in VALUE_LIST %v for %s on %s", label, dp.ValueList, param, address)
+	}
+	return b.CCU.FireDeviceEvent(address, param, idx)
+}
+
+// splitChannelAddress splits an ADDRESS:CHANNEL string into its device
+// address and channel-number components on the final colon.
+func splitChannelAddress(address string) (dev, ch string, ok bool) {
+	i := strings.LastIndex(address, ":")
+	if i <= 0 || i == len(address)-1 {
+		return "", "", false
+	}
+	return address[:i], address[i+1:], true
 }
 
 // CCUAddressForCluster discovers a bridged endpoint whose Descriptor

@@ -137,7 +137,7 @@ func doorlockAwaitReceive(ctx context.Context, t *testing.T, b *harness.Bridge, 
 	for _, l := range locks {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"doorlock", "lock-state", l.ep,
-			func() error { return b.CCU.FireDeviceEvent(l.address, "LOCK_STATE", lockState) },
+			func() error { return b.FireDeviceEventEnum(t, l.address, "LOCK_STATE", lockState) },
 			func(out string) bool {
 				v, ok := harness.FindAttrUint(out, "LockState")
 				return ok && v == want

@@ -71,7 +71,7 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 	t.Run("receive/smoke-state-primary-alarm", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"smokecoalarm", "smoke-state", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "SMOKE_DETECTOR_ALARM_STATUS", "PRIMARY_ALARM") },
+			func() error { return b.FireDeviceEventEnum(t, address, "SMOKE_DETECTOR_ALARM_STATUS", "PRIMARY_ALARM") },
 			smokecoalarmWantSmokeState(2),
 			30*time.Second)
 		if err != nil {
@@ -85,7 +85,9 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 	t.Run("receive/smoke-state-secondary-alarm", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"smokecoalarm", "smoke-state", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "SMOKE_DETECTOR_ALARM_STATUS", "SECONDARY_ALARM") },
+			func() error {
+				return b.FireDeviceEventEnum(t, address, "SMOKE_DETECTOR_ALARM_STATUS", "SECONDARY_ALARM")
+			},
 			smokecoalarmWantSmokeState(1),
 			30*time.Second)
 		if err != nil {
@@ -98,7 +100,7 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 	t.Run("receive/smoke-state-idle-off", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"smokecoalarm", "smoke-state", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "SMOKE_DETECTOR_ALARM_STATUS", "IDLE_OFF") },
+			func() error { return b.FireDeviceEventEnum(t, address, "SMOKE_DETECTOR_ALARM_STATUS", "IDLE_OFF") },
 			smokecoalarmWantSmokeState(0),
 			30*time.Second)
 		if err != nil {
@@ -114,7 +116,7 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 	t.Run("receive/expressed-state-primary-alarm", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"smokecoalarm", "expressed-state", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "SMOKE_DETECTOR_ALARM_STATUS", "PRIMARY_ALARM") },
+			func() error { return b.FireDeviceEventEnum(t, address, "SMOKE_DETECTOR_ALARM_STATUS", "PRIMARY_ALARM") },
 			func(out string) bool {
 				v, ok := harness.FindAttrUint(out, "ExpressedState")
 				return ok && v == 2
