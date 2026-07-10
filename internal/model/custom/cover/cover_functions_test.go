@@ -517,9 +517,13 @@ func TestGarageSubscribeWiresDoorStateAndSection(t *testing.T) {
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel("HmIP-MOD-HO:1", 1, "GARAGE_DOOR", hmenum.ParamsetKeyValues)
 
-	stateDP := generic.NewStringSensor(generic.Spec{
-		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterDoorState)},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeString, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	stateDP := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{ChannelAddress: ch.Address, ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterDoorState)},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"UNKNOWN", "OPEN", "CLOSED", "VENTILATION_POSITION"},
+		},
 	})
 	sectionDP := generic.NewIntegerSensor(generic.Spec{
 		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterSection)},
@@ -533,7 +537,7 @@ func TestGarageSubscribeWiresDoorStateAndSection(t *testing.T) {
 	defer unsub()
 
 	// Fire DOOR_STATE.
-	stateDP.OnEvent("CLOSED")
+	fireDoorState(t, stateDP, "CLOSED")
 	st, ok := g.DoorState()
 	if !ok || st != DoorStateClosed {
 		t.Errorf("Subscribe: state after event = %v ok=%v, want CLOSED/true", st, ok)

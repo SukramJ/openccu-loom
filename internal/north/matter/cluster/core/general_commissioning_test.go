@@ -7,6 +7,7 @@ import (
 	"context"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1020,5 +1021,72 @@ func TestGenComm_ArmFailSafeForArmsThenExpires(t *testing.T) {
 	err := gc.ArmFailSafeFor(context.Background(), 60, 1)
 	if err != nil {
 		t.Fatalf("ArmFailSafeFor: %v", err)
+	}
+}
+
+// TestGencomm_ArmFailSafeFor_ZeroSecondsDisarmsWithoutFiringHook pins the
+// contract that ArmFailSafeFor(seconds=0) is a PURE disarm: it flips the
+// fail-safe off and must NOT fire OnFailSafeExpired. The only caller with
+// seconds=0 is CommissioningWindow.RevokeWindow, which disarms so the next
+// OpenCommissioningWindow is not Busy-locked. A zero-second window elapses at
+// once, so the pre-fix code armed for now+0 and spawned watchFailSafeExpiry,
+// which fired the expiry hook immediately — the seed of the RevokeWindow →
+// ArmFailSafeFor(0) → hook → RevokeWindow loop.
+func TestGencomm_ArmFailSafeFor_ZeroSecondsDisarmsWithoutFiringHook(t *testing.T) {
+	t.Parallel()
+	var fired atomic.Int32
+	gc := newGencomm(t, core.GeneralCommissioningConfig{
+		LocationCapability: core.RegulatoryIndoor,
+		FailSafeMaxSeconds: 600,
+		OnFailSafeExpired: func(_ context.Context, _ uint8) {
+			fired.Add(1)
+		},
+	})
+
+	if err := gc.ArmFailSafeFor(context.Background(), 0, 0); err != nil {
+		t.Fatalf("ArmFailSafeFor(0): %v", err)
+	}
+	// Give any (erroneously-spawned) watcher goroutine time to fire.
+	time.Sleep(50 * time.Millisecond)
+
+	if n := fired.Load(); n != 0 {
+		t.Fatalf("ArmFailSafeFor(0) fired OnFailSafeExpired %d time(s); a disarm must not fire it", n)
+	}
+	if gc.FailSafeArmed() {
+		t.Fatal("FailSafeArmed = true after ArmFailSafeFor(0), want false")
+	}
+}
+
+// TestGencomm_ArmFailSafeFor_ZeroSecondsDoesNotSelfLoop reproduces the live
+// Apple-pair failure: RevokeWindow's expiry hook itself calls ArmFailSafeFor(0)
+// (via bridge.RevokeWindow). Pre-fix, ArmFailSafeFor(0) spawned a watcher that
+// re-fired the hook, which re-entered ArmFailSafeFor(0) — an unbounded loop
+// that pegged a core and flooded the log (~10^8 lines) until the commissioner
+// aborted. The re-entry here is capped so the test fails fast instead of
+// hanging on the buggy code; with the fix the hook never fires, so the counter
+// stays at zero.
+func TestGencomm_ArmFailSafeFor_ZeroSecondsDoesNotSelfLoop(t *testing.T) {
+	t.Parallel()
+	var reentries atomic.Int32
+	gc := newGencomm(t, core.GeneralCommissioningConfig{
+		LocationCapability: core.RegulatoryIndoor,
+		FailSafeMaxSeconds: 600,
+	})
+	gc.SetOnFailSafeExpired(func(ctx context.Context, _ uint8) {
+		// Mirror bridge.RevokeWindow, which disarms via ArmFailSafeFor(0)
+		// from inside this very hook. Cap the re-entry so a regression fails
+		// the assertion rather than spinning forever.
+		if reentries.Add(1) < 8 {
+			_ = gc.ArmFailSafeFor(ctx, 0, 0)
+		}
+	})
+
+	if err := gc.ArmFailSafeFor(context.Background(), 0, 0); err != nil {
+		t.Fatalf("ArmFailSafeFor(0): %v", err)
+	}
+	time.Sleep(80 * time.Millisecond)
+
+	if n := reentries.Load(); n != 0 {
+		t.Fatalf("ArmFailSafeFor(0) disarm re-entered the expiry hook %d time(s); RevokeWindow→ArmFailSafeFor(0) must not loop", n)
 	}
 }

@@ -32,27 +32,93 @@ func attachStringSensor(ch *device.Channel, param hmenum.Parameter) *generic.Sen
 	return dp
 }
 
+// attachSmokeStatusSensor attaches SMOKE_DETECTOR_ALARM_STATUS as the
+// read-only ENUM index sensor the resolver projects it onto (see
+// custom.EnumSensorField), mirroring production's *generic.Sensor[int32]
+// shape rather than a *generic.Sensor[string].
+func attachSmokeStatusSensor(ch *device.Channel) *generic.Sensor[int32] {
+	dp := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterSmokeDetectorAlarmStatus),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"IDLE_OFF", "IDLE_ON", "PRIMARY_ALARM", "INTRUSION_ALARM", "SECONDARY_ALARM"},
+		},
+	})
+	ch.Put(dp)
+	return dp
+}
+
+// fireSmokeStatus fires a CCU event on a SMOKE_DETECTOR_ALARM_STATUS index
+// sensor for the given VALUE_LIST label, mirroring how the resolver delivers
+// a raw 0-based index for this read-only ENUM parameter.
+func fireSmokeStatus(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
+}
+
 // newSmokeSirenWithDPs builds a SmokeSiren backed by real
 // SMOKE_DETECTOR_ALARM_STATUS and SMOKE_DETECTOR_COMMAND DPs so that
 // IsActive / IsStateChange read real observed values.
-func newSmokeSirenWithDPs(t *testing.T) (*SmokeSiren, *generic.Sensor[string]) {
+func newSmokeSirenWithDPs(t *testing.T) (*SmokeSiren, *generic.Sensor[int32]) {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "SWSD001"})
 	ch := d.AddChannel("SWSD001:1", 1, "SIREN", hmenum.ParamsetKeyValues)
-	statusDP := attachStringSensor(ch, hmenum.ParameterSmokeDetectorAlarmStatus)
+	statusDP := attachSmokeStatusSensor(ch)
 	attachStringSensor(ch, hmenum.ParameterSmokeDetectorCommand)
 	ss := NewSmokeSiren(SmokeSirenConfig{Channel: ch})
 	return ss, statusDP
 }
 
+// attachEnumSensor attaches a *generic.Sensor[int32] for the given
+// read-only ENUM parameter to the channel, mirroring how the resolver
+// projects such parameters (see custom.EnumSensorField) onto a raw-index
+// sensor rather than a *generic.Sensor[string].
+func attachEnumSensor(ch *device.Channel, param hmenum.Parameter, valueList []string) *generic.Sensor[int32] {
+	dp := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(param),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  valueList,
+		},
+	})
+	ch.Put(dp)
+	return dp
+}
+
+// fireDirection resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event — mirrors how the resolver projects
+// the read-only ENUM parameter DIRECTION onto an index-valued Sensor[int32].
+func fireDirection(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
+}
+
 // newSoundPlayerWithDPs builds a SoundPlayer backed by a real DIRECTION DP
 // so that IsPlaying / IsStateChange read real observed values.
-func newSoundPlayerWithDPs(t *testing.T) (*SoundPlayer, *generic.Sensor[string]) {
+func newSoundPlayerWithDPs(t *testing.T) (*SoundPlayer, *generic.Sensor[int32]) {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P001"})
 	ch := d.AddChannel("MP3P001:2", 2, "SIREN", hmenum.ParamsetKeyValues)
-	directionDP := attachStringSensor(ch, hmenum.ParameterDirection)
-	attachStringSensor(ch, hmenum.ParameterSoundfile)
+	directionDP := attachEnumSensor(ch, hmenum.ParameterDirection, []string{"", "UP", "DOWN"})
+	attachEnumSensor(ch, hmenum.ParameterSoundfile, []string{"SOUNDFILE_001"})
 	sp := NewSoundPlayer(SoundPlayerConfig{Channel: ch})
 	return sp, directionDP
 }
@@ -124,7 +190,7 @@ func TestSmokeSirenIsStateChangeReturnsFalseWhenAlreadyActive(t *testing.T) {
 	t.Parallel()
 
 	ss, statusDP := newSmokeSirenWithDPs(t)
-	statusDP.OnEvent(string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusPrimaryAlarm))
 	if ss.IsStateChange(true) {
 		t.Error("SmokeSiren.IsStateChange(true) when active = true, want false")
 	}
@@ -136,7 +202,7 @@ func TestSmokeSirenIsStateChangeReturnsTrueWhenTransitioningToActive(t *testing.
 	t.Parallel()
 
 	ss, statusDP := newSmokeSirenWithDPs(t)
-	statusDP.OnEvent(string(SmokeStatusIdleOff))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusIdleOff))
 	if !ss.IsStateChange(true) {
 		t.Error("SmokeSiren.IsStateChange(true) when idle = false, want true")
 	}
@@ -164,19 +230,20 @@ func TestSoundPlayerIsStateChangeReturnsFalseWhenAlreadyPlaying(t *testing.T) {
 	t.Parallel()
 
 	sp, directionDP := newSoundPlayerWithDPs(t)
-	directionDP.OnEvent("UP")
+	fireDirection(t, directionDP, "UP")
 	if sp.IsStateChange(true) {
 		t.Error("SoundPlayer.IsStateChange(true) when playing = true, want false")
 	}
 }
 
 // TestSoundPlayerIsStateChangeReturnsTrueWhenTransitioningToPlaying
-// verifies that IsStateChange(true) is true when DIRECTION is "STOP".
+// verifies that IsStateChange(true) is true when DIRECTION is empty
+// (no playback direction — stopped).
 func TestSoundPlayerIsStateChangeReturnsTrueWhenTransitioningToPlaying(t *testing.T) {
 	t.Parallel()
 
 	sp, directionDP := newSoundPlayerWithDPs(t)
-	directionDP.OnEvent("STOP")
+	fireDirection(t, directionDP, "")
 	if !sp.IsStateChange(true) {
 		t.Error("SoundPlayer.IsStateChange(true) when stopped = false, want true")
 	}

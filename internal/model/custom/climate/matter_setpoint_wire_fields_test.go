@@ -5,6 +5,7 @@ package climate
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -57,5 +58,46 @@ func TestThermostatSetpointRaiseLowerWireFieldsLowers(t *testing.T) {
 	}
 	if got := w.last(); got.value.(float64) != 18.5 {
 		t.Fatalf("lower (wire map) reached wire as %v, want 18.5", got.value)
+	}
+}
+
+// TestThermostatOccupiedHeatingSetpointWriteAcceptsWireInt drives a direct
+// attribute Write of OccupiedHeatingSetpoint (0x0012) with the wire value
+// shape the bridge's TLV decoder produces: a signed setpoint lands as int64,
+// not int16 (see internal/north/matter/cluster/coerce.go, whose doc-comment
+// spells out that a strict value.(int16) rejects it and the whole Write fails
+// with IM status Failure). 2100 centi-°C = 21.0 °C must reach the CCU writer.
+func TestThermostatOccupiedHeatingSetpointWriteAcceptsWireInt(t *testing.T) {
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
+		MinTemperature: 4.5,
+		MaxTemperature: 30.5,
+	})
+	srv := findCluster(t, r.climate, 0x0201)
+	if err := srv.MatterWrite(context.Background(), matterAttrThermOccupiedHeatSp, int64(2100), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OccupiedHeatingSetpoint write (int64 wire value) err: %v", err)
+	}
+	if got := w.last(); got.value.(float64) != 21.0 {
+		t.Fatalf("setpoint write reached wire as %v, want 21.0", got.value)
+	}
+}
+
+// TestThermostatSystemModeWriteAcceptsWireUint pins the SystemMode (0x001C)
+// Write against the wire's uint64 shape. A prior strict value.(uint8) rejected
+// it as a type error, so Apple's "set mode" always failed. The assertion is
+// deliberately narrow — the write must get PAST value-type coercion; whether
+// the resulting mode is accepted (Heat) or refused (ConstraintError for an
+// AUTO-less device) is a separate concern, so it is enough that the error is
+// not the value-type error.
+func TestThermostatSystemModeWriteAcceptsWireUint(t *testing.T) {
+	w := &stubWriter{}
+	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{
+		MinTemperature: 4.5,
+		MaxTemperature: 30.5,
+	})
+	srv := findCluster(t, r.climate, 0x0201)
+	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, uint64(matterSysModeHeat), hmenum.CommandPriorityHigh)
+	if errors.Is(err, errMatterValueType) {
+		t.Fatalf("SystemMode write rejected the wire uint64 as a value-type error: %v", err)
 	}
 }

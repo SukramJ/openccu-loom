@@ -6,6 +6,70 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Matter commissioning no longer spins after CommissioningComplete.** When a
+  commissioner (Apple Home, Google Home, chip-tool) finished pairing, the
+  commissioning-window auto-close routed through `RevokeWindow`, which disarmed
+  the fail-safe via `ArmFailSafeFor(…, 0, …)`. That path treated a zero-second
+  arm as "arm for 0 seconds" — immediately expired — so it spawned an expiry
+  watcher that fired the expiry hook, which itself calls `RevokeWindow`: an
+  unbounded loop that pegged a CPU core and flooded the log. The bridge stopped
+  answering the commissioner's post-commissioning reads, so the pairing aborted
+  ("could not add accessory"). A zero-second `ArmFailSafeFor` is now a pure
+  disarm (no watcher, no expiry hook), matching the cluster-wire disarm
+  semantics. Verified end-to-end against a real Apple Home commissioner.
+- **Matter thermostat setpoint / mode writes from a controller now take
+  effect.** The Climate Thermostat cluster asserted `value.(int16)` /
+  `value.(uint8)` on writes, but the bridge's TLV decoder delivers write values
+  as `int64` / `uint64`, so every Apple/Google `OccupiedHeatingSetpoint` or
+  `SystemMode` write failed with IM status `Failure`. The handler now coerces via
+  `cluster.AsInt16` / `cluster.AsUint8` (matching every other cluster), so the
+  setpoint and mode actually reach the CCU.
+- **External CCU changes now propagate to Matter controllers for every bridged
+  device class.** Only generic sensors/switches implemented the
+  `MatterChangeNotifier`, so a change made at the wall switch or by a CCU program
+  never reached a controller's Subscribe for custom-DP-backed accessories
+  (dimmers, thermostats, covers, locks, sirens) — they reflected only the
+  commands the controller itself sent. `generic.Float` and every custom endpoint
+  class now implement `OnMatterValueChanged`, and a source-walking contract test
+  guarantees no future device type reopens the gap. Verified end-to-end against
+  Apple Home.
+- **Read-only ENUM state now reaches Matter controllers for every affected
+  device class.** A custom data point that read a read-only ENUM wire parameter
+  through a string-sensor accessor got `nil`: the resolver projects read-only
+  ENUM parameters onto a raw-index integer sensor, which the `*Sensor[string]`
+  cast never matched, so the projected value stayed unobserved and the Matter
+  attribute reported TLV-null forever. This silently disabled DoorLock
+  `LockState` (`LOCK_STATE`) and SmokeCOAlarm `SmokeState` / `ExpressedState`
+  (`SMOKE_DETECTOR_ALARM_STATUS`) in Apple / Google Home, plus the door lock's
+  `DIRECTION`, the RF lock's `ERROR`, the siren sound player's `SOUNDFILE` /
+  `DIRECTION`, the fixed-colour light's active `CHANNEL_COLOR` slot, and the
+  garage door's `DOOR_STATE` (so a garage never reported a position). The custom
+  DPs now read the index sensor and resolve the VALUE_LIST label on demand, and a
+  resolver-boundary contract test pins the "read-only ENUM → index sensor"
+  invariant so the accessor mismatch cannot recur.
+- **Docker image builds again.** The builder stage pinned `golang:1.26.4-alpine`
+  while `go.mod` requires Go 1.26.5, so with `GOTOOLCHAIN=local` the image build
+  failed at `go mod download` (`requires go >= 1.26.5`). The builder base image is
+  bumped to `golang:1.26.5-alpine`, matching `go.mod` and the CI `GO_VERSION`.
+- **Matter bridge survives boot-time database contention with a large device
+  fleet.** Endpoint-ID assignment runs a read-then-write SQLite transaction;
+  under WAL a concurrent boot writer (the device-load pipeline) could fail the
+  upgrade with `SQLITE_BUSY` — a case `busy_timeout` does not cover — so the
+  bridge logged `matter.bridge.start … database is locked` and never brought up
+  its Matter listener. The assignment now retries on a BUSY/locked error with a
+  bounded backoff, so bring-up no longer fails when many devices are assembled
+  at once.
+- **A structurally-incomplete device no longer crashes the Matter exposable
+  list.** Enumerating exposure candidates calls promoted accessors on each
+  device; a custom device with a nil embedded data point (e.g. a colour light
+  whose LEVEL DP never materialised) panicked `GET /api/v1/matter/exposable`
+  with a `500`, which in turn left the Matter bridge with no bridged endpoints.
+  Candidate collection now isolates each device — a panicking one is logged and
+  skipped — so every healthy device still surfaces on the exposable list and in
+  the bridge.
+
 ## [0.30.0] — 2026-07-09
 
 ### Fixed

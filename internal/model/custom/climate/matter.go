@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -27,6 +29,7 @@ import (
 var (
 	_ interfaces.MatterEndpointSource     = (*Climate)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Climate)(nil)
+	_ interfaces.MatterChangeNotifier     = (*Climate)(nil)
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -35,6 +38,27 @@ var (
 // Bumped on every successful write / invoke so DataVersionFilter
 // evaluation correctly detects cluster changes.
 func (c *Climate) MatterDataVersion() uint32 { return c.dataVersion.Current() }
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier].
+// A Climate projects several wire-backed data points onto the Thermostat /
+// TemperatureMeasurement / RelativeHumidityMeasurement clusters; fan every
+// value-bearing DP into the callback so an external CCU change (setpoint
+// adjusted at the wall dial, ambient temperature/humidity reading) dirty-
+// marks the endpoint and reaches Apple's Subscribe. Each DP's own
+// OnMatterValueChanged guards a nil receiver, so absent DPs contribute a
+// no-op unsubscribe. SystemMode/RunningMode are re-read on any of these
+// firing because the notifier marks the whole reportable path set dirty.
+func (c *Climate) OnMatterValueChanged(cb func()) func() {
+	if c == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		c.setpoint.OnMatterValueChanged(cb),
+		c.actualTemperature.OnMatterValueChanged(cb),
+		c.humidity.OnMatterValueChanged(cb),
+		c.humidityInt.OnMatterValueChanged(cb),
+	)
+}
 
 // Matter constants follow the Matter Application Cluster Specification
 // §4.3 (Thermostat), §4.4 (ThermostatUserInterfaceConfiguration),
@@ -530,9 +554,14 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 	var err error
 	switch attrID {
 	case matterAttrThermOccupiedHeatSp:
-		v, ok := value.(int16)
+		// The bridge's TLV decoder surfaces a signed setpoint as int64, not
+		// int16 (see internal/north/matter/cluster/coerce.go). Coerce rather
+		// than assert one exact Go type — a strict value.(int16) rejected the
+		// wire value and every Apple/Google setpoint write failed with IM
+		// status Failure.
+		v, ok := cluster.AsInt16(value)
 		if !ok {
-			return fmt.Errorf("%w: setpoint write expected int16, got %T", errMatterValueType, value)
+			return fmt.Errorf("%w: setpoint write expected numeric, got %T", errMatterValueType, value)
 		}
 		err = s.c.SetTemperature(ctx, matterToCelsius(v), priority)
 	case matterAttrThermOccupiedCoolSp:
@@ -543,15 +572,17 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 		if s.featureMap()&matterThermFeatureCool == 0 {
 			return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 		}
-		v, ok := value.(int16)
+		v, ok := cluster.AsInt16(value)
 		if !ok {
-			return fmt.Errorf("%w: setpoint write expected int16, got %T", errMatterValueType, value)
+			return fmt.Errorf("%w: setpoint write expected numeric, got %T", errMatterValueType, value)
 		}
 		err = s.c.SetTemperature(ctx, matterToCelsius(v), priority)
 	case matterAttrThermSystemMode:
-		raw, ok := value.(uint8)
+		// SystemMode is an enum8; the decoder delivers it as uint64. Coerce,
+		// mirroring the setpoint path and thermo/thermostat_server.go.
+		raw, ok := cluster.AsUint8(value)
 		if !ok {
-			return fmt.Errorf("%w: SystemMode write expected uint8, got %T", errMatterValueType, value)
+			return fmt.Errorf("%w: SystemMode write expected numeric, got %T", errMatterValueType, value)
 		}
 		mode, e := matterToHmMode(raw)
 		if e != nil {

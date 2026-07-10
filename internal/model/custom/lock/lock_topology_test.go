@@ -57,7 +57,7 @@ func TestTopicSlot_UnparsableAddress(t *testing.T) {
 func TestIsLocking_True(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.dirDP.OnEvent(string(DirectionLocking))
+	fireLockEnum(t, r.dirDP, string(DirectionLocking))
 	if !r.lock.IsLocking() {
 		t.Error("IsLocking must be true after LOCKING direction event")
 	}
@@ -70,7 +70,7 @@ func TestIsLocking_True(t *testing.T) {
 func TestIsUnlocking_True(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.dirDP.OnEvent(string(DirectionUnlock))
+	fireLockEnum(t, r.dirDP, string(DirectionUnlock))
 	if !r.lock.IsUnlocking() {
 		t.Error("IsUnlocking must be true after UNLOCKING direction event")
 	}

@@ -26,13 +26,40 @@ import (
 //   - HmIP-PS     — Plug-in switch → OnOff (mirrors the sanctioned
 //     write target on the real CCU)
 //   - HmIP-BDT    — Brand-recessed dimmer → OnOff + LevelControl
+//   - HmIP-DLD    — Door lock drive → DoorLock
+//   - HmIP-LSC    — Light strip / combined light → ColorControl
+//     (hue/saturation + colour temperature simultaneously)
+//   - HmIP-FBL    — Tilting blind → WindowCovering (tilt variant)
+//   - HmIP-MOD-HO — Garage door module → WindowCovering with
+//     EndProductType=GarageDoor
+//   - HmIP-SMI    — Motion detector → OccupancySensing
+//   - HmIP-SWDO   — Shutter contact (window/door sensor) →
+//     BooleanState (second fixture on this cluster, distinct wire
+//     shape from HmIP-SWSD)
+//   - HmIP-STHO   — Outdoor temperature/humidity sensor →
+//     TemperatureMeasurement, RelativeHumidity
+//   - HmIP-SCTH230 — CO2 + temperature + humidity sensor →
+//     CarbonDioxideConcentrationMeasurement, TemperatureMeasurement,
+//     RelativeHumidity
+//
+// The shared bridge keeps a MODERATE fleet on purpose: cluster/endpoint
+// discovery reads one wildcard `descriptor server-list 0xFFFF`, whose report
+// truncates once the bridged-endpoint count grows large, hiding later
+// endpoints from every discoverEndpointsWith caller. HmIP-LSC (ColorControl),
+// HmIP-FBL (tilt blind), HmIP-MOD-HO (garage) and HmIP-SCTH230 (CO2 +
+// temperature + humidity) are high-endpoint-footprint / not-yet-fixtured
+// devices; they are deferred to a follow-up that pairs each with a per-endpoint
+// discovery that survives a large fleet (see the send/receive matrix).
 var DefaultDevices = []string{
-	"HmIP-SWSD",
-	"HmIP-BWTH",
-	"HmIP-BSM",
-	"HmIP-BROLL",
-	"HmIP-PS",
-	"HmIP-BDT",
+	"HmIP-SWSD",  // Smoke detector    → SmokeCOAlarm / BooleanState / PowerSource
+	"HmIP-BWTH",  // Wall thermostat   → Thermostat + TemperatureMeasurement + RelativeHumidity
+	"HmIP-BSM",   // Switch + meter    → OnOff + ElectricalPower/Energy
+	"HmIP-BROLL", // Roller shutter   → WindowCovering (lift)
+	"HmIP-PS",    // Plug-in switch    → OnOff
+	"HmIP-BDT",   // Dimmer            → OnOff + LevelControl
+	"HmIP-DLD",   // Door lock drive   → DoorLock
+	"HmIP-SMI",   // Motion detector   → OccupancySensing (+ IlluminanceMeasurement)
+	"HmIP-SWDO",  // Window/door contact → BooleanState
 }
 
 // MockCCU wraps a running godevccu instance bound to OS-assigned

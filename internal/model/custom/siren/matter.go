@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -26,16 +27,48 @@ var (
 	_ interfaces.MatterEndpointSource     = (*SmokeSiren)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Siren)(nil)
 	_ interfaces.MatterClusterDataVersion = (*SmokeSiren)(nil)
+	_ interfaces.MatterChangeNotifier     = (*Siren)(nil)
+	_ interfaces.MatterChangeNotifier     = (*SmokeSiren)(nil)
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion] for Siren.
 // Bumped on every successful MatterWrite / MatterInvoke.
 func (s *Siren) MatterDataVersion() uint32 { return s.dataVersion.Current() }
 
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for Siren.
+// The Matter surface is OnOff + BooleanState driven by the acoustic and
+// optical active-state DPs; fan both into the callback so a siren that starts
+// or stops outside Apple (triggered by a CCU program or the device itself)
+// dirty-marks the endpoint and reaches Apple's Subscribe. Tone/light
+// selection stays MQTT-only (no Matter cluster), so those DPs are not wired.
+func (s *Siren) OnMatterValueChanged(cb func()) func() {
+	if s == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		s.acousticActive.OnMatterValueChanged(cb),
+		s.opticalActive.OnMatterValueChanged(cb),
+	)
+}
+
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion] for SmokeSiren.
 // SmokeCOAlarm has no client-writable attributes / commands in 0.1.0; the version
 // is reserved for when SelfTestRequest is wired.
 func (s *SmokeSiren) MatterDataVersion() uint32 { return s.dataVersion.Current() }
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
+// SmokeSiren. The SmokeCOAlarm cluster's ExpressedState/alarm attributes are
+// driven by the status DP; wiring it means a smoke/CO alarm raised at the
+// device reaches Apple's Subscribe rather than only surfacing after a manual
+// re-read.
+func (s *SmokeSiren) OnMatterValueChanged(cb func()) func() {
+	if s == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		s.status.OnMatterValueChanged(cb),
+	)
+}
 
 // Matter constants follow the Matter 1.5.1 Application Cluster
 // Specification (§1.5 OnOff, §1.7 BooleanState, §2.11 SmokeCOAlarm).

@@ -1,24 +1,24 @@
 # Dead-Code Summary
 
-Generated: c986d73
-HEAD: c986d73
+Generated: 35fc5810
+HEAD: 35fc5810
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24109 |
-| Reachable | 3796 |
-| Whitelisted | 17436 |
-| **Unreachable** | **2877** |
+| Total Exported | 24386 |
+| Reachable | 3825 |
+| Whitelisted | 17653 |
+| **Unreachable** | **2908** |
 
 ## Top-20 Packages by Dead Code
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/adapter | 66 | 88 | 46 |
+| internal/model/custom | 27 | 49 | 10 |
 | internal/model/naming | 25 | 2 | 4 |
-| internal/model/custom | 23 | 49 | 10 |
 | internal/north/mqtt | 21 | 76 | 4 |
 | internal/client/backends | 19 | 37 | 4 |
 | internal/store/sqlite | 19 | 60 | 22 |
@@ -44,11 +44,11 @@ HEAD: c986d73
 | internal/audit | AsyncSink | internal/audit/persist.go | 291 |
 | internal/audit | AsyncSink | internal/audit/persist.go | 291 |
 | internal/audit | BuildChangeDiff | internal/audit/change_log.go | 177 |
-| internal/audit | NewBuffer | internal/audit/audit.go | 140 |
+| internal/audit | NewBuffer | internal/audit/audit.go | 145 |
 | internal/audit | NewChangeLog | internal/audit/change_log.go | 53 |
 | internal/audit | NewDurableSink | internal/audit/persist.go | 167 |
 | internal/audit | NewPersistedRecorder | internal/audit/persist.go | 40 |
-| internal/audit | NoopRecorder | internal/audit/audit.go | 197 |
+| internal/audit | NoopRecorder | internal/audit/audit.go | 202 |
 | internal/auth | CSRFMiddleware | internal/auth/csrf.go | 52 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
@@ -84,7 +84,7 @@ HEAD: c986d73
 | internal/central/adapter | EncodeTimeValue | internal/central/adapter/link_param_metadata.go | 305 |
 | internal/central/adapter | GetTimePresets | internal/central/adapter/link_param_metadata.go | 276 |
 | internal/central/adapter | InitInterfaceID | internal/central/adapter/interface_id.go | 54 |
-| internal/central/adapter | NewBackupAdapter | internal/central/adapter/stubs.go | 55 |
+| internal/central/adapter | NewBackupAdapter | internal/central/adapter/stubs.go | 69 |
 | internal/central/adapter | NewCCUAuthDomain | internal/central/adapter/ccu_auth.go | 51 |
 | internal/central/adapter | NewCallbackHandlers | internal/central/adapter/callback_handlers.go | 79 |
 | internal/central/adapter | NewCentralLinksDomain | internal/central/adapter/central_links.go | 32 |
@@ -97,8 +97,8 @@ HEAD: c986d73
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/adapter | 66 | 88 | 46 |
+| internal/model/custom | 27 | 49 | 10 |
 | internal/model/naming | 25 | 2 | 4 |
-| internal/model/custom | 23 | 49 | 10 |
 | internal/north/mqtt | 21 | 76 | 4 |
 | internal/client/backends | 19 | 37 | 4 |
 | internal/store/sqlite | 19 | 60 | 22 |
@@ -157,6 +157,7 @@ HEAD: c986d73
 | internal/north/matter/bridge | 1 | 51 | 38 |
 | internal/north/matter/mdns | 1 | 8 | 4 |
 | internal/north/matter/secure/spake2 | 1 | 11 | 10 |
+| internal/north/matter/store | 1 | 34 | 18 |
 | internal/store/masterprofile | 1 | 4 | 2 |
 | internal/store/patches | 1 | 3 | 0 |
 | internal/store/session | 1 | 15 | 0 |
@@ -186,7 +187,6 @@ HEAD: c986d73
 | internal/north/matter/secure/channel | 0 | 4 | 10 |
 | internal/north/matter/secure/mattercert | 0 | 7 | 16 |
 | internal/north/matter/secure/operational | 0 | 2 | 4 |
-| internal/north/matter/store | 0 | 17 | 9 |
 | internal/north/matter/transport/message | 0 | 6 | 12 |
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |

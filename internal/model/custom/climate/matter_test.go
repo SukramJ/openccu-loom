@@ -477,3 +477,65 @@ func TestUnknownCommandsRejected(t *testing.T) {
 		}
 	}
 }
+
+// --- OnMatterValueChanged (MatterChangeNotifier) ---
+
+// TestClimateOnMatterValueChangedFiresOnConfirmedSetpointChange verifies
+// that a CCU-confirmed setpoint change (e.g. adjusted at the wall dial)
+// reaches a registered OnMatterValueChanged callback.
+func TestClimateOnMatterValueChangedFiresOnConfirmedSetpointChange(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	var count int
+	_ = r.climate.OnMatterValueChanged(func() { count++ })
+	r.setpoint.OnEvent(20.0)
+	r.setpoint.OnEvent(21.5)
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations, got %d", count)
+	}
+}
+
+// TestClimateOnMatterValueChangedUnsubscribeStopsCallback verifies that
+// the returned closure detaches the setpoint subscription so a further
+// confirmed change does not fire the callback again.
+func TestClimateOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	var count int
+	unsub := r.climate.OnMatterValueChanged(func() { count++ })
+	r.setpoint.OnEvent(20.0)
+	unsub()
+	r.setpoint.OnEvent(21.5)
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
+	}
+}
+
+// TestClimateOnMatterValueChangedFansActualTemperature confirms that
+// CombineUnsubs fans a second wired DP (ACTUAL_TEMPERATURE) into the
+// same callback, not just the setpoint.
+func TestClimateOnMatterValueChangedFansActualTemperature(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	var count int
+	_ = r.climate.OnMatterValueChanged(func() { count++ })
+	r.actualTemperature.OnEvent(21.5)
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation from actualTemperature change, got %d", count)
+	}
+}
+
+// TestClimateOnMatterValueChangedNilSafe verifies nil-receiver and
+// nil-callback safety.
+func TestClimateOnMatterValueChangedNilSafe(t *testing.T) {
+	var c *Climate
+	unsub := c.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil Climate: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	unsub2 := r.climate.OnMatterValueChanged(nil)
+	if unsub2 == nil {
+		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
+	}
+	r.setpoint.OnEvent(20.0) // must not panic with no subscriber
+}

@@ -128,11 +128,11 @@ func TestParityLockIsLockedAfterStateLocked(t *testing.T) {
 	t.Parallel()
 
 	r := newRig(t, "VCU0000146:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	if locked, ok := r.lock.IsLocked(); !locked || !ok {
 		t.Fatalf("IsLocked()=%v ok=%v after StateLocked event, want (true, true)", locked, ok)
 	}
-	r.stateDP.OnEvent(string(StateUnlocked))
+	fireLockEnum(t, r.stateDP, string(StateUnlocked))
 	if locked, _ := r.lock.IsLocked(); locked {
 		t.Error("IsLocked() must be false after StateUnlocked event")
 	}
@@ -145,7 +145,7 @@ func TestParityLockIsLockingFromDirection(t *testing.T) {
 
 	r := newRig(t, "x", KindIP, &stubWriter{}, custom.LockCapabilities{})
 
-	r.dirDP.OnEvent(string(DirectionLocking))
+	fireLockEnum(t, r.dirDP, string(DirectionLocking))
 	if !r.lock.IsLocking() {
 		t.Error("IsLocking() must be true when direction=locking")
 	}
@@ -153,7 +153,7 @@ func TestParityLockIsLockingFromDirection(t *testing.T) {
 		t.Error("IsUnlocking() must be false when direction=locking")
 	}
 
-	r.dirDP.OnEvent(string(DirectionUnlock))
+	fireLockEnum(t, r.dirDP, string(DirectionUnlock))
 	if r.lock.IsLocking() {
 		t.Error("IsLocking() must be false when direction=unlocking")
 	}
@@ -161,7 +161,7 @@ func TestParityLockIsLockingFromDirection(t *testing.T) {
 		t.Error("IsUnlocking() must be true when direction=unlocking")
 	}
 
-	r.dirDP.OnEvent(string(DirectionNone))
+	fireLockEnum(t, r.dirDP, string(DirectionNone))
 	if r.lock.IsLocking() || r.lock.IsUnlocking() {
 		t.Error("Both IsLocking and IsUnlocking must be false when direction=none")
 	}
@@ -195,7 +195,7 @@ func TestParityLockIsRefreshed(t *testing.T) {
 	if r.lock.IsRefreshed() {
 		t.Error("IsRefreshed() must be false before any wire event")
 	}
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	if !r.lock.IsRefreshed() {
 		t.Error("IsRefreshed() must be true after state event")
 	}
@@ -233,7 +233,7 @@ func TestParityLockRFStateFromBoolDP(t *testing.T) {
 type rfErrorRig struct {
 	lock    *Lock
 	channel *device.Channel
-	errorDP *generic.Sensor[string]
+	errorDP *generic.Sensor[int32]
 }
 
 func newRFErrorRig(t *testing.T, address string) *rfErrorRig {
@@ -256,16 +256,18 @@ func newRFErrorRig(t *testing.T, address string) *rfErrorRig {
 	})
 	ch.Put(stateDp)
 
-	// RF locks expose ERROR (string) for jam detection.
-	errorDP := generic.NewStringSensor(generic.Spec{
+	// RF locks expose ERROR as a read-only ENUM (index sensor) for jam
+	// detection.
+	errorDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: address,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterError),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"NO_ERROR", "CLUTCH_FAILURE", "MOTOR_ABORTED"},
 		},
 	})
 	ch.Put(errorDP)
@@ -280,7 +282,7 @@ func TestIsJammedRFNoError(t *testing.T) {
 	t.Parallel()
 
 	r := newRFErrorRig(t, "HmSecKey:1")
-	r.errorDP.OnEvent(string(LockErrorNoError))
+	fireLockEnum(t, r.errorDP, string(LockErrorNoError))
 
 	if r.lock.IsJammed() {
 		t.Error("IsJammed() must be false when ERROR = NO_ERROR")
@@ -293,7 +295,7 @@ func TestIsJammedRFClutchFailure(t *testing.T) {
 	t.Parallel()
 
 	r := newRFErrorRig(t, "HmSecKey:2")
-	r.errorDP.OnEvent(string(LockErrorClutchFail))
+	fireLockEnum(t, r.errorDP, string(LockErrorClutchFail))
 
 	if !r.lock.IsJammed() {
 		t.Errorf("IsJammed() must be true when ERROR = %s", LockErrorClutchFail)
@@ -306,7 +308,7 @@ func TestIsJammedRFMotorAborted(t *testing.T) {
 	t.Parallel()
 
 	r := newRFErrorRig(t, "HmSecKey:3")
-	r.errorDP.OnEvent(string(LockErrorMotorAborted))
+	fireLockEnum(t, r.errorDP, string(LockErrorMotorAborted))
 
 	if !r.lock.IsJammed() {
 		t.Errorf("IsJammed() must be true when ERROR = %s", LockErrorMotorAborted)

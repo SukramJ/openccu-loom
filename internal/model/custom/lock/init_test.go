@@ -15,21 +15,35 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// putStringSensorDP attaches a *generic.Sensor[string] for param on ch and returns it.
-func putStringSensorDP(ch *device.Channel, param hmenum.Parameter) *generic.Sensor[string] {
-	dp := generic.NewStringSensor(generic.Spec{
+// putLockStateEnumDP attaches a *generic.Sensor[int32] for the LOCK_STATE
+// read-only ENUM parameter on ch and returns it — mirrors the resolver's
+// projection of a read-only ENUM onto an index-valued sensor.
+func putLockStateEnumDP(ch *device.Channel, param hmenum.Parameter) *generic.Sensor[int32] {
+	dp := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: ch.Address,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(param),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"UNKNOWN", "LOCKED", "UNLOCKED"},
 		},
 	})
 	ch.Put(dp)
 	return dp
+}
+
+// fireEnumIndex resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event.
+func fireEnumIndex(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
 }
 
 // makeLockChannel builds a bare device + channel for constructor testing.
@@ -113,7 +127,7 @@ func TestIPLockConstructorReturnsValidDP(t *testing.T) {
 	t.Parallel()
 
 	ch := makeLockChannel(t, "HmIP-DLD:1")
-	putStringSensorDP(ch, hmenum.ParameterLockState)
+	putLockStateEnumDP(ch, hmenum.ParameterLockState)
 
 	ctor, ok := custom.DefaultRegistry().Constructor(hmenum.DeviceProfileIPLock)
 	if !ok {
@@ -135,7 +149,7 @@ func TestRfLockConstructorReturnsValidDP(t *testing.T) {
 	t.Parallel()
 
 	ch := makeLockChannel(t, "HM-Sec-Key:1")
-	putStringSensorDP(ch, hmenum.ParameterLockState)
+	putLockStateEnumDP(ch, hmenum.ParameterLockState)
 
 	ctor, ok := custom.DefaultRegistry().Constructor(hmenum.DeviceProfileRfLock)
 	if !ok {
@@ -181,7 +195,7 @@ func TestIPLockConstructorWiresLockStateField(t *testing.T) {
 	t.Parallel()
 
 	ch := makeLockChannel(t, "HmIP-DLD:1")
-	stateDP := putStringSensorDP(ch, hmenum.ParameterLockState)
+	stateDP := putLockStateEnumDP(ch, hmenum.ParameterLockState)
 
 	ctor, _ := custom.DefaultRegistry().Constructor(hmenum.DeviceProfileIPLock)
 	dp, err := ctor(ch, custom.RebasedChannelGroupConfig{})
@@ -190,7 +204,7 @@ func TestIPLockConstructorWiresLockStateField(t *testing.T) {
 	}
 
 	// Drive a value via the shared generic DP.
-	stateDP.OnEvent("locked")
+	fireEnumIndex(t, stateDP, string(lock.StateLocked))
 
 	// For IP lock, the DataPointKey is keyed on LOCK_TARGET_LEVEL (the
 	// primary write parameter). The shared stateDP pointer means events

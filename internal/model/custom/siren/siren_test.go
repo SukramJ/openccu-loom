@@ -705,23 +705,12 @@ func TestSirenMatterReportable(t *testing.T) {
 
 // --- SmokeSiren ---
 
-func newSmokeSirenRig(t *testing.T) (*SmokeSiren, *stubWriter, *generic.Sensor[string]) {
+func newSmokeSirenRig(t *testing.T) (*SmokeSiren, *stubWriter, *generic.Sensor[int32]) {
 	t.Helper()
 	w := &stubWriter{}
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "SWSD0001"})
 	ch := d.AddChannel("SWSD0001:1", 1, "SMOKE_DETECTOR", hmenum.ParamsetKeyValues)
-	statusDP := generic.NewStringSensor(generic.Spec{
-		Key: hmtypes.DataPointKey{
-			ChannelAddress: "SWSD0001:1",
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      string(hmenum.ParameterSmokeDetectorAlarmStatus),
-		},
-		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
-			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
-		},
-	})
-	ch.Put(statusDP)
+	statusDP := attachSmokeStatusSensor(ch)
 	s := NewSmokeSiren(SmokeSirenConfig{Channel: ch, Writer: w})
 	return s, w, statusDP
 }
@@ -749,7 +738,7 @@ func TestSmokeSirenIsSecondaryAlarm(t *testing.T) {
 	t.Parallel()
 
 	s, _, statusDP := newSmokeSirenRig(t)
-	statusDP.OnEvent(string(SmokeStatusSecondaryAlarm))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusSecondaryAlarm))
 	if !s.IsSecondaryAlarm() {
 		t.Error("IsSecondaryAlarm must be true in SECONDARY_ALARM state")
 	}
@@ -762,7 +751,7 @@ func TestSmokeSirenIsIntrusion(t *testing.T) {
 	t.Parallel()
 
 	s, _, statusDP := newSmokeSirenRig(t)
-	statusDP.OnEvent(string(SmokeStatusIntrusion))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusIntrusion))
 	if !s.IsIntrusion() {
 		t.Error("IsIntrusion must be true in INTRUSION_ALARM state")
 	}
@@ -841,7 +830,7 @@ func TestSmokeSirenStatePayloadOn(t *testing.T) {
 	t.Parallel()
 
 	s, _, statusDP := newSmokeSirenRig(t)
-	statusDP.OnEvent(string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusPrimaryAlarm))
 	p, ok := s.State().(*payload.SmokeSirenState)
 	if !ok || p == nil {
 		t.Fatal("SmokeSiren.StatePayload must return a non-nil *payload.SmokeSirenState")
@@ -917,7 +906,7 @@ func TestSmokeSirenMatterReadAttributes(t *testing.T) {
 	}
 
 	// After PRIMARY_ALARM → Critical=2.
-	statusDP.OnEvent(string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusPrimaryAlarm))
 	v, ok = srv.MatterRead(matterAttrSmokeExpressedState)
 	if !ok || v != matterSmokeAlarmCritical {
 		t.Errorf("ExpressedState PRIMARY = %v ok=%v, want (%d, true)", v, ok, matterSmokeAlarmCritical)
@@ -1019,11 +1008,24 @@ func TestSmokeSirenReadSecondaryAlarmWarning(t *testing.T) {
 	s, _, statusDP := newSmokeSirenRig(t)
 	servers := s.MatterClusterServers()
 	srv := servers[0]
-	statusDP.OnEvent(string(SmokeStatusSecondaryAlarm))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusSecondaryAlarm))
 	v, ok := srv.MatterRead(matterAttrSmokeState)
 	if !ok || v != matterSmokeAlarmWarning {
 		t.Errorf("SmokeState SECONDARY = %v ok=%v, want (Warning, true)", v, ok)
 	}
+}
+
+// fireEnum resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event — mirrors how the resolver projects a
+// read-only ENUM parameter (SOUNDFILE, DIRECTION) onto an index-valued
+// Sensor[int32].
+func fireEnum(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
 }
 
 // --- SoundPlayer ---
@@ -1126,20 +1128,21 @@ func TestSoundPlayerCurrentSoundfile(t *testing.T) {
 	// Get the soundfile DP from the channel directly; drive it.
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P0001"})
 	ch := d.AddChannel("MP3P0001:2", 2, "AUDIO", hmenum.ParamsetKeyValues)
-	sfDP := generic.NewStringSensor(generic.Spec{
+	sfDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "MP3P0001:2",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterSoundfile),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"SOUNDFILE_042"},
 		},
 	})
 	ch.Put(sfDP)
 	sp2 := NewSoundPlayer(SoundPlayerConfig{Channel: ch, Writer: &stubWriter{}})
-	sfDP.OnEvent("SOUNDFILE_042")
+	fireEnum(t, sfDP, "SOUNDFILE_042")
 	sf, obs2 := sp2.CurrentSoundfile()
 	if !obs2 || sf != "SOUNDFILE_042" {
 		t.Errorf("CurrentSoundfile = %q obs=%v, want (SOUNDFILE_042, true)", sf, obs2)
@@ -1151,15 +1154,16 @@ func TestSoundPlayerIsPlaying(t *testing.T) {
 
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P0001"})
 	ch := d.AddChannel("MP3P0001:2", 2, "AUDIO", hmenum.ParamsetKeyValues)
-	dirDP := generic.NewStringSensor(generic.Spec{
+	dirDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "MP3P0001:2",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterDirection),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"", "UP", "DOWN"},
 		},
 	})
 	ch.Put(dirDP)
@@ -1172,24 +1176,24 @@ func TestSoundPlayerIsPlaying(t *testing.T) {
 	}
 
 	// Playing UP.
-	dirDP.OnEvent("UP")
+	fireEnum(t, dirDP, "UP")
 	playing, obs = sp.IsPlaying()
 	if !obs || !playing {
 		t.Errorf("IsPlaying after UP = %v obs=%v, want (true, true)", playing, obs)
 	}
 
 	// Playing DOWN.
-	dirDP.OnEvent("DOWN")
+	fireEnum(t, dirDP, "DOWN")
 	playing, _ = sp.IsPlaying()
 	if !playing {
 		t.Error("IsPlaying after DOWN must be true")
 	}
 
-	// Stopped.
-	dirDP.OnEvent("NONE")
+	// Stopped (empty label — no direction).
+	fireEnum(t, dirDP, "")
 	playing, _ = sp.IsPlaying()
 	if playing {
-		t.Error("IsPlaying after NONE must be false")
+		t.Error("IsPlaying after empty DIRECTION must be false")
 	}
 }
 
@@ -1522,18 +1526,7 @@ func TestSmokeSirenTurnOnSendsIntrusionCommand(t *testing.T) {
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel("HmIP-SWSD:1", 1, "SMOKE_DETECTOR", hmenum.ParamsetKeyValues)
 
-	statusDP := generic.NewStringSensor(generic.Spec{
-		Key: hmtypes.DataPointKey{
-			ChannelAddress: "HmIP-SWSD:1",
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      string(hmenum.ParameterSmokeDetectorAlarmStatus),
-		},
-		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
-			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
-		},
-	})
-	ch.Put(statusDP)
+	attachSmokeStatusSensor(ch)
 
 	s := NewSmokeSiren(SmokeSirenConfig{Channel: ch, Writer: w})
 	if err := s.TurnOn(context.Background(), hmenum.CommandPriorityHigh); err != nil {
@@ -1695,18 +1688,7 @@ func TestSmokeSirenStatusReflectsDP(t *testing.T) {
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel("HmIP-SWSD:1", 1, "SMOKE_DETECTOR", hmenum.ParamsetKeyValues)
 
-	statusDP := generic.NewStringSensor(generic.Spec{
-		Key: hmtypes.DataPointKey{
-			ChannelAddress: "HmIP-SWSD:1",
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      string(hmenum.ParameterSmokeDetectorAlarmStatus),
-		},
-		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
-			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
-		},
-	})
-	ch.Put(statusDP)
+	statusDP := attachSmokeStatusSensor(ch)
 
 	s := NewSmokeSiren(SmokeSirenConfig{Channel: ch, Writer: w})
 
@@ -1715,7 +1697,7 @@ func TestSmokeSirenStatusReflectsDP(t *testing.T) {
 		t.Error("Status should not be observed before any event")
 	}
 
-	statusDP.OnEvent(string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusPrimaryAlarm))
 	st, ok := s.Status()
 	if !ok {
 		t.Fatal("Status should be observed after event")

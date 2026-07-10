@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 )
 
 // DPKind classifies a Matter endpoint's source within the model.
@@ -186,6 +188,44 @@ func (s *Store) AssignEndpointID(ctx context.Context) (uint16, error) {
 // path holds an exclusive lock briefly to keep two concurrent
 // assemblers from picking the same ID.
 func (s *Store) UpsertEndpointAssigning(ctx context.Context, rec EndpointRecord) (uint16, error) {
+	// The transaction reads (nextFreeEndpointID) before it writes, so under
+	// WAL a concurrent writer — the device-load pipeline during a busy boot
+	// with a large fleet — can make the read→write upgrade fail immediately
+	// with SQLITE_BUSY, a case the connection's busy_timeout does not retry.
+	// Retry the whole transaction a bounded number of times so Matter endpoint
+	// assembly survives boot-time write contention instead of failing the
+	// bridge bring-up with "database is locked".
+	const maxAttempts = 30
+	backoff := 5 * time.Millisecond
+	for attempt := 1; ; attempt++ {
+		id, err := s.upsertEndpointAssigningOnce(ctx, rec)
+		if err == nil || attempt >= maxAttempts || !isSQLiteBusy(err) {
+			return id, err
+		}
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-time.After(backoff):
+		}
+		if backoff < 200*time.Millisecond {
+			backoff *= 2
+		}
+	}
+}
+
+// isSQLiteBusy reports whether err is a SQLite BUSY / locked error — the
+// transient class a bounded retry can clear once the current writer commits.
+func isSQLiteBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "database is locked") ||
+		strings.Contains(msg, "database table is locked") ||
+		strings.Contains(msg, "sqlite_busy")
+}
+
+func (s *Store) upsertEndpointAssigningOnce(ctx context.Context, rec EndpointRecord) (uint16, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("matter store: upsert endpoint assigning: begin tx: %w", err)

@@ -44,9 +44,12 @@ type SmokeSiren struct {
 	// in 0.1.0; the field is reserved for when SelfTestRequest is wired.
 	dataVersion hmtypes.DataVersionTracker
 
-	key     hmtypes.DataPointKey
-	writer  custom.Writer
-	status  *generic.Sensor[string]
+	key    hmtypes.DataPointKey
+	writer custom.Writer
+	// status carries SMOKE_DETECTOR_ALARM_STATUS, a read-only ENUM the
+	// resolver projects onto a raw-index Sensor[int32]; the string label is
+	// resolved on read via [custom.EnumLabelValue].
+	status  *generic.Sensor[int32]
 	command *generic.Sensor[string]
 }
 
@@ -112,13 +115,13 @@ func NewSmokeSiren(cfg SmokeSirenConfig) *SmokeSiren {
 		Address: addr,
 		key:     key,
 		writer:  cfg.Writer,
-		status:  custom.StringSensorField(cfg.Channel, hmenum.ParameterSmokeDetectorAlarmStatus),
+		status:  custom.EnumSensorField(cfg.Channel, hmenum.ParameterSmokeDetectorAlarmStatus),
 		command: custom.StringSensorField(cfg.Channel, hmenum.ParameterSmokeDetectorCommand),
 	}
 	s.registerSmokeSirenServices()
 	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
 	if s.status != nil {
-		_ = s.status.OnConfirmedUpdate(func(_, _ string) { s.dataVersion.Bump() })
+		_ = s.status.OnConfirmedUpdate(func(_, _ int32) { s.dataVersion.Bump() })
 	}
 	if s.command != nil {
 		_ = s.command.OnConfirmedUpdate(func(_, _ string) { s.dataVersion.Bump() })
@@ -126,16 +129,15 @@ func NewSmokeSiren(cfg SmokeSirenConfig) *SmokeSiren {
 	return s
 }
 
-// Status returns the last observed alarm status.
+// Status returns the last observed alarm status. SMOKE_DETECTOR_ALARM_STATUS
+// is a read-only ENUM projected onto a raw-index sensor, so the index is
+// resolved to its VALUE_LIST label before being returned as a SmokeAlarmStatus.
 func (s *SmokeSiren) Status() (SmokeAlarmStatus, bool) {
-	if s.status == nil {
-		return "", false
-	}
-	v, ok := s.status.Value()
+	label, ok := custom.EnumLabelValue(s.status)
 	if !ok {
 		return "", false
 	}
-	return SmokeAlarmStatus(v), true
+	return SmokeAlarmStatus(label), true
 }
 
 // IsActive reports whether the siren is currently firing — i.e. the status is

@@ -29,6 +29,10 @@ func (l *Light) MatterDataVersion() uint32 { return l.dataVersion.Current() }
 var (
 	_ interfaces.MatterEndpointSource     = (*Light)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Light)(nil)
+	// Light inherits OnMatterValueChanged from the embedded *generic.Float
+	// (LEVEL / brightness), so an external CCU-confirmed level change
+	// dirty-marks the OnOff / LevelControl attributes for Apple's Subscribe.
+	_ interfaces.MatterChangeNotifier = (*Light)(nil)
 )
 
 // Matter Device Type IDs and cluster IDs follow the Matter 1.5.1

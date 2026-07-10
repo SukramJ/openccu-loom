@@ -775,6 +775,36 @@ func (g *GeneralCommissioning) handleCommissioningComplete(ctx context.Context) 
 // GeneralCommissioningBehavior.armFailSafeLogic(timeoutSeconds) and
 // chip CommissioningWindowManager.cpp ArmFailSafe() call.
 func (g *GeneralCommissioning) ArmFailSafeFor(ctx context.Context, seconds uint32, fabricIndex uint8) error {
+	if seconds == 0 {
+		// A zero-second arm is a DISARM request. Its only caller is
+		// CommissioningWindow.RevokeWindow, which disarms so the next
+		// OpenCommissioningWindow is not Busy-locked. Treat it as a pure state
+		// reset: do NOT run the arm logic below (now+0 is immediately expired,
+		// so watchFailSafeExpiry would fire onFailSafeExpired at once) and do
+		// NOT fire onFailSafeExpired here. Both RevokeWindow callers — the
+		// CommissioningComplete hook and the onFailSafeExpired hook — already
+		// ran the pending-NOC rollback (ClearPendingState / OnFailSafeExpiry)
+		// before revoking, and onFailSafeExpired itself calls RevokeWindow:
+		// firing the hook from here would re-enter RevokeWindow →
+		// ArmFailSafeFor(0) → watcher → hook → … an unbounded loop that pegs a
+		// core and floods the log.
+		//
+		// This differs from the cluster-wire ArmFailSafe(ExpiryLengthSeconds=0)
+		// disarm in handleArmFailSafe, which DOES fire the hook: that path is a
+		// commissioner-initiated disarm that owns the pending-NOC rollback and
+		// is never reached from inside the hook, so it cannot recurse.
+		g.mu.Lock()
+		g.failSafeArmed = false
+		g.failSafeFabricIndex = 0
+		g.failSafeCumulativeStarted = false
+		// Matter §11.10.6.1: Breadcrumb SHALL be 0 once the fail-safe is no
+		// longer armed. Bump DataVersion so Apple's MTRDevice invalidates its
+		// cached snapshot, matching the wire-disarm and expiry paths.
+		g.breadcrumb = 0
+		g.dataVersion.Bump()
+		g.mu.Unlock()
+		return nil
+	}
 	req := ArmFailSafeRequest{
 		ExpiryLengthSeconds: uint16(seconds & 0xFFFF), // window timeout ≤ 900 s, fits uint16
 		Breadcrumb:          0,                        // window open does not set Breadcrumb

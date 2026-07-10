@@ -79,9 +79,62 @@ func IntegerSensorField(ch *device.Channel, p hmenum.Parameter) *generic.Sensor[
 
 // StringSensorField returns the channel's *generic.Sensor[string] for
 // parameter p (VALUES-then-MASTER), or nil when absent / wrong type.
+//
+// Only genuine STRING-typed parameters resolve to a *generic.Sensor[string].
+// A read-only ENUM parameter resolves to *generic.Sensor[int32] (raw 0-based
+// index) and a writable ENUM to *generic.Select, so StringSensorField returns
+// nil for either — a custom DP that needs an ENUM's string label must read the
+// index sensor via [EnumSensorField] + [EnumLabelValue] instead, not this.
 func StringSensorField(ch *device.Channel, p hmenum.Parameter) *generic.Sensor[string] {
 	dp, _ := resolveDP(ch, p).(*generic.Sensor[string])
 	return dp
+}
+
+// EnumSensorField returns the channel's *generic.Sensor[int32] for a read-only
+// ENUM (or INTEGER) parameter p (VALUES-then-MASTER), or nil when absent /
+// wrong type. It is the correct field accessor for read-only ENUM status
+// parameters (LOCK_STATE, SMOKE_DETECTOR_ALARM_STATUS, DOOR_STATE, DIRECTION,
+// …): the resolver projects those onto Sensor[int32] carrying the raw index,
+// and the string label is resolved on demand via [EnumLabelValue]. Custom DPs
+// previously read these through [StringSensorField], whose *Sensor[string] cast
+// never matched an int32 sensor and silently resolved to nil — the projected
+// value stayed absent and the Matter attribute reported TLV-null forever.
+func EnumSensorField(ch *device.Channel, p hmenum.Parameter) *generic.Sensor[int32] {
+	return IntegerSensorField(ch, p)
+}
+
+// EnumLabelValue resolves an index-valued ENUM sensor's current value to its
+// VALUE_LIST label, mirroring [generic.Select.Label]. Returns ("", false) for a
+// nil sensor, an unobserved value, or an index outside the VALUE_LIST.
+func EnumLabelValue(dp *generic.Sensor[int32]) (string, bool) {
+	if dp == nil {
+		return "", false
+	}
+	v, ok := dp.Value()
+	if !ok {
+		return "", false
+	}
+	vl := dp.ParameterData().ValueList
+	if int(v) < 0 || int(v) >= len(vl) {
+		return "", false
+	}
+	return vl[v], true
+}
+
+// EnumLabelIndex is the inverse of [EnumLabelValue]: it resolves a VALUE_LIST
+// label back to its 0-based index for an optimistic-echo write onto an
+// index-valued ENUM sensor. Returns (-1, false) when the label is not in the
+// sensor's VALUE_LIST.
+func EnumLabelIndex(dp *generic.Sensor[int32], label string) (int32, bool) {
+	if dp == nil {
+		return -1, false
+	}
+	for i, v := range dp.ParameterData().ValueList {
+		if v == label {
+			return int32(i), true //nolint:gosec // VALUE_LIST length is small; index fits int32
+		}
+	}
+	return -1, false
 }
 
 // SelectField returns the channel's *generic.Select for parameter p

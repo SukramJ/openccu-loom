@@ -110,7 +110,7 @@ func TestSirenOnOffOffCommandTurnsOff(t *testing.T) {
 // SMOKE_DETECTOR_ALARM_STATUS + SMOKE_DETECTOR_COMMAND DPs.
 type smokeRig struct {
 	siren  *SmokeSiren
-	status *generic.Sensor[string]
+	status *generic.Sensor[int32]
 }
 
 func newSmokeRig(t *testing.T) *smokeRig {
@@ -133,7 +133,7 @@ func newSmokeRig(t *testing.T) *smokeRig {
 		ch.Put(dp)
 		return dp
 	}
-	statusDP := mk(hmenum.ParameterSmokeDetectorAlarmStatus)
+	statusDP := attachSmokeStatusSensor(ch)
 	mk(hmenum.ParameterSmokeDetectorCommand)
 	return &smokeRig{
 		siren:  NewSmokeSiren(SmokeSirenConfig{Channel: ch, Writer: w}),
@@ -165,7 +165,7 @@ func TestSmokeSirenStatusToAlarmState(t *testing.T) {
 	}
 	for _, tc := range cases {
 		r := newSmokeRig(t)
-		r.status.OnEvent(string(tc.status))
+		fireSmokeStatus(t, r.status, string(tc.status))
 		srv := findCluster(t, r.siren, 0x005C)
 		v, ok := srv.MatterRead(0x0001) // SmokeState
 		if !ok || v.(uint8) != tc.want {
@@ -205,4 +205,100 @@ func TestSmokeSirenInvokeRejectsAllCommands(t *testing.T) {
 	if !errors.Is(err, errMatterUnknownCommand) {
 		t.Fatalf("err = %v, want errMatterUnknownCommand", err)
 	}
+}
+
+// --- OnMatterValueChanged (MatterChangeNotifier) ---
+
+// TestSirenOnMatterValueChangedFiresOnConfirmedAcousticChange verifies
+// that a CCU-confirmed ACOUSTIC_ALARM_ACTIVE change (e.g. the siren
+// started/stopped via a CCU program, not through Apple) reaches a
+// registered OnMatterValueChanged callback.
+func TestSirenOnMatterValueChangedFiresOnConfirmedAcousticChange(t *testing.T) {
+	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
+	var count int
+	_ = r.siren.OnMatterValueChanged(func() { count++ })
+	r.acousticActiveDP.OnEvent(true)
+	r.acousticActiveDP.OnEvent(false)
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations, got %d", count)
+	}
+}
+
+// TestSirenOnMatterValueChangedUnsubscribeStopsCallback verifies that the
+// returned closure detaches every wired DP so a further confirmed change
+// does not fire the callback again.
+func TestSirenOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
+	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
+	var count int
+	unsub := r.siren.OnMatterValueChanged(func() { count++ })
+	r.acousticActiveDP.OnEvent(true)
+	unsub()
+	r.acousticActiveDP.OnEvent(false)
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
+	}
+}
+
+// TestSirenOnMatterValueChangedNilSafe verifies nil-receiver and
+// nil-callback safety.
+func TestSirenOnMatterValueChangedNilSafe(t *testing.T) {
+	var s *Siren
+	unsub := s.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil Siren: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+
+	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
+	unsub2 := r.siren.OnMatterValueChanged(nil)
+	if unsub2 == nil {
+		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
+	}
+	r.acousticActiveDP.OnEvent(true) // must not panic with no subscriber
+}
+
+// TestSmokeSirenOnMatterValueChangedFiresOnConfirmedStatusChange verifies
+// that a CCU-confirmed SMOKE_DETECTOR_ALARM_STATUS change reaches a
+// registered OnMatterValueChanged callback.
+func TestSmokeSirenOnMatterValueChangedFiresOnConfirmedStatusChange(t *testing.T) {
+	r := newSmokeRig(t)
+	var count int
+	_ = r.siren.OnMatterValueChanged(func() { count++ })
+	fireSmokeStatus(t, r.status, string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, r.status, string(SmokeStatusIdleOff))
+	if count != 2 {
+		t.Fatalf("expected 2 callback invocations, got %d", count)
+	}
+}
+
+// TestSmokeSirenOnMatterValueChangedUnsubscribeStopsCallback verifies
+// that the returned closure detaches the status subscription.
+func TestSmokeSirenOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
+	r := newSmokeRig(t)
+	var count int
+	unsub := r.siren.OnMatterValueChanged(func() { count++ })
+	fireSmokeStatus(t, r.status, string(SmokeStatusPrimaryAlarm))
+	unsub()
+	fireSmokeStatus(t, r.status, string(SmokeStatusIdleOff))
+	if count != 1 {
+		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
+	}
+}
+
+// TestSmokeSirenOnMatterValueChangedNilSafe verifies nil-receiver and
+// nil-callback safety.
+func TestSmokeSirenOnMatterValueChangedNilSafe(t *testing.T) {
+	var s *SmokeSiren
+	unsub := s.OnMatterValueChanged(func() {})
+	if unsub == nil {
+		t.Fatal("nil SmokeSiren: OnMatterValueChanged must return non-nil unsub")
+	}
+	unsub() // must not panic
+
+	r := newSmokeRig(t)
+	unsub2 := r.siren.OnMatterValueChanged(nil)
+	if unsub2 == nil {
+		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
+	}
+	fireSmokeStatus(t, r.status, string(SmokeStatusPrimaryAlarm)) // must not panic with no subscriber
 }

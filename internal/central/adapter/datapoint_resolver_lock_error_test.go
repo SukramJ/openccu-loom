@@ -82,6 +82,39 @@ func TestResolveDataPointWithUnIgnoreImpulseAlwaysSuppressed(t *testing.T) {
 	}
 }
 
+// TestResolveReadonlyEnumIsIndexSensor pins the invariant every custom DP
+// that reads an ENUM status depends on: a read-only ENUM parameter resolves
+// to *generic.Sensor[int32] carrying the raw 0-based VALUE_LIST index, NOT
+// *generic.Sensor[string]. Lock (LOCK_STATE / DIRECTION), SmokeSiren
+// (SMOKE_DETECTOR_ALARM_STATUS) and peers therefore read it through
+// custom.EnumSensorField + custom.EnumLabelValue. The former *Sensor[string]
+// cast (custom.StringSensorField) never matched an int32 sensor, silently
+// resolved to nil, and left the projected Matter attribute TLV-null forever —
+// this test guards that regression at the resolver boundary.
+func TestResolveReadonlyEnumIsIndexSensor(t *testing.T) {
+	t.Parallel()
+	cfg := generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "VCU0000001:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "LOCK_STATE",
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"UNKNOWN", "LOCKED", "UNLOCKED"},
+		},
+	}
+	dp := resolveDataPointWithUnIgnore(cfg, false)
+	if _, ok := dp.(*generic.Sensor[int32]); !ok {
+		t.Fatalf("read-only ENUM must resolve to *generic.Sensor[int32], got %T", dp)
+	}
+	if _, ok := dp.(*generic.Sensor[string]); ok {
+		t.Fatal("read-only ENUM must NOT resolve to *generic.Sensor[string] (custom.StringSensorField nil-cast regression)")
+	}
+}
+
 // TestResolveDataPointWithUnIgnoreErrorJammedHmIP verifies the HmIP
 // lock branch: HmIP-DLD/HmIP-DLP ERROR_JAMMED on channel 0 must
 // receive a DP when un_ignored.

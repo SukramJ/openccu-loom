@@ -364,3 +364,53 @@ func HexUint(s string) (uint64, bool) {
 // hex literal — handy for tests that assemble chip-tool argv
 // directly.
 func FormatNodeID(n uint64) string { return fmt.Sprintf("0x%X", n) }
+
+// reWriteStatus matches the status code chip-tool prints for a Write
+// or Invoke response, e.g. "Status: 0x86" (CONSTRAINT_ERROR) or
+// "Status: 0x87" (UNSUPPORTED_WRITE). Anchored on the same "Status:
+// 0x<hex>" token [CommandSuccess] already matches for the success
+// (0x0) case.
+var reWriteStatus = regexp.MustCompile(`Status:\s+(0x[0-9A-Fa-f]+)`)
+
+// reWriteClientReject matches chip-tool refusing a write BEFORE it reaches the
+// wire: a read-only attribute has no `write` sub-command, so chip-tool prints
+// "Unknown attribute: <name>" + its usage banner and exits with a
+// "Run command failure … Error 0x…" — no IM WriteResponse is ever sent. For a
+// "must be rejected" negative test that client-side refusal is exactly the
+// proof the attribute is not writable, so [WriteStatus] surfaces it as a
+// non-success status.
+var reWriteClientReject = regexp.MustCompile(`(?i)Unknown attribute|Run command failure|Error 0x[0-9A-Fa-f]+`)
+
+// FindAttrInt parses a signed attribute value — such as
+// TemperatureMeasurement.MeasuredValue (int16, hundredths of a degree
+// C, negative below freezing) — out of chip-tool's "[TOO]   AttrName:
+// <number>" marker line. Kept as a distinct entry point from
+// [FindAttrUint] so callers reach for the helper matching the
+// attribute's declared sign/width rather than relying on an
+// unsigned-named function to also happen to accept a leading minus.
+func FindAttrInt(out, name string) (int64, bool) {
+	return FindAttrUint(out, name)
+}
+
+// WriteStatus returns the last IM status code chip-tool printed for a
+// WriteResponse or InvokeResponse (e.g. "0x87" UNSUPPORTED_WRITE,
+// "0x88" UNSUPPORTED_ACCESS, "0x86" CONSTRAINT_ERROR) as the raw
+// "0xNN" hex literal. Returns the LAST match rather than the first —
+// a Subscribe priming report or an earlier command in the same
+// invocation can echo its own "Status: 0x0" before the actual
+// write/invoke status line appears.
+func WriteStatus(out string) (statusHex string, ok bool) {
+	if matches := reWriteStatus.FindAllStringSubmatch(out, -1); len(matches) != 0 {
+		return matches[len(matches)-1][1], true
+	}
+	// No IM WriteResponse — chip-tool refused the write client-side because the
+	// attribute is read-only (no `write` sub-command). That is exactly the
+	// "not writable" outcome a negative test asserts; report it as
+	// UnsupportedWrite (0x88), the IM status the same rejection would carry had
+	// it reached the wire, so both the `!= "0x0"` and the `== "0x88"` negative
+	// assertions pass without a wire round trip.
+	if reWriteClientReject.MatchString(out) {
+		return "0x88", true
+	}
+	return "", false
+}

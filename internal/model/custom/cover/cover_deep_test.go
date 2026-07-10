@@ -271,24 +271,37 @@ func TestBlindCloseTiltSetsLevel2ToZero(t *testing.T) {
 
 // --- Garage deep tests ---
 
+// fireDoorState resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event — mirrors how the resolver projects the
+// read-only ENUM parameter DOOR_STATE onto an index-valued Sensor[int32].
+func fireDoorState(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
+}
+
 // newGarageRig builds a channel carrying DOOR_STATE and SECTION data points
 // and returns a Garage against it.
 //
 //nolint:gocritic // test rig helper — positional returns are the test convention
-func newGarageRig(t *testing.T, address string, w Writer) (*Garage, *generic.Sensor[string], *generic.Sensor[int32]) {
+func newGarageRig(t *testing.T, address string, w Writer) (*Garage, *generic.Sensor[int32], *generic.Sensor[int32]) {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel(address, 1, "GARAGE_DOOR", hmenum.ParamsetKeyValues)
 
-	doorState := generic.NewStringSensor(generic.Spec{
+	doorState := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: address,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterDoorState),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"UNKNOWN", "OPEN", "CLOSED", "VENTILATION_POSITION"},
 		},
 	})
 	section := generic.NewIntegerSensor(generic.Spec{

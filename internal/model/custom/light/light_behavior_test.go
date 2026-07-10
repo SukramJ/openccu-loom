@@ -446,24 +446,40 @@ func TestFixedColorLightColorNameUnknownSlot(t *testing.T) {
 	}
 }
 
+// fireChannelColor resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event — mirrors how the resolver projects the
+// read-only ENUM parameter CHANNEL_COLOR onto an index-valued Sensor[int32].
+func fireChannelColor(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
+}
+
 // TestFixedColorLightChannelHsColor verifies ChannelHsColor maps the CHANNEL_COLOR
-// string sensor to (hue, sat, ok).
+// index sensor to (hue, sat, ok).
 func TestFixedColorLightChannelHsColor(t *testing.T) {
 	w := &colorStubWriter{}
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "X0001"})
 	ch := d.AddChannel("X:1", 1, "FCL", hmenum.ParamsetKeyValues)
 	putWritableFloat(ch, "X:1", hmenum.ParameterLevel, w)
 	putWritableSelect(ch, "X:1", hmenum.ParameterColor, w, fixedColorValueList)
-	// Add CHANNEL_COLOR sensor.
-	channelColorDP := generic.NewStringSensor(generic.Spec{
+	// Add CHANNEL_COLOR sensor. CHANNEL_COLOR is a read-only ENUM the
+	// resolver projects onto a raw-index Sensor[int32] (see
+	// custom.EnumSensorField); the colour-name label is resolved on read
+	// via custom.EnumLabelValue.
+	channelColorDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "X:1",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterChannelColor),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"RED", "UNKNOWN_COLOR_XYZ"},
 		},
 	})
 	ch.Put(channelColorDP)
@@ -477,7 +493,7 @@ func TestFixedColorLightChannelHsColor(t *testing.T) {
 	}
 
 	// Known colour: RED maps to hue=0, sat=100.
-	channelColorDP.OnEvent("RED")
+	fireChannelColor(t, channelColorDP, "RED")
 	h, s, ok := l.ChannelHsColor()
 	if !ok {
 		t.Error("ChannelHsColor() after RED event must return ok=true")
@@ -487,7 +503,7 @@ func TestFixedColorLightChannelHsColor(t *testing.T) {
 	}
 
 	// Unknown name: returns (0, 0, true) — unknown fallback per code.
-	channelColorDP.OnEvent("UNKNOWN_COLOR_XYZ")
+	fireChannelColor(t, channelColorDP, "UNKNOWN_COLOR_XYZ")
 	h, s, ok = l.ChannelHsColor()
 	if !ok {
 		t.Error("ChannelHsColor() with unknown name must still return ok=true (fallback)")

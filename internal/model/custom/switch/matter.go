@@ -21,6 +21,9 @@ var (
 	_ interfaces.MatterEndpointSource     = (*Switch)(nil)
 	_ interfaces.MatterClusterServer      = (*Switch)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Switch)(nil)
+	// Inherited from the embedded *generic.Switch: an external STATE flip
+	// (physical button / CCU program) propagates to Apple's Subscribe.
+	_ interfaces.MatterChangeNotifier = (*Switch)(nil)
 )
 
 // Matter Device Type IDs and OnOff cluster IDs follow the Matter 1.5.1
