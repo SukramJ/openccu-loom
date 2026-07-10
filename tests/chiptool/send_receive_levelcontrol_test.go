@@ -36,7 +36,7 @@ func TestSendReceive_LevelControl(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0008)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for LevelControl endpoint %d", ep)
 	}

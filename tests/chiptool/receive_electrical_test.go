@@ -37,7 +37,7 @@ func TestReceive_ElectricalPowerMeasurement(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0090)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for ElectricalPowerMeasurement endpoint %d", ep)
 	}
@@ -101,7 +101,7 @@ func TestReceive_ElectricalEnergyMeasurement(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0091)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for ElectricalEnergyMeasurement endpoint %d", ep)
 	}

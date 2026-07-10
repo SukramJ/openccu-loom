@@ -33,7 +33,7 @@ func TestSendReceive_WindowCovering(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0102)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for windowcovering endpoint %d", ep)
 	}
@@ -198,7 +198,7 @@ func TestSendReceive_WindowCovering_Tilt(t *testing.T) {
 		t.Skip("no Blind (lift+tilt) WindowCovering endpoint — HmIP-FBL not yet in godevccu fleet")
 	}
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0102)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for blind endpoint %d", ep)
 	}
@@ -275,7 +275,7 @@ func TestSendReceive_WindowCovering_Garage(t *testing.T) {
 		t.Skip("no Garage WindowCovering endpoint — HmIP-MOD-HO not yet in godevccu fleet")
 	}
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0102)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for garage endpoint %d", ep)
 	}

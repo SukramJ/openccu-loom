@@ -37,7 +37,7 @@ func TestReceive_MeasurementAnalog(t *testing.T) {
 			t.Skip("no TemperatureMeasurement endpoint — godevccu fleet lacks HmIP-STHO")
 		}
 		ep := eps[0]
-		address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+		address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0402)
 		if !ok {
 			t.Fatalf("could not resolve CCU address for temperaturemeasurement endpoint %d", ep)
 		}
@@ -63,7 +63,7 @@ func TestReceive_MeasurementAnalog(t *testing.T) {
 			t.Skip("no RelativeHumidityMeasurement endpoint — godevccu fleet lacks HmIP-STHO")
 		}
 		ep := eps[0]
-		address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+		address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0405)
 		if !ok {
 			t.Fatalf("could not resolve CCU address for relativehumiditymeasurement endpoint %d", ep)
 		}
@@ -89,7 +89,7 @@ func TestReceive_MeasurementAnalog(t *testing.T) {
 			t.Skip("no IlluminanceMeasurement endpoint — godevccu fleet lacks HmIP-SMI")
 		}
 		ep := eps[0]
-		address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+		address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0400)
 		if !ok {
 			t.Fatalf("could not resolve CCU address for illuminancemeasurement endpoint %d", ep)
 		}
@@ -119,7 +119,7 @@ func TestReceive_MeasurementAnalog(t *testing.T) {
 			t.Skip("no CarbonDioxideConcentrationMeasurement endpoint — godevccu fleet lacks HmIP-SCTH230")
 		}
 		ep := eps[0]
-		address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+		address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x040D)
 		if !ok {
 			t.Fatalf("could not resolve CCU address for carbondioxideconcentrationmeasurement endpoint %d", ep)
 		}

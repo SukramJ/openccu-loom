@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"testing"
 )
@@ -50,14 +51,27 @@ func (b *Bridge) fetchExposable(t *testing.T) ([]exposureItem, error) {
 // bridge stamps SerialNumber with the source device's address (see
 // internal/north/matter/endpoint/materialize.go) — then
 // cross-references GET /api/v1/matter/exposable for the enabled row
-// whose device_address matches, returning that row's dp_key.
+// whose device_address AND cluster match, returning that row's
+// channel address plus dp_key.
 //
-// When more than one enabled exposure shares the same device_address
-// (a multi-channel device with several mapped DPs), the first match
-// wins. Callers that need to disambiguate by cluster should go
-// through [Bridge.CCUAddressForCluster] instead, which narrows to a
-// specific cluster before ever reaching this function.
-func (b *Bridge) ResolveCCUAddress(ctx context.Context, t *testing.T, endpointID uint16) (address, dpKey string, ok bool) {
+// The cluster narrowing is load-bearing: a multi-channel device
+// carries many enabled exposures (a channel-0 PowerSource / maintenance
+// candidate sorts first for every device), so a device-address-only
+// match collapses onto channel 0 and the tested VALUES parameter is not
+// described there. Narrowing to clusterID selects the channel that
+// actually hosts the cluster under test. Pass clusterID==0 to keep the
+// legacy device-scoped first-match (only safe for single-channel
+// devices — used by the negative/unmappable dp_key probe).
+//
+// preferDPKeys disambiguates when one device mounts the same cluster on
+// several channels with different semantics — e.g. a door-lock drive
+// materialises DoorLock (0x0101) BOTH for its GLOBAL_BUTTON_LOCK
+// child-lock on channel 0 AND for the real LOCK_TARGET_LEVEL on channel
+// 1 (ButtonLock is an aiohomematic-parity lock entity). Passing
+// preferDPKeys=["LOCK_TARGET_LEVEL","LOCK_STATE"] picks the real-lock
+// row over the button-lock row; when no preferred row matches the first
+// cluster match wins.
+func (b *Bridge) ResolveCCUAddress(ctx context.Context, t *testing.T, endpointID, clusterID uint16, preferDPKeys ...string) (address, dpKey string, ok bool) {
 	t.Helper()
 	ctl := b.SharedCtl
 	if ctl == nil {
@@ -75,17 +89,34 @@ func (b *Bridge) ResolveCCUAddress(ctx context.Context, t *testing.T, endpointID
 	if err != nil {
 		return "", "", false
 	}
+	// Collect every enabled exposure on this device that advertises the
+	// cluster under test. The CHANNEL address (ADDRESS:CHANNEL), not the
+	// device root, is what godevccu's GetValue/SetValue/
+	// SimulateDeviceEvent accept — the bare device address is rejected
+	// with `paramset "VALUES" not found on "VCU…"`.
+	var matches []exposureItem
 	for _, it := range items {
-		if it.Enabled && it.DeviceAddress == addr {
-			// Return the CHANNEL address (ADDRESS:CHANNEL), not the device
-			// root: the VALUES paramset a SEND assertion reads and a RECEIVE
-			// injection writes lives on the channel, so godevccu's
-			// GetValue/SetValue/SimulateDeviceEvent reject the bare device
-			// address with `paramset "VALUES" not found on "VCU…"`.
-			return fmt.Sprintf("%s:%d", it.DeviceAddress, it.ChannelNo), it.DPKey, true
+		if !it.Enabled || it.DeviceAddress != addr {
+			continue
+		}
+		if clusterID != 0 && !HasCluster(it.Clusters, uint32(clusterID)) {
+			continue
+		}
+		matches = append(matches, it)
+	}
+	if len(matches) == 0 {
+		return "", "", false
+	}
+	pick := matches[0]
+	if len(preferDPKeys) > 0 {
+		for _, it := range matches {
+			if slices.Contains(preferDPKeys, it.DPKey) {
+				pick = it
+				break
+			}
 		}
 	}
-	return "", "", false
+	return fmt.Sprintf("%s:%d", pick.DeviceAddress, pick.ChannelNo), pick.DPKey, true
 }
 
 // CCUAddressForCluster discovers a bridged endpoint whose Descriptor
@@ -125,7 +156,7 @@ func (b *Bridge) CCUAddressForCluster(ctx context.Context, t *testing.T, cluster
 		if !HasCluster(perEP[ep], cluster32) {
 			continue
 		}
-		addr, dp, resolved := b.ResolveCCUAddress(ctx, t, ep)
+		addr, dp, resolved := b.ResolveCCUAddress(ctx, t, ep, clusterID)
 		if resolved {
 			return ep, addr, dp, true
 		}

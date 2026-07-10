@@ -156,7 +156,7 @@ func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 		}
 
 		for _, ep := range eps {
-			addr, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep)
+			addr, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0)
 			if !ok || addr != unmappableTextDisplayAddr {
 				continue
 			}

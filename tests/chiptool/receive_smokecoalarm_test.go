@@ -31,7 +31,7 @@ func TestReceive_SmokeCOAlarm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x005C)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for SmokeCOAlarm endpoint %d", ep)
 	}

@@ -28,7 +28,7 @@ func TestReceive_BooleanStateContact(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0045)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for BooleanState endpoint %d", ep)
 	}
@@ -81,7 +81,7 @@ func TestReceive_OccupancySensing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0406)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for OccupancySensing endpoint %d", ep)
 	}
@@ -135,7 +135,7 @@ func TestReceive_PowerSourceBattery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x002F)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for PowerSource endpoint %d", ep)
 	}

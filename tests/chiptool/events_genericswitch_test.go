@@ -40,7 +40,7 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep)
+	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x003B)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for GenericSwitch endpoint %d", ep)
 	}
