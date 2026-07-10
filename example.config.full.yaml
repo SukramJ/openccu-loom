@@ -277,6 +277,11 @@ north:
     # [default: false]
     prefer_ipv4: false
 
+    # Expose a multi-channel device's secondary actor channels as separate
+    # Matter endpoints too. Default false = one endpoint per device (primary
+    # channel only). Matter-only.
+    expose_secondary_channels: false
+
     # IANA vendor ID. 0xFFF1 = developer / test block.
     # NEVER use 0xFFF1 in production.  [default: 0xFFF1]
     vendor_id: 0xFFF1

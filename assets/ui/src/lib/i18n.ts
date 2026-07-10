@@ -427,6 +427,7 @@ const EN: Catalog = {
   "config.field.north.matter.node_label": "Bridge label",
   "config.field.north.matter.discriminator": "Commissioning discriminator",
   "config.field.north.matter.prefer_ipv4": "Force IPv4",
+  "config.field.north.matter.expose_secondary_channels": "Expose secondary channels",
   "config.field.north.matter.mdns_advertise": "mDNS advertiser",
   "config.field.north.matter.dev_rotate_unique_ids": "Rotate unique IDs each boot (dev)",
   "config.field.north.matter.commissioning.passcode": "Passcode",
@@ -580,6 +581,8 @@ const EN: Catalog = {
   "config.help.north.matter.discriminator": "12-bit Matter commissioning discriminator. Combined with the passcode to form the manual setup code.",
   "config.help.north.matter.prefer_ipv4":
     "Force the Matter UDP socket to bind IPv4-only. Default false opens an IPv6 dual-stack socket that also accepts IPv4 traffic — the standard choice.",
+  "config.help.north.matter.expose_secondary_channels":
+    "Off by default: a multi-channel device (switch, dimmer, cover, lock, siren, valve) projects a single Matter endpoint from its primary channel. Enable to also expose its secondary virtual-receiver actor channels as separate endpoints. Matter only — MQTT, HA-Discovery and REST always carry every channel.",
   "config.help.north.matter.mdns_advertise":
     "mDNS advertiser implementation. Unset defaults to `zeroconf`, which publishes the operational + commissionable records on the network — required for pairing by QR code. `noop` keeps the records in-memory only (tests / out-of-band discovery); commissioners cannot discover the bridge in that mode.",
   "config.help.north.matter.dev_rotate_unique_ids":
@@ -2469,6 +2472,7 @@ const DE: Catalog = {
   "config.field.north.matter.node_label": "Bridge-Label",
   "config.field.north.matter.discriminator": "Commissioning-Discriminator",
   "config.field.north.matter.prefer_ipv4": "IPv4 erzwingen",
+  "config.field.north.matter.expose_secondary_channels": "Sekundärkanäle exponieren",
   "config.field.north.matter.mdns_advertise": "mDNS-Advertiser",
   "config.field.north.matter.dev_rotate_unique_ids": "UniqueID pro Boot rotieren (Dev)",
   "config.field.north.matter.commissioning.passcode": "Setup-Code",
@@ -2618,6 +2622,8 @@ const DE: Catalog = {
   "config.help.north.matter.discriminator": "12-bit Matter-Commissioning-Discriminator. Mit dem Passcode bildet er den manuellen Setup-Code.",
   "config.help.north.matter.prefer_ipv4":
     "Erzwingt IPv4-only auf dem Matter-UDP-Socket. Default aus = IPv6-Dual-Stack-Socket, der auch IPv4 akzeptiert (Standardwahl).",
+  "config.help.north.matter.expose_secondary_channels":
+    "Standardmäßig aus: Ein Mehrkanalgerät (Schalter, Dimmer, Rollladen, Schloss, Sirene, Ventil) projiziert einen einzelnen Matter-Endpoint aus seinem Primärkanal. Aktivieren, um auch die sekundären Aktor-Kanäle als eigene Endpoints zu exponieren. Nur Matter — MQTT, HA-Discovery und REST führen immer alle Kanäle.",
   "config.help.north.matter.mdns_advertise":
     "mDNS-Advertiser-Implementierung. Ohne Wert gilt `zeroconf`: operational + commissionable Records werden im Netz veröffentlicht — Voraussetzung für das Koppeln per QR-Code. `noop` hält die Records nur in-memory (Tests / Out-of-band-Discovery); Commissioner finden die Bridge dann nicht.",
   "config.help.north.matter.dev_rotate_unique_ids":

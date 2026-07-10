@@ -30,6 +30,16 @@ const (
 	// address alone is not a valid "unmapped" signal; the assertion
 	// must scope to this specific channel.
 	unmappableTextDisplayChannel = 3
+
+	// unmappableIrrigationPrimaryChannel is ELV-SH-WSM's
+	// WATER_SWITCH_VIRTUAL_RECEIVER channel — the valve's primary
+	// actor, the ONLY WSM channel whose bool STATE surfaces a mappable
+	// OnOff candidate. Fixed by godevccu's ELV-SH-WSM device_descriptions
+	// fixture. Its sibling group-STATE transmitter (offset -1, marked
+	// DataPointUsageCDPState) and secondary actor channels (offsets
+	// +1/+2, ce_secondary) also carry a bool STATE but are dropped from
+	// the default Matter projection.
+	unmappableIrrigationPrimaryChannel = 4
 )
 
 // negativeExposableRow mirrors the subset of the REST GET
@@ -64,17 +74,19 @@ var negativeDisplayParamKeys = map[string]bool{
 	"REPETITIONS":                     true,
 }
 
-// TestNegative_UnmappableDeviceClasses asserts that device classes ADR
-// 0012 ("Out of Matter scope" table, plus the Custom-DP mapping table
-// rows for `textdisplay.TextDisplay` and `valve.Irrigation`) documents
-// as having no Matter cluster never materialise a Matter endpoint —
-// even though the daemon happily bridges everything ELSE on the same
-// physical device (config button, battery telemetry).
+// TestNegative_UnmappableDeviceClasses guards two "must not surface to
+// Matter" boundaries on devices the daemon otherwise bridges happily:
+//   - textdisplay.TextDisplay (HmIP-WRCD): ADR 0012's "Out of Matter
+//     scope" class — no channel of it ever materialises an endpoint,
+//     even though the same device's config button + battery telemetry do.
+//   - valve.Irrigation (ELV-SH-WSM): its primary channel IS bridged as
+//     OnOff (decision B), but the custom entity's redundant group-STATE
+//     transmitter (ce_state) and secondary actor channels (ce_secondary)
+//     must stay hidden by default so exactly one on/off endpoint surfaces.
 //
-// HmIP-WRCD (textdisplay.TextDisplay) and ELV-SH-WSM (valve.Irrigation)
-// are not in [harness.DefaultDevices], so this test brings up its own
-// isolated bridge with them added to the fleet rather than reaching
-// for [requireBridge]'s shared one.
+// HmIP-WRCD and ELV-SH-WSM are not in [harness.DefaultDevices], so this
+// test brings up its own isolated bridge with them added to the fleet
+// rather than reaching for [requireBridge]'s shared one.
 func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 	chipBin := harness.RequireChipTool(t)
 	b := harness.Start(t, chipBin, harness.Options{
@@ -170,32 +182,65 @@ func TestNegative_UnmappableDeviceClasses(t *testing.T) {
 		}
 	})
 
-	// valve.Irrigation (ELV-SH-WSM) is deliberately NOT asserted here.
-	// ADR 0012 documents it as having no Matter cluster ("stays
-	// MQTT-only"), matching textdisplay.TextDisplay above — but the
-	// current implementation has drifted from that decision:
-	// [*valve.Irrigation] (internal/model/custom/valve/valve.go)
-	// embeds *generic.Switch for its STATE field, and *generic.Switch
-	// implements interfaces.MatterEndpointSource
-	// (internal/model/generic/switch_matter.go) to project STATE onto
-	// OnOff (0x0006) / OnOffPlugInUnit (0x010A). Go's method promotion
-	// carries that projection onto *valve.Irrigation unmodified, so
-	// ELV-SH-WSM's WATER_SWITCH_VIRTUAL_RECEIVER channels DO surface
-	// a mappable OnOff candidate and DO materialise a bridged Matter
-	// endpoint today, contrary to ADR 0012.
+	// valve.Irrigation (ELV-SH-WSM) IS bridged — its embedded
+	// *generic.Switch (internal/model/custom/valve/valve.go) projects
+	// the primary WATER_SWITCH_VIRTUAL_RECEIVER STATE onto OnOff
+	// (0x0006) / OnOffPlugInUnit (0x010A) via
+	// interfaces.MatterEndpointSource
+	// (internal/model/generic/switch_matter.go). This is intentional
+	// (docs/adr/0049-matter-one-endpoint-per-device.md, superseding
+	// ADR 0012's earlier "stays MQTT-only" valve rows).
 	//
-	// Skipping (rather than asserting either the ADR-documented or
-	// the as-built behaviour) avoids two bad outcomes: pinning the
-	// wrong-by-ADR OnOff mapping would read as "this is intentional",
-	// and pinning the ADR-correct Unmappable verdict would redden
-	// this suite for a production-code change outside this test's
-	// scope. Whoever resolves the drift — either making
-	// *valve.Irrigation implement MatterEligibilitySource to return
-	// Unmappable, or updating ADR 0012 to accept the OnOff projection
-	// as an intentional evolution — should replace this Skip with the
-	// real assertion (the textdisplay sub-tests above are the
-	// template).
-	t.Run("irrigation-valve/adr-0012-gap", func(t *testing.T) {
-		t.Skip("valve.Irrigation currently satisfies interfaces.MatterEndpointSource via its embedded *generic.Switch and DOES materialise an OnOff endpoint for " + unmappableIrrigationAddr + ", contradicting ADR 0012's \"stays MQTT-only\" decision — see internal/model/custom/valve/valve.go and internal/model/generic/switch_matter.go")
+	// The NEGATIVE part this suite still guards: a valve custom entity
+	// spans several channels off its primary, and only the primary may
+	// surface an on/off actor to Matter. Its group-STATE transmitter
+	// (offset -1, marked DataPointUsageCDPState — its bool STATE merely
+	// restates the primary's on/off) and its sibling actor channels
+	// (offsets +1/+2, ce_secondary) each carry a bool STATE that would
+	// ALSO project to OnOff, but the default Matter projection
+	// (north.matter.expose_secondary_channels off) drops them so the
+	// device exposes exactly one on/off endpoint. Asserted at the
+	// candidate layer: exactly one WSM channel — the primary — yields a
+	// mappable STATE row.
+	t.Run("irrigation-valve/only-primary-channel-onoff", func(t *testing.T) {
+		stateChannels := map[int]bool{}
+		for _, it := range candidates.Items {
+			if it.DeviceAddress == unmappableIrrigationAddr && it.DPKey == "STATE" && it.Mappable == "mappable" {
+				stateChannels[it.ChannelNo] = true
+			}
+		}
+		if !stateChannels[unmappableIrrigationPrimaryChannel] {
+			t.Errorf("ELV-SH-WSM primary valve channel %d has no mappable STATE candidate — decision B expects it exposed as OnOff", unmappableIrrigationPrimaryChannel)
+		}
+		for ch := range stateChannels {
+			if ch != unmappableIrrigationPrimaryChannel {
+				t.Errorf("ELV-SH-WSM channel %d also exposes a mappable STATE candidate — the group-STATE transmitter (ce_state) and secondary actor channels (ce_secondary) must stay hidden while expose_secondary_channels is off", ch)
+			}
+		}
+	})
+
+	t.Run("irrigation-valve/internal-params-not-candidates", func(t *testing.T) {
+		// Service / status / overflow params (usage ignored) and constituents
+		// consumed by an aggregating parent (usage no_create) are hidden on
+		// every north-bound surface. The Matter candidate collector applies the
+		// same visibility gate (docs/adr/0049-matter-one-endpoint-per-device.md),
+		// so none of these may surface as an exposable row.
+		internal := map[string]bool{
+			"INSTALL_TEST":               true, // ignored: service param
+			"CONFIG_PENDING":             true, // ignored: service param
+			"UNREACH":                    true, // ignored: service param
+			"UPDATE_PENDING":             true, // ignored: service param
+			"ACTUAL_TEMPERATURE_STATUS":  true, // ignored: *_STATUS validity flag
+			"WATER_FLOW_STATUS":          true, // ignored: *_STATUS validity flag
+			"WATER_VOLUME_OVERFLOW":      true, // ignored: *_OVERFLOW counter flag
+			"PROCESS":                    true, // ignored: irrigation-program plumbing
+			"SECTION_STATUS":             true, // ignored: *_STATUS validity flag
+			"WEEK_PROGRAM_CHANNEL_LOCKS": true, // no_create: consumed by week profile
+		}
+		for _, it := range candidates.Items {
+			if it.DeviceAddress == unmappableIrrigationAddr && internal[it.DPKey] {
+				t.Errorf("ELV-SH-WSM exposes a Matter candidate for internal param %q (ch %d) — ignored / no_create params must stay out of the candidate list", it.DPKey, it.ChannelNo)
+			}
+		}
 	})
 }

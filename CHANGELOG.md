@@ -6,6 +6,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Matter now bridges `valve.Irrigation` as an on/off endpoint.** The
+  irrigation valve's primary channel projects its `STATE` onto OnOff /
+  OnOffPlugInUnit like any other switch — resolving the ADR 0012 "stays
+  MQTT-only" gap. Its redundant group-STATE transmitter and sibling actor
+  channels stay folded so the device presents as one Matter endpoint by
+  default. See [ADR 0049](docs/adr/0049-matter-one-endpoint-per-device.md).
+- **Expert flag `north.matter.expose_secondary_channels`** (default off). When
+  enabled, the Matter projection additionally surfaces a custom entity's
+  secondary actor channels and its group-STATE channel as their own endpoints,
+  for power users who want per-channel control. Matter-only — MQTT,
+  HA-Discovery and REST are unaffected.
+
+### Changed
+
+- **The Matter exposure candidate list only shows real entities now.** The
+  `GET /api/v1/matter/exposable` collector now applies the same visibility gate
+  MQTT / HA / REST use: service, status-validity and overflow parameters
+  (`INSTALL_TEST`, `*_STATUS`, `*_OVERFLOW`, `PROCESS`, `CONFIG_PENDING`, …,
+  all usage `ignored`) and the raw constituents an aggregating custom entity
+  consumes (usage `no_create`) no longer clutter the exposure UI as
+  "unmappable" rows. A candidate is now a data point that would be a standalone
+  entity elsewhere; un-ignoring a parameter makes it reappear automatically.
+
 ### Fixed
 
 - **Matter commissioning no longer spins after CommissioningComplete.** When a

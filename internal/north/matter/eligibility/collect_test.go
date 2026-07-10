@@ -86,7 +86,7 @@ func (p *profileOnlyDP) MatterClusterServers() []interfaces.MatterClusterServer 
 func TestCollectCandidates_NilDevice(t *testing.T) {
 	t.Parallel()
 	devices := []*device.Device{nil}
-	got := eligibility.CollectCandidates("central1", devices)
+	got := eligibility.CollectCandidates("central1", devices, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for nil device, got %d", len(got))
 	}
@@ -96,7 +96,7 @@ func TestCollectCandidates_NilDevice(t *testing.T) {
 // returns an empty slice.
 func TestCollectCandidates_EmptyDeviceList(t *testing.T) {
 	t.Parallel()
-	got := eligibility.CollectCandidates("central1", nil)
+	got := eligibility.CollectCandidates("central1", nil, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0, got %d", len(got))
 	}
@@ -110,7 +110,7 @@ func TestCollectCandidates_DeviceNoChannels(t *testing.T) {
 		Address: "A1:0",
 		Model:   "HmIP-TEST",
 	})
-	got := eligibility.CollectCandidates("c1", []*device.Device{d})
+	got := eligibility.CollectCandidates("c1", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for device with no channels, got %d", len(got))
 	}
@@ -125,7 +125,7 @@ func TestCollectCandidates_DeviceWithEmptyChannel(t *testing.T) {
 		Model:   "HmIP-TEST",
 	})
 	d.AddChannel("A2:1", 1, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
-	got := eligibility.CollectCandidates("c2", []*device.Device{d})
+	got := eligibility.CollectCandidates("c2", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates for empty channel, got %d", len(got))
 	}
@@ -149,7 +149,7 @@ func TestCollectCandidates_CustomDP_Mappable(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("central", []*device.Device{d})
+	got := eligibility.CollectCandidates("central", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -181,7 +181,7 @@ func TestCollectCandidates_CalculatedDP_Mappable(t *testing.T) {
 	}
 	ch.AttachCalculatedDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d})
+	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -205,7 +205,7 @@ func TestCollectCandidates_OpaqueDP_Skipped(t *testing.T) {
 		key: hmtypes.DataPointKey{Parameter: "OPAQUE"},
 	})
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d})
+	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Fatalf("expected 0 candidates for opaque DP, got %d: %+v", len(got), got)
 	}
@@ -227,7 +227,7 @@ func TestCollectCandidates_ProfileDPKey(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d})
+	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -275,7 +275,7 @@ func TestCollectCandidates_NameDPKey(t *testing.T) {
 	dp := &namedDP{name: "my-light", devType: 0x0100, cluster: 0x0006}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d})
+	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -295,7 +295,7 @@ func TestCollectCandidates_UnknownDPKey(t *testing.T) {
 	dp := &unknownDP{devType: 0x0100, cluster: 0x0006}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d})
+	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}
@@ -326,7 +326,7 @@ func TestCollectCandidates_GenericDP_Mappable(t *testing.T) {
 	}
 	ch.Put(dp) // adds to VALUES paramset → DataPoints()
 
-	got := eligibility.CollectCandidates("central", []*device.Device{d})
+	got := eligibility.CollectCandidates("central", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate for generic DP, got %d", len(got))
 	}
@@ -366,7 +366,7 @@ func TestCollectCandidates_NilChannel(t *testing.T) {
 	// device.New doesn't expose a way to inject a nil channel directly;
 	// use a device with no channels (already covered) and verify no panic.
 	d := device.New(device.Config{Address: "I1:0"})
-	got := eligibility.CollectCandidates("c", []*device.Device{d})
+	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 0 {
 		t.Errorf("expected 0 candidates, got %d", len(got))
 	}
@@ -388,7 +388,7 @@ func TestCollectCandidates_DisplayNameFallbackToAddress(t *testing.T) {
 	}
 	ch.SetCustomDataPoint(dp)
 
-	got := eligibility.CollectCandidates("c", []*device.Device{d})
+	got := eligibility.CollectCandidates("c", []*device.Device{d}, false)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d", len(got))
 	}

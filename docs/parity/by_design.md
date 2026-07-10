@@ -161,6 +161,40 @@ canonicalises the two hidden usages so this divergence does not count as drift,
 while a *real* usage drift (e.g. `ignored`↔`data_point`, where only one side is
 a hidden usage) still surfaces.
 
+### BD-Visibility-CDPStateGroupStatus — visible group-STATE split into ce_state
+
+The reference model uses a single `CDP_VISIBLE` usage for every visible
+constituent of a custom entity's device. OpenCCU-Loom **deliberately splits
+`ce_visible` into two usages**:
+
+- `CDP_VISIBLE` — a genuine extra sensor a custom entity exposes alongside its
+  primary control (e.g. HmIP-BWTH `HUMIDITY` / `ACTUAL_TEMPERATURE`, a contact
+  `STATE`). Distinct information, not a duplicate of the primary.
+- `CDP_STATE` — the group-STATE **status transmitter** a custom actor spans off
+  its primary channel via the `FieldGroupState` field mapping (e.g. the valve's
+  `WATER_SWITCH_TRANSMITTER` STATE, a switch's status channel). Its value merely
+  **restates the primary's own projection** (the valve/switch on/off), so it is
+  a redundant status channel.
+
+**Why:** the Matter bridge projects one endpoint per physical device by default
+(`north.matter.expose_secondary_channels=false`). It drops a custom entity's
+non-primary constituents — `ce_secondary` actor channels and the `ce_state`
+status transmitter — while KEEPING genuine `ce_visible` extra sensors. A single
+`ce_visible` class cannot express that distinction; `ce_state` can, and only
+Matter acts on it.
+
+**Behaviourally equivalent for every other surface:** `EnabledByDefault()` /
+`Visible()` (`internal/model/datapoint/base.go`, `internal/model/generic/datapoint.go`)
+return `true` for both `CDP_VISIBLE` and `CDP_STATE`, and the MQTT discovery gate
+(`internal/north/mqtt/discovery.go`) passes both — so HA-Discovery, MQTT and REST
+carry the group-STATE channel exactly as before. The marker is set in
+`internal/model/custom/materialize.go` (`applyFieldValueToChannel`, keyed on
+`hmenum.FieldGroupState`).
+
+**Snapshot tolerance:** `script/model_snapshot_diff.py` (`canon_state_usage`)
+canonicalises `ce_state`→`ce_visible` on both sides, so this split does not count
+as drift while a real `ce_visible`↔other drift still surfaces.
+
 ### BD-Visibility-ScheduleChannelLocks — raw schedule-lock DPs suppressed
 
 For a non-climate schedule device (e.g. HmIP-MIO16-PCB ch49, HmIP-FWI ch13)

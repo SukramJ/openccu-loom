@@ -148,10 +148,20 @@ const (
 	DataPointUsageCDPPrimary   DataPointUsage = "ce_primary"
 	DataPointUsageCDPSecondary DataPointUsage = "ce_secondary"
 	DataPointUsageCDPVisible   DataPointUsage = "ce_visible"
-	DataPointUsageDataPoint    DataPointUsage = "data_point"
-	DataPointUsageEvent        DataPointUsage = "event"
-	DataPointUsageIgnored      DataPointUsage = "ignored"
-	DataPointUsageNoCreate     DataPointUsage = "no_create"
+	// DataPointUsageCDPState marks the group-STATE data point a custom
+	// entity spans off its primary channel — the status transmitter whose
+	// value restates the primary's own projection (e.g. a valve's
+	// WATER_SWITCH_TRANSMITTER STATE mirrors the valve's on/off). It is a
+	// visible constituent like CDPVisible for HA / MQTT / REST (which treat
+	// the two identically), but distinct so the Matter projection can drop
+	// this redundant status channel by default while keeping genuine extra
+	// CDPVisible sensors (HUMIDITY, a contact STATE). The Python reference
+	// model has no equivalent usage — see docs/parity/by_design.md.
+	DataPointUsageCDPState  DataPointUsage = "ce_state"
+	DataPointUsageDataPoint DataPointUsage = "data_point"
+	DataPointUsageEvent     DataPointUsage = "event"
+	DataPointUsageIgnored   DataPointUsage = "ignored"
+	DataPointUsageNoCreate  DataPointUsage = "no_create"
 )
 
 // String returns the wire representation.
