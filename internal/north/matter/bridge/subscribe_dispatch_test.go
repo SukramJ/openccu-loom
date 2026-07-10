@@ -83,6 +83,61 @@ func TestBuildInitialReport_SortOrder(t *testing.T) {
 	}
 }
 
+// TestBuildInitialReport_EventOnlyEmptyLog_Establishes is the regression
+// guard for the "matched counts REQUESTED event paths, not priming-log
+// records" fix in buildInitialReport: an event-only Subscribe (no
+// AttributeRequests) naming a real Switch (0x003B) InitialPress
+// (0x01) event path must report matched > 0 even when the event log has
+// no matching entries yet.
+//
+// This reproduces a GenericSwitch momentary button: the commissioner
+// places the Subscribe BEFORE the physical press, so the event log is
+// necessarily empty at establish time. Before the fix, matched was
+// computed from len(BuildEventReports(...)) — zero on an empty log —
+// which made handleSubscribeRequest reject the Subscribe with
+// StatusResponse(InvalidAction) and the button could never deliver its
+// future press. matter.js establishes an event subscription regardless
+// of the priming log (ServerSubscription.ts emits 0+ EventReports on
+// Subscribe-Initial); see subscribe_dispatch.go's buildInitialReport
+// EventRequests handling.
+func TestBuildInitialReport_EventOnlyEmptyLog_Establishes(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	dispatcher := b.Dispatcher()
+	if dispatcher == nil {
+		t.Skip("dispatcher nil after start — topology not yet assembled")
+	}
+
+	// No EmitEvent calls precede this — the event log is empty, matching
+	// a subscribe placed before the button's first press.
+	if records := b.EventLog().Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0); len(records) != 0 {
+		t.Fatalf("precondition: event log has %d records, want 0 (empty log)", len(records))
+	}
+
+	req := im.SubscribeRequest{
+		EventRequests: []im.ConcreteEventPath{
+			{
+				HasEndpoint: true, Endpoint: 1,
+				HasCluster: true, Cluster: 0x003B, // Switch
+				HasEvent: true, Event: 0x01, // InitialPress
+			},
+		},
+	}
+	report, matched := b.buildInitialReport(context.Background(), dispatcher, req)
+	if matched == 0 {
+		t.Fatal("buildInitialReport: matched = 0 for an event-only subscribe with an empty log — would misfire into no_match rejection")
+	}
+	if matched != len(req.EventRequests) {
+		t.Errorf("buildInitialReport: matched = %d, want %d (len(req.EventRequests))", matched, len(req.EventRequests))
+	}
+	if len(report.EventReports) != 0 {
+		t.Errorf("buildInitialReport: EventReports = %d, want 0 (nothing buffered yet on an empty log)", len(report.EventReports))
+	}
+	if len(report.Reports) != 0 {
+		t.Errorf("buildInitialReport: Reports = %d, want 0 (no AttributeRequests in this subscribe)", len(report.Reports))
+	}
+}
+
 // ─── registerSubscription ───────────────────────────────────────────────────
 
 // TestRegisterSubscription_NoManager_ReturnsZeroSubID verifies that when no
