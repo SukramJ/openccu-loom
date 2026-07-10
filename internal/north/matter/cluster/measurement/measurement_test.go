@@ -33,6 +33,36 @@ type fakeBool struct {
 func (f fakeBool) MatterMeasurementClass() interfaces.MatterMeasurementClass { return f.class }
 func (f fakeBool) MatterBoolValue() (value, observed bool)                   { return f.val, f.obs }
 
+// fakeFloatNotifier implements both MatterFloatMeasurementSource and
+// MatterChangeNotifier so tests can verify that a cluster server forwards
+// OnMatterValueChanged to its wrapped source. Unlike fakeFloat (which
+// deliberately does NOT implement MatterChangeNotifier, covering the
+// no-notifier fallback path), this fake records the subscribed callback and
+// counts unsubscribe calls.
+type fakeFloatNotifier struct {
+	class      interfaces.MatterMeasurementClass
+	val        float64
+	obs        bool
+	cb         func()
+	unsubCalls int
+}
+
+func (f *fakeFloatNotifier) MatterMeasurementClass() interfaces.MatterMeasurementClass {
+	return f.class
+}
+func (f *fakeFloatNotifier) MatterFloatValue() (float64, bool) { return f.val, f.obs }
+
+func (f *fakeFloatNotifier) OnMatterValueChanged(cb func()) func() {
+	f.cb = cb
+	return func() { f.unsubCalls++ }
+}
+
+// Compile-time assertions: both Electrical* servers satisfy MatterChangeNotifier.
+var (
+	_ interfaces.MatterChangeNotifier = (*measurement.ElectricalPowerServer)(nil)
+	_ interfaces.MatterChangeNotifier = (*measurement.ElectricalEnergyServer)(nil)
+)
+
 // attrClusterRevision is the global cluster-revision attribute ID.
 const attrClusterRevision uint32 = 0xFFFD
 
@@ -1305,6 +1335,88 @@ func TestElectricalEnergyServerAccuracyRangesNonEmpty(t *testing.T) {
 	if len(list[0].AccuracyRanges) == 0 {
 		t.Fatalf("AccuracyRanges[0] is empty; Matter §2.14.5.2 requires ≥ 1 AccuracyRangeStruct entry")
 	}
+}
+
+// TestElectricalPowerServerOnMatterValueChangedForwards verifies that
+// ElectricalPowerServer.OnMatterValueChanged forwards subscription and
+// unsubscription to the wrapped source's MatterChangeNotifier.
+func TestElectricalPowerServerOnMatterValueChangedForwards(t *testing.T) {
+	t.Parallel()
+	src := &fakeFloatNotifier{class: interfaces.MatterMeasurementPower, val: 1500.0, obs: true}
+	s := measurement.NewElectricalPowerServer(src)
+
+	calls := 0
+	unsubscribe := s.OnMatterValueChanged(func() { calls++ })
+	if unsubscribe == nil {
+		t.Fatal("OnMatterValueChanged returned nil unsubscribe, want non-nil")
+	}
+	if src.cb == nil {
+		t.Fatal("wrapped source did not receive a callback")
+	}
+
+	src.cb()
+	if calls != 1 {
+		t.Errorf("cb call count = %d, want 1 after triggering source notifier", calls)
+	}
+
+	unsubscribe()
+	if src.unsubCalls != 1 {
+		t.Errorf("source unsubscribe call count = %d, want 1", src.unsubCalls)
+	}
+}
+
+// TestElectricalPowerServerOnMatterValueChangedNoNotifierFallback verifies
+// that wrapping a source without MatterChangeNotifier yields a safe, non-nil
+// no-op unsubscribe rather than a panic.
+func TestElectricalPowerServerOnMatterValueChangedNoNotifierFallback(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewElectricalPowerServer(fakeFloat{val: 1500.0, obs: true})
+	unsubscribe := s.OnMatterValueChanged(func() {})
+	if unsubscribe == nil {
+		t.Fatal("OnMatterValueChanged returned nil unsubscribe, want non-nil no-op")
+	}
+	unsubscribe() // must not panic
+}
+
+// TestElectricalEnergyServerOnMatterValueChangedForwards verifies that
+// ElectricalEnergyServer.OnMatterValueChanged forwards subscription and
+// unsubscription to the wrapped source's MatterChangeNotifier.
+func TestElectricalEnergyServerOnMatterValueChangedForwards(t *testing.T) {
+	t.Parallel()
+	src := &fakeFloatNotifier{class: interfaces.MatterMeasurementEnergy, val: 12345.0, obs: true}
+	s := measurement.NewElectricalEnergyServer(src)
+
+	calls := 0
+	unsubscribe := s.OnMatterValueChanged(func() { calls++ })
+	if unsubscribe == nil {
+		t.Fatal("OnMatterValueChanged returned nil unsubscribe, want non-nil")
+	}
+	if src.cb == nil {
+		t.Fatal("wrapped source did not receive a callback")
+	}
+
+	src.cb()
+	if calls != 1 {
+		t.Errorf("cb call count = %d, want 1 after triggering source notifier", calls)
+	}
+
+	unsubscribe()
+	if src.unsubCalls != 1 {
+		t.Errorf("source unsubscribe call count = %d, want 1", src.unsubCalls)
+	}
+}
+
+// TestElectricalEnergyServerOnMatterValueChangedNoNotifierFallback verifies
+// that wrapping a source without MatterChangeNotifier yields a safe, non-nil
+// no-op unsubscribe rather than a panic.
+func TestElectricalEnergyServerOnMatterValueChangedNoNotifierFallback(t *testing.T) {
+	t.Parallel()
+	s := measurement.NewElectricalEnergyServer(fakeFloat{val: 12345.0, obs: true})
+	unsubscribe := s.OnMatterValueChanged(func() {})
+	if unsubscribe == nil {
+		t.Fatal("OnMatterValueChanged returned nil unsubscribe, want non-nil no-op")
+	}
+	unsubscribe() // must not panic
 }
 
 // TestPowerSourceServerFeatureMapHasBATAndREPLC verifies that the FeatureMap

@@ -892,6 +892,19 @@ func (s *ElectricalPowerServer) MatterDataVersion() uint32 { return s.Current() 
 // MatterClusterID returns the Matter Electrical Power Measurement cluster ID (0x0090).
 func (s *ElectricalPowerServer) MatterClusterID() uint32 { return ClusterElectricalPower }
 
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] by
+// forwarding the wrapped source's notifier. On a metering switch the POWER
+// sensor lives on a sibling meter channel and is attached cross-channel, so
+// without this the endpoint's OnOff notifier (which filters to its own cluster)
+// would never mark ActivePower dirty and the controller would only ever see the
+// value on a read. Returns a no-op unsubscribe when the source cannot notify.
+func (s *ElectricalPowerServer) OnMatterValueChanged(cb func()) func() {
+	if n, ok := s.src.(interfaces.MatterChangeNotifier); ok && n != nil {
+		return n.OnMatterValueChanged(cb)
+	}
+	return func() {}
+}
+
 // MatterRead resolves an attribute by ID against the underlying source.
 func (s *ElectricalPowerServer) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
@@ -1007,6 +1020,17 @@ func (s *ElectricalEnergyServer) MatterDataVersion() uint32 { return s.Current()
 
 // MatterClusterID returns the Matter Electrical Energy Measurement cluster ID (0x0091).
 func (s *ElectricalEnergyServer) MatterClusterID() uint32 { return ClusterElectricalEnergy }
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] by
+// forwarding the wrapped source's notifier, so an ENERGY_COUNTER push on the
+// sibling meter channel drives a proactive CumulativeEnergyImported report. See
+// [ElectricalPowerServer.OnMatterValueChanged] for the cross-channel rationale.
+func (s *ElectricalEnergyServer) OnMatterValueChanged(cb func()) func() {
+	if n, ok := s.src.(interfaces.MatterChangeNotifier); ok && n != nil {
+		return n.OnMatterValueChanged(cb)
+	}
+	return func() {}
+}
 
 // MatterRead resolves an attribute by ID against the underlying source.
 func (s *ElectricalEnergyServer) MatterRead(attrID uint32) (any, bool) {

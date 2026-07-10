@@ -101,15 +101,22 @@ func (b *Bridge) buildInitialReport(
 	// Apple flipped to count: 21 + InitialSubscriptionEstablished.
 	if len(req.EventRequests) > 0 {
 		raw := im.BuildEventReports(req.EventRequests, b.eventLog, req.EventFilters)
-		// The establish decision (matched > 0) counts raw matched records —
-		// authorization filtering only affects which events are disclosed, not
-		// whether the subscription establishes. Then authorize + fabric-project
-		// the priming events so a wildcard event subscribe from fabric B does
-		// not receive fabric A's AccessControl-change events, and a
-		// non-Administer subject sees no AccessControl events (Matter §8.4.3.2 /
-		// §9.10.7.1). Mirrors matter.js EventReadResponse.ts #readAllowedEvents;
-		// subCtx carries the requesting fabric + subject.
-		matched += len(raw)
+		// The establish decision (matched > 0) counts the REQUESTED event paths,
+		// not the priming-log instances: a momentary/event-only subscribe
+		// (GenericSwitch button) is placed BEFORE the event fires, so its event
+		// log is empty at establish time — counting log records would reject it
+		// with no_match and it could never receive the future press. matter.js
+		// establishes an event subscription regardless of the priming log
+		// (ServerSubscription.ts emits 0+ EventReports on Subscribe-Initial).
+		// The raw records still seed the initial report below; authorization
+		// filtering only affects which events are disclosed, not whether the
+		// subscription establishes — then authorize + fabric-project the priming
+		// events so a wildcard event subscribe from fabric B does not receive
+		// fabric A's AccessControl-change events, and a non-Administer subject
+		// sees no AccessControl events (Matter §8.4.3.2 / §9.10.7.1). Mirrors
+		// matter.js EventReadResponse.ts #readAllowedEvents; subCtx carries the
+		// requesting fabric + subject.
+		matched += len(req.EventRequests)
 		_, subFabricIndex := im.FabricFilterFromContext(subCtx)
 		subSubjectNodeID, subSubjectCATs := im.SubjectFromContext(subCtx)
 		auth := b.eventReadAuthorizer(dispatcher, subFabricIndex, subSubjectNodeID, subSubjectCATs)
