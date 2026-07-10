@@ -51,6 +51,8 @@ const (
 // channel-specific parameter labels (`POWER` on
 // `ENERGIE_METER_TRANSMITTER` resolves differently from the bare
 // parameter table).
+//
+// loom:reachable:reason="return type of CollectCandidates, the GET /api/v1/matter/exposable entry point reached through the daemon's matterCandidateProviderAdapter interface dispatch the reachability analyzer's RTA heuristic does not trace"
 type Candidate struct {
 	Key         store.EndpointKey
 	DisplayName string
@@ -61,6 +63,8 @@ type Candidate struct {
 // Classify returns the verdict for one source. It honours
 // [interfaces.MatterEligibilitySource] when present, otherwise falls
 // back to [DeriveMatterEligibility] for the structural default.
+//
+// loom:reachable:reason="reached from GET /api/v1/matter/exposable via CollectCandidates; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic"
 func Classify(src any) Verdict {
 	if src == nil {
 		return Verdict{State: StateUnmappable, Reason: "nil source"}
@@ -84,6 +88,8 @@ func Classify(src any) Verdict {
 // [interfaces.MatterEligibilitySource] directly and override the
 // derivation; they typically call DeriveMatterEligibility for the
 // base verdict and then patch in `State = Partial` plus a reason.
+//
+// loom:reachable:reason="reached from GET /api/v1/matter/exposable via Classify; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic"
 func DeriveMatterEligibility(src any) Verdict {
 	if ep, ok := src.(interfaces.MatterEndpointSource); ok {
 		dt := ep.MatterDeviceType()
@@ -131,14 +137,18 @@ func DeriveMatterEligibility(src any) Verdict {
 //   - its SECONDARY virtual-receiver actor channels — the same custom-DP
 //     secondary classification HA-Discovery marks enabled-by-default false
 //     ([device.Channel.IsCustomDPSecondaryChannel]); and
-//   - its ce_visible status DPs — the group-state transmitter a custom
+//   - its ce_state status DP — the group-state transmitter a custom
 //     entity spans off its primary (e.g. the WATER_SWITCH_TRANSMITTER
-//     STATE feeding a valve), classified [hmenum.DataPointUsageCDPVisible].
+//     STATE feeding a valve), classified [hmenum.DataPointUsageCDPState].
 //
+// It also drops the ignored service params and the no_create raw
+// constituents an aggregating parent consumes (see hideFromMatter), so the
+// candidate set matches the entity-creation gate MQTT / HA / REST apply.
 // Genuinely standalone DPs — buttons (event), measurements / battery
-// (data_point), a channel-0 maintenance sensor — are NOT custom-entity
-// constituents and are always collected. This is Matter-only; every other
-// north-bound surface still enumerates all channels.
+// (data_point), a channel-0 maintenance sensor — are always collected. This
+// is Matter-only; every other north-bound surface still enumerates all channels.
+//
+// loom:reachable:reason="Matter exposure entry point — reached from GET /api/v1/matter/exposable via the daemon's matterCandidateProviderAdapter (cmd/openccu-loom); that adapter's interface dispatch is not traced by the reachability analyzer's RTA heuristic"
 func CollectCandidates(centralName string, devices []*device.Device, exposeSecondary bool) []Candidate {
 	var out []Candidate
 	for _, dev := range devices {

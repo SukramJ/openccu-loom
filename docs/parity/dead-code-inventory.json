@@ -1,6 +1,6 @@
 {
-  "generated": "35fc5810",
-  "head": "35fc5810",
+  "generated": "e672f867",
+  "head": "e672f867",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24386,
-    "reachable": 3825,
-    "whitelisted": 17653,
-    "unreachable": 2908
+    "total_exported": 24398,
+    "reachable": 3827,
+    "whitelisted": 17664,
+    "unreachable": 2907
   },
   "by_package": [
     {
@@ -517,12 +517,6 @@
       "unreachable_funcs": 0,
       "unreachable_types": 6,
       "unreachable_other": 9
-    },
-    {
-      "package": "internal/north/matter/eligibility",
-      "unreachable_funcs": 0,
-      "unreachable_types": 1,
-      "unreachable_other": 0
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -7782,14 +7776,14 @@
       "package": "internal/model/custom",
       "identifier": "UnIgnoreExemption",
       "file": "internal/model/custom/materialize.go",
-      "line": 465,
+      "line": 475,
       "kind": "type"
     },
     {
       "package": "internal/model/custom",
       "identifier": "UnIgnoreExemption",
       "file": "internal/model/custom/materialize.go",
-      "line": 465,
+      "line": 475,
       "kind": "type"
     },
     {
@@ -9140,7 +9134,7 @@
       "package": "internal/model/datapoint",
       "identifier": "UpdatedPayload",
       "file": "internal/model/datapoint/base.go",
-      "line": 420,
+      "line": 421,
       "kind": "type"
     },
     {
@@ -10827,14 +10821,14 @@
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1206,
+      "line": 1215,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1206,
+      "line": 1215,
       "kind": "type"
     },
     {
@@ -11198,14 +11192,14 @@
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 875,
+      "line": 884,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 875,
+      "line": 884,
       "kind": "type"
     },
     {
@@ -11496,13 +11490,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/north/matter/eligibility",
-      "identifier": "Candidate",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 53,
-      "kind": "type"
-    },
-    {
       "package": "internal/north/matter/endpoint",
       "identifier": "ACLLister",
       "file": "internal/north/matter/endpoint/dispatcher.go",
@@ -11520,14 +11507,14 @@
       "package": "internal/north/matter/endpoint",
       "identifier": "ExposureChecker",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 76,
+      "line": 85,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "ExposureChecker",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 76,
+      "line": 85,
       "kind": "type"
     },
     {
@@ -11548,14 +11535,14 @@
       "package": "internal/north/matter/endpoint",
       "identifier": "Store",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 61,
+      "line": 70,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "Store",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 61,
+      "line": 70,
       "kind": "type"
     },
     {
@@ -60908,14 +60895,14 @@
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1100
+      "line": 1117
     },
     {
       "package": "internal/config",
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1100
+      "line": 1117
     },
     {
       "package": "internal/config",
@@ -60978,14 +60965,14 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1159
+      "line": 1176
     },
     {
       "package": "internal/config",
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1159
+      "line": 1176
     },
     {
       "package": "internal/config",
@@ -61020,28 +61007,28 @@
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1256
+      "line": 1273
     },
     {
       "package": "internal/config",
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1256
+      "line": 1273
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1207
+      "line": 1224
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1207
+      "line": 1224
     },
     {
       "package": "internal/config",
@@ -61118,14 +61105,14 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1399
+      "line": 1416
     },
     {
       "package": "internal/config",
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1399
+      "line": 1416
     },
     {
       "package": "internal/config",
@@ -61272,14 +61259,14 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1370
+      "line": 1387
     },
     {
       "package": "internal/config",
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1370
+      "line": 1387
     },
     {
       "package": "internal/config",
@@ -61370,14 +61357,14 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1137
+      "line": 1154
     },
     {
       "package": "internal/config",
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1137
+      "line": 1154
     },
     {
       "package": "internal/config",
@@ -61440,14 +61427,14 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1374
+      "line": 1391
     },
     {
       "package": "internal/config",
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1374
+      "line": 1391
     },
     {
       "package": "internal/config",
@@ -61594,14 +61581,14 @@
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1024
+      "line": 1041
     },
     {
       "package": "internal/config",
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1024
+      "line": 1041
     },
     {
       "package": "internal/config",
@@ -61622,98 +61609,98 @@
       "identifier": "NorthMatterAttestation",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 733
+      "line": 750
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterAttestation",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 733
+      "line": 750
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCASE",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 858
+      "line": 875
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCASE",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 858
+      "line": 875
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCommissioning",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 754
+      "line": 771
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCommissioning",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 754
+      "line": 771
     },
     {
       "package": "internal/config",
       "identifier": "NorthREST",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 877
+      "line": 894
     },
     {
       "package": "internal/config",
       "identifier": "NorthREST",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 877
+      "line": 894
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTRateLimit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 967
+      "line": 984
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTRateLimit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 967
+      "line": 984
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTWS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 951
+      "line": 968
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTWS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 951
+      "line": 968
     },
     {
       "package": "internal/config",
       "identifier": "NorthUI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1008
+      "line": 1025
     },
     {
       "package": "internal/config",
       "identifier": "NorthUI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1008
+      "line": 1025
     },
     {
       "package": "internal/config",
@@ -61748,28 +61735,28 @@
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1187
+      "line": 1204
     },
     {
       "package": "internal/config",
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1187
+      "line": 1204
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1386
+      "line": 1403
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1386
+      "line": 1403
     },
     {
       "package": "internal/config",
@@ -62721,14 +62708,14 @@
       "identifier": "TracingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 870
+      "line": 887
     },
     {
       "package": "internal/config",
       "identifier": "TracingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 870
+      "line": 887
     },
     {
       "package": "internal/config",
@@ -62763,14 +62750,14 @@
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1360
+      "line": 1377
     },
     {
       "package": "internal/config",
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1360
+      "line": 1377
     },
     {
       "package": "internal/config",
@@ -67166,42 +67153,42 @@
       "identifier": "SuppressUndefinedGenericDataPoints",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/materialize.go",
-      "line": 454
+      "line": 464
     },
     {
       "package": "internal/model/custom",
       "identifier": "SuppressUndefinedGenericDataPoints",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/materialize.go",
-      "line": 454
+      "line": 464
     },
     {
       "package": "internal/model/custom",
       "identifier": "SuppressUndefinedGenericDataPointsWith",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/materialize.go",
-      "line": 472
+      "line": 482
     },
     {
       "package": "internal/model/custom",
       "identifier": "SuppressUndefinedGenericDataPointsWith",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/materialize.go",
-      "line": 472
+      "line": 482
     },
     {
       "package": "internal/model/custom",
       "identifier": "SuppressUndefinedGenericDataPointsWithExempt",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/materialize.go",
-      "line": 496
+      "line": 506
     },
     {
       "package": "internal/model/custom",
       "identifier": "SuppressUndefinedGenericDataPointsWithExempt",
       "reason": "auto-whitelist:pattern=custom-mixin-factory",
       "file": "internal/model/custom/materialize.go",
-      "line": 496
+      "line": 506
     },
     {
       "package": "internal/model/custom",
@@ -81152,14 +81139,14 @@
       "identifier": "AllowedInternalParameters",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2175
+      "line": 2176
     },
     {
       "package": "internal/model/generic",
       "identifier": "AllowedInternalParameters",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2175
+      "line": 2176
     },
     {
       "package": "internal/model/generic",
@@ -81348,14 +81335,14 @@
       "identifier": "DetectStatusParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 1963
+      "line": 1964
     },
     {
       "package": "internal/model/generic",
       "identifier": "DetectStatusParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 1963
+      "line": 1964
     },
     {
       "package": "internal/model/generic",
@@ -81488,14 +81475,14 @@
       "identifier": "EventData",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2104
+      "line": 2105
     },
     {
       "package": "internal/model/generic",
       "identifier": "EventData",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2104
+      "line": 2105
     },
     {
       "package": "internal/model/generic",
@@ -82370,14 +82357,14 @@
       "identifier": "StateChangeOpt",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2017
+      "line": 2018
     },
     {
       "package": "internal/model/generic",
       "identifier": "StateChangeOpt",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2017
+      "line": 2018
     },
     {
       "package": "internal/model/generic",
@@ -85485,14 +85472,14 @@
       "identifier": "WithValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2052
+      "line": 2053
     },
     {
       "package": "internal/model/generic",
       "identifier": "WithValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2052
+      "line": 2053
     },
     {
       "package": "internal/model/generic",
@@ -92485,14 +92472,14 @@
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 367
+      "line": 375
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 367
+      "line": 375
     },
     {
       "package": "internal/north/matter/bridge",
@@ -102198,31 +102185,108 @@
     },
     {
       "package": "internal/north/matter/eligibility",
+      "identifier": "Candidate",
+      "reason": "return type of CollectCandidates, the GET /api/v1/matter/exposable entry point reached through the daemon's matterCandidateProviderAdapter interface dispatch the reachability analyzer's RTA heuristic does not trace",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 56
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "Candidate",
+      "reason": "return type of CollectCandidates, the GET /api/v1/matter/exposable entry point reached through the daemon's matterCandidateProviderAdapter interface dispatch the reachability analyzer's RTA heuristic does not trace",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 56
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "Classify",
+      "reason": "reached from GET /api/v1/matter/exposable via CollectCandidates; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 68
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "Classify",
+      "reason": "reached from GET /api/v1/matter/exposable via CollectCandidates; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 68
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "CollectCandidates",
+      "reason": "Matter exposure entry point — reached from GET /api/v1/matter/exposable via the daemon's matterCandidateProviderAdapter (cmd/openccu-loom); that adapter's interface dispatch is not traced by the reachability analyzer's RTA heuristic",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 152
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "CollectCandidates",
+      "reason": "Matter exposure entry point — reached from GET /api/v1/matter/exposable via the daemon's matterCandidateProviderAdapter (cmd/openccu-loom); that adapter's interface dispatch is not traced by the reachability analyzer's RTA heuristic",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 152
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "DeriveMatterEligibility",
+      "reason": "reached from GET /api/v1/matter/exposable via Classify; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 93
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "DeriveMatterEligibility",
+      "reason": "reached from GET /api/v1/matter/exposable via Classify; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 93
+    },
+    {
+      "package": "internal/north/matter/eligibility",
       "identifier": "State",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 34
+      "line": 35
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "State",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 35
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "TestHideFromMatter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/eligibility/constituent_filter_test.go",
+      "line": 19
     },
     {
       "package": "internal/north/matter/eligibility",
       "identifier": "Verdict",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 31
+      "line": 32
+    },
+    {
+      "package": "internal/north/matter/eligibility",
+      "identifier": "Verdict",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/matter/eligibility/eligibility.go",
+      "line": 32
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 106
+      "line": 115
     },
     {
       "package": "internal/north/matter/endpoint",
       "identifier": "New",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/endpoint/assembler.go",
-      "line": 106
+      "line": 115
     },
     {
       "package": "internal/north/matter/endpoint",
