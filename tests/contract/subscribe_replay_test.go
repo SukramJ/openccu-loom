@@ -107,6 +107,30 @@ func putStrDP(ch *device.Channel, p hmenum.Parameter) *generic.Sensor[string] {
 	)
 }
 
+// putEnumDP attaches a read-only ENUM sensor carrying its raw VALUE_LIST
+// index — the shape the resolver produces for a read-only ENUM parameter
+// (a *generic.Sensor[int32], not a *generic.Sensor[string]). Custom DPs
+// read it back through custom.EnumSensorField + custom.EnumLabelValue, so a
+// contract test that pre-populates one must build this type and fire the
+// index, not the label.
+func putEnumDP(ch *device.Channel, p hmenum.Parameter, valueList []string) *generic.Sensor[int32] {
+	cfg := generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(p),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  valueList,
+		},
+	}
+	dp := generic.NewIntegerSensor(cfg)
+	ch.Put(dp)
+	return dp
+}
+
 // subscribeAndUnsub calls dp.Subscribe(ch) and returns the unsubscribe closure.
 // It also verifies that Subscribe returned a non-nil unsub — a nil unsub from
 // a SubscribingDataPoint is itself a contract violation.
@@ -166,10 +190,11 @@ func TestSubscribeReplay_Garage_State(t *testing.T) {
 	t.Parallel()
 
 	ch := makeCh("GARAGE0001:1", "GARAGE_DOOR")
-	stateDP := putStrDP(ch, hmenum.ParameterDoorState)
+	stateDP := putEnumDP(ch, hmenum.ParameterDoorState,
+		[]string{"UNKNOWN", "OPEN", "CLOSED", "VENTILATION_POSITION"})
 
-	// Pre-populate before Subscribe.
-	stateDP.OnEvent("CLOSED")
+	// Pre-populate before Subscribe (index 2 = CLOSED).
+	stateDP.OnEvent(int32(2))
 
 	g := cover.NewGarage(cover.GarageConfig{
 		Channel:      ch,

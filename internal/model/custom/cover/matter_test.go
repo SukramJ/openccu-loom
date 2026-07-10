@@ -333,8 +333,8 @@ func TestGarageOnMatterValueChangedFiresOnConfirmedDoorStateChange(t *testing.T)
 	g, doorStateDP, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	var count int
 	_ = g.OnMatterValueChanged(func() { count++ })
-	doorStateDP.OnEvent(string(DoorStateOpen))
-	doorStateDP.OnEvent(string(DoorStateClosed))
+	fireDoorState(t, doorStateDP, string(DoorStateOpen))
+	fireDoorState(t, doorStateDP, string(DoorStateClosed))
 	if count != 2 {
 		t.Fatalf("expected 2 callback invocations, got %d", count)
 	}
@@ -347,9 +347,9 @@ func TestGarageOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
 	g, doorStateDP, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	var count int
 	unsub := g.OnMatterValueChanged(func() { count++ })
-	doorStateDP.OnEvent(string(DoorStateOpen))
+	fireDoorState(t, doorStateDP, string(DoorStateOpen))
 	unsub()
-	doorStateDP.OnEvent(string(DoorStateClosed))
+	fireDoorState(t, doorStateDP, string(DoorStateClosed))
 	if count != 1 {
 		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
 	}
@@ -382,5 +382,5 @@ func TestGarageOnMatterValueChangedNilSafe(t *testing.T) {
 	if unsub2 == nil {
 		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
 	}
-	doorStateDP.OnEvent(string(DoorStateOpen)) // must not panic with no subscriber
+	fireDoorState(t, doorStateDP, string(DoorStateOpen)) // must not panic with no subscriber
 }

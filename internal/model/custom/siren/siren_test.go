@@ -1015,6 +1015,19 @@ func TestSmokeSirenReadSecondaryAlarmWarning(t *testing.T) {
 	}
 }
 
+// fireEnum resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event — mirrors how the resolver projects a
+// read-only ENUM parameter (SOUNDFILE, DIRECTION) onto an index-valued
+// Sensor[int32].
+func fireEnum(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
+}
+
 // --- SoundPlayer ---
 
 func newSoundPlayerRig(t *testing.T) (*SoundPlayer, *stubWriter) {
@@ -1115,20 +1128,21 @@ func TestSoundPlayerCurrentSoundfile(t *testing.T) {
 	// Get the soundfile DP from the channel directly; drive it.
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P0001"})
 	ch := d.AddChannel("MP3P0001:2", 2, "AUDIO", hmenum.ParamsetKeyValues)
-	sfDP := generic.NewStringSensor(generic.Spec{
+	sfDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "MP3P0001:2",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterSoundfile),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"SOUNDFILE_042"},
 		},
 	})
 	ch.Put(sfDP)
 	sp2 := NewSoundPlayer(SoundPlayerConfig{Channel: ch, Writer: &stubWriter{}})
-	sfDP.OnEvent("SOUNDFILE_042")
+	fireEnum(t, sfDP, "SOUNDFILE_042")
 	sf, obs2 := sp2.CurrentSoundfile()
 	if !obs2 || sf != "SOUNDFILE_042" {
 		t.Errorf("CurrentSoundfile = %q obs=%v, want (SOUNDFILE_042, true)", sf, obs2)
@@ -1140,15 +1154,16 @@ func TestSoundPlayerIsPlaying(t *testing.T) {
 
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P0001"})
 	ch := d.AddChannel("MP3P0001:2", 2, "AUDIO", hmenum.ParamsetKeyValues)
-	dirDP := generic.NewStringSensor(generic.Spec{
+	dirDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: "MP3P0001:2",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterDirection),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"", "UP", "DOWN"},
 		},
 	})
 	ch.Put(dirDP)
@@ -1161,24 +1176,24 @@ func TestSoundPlayerIsPlaying(t *testing.T) {
 	}
 
 	// Playing UP.
-	dirDP.OnEvent("UP")
+	fireEnum(t, dirDP, "UP")
 	playing, obs = sp.IsPlaying()
 	if !obs || !playing {
 		t.Errorf("IsPlaying after UP = %v obs=%v, want (true, true)", playing, obs)
 	}
 
 	// Playing DOWN.
-	dirDP.OnEvent("DOWN")
+	fireEnum(t, dirDP, "DOWN")
 	playing, _ = sp.IsPlaying()
 	if !playing {
 		t.Error("IsPlaying after DOWN must be true")
 	}
 
-	// Stopped.
-	dirDP.OnEvent("NONE")
+	// Stopped (empty label — no direction).
+	fireEnum(t, dirDP, "")
 	playing, _ = sp.IsPlaying()
 	if playing {
-		t.Error("IsPlaying after NONE must be false")
+		t.Error("IsPlaying after empty DIRECTION must be false")
 	}
 }
 

@@ -75,7 +75,7 @@ type Garage struct {
 
 	writer Writer
 
-	doorStateDp   *generic.Sensor[string]
+	doorStateDp   *generic.Sensor[int32]
 	doorCommandDp *generic.Sensor[string]
 	sectionDp     *generic.Sensor[int32]
 
@@ -109,13 +109,13 @@ func NewGarage(cfg GarageConfig) *Garage {
 		Capabilities:  cfg.Capabilities,
 		key:           key,
 		writer:        cfg.Writer,
-		doorStateDp:   custom.StringSensorField(cfg.Channel, hmenum.ParameterDoorState),
+		doorStateDp:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterDoorState),
 		doorCommandDp: custom.StringSensorField(cfg.Channel, hmenum.ParameterDoorCommand),
 		sectionDp:     custom.IntegerSensorField(cfg.Channel, hmenum.ParameterSection),
 	}
 	g.registerGarageServices()
 	if g.doorStateDp != nil {
-		_ = g.doorStateDp.OnConfirmedUpdate(func(_, _ string) { g.dataVersion.Bump() })
+		_ = g.doorStateDp.OnConfirmedUpdate(func(_, _ int32) { g.dataVersion.Bump() })
 	}
 	if g.doorCommandDp != nil {
 		_ = g.doorCommandDp.OnConfirmedUpdate(func(_, _ string) { g.dataVersion.Bump() })
@@ -283,9 +283,13 @@ func (g *Garage) Subscribe(ch *device.Channel) func() {
 		return func() {}
 	}
 	var unsubs []func()
-	applyState := func(next any) {
-		if s, ok := next.(string); ok {
-			g.OnState(DoorState(s))
+	// DOOR_STATE is a read-only ENUM projected onto a raw-index sensor, so an
+	// update carries the index; resolve it to its VALUE_LIST label (the same
+	// sensor g.doorStateDp holds, already updated when this fires) before
+	// recording the DoorState.
+	applyState := func(_ any) {
+		if label, ok := custom.EnumLabelValue(g.doorStateDp); ok {
+			g.OnState(DoorState(label))
 		}
 	}
 	applySection := func(next any) {

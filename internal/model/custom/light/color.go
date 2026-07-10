@@ -295,7 +295,10 @@ type FixedColorLight struct {
 
 	color          *generic.Select
 	colorBehaviour *generic.Select
-	channelColor   *generic.Sensor[string]
+	// channelColor carries CHANNEL_COLOR, a read-only ENUM the resolver
+	// projects onto a raw-index Sensor[int32]; the colour-slot label is
+	// resolved on read via [custom.EnumLabelValue].
+	channelColor *generic.Sensor[int32]
 }
 
 // NewFixedColorLight constructs a FixedColorLight.
@@ -304,7 +307,7 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 		Light:          New(cfg),
 		color:          custom.SelectField(cfg.Channel, hmenum.ParameterColor),
 		colorBehaviour: custom.SelectField(cfg.Channel, hmenum.ParameterColorBehaviour),
-		channelColor:   custom.StringSensorField(cfg.Channel, hmenum.ParameterChannelColor),
+		channelColor:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterChannelColor),
 	}
 	// Signal lights reset the device-side ON_TIME duration on every plain
 	// turn_on; RGBW/DALI must not (see Light.resetsOnTimeOnTurnOn).
@@ -313,7 +316,7 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 		fc.registerFixedColorLightServices()
 	}
 	if fc.channelColor != nil {
-		_ = fc.channelColor.OnConfirmedUpdate(func(_, _ string) { fc.dataVersion.Bump() })
+		_ = fc.channelColor.OnConfirmedUpdate(func(_, _ int32) { fc.dataVersion.Bump() })
 	}
 	if fc.colorBehaviour != nil {
 		_ = fc.colorBehaviour.OnConfirmedUpdate(func(_, _ int32) { fc.dataVersion.Bump() })
@@ -347,11 +350,12 @@ func (l *FixedColorLight) Subscribe(ch *device.Channel) func() {
 			}
 		}
 	}
-	// Replay CHANNEL_COLOR current value.
+	// Replay CHANNEL_COLOR current value (raw index; the label is resolved
+	// on read via custom.EnumLabelValue).
 	if l.channelColor != nil {
 		if v, observed := l.channelColor.RawValue(); observed {
-			if sv, ok := v.(string); ok {
-				l.channelColor.OnEvent(sv)
+			if iv, ok := v.(int32); ok {
+				l.channelColor.OnEvent(iv)
 			}
 		}
 	}
@@ -446,10 +450,7 @@ func (l *FixedColorLight) SetColorBehaviour(ctx context.Context, behaviour Color
 // reported by the CCU (may differ from COLOR during transitions). Returns (0,
 // 0, false) when not observed.
 func (l *FixedColorLight) ChannelHsColor() (hue int32, saturation float64, ok bool) {
-	if l.channelColor == nil {
-		return 0, 0, false
-	}
-	name, observed := l.channelColor.Value()
+	name, observed := custom.EnumLabelValue(l.channelColor)
 	if !observed {
 		return 0, 0, false
 	}

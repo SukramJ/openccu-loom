@@ -35,15 +35,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   class now implement `OnMatterValueChanged`, and a source-walking contract test
   guarantees no future device type reopens the gap. Verified end-to-end against
   Apple Home.
-- **Door-lock and smoke-detector state now reaches Matter controllers.** DoorLock
-  `LockState` and SmokeCOAlarm `SmokeState` / `ExpressedState` were permanently
-  reported as TLV-null in Apple / Google Home. Their custom data points read the
-  read-only ENUM wire parameters (`LOCK_STATE`, `SMOKE_DETECTOR_ALARM_STATUS`)
-  through a string-sensor accessor, but the resolver projects read-only ENUM
-  parameters onto a raw-index integer sensor — so the accessor silently resolved
-  to `nil` and the projected attribute never observed a value (the door lock's
-  `DIRECTION` and the RF lock's `ERROR` had the same gap). The custom DPs now read
-  the index sensor and resolve the VALUE_LIST label on demand, and a
+- **Read-only ENUM state now reaches Matter controllers for every affected
+  device class.** A custom data point that read a read-only ENUM wire parameter
+  through a string-sensor accessor got `nil`: the resolver projects read-only
+  ENUM parameters onto a raw-index integer sensor, which the `*Sensor[string]`
+  cast never matched, so the projected value stayed unobserved and the Matter
+  attribute reported TLV-null forever. This silently disabled DoorLock
+  `LockState` (`LOCK_STATE`) and SmokeCOAlarm `SmokeState` / `ExpressedState`
+  (`SMOKE_DETECTOR_ALARM_STATUS`) in Apple / Google Home, plus the door lock's
+  `DIRECTION`, the RF lock's `ERROR`, the siren sound player's `SOUNDFILE` /
+  `DIRECTION`, the fixed-colour light's active `CHANNEL_COLOR` slot, and the
+  garage door's `DOOR_STATE` (so a garage never reported a position). The custom
+  DPs now read the index sensor and resolve the VALUE_LIST label on demand, and a
   resolver-boundary contract test pins the "read-only ENUM → index sensor"
   invariant so the accessor mismatch cannot recur.
 - **Docker image builds again.** The builder stage pinned `golang:1.26.4-alpine`

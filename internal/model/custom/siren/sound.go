@@ -63,9 +63,9 @@ type SoundPlayer struct {
 	key          hmtypes.DataPointKey
 	writer       custom.Writer
 	level        *generic.Float          // LEVEL (0..1 volume)
-	soundfile    *generic.Sensor[string] // SOUNDFILE
+	soundfile    *generic.Sensor[int32]  // SOUNDFILE (read-only ENUM, index sensor)
 	repetitions  *generic.Sensor[string] // REPETITIONS
-	direction    *generic.Sensor[string] // DIRECTION (UP/DOWN)
+	direction    *generic.Sensor[int32]  // DIRECTION (UP/DOWN; read-only ENUM, index sensor)
 	availableSF  []string
 	availableRep []string
 }
@@ -110,9 +110,9 @@ func NewSoundPlayer(cfg SoundPlayerConfig) *SoundPlayer {
 		key:         key,
 		writer:      cfg.Writer,
 		level:       custom.FloatField(cfg.Channel, hmenum.ParameterLevel),
-		soundfile:   custom.StringSensorField(cfg.Channel, hmenum.ParameterSoundfile),
+		soundfile:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterSoundfile),
 		repetitions: custom.StringSensorField(cfg.Channel, hmenum.ParameterRepetitions),
-		direction:   custom.StringSensorField(cfg.Channel, hmenum.ParameterDirection),
+		direction:   custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection),
 	}
 	if cfg.Channel != nil {
 		if dp := cfg.Channel.Parameter(hmenum.ParameterSoundfile); dp != nil {
@@ -147,18 +147,12 @@ func (sp *SoundPlayer) AvailableRepetitions() []string {
 // CurrentSoundfile returns the last observed SOUNDFILE label and
 // whether it has been observed yet.
 func (sp *SoundPlayer) CurrentSoundfile() (string, bool) {
-	if sp.soundfile == nil {
-		return "", false
-	}
-	return sp.soundfile.Value()
+	return custom.EnumLabelValue(sp.soundfile)
 }
 
 // IsPlaying reports whether the unit is currently playing back a sound file.
 func (sp *SoundPlayer) IsPlaying() (playing, observed bool) {
-	if sp.direction == nil {
-		return false, false
-	}
-	d, ok := sp.direction.Value()
+	d, ok := custom.EnumLabelValue(sp.direction)
 	if !ok {
 		return false, false
 	}
@@ -351,7 +345,7 @@ func (sp *SoundPlayer) Subscribe(ch *device.Channel) func() {
 		// Bump the DataVersion on every confirmed SOUNDFILE change so that
 		// Matter DataVersionFilter evaluation picks up playback-state transitions.
 		// Mirrors the OnConfirmedUpdate hook in switchdev.New (switch/switch.go).
-		unsubs = append(unsubs, sp.soundfile.OnConfirmedUpdate(func(_, _ string) {
+		unsubs = append(unsubs, sp.soundfile.OnConfirmedUpdate(func(_, _ int32) {
 			sp.Bump()
 		}))
 	}
@@ -361,7 +355,7 @@ func (sp *SoundPlayer) Subscribe(ch *device.Channel) func() {
 	if sp.direction != nil {
 		// Also bump on DIRECTION changes — UP/DOWN encodes whether the player
 		// is currently active, which maps to the Matter LevelControl OnOff bit.
-		unsubs = append(unsubs, sp.direction.OnConfirmedUpdate(func(_, _ string) {
+		unsubs = append(unsubs, sp.direction.OnConfirmedUpdate(func(_, _ int32) {
 			sp.Bump()
 		}))
 	}

@@ -78,14 +78,47 @@ func newSmokeSirenWithDPs(t *testing.T) (*SmokeSiren, *generic.Sensor[int32]) {
 	return ss, statusDP
 }
 
+// attachEnumSensor attaches a *generic.Sensor[int32] for the given
+// read-only ENUM parameter to the channel, mirroring how the resolver
+// projects such parameters (see custom.EnumSensorField) onto a raw-index
+// sensor rather than a *generic.Sensor[string].
+func attachEnumSensor(ch *device.Channel, param hmenum.Parameter, valueList []string) *generic.Sensor[int32] {
+	dp := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(param),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  valueList,
+		},
+	})
+	ch.Put(dp)
+	return dp
+}
+
+// fireDirection resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event — mirrors how the resolver projects
+// the read-only ENUM parameter DIRECTION onto an index-valued Sensor[int32].
+func fireDirection(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
+}
+
 // newSoundPlayerWithDPs builds a SoundPlayer backed by a real DIRECTION DP
 // so that IsPlaying / IsStateChange read real observed values.
-func newSoundPlayerWithDPs(t *testing.T) (*SoundPlayer, *generic.Sensor[string]) {
+func newSoundPlayerWithDPs(t *testing.T) (*SoundPlayer, *generic.Sensor[int32]) {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "MP3P001"})
 	ch := d.AddChannel("MP3P001:2", 2, "SIREN", hmenum.ParamsetKeyValues)
-	directionDP := attachStringSensor(ch, hmenum.ParameterDirection)
-	attachStringSensor(ch, hmenum.ParameterSoundfile)
+	directionDP := attachEnumSensor(ch, hmenum.ParameterDirection, []string{"", "UP", "DOWN"})
+	attachEnumSensor(ch, hmenum.ParameterSoundfile, []string{"SOUNDFILE_001"})
 	sp := NewSoundPlayer(SoundPlayerConfig{Channel: ch})
 	return sp, directionDP
 }
@@ -197,19 +230,20 @@ func TestSoundPlayerIsStateChangeReturnsFalseWhenAlreadyPlaying(t *testing.T) {
 	t.Parallel()
 
 	sp, directionDP := newSoundPlayerWithDPs(t)
-	directionDP.OnEvent("UP")
+	fireDirection(t, directionDP, "UP")
 	if sp.IsStateChange(true) {
 		t.Error("SoundPlayer.IsStateChange(true) when playing = true, want false")
 	}
 }
 
 // TestSoundPlayerIsStateChangeReturnsTrueWhenTransitioningToPlaying
-// verifies that IsStateChange(true) is true when DIRECTION is "STOP".
+// verifies that IsStateChange(true) is true when DIRECTION is empty
+// (no playback direction — stopped).
 func TestSoundPlayerIsStateChangeReturnsTrueWhenTransitioningToPlaying(t *testing.T) {
 	t.Parallel()
 
 	sp, directionDP := newSoundPlayerWithDPs(t)
-	directionDP.OnEvent("STOP")
+	fireDirection(t, directionDP, "")
 	if !sp.IsStateChange(true) {
 		t.Error("SoundPlayer.IsStateChange(true) when stopped = false, want true")
 	}
