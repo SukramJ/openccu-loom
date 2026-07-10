@@ -838,35 +838,34 @@ func (b *Bridge) wireMeasurementListenersLocked() {
 			continue
 		}
 		withPaths++
-		epID := ep.ID
-		epRef := ep
-		logger := b.logger
-		unsub := notifier.OnMatterValueChanged(func() {
-			if logger != nil {
-				logger.Debug("matter.bridge.measurement.notify",
-					slog.Int("endpoint", int(epID)),
-					slog.Int("paths", len(pathSet)))
-			}
-			// Advance the endpoint-hosted DataVersion of every cluster
-			// this change touches BEFORE dirty-marking, so the report
-			// the manager ships carries the post-change version and
-			// controllers' DataVersionFilters miss on the next read.
-			// Mirrors matter.js Datasource.ts:949 (increment per change).
-			bumped := make(map[uint32]struct{}, 1)
-			for _, p := range pathSet {
-				if _, done := bumped[p.Cluster]; !done {
-					epRef.BumpClusterDataVersion(p.Cluster)
-					bumped[p.Cluster] = struct{}{}
-				}
-			}
-			for _, p := range pathSet {
-				mgr.OnAttributeChanged(p)
-			}
-		})
-		if unsub == nil {
-			unsub = func() {}
+		b.wireMeasurementNotifier(mgr, ep, notifier, pathSet)
+
+		// A metering switch hosts sub-cluster servers (ElectricalPower /
+		// ElectricalEnergy) backed by sibling meter-channel sensors, in
+		// ADDITION to its primary OnOff. The primary notifier above only
+		// marks its own cluster's paths (filterPathsByNotifierCluster), so
+		// wire each remaining notifier-capable cluster server to its own
+		// cluster's reportable paths — otherwise a POWER / ENERGY_COUNTER
+		// push never reaches a controller as a proactive report.
+		primaryCluster := uint32(0)
+		if srv, isSrv := notifier.(interfaces.MatterClusterServer); isSrv {
+			primaryCluster = srv.MatterClusterID()
 		}
-		b.measurementUnsubscribers = append(b.measurementUnsubscribers, unsub)
+		for _, srv := range endpointpkg.ClusterServers(ep) {
+			if srv == nil || srv.MatterClusterID() == primaryCluster {
+				continue
+			}
+			subNotifier, isNotifier := srv.(interfaces.MatterChangeNotifier)
+			if !isNotifier {
+				continue
+			}
+			subPaths := filterPathsByNotifierCluster(subNotifier, paths)
+			if len(subPaths) == 0 {
+				continue
+			}
+			withPaths++
+			b.wireMeasurementNotifier(mgr, ep, subNotifier, subPaths)
+		}
 	}
 	if b.logger != nil {
 		b.logger.Info("matter.bridge.measurement_listeners_wired",
@@ -876,6 +875,37 @@ func (b *Bridge) wireMeasurementListenersLocked() {
 			slog.Int("with_paths", withPaths),
 			slog.Int("registered", len(b.measurementUnsubscribers)))
 	}
+}
+
+// wireMeasurementNotifier subscribes notifier to pathSet: on each fire it
+// advances the touched clusters' endpoint-hosted DataVersion BEFORE dirty-
+// marking (so the shipped report carries the post-change version and a
+// controller's DataVersionFilter misses on the next read — mirrors matter.js
+// Datasource.ts:949), then marks every path dirty on the Subscribe manager. The
+// unsubscribe is tracked so a reassemble tears every listener down.
+func (b *Bridge) wireMeasurementNotifier(mgr *subscription.Manager, ep *endpointpkg.Endpoint, notifier interfaces.MatterChangeNotifier, pathSet []im.ConcreteAttributePath) {
+	epID := ep.ID
+	unsub := notifier.OnMatterValueChanged(func() {
+		if b.logger != nil {
+			b.logger.Debug("matter.bridge.measurement.notify",
+				slog.Int("endpoint", int(epID)),
+				slog.Int("paths", len(pathSet)))
+		}
+		bumped := make(map[uint32]struct{}, 1)
+		for _, p := range pathSet {
+			if _, done := bumped[p.Cluster]; !done {
+				ep.BumpClusterDataVersion(p.Cluster)
+				bumped[p.Cluster] = struct{}{}
+			}
+		}
+		for _, p := range pathSet {
+			mgr.OnAttributeChanged(p)
+		}
+	})
+	if unsub == nil {
+		unsub = func() {}
+	}
+	b.measurementUnsubscribers = append(b.measurementUnsubscribers, unsub)
 }
 
 // filterPathsByNotifierCluster narrows reportable paths to only those
