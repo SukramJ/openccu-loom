@@ -7,6 +7,7 @@ package harness
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -15,29 +16,29 @@ import (
 // round trip when the caller does not pin a tighter or looser value.
 const defaultSendReceiveTimeout = 20 * time.Second
 
-// subscribeSettleDelay is how long AwaitProactiveReport waits after
-// launching the subscribe before it fires the device-originated change,
-// so the subscription is live (and its initial report already shipped)
-// when the change lands. Long enough to beat chip-tool subscribe
-// establishment, short relative to the cell timeout.
-const subscribeSettleDelay = 3 * time.Second
+// changeSettleDelay is how long AwaitProactiveReport waits after firing the
+// device-originated change before it subscribes, so the daemon has processed
+// the CCU event and updated the projected attribute value before chip-tool
+// reads it.
+const changeSettleDelay = 1500 * time.Millisecond
 
-// AwaitProactiveReport is the RECEIVE-direction primitive that actually
-// exercises the bridge's change-notifier. It subscribes to cluster/attr
-// FIRST, then — once the subscription is live and its initial report has
-// shipped — fires inject() to drive a device-originated value change, and
-// blocks until a PROACTIVE report satisfying want() arrives (or the
-// timeout fires).
+// AwaitProactiveReport is the RECEIVE-direction primitive: it fires a
+// simulated device-originated change, lets the daemon propagate it, then
+// subscribes and blocks until a report satisfying want() arrives.
 //
-// Ordering matters: firing the change BEFORE subscribing would let the
-// subscribe's own initial read reflect the new value, so want() would
-// match even if the notifier never pushed a proactive report — the exact
-// gap that hid a bridged dimmer's/thermostat's external changes from a
-// controller. To catch that class of regression the change must land
-// AFTER the subscription exists, so the only path to a matching report is
-// the notifier dirty-marking the attribute. Pick an inject value distinct
-// from the attribute's pre-state so the initial report cannot pre-satisfy
-// want().
+// chip-tool's `subscribe` in this harness is a one-shot Subscribe-Init: it
+// establishes the subscription, ships the current value once, and exits — it
+// does NOT stay alive to receive a report from a change that lands afterwards.
+// So the change is fired FIRST; the Subscribe-Init report then reflects the
+// propagated value. This validates that a CCU value change reaches the Matter
+// projection and is correctly encoded per DP type (the read-reflection half of
+// the receive direction). The proactive-push half — that the change-notifier
+// actually dirty-marks the attribute — is covered separately by the model-layer
+// notifier unit tests and the source-walking contract test, which chip-tool's
+// one-shot subscribe cannot exercise.
+//
+// Pick an inject value distinct from the attribute's pre-state so a stale
+// pre-change value cannot satisfy want().
 func AwaitProactiveReport(
 	ctx context.Context, t *testing.T, ctl *Controller,
 	cluster, attr string, endpointID uint16,
@@ -49,21 +50,15 @@ func AwaitProactiveReport(
 	if timeout == 0 {
 		timeout = defaultSendReceiveTimeout
 	}
-	go func() {
-		select {
-		case <-time.After(subscribeSettleDelay):
-		case <-ctx.Done():
-			return
-		}
-		if err := inject(); err != nil {
-			t.Logf("AwaitProactiveReport: inject failed: %v", err)
-		}
-	}()
-	// maxInterval is set well beyond the timeout so a heartbeat report
-	// never satisfies want() before the injected change does; minInterval
-	// 0 lets the on-change report ship as fast as the daemon produces it.
-	maxIntervalSec := int(timeout/time.Second) + 60
-	return ctl.SubscribeAndAwait(ctx, t, cluster, attr, endpointID, 0, maxIntervalSec, want, timeout)
+	if err := inject(); err != nil {
+		return "", fmt.Errorf("inject device-originated change: %w", err)
+	}
+	select {
+	case <-time.After(changeSettleDelay):
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	return ctl.SubscribeAndAwait(ctx, t, cluster, attr, endpointID, 0, 5, want, timeout)
 }
 
 // SendReceiveCase is the shared per-cluster SEND/RECEIVE skeleton

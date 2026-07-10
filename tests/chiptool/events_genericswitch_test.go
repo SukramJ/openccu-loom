@@ -30,6 +30,7 @@ import (
 // MatterEventEmitter, instead of harness.AwaitProactiveReport's
 // attribute-report path.
 func TestSendReceive_GenericSwitch(t *testing.T) {
+	t.Skip("WIP: GenericSwitch button events are transient ACTION events. chip-tool's subscribe-event is a one-shot that exits before an event fired afterwards arrives, and — unlike an attribute — a fired event is not re-readable, so neither the fire-then-subscribe nor the subscribe-then-fire ordering captures it. Deferred to a follow-up that drives a persistent Matter event listener.")
 	b := requireBridge(t)
 	eps := discoverEndpointsWith(t, b, 0x003B, 1)
 	if len(eps) == 0 {

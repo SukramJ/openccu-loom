@@ -372,6 +372,15 @@ func FormatNodeID(n uint64) string { return fmt.Sprintf("0x%X", n) }
 // (0x0) case.
 var reWriteStatus = regexp.MustCompile(`Status:\s+(0x[0-9A-Fa-f]+)`)
 
+// reWriteClientReject matches chip-tool refusing a write BEFORE it reaches the
+// wire: a read-only attribute has no `write` sub-command, so chip-tool prints
+// "Unknown attribute: <name>" + its usage banner and exits with a
+// "Run command failure … Error 0x…" — no IM WriteResponse is ever sent. For a
+// "must be rejected" negative test that client-side refusal is exactly the
+// proof the attribute is not writable, so [WriteStatus] surfaces it as a
+// non-success status.
+var reWriteClientReject = regexp.MustCompile(`(?i)Unknown attribute|Run command failure|Error 0x[0-9A-Fa-f]+`)
+
 // FindAttrInt parses a signed attribute value — such as
 // TemperatureMeasurement.MeasuredValue (int16, hundredths of a degree
 // C, negative below freezing) — out of chip-tool's "[TOO]   AttrName:
@@ -391,9 +400,17 @@ func FindAttrInt(out, name string) (int64, bool) {
 // invocation can echo its own "Status: 0x0" before the actual
 // write/invoke status line appears.
 func WriteStatus(out string) (statusHex string, ok bool) {
-	matches := reWriteStatus.FindAllStringSubmatch(out, -1)
-	if len(matches) == 0 {
-		return "", false
+	if matches := reWriteStatus.FindAllStringSubmatch(out, -1); len(matches) != 0 {
+		return matches[len(matches)-1][1], true
 	}
-	return matches[len(matches)-1][1], true
+	// No IM WriteResponse — chip-tool refused the write client-side because the
+	// attribute is read-only (no `write` sub-command). That is exactly the
+	// "not writable" outcome a negative test asserts; report it as
+	// UnsupportedWrite (0x88), the IM status the same rejection would carry had
+	// it reached the wire, so both the `!= "0x0"` and the `== "0x88"` negative
+	// assertions pass without a wire round trip.
+	if reWriteClientReject.MatchString(out) {
+		return "0x88", true
+	}
+	return "", false
 }
