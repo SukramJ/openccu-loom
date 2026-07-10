@@ -1732,6 +1732,9 @@ func TestSirenIsRefreshed_FalseWhenNoDPObserved(t *testing.T) {
 
 // TestSirenIsRefreshed_TrueAfterAcousticPush verifies IsRefreshed returns
 // true after the acoustic-active DP receives a CCU push.
+//
+// Pins the availability gate to its primary state carrier
+// (ACOUSTIC_ALARM_ACTIVE); see docs/parity/by_design.md.
 func TestSirenIsRefreshed_TrueAfterAcousticPush(t *testing.T) {
 	r := newRig(t, "ABC0001:1", &stubWriter{}, fullCaps)
 	r.acousticActiveDP.OnEvent(true)

@@ -389,6 +389,56 @@ openccu-loom lacks.
 |----|--------------|-------------|---------|---------|------------|
 | A2-D20 | `CustomDpIpLock.lock/unlock/open` | lock.py:141-154 | Optimistic echo via `observeCommand` | `internal/model/custom/lock/lock.go::observeCommand` | Python writes to `_dp_lock_target_level` only and waits for the CCU push-callback to update `_dp_lock_state`. OpenCCU-Loom additionally calls `observeCommand` immediately after each write to synthesise a tentative `LOCK_STATE` / `STATE` value. This improves responsiveness for MQTT / REST consumers that read state right after issuing a command, before the CCU round-trip completes. The optimistic value is overwritten by the next CCU push, so correctness is preserved. No Python equivalent exists; this is a deliberate Go-side enhancement. |
 
+### BD-CDP-AvailabilityCarrier — availability gates via OR over primary carriers, not `all()` over the readable set
+
+**Reference mechanism (aiohomematic ADR-0025, #3286).** aiohomematic derives
+`CustomDataPoint.is_valid` from `all(dp refreshed for dp in _validity_relevant_fields)`
+— an **AND** over a per-class, declaratively-pinned set of state-carrying fields.
+That set had to be *shrunk* to state carriers (ADR-0025, superseding the earlier
+`_validity_irrelevant_data_points` blocklist) because a secondary readback in the
+AND — activity/direction readbacks, group readbacks, colours, `HUMIDITY`,
+`*_ALARM_SELECTION`, MASTER fields — that the CCU never re-pushes after a reboot
+leaves the whole custom data point stuck at `value_state=restored` for hours
+(#3255, #3279). The AND is what makes a never-refreshing secondary field fatal.
+
+**openccu-loom divergence.** Each custom data point gates `IsRefreshed()` on an
+**OR** over its wire slots (`AggregateView.IsRefreshed` = *any* slot observed),
+so a secondary slot can only make availability *easier*, never block it.
+openccu-loom is therefore **structurally immune** to the #3255/#3279 stuck-restored
+failure class that ADR-0025 exists to close — it does not need the AND-set-shrink
+because it never runs the AND. This is reinforced by how channel values actually
+arrive: the initial/periodic bulk seed (`fetch_all_device_data.fn`, gated only on
+the CCU holding a timestamped value) refreshes *all* timestamped channel params in
+one pass, and live device reports arrive as a batched XML-RPC `system.multicall`
+that the callback mux splits per-parameter (`internal/client/transport/xmlrpc/mux.go`),
+so the primary carriers land together promptly. Switching to AND would import the
+exact reboot-fragility (idle sirens never report `*_ALARM_ACTIVE`; `SETPOINT` lags
+after a reboot) that OR avoids, for no practical gain.
+
+**Standing guard.** A contract test pins, per custom-DP type, that its availability
+gate observes the ADR-0025 **primary state carrier** — a regression guard against a
+future refactor dropping the primary carrier from the gate. The OR semantics and
+the current (superset) slot lists are intentionally kept; the pin is positive-only
+(carrier ⊆ gate), not `only-carrier`. Per-type carrier mapping (openccu-loom type →
+carrier param → aiohomematic ADR-0025 class):
+
+| openccu-loom type | primary carrier param | aiohomematic ADR-0025 class · set |
+|---|---|---|
+| `switch.Switch` | `STATE` | CustomDpSwitch · `{STATE}` |
+| `switch.AccessPermission` | `STATE` | CustomDpIpAccessPermission · `{STATE}` |
+| `cover.Cover` | `LEVEL` | CustomDpCover/Blind/IpBlind/WindowDrive · `{LEVEL}` |
+| `cover.Garage` | `DOOR_STATE` | CustomDpGarage · `{DOOR_STATE}` |
+| `light.Light` | `LEVEL` | CustomDp{Dimmer,ColorDimmer,ColorTempDimmer,IpFixedColorLight,IpRGBWLight,IpRGBWColorTempLight,IpDrgDaliLight,SoundPlayerLed} · `{LEVEL}` |
+| `valve.Irrigation` | `STATE` | CustomDpIpIrrigationValve · `{STATE}` |
+| `valve.Modulating` | `LEVEL` | modulating-valve variant · `{LEVEL}` |
+| `lock.Lock` | `LOCK_STATE` (IP) / `STATE` (RF) | CustomDpIpLock `{LOCK_STATE}` · CustomDpRfLock `{STATE}` · CustomDpButtonLock `{BUTTON_LOCK}` |
+| `siren.Siren` | `ACOUSTIC_ALARM_ACTIVE` / `OPTICAL_ALARM_ACTIVE` (+ `SMOKE_DETECTOR_ALARM_STATUS`) | CustomDpIpSiren `{ACOUSTIC_ALARM_ACTIVE, OPTICAL_ALARM_ACTIVE}` · CustomDpIpSirenSmoke `{SMOKE_DETECTOR_ALARM_STATUS}` |
+| `climate.Climate` | `ACTUAL_TEMPERATURE` + `SETPOINT`/`SET_POINT_TEMPERATURE` | CustomDp{Ip,Rf,SimpleRf}Thermostat · `{TEMPERATURE, SETPOINT(, mode)}` |
+| `textdisplay.TextDisplay` | `BURST_LIMIT_WARNING` (its only readable field) | CustomDpTextDisplay · `frozenset()` — **diverges**: aiohomematic treats a text display as always-valid (empty set → `all(())=True`); openccu-loom anchors observation on the `BURST_LIMIT_WARNING` binary sensor, so a display with no readable field stays unobserved until that warning channel reports (`TestTextDisplayIsRefreshedFalseWithoutBurstLimitWarning`). Intentional. |
+
+(aiohomematic's `CustomDpSoundPlayer {DIRECTION}` has no distinct openccu-loom
+custom-DP type; sound handling lives inside `siren`.)
+
 ---
 
 ## A3 — Calc / Combined / Hub

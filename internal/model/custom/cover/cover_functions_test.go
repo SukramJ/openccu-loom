@@ -55,6 +55,8 @@ func TestCoverSubDataPointKeys(t *testing.T) {
 	}
 }
 
+// TestCoverIsRefreshed also pins the availability gate to its primary state
+// carrier (LEVEL); see docs/parity/by_design.md.
 func TestCoverIsRefreshed(t *testing.T) {
 	c, _, level := newRig(t, "x:1", &stubWriter{}, custom.CoverCapabilities{})
 	if c.IsRefreshed() {
@@ -553,6 +555,37 @@ func TestGarageSubscribeWiresDoorStateAndSection(t *testing.T) {
 	sectionDP.OnEvent(int32(sectionClosing))
 	if !g.IsClosing() {
 		t.Error("Subscribe: IsClosing must be true after SECTION=5")
+	}
+}
+
+// TestGarageAvailabilityGatesOnDoorState pins the observed-state gate to its
+// primary state carrier (DOOR_STATE); see docs/parity/by_design.md. Garage
+// has no IsRefreshed method — DoorState's ok return is the observed-flag
+// accessor the north-bound surface relies on.
+func TestGarageAvailabilityGatesOnDoorState(t *testing.T) {
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
+	ch := d.AddChannel("HmIP-MOD-HO:1", 1, "GARAGE_DOOR", hmenum.ParamsetKeyValues)
+
+	stateDP := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{ChannelAddress: ch.Address, ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterDoorState)},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"UNKNOWN", "OPEN", "CLOSED", "VENTILATION_POSITION"},
+		},
+	})
+	ch.Put(stateDP)
+
+	g := NewGarage(GarageConfig{Channel: ch, Writer: &stubWriter{}})
+	unsub := g.Subscribe(ch)
+	defer unsub()
+
+	if _, ok := g.DoorState(); ok {
+		t.Fatal("DoorState() must be unobserved before any wire event")
+	}
+	fireDoorState(t, stateDP, "CLOSED")
+	if _, ok := g.DoorState(); !ok {
+		t.Fatal("DoorState() must be observed after DOOR_STATE event")
 	}
 }
 

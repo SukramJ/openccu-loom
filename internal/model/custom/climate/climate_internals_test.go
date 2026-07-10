@@ -20,6 +20,8 @@ import (
 // IsRefreshed / SubDataPointKeys
 // ---------------------------------------------------------------------------
 
+// TestClimateIsRefreshed also pins the availability gate to its primary
+// state carrier (ACTUAL_TEMPERATURE); see docs/parity/by_design.md.
 func TestClimateIsRefreshed(t *testing.T) {
 	r := newRig(t, "x", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	// Before any wire event the aggregate is not refreshed.
