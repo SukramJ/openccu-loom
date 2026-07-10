@@ -111,6 +111,12 @@ type Options struct {
 	// knob. Needed by lifecycle_test.go's bootid-rotation case.
 	DevRotateUniqueIDs bool
 
+	// ExposeSecondaryChannels surfaces the
+	// `north.matter.expose_secondary_channels` expert knob. Off (default)
+	// keeps one Matter endpoint per physical device; on additionally exposes
+	// a custom entity's secondary actor channels and its group-STATE channel.
+	ExposeSecondaryChannels bool
+
 	// StartupDeadline overrides the default 30 s wait for the
 	// /api/v1/health endpoint to start returning 200.
 	StartupDeadline time.Duration
@@ -226,21 +232,22 @@ func startCommon(t *testing.T, chipBin string, opts Options) (*Bridge, func(), e
 	b.cfgPath = filepath.Join(b.dataDir, "config.yaml")
 
 	cfgYAML := buildChipToolConfigYAML(chipToolConfigInputs{
-		DataDir:             b.dataDir,
-		RESTListen:          fmt.Sprintf(":%d", restPort),
-		CallbackPort:        b.callbackPort,
-		BinPort:             b.binPort,
-		MatterListen:        b.matterAddr,
-		MatterMDNS:          mdns,
-		MatterPasscode:      ChipDefaultPasscode,
-		MatterDiscriminator: ChipDefaultDiscriminator,
-		CASEEnabled:         opts.CASEEnabled,
-		BridgeNodeID:        BridgeNodeID,
-		BridgeFabricID:      BridgeFabricID,
-		DevRotateUniqueIDs:  opts.DevRotateUniqueIDs,
-		CCUHost:             "127.0.0.1",
-		CCUXMLRPC:           b.CCU.XMLRPCPort(),
-		CCUJSONRPC:          b.CCU.JSONRPCPort(),
+		DataDir:                 b.dataDir,
+		RESTListen:              fmt.Sprintf(":%d", restPort),
+		CallbackPort:            b.callbackPort,
+		BinPort:                 b.binPort,
+		MatterListen:            b.matterAddr,
+		MatterMDNS:              mdns,
+		MatterPasscode:          ChipDefaultPasscode,
+		MatterDiscriminator:     ChipDefaultDiscriminator,
+		CASEEnabled:             opts.CASEEnabled,
+		BridgeNodeID:            BridgeNodeID,
+		BridgeFabricID:          BridgeFabricID,
+		DevRotateUniqueIDs:      opts.DevRotateUniqueIDs,
+		ExposeSecondaryChannels: opts.ExposeSecondaryChannels,
+		CCUHost:                 "127.0.0.1",
+		CCUXMLRPC:               b.CCU.XMLRPCPort(),
+		CCUJSONRPC:              b.CCU.JSONRPCPort(),
 	})
 	if err := os.WriteFile(b.cfgPath, []byte(cfgYAML), 0o600); err != nil {
 		rollback()
@@ -672,21 +679,22 @@ func (b *Bridge) waitForMatterListening(deadline time.Duration) error {
 // chipToolConfigInputs collects every value the chiptool harness
 // needs to write a complete daemon config.
 type chipToolConfigInputs struct {
-	DataDir             string
-	RESTListen          string
-	CallbackPort        int
-	BinPort             int
-	MatterListen        string
-	MatterMDNS          string
-	MatterPasscode      uint32
-	MatterDiscriminator uint16
-	CASEEnabled         bool
-	BridgeNodeID        uint64
-	BridgeFabricID      uint64
-	DevRotateUniqueIDs  bool
-	CCUHost             string
-	CCUXMLRPC           int
-	CCUJSONRPC          int
+	DataDir                 string
+	RESTListen              string
+	CallbackPort            int
+	BinPort                 int
+	MatterListen            string
+	MatterMDNS              string
+	MatterPasscode          uint32
+	MatterDiscriminator     uint16
+	CASEEnabled             bool
+	BridgeNodeID            uint64
+	BridgeFabricID          uint64
+	DevRotateUniqueIDs      bool
+	ExposeSecondaryChannels bool
+	CCUHost                 string
+	CCUXMLRPC               int
+	CCUJSONRPC              int
 }
 
 // buildChipToolConfigYAML returns a complete openccu-loom config
@@ -708,6 +716,10 @@ func buildChipToolConfigYAML(in chipToolConfigInputs) string {
 	rotate := "false"
 	if in.DevRotateUniqueIDs {
 		rotate = "true"
+	}
+	exposeSecondary := "false"
+	if in.ExposeSecondaryChannels {
+		exposeSecondary = "true"
 	}
 
 	var b strings.Builder
@@ -757,6 +769,7 @@ func buildChipToolConfigYAML(in chipToolConfigInputs) string {
 	fmt.Fprintf(&b, "      node_id: %d\n", caseNode)
 	fmt.Fprintf(&b, "      fabric_id: %d\n", caseFabric)
 	fmt.Fprintf(&b, "    dev_rotate_unique_ids: %s\n", rotate)
+	fmt.Fprintf(&b, "    expose_secondary_channels: %s\n", exposeSecondary)
 
 	fmt.Fprintf(&b, "centrals:\n")
 	fmt.Fprintf(&b, "  - name: ccu-chiptool\n")

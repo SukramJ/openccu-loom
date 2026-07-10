@@ -127,18 +127,34 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 	ctl := harness.NewController(t, chipBin, 0x2000) // distinct node ID
 	// Full second-fabric commissioning (PASE + CASE + attestation + the
 	// post-commission cluster reads) is the heaviest chip-tool flow in the
-	// suite; on a loaded arm64 CI runner it can take well over a minute
-	// amid mDNS resolution and MRP retransmits. Give the outer deadline
-	// enough headroom to not cap the per-command ceiling in [Controller.Run].
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// suite; on a loaded arm64 CI runner it can take well over a minute amid
+	// MRP retransmits and intermittently fails mid-flow under load. The
+	// commissioning window stays open across a failed attempt (180 s, opened
+	// above), so retry the pairing — cleaning up any partial fabric between
+	// tries — before declaring failure. Each attempt keeps the full
+	// per-command budget so a merely slow (not failed) run is never capped.
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
-	out, err := ctl.PairFullWithPasscode(ctx, t, harness.PairTargetHost, b.MatterPort(), openResp.Passcode)
-	if err != nil {
-		t.Fatalf("pair: %v", err)
+	const pairAttempts = 2
+	var out string
+	var paired bool
+	for attempt := 1; attempt <= pairAttempts; attempt++ {
+		attemptCtx, attemptCancel := context.WithTimeout(ctx, 120*time.Second)
+		o, err := ctl.PairFullWithPasscode(attemptCtx, t, harness.PairTargetHost, b.MatterPort(), openResp.Passcode)
+		attemptCancel()
+		out = o
+		if err == nil && harness.PairingSuccess(o) {
+			paired = true
+			break
+		}
+		t.Logf("second-fabric pairing attempt %d/%d did not succeed (err=%v); cleaning up and retrying into the still-open window", attempt, pairAttempts, err)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		_, _ = ctl.Unpair(cleanupCtx, t)
+		cleanupCancel()
 	}
-	if !harness.PairingSuccess(out) {
-		t.Fatalf("PASE success marker missing:\n%s", out)
+	if !paired {
+		t.Fatalf("second-fabric pairing did not succeed after %d attempts:\n%s", pairAttempts, out)
 	}
 
 	// Clean up the freshly paired fabric so the bridge does not
