@@ -8,8 +8,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/config"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 )
 
 // TestMatterStatusAdapter_NilBridge_Returns_Disabled verifies that when
@@ -131,27 +131,35 @@ func TestMatterCandidates_NilReceiver_ReturnsNil(t *testing.T) {
 	}
 }
 
-func TestMatterCandidates_NilWalk_ReturnsNil(t *testing.T) {
+func TestMatterCandidates_NilFields_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	a := &matterCandidateProviderAdapter{walk: nil}
-	got := a.MatterCandidates(context.Background())
-	if got != nil {
-		t.Errorf("expected nil for nil walk fn, got %v", got)
+	reg := buildTestRegistry(t, "ccu-one")
+	cfg := &config.Config{}
+
+	cases := map[string]*matterCandidateProviderAdapter{
+		"both nil": {},
+		"nil cfg":  {reg: reg},
+		"nil reg":  {cfg: cfg},
+	}
+	for name, a := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := a.MatterCandidates(context.Background())
+			if got != nil {
+				t.Errorf("expected nil, got %v", got)
+			}
+		})
 	}
 }
 
-func TestMatterCandidates_WithWalk_ReturnsResults(t *testing.T) {
+func TestMatterCandidates_EmptyRegistry_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	expected := []eligibility.Candidate{{DisplayName: "Bookshelf Lamp"}}
-	a := &matterCandidateProviderAdapter{
-		walk: func() []eligibility.Candidate { return expected },
-	}
+	reg := buildTestRegistry(t, "ccu-one", "ccu-two")
+	a := &matterCandidateProviderAdapter{reg: reg, cfg: &config.Config{}}
+
 	got := a.MatterCandidates(context.Background())
-	if len(got) != 1 {
-		t.Fatalf("expected 1 candidate, got %d", len(got))
-	}
-	if got[0].DisplayName != "Bookshelf Lamp" {
-		t.Errorf("expected DisplayName=Bookshelf Lamp, got %s", got[0].DisplayName)
+	if len(got) != 0 {
+		t.Errorf("expected no candidates from centrals with empty ModelRegistry, got %v", got)
 	}
 }
 

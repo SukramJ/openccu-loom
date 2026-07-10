@@ -1,6 +1,6 @@
 {
-  "generated": "e672f867",
-  "head": "e672f867",
+  "generated": "4969aa7d",
+  "head": "4969aa7d",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -9,177 +9,27 @@
   ],
   "summary": {
     "total_exported": 24398,
-    "reachable": 3612,
-    "whitelisted": 17664,
-    "unreachable": 3122
+    "reachable": 4049,
+    "whitelisted": 17658,
+    "unreachable": 2691
   },
   "by_package": [
     {
-      "package": "internal/central/adapter",
-      "unreachable_funcs": 66,
-      "unreachable_types": 88,
-      "unreachable_other": 46
-    },
-    {
-      "package": "internal/model/custom",
-      "unreachable_funcs": 33,
-      "unreachable_types": 54,
-      "unreachable_other": 10
-    },
-    {
-      "package": "internal/model/naming",
-      "unreachable_funcs": 27,
-      "unreachable_types": 4,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/store/sqlite",
-      "unreachable_funcs": 25,
-      "unreachable_types": 64,
-      "unreachable_other": 22
-    },
-    {
-      "package": "pkg/hmlog",
-      "unreachable_funcs": 22,
-      "unreachable_types": 23,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/north/mqtt",
-      "unreachable_funcs": 21,
-      "unreachable_types": 76,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/client/backends",
-      "unreachable_funcs": 19,
-      "unreachable_types": 37,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/auth",
-      "unreachable_funcs": 14,
-      "unreachable_types": 24,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/north/matter/im",
-      "unreachable_funcs": 14,
-      "unreachable_types": 74,
-      "unreachable_other": 14
-    },
-    {
-      "package": "internal/metrics",
-      "unreachable_funcs": 12,
-      "unreachable_types": 60,
-      "unreachable_other": 2
-    },
-    {
-      "package": "internal/payload",
-      "unreachable_funcs": 12,
-      "unreachable_types": 232,
-      "unreachable_other": 6
-    },
-    {
       "package": "internal/central/events",
-      "unreachable_funcs": 11,
+      "unreachable_funcs": 10,
       "unreachable_types": 9,
       "unreachable_other": 0
     },
     {
-      "package": "internal/model/hub",
-      "unreachable_funcs": 10,
-      "unreachable_types": 41,
-      "unreachable_other": 30
-    },
-    {
-      "package": "internal/client",
-      "unreachable_funcs": 9,
-      "unreachable_types": 31,
-      "unreachable_other": 8
-    },
-    {
-      "package": "internal/model/calculated",
-      "unreachable_funcs": 9,
-      "unreachable_types": 12,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "unreachable_funcs": 9,
-      "unreachable_types": 56,
-      "unreachable_other": 38
-    },
-    {
-      "package": "internal/north/matter/tlv",
-      "unreachable_funcs": 9,
-      "unreachable_types": 11,
-      "unreachable_other": 26
-    },
-    {
-      "package": "internal/audit",
+      "package": "internal/client/backends",
       "unreachable_funcs": 8,
-      "unreachable_types": 22,
-      "unreachable_other": 2
-    },
-    {
-      "package": "internal/central/coordinators",
-      "unreachable_funcs": 8,
-      "unreachable_types": 123,
+      "unreachable_types": 37,
       "unreachable_other": 4
     },
     {
-      "package": "internal/client/transport/binrpc",
+      "package": "pkg/hmlog",
       "unreachable_funcs": 8,
-      "unreachable_types": 11,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/configstore",
-      "unreachable_funcs": 8,
-      "unreachable_types": 17,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/model/device",
-      "unreachable_funcs": 8,
-      "unreachable_types": 45,
-      "unreachable_other": 12
-    },
-    {
-      "package": "internal/model/event",
-      "unreachable_funcs": 8,
-      "unreachable_types": 5,
-      "unreachable_other": 0
-    },
-    {
-      "package": "pkg/hmerr",
-      "unreachable_funcs": 8,
-      "unreachable_types": 5,
-      "unreachable_other": 24
-    },
-    {
-      "package": "internal/metrics/wiring",
-      "unreachable_funcs": 7,
-      "unreachable_types": 7,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/routingkey",
-      "unreachable_funcs": 7,
-      "unreachable_types": 0,
-      "unreachable_other": 2
-    },
-    {
-      "package": "internal/ccudata",
-      "unreachable_funcs": 6,
-      "unreachable_types": 31,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/client/transport/xmlrpc",
-      "unreachable_funcs": 6,
-      "unreachable_types": 21,
+      "unreachable_types": 23,
       "unreachable_other": 0
     },
     {
@@ -189,40 +39,22 @@
       "unreachable_other": 1
     },
     {
-      "package": "internal/north/matter/secure/spake2",
+      "package": "internal/north/matter/tlv",
       "unreachable_funcs": 6,
-      "unreachable_types": 14,
-      "unreachable_other": 10
+      "unreachable_types": 11,
+      "unreachable_other": 26
     },
     {
-      "package": "internal/configui",
-      "unreachable_funcs": 5,
-      "unreachable_types": 17,
-      "unreachable_other": 0
+      "package": "pkg/hmerr",
+      "unreachable_funcs": 6,
+      "unreachable_types": 5,
+      "unreachable_other": 24
     },
     {
-      "package": "internal/north/matter/schema",
-      "unreachable_funcs": 5,
-      "unreachable_types": 0,
-      "unreachable_other": 8
-    },
-    {
-      "package": "internal/north/webhook",
-      "unreachable_funcs": 5,
-      "unreachable_types": 3,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/auth/oidc",
+      "package": "internal/central/adapter",
       "unreachable_funcs": 4,
-      "unreachable_types": 17,
-      "unreachable_other": 2
-    },
-    {
-      "package": "internal/central/registry",
-      "unreachable_funcs": 4,
-      "unreachable_types": 15,
-      "unreachable_other": 0
+      "unreachable_types": 88,
+      "unreachable_other": 46
     },
     {
       "package": "internal/north/matter/commissioning",
@@ -231,10 +63,22 @@
       "unreachable_other": 9
     },
     {
-      "package": "internal/north/rest",
+      "package": "internal/north/matter/secure/spake2",
       "unreachable_funcs": 4,
-      "unreachable_types": 4,
+      "unreachable_types": 14,
+      "unreachable_other": 10
+    },
+    {
+      "package": "internal/north/webhook",
+      "unreachable_funcs": 4,
+      "unreachable_types": 3,
       "unreachable_other": 0
+    },
+    {
+      "package": "internal/payload",
+      "unreachable_funcs": 4,
+      "unreachable_types": 232,
+      "unreachable_other": 6
     },
     {
       "package": "internal/reqctx",
@@ -243,100 +87,58 @@
       "unreachable_other": 0
     },
     {
-      "package": "internal/central",
-      "unreachable_funcs": 3,
-      "unreachable_types": 21,
+      "package": "internal/audit",
+      "unreachable_funcs": 2,
+      "unreachable_types": 22,
       "unreachable_other": 2
+    },
+    {
+      "package": "internal/auth",
+      "unreachable_funcs": 2,
+      "unreachable_types": 24,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/client",
+      "unreachable_funcs": 2,
+      "unreachable_types": 31,
+      "unreachable_other": 8
+    },
+    {
+      "package": "internal/client/transport/binrpc",
+      "unreachable_funcs": 2,
+      "unreachable_types": 11,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/client/transport/xmlrpc",
+      "unreachable_funcs": 2,
+      "unreachable_types": 21,
+      "unreachable_other": 0
     },
     {
       "package": "internal/clock",
-      "unreachable_funcs": 3,
+      "unreachable_funcs": 2,
       "unreachable_types": 5,
       "unreachable_other": 0
     },
     {
-      "package": "internal/health",
-      "unreachable_funcs": 3,
-      "unreachable_types": 17,
-      "unreachable_other": 0
+      "package": "internal/model/device",
+      "unreachable_funcs": 2,
+      "unreachable_types": 45,
+      "unreachable_other": 12
     },
     {
-      "package": "internal/north/discovery/mdns",
-      "unreachable_funcs": 3,
-      "unreachable_types": 6,
-      "unreachable_other": 2
-    },
-    {
-      "package": "internal/north/matter/mdns",
-      "unreachable_funcs": 3,
-      "unreachable_types": 12,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/north/matter/secure/channel",
-      "unreachable_funcs": 3,
+      "package": "internal/model/event",
+      "unreachable_funcs": 2,
       "unreachable_types": 5,
-      "unreachable_other": 10
-    },
-    {
-      "package": "internal/north/matter/secure/setup",
-      "unreachable_funcs": 3,
-      "unreachable_types": 3,
       "unreachable_other": 0
     },
     {
-      "package": "internal/store/devicedetails",
-      "unreachable_funcs": 3,
-      "unreachable_types": 2,
-      "unreachable_other": 0
-    },
-    {
-      "package": "pkg/hmenum",
-      "unreachable_funcs": 3,
-      "unreachable_types": 97,
-      "unreachable_other": 36
-    },
-    {
-      "package": "pkg/hmevent",
-      "unreachable_funcs": 3,
-      "unreachable_types": 44,
-      "unreachable_other": 0
-    },
-    {
-      "package": "pkg/interfaces",
-      "unreachable_funcs": 3,
-      "unreachable_types": 80,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/central/rpcserver",
+      "package": "internal/model/hub",
       "unreachable_funcs": 2,
-      "unreachable_types": 10,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/history",
-      "unreachable_funcs": 2,
-      "unreachable_types": 12,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/model/custom/cdpkind",
-      "unreachable_funcs": 2,
-      "unreachable_types": 0,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/model/custom/light",
-      "unreachable_funcs": 2,
-      "unreachable_types": 20,
-      "unreachable_other": 22
-    },
-    {
-      "package": "internal/model/device/definitionexport",
-      "unreachable_funcs": 2,
-      "unreachable_types": 6,
-      "unreachable_other": 2
+      "unreachable_types": 41,
+      "unreachable_other": 30
     },
     {
       "package": "internal/model/optimistic",
@@ -345,34 +147,16 @@
       "unreachable_other": 0
     },
     {
-      "package": "internal/north/matter/bootid",
+      "package": "internal/north/discovery/mdns",
+      "unreachable_funcs": 2,
+      "unreachable_types": 6,
+      "unreachable_other": 2
+    },
+    {
+      "package": "internal/north/matter/schema",
       "unreachable_funcs": 2,
       "unreachable_types": 0,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "unreachable_funcs": 2,
-      "unreachable_types": 13,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/north/matter/secure/attestation",
-      "unreachable_funcs": 2,
-      "unreachable_types": 2,
-      "unreachable_other": 16
-    },
-    {
-      "package": "internal/north/matter/secure/mattercert",
-      "unreachable_funcs": 2,
-      "unreachable_types": 11,
-      "unreachable_other": 16
-    },
-    {
-      "package": "internal/north/matter/secure/sigma",
-      "unreachable_funcs": 2,
-      "unreachable_types": 36,
-      "unreachable_other": 12
+      "unreachable_other": 8
     },
     {
       "package": "internal/north/matter/store",
@@ -381,22 +165,10 @@
       "unreachable_other": 18
     },
     {
-      "package": "internal/north/matter/transport/mrp",
+      "package": "internal/routingkey",
       "unreachable_funcs": 2,
-      "unreachable_types": 13,
-      "unreachable_other": 4
-    },
-    {
-      "package": "internal/north/ui",
-      "unreachable_funcs": 2,
-      "unreachable_types": 2,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/orderedjson",
-      "unreachable_funcs": 2,
-      "unreachable_types": 5,
-      "unreachable_other": 0
+      "unreachable_types": 0,
+      "unreachable_other": 2
     },
     {
       "package": "pkg/hmapi",
@@ -405,93 +177,15 @@
       "unreachable_other": 14
     },
     {
-      "package": "internal/build",
-      "unreachable_funcs": 1,
-      "unreachable_types": 0,
-      "unreachable_other": 8
-    },
-    {
-      "package": "internal/central/cachereset",
-      "unreachable_funcs": 1,
-      "unreachable_types": 20,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/client/transport/jsonrpc",
-      "unreachable_funcs": 1,
-      "unreachable_types": 11,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/i18n",
-      "unreachable_funcs": 1,
-      "unreachable_types": 3,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/model/custom/cover",
-      "unreachable_funcs": 1,
-      "unreachable_types": 18,
-      "unreachable_other": 18
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "unreachable_funcs": 1,
-      "unreachable_types": 0,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/north/bridge",
-      "unreachable_funcs": 1,
-      "unreachable_types": 7,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/north/discovery",
-      "unreachable_funcs": 1,
-      "unreachable_types": 1,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/north/discovery/ssdp",
-      "unreachable_funcs": 1,
-      "unreachable_types": 3,
+      "package": "pkg/hmevent",
+      "unreachable_funcs": 2,
+      "unreachable_types": 44,
       "unreachable_other": 0
     },
     {
       "package": "internal/north/matter/parity",
       "unreachable_funcs": 1,
       "unreachable_types": 0,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/scheduler",
-      "unreachable_funcs": 1,
-      "unreachable_types": 5,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/store/masterprofile",
-      "unreachable_funcs": 1,
-      "unreachable_types": 4,
-      "unreachable_other": 2
-    },
-    {
-      "package": "internal/store/patches",
-      "unreachable_funcs": 1,
-      "unreachable_types": 3,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/store/session",
-      "unreachable_funcs": 1,
-      "unreachable_types": 15,
-      "unreachable_other": 0
-    },
-    {
-      "package": "pkg/hmui",
-      "unreachable_funcs": 1,
-      "unreachable_types": 2,
       "unreachable_other": 0
     },
     {
@@ -507,9 +201,75 @@
       "unreachable_other": 0
     },
     {
+      "package": "internal/auth/oidc",
+      "unreachable_funcs": 0,
+      "unreachable_types": 17,
+      "unreachable_other": 2
+    },
+    {
+      "package": "internal/build",
+      "unreachable_funcs": 0,
+      "unreachable_types": 0,
+      "unreachable_other": 8
+    },
+    {
+      "package": "internal/ccudata",
+      "unreachable_funcs": 0,
+      "unreachable_types": 31,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/central",
+      "unreachable_funcs": 0,
+      "unreachable_types": 21,
+      "unreachable_other": 2
+    },
+    {
+      "package": "internal/central/cachereset",
+      "unreachable_funcs": 0,
+      "unreachable_types": 20,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/central/coordinators",
+      "unreachable_funcs": 0,
+      "unreachable_types": 123,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/central/registry",
+      "unreachable_funcs": 0,
+      "unreachable_types": 15,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/central/rpcserver",
+      "unreachable_funcs": 0,
+      "unreachable_types": 10,
+      "unreachable_other": 4
+    },
+    {
       "package": "internal/client/observer",
       "unreachable_funcs": 0,
       "unreachable_types": 3,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "unreachable_funcs": 0,
+      "unreachable_types": 11,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/configstore",
+      "unreachable_funcs": 0,
+      "unreachable_types": 17,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/configui",
+      "unreachable_funcs": 0,
+      "unreachable_types": 17,
       "unreachable_other": 0
     },
     {
@@ -519,16 +279,70 @@
       "unreachable_other": 4
     },
     {
+      "package": "internal/health",
+      "unreachable_funcs": 0,
+      "unreachable_types": 17,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/history",
+      "unreachable_funcs": 0,
+      "unreachable_types": 12,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/i18n",
+      "unreachable_funcs": 0,
+      "unreachable_types": 3,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/metrics",
+      "unreachable_funcs": 0,
+      "unreachable_types": 60,
+      "unreachable_other": 2
+    },
+    {
+      "package": "internal/metrics/wiring",
+      "unreachable_funcs": 0,
+      "unreachable_types": 7,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/model/calculated",
+      "unreachable_funcs": 0,
+      "unreachable_types": 12,
+      "unreachable_other": 0
+    },
+    {
       "package": "internal/model/combined",
       "unreachable_funcs": 0,
       "unreachable_types": 9,
       "unreachable_other": 0
     },
     {
+      "package": "internal/model/custom",
+      "unreachable_funcs": 0,
+      "unreachable_types": 54,
+      "unreachable_other": 10
+    },
+    {
       "package": "internal/model/custom/climate",
       "unreachable_funcs": 0,
       "unreachable_types": 8,
       "unreachable_other": 18
+    },
+    {
+      "package": "internal/model/custom/cover",
+      "unreachable_funcs": 0,
+      "unreachable_types": 18,
+      "unreachable_other": 18
+    },
+    {
+      "package": "internal/model/custom/light",
+      "unreachable_funcs": 0,
+      "unreachable_types": 20,
+      "unreachable_other": 22
     },
     {
       "package": "internal/model/custom/lock",
@@ -555,15 +369,69 @@
       "unreachable_other": 0
     },
     {
+      "package": "internal/model/device/definitionexport",
+      "unreachable_funcs": 0,
+      "unreachable_types": 6,
+      "unreachable_other": 2
+    },
+    {
+      "package": "internal/model/naming",
+      "unreachable_funcs": 0,
+      "unreachable_types": 4,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/north/bridge",
+      "unreachable_funcs": 0,
+      "unreachable_types": 7,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/north/discovery",
+      "unreachable_funcs": 0,
+      "unreachable_types": 1,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/north/discovery/ssdp",
+      "unreachable_funcs": 0,
+      "unreachable_types": 3,
+      "unreachable_other": 0
+    },
+    {
       "package": "internal/north/filter",
       "unreachable_funcs": 0,
       "unreachable_types": 1,
       "unreachable_other": 0
     },
     {
+      "package": "internal/north/matter/bridge",
+      "unreachable_funcs": 0,
+      "unreachable_types": 56,
+      "unreachable_other": 38
+    },
+    {
+      "package": "internal/north/matter/endpoint",
+      "unreachable_funcs": 0,
+      "unreachable_types": 13,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/north/matter/im",
+      "unreachable_funcs": 0,
+      "unreachable_types": 74,
+      "unreachable_other": 14
+    },
+    {
       "package": "internal/north/matter/im/subscription",
       "unreachable_funcs": 0,
       "unreachable_types": 5,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/north/matter/mdns",
+      "unreachable_funcs": 0,
+      "unreachable_types": 12,
       "unreachable_other": 4
     },
     {
@@ -573,16 +441,52 @@
       "unreachable_other": 10
     },
     {
+      "package": "internal/north/matter/secure/attestation",
+      "unreachable_funcs": 0,
+      "unreachable_types": 2,
+      "unreachable_other": 16
+    },
+    {
+      "package": "internal/north/matter/secure/channel",
+      "unreachable_funcs": 0,
+      "unreachable_types": 5,
+      "unreachable_other": 10
+    },
+    {
+      "package": "internal/north/matter/secure/mattercert",
+      "unreachable_funcs": 0,
+      "unreachable_types": 11,
+      "unreachable_other": 16
+    },
+    {
       "package": "internal/north/matter/secure/operational",
       "unreachable_funcs": 0,
       "unreachable_types": 4,
       "unreachable_other": 4
     },
     {
+      "package": "internal/north/matter/secure/setup",
+      "unreachable_funcs": 0,
+      "unreachable_types": 3,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/north/matter/secure/sigma",
+      "unreachable_funcs": 0,
+      "unreachable_types": 36,
+      "unreachable_other": 12
+    },
+    {
       "package": "internal/north/matter/transport/message",
       "unreachable_funcs": 0,
       "unreachable_types": 6,
       "unreachable_other": 12
+    },
+    {
+      "package": "internal/north/matter/transport/mrp",
+      "unreachable_funcs": 0,
+      "unreachable_types": 13,
+      "unreachable_other": 4
     },
     {
       "package": "internal/north/matter/transport/udp",
@@ -597,10 +501,34 @@
       "unreachable_other": 0
     },
     {
+      "package": "internal/north/mqtt",
+      "unreachable_funcs": 0,
+      "unreachable_types": 76,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/north/rest",
+      "unreachable_funcs": 0,
+      "unreachable_types": 4,
+      "unreachable_other": 0
+    },
+    {
       "package": "internal/north/rest/problem",
       "unreachable_funcs": 0,
       "unreachable_types": 3,
       "unreachable_other": 4
+    },
+    {
+      "package": "internal/north/ui",
+      "unreachable_funcs": 0,
+      "unreachable_types": 2,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/orderedjson",
+      "unreachable_funcs": 0,
+      "unreachable_types": 5,
+      "unreachable_other": 0
     },
     {
       "package": "internal/restapi",
@@ -609,10 +537,64 @@
       "unreachable_other": 0
     },
     {
+      "package": "internal/scheduler",
+      "unreachable_funcs": 0,
+      "unreachable_types": 5,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/store/devicedetails",
+      "unreachable_funcs": 0,
+      "unreachable_types": 2,
+      "unreachable_other": 0
+    },
+    {
       "package": "internal/store/linkprofile",
       "unreachable_funcs": 0,
       "unreachable_types": 1,
       "unreachable_other": 1
+    },
+    {
+      "package": "internal/store/masterprofile",
+      "unreachable_funcs": 0,
+      "unreachable_types": 4,
+      "unreachable_other": 2
+    },
+    {
+      "package": "internal/store/patches",
+      "unreachable_funcs": 0,
+      "unreachable_types": 3,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/store/session",
+      "unreachable_funcs": 0,
+      "unreachable_types": 15,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/store/sqlite",
+      "unreachable_funcs": 0,
+      "unreachable_types": 64,
+      "unreachable_other": 22
+    },
+    {
+      "package": "pkg/hmenum",
+      "unreachable_funcs": 0,
+      "unreachable_types": 96,
+      "unreachable_other": 36
+    },
+    {
+      "package": "pkg/hmui",
+      "unreachable_funcs": 0,
+      "unreachable_types": 2,
+      "unreachable_other": 0
+    },
+    {
+      "package": "pkg/interfaces",
+      "unreachable_funcs": 0,
+      "unreachable_types": 80,
+      "unreachable_other": 0
     }
   ],
   "unreachable": [
@@ -664,13 +646,6 @@
       "file": "internal/audit/audit.go",
       "line": 135,
       "kind": "type"
-    },
-    {
-      "package": "internal/audit",
-      "identifier": "BuildChangeDiff",
-      "file": "internal/audit/change_log.go",
-      "line": 177,
-      "kind": "func"
     },
     {
       "package": "internal/audit",
@@ -758,41 +733,6 @@
     },
     {
       "package": "internal/audit",
-      "identifier": "NewBuffer",
-      "file": "internal/audit/audit.go",
-      "line": 145,
-      "kind": "func"
-    },
-    {
-      "package": "internal/audit",
-      "identifier": "NewChangeLog",
-      "file": "internal/audit/change_log.go",
-      "line": 53,
-      "kind": "func"
-    },
-    {
-      "package": "internal/audit",
-      "identifier": "NewDurableSink",
-      "file": "internal/audit/persist.go",
-      "line": 167,
-      "kind": "func"
-    },
-    {
-      "package": "internal/audit",
-      "identifier": "NewPersistedRecorder",
-      "file": "internal/audit/persist.go",
-      "line": 40,
-      "kind": "func"
-    },
-    {
-      "package": "internal/audit",
-      "identifier": "NoopRecorder",
-      "file": "internal/audit/audit.go",
-      "line": 202,
-      "kind": "func"
-    },
-    {
-      "package": "internal/audit",
       "identifier": "ParamChange",
       "file": "internal/audit/change_log.go",
       "line": 32,
@@ -856,13 +796,6 @@
     },
     {
       "package": "internal/auth",
-      "identifier": "CSRFMiddleware",
-      "file": "internal/auth/csrf.go",
-      "line": 52,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
       "identifier": "CSRFToken",
       "file": "internal/auth/csrf.go",
       "line": 28,
@@ -891,13 +824,6 @@
     },
     {
       "package": "internal/auth",
-      "identifier": "ClearSessionCookie",
-      "file": "internal/auth/session.go",
-      "line": 268,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
       "identifier": "ErrForbidden",
       "file": "internal/auth/auth.go",
       "line": 55,
@@ -923,13 +849,6 @@
       "file": "internal/auth/auth.go",
       "line": 52,
       "kind": "var"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "HashPassword",
-      "file": "internal/auth/auth.go",
-      "line": 242,
-      "kind": "func"
     },
     {
       "package": "internal/auth",
@@ -937,20 +856,6 @@
       "file": "internal/auth/auth.go",
       "line": 43,
       "kind": "type"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "IdentityFrom",
-      "file": "internal/auth/middleware.go",
-      "line": 104,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "IngressPassthrough",
-      "file": "internal/auth/ingress.go",
-      "line": 52,
-      "kind": "func"
     },
     {
       "package": "internal/auth",
@@ -982,41 +887,6 @@
     },
     {
       "package": "internal/auth",
-      "identifier": "NewMemoryTokenStore",
-      "file": "internal/auth/auth.go",
-      "line": 88,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "NewMemoryUserStore",
-      "file": "internal/auth/auth.go",
-      "line": 206,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "NewMiddleware",
-      "file": "internal/auth/middleware.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "NewPersistentSessionStore",
-      "file": "internal/auth/session.go",
-      "line": 82,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "NewSessionStore",
-      "file": "internal/auth/session.go",
-      "line": 72,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth",
       "identifier": "Role",
       "file": "internal/auth/auth.go",
       "line": 32,
@@ -1056,13 +926,6 @@
       "file": "internal/auth/session.go",
       "line": 23,
       "kind": "type"
-    },
-    {
-      "package": "internal/auth",
-      "identifier": "SessionMiddleware",
-      "file": "internal/auth/session.go",
-      "line": 232,
-      "kind": "func"
     },
     {
       "package": "internal/auth",
@@ -1142,13 +1005,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/auth",
-      "identifier": "WriteSessionCookie",
-      "file": "internal/auth/session.go",
-      "line": 253,
-      "kind": "func"
-    },
-    {
       "package": "internal/auth/ccuauth",
       "identifier": "Authenticator",
       "file": "internal/auth/ccuauth/store.go",
@@ -1189,13 +1045,6 @@
       "file": "internal/auth/oidc/client.go",
       "line": 23,
       "kind": "type"
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "Discover",
-      "file": "internal/auth/oidc/discovery.go",
-      "line": 27,
-      "kind": "func"
     },
     {
       "package": "internal/auth/oidc",
@@ -1262,20 +1111,6 @@
     },
     {
       "package": "internal/auth/oidc",
-      "identifier": "New",
-      "file": "internal/auth/oidc/client.go",
-      "line": 43,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "NewPKCEPair",
-      "file": "internal/auth/oidc/pkce.go",
-      "line": 23,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth/oidc",
       "identifier": "PKCEPair",
       "file": "internal/auth/oidc/pkce.go",
       "line": 15,
@@ -1315,13 +1150,6 @@
       "file": "internal/auth/oidc/client.go",
       "line": 108,
       "kind": "type"
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "Verify",
-      "file": "internal/auth/oidc/jwks.go",
-      "line": 129,
-      "kind": "func"
     },
     {
       "package": "internal/build",
@@ -1364,13 +1192,6 @@
       "file": "internal/build/version.go",
       "line": 16,
       "kind": "var"
-    },
-    {
-      "package": "internal/build",
-      "identifier": "IsAddon",
-      "file": "internal/build/version.go",
-      "line": 28,
-      "kind": "func"
     },
     {
       "package": "internal/build",
@@ -1451,20 +1272,6 @@
     },
     {
       "package": "internal/ccudata",
-      "identifier": "Empty",
-      "file": "internal/ccudata/translations.go",
-      "line": 79,
-      "kind": "func"
-    },
-    {
-      "package": "internal/ccudata",
-      "identifier": "EmptyEasymode",
-      "file": "internal/ccudata/easymode.go",
-      "line": 237,
-      "kind": "func"
-    },
-    {
-      "package": "internal/ccudata",
       "identifier": "ErrNoArchive",
       "file": "internal/ccudata/translations.go",
       "line": 47,
@@ -1490,34 +1297,6 @@
       "file": "internal/ccudata/easymode.go",
       "line": 177,
       "kind": "var"
-    },
-    {
-      "package": "internal/ccudata",
-      "identifier": "LoadEasymodeEmbedded",
-      "file": "internal/ccudata/embed.go",
-      "line": 65,
-      "kind": "func"
-    },
-    {
-      "package": "internal/ccudata",
-      "identifier": "LoadProfilesEmbedded",
-      "file": "internal/ccudata/profiles.go",
-      "line": 109,
-      "kind": "func"
-    },
-    {
-      "package": "internal/ccudata",
-      "identifier": "LoadTranslations",
-      "file": "internal/ccudata/translations.go",
-      "line": 52,
-      "kind": "func"
-    },
-    {
-      "package": "internal/ccudata",
-      "identifier": "LoadTranslationsEmbedded",
-      "file": "internal/ccudata/embed.go",
-      "line": 48,
-      "kind": "func"
     },
     {
       "package": "internal/ccudata",
@@ -1752,31 +1531,10 @@
     },
     {
       "package": "internal/central",
-      "identifier": "New",
-      "file": "internal/central/central.go",
-      "line": 205,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central",
-      "identifier": "NewRegistry",
-      "file": "internal/central/central_registry.go",
-      "line": 26,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central",
       "identifier": "QueryFacade",
       "file": "internal/central/queryfacade.go",
       "line": 54,
       "kind": "type"
-    },
-    {
-      "package": "internal/central",
-      "identifier": "RegisterStandardJobs",
-      "file": "internal/central/jobs.go",
-      "line": 300,
-      "kind": "func"
     },
     {
       "package": "internal/central",
@@ -1920,13 +1678,6 @@
     },
     {
       "package": "internal/central/adapter",
-      "identifier": "BridgeCombinedDataPoint",
-      "file": "internal/central/adapter/combined_bridge.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
       "identifier": "BringUpManager",
       "file": "internal/central/adapter/central_bringup.go",
       "line": 197,
@@ -1980,13 +1731,6 @@
       "file": "internal/central/adapter/central_links.go",
       "line": 26,
       "kind": "type"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "ClassifyLinkParameter",
-      "file": "internal/central/adapter/link_param_metadata.go",
-      "line": 184,
-      "kind": "func"
     },
     {
       "package": "internal/central/adapter",
@@ -2424,13 +2168,6 @@
     },
     {
       "package": "internal/central/adapter",
-      "identifier": "GetTimePresets",
-      "file": "internal/central/adapter/link_param_metadata.go",
-      "line": 276,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
       "identifier": "HTTPBackupRestorer",
       "file": "internal/central/adapter/backup_restorer.go",
       "line": 41,
@@ -2491,13 +2228,6 @@
       "file": "internal/central/adapter/incidents.go",
       "line": 30,
       "kind": "type"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "InitInterfaceID",
-      "file": "internal/central/adapter/interface_id.go",
-      "line": 54,
-      "kind": "func"
     },
     {
       "package": "internal/central/adapter",
@@ -2634,286 +2364,6 @@
     },
     {
       "package": "internal/central/adapter",
-      "identifier": "NewBackupAdapter",
-      "file": "internal/central/adapter/stubs.go",
-      "line": 69,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewCCUAuthDomain",
-      "file": "internal/central/adapter/ccu_auth.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewCallbackHandlers",
-      "file": "internal/central/adapter/callback_handlers.go",
-      "line": 79,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewCentralLinksDomain",
-      "file": "internal/central/adapter/central_links.go",
-      "line": 32,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewConfigAdapter",
-      "file": "internal/central/adapter/config.go",
-      "line": 26,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewCustomDPDispatcher",
-      "file": "internal/central/adapter/custom_dp_dispatcher.go",
-      "line": 60,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewDataPointWriterAdapter",
-      "file": "internal/central/adapter/devices.go",
-      "line": 140,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewDefinitionExportDomain",
-      "file": "internal/central/adapter/definition_export_service.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewDeviceAdminDomain",
-      "file": "internal/central/adapter/device_admin.go",
-      "line": 27,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewDevicePipeline",
-      "file": "internal/central/adapter/device_pipeline.go",
-      "line": 133,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewDeviceReloaderAdapter",
-      "file": "internal/central/adapter/device_reloader.go",
-      "line": 36,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewDevicesAdapter",
-      "file": "internal/central/adapter/devices.go",
-      "line": 26,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewEventBridge",
-      "file": "internal/central/adapter/eventbridge.go",
-      "line": 98,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewFilesystemBackupStorage",
-      "file": "internal/central/adapter/backup_storage.go",
-      "line": 65,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewFirmwareDomain",
-      "file": "internal/central/adapter/firmware_domain.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewHealthAdapter",
-      "file": "internal/central/adapter/config.go",
-      "line": 85,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewHubAdapter",
-      "file": "internal/central/adapter/hub.go",
-      "line": 19,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewHubMQTTPublisher",
-      "file": "internal/central/adapter/hub_mqtt_publisher.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewIncidentsStoreReader",
-      "file": "internal/central/adapter/incidents.go",
-      "line": 39,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewInterfacesAdapter",
-      "file": "internal/central/adapter/interfaces.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewIntrospectAdapter",
-      "file": "internal/central/adapter/diagnostics_introspect.go",
-      "line": 24,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewJSONRPCConnectivityProbe",
-      "file": "internal/central/adapter/connectivity_probe.go",
-      "line": 35,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewLinkProfilesAdapter",
-      "file": "internal/central/adapter/link_profiles_adapter.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewLinksDomain",
-      "file": "internal/central/adapter/links.go",
-      "line": 34,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewMQTTCommandSink",
-      "file": "internal/central/adapter/mqtt_sink.go",
-      "line": 36,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewMqttParameterLabelAdapter",
-      "file": "internal/central/adapter/labels.go",
-      "line": 90,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewParameterDeterminerAdapter",
-      "file": "internal/central/adapter/parameter_determiner.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewParameterLabelAdapter",
-      "file": "internal/central/adapter/labels.go",
-      "line": 21,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewParamsetsDomain",
-      "file": "internal/central/adapter/paramsets.go",
-      "line": 60,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewPublishingIncidentRecorder",
-      "file": "internal/central/adapter/incident_publisher.go",
-      "line": 34,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewRPCRecorderAdapter",
-      "file": "internal/central/adapter/rpc_recorder.go",
-      "line": 60,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewRSSIInfoDomain",
-      "file": "internal/central/adapter/rssi_domain.go",
-      "line": 23,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewRecoveryReconnector",
-      "file": "internal/central/adapter/reconnector.go",
-      "line": 28,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewRoomFunctionAdminDomain",
-      "file": "internal/central/adapter/room_function_admin.go",
-      "line": 24,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewScheduleQueryAdapter",
-      "file": "internal/central/adapter/schedule_query_adapter.go",
-      "line": 27,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewSchedulesDomain",
-      "file": "internal/central/adapter/schedules.go",
-      "line": 52,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewSysvarFetchAdapter",
-      "file": "internal/central/adapter/hub_sysvar_fetch.go",
-      "line": 38,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewUISchemaAdapter",
-      "file": "internal/central/adapter/uischema_adapter.go",
-      "line": 47,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewUnobservedSweep",
-      "file": "internal/central/adapter/unobserved_sweep.go",
-      "line": 35,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "ParamValueFromWire",
-      "file": "internal/central/adapter/wire_value.go",
-      "line": 16,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
       "identifier": "ParameterDeterminerAdapter",
       "file": "internal/central/adapter/parameter_determiner.go",
       "line": 36,
@@ -3009,20 +2459,6 @@
       "file": "internal/central/adapter/backup_restorer.go",
       "line": 24,
       "kind": "type"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "StartUnobservedSweepLoop",
-      "file": "internal/central/adapter/unobserved_sweep_job.go",
-      "line": 45,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "StripInstance",
-      "file": "internal/central/adapter/interface_id.go",
-      "line": 65,
-      "kind": "func"
     },
     {
       "package": "internal/central/adapter",
@@ -3131,34 +2567,6 @@
     },
     {
       "package": "internal/central/adapter",
-      "identifier": "WaitForCCUReady",
-      "file": "internal/central/adapter/ccu_readiness.go",
-      "line": 63,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireBackupAndDownload",
-      "file": "internal/central/adapter/hub_wiring.go",
-      "line": 1690,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireCentrals",
-      "file": "internal/central/adapter/ccu_wiring.go",
-      "line": 165,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireClimateLinkPeerRefresh",
-      "file": "internal/central/adapter/climate_link_peer_refresh.go",
-      "line": 44,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
       "identifier": "WireDeps",
       "file": "internal/central/adapter/ccu_wiring.go",
       "line": 61,
@@ -3170,90 +2578,6 @@
       "file": "internal/central/adapter/ccu_wiring.go",
       "line": 61,
       "kind": "type"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireDescriptorPersistence",
-      "file": "internal/central/adapter/descriptor_persistence.go",
-      "line": 201,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireDeviceAvailability",
-      "file": "internal/central/adapter/device_availability.go",
-      "line": 32,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireHealth",
-      "file": "internal/central/adapter/health_wiring.go",
-      "line": 37,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireHub",
-      "file": "internal/central/adapter/hub_wiring.go",
-      "line": 113,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireInstallModeDPs",
-      "file": "internal/central/adapter/install_mode.go",
-      "line": 64,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireInterfaceID",
-      "file": "internal/central/adapter/interface_id.go",
-      "line": 27,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireLinkCoordinator",
-      "file": "internal/central/adapter/link_resolver.go",
-      "line": 138,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WirePingPongBus",
-      "file": "internal/central/adapter/pingpong_wiring.go",
-      "line": 32,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireSysvarCreator",
-      "file": "internal/central/adapter/hub_wiring.go",
-      "line": 1670,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireValueSourceLifecycle",
-      "file": "internal/central/adapter/values_source_lifecycle.go",
-      "line": 49,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireValuesCacheEviction",
-      "file": "internal/central/adapter/values_cache_evict.go",
-      "line": 30,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "WireValuesCacheFlusher",
-      "file": "internal/central/adapter/values_cache_flush.go",
-      "line": 208,
-      "kind": "func"
     },
     {
       "package": "internal/central/cachereset",
@@ -3296,13 +2620,6 @@
       "file": "internal/central/cachereset/cachereset.go",
       "line": 108,
       "kind": "type"
-    },
-    {
-      "package": "internal/central/cachereset",
-      "identifier": "New",
-      "file": "internal/central/cachereset/cachereset.go",
-      "line": 149,
-      "kind": "func"
     },
     {
       "package": "internal/central/cachereset",
@@ -3957,62 +3274,6 @@
     },
     {
       "package": "internal/central/coordinators",
-      "identifier": "NewCacheCoordinator",
-      "file": "internal/central/coordinators/cache.go",
-      "line": 145,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "NewClientCoordinator",
-      "file": "internal/central/coordinators/client.go",
-      "line": 70,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "NewConfigurationCoordinator",
-      "file": "internal/central/coordinators/configuration.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "NewConnectionRecoveryCoordinator",
-      "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 254,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "NewDeviceCoordinator",
-      "file": "internal/central/coordinators/device.go",
-      "line": 60,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "NewEventCoordinator",
-      "file": "internal/central/coordinators/event.go",
-      "line": 57,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "NewHubCoordinator",
-      "file": "internal/central/coordinators/hub.go",
-      "line": 78,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "NewLinkCoordinator",
-      "file": "internal/central/coordinators/link.go",
-      "line": 78,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
       "identifier": "ParamsetConsistencyChecker",
       "file": "internal/central/coordinators/device.go",
       "line": 803,
@@ -4384,13 +3645,6 @@
     },
     {
       "package": "internal/central/events",
-      "identifier": "NewBus",
-      "file": "internal/central/events/bus.go",
-      "line": 161,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/events",
       "identifier": "Priority",
       "file": "internal/central/events/bus.go",
       "line": 34,
@@ -4559,34 +3813,6 @@
     },
     {
       "package": "internal/central/registry",
-      "identifier": "NewDeviceDescriptionRegistry",
-      "file": "internal/central/registry/device_description.go",
-      "line": 43,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "NewDeviceRegistry",
-      "file": "internal/central/registry/device.go",
-      "line": 43,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "NewModelRegistry",
-      "file": "internal/central/registry/model_registry.go",
-      "line": 23,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/registry",
-      "identifier": "NewParamsetRegistryWithPatches",
-      "file": "internal/central/registry/paramset.go",
-      "line": 82,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/registry",
       "identifier": "ParamsetKey",
       "file": "internal/central/registry/paramset.go",
       "line": 16,
@@ -4682,20 +3908,6 @@
       "file": "internal/central/rpcserver/handlers.go",
       "line": 20,
       "kind": "type"
-    },
-    {
-      "package": "internal/central/rpcserver",
-      "identifier": "NewPortRange",
-      "file": "internal/central/rpcserver/portbind.go",
-      "line": 26,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/rpcserver",
-      "identifier": "NewXMLRPCServer",
-      "file": "internal/central/rpcserver/xmlrpc_server.go",
-      "line": 87,
-      "kind": "func"
     },
     {
       "package": "internal/central/rpcserver",
@@ -4930,41 +4142,6 @@
     },
     {
       "package": "internal/client",
-      "identifier": "New",
-      "file": "internal/client/interface_client.go",
-      "line": 250,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client",
-      "identifier": "NewBackendCaller",
-      "file": "internal/client/backend_caller.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client",
-      "identifier": "NewClientStateMachine",
-      "file": "internal/client/state_machine.go",
-      "line": 95,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client",
-      "identifier": "NewMetricsClientProvider",
-      "file": "internal/client/interface_client_metrics.go",
-      "line": 82,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client",
-      "identifier": "NewValueWriter",
-      "file": "internal/client/value_writer.go",
-      "line": 106,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client",
       "identifier": "OrderedCaller",
       "file": "internal/client/interface_client.go",
       "line": 56,
@@ -4997,13 +4174,6 @@
       "file": "internal/client/interface_client_orchestration.go",
       "line": 867,
       "kind": "type"
-    },
-    {
-      "package": "internal/client",
-      "identifier": "RPCServerTypeForInterface",
-      "file": "internal/client/interface_client.go",
-      "line": 992,
-      "kind": "func"
     },
     {
       "package": "internal/client",
@@ -5049,13 +4219,6 @@
     },
     {
       "package": "internal/client",
-      "identifier": "WaitForStateChangeOrTimeout",
-      "file": "internal/client/state_change.go",
-      "line": 50,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client",
       "identifier": "WriteOptions",
       "file": "internal/client/write_options.go",
       "line": 36,
@@ -5123,13 +4286,6 @@
       "file": "internal/client/backends/capabilities.go",
       "line": 35,
       "kind": "type"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "CapabilityFor",
-      "file": "internal/client/backends/capabilities.go",
-      "line": 147,
-      "kind": "func"
     },
     {
       "package": "internal/client/backends",
@@ -5259,13 +4415,6 @@
     },
     {
       "package": "internal/client/backends",
-      "identifier": "FactoryWithKind",
-      "file": "internal/client/backends/factory.go",
-      "line": 31,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
       "identifier": "HomegearBackend",
       "file": "internal/client/backends/homegear.go",
       "line": 31,
@@ -5287,24 +4436,10 @@
     },
     {
       "package": "internal/client/backends",
-      "identifier": "IsCombinedParameter",
-      "file": "internal/client/backends/combined.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
       "identifier": "Kind",
       "file": "internal/client/backends/capabilities.go",
       "line": 9,
       "kind": "type"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "KindFor",
-      "file": "internal/client/backends/capabilities.go",
-      "line": 272,
-      "kind": "func"
     },
     {
       "package": "internal/client/backends",
@@ -5357,41 +4492,6 @@
     },
     {
       "package": "internal/client/backends",
-      "identifier": "MaybeInitialize",
-      "file": "internal/client/backends/factory.go",
-      "line": 58,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "NewCcuBackendForInterface",
-      "file": "internal/client/backends/ccu.go",
-      "line": 80,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "NewCuxdBackend",
-      "file": "internal/client/backends/cuxd.go",
-      "line": 21,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "NewHomegearBackend",
-      "file": "internal/client/backends/homegear.go",
-      "line": 39,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "NewMasterPoller",
-      "file": "internal/client/backends/master_poll.go",
-      "line": 65,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
       "identifier": "Operations",
       "file": "internal/client/backends/backend.go",
       "line": 345,
@@ -5417,20 +4517,6 @@
       "file": "internal/client/backends/backend.go",
       "line": 137,
       "kind": "type"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "ParseCombinedParameter",
-      "file": "internal/client/backends/combined.go",
-      "line": 58,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "ParseDeviceDescriptions",
-      "file": "internal/client/backends/convert.go",
-      "line": 84,
-      "kind": "func"
     },
     {
       "package": "internal/client/backends",
@@ -5532,13 +4618,6 @@
     },
     {
       "package": "internal/client/transport/binrpc",
-      "identifier": "NewClient",
-      "file": "internal/client/transport/binrpc/client.go",
-      "line": 69,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/binrpc",
       "identifier": "NewServer",
       "file": "internal/client/transport/binrpc/server.go",
       "line": 55,
@@ -5549,20 +4628,6 @@
       "identifier": "NewServer",
       "file": "internal/client/transport/binrpc/server.go",
       "line": 55,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/binrpc",
-      "identifier": "ReadRequest",
-      "file": "internal/client/transport/binrpc/decode.go",
-      "line": 36,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/binrpc",
-      "identifier": "ReadResponse",
-      "file": "internal/client/transport/binrpc/decode.go",
-      "line": 64,
       "kind": "func"
     },
     {
@@ -5620,27 +4685,6 @@
       "file": "internal/client/transport/binrpc/server.go",
       "line": 26,
       "kind": "type"
-    },
-    {
-      "package": "internal/client/transport/binrpc",
-      "identifier": "WriteFault",
-      "file": "internal/client/transport/binrpc/encode.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/binrpc",
-      "identifier": "WriteRequest",
-      "file": "internal/client/transport/binrpc/encode.go",
-      "line": 21,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/binrpc",
-      "identifier": "WriteResponse",
-      "file": "internal/client/transport/binrpc/encode.go",
-      "line": 37,
-      "kind": "func"
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -5676,13 +4720,6 @@
       "file": "internal/client/transport/jsonrpc/methods.go",
       "line": 890,
       "kind": "type"
-    },
-    {
-      "package": "internal/client/transport/jsonrpc",
-      "identifier": "New",
-      "file": "internal/client/transport/jsonrpc/client.go",
-      "line": 144,
-      "kind": "func"
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -5777,13 +4814,6 @@
     },
     {
       "package": "internal/client/transport/xmlrpc",
-      "identifier": "DecodeValue",
-      "file": "internal/client/transport/xmlrpc/decode.go",
-      "line": 33,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/xmlrpc",
       "identifier": "DoubleValue",
       "file": "internal/client/transport/xmlrpc/value.go",
       "line": 136,
@@ -5861,27 +4891,6 @@
     },
     {
       "package": "internal/client/transport/xmlrpc",
-      "identifier": "NewClient",
-      "file": "internal/client/transport/xmlrpc/client.go",
-      "line": 75,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/xmlrpc",
-      "identifier": "NewHandler",
-      "file": "internal/client/transport/xmlrpc/handler.go",
-      "line": 34,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/xmlrpc",
-      "identifier": "NewMux",
-      "file": "internal/client/transport/xmlrpc/mux.go",
-      "line": 34,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/transport/xmlrpc",
       "identifier": "NilValue",
       "file": "internal/client/transport/xmlrpc/value.go",
       "line": 84,
@@ -5931,13 +4940,6 @@
     },
     {
       "package": "internal/clock",
-      "identifier": "New",
-      "file": "internal/clock/clock.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/clock",
       "identifier": "NewFake",
       "file": "internal/clock/clock.go",
       "line": 88,
@@ -5973,20 +4975,6 @@
     },
     {
       "package": "internal/configstore",
-      "identifier": "AllSections",
-      "file": "internal/configstore/sections.go",
-      "line": 61,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configstore",
-      "identifier": "ApplySectionToConfig",
-      "file": "internal/configstore/store.go",
-      "line": 393,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configstore",
       "identifier": "CentralLoader",
       "file": "internal/configstore/store.go",
       "line": 28,
@@ -6043,13 +5031,6 @@
     },
     {
       "package": "internal/configstore",
-      "identifier": "New",
-      "file": "internal/configstore/store.go",
-      "line": 56,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configstore",
       "identifier": "Option",
       "file": "internal/configstore/store.go",
       "line": 47,
@@ -6061,13 +5042,6 @@
       "file": "internal/configstore/store.go",
       "line": 47,
       "kind": "type"
-    },
-    {
-      "package": "internal/configstore",
-      "identifier": "RowToCentralConfig",
-      "file": "internal/configstore/store.go",
-      "line": 586,
-      "kind": "func"
     },
     {
       "package": "internal/configstore",
@@ -6119,41 +5093,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/configstore",
-      "identifier": "StripUnmanagedSectionFields",
-      "file": "internal/configstore/store.go",
-      "line": 106,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configstore",
-      "identifier": "TransformSectionJSON",
-      "file": "internal/configstore/sealing.go",
-      "line": 74,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configstore",
-      "identifier": "UnmanagedFieldPaths",
-      "file": "internal/configstore/store.go",
-      "line": 94,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configstore",
-      "identifier": "WithEnvLookup",
-      "file": "internal/configstore/store.go",
-      "line": 50,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configui",
-      "identifier": "ApplyConfiguration",
-      "file": "internal/configui/exporter.go",
-      "line": 195,
-      "kind": "func"
-    },
-    {
       "package": "internal/configui",
       "identifier": "CrossValidationConstraint",
       "file": "internal/configui/schema.go",
@@ -6166,13 +5105,6 @@
       "file": "internal/configui/schema.go",
       "line": 28,
       "kind": "type"
-    },
-    {
-      "package": "internal/configui",
-      "identifier": "ExportConfiguration",
-      "file": "internal/configui/exporter.go",
-      "line": 132,
-      "kind": "func"
     },
     {
       "package": "internal/configui",
@@ -6194,27 +5126,6 @@
       "file": "internal/configui/exporter.go",
       "line": 43,
       "kind": "type"
-    },
-    {
-      "package": "internal/configui",
-      "identifier": "ImportConfiguration",
-      "file": "internal/configui/exporter.go",
-      "line": 169,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configui",
-      "identifier": "NewSession",
-      "file": "internal/configui/session.go",
-      "line": 52,
-      "kind": "func"
-    },
-    {
-      "package": "internal/configui",
-      "identifier": "NewSessionStore",
-      "file": "internal/configui/sessions.go",
-      "line": 30,
-      "kind": "func"
     },
     {
       "package": "internal/configui",
@@ -6428,13 +5339,6 @@
     },
     {
       "package": "internal/health",
-      "identifier": "NewTracker",
-      "file": "internal/health/tracker.go",
-      "line": 143,
-      "kind": "func"
-    },
-    {
-      "package": "internal/health",
       "identifier": "Option",
       "file": "internal/health/tracker.go",
       "line": 107,
@@ -6449,13 +5353,6 @@
     },
     {
       "package": "internal/health",
-      "identifier": "PingPongComponent",
-      "file": "internal/health/tracker.go",
-      "line": 401,
-      "kind": "func"
-    },
-    {
-      "package": "internal/health",
       "identifier": "Sample",
       "file": "internal/health/tracker.go",
       "line": 42,
@@ -6467,13 +5364,6 @@
       "file": "internal/health/tracker.go",
       "line": 42,
       "kind": "type"
-    },
-    {
-      "package": "internal/health",
-      "identifier": "ServiceAvailability",
-      "file": "internal/health/tracker.go",
-      "line": 348,
-      "kind": "func"
     },
     {
       "package": "internal/health",
@@ -6575,20 +5465,6 @@
     },
     {
       "package": "internal/history",
-      "identifier": "New",
-      "file": "internal/history/recorder.go",
-      "line": 124,
-      "kind": "func"
-    },
-    {
-      "package": "internal/history",
-      "identifier": "NewInfluxExporter",
-      "file": "internal/history/influx_exporter.go",
-      "line": 66,
-      "kind": "func"
-    },
-    {
-      "package": "internal/history",
       "identifier": "Options",
       "file": "internal/history/recorder.go",
       "line": 95,
@@ -6628,13 +5504,6 @@
       "file": "internal/i18n/i18n.go",
       "line": 24,
       "kind": "type"
-    },
-    {
-      "package": "internal/i18n",
-      "identifier": "NewCatalogs",
-      "file": "internal/i18n/i18n.go",
-      "line": 33,
-      "kind": "func"
     },
     {
       "package": "internal/metrics",
@@ -6960,41 +5829,6 @@
     },
     {
       "package": "internal/metrics",
-      "identifier": "NewAggregator",
-      "file": "internal/metrics/aggregator.go",
-      "line": 232,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "NewLatencyStats",
-      "file": "internal/metrics/stats.go",
-      "line": 147,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "NewMqttCollector",
-      "file": "internal/metrics/mqtt_collector.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "NewObserver",
-      "file": "internal/metrics/aggregator.go",
-      "line": 28,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "NewRegistry",
-      "file": "internal/metrics/registry.go",
-      "line": 69,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
       "identifier": "Observer",
       "file": "internal/metrics/aggregator.go",
       "line": 19,
@@ -7106,55 +5940,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/metrics",
-      "identifier": "WithCacheProvider",
-      "file": "internal/metrics/aggregator.go",
-      "line": 211,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "WithClientProvider",
-      "file": "internal/metrics/aggregator.go",
-      "line": 196,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "WithDeviceProvider",
-      "file": "internal/metrics/aggregator.go",
-      "line": 201,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "WithEventBus",
-      "file": "internal/metrics/aggregator.go",
-      "line": 221,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "WithHealthTracker",
-      "file": "internal/metrics/aggregator.go",
-      "line": 226,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "WithHubManager",
-      "file": "internal/metrics/aggregator.go",
-      "line": 206,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "WithRecoveryProvider",
-      "file": "internal/metrics/aggregator.go",
-      "line": 216,
-      "kind": "func"
-    },
-    {
       "package": "internal/metrics/wiring",
       "identifier": "CacheProvider",
       "file": "internal/metrics/wiring/wiring.go",
@@ -7198,66 +5983,10 @@
     },
     {
       "package": "internal/metrics/wiring",
-      "identifier": "NewCacheProvider",
-      "file": "internal/metrics/wiring/wiring.go",
-      "line": 103,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics/wiring",
-      "identifier": "NewClientProvider",
-      "file": "internal/metrics/wiring/wiring.go",
-      "line": 41,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics/wiring",
-      "identifier": "NewDeviceProvider",
-      "file": "internal/metrics/wiring/wiring.go",
-      "line": 285,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics/wiring",
-      "identifier": "NewEventBusProvider",
-      "file": "internal/metrics/wiring/wiring.go",
-      "line": 191,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics/wiring",
-      "identifier": "NewHealthProvider",
-      "file": "internal/metrics/wiring/wiring.go",
-      "line": 249,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics/wiring",
-      "identifier": "NewHubProvider",
-      "file": "internal/metrics/wiring/wiring.go",
-      "line": 345,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics/wiring",
-      "identifier": "NewRecoveryProvider",
-      "file": "internal/metrics/wiring/wiring.go",
-      "line": 159,
-      "kind": "func"
-    },
-    {
-      "package": "internal/metrics/wiring",
       "identifier": "RecoveryProvider",
       "file": "internal/metrics/wiring/wiring.go",
       "line": 154,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "ApparentTemperature",
-      "file": "internal/model/calculated/formulas.go",
-      "line": 16,
-      "kind": "func"
     },
     {
       "package": "internal/model/calculated",
@@ -7282,13 +6011,6 @@
     },
     {
       "package": "internal/model/calculated",
-      "identifier": "CellVoltage",
-      "file": "internal/model/calculated/voltage_data.go",
-      "line": 23,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/calculated",
       "identifier": "ChannelInspector",
       "file": "internal/model/calculated/relevance.go",
       "line": 12,
@@ -7300,13 +6022,6 @@
       "file": "internal/model/calculated/relevance.go",
       "line": 12,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "CreateCalculatedDataPoints",
-      "file": "internal/model/calculated/factory.go",
-      "line": 30,
-      "kind": "func"
     },
     {
       "package": "internal/model/calculated",
@@ -7317,41 +6032,6 @@
     },
     {
       "package": "internal/model/calculated",
-      "identifier": "DewPoint",
-      "file": "internal/model/calculated/formulas.go",
-      "line": 33,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "DewPointSpread",
-      "file": "internal/model/calculated/formulas.go",
-      "line": 66,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "Enthalpy",
-      "file": "internal/model/calculated/formulas.go",
-      "line": 77,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "FrostPoint",
-      "file": "internal/model/calculated/formulas.go",
-      "line": 95,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "OperatingVoltageLevel",
-      "file": "internal/model/calculated/formulas.go",
-      "line": 140,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/calculated",
       "identifier": "Sensor",
       "file": "internal/model/calculated/contract.go",
       "line": 29,
@@ -7391,13 +6071,6 @@
       "file": "internal/model/calculated/state_change_with.go",
       "line": 7,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "VaporConcentration",
-      "file": "internal/model/calculated/formulas.go",
-      "line": 118,
-      "kind": "func"
     },
     {
       "package": "internal/model/combined",
@@ -7464,13 +6137,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "ActionSelectField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 149,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "AggregateDataPoint",
       "file": "internal/model/custom/contract.go",
       "line": 23,
@@ -7496,13 +6162,6 @@
       "file": "internal/model/custom/aggregate_status.go",
       "line": 26,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "AggregateStatus",
-      "file": "internal/model/custom/aggregate_status.go",
-      "line": 37,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom",
@@ -7513,24 +6172,10 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "Bare",
-      "file": "internal/model/custom/profile_schema.go",
-      "line": 67,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "BaseDP",
       "file": "internal/model/custom/mixins.go",
       "line": 555,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "BinarySensorField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 61,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom",
@@ -7597,13 +6242,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "CombineUnsubs",
-      "file": "internal/model/custom/matter_notifier.go",
-      "line": 14,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "Constructor",
       "file": "internal/model/custom/materialize.go",
       "line": 43,
@@ -7632,20 +6270,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "CreateCustomDataPoint",
-      "file": "internal/model/custom/materialize.go",
-      "line": 171,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "CreateCustomDataPoints",
-      "file": "internal/model/custom/materialize.go",
-      "line": 128,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "DefaultDataPoints",
       "file": "internal/model/custom/generated_default_data_points.go",
       "line": 20,
@@ -7657,48 +6281,6 @@
       "file": "internal/model/custom/generated_default_data_points.go",
       "line": 20,
       "kind": "var"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "DefaultRegistry",
-      "file": "internal/model/custom/default.go",
-      "line": 21,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "EncodeTimerDuration",
-      "file": "internal/model/custom/mixins.go",
-      "line": 140,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "EnsureContext",
-      "file": "internal/model/custom/mixins.go",
-      "line": 535,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "EnumLabelIndex",
-      "file": "internal/model/custom/resolve.go",
-      "line": 128,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "EnumLabelValue",
-      "file": "internal/model/custom/resolve.go",
-      "line": 109,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "EnumSensorField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 102,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom",
@@ -7779,27 +6361,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "FindByWireName",
-      "file": "internal/model/custom/wire_name.go",
-      "line": 66,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "FloatField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 40,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "FloatSensorField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 68,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "GroupState",
       "file": "internal/model/custom/mixins.go",
       "line": 309,
@@ -7807,27 +6368,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "Hidden",
-      "file": "internal/model/custom/profile_schema.go",
-      "line": 83,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "IntegerField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 47,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "IntegerSensorField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 75,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "LightCapabilities",
       "file": "internal/model/custom/mixins.go",
       "line": 497,
@@ -7853,20 +6393,6 @@
       "file": "internal/model/custom/mixins.go",
       "line": 508,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "ParamFromAnyParamset",
-      "file": "internal/model/custom/replay.go",
-      "line": 21,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "ParseWireName",
-      "file": "internal/model/custom/wire_name.go",
-      "line": 54,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom",
@@ -7912,20 +6438,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "PutOrSet",
-      "file": "internal/model/custom/mixins.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "PutParamsetForce",
-      "file": "internal/model/custom/mixins.go",
-      "line": 98,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "RawValuer",
       "file": "internal/model/custom/replay.go",
       "line": 37,
@@ -7940,13 +6452,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "RebaseChannelGroup",
-      "file": "internal/model/custom/profile_schema.go",
-      "line": 247,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "RebasedChannelGroupConfig",
       "file": "internal/model/custom/profile_schema.go",
       "line": 200,
@@ -7958,13 +6463,6 @@
       "file": "internal/model/custom/profile_schema.go",
       "line": 200,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "RegisterGeneratedProfiles",
-      "file": "internal/model/custom/generated_profiles.go",
-      "line": 23,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom",
@@ -7975,27 +6473,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "ReplayCurrentValue",
-      "file": "internal/model/custom/replay.go",
-      "line": 54,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "ResolveFieldValue",
-      "file": "internal/model/custom/profile_schema.go",
-      "line": 95,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "ScheduleRelevantChannelGroups",
-      "file": "internal/model/custom/schedule_targets.go",
-      "line": 52,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "ScheduleTargetChannel",
       "file": "internal/model/custom/schedule_targets.go",
       "line": 16,
@@ -8021,13 +6498,6 @@
       "file": "internal/model/custom/schedule_targets.go",
       "line": 24,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "SelectField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 142,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom",
@@ -8101,20 +6571,6 @@
     },
     {
       "package": "internal/model/custom",
-      "identifier": "StringSensorField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 88,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "SwitchField",
-      "file": "internal/model/custom/resolve.go",
-      "line": 54,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
       "identifier": "UnIgnoreExemption",
       "file": "internal/model/custom/materialize.go",
       "line": 475,
@@ -8126,34 +6582,6 @@
       "file": "internal/model/custom/materialize.go",
       "line": 475,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "Visible",
-      "file": "internal/model/custom/profile_schema.go",
-      "line": 73,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom",
-      "identifier": "WireName",
-      "file": "internal/model/custom/wire_name.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom/cdpkind",
-      "identifier": "Capabilities",
-      "file": "internal/model/custom/cdpkind/kind.go",
-      "line": 135,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom/cdpkind",
-      "identifier": "Of",
-      "file": "internal/model/custom/cdpkind/kind.go",
-      "line": 65,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom/climate",
@@ -8590,13 +7018,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/model/custom/cover",
-      "identifier": "VariantString",
-      "file": "internal/model/custom/cover/cover.go",
-      "line": 55,
-      "kind": "func"
-    },
-    {
       "package": "internal/model/custom/light",
       "identifier": "COLOR_DIMMER_CAPABILITIES",
       "file": "internal/model/custom/light/init.go",
@@ -8766,13 +7187,6 @@
     },
     {
       "package": "internal/model/custom/light",
-      "identifier": "FixedColorToHS",
-      "file": "internal/model/custom/light/color.go",
-      "line": 505,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/custom/light",
       "identifier": "HSColor",
       "file": "internal/model/custom/light/light.go",
       "line": 864,
@@ -8784,13 +7198,6 @@
       "file": "internal/model/custom/light/light.go",
       "line": 864,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom/light",
-      "identifier": "HSToFixedColor",
-      "file": "internal/model/custom/light/color.go",
-      "line": 479,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom/light",
@@ -9295,13 +7702,6 @@
       "file": "internal/model/custom/siren/sound.go",
       "line": 85,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/custom/switch",
-      "identifier": "AttachPowerEnergySources",
-      "file": "internal/model/custom/switch/discovery.go",
-      "line": 31,
-      "kind": "func"
     },
     {
       "package": "internal/model/custom/textdisplay",
@@ -9529,13 +7929,6 @@
     },
     {
       "package": "internal/model/device",
-      "identifier": "BuildDataPointName",
-      "file": "internal/model/device/namedata.go",
-      "line": 43,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/device",
       "identifier": "CategorisedDataPoint",
       "file": "internal/model/device/aggregate.go",
       "line": 223,
@@ -9746,13 +8139,6 @@
     },
     {
       "package": "internal/model/device",
-      "identifier": "GatedLatestFirmware",
-      "file": "internal/model/device/firmware.go",
-      "line": 30,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/device",
       "identifier": "GenerateTranslationKey",
       "file": "internal/model/device/naming.go",
       "line": 39,
@@ -9778,20 +8164,6 @@
       "file": "internal/model/device/aggregate.go",
       "line": 695,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "New",
-      "file": "internal/model/device/device.go",
-      "line": 181,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "NewUpdate",
-      "file": "internal/model/device/update.go",
-      "line": 57,
-      "kind": "func"
     },
     {
       "package": "internal/model/device",
@@ -9890,20 +8262,6 @@
       "file": "internal/model/device/aggregate.go",
       "line": 43,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "TranslatedDataPointLabel",
-      "file": "internal/model/device/namedata.go",
-      "line": 99,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "TranslatedParameterLabel",
-      "file": "internal/model/device/namedata.go",
-      "line": 119,
-      "kind": "func"
     },
     {
       "package": "internal/model/device",
@@ -9942,13 +8300,6 @@
     },
     {
       "package": "internal/model/device/definitionexport",
-      "identifier": "DefaultRandomID",
-      "file": "internal/model/device/definitionexport/export.go",
-      "line": 244,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/device/definitionexport",
       "identifier": "ErrDeviceNotFound",
       "file": "internal/model/device/definitionexport/export.go",
       "line": 30,
@@ -9960,13 +8311,6 @@
       "file": "internal/model/device/definitionexport/export.go",
       "line": 30,
       "kind": "var"
-    },
-    {
-      "package": "internal/model/device/definitionexport",
-      "identifier": "Export",
-      "file": "internal/model/device/definitionexport/export.go",
-      "line": 66,
-      "kind": "func"
     },
     {
       "package": "internal/model/device/definitionexport",
@@ -10012,20 +8356,6 @@
     },
     {
       "package": "internal/model/event",
-      "identifier": "Classify",
-      "file": "internal/model/event/event.go",
-      "line": 56,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/event",
-      "identifier": "Classify",
-      "file": "internal/model/event/event.go",
-      "line": 56,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/event",
       "identifier": "Event",
       "file": "internal/model/event/event.go",
       "line": 27,
@@ -10040,13 +8370,6 @@
     },
     {
       "package": "internal/model/event",
-      "identifier": "GenerateTranslationKey",
-      "file": "internal/model/event/event.go",
-      "line": 362,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/event",
       "identifier": "Kind",
       "file": "internal/model/event/event.go",
       "line": 17,
@@ -10058,27 +8381,6 @@
       "file": "internal/model/event/event.go",
       "line": 17,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/event",
-      "identifier": "NewGroupWithCentral",
-      "file": "internal/model/event/group.go",
-      "line": 56,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/event",
-      "identifier": "NewSource",
-      "file": "internal/model/event/event.go",
-      "line": 136,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/event",
-      "identifier": "NewSource",
-      "file": "internal/model/event/event.go",
-      "line": 136,
-      "kind": "func"
     },
     {
       "package": "internal/model/event",
@@ -10488,62 +8790,6 @@
     },
     {
       "package": "internal/model/hub",
-      "identifier": "NewConnectivity",
-      "file": "internal/model/hub/connectivity.go",
-      "line": 55,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
-      "identifier": "NewHub",
-      "file": "internal/model/hub/hub.go",
-      "line": 198,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
-      "identifier": "NewHubDataPoint",
-      "file": "internal/model/hub/generic_data_point.go",
-      "line": 82,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
-      "identifier": "NewInbox",
-      "file": "internal/model/hub/inbox.go",
-      "line": 64,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
-      "identifier": "NewInboxWithCentral",
-      "file": "internal/model/hub/inbox.go",
-      "line": 70,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
-      "identifier": "NewInstallMode",
-      "file": "internal/model/hub/install_mode.go",
-      "line": 41,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
-      "identifier": "NewProgram",
-      "file": "internal/model/hub/program.go",
-      "line": 66,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
-      "identifier": "NewUpdate",
-      "file": "internal/model/hub/update.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/hub",
       "identifier": "ProgramEvent",
       "file": "internal/model/hub/program.go",
       "line": 97,
@@ -10684,13 +8930,6 @@
     },
     {
       "package": "internal/model/naming",
-      "identifier": "DiscoveryConfigTopic",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 450,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
       "identifier": "EmptyNameData",
       "file": "internal/model/naming/namedata.go",
       "line": 61,
@@ -10716,132 +8955,6 @@
       "file": "internal/model/naming/pathdata.go",
       "line": 115,
       "kind": "var"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "EntityDisplayName",
-      "file": "internal/model/naming/entityname.go",
-      "line": 26,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTCustomDPInvoke",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 770,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubAlarmMessages",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 729,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubConnectivity",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 753,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubDiagnostics",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 630,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubInbox",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 741,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubInfo",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 624,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubInstallMode",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 694,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubInstallModeCommand",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 718,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubInstallModeForInterface",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 703,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubProgramState",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 679,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubProgramTrigger",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 663,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubServiceMessages",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 735,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubStatus",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 618,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubSysvarCommand",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 649,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubSysvarState",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 636,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTHubUpdate",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 747,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "MQTTSystemStatus",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 764,
-      "kind": "func"
     },
     {
       "package": "internal/model/naming",
@@ -10852,66 +8965,10 @@
     },
     {
       "package": "internal/model/naming",
-      "identifier": "NewChannelPathData",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 466,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "NewCustomDPPathData",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 505,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "NewDataPointPathData",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 549,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "NewDevicePathData",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 484,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "NewProgramPathData",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 590,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "NewSysvarPathData",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 603,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
       "identifier": "PathData",
       "file": "internal/model/naming/pathdata.go",
       "line": 88,
       "kind": "type"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "TitleCaseParameter",
-      "file": "internal/model/naming/entityname.go",
-      "line": 43,
-      "kind": "func"
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "TopicSafe",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 526,
-      "kind": "func"
     },
     {
       "package": "internal/model/optimistic",
@@ -11034,13 +9091,6 @@
     },
     {
       "package": "internal/north/bridge",
-      "identifier": "NewRegistry",
-      "file": "internal/north/bridge/registry.go",
-      "line": 37,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/bridge",
       "identifier": "Phase",
       "file": "internal/north/bridge/service.go",
       "line": 49,
@@ -11082,13 +9132,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/north/discovery",
-      "identifier": "NewHostSuggester",
-      "file": "internal/north/discovery/hostsuggest.go",
-      "line": 54,
-      "kind": "func"
-    },
-    {
       "package": "internal/north/discovery/mdns",
       "identifier": "Advertiser",
       "file": "internal/north/discovery/mdns/advertiser.go",
@@ -11122,13 +9165,6 @@
       "file": "internal/north/discovery/mdns/advertiser.go",
       "line": 137,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/discovery/mdns",
-      "identifier": "NewMulticast",
-      "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 146,
-      "kind": "func"
     },
     {
       "package": "internal/north/discovery/mdns",
@@ -11187,32 +9223,11 @@
       "kind": "type"
     },
     {
-      "package": "internal/north/discovery/ssdp",
-      "identifier": "New",
-      "file": "internal/north/discovery/ssdp/discoverer.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
       "package": "internal/north/filter",
       "identifier": "VisibilitySet",
       "file": "internal/north/filter/visibility.go",
       "line": 32,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/bootid",
-      "identifier": "EnableRotation",
-      "file": "internal/north/matter/bootid/bootid.go",
-      "line": 71,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bootid",
-      "identifier": "Salt",
-      "file": "internal/north/matter/bootid/bootid.go",
-      "line": 56,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/bridge",
@@ -11318,41 +9333,6 @@
       "file": "internal/north/matter/bridge/bridge.go",
       "line": 71,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "EncodeInvokeResponse",
-      "file": "internal/north/matter/bridge/reply.go",
-      "line": 371,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "EncodeReportData",
-      "file": "internal/north/matter/bridge/reply.go",
-      "line": 233,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "EncodeStatusResponse",
-      "file": "internal/north/matter/bridge/reply.go",
-      "line": 386,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "EncodeSubscribeResponse",
-      "file": "internal/north/matter/bridge/reply.go",
-      "line": 398,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "EncodeWriteResponse",
-      "file": "internal/north/matter/bridge/reply.go",
-      "line": 356,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/bridge",
@@ -11825,27 +9805,6 @@
     },
     {
       "package": "internal/north/matter/bridge",
-      "identifier": "RandomDiscriminator",
-      "file": "internal/north/matter/bridge/commissioning_window.go",
-      "line": 694,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "RandomPasscode",
-      "file": "internal/north/matter/bridge/commissioning_window.go",
-      "line": 706,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "RandomSalt",
-      "file": "internal/north/matter/bridge/commissioning_window.go",
-      "line": 739,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/bridge",
       "identifier": "SessionFabricResolver",
       "file": "internal/north/matter/bridge/handlers.go",
       "line": 741,
@@ -11913,13 +9872,6 @@
       "file": "internal/north/matter/bridge/bridge.go",
       "line": 67,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/bridge",
-      "identifier": "StartHealthProbe",
-      "file": "internal/north/matter/bridge/health_probe.go",
-      "line": 49,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/bridge",
@@ -12098,13 +10050,6 @@
     },
     {
       "package": "internal/north/matter/endpoint",
-      "identifier": "ClusterServers",
-      "file": "internal/north/matter/endpoint/materialize.go",
-      "line": 50,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/endpoint",
       "identifier": "Config",
       "file": "internal/north/matter/endpoint/assembler.go",
       "line": 24,
@@ -12130,13 +10075,6 @@
       "file": "internal/north/matter/endpoint/assembler.go",
       "line": 85,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/endpoint",
-      "identifier": "ReportablePaths",
-      "file": "internal/north/matter/endpoint/reportable_paths.go",
-      "line": 24,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/endpoint",
@@ -12298,20 +10236,6 @@
       "file": "internal/north/matter/im/dispatcher.go",
       "line": 97,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "AuthorizeEventReports",
-      "file": "internal/north/matter/im/read.go",
-      "line": 663,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "BuildEventReports",
-      "file": "internal/north/matter/im/read.go",
-      "line": 560,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/im",
@@ -12616,41 +10540,6 @@
     },
     {
       "package": "internal/north/matter/im",
-      "identifier": "FabricFilterFromContext",
-      "file": "internal/north/matter/im/fabric_context.go",
-      "line": 37,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "HandleInvokeRequest",
-      "file": "internal/north/matter/im/invoke.go",
-      "line": 365,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "HandleReadEventRequest",
-      "file": "internal/north/matter/im/read.go",
-      "line": 622,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "HandleReadRequest",
-      "file": "internal/north/matter/im/read.go",
-      "line": 411,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "HandleWriteRequest",
-      "file": "internal/north/matter/im/write.go",
-      "line": 237,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
       "identifier": "InvokeRequest",
       "file": "internal/north/matter/im/invoke.go",
       "line": 49,
@@ -12690,20 +10579,6 @@
       "file": "internal/north/matter/im/dispatcher.go",
       "line": 188,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "IsRequestOpcode",
-      "file": "internal/north/matter/im/protocol.go",
-      "line": 37,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "MatchDataVersionFilter",
-      "file": "internal/north/matter/im/event_filter.go",
-      "line": 18,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/im",
@@ -12791,13 +10666,6 @@
     },
     {
       "package": "internal/north/matter/im",
-      "identifier": "SubjectFromContext",
-      "file": "internal/north/matter/im/fabric_context.go",
-      "line": 82,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
       "identifier": "SubscribeRequest",
       "file": "internal/north/matter/im/subscribe.go",
       "line": 78,
@@ -12830,34 +10698,6 @@
       "file": "internal/north/matter/im/timed.go",
       "line": 54,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "ValidateInvokeBatch",
-      "file": "internal/north/matter/im/invoke.go",
-      "line": 278,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "ValidateReadPaths",
-      "file": "internal/north/matter/im/read.go",
-      "line": 751,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "WithFabricFilter",
-      "file": "internal/north/matter/im/fabric_context.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/im",
-      "identifier": "WithSubject",
-      "file": "internal/north/matter/im/fabric_context.go",
-      "line": 70,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/im",
@@ -12973,20 +10813,6 @@
     },
     {
       "package": "internal/north/matter/mdns",
-      "identifier": "BuildCommissionableService",
-      "file": "internal/north/matter/mdns/service.go",
-      "line": 372,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/mdns",
-      "identifier": "BuildOperationalService",
-      "file": "internal/north/matter/mdns/service.go",
-      "line": 176,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/mdns",
       "identifier": "CommissionableServiceConfig",
       "file": "internal/north/matter/mdns/service.go",
       "line": 252,
@@ -12998,13 +10824,6 @@
       "file": "internal/north/matter/mdns/service.go",
       "line": 252,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/mdns",
-      "identifier": "DeriveUniqueIDFromIdentity",
-      "file": "internal/north/matter/mdns/rotating_id.go",
-      "line": 117,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/mdns",
@@ -13099,13 +10918,6 @@
     },
     {
       "package": "internal/north/matter/schema",
-      "identifier": "AttributeWritable",
-      "file": "internal/north/matter/schema/writable.go",
-      "line": 234,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/schema",
       "identifier": "ClusterNames",
       "file": "internal/north/matter/schema/clusters.go",
       "line": 149,
@@ -13162,13 +10974,6 @@
     },
     {
       "package": "internal/north/matter/schema",
-      "identifier": "DeviceTypeRevision",
-      "file": "internal/north/matter/schema/lookup.go",
-      "line": 35,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/schema",
       "identifier": "DeviceTypeRevisions",
       "file": "internal/north/matter/schema/devicetypes.go",
       "line": 13,
@@ -13180,13 +10985,6 @@
       "file": "internal/north/matter/schema/devicetypes.go",
       "line": 13,
       "kind": "var"
-    },
-    {
-      "package": "internal/north/matter/schema",
-      "identifier": "IsTimedInvoke",
-      "file": "internal/north/matter/schema/timed.go",
-      "line": 44,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/secure/aesccm",
@@ -13267,20 +11065,6 @@
     },
     {
       "package": "internal/north/matter/secure/attestation",
-      "identifier": "BuildTestCertificationDeclaration",
-      "file": "internal/north/matter/secure/attestation/cd.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/attestation",
-      "identifier": "BuildTestChain",
-      "file": "internal/north/matter/secure/attestation/builder.go",
-      "line": 86,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/attestation",
       "identifier": "Chain",
       "file": "internal/north/matter/secure/attestation/builder.go",
       "line": 71,
@@ -13407,13 +11191,6 @@
     },
     {
       "package": "internal/north/matter/secure/channel",
-      "identifier": "ApplyPrivacyMask",
-      "file": "internal/north/matter/secure/channel/privacy.go",
-      "line": 139,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/channel",
       "identifier": "Config",
       "file": "internal/north/matter/secure/channel/session.go",
       "line": 89,
@@ -13425,13 +11202,6 @@
       "file": "internal/north/matter/secure/channel/session.go",
       "line": 89,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/secure/channel",
-      "identifier": "DerivePrivacyKey",
-      "file": "internal/north/matter/secure/channel/privacy.go",
-      "line": 71,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/secure/channel",
@@ -13516,13 +11286,6 @@
       "file": "internal/north/matter/secure/channel/session.go",
       "line": 28,
       "kind": "var"
-    },
-    {
-      "package": "internal/north/matter/secure/channel",
-      "identifier": "PrivacyMask",
-      "file": "internal/north/matter/secure/channel/privacy.go",
-      "line": 103,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/secure/channel",
@@ -13701,13 +11464,6 @@
     },
     {
       "package": "internal/north/matter/secure/mattercert",
-      "identifier": "TBSToDER",
-      "file": "internal/north/matter/secure/mattercert/tbs_der.go",
-      "line": 84,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/mattercert",
       "identifier": "TimeSource",
       "file": "internal/north/matter/secure/mattercert/verify.go",
       "line": 36,
@@ -13719,13 +11475,6 @@
       "file": "internal/north/matter/secure/mattercert/verify.go",
       "line": 36,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/secure/mattercert",
-      "identifier": "ValidateRCAC",
-      "file": "internal/north/matter/secure/mattercert/verify.go",
-      "line": 100,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/secure/mattercert",
@@ -13806,40 +11555,12 @@
     },
     {
       "package": "internal/north/matter/secure/setup",
-      "identifier": "IsValidSetupPIN",
-      "file": "internal/north/matter/secure/setup/setup.go",
-      "line": 263,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/setup",
-      "identifier": "ManualCode",
-      "file": "internal/north/matter/secure/setup/setup.go",
-      "line": 167,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/setup",
       "identifier": "Payload",
       "file": "internal/north/matter/secure/setup/setup.go",
       "line": 47,
       "kind": "type"
     },
     {
-      "package": "internal/north/matter/secure/setup",
-      "identifier": "QRCode",
-      "file": "internal/north/matter/secure/setup/setup.go",
-      "line": 88,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/sigma",
-      "identifier": "ComputeDestinationID",
-      "file": "internal/north/matter/secure/sigma/sigma.go",
-      "line": 791,
-      "kind": "func"
-    },
-    {
       "package": "internal/north/matter/secure/sigma",
       "identifier": "ErrFabricIDMismatch",
       "file": "internal/north/matter/secure/sigma/protocol.go",
@@ -13978,13 +11699,6 @@
       "file": "internal/north/matter/secure/sigma/protocol.go",
       "line": 165,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/secure/sigma",
-      "identifier": "MarshalSigma2Resume",
-      "file": "internal/north/matter/secure/sigma/sigma.go",
-      "line": 760,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/secure/sigma",
@@ -14198,13 +11912,6 @@
     },
     {
       "package": "internal/north/matter/secure/spake2",
-      "identifier": "EncodePake2",
-      "file": "internal/north/matter/secure/spake2/wire.go",
-      "line": 109,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/secure/spake2",
       "identifier": "EncodePake3",
       "file": "internal/north/matter/secure/spake2/wire.go",
       "line": 161,
@@ -14300,13 +12007,6 @@
       "file": "internal/north/matter/secure/spake2/wire.go",
       "line": 340,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/secure/spake2",
-      "identifier": "PBKDF",
-      "file": "internal/north/matter/secure/spake2/spake2.go",
-      "line": 167,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/secure/spake2",
@@ -14779,13 +12479,6 @@
     },
     {
       "package": "internal/north/matter/tlv",
-      "identifier": "AnonymousTag",
-      "file": "internal/north/matter/tlv/tlv.go",
-      "line": 68,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/tlv",
       "identifier": "BoundedString",
       "file": "internal/north/matter/tlv/tlv.go",
       "line": 110,
@@ -14810,13 +12503,6 @@
       "identifier": "CommonTag",
       "file": "internal/north/matter/tlv/tlv.go",
       "line": 76,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/tlv",
-      "identifier": "ContextTag",
-      "file": "internal/north/matter/tlv/tlv.go",
-      "line": 72,
       "kind": "func"
     },
     {
@@ -15093,13 +12779,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/north/matter/tlv",
-      "identifier": "Validate",
-      "file": "internal/north/matter/tlv/decode.go",
-      "line": 301,
-      "kind": "func"
-    },
-    {
       "package": "internal/north/matter/transport/message",
       "identifier": "DestSize",
       "file": "internal/north/matter/transport/message/message.go",
@@ -15248,24 +12927,10 @@
     },
     {
       "package": "internal/north/matter/transport/mrp",
-      "identifier": "BackoffDuration",
-      "file": "internal/north/matter/transport/mrp/retransmit.go",
-      "line": 55,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/matter/transport/mrp",
       "identifier": "Counter",
       "file": "internal/north/matter/transport/mrp/counter.go",
       "line": 29,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/matter/transport/mrp",
-      "identifier": "EncodeStatusReport",
-      "file": "internal/north/matter/transport/mrp/status_report.go",
-      "line": 41,
-      "kind": "func"
     },
     {
       "package": "internal/north/matter/transport/mrp",
@@ -15507,13 +13172,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "BuildOriginInfo",
-      "file": "internal/north/mqtt/origin_info.go",
-      "line": 14,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "CDPInvocationSink",
       "file": "internal/north/mqtt/command_subscriber.go",
       "line": 102,
@@ -15567,13 +13225,6 @@
       "file": "internal/north/mqtt/bridge.go",
       "line": 309,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "ChannelPressTypes",
-      "file": "internal/north/mqtt/discovery_aggregate.go",
-      "line": 62,
-      "kind": "func"
     },
     {
       "package": "internal/north/mqtt",
@@ -15686,13 +13337,6 @@
       "file": "internal/north/mqtt/discovery.go",
       "line": 124,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "DefaultLifecycle",
-      "file": "internal/north/mqtt/client.go",
-      "line": 104,
-      "kind": "func"
     },
     {
       "package": "internal/north/mqtt",
@@ -15843,13 +13487,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "IsPressParameter",
-      "file": "internal/north/mqtt/discovery_aggregate.go",
-      "line": 39,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "LegacyAliasConfig",
       "file": "internal/north/mqtt/legacy_alias.go",
       "line": 16,
@@ -15861,13 +13498,6 @@
       "file": "internal/north/mqtt/legacy_alias.go",
       "line": 16,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "LegacyHandler",
-      "file": "internal/north/mqtt/client.go",
-      "line": 91,
-      "kind": "func"
     },
     {
       "package": "internal/north/mqtt",
@@ -15875,90 +13505,6 @@
       "file": "internal/north/mqtt/legacy_alias.go",
       "line": 31,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewBirthSync",
-      "file": "internal/north/mqtt/birth_sync.go",
-      "line": 59,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewBreaker",
-      "file": "internal/north/mqtt/client.go",
-      "line": 87,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewBridge",
-      "file": "internal/north/mqtt/bridge.go",
-      "line": 417,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewCommandSubscriber",
-      "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 192,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewDefaultDiscoveryBuilder",
-      "file": "internal/north/mqtt/discovery.go",
-      "line": 147,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewLegacyTopicBuilder",
-      "file": "internal/north/mqtt/legacy_alias.go",
-      "line": 37,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewLifecycle",
-      "file": "internal/north/mqtt/client.go",
-      "line": 99,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewNoopClient",
-      "file": "internal/north/mqtt/adapter_noop.go",
-      "line": 30,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewSystemStatusPublisher",
-      "file": "internal/north/mqtt/system_status_publisher.go",
-      "line": 36,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewTCPClient",
-      "file": "internal/north/mqtt/client.go",
-      "line": 96,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewTopicBuilder",
-      "file": "internal/north/mqtt/topics.go",
-      "line": 32,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewWiring",
-      "file": "internal/north/mqtt/wiring.go",
-      "line": 39,
-      "kind": "func"
     },
     {
       "package": "internal/north/mqtt",
@@ -15983,13 +13529,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "PressParameters",
-      "file": "internal/north/mqtt/discovery_aggregate.go",
-      "line": 47,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "Publication",
       "file": "internal/north/mqtt/adapter_noop.go",
       "line": 22,
@@ -16015,13 +13554,6 @@
       "file": "internal/north/mqtt/bridge.go",
       "line": 27,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "ResolveEnumLabel",
-      "file": "internal/north/mqtt/bridge.go",
-      "line": 1582,
-      "kind": "func"
     },
     {
       "package": "internal/north/mqtt",
@@ -16064,20 +13596,6 @@
       "file": "internal/north/mqtt/command_subscriber.go",
       "line": 58,
       "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "SetOriginVersion",
-      "file": "internal/north/mqtt/discovery.go",
-      "line": 104,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "StartHealthProbe",
-      "file": "internal/north/mqtt/health_probe.go",
-      "line": 46,
-      "kind": "func"
     },
     {
       "package": "internal/north/mqtt",
@@ -16200,34 +13718,6 @@
     },
     {
       "package": "internal/north/rest",
-      "identifier": "NewCertReloader",
-      "file": "internal/north/rest/server_tls.go",
-      "line": 32,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/rest",
-      "identifier": "NewRouter",
-      "file": "internal/north/rest/router.go",
-      "line": 425,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/rest",
-      "identifier": "NewServer",
-      "file": "internal/north/rest/server.go",
-      "line": 41,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/rest",
-      "identifier": "NewService",
-      "file": "internal/north/rest/service.go",
-      "line": 32,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/rest",
       "identifier": "Server",
       "file": "internal/north/rest/server.go",
       "line": 18,
@@ -16304,27 +13794,6 @@
       "kind": "type"
     },
     {
-      "package": "internal/north/ui",
-      "identifier": "NewRouter",
-      "file": "internal/north/ui/server.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/ui",
-      "identifier": "SPAHandler",
-      "file": "internal/north/ui/spa.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/north/webhook",
-      "identifier": "NewOutbound",
-      "file": "internal/north/webhook/outbound.go",
-      "line": 94,
-      "kind": "func"
-    },
-    {
       "package": "internal/north/webhook",
       "identifier": "Option",
       "file": "internal/north/webhook/outbound.go",
@@ -16389,13 +13858,6 @@
     },
     {
       "package": "internal/orderedjson",
-      "identifier": "Marshal",
-      "file": "internal/orderedjson/encode.go",
-      "line": 21,
-      "kind": "func"
-    },
-    {
-      "package": "internal/orderedjson",
       "identifier": "Member",
       "file": "internal/orderedjson/value.go",
       "line": 23,
@@ -16407,13 +13869,6 @@
       "file": "internal/orderedjson/value.go",
       "line": 23,
       "kind": "type"
-    },
-    {
-      "package": "internal/orderedjson",
-      "identifier": "NewObject",
-      "file": "internal/orderedjson/value.go",
-      "line": 35,
-      "kind": "func"
     },
     {
       "package": "internal/orderedjson",
@@ -16970,13 +14425,6 @@
     },
     {
       "package": "internal/payload",
-      "identifier": "EpochSeconds",
-      "file": "internal/payload/wrapper.go",
-      "line": 49,
-      "kind": "func"
-    },
-    {
-      "package": "internal/payload",
       "identifier": "ErrServiceInvalidParam",
       "file": "internal/payload/params.go",
       "line": 19,
@@ -17057,13 +14505,6 @@
       "identifier": "For",
       "file": "internal/payload/payload.go",
       "line": 39,
-      "kind": "func"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "ForWith",
-      "file": "internal/payload/payload.go",
-      "line": 53,
       "kind": "func"
     },
     {
@@ -17163,13 +14604,6 @@
       "file": "internal/payload/state.go",
       "line": 369,
       "kind": "type"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "GlobalScalarArgKey",
-      "file": "internal/payload/registry.go",
-      "line": 52,
-      "kind": "func"
     },
     {
       "package": "internal/payload",
@@ -17642,34 +15076,6 @@
     },
     {
       "package": "internal/payload",
-      "identifier": "ParamBool",
-      "file": "internal/payload/params.go",
-      "line": 32,
-      "kind": "func"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "ParamFloat64",
-      "file": "internal/payload/params.go",
-      "line": 59,
-      "kind": "func"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "ParamInt32",
-      "file": "internal/payload/params.go",
-      "line": 88,
-      "kind": "func"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "ParamString",
-      "file": "internal/payload/params.go",
-      "line": 125,
-      "kind": "func"
-    },
-    {
-      "package": "internal/payload",
       "identifier": "PerDPState",
       "file": "internal/payload/wrapper.go",
       "line": 21,
@@ -17765,13 +15171,6 @@
       "file": "internal/payload/state.go",
       "line": 132,
       "kind": "type"
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "RegisterGlobalScalarArgKey",
-      "file": "internal/payload/registry.go",
-      "line": 72,
-      "kind": "func"
     },
     {
       "package": "internal/payload",
@@ -18237,20 +15636,6 @@
     },
     {
       "package": "internal/routingkey",
-      "identifier": "CanonicalSerial",
-      "file": "internal/routingkey/canonical.go",
-      "line": 31,
-      "kind": "func"
-    },
-    {
-      "package": "internal/routingkey",
-      "identifier": "CanonicalUniqueID",
-      "file": "internal/routingkey/canonical.go",
-      "line": 61,
-      "kind": "func"
-    },
-    {
-      "package": "internal/routingkey",
       "identifier": "GenerateChannelUniqueID",
       "file": "internal/routingkey/uniqueid.go",
       "line": 130,
@@ -18261,20 +15646,6 @@
       "identifier": "GenerateChannelUniqueID",
       "file": "internal/routingkey/uniqueid.go",
       "line": 130,
-      "kind": "func"
-    },
-    {
-      "package": "internal/routingkey",
-      "identifier": "GenerateUniqueID",
-      "file": "internal/routingkey/uniqueid.go",
-      "line": 112,
-      "kind": "func"
-    },
-    {
-      "package": "internal/routingkey",
-      "identifier": "HubSlug",
-      "file": "internal/routingkey/slug.go",
-      "line": 44,
       "kind": "func"
     },
     {
@@ -18290,13 +15661,6 @@
       "file": "internal/routingkey/uniqueid.go",
       "line": 58,
       "kind": "var"
-    },
-    {
-      "package": "internal/routingkey",
-      "identifier": "SerialSuffix",
-      "file": "internal/routingkey/canonical.go",
-      "line": 44,
-      "kind": "func"
     },
     {
       "package": "internal/scheduler",
@@ -18325,13 +15689,6 @@
       "file": "internal/scheduler/scheduler.go",
       "line": 24,
       "kind": "type"
-    },
-    {
-      "package": "internal/scheduler",
-      "identifier": "New",
-      "file": "internal/scheduler/scheduler.go",
-      "line": 122,
-      "kind": "func"
     },
     {
       "package": "internal/scheduler",
@@ -18353,27 +15710,6 @@
       "file": "internal/store/devicedetails/loader.go",
       "line": 78,
       "kind": "type"
-    },
-    {
-      "package": "internal/store/devicedetails",
-      "identifier": "New",
-      "file": "internal/store/devicedetails/cache.go",
-      "line": 56,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/devicedetails",
-      "identifier": "NewLoader",
-      "file": "internal/store/devicedetails/loader.go",
-      "line": 87,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/devicedetails",
-      "identifier": "NewLoaderForJSONRPC",
-      "file": "internal/store/devicedetails/jsonrpc_adapter.go",
-      "line": 60,
-      "kind": "func"
     },
     {
       "package": "internal/store/linkprofile",
@@ -18405,13 +15741,6 @@
     },
     {
       "package": "internal/store/masterprofile",
-      "identifier": "New",
-      "file": "internal/store/masterprofile/store.go",
-      "line": 93,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/masterprofile",
       "identifier": "ParamConstraint",
       "file": "internal/store/masterprofile/store.go",
       "line": 36,
@@ -18437,13 +15766,6 @@
       "file": "internal/store/masterprofile/store.go",
       "line": 83,
       "kind": "type"
-    },
-    {
-      "package": "internal/store/patches",
-      "identifier": "NewRegistry",
-      "file": "internal/store/patches/patches.go",
-      "line": 45,
-      "kind": "func"
     },
     {
       "package": "internal/store/patches",
@@ -18521,13 +15843,6 @@
       "file": "internal/store/session/recorder.go",
       "line": 529,
       "kind": "type"
-    },
-    {
-      "package": "internal/store/session",
-      "identifier": "New",
-      "file": "internal/store/session/recorder.go",
-      "line": 100,
-      "kind": "func"
     },
     {
       "package": "internal/store/session",
@@ -18626,13 +15941,6 @@
       "file": "internal/store/sqlite/centrals_store.go",
       "line": 22,
       "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "CheckpointWAL",
-      "file": "internal/store/sqlite/wal_checkpoint.go",
-      "line": 42,
-      "kind": "func"
     },
     {
       "package": "internal/store/sqlite",
@@ -18867,13 +16175,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "FileDSN",
-      "file": "internal/store/sqlite/dsn.go",
-      "line": 27,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "GCResult",
       "file": "internal/store/sqlite/values_cache.go",
       "line": 498,
@@ -18941,13 +16242,6 @@
       "file": "internal/store/sqlite/master_values.go",
       "line": 21,
       "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "MaxKnownMigration",
-      "file": "internal/store/sqlite/store.go",
-      "line": 192,
-      "kind": "func"
     },
     {
       "package": "internal/store/sqlite",
@@ -19028,132 +16322,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "Migrate",
-      "file": "internal/store/sqlite/store.go",
-      "line": 102,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAuditStore",
-      "file": "internal/store/sqlite/audit.go",
-      "line": 48,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAuthSessionStore",
-      "file": "internal/store/sqlite/auth_sessions.go",
-      "line": 25,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewCentralsStore",
-      "file": "internal/store/sqlite/centrals_store.go",
-      "line": 31,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewConfigSectionStore",
-      "file": "internal/store/sqlite/config_sections.go",
-      "line": 37,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewDiscoveryIgnoreStore",
-      "file": "internal/store/sqlite/discovery_ignored.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewIncidentStore",
-      "file": "internal/store/sqlite/incidents.go",
-      "line": 47,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewMasterValuesStore",
-      "file": "internal/store/sqlite/master_values.go",
-      "line": 28,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewMeasurementStore",
-      "file": "internal/store/sqlite/measurements.go",
-      "line": 119,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewParamsetStore",
-      "file": "internal/store/sqlite/paramsets.go",
-      "line": 87,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewSessionRecorderStore",
-      "file": "internal/store/sqlite/sessions.go",
-      "line": 41,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewTokenStore",
-      "file": "internal/store/sqlite/tokens.go",
-      "line": 33,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewUserPreferencesStore",
-      "file": "internal/store/sqlite/user_preferences.go",
-      "line": 28,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewUserStore",
-      "file": "internal/store/sqlite/users.go",
-      "line": 30,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewValuesCacheStore",
-      "file": "internal/store/sqlite/values_cache.go",
-      "line": 169,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewVisibilityUnIgnoreStore",
-      "file": "internal/store/sqlite/visibility_unignore.go",
-      "line": 27,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "Open",
-      "file": "internal/store/sqlite/store.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "OpenHistory",
-      "file": "internal/store/sqlite/measurements.go",
-      "line": 29,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "ParamsetRecord",
       "file": "internal/store/sqlite/paramsets.go",
       "line": 37,
@@ -19189,20 +16357,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "SchemaVersion",
-      "file": "internal/store/sqlite/store.go",
-      "line": 165,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "SchemaVersionOfFile",
-      "file": "internal/store/sqlite/store.go",
-      "line": 179,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "SectionRow",
       "file": "internal/store/sqlite/config_sections.go",
       "line": 55,
@@ -19221,20 +16375,6 @@
       "file": "internal/store/sqlite/sessions.go",
       "line": 36,
       "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "StartHealthProbe",
-      "file": "internal/store/sqlite/health_probe.go",
-      "line": 48,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "StartWALCheckpointLoop",
-      "file": "internal/store/sqlite/wal_checkpoint.go",
-      "line": 76,
-      "kind": "func"
     },
     {
       "package": "internal/store/sqlite",
@@ -20288,13 +17428,6 @@
     },
     {
       "package": "pkg/hmenum",
-      "identifier": "DeriveDeviceUpdateStatus",
-      "file": "pkg/hmenum/device.go",
-      "line": 67,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmenum",
       "identifier": "DescriptionMarker",
       "file": "pkg/hmenum/device.go",
       "line": 110,
@@ -20368,13 +17501,6 @@
       "identifier": "DeviceTriggerEventType",
       "file": "pkg/hmenum/incident.go",
       "line": 101,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
-      "identifier": "DeviceUpdateStatus",
-      "file": "pkg/hmenum/device.go",
-      "line": 47,
       "kind": "type"
     },
     {
@@ -20687,13 +17813,6 @@
     },
     {
       "package": "pkg/hmenum",
-      "identifier": "ProductGroupForModel",
-      "file": "pkg/hmenum/backend.go",
-      "line": 60,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmenum",
       "identifier": "ProfileKey",
       "file": "pkg/hmenum/device.go",
       "line": 124,
@@ -20726,13 +17845,6 @@
       "file": "pkg/hmenum/rpc.go",
       "line": 39,
       "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
-      "identifier": "PushesConfigPendingFor",
-      "file": "pkg/hmenum/interface.go",
-      "line": 92,
-      "kind": "func"
     },
     {
       "package": "pkg/hmenum",
@@ -21198,20 +18310,6 @@
     },
     {
       "package": "pkg/hmerr",
-      "identifier": "SanitizeErrorMessage",
-      "file": "pkg/hmerr/errors.go",
-      "line": 315,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmerr",
-      "identifier": "WithContext",
-      "file": "pkg/hmerr/errors.go",
-      "line": 153,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmerr",
       "identifier": "XMLRPCFault",
       "file": "pkg/hmerr/errors.go",
       "line": 236,
@@ -21450,13 +18548,6 @@
     },
     {
       "package": "pkg/hmevent",
-      "identifier": "NewBase",
-      "file": "pkg/hmevent/event.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmevent",
       "identifier": "NewBaseAt",
       "file": "pkg/hmevent/event.go",
       "line": 45,
@@ -21555,20 +18646,6 @@
     },
     {
       "package": "pkg/hmlog",
-      "identifier": "AnonymiseToken",
-      "file": "pkg/hmlog/capture.go",
-      "line": 300,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "BuildFullStack",
-      "file": "pkg/hmlog/factory.go",
-      "line": 90,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
       "identifier": "CaptureSink",
       "file": "pkg/hmlog/capture.go",
       "line": 31,
@@ -21632,13 +18709,6 @@
     },
     {
       "package": "pkg/hmlog",
-      "identifier": "FormatLevel",
-      "file": "pkg/hmlog/levels.go",
-      "line": 277,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
       "identifier": "Get",
       "file": "pkg/hmlog/contextual.go",
       "line": 57,
@@ -21649,13 +18719,6 @@
       "identifier": "Get",
       "file": "pkg/hmlog/contextual.go",
       "line": 57,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "IsSensitiveKey",
-      "file": "pkg/hmlog/redact.go",
-      "line": 106,
       "kind": "func"
     },
     {
@@ -21702,48 +18765,6 @@
     },
     {
       "package": "pkg/hmlog",
-      "identifier": "NewCaptureSink",
-      "file": "pkg/hmlog/capture.go",
-      "line": 45,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "NewLevelRegistry",
-      "file": "pkg/hmlog/levels.go",
-      "line": 56,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "NewLiveLog",
-      "file": "pkg/hmlog/livelog.go",
-      "line": 66,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "NewRedactingHandler",
-      "file": "pkg/hmlog/redact.go",
-      "line": 79,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "NewRedactingHandlerWithKeys",
-      "file": "pkg/hmlog/redact.go",
-      "line": 86,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "NewTeeHandler",
-      "file": "pkg/hmlog/capture.go",
-      "line": 150,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
       "identifier": "OpOptions",
       "file": "pkg/hmlog/op.go",
       "line": 21,
@@ -21769,20 +18790,6 @@
       "file": "pkg/hmlog/levels.go",
       "line": 44,
       "kind": "type"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "ParseFormat",
-      "file": "pkg/hmlog/factory.go",
-      "line": 37,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "ParseLevel",
-      "file": "pkg/hmlog/levels.go",
-      "line": 259,
-      "kind": "func"
     },
     {
       "package": "pkg/hmlog",
@@ -21835,13 +18842,6 @@
     },
     {
       "package": "pkg/hmlog",
-      "identifier": "StartOp",
-      "file": "pkg/hmlog/op.go",
-      "line": 53,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
       "identifier": "TeeHandler",
       "file": "pkg/hmlog/capture.go",
       "line": 136,
@@ -21849,13 +18849,6 @@
     },
     {
       "package": "pkg/hmlog",
-      "identifier": "WatchSlow",
-      "file": "pkg/hmlog/slowquery.go",
-      "line": 35,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmlog",
       "identifier": "WithContext",
       "file": "pkg/hmlog/contextual.go",
       "line": 71,
@@ -21881,13 +18874,6 @@
       "file": "pkg/hmui/quantity.go",
       "line": 34,
       "kind": "type"
-    },
-    {
-      "package": "pkg/hmui",
-      "identifier": "HintFor",
-      "file": "pkg/hmui/quantity.go",
-      "line": 48,
-      "kind": "func"
     },
     {
       "package": "pkg/interfaces",
@@ -22168,13 +19154,6 @@
       "file": "pkg/interfaces/matter.go",
       "line": 45,
       "kind": "type"
-    },
-    {
-      "package": "pkg/interfaces",
-      "identifier": "MatterDeviceTypeName",
-      "file": "pkg/interfaces/matter.go",
-      "line": 477,
-      "kind": "func"
     },
     {
       "package": "pkg/interfaces",
@@ -22294,20 +19273,6 @@
       "file": "pkg/interfaces/matter.go",
       "line": 232,
       "kind": "type"
-    },
-    {
-      "package": "pkg/interfaces",
-      "identifier": "MatterMeasurementClassClusterID",
-      "file": "pkg/interfaces/matter.go",
-      "line": 525,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/interfaces",
-      "identifier": "MatterMeasurementClassDeviceType",
-      "file": "pkg/interfaces/matter.go",
-      "line": 437,
-      "kind": "func"
     },
     {
       "package": "pkg/interfaces",
@@ -25708,24 +22673,38 @@
     },
     {
       "package": "cmd/openccu-loom",
-      "identifier": "TestMatterCandidateProviderAdapter_NilReceiver_ReturnsNil",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "cmd/openccu-loom/matter_status_nil_test.go",
-      "line": 75
-    },
-    {
-      "package": "cmd/openccu-loom",
-      "identifier": "TestMatterCandidateProviderAdapter_NilWalk_ReturnsNil",
+      "identifier": "TestMatterCandidateProviderAdapter_NilFields_ReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_status_nil_test.go",
       "line": 65
     },
     {
       "package": "cmd/openccu-loom",
-      "identifier": "TestMatterCandidateProviderAdapter_WalkReturnsResults",
+      "identifier": "TestMatterCandidateProviderAdapter_NilReceiver_ReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_status_nil_test.go",
-      "line": 85
+      "line": 83
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCandidateProviderAdapter_WalksRegistry_SkipsNilAndEmptyUnits",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/matter_status_nil_test.go",
+      "line": 96
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCandidates_EmptyRegistry_ReturnsEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/matter_status_adapter_test.go",
+      "line": 155
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCandidates_NilFields_ReturnsNil",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/matter_status_adapter_test.go",
+      "line": 134
     },
     {
       "package": "cmd/openccu-loom",
@@ -25733,20 +22712,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_status_adapter_test.go",
       "line": 125
-    },
-    {
-      "package": "cmd/openccu-loom",
-      "identifier": "TestMatterCandidates_NilWalk_ReturnsNil",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "cmd/openccu-loom/matter_status_adapter_test.go",
-      "line": 134
-    },
-    {
-      "package": "cmd/openccu-loom",
-      "identifier": "TestMatterCandidates_WithWalk_ReturnsResults",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "cmd/openccu-loom/matter_status_adapter_test.go",
-      "line": 143
     },
     {
       "package": "cmd/openccu-loom",
@@ -25963,7 +22928,7 @@
       "identifier": "TestMatterStatusAdapter_Advertising_Propagated",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_status_adapter_test.go",
-      "line": 161
+      "line": 169
     },
     {
       "package": "cmd/openccu-loom",
@@ -103703,58 +100668,16 @@
     {
       "package": "internal/north/matter/eligibility",
       "identifier": "Candidate",
-      "reason": "return type of CollectCandidates, the GET /api/v1/matter/exposable entry point reached through the daemon's matterCandidateProviderAdapter interface dispatch the reachability analyzer's RTA heuristic does not trace",
+      "reason": "returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used",
       "file": "internal/north/matter/eligibility/eligibility.go",
       "line": 56
     },
     {
       "package": "internal/north/matter/eligibility",
       "identifier": "Candidate",
-      "reason": "return type of CollectCandidates, the GET /api/v1/matter/exposable entry point reached through the daemon's matterCandidateProviderAdapter interface dispatch the reachability analyzer's RTA heuristic does not trace",
+      "reason": "returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used",
       "file": "internal/north/matter/eligibility/eligibility.go",
       "line": 56
-    },
-    {
-      "package": "internal/north/matter/eligibility",
-      "identifier": "Classify",
-      "reason": "reached from GET /api/v1/matter/exposable via CollectCandidates; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 68
-    },
-    {
-      "package": "internal/north/matter/eligibility",
-      "identifier": "Classify",
-      "reason": "reached from GET /api/v1/matter/exposable via CollectCandidates; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 68
-    },
-    {
-      "package": "internal/north/matter/eligibility",
-      "identifier": "CollectCandidates",
-      "reason": "Matter exposure entry point — reached from GET /api/v1/matter/exposable via the daemon's matterCandidateProviderAdapter (cmd/openccu-loom); that adapter's interface dispatch is not traced by the reachability analyzer's RTA heuristic",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 152
-    },
-    {
-      "package": "internal/north/matter/eligibility",
-      "identifier": "CollectCandidates",
-      "reason": "Matter exposure entry point — reached from GET /api/v1/matter/exposable via the daemon's matterCandidateProviderAdapter (cmd/openccu-loom); that adapter's interface dispatch is not traced by the reachability analyzer's RTA heuristic",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 152
-    },
-    {
-      "package": "internal/north/matter/eligibility",
-      "identifier": "DeriveMatterEligibility",
-      "reason": "reached from GET /api/v1/matter/exposable via Classify; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 93
-    },
-    {
-      "package": "internal/north/matter/eligibility",
-      "identifier": "DeriveMatterEligibility",
-      "reason": "reached from GET /api/v1/matter/exposable via Classify; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic",
-      "file": "internal/north/matter/eligibility/eligibility.go",
-      "line": 93
     },
     {
       "package": "internal/north/matter/eligibility",

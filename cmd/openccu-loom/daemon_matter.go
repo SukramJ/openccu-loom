@@ -36,7 +36,6 @@ import (
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	matterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
@@ -3117,18 +3116,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		}
 		wiring.fabricRevoker = &matterFabricRevokerAdapter{store: mfs}
 		wiring.closer = &matterCommissioningCloserAdapter{window: window}
-		wiring.candidates = &matterCandidateProviderAdapter{
-			walk: func() []eligibility.Candidate {
-				var out []eligibility.Candidate
-				for _, u := range reg.List() {
-					if u == nil || u.ModelRegistry == nil {
-						continue
-					}
-					out = append(out, eligibility.CollectCandidates(u.Name(), u.ModelRegistry.List(), cfg.North.Matter.ExposeSecondaryChannels)...)
-				}
-				return out
-			},
-		}
+		wiring.candidates = &matterCandidateProviderAdapter{reg: reg, cfg: cfg}
 	}
 	return wiring, closers, teardown
 }
