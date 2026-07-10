@@ -7,6 +7,7 @@ package chiptool
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,13 +117,19 @@ func TestReceive_ElectricalEnergyMeasurement(t *testing.T) {
 	// RECEIVE — an ENERGY_COUNTER push must reach the controller as a proactive
 	// CumulativeEnergyImported report (1500 Wh → 1500000 mWh). Subscribe first,
 	// then fire so the report can only come from the change-notifier.
+	//
+	// chip-tool's DataModelLogger has no friendly name for
+	// ElectricalEnergyMeasurement.CumulativeEnergyImported (0x0091:0x0001) in
+	// the pinned build — unlike ElectricalPower.ActivePower — so it logs the
+	// decoded value as a raw "Data = …" on that cluster/attribute path. Match
+	// the cluster + attribute + value rather than an attribute name.
 	t.Run("receive/cumulative-energy-imported", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"electricalenergymeasurement", "cumulative-energy-imported", ep,
 			func() error { return b.CCU.FireDeviceEvent(address, dpKey, 1500.0) },
 			func(out string) bool {
-				v, ok := harness.FindAttrInt(out, "CumulativeEnergyImported")
-				return ok && v == 1500000
+				return strings.Contains(out, "Cluster: 0x0000_0091 Attribute 0x0000_0001") &&
+					strings.Contains(out, "Data = 1500000")
 			},
 			30*time.Second)
 		if err != nil {
