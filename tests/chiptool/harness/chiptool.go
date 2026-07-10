@@ -623,7 +623,16 @@ func (c *Controller) SubscribeEventInteractiveAndAwait(
 		return "", fmt.Errorf("start chip-tool interactive: %w", err)
 	}
 
-	// Issue the subscription into the live REPL session.
+	// Prime the operational CASE session with a cheap read first, THEN issue the
+	// subscription — in interactive mode the subscribe-event alone does not
+	// reliably resolve the operational node, so without an established session
+	// the request never reaches the bridge. Both commands are queued on the
+	// REPL's stdin; the REPL executes them in order.
+	if _, err := fmt.Fprintf(stdin, "descriptor read server-list 0x%X %d\n", c.NodeID, endpointID); err != nil {
+		cancel()
+		_ = cmd.Wait()
+		return "", fmt.Errorf("write priming read command: %w", err)
+	}
 	if _, err := fmt.Fprintf(stdin, "%s subscribe-event %s %d %d 0x%X %d\n",
 		cluster, evt, minIntervalSec, maxIntervalSec, c.NodeID, endpointID); err != nil {
 		cancel()
