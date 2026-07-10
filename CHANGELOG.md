@@ -6,6 +6,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-07-10
+
+### Fixed
+
+- **Power/energy meters on switching devices now push live readings to Matter.**
+  A HmIP-BSM (and similar metering switches) reports its POWER / ENERGY_COUNTER
+  from a sibling meter channel that the bridge attaches onto the switch's Matter
+  endpoint. The endpoint's change-notifier only covered the OnOff cluster, so a
+  power/energy change was never pushed to a subscribed controller — the value was
+  correct on a read but updated only on demand. The ElectricalPowerMeasurement /
+  ElectricalEnergyMeasurement clusters now forward their source's notifier, so a
+  meter reading change reaches Apple/Google Home as a proactive report.
+- **Matter event subscriptions now establish and deliver events.** A subscription
+  naming only events (e.g. a GenericSwitch button press — a momentary control with
+  no persisted attribute) was rejected when no matching event had been recorded
+  yet. Since a button subscription is necessarily placed before the press, it
+  could never receive one. Event-only subscriptions now establish on the requested
+  event paths and stay up to deliver future events, matching the reference Matter
+  stack.
+
 ## [0.31.0] — 2026-07-10
 
 ### Added

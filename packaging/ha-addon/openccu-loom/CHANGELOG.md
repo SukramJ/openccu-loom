@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.32.0
+
+- **Power/energy meters now update live in Matter.** A switch with a power meter
+  (HmIP-BSM) now pushes its live power and energy readings to Apple/Google Home
+  instead of only updating when the app reads them.
+- **Matter button presses now work.** Subscribing to a button/action (via a
+  Matter controller) previously failed; button-press events now reach the
+  controller.
+
 ## 0.31.0
 
 - **Irrigation valves now work in Matter.** An HmIP irrigation valve is now
