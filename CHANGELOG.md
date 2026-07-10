@@ -46,6 +46,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the index sensor and resolve the VALUE_LIST label on demand, and a
   resolver-boundary contract test pins the "read-only ENUM → index sensor"
   invariant so the accessor mismatch cannot recur.
+- **Docker image builds again.** The builder stage pinned `golang:1.26.4-alpine`
+  while `go.mod` requires Go 1.26.5, so with `GOTOOLCHAIN=local` the image build
+  failed at `go mod download` (`requires go >= 1.26.5`). The builder base image is
+  bumped to `golang:1.26.5-alpine`, matching `go.mod` and the CI `GO_VERSION`.
 - **Matter bridge survives boot-time database contention with a large device
   fleet.** Endpoint-ID assignment runs a read-then-write SQLite transaction;
   under WAL a concurrent boot writer (the device-load pipeline) could fail the
