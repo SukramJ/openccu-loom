@@ -250,7 +250,31 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 			}
 		}
 	}
-	logger.Info("entry-points gesammelt", "count", len(entryFuncs), "production_only", productionOnly)
+
+	// REST/WS request handlers (and the closures they return) are mounted on
+	// the router reflectively, so RTA never sees them being called. Without
+	// help it treats them — AND everything reachable ONLY through them
+	// (adapters, providers, the Matter eligibility collector) — as unreachable.
+	// checkAutoWhitelist papers over the handler functions themselves, but their
+	// transitive callees in domain packages are left as false-negative dead code
+	// that a benign refactor elsewhere can flip into the ratchet (see
+	// docs/adr/0049-matter-one-endpoint-per-device.md, where the Matter
+	// eligibility entry points went dark this way). Seed RTA with the handler
+	// functions and their nested closures as extra entry points so their real
+	// callees are traced instead of needing a manual loom:reachable annotation.
+	reflectiveEntries := 0
+	for fn := range ssautil.AllFunctions(prog) {
+		if fn == nil || fn.Pkg == nil || !fn.Pos().IsValid() {
+			continue
+		}
+		relFile := strings.TrimPrefix(prog.Fset.Position(fn.Pos()).Filename, absRoot+"/")
+		if isReflectiveEntryFile(relFile) {
+			entryFuncs = append(entryFuncs, fn)
+			reflectiveEntries++
+		}
+	}
+	logger.Info("entry-points gesammelt", "count", len(entryFuncs),
+		"reflective_handlers", reflectiveEntries, "production_only", productionOnly)
 
 	// --- 4. RTA-Analyse ---
 	logger.Info("starte RTA-Analyse (kann 30-60s dauern)...")
@@ -260,6 +284,33 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 	reachableFuncs := make(map[*ssa.Function]bool)
 	for fn := range rtaResult.Reachable {
 		reachableFuncs[fn] = true
+	}
+
+	// Unify test-instrumented package variants. go/packages loads a package in
+	// several configurations (normal, package-under-test, external test), so one
+	// logical function has several *ssa.Function instances. RTA reaches only the
+	// instance on the live call path, but the classification below may inspect a
+	// different variant — which would then read as unreachable even though the
+	// function is genuinely live. Mark every instance whose logical identity
+	// (RelString: package + receiver + name, unique per logical function so this
+	// can never conflate two distinct functions) matches a reachable one.
+	reachableSig := make(map[string]bool, len(reachableFuncs))
+	for fn := range reachableFuncs {
+		reachableSig[fn.RelString(nil)] = true
+	}
+	for _, p := range ssaPkgs {
+		if p == nil {
+			continue
+		}
+		for _, mem := range p.Members {
+			fn, ok := mem.(*ssa.Function)
+			if !ok || reachableFuncs[fn] {
+				continue
+			}
+			if reachableSig[fn.RelString(nil)] {
+				reachableFuncs[fn] = true
+			}
+		}
 	}
 	logger.Debug("erreichbare Funktionen", "count", len(reachableFuncs))
 
@@ -463,6 +514,17 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 	}
 
 	return nil
+}
+
+// isReflectiveEntryFile reports whether relFile holds request handlers the
+// router mounts reflectively (HTTP handlers + WebSocket command handlers). RTA
+// cannot observe these being called, so [main] seeds them — and their nested
+// closures — as extra entry points so their real callees are traced. Keep this
+// in sync with the rest-handler / ws-command auto-whitelist patterns in
+// checkAutoWhitelist below.
+func isReflectiveEntryFile(relFile string) bool {
+	return strings.Contains(relFile, "internal/north/rest/handlers/") ||
+		strings.Contains(relFile, "internal/north/rest/ws/")
 }
 
 // checkAutoWhitelist prüft ob ein Item automatisch whitelisted werden soll.

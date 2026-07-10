@@ -1,8 +1,8 @@
 # loom:reachable Whitelist Audit
 
-Generated: 2026-07-10T14:42:49Z
+Generated: 2026-07-10T16:33:14Z
 
-Total annotated items: 32 — PRODUCTIVE: 24 — MASKED: 8
+Total annotated items: 29 — PRODUCTIVE: 21 — MASKED: 8
 
 ## MASKED — Annotation hides genuine dead code (8 items)
 
@@ -23,7 +23,7 @@ A `loom:reachable` annotation alone is not sufficient justification.
 | `ClusterName` | `internal/north/matter/schema/lookup.go` | 20 | introspection companion to the generated cluster tables; retained for diagnostics — no production caller yet |
 | `DeviceTypeName` | `internal/north/matter/schema/lookup.go` | 44 | introspection companion to the generated device-type tables; retained for diagnostics — no production caller yet |
 
-## PRODUCTIVE — Has production callers (24 items)
+## PRODUCTIVE — Has production callers (21 items)
 
 These items are genuinely reachable from production code.
 
@@ -44,10 +44,7 @@ These items are genuinely reachable from production code.
 | `ErrValidation` | `internal/model/device/channel_set.go` | 45 | internal/north/rest/problem/problem.go, internal/north/rest/handlers/devices.go, internal/central/adapter/paramsets.go (and 3 more) | matched by the REST PUT /value handler (internal/north/rest/handlers/devices.go) via errors.Is to map a client-side validation rejection to 400 instead of a 502 upstream failure; the reachability heuristic does not follow sentinel-var references through errors.Is |
 | `NewAlarmMessagesWithCentral` | `internal/model/hub/messages.go` | 83 | internal/model/hub/messages.go (same file) | called by NewAlarmMessages (legacy wrapper) which is used by hub.NewHub to populate the Hub.Messages field |
 | `IsVirtualInterfaceName` | `internal/netutil/interfaces.go` | 42 | internal/north/discovery/mdns/interfaces.go, internal/north/matter/mdns/zeroconf.go | statically called by the client-discovery and Matter mDNS advertisers (internal/north/discovery/mdns, internal/north/matter/mdns); those advertiser paths sit behind the daemon wiring the RTA entry-point analysis already tolerates as unreachable for the caller packages |
-| `Candidate` | `internal/north/matter/eligibility/eligibility.go` | 56 | cmd/openccu-loom/matter_status_adapter.go, cmd/openccu-loom/daemon_matter.go, internal/north/rest/handlers/matter_exposures.go (and 1 more) | return type of CollectCandidates, the GET /api/v1/matter/exposable entry point reached through the daemon's matterCandidateProviderAdapter interface dispatch the reachability analyzer's RTA heuristic does not trace |
-| `Classify` | `internal/north/matter/eligibility/eligibility.go` | 68 | cmd/hmcli/events.go, internal/north/rest/ws/client.go, internal/model/event/event.go (and 2 more) | reached from GET /api/v1/matter/exposable via CollectCandidates; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic |
-| `DeriveMatterEligibility` | `internal/north/matter/eligibility/eligibility.go` | 93 | pkg/interfaces/matter.go, internal/north/matter/eligibility/eligibility.go (same file) | reached from GET /api/v1/matter/exposable via Classify; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic |
-| `CollectCandidates` | `internal/north/matter/eligibility/eligibility.go` | 152 | cmd/openccu-loom/daemon_matter.go, internal/north/rest/handlers/matter_exposures.go | Matter exposure entry point — reached from GET /api/v1/matter/exposable via the daemon's matterCandidateProviderAdapter (cmd/openccu-loom); that adapter's interface dispatch is not traced by the reachability analyzer's RTA heuristic |
+| `Candidate` | `internal/north/matter/eligibility/eligibility.go` | 56 | cmd/openccu-loom/matter_status_adapter.go, internal/north/rest/handlers/matter_exposures.go, internal/north/matter/eligibility/eligibility.go (same file) | returned by CollectCandidates and consumed by the REST /matter/exposable handler; a method-less data struct that the reachability analyzer's type heuristic (which marks a type reachable only via its methods) cannot see used |
 | `MatchesSpecialValue` | `internal/parameter/validate.go` | 230 | internal/model/generic/bounds.go, internal/parameter/coerce.go, internal/parameter/validate.go (same file) | single source of truth for the SPECIAL MIN/MAX-bypass rule; called by the write-coerce path (coerce.go), the validation path (validate.go), and the runtime read path (internal/model/generic bounds.go) — the reachability heuristic does not resolve the delegated cross-package call |
 | `NewDeviceStore` | `internal/store/sqlite/devices.go` | 43 | cmd/openccu-loom/descriptor_stores_wiring.go | constructed in daemon.go central wiring alongside other SQLite stores; device persistence for warm-boot cache |
 | `Upsert` | `internal/store/sqlite/devices.go` | 46 | cmd/openccu-loom/configcli.go, internal/central/adapter/descriptor_persistence.go, internal/store/sqlite/paramsets.go (and 1 more) | constructed in daemon.go central wiring alongside other SQLite stores; device persistence for warm-boot cache |
