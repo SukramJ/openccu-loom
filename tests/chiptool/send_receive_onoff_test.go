@@ -79,43 +79,46 @@ func TestSendReceive_OnOff(t *testing.T) {
 		}
 	})
 
-	// SEND — a raw attribute write (as opposed to the on/off/toggle
-	// command invocations above) must land the same way: MatterWrite
-	// accepts OnOff.OnOff as a plain boolean write onto STATE.
-	t.Run("send/write-on-off-attribute", func(t *testing.T) {
-		if _, err := b.SharedCtl.WriteAttr(ctx, t, "onoff", "on-off", "1", ep); err != nil {
-			t.Fatalf("write on-off=1: %v", err)
-		}
-		got, ok := b.CCU.GetDPValue(address, "STATE")
+	// SEND (negative) — OnOff.OnOff (attribute 0x0000) is read-only per
+	// Matter §1.5.6.1 (matter.js OnOffServer's `onOff` element carries no
+	// write access), so a controller attribute WRITE must be refused, not
+	// land on the CCU. chip-tool rejects `onoff write on-off` before the
+	// wire (its cluster schema marks the attribute non-writable) and exits
+	// non-zero; WriteStatus surfaces that as a non-success status. OnOff
+	// SEND is driven by the On/Off/Toggle commands (the cycle above), which
+	// is the only spec-valid controller path.
+	t.Run("send/write-on-off-attribute-rejected", func(t *testing.T) {
+		out, _ := b.SharedCtl.WriteAttr(ctx, t, "onoff", "on-off", "1", ep)
+		statusHex, ok := harness.WriteStatus(out)
 		if !ok {
-			t.Fatalf("STATE absent on CCU after attribute write")
+			t.Fatalf("no IM status parsed from OnOff.OnOff write attempt:\n%s", out)
 		}
-		if !onoffIsTrue(got) {
-			t.Fatalf("CCU STATE = %v after write on-off=1, want true", got)
+		if statusHex == "0x0" {
+			t.Fatalf("OnOff.OnOff write unexpectedly succeeded (status=0x0) — attribute must be read-only:\n%s", out)
 		}
 	})
 
 	// RECEIVE — an external STATE change (device button press / CCU
 	// program) must reach the controller as a proactive OnOff report.
-	// The send cell above left STATE=true, so injecting false here is
-	// distinct from the pre-state and the subscribe's own initial
-	// report cannot pre-satisfy want(). OnOff is non-nullable: a
-	// successful FindAttrBool match (rather than a TLV-null encoding,
-	// which chip-tool would refuse to parse as CHIP 0x26) is itself
-	// the non-nullability assertion — switch.Switch implements
-	// MatterClusterServer, so the change-notifier only ever reports a
-	// concrete boolean for OnOff.
+	// The on/off/toggle cycle above ended with STATE=false (and the
+	// read-only-write cell left it untouched), so injecting true here is
+	// distinct from the pre-state and the subscribe's own initial report
+	// cannot pre-satisfy want(). OnOff is non-nullable: a successful
+	// FindAttrBool match (rather than a TLV-null encoding, which chip-tool
+	// would refuse to parse as CHIP 0x26) is itself the non-nullability
+	// assertion — switch.Switch implements MatterClusterServer, so the
+	// change-notifier only ever reports a concrete boolean for OnOff.
 	t.Run("receive/on-off", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"onoff", "on-off", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "STATE", false) },
+			func() error { return b.CCU.FireDeviceEvent(address, "STATE", true) },
 			func(out string) bool {
 				v, ok := harness.FindAttrBool(out, "OnOff")
-				return ok && !v
+				return ok && v
 			},
 			30*time.Second)
 		if err != nil {
-			t.Fatalf("await proactive OnOff=false: %v\n%s", err, out)
+			t.Fatalf("await proactive OnOff=true: %v\n%s", err, out)
 		}
 	})
 

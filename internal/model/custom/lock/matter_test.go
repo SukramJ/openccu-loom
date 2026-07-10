@@ -58,7 +58,7 @@ func TestMatterClusterServersExposesDoorLock(t *testing.T) {
 // TestLockStateLockedMaps maps StateLocked to Matter LockState=1.
 func TestLockStateLockedMaps(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	v, ok := srv(r.lock).MatterRead(0x0000)
 	if !ok || v.(uint8) != 1 {
 		t.Fatalf("LockState = (%v, %v), want (1, true)", v, ok)
@@ -68,7 +68,7 @@ func TestLockStateLockedMaps(t *testing.T) {
 // TestLockStateUnlockedMaps maps StateUnlocked to Matter LockState=2.
 func TestLockStateUnlockedMaps(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.stateDP.OnEvent(string(StateUnlocked))
+	fireLockEnum(t, r.stateDP, string(StateUnlocked))
 	v, ok := srv(r.lock).MatterRead(0x0000)
 	if !ok || v.(uint8) != 2 {
 		t.Fatalf("LockState = (%v, %v), want (2, true)", v, ok)
@@ -81,7 +81,7 @@ func TestLockStateUnlockedMaps(t *testing.T) {
 // the operation".
 func TestLockStateJammedOverridesLocked(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	r.jammedDP.OnEvent(true)
 	v, ok := srv(r.lock).MatterRead(0x0000)
 	if !ok || v.(uint8) != 0 {
@@ -209,8 +209,8 @@ func TestLockOnMatterValueChangedFiresOnConfirmedStateChange(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
 	var count int
 	_ = r.lock.OnMatterValueChanged(func() { count++ })
-	r.stateDP.OnEvent(string(StateLocked))
-	r.stateDP.OnEvent(string(StateUnlocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateUnlocked))
 	if count != 2 {
 		t.Fatalf("expected 2 callback invocations, got %d", count)
 	}
@@ -223,9 +223,9 @@ func TestLockOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
 	var count int
 	unsub := r.lock.OnMatterValueChanged(func() { count++ })
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	unsub()
-	r.stateDP.OnEvent(string(StateUnlocked))
+	fireLockEnum(t, r.stateDP, string(StateUnlocked))
 	if count != 1 {
 		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
 	}
@@ -246,5 +246,5 @@ func TestLockOnMatterValueChangedNilSafe(t *testing.T) {
 	if unsub2 == nil {
 		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
 	}
-	r.stateDP.OnEvent(string(StateLocked)) // must not panic with no subscriber
+	fireLockEnum(t, r.stateDP, string(StateLocked)) // must not panic with no subscriber
 }

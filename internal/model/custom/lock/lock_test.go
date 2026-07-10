@@ -47,9 +47,22 @@ func (s *stubWriter) last() call {
 type rig struct {
 	lock     *Lock
 	channel  *device.Channel
-	stateDP  *generic.Sensor[string]
-	dirDP    *generic.Sensor[string]
+	stateDP  *generic.Sensor[int32]
+	dirDP    *generic.Sensor[int32]
 	jammedDP *generic.BinarySensor
+}
+
+// fireLockEnum resolves label against dp's own VALUE_LIST and fires the
+// resulting raw index as a wire event — mirrors how the resolver projects a
+// read-only ENUM parameter (LOCK_STATE, DIRECTION, ERROR) onto an
+// index-valued Sensor[int32].
+func fireLockEnum(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
 }
 
 func newRig(t *testing.T, address string, kind Kind, w Writer, caps custom.LockCapabilities) *rig {
@@ -57,28 +70,30 @@ func newRig(t *testing.T, address string, kind Kind, w Writer, caps custom.LockC
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel(address, 1, "LOCK", hmenum.ParamsetKeyValues)
 
-	stateDP := generic.NewStringSensor(generic.Spec{
+	stateDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: address,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterLockState),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"UNKNOWN", "LOCKED", "UNLOCKED"},
 		},
 	})
 	ch.Put(stateDP)
 
-	dirDP := generic.NewStringSensor(generic.Spec{
+	dirDP := generic.NewIntegerSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: address,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(hmenum.ParameterDirection),
 		},
 		Descriptor: hmproto.ParameterData{
-			Type:       hmenum.ParameterTypeString,
+			Type:       hmenum.ParameterTypeEnum,
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"", "UP", "DOWN"},
 		},
 	})
 	ch.Put(dirDP)
@@ -155,12 +170,12 @@ func TestLockIngestion(t *testing.T) {
 
 	// Drive the channel-side data points (production path) and
 	// verify Lock observes them through its shared pointers.
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	locked, observed := r.lock.IsLocked()
 	if !locked || !observed {
 		t.Fatalf("locked=%v observed=%v", locked, observed)
 	}
-	r.dirDP.OnEvent(string(DirectionLocking))
+	fireLockEnum(t, r.dirDP, string(DirectionLocking))
 	if d, ok := r.lock.Direction(); !ok || d != DirectionLocking {
 		t.Fatalf("direction=%v ok=%v", d, ok)
 	}
@@ -278,7 +293,7 @@ func TestLockDataVersionBumpsOnWireUpdate(t *testing.T) {
 	before := r.lock.MatterDataVersion()
 
 	// First CCU-confirmed value fires OnConfirmedUpdate (first observation).
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 
 	after := r.lock.MatterDataVersion()
 	if after <= before {
@@ -287,7 +302,7 @@ func TestLockDataVersionBumpsOnWireUpdate(t *testing.T) {
 
 	// A value change also fires confirmed callbacks.
 	mid := after
-	r.stateDP.OnEvent(string(StateUnlocked))
+	fireLockEnum(t, r.stateDP, string(StateUnlocked))
 	afterChange := r.lock.MatterDataVersion()
 	if afterChange <= mid {
 		t.Fatalf("DataVersion did not bump after LOCK_STATE value change: before=%d after=%d", mid, afterChange)
@@ -441,7 +456,7 @@ func TestLockGetCurrentStateReflectsDP(t *testing.T) {
 		t.Error("State() should not be observed before any DP event")
 	}
 
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	st, ok := r.lock.LockState()
 	if !ok {
 		t.Fatal("State() must be observed after event")
@@ -450,7 +465,7 @@ func TestLockGetCurrentStateReflectsDP(t *testing.T) {
 		t.Errorf("State() = %q, want %q", st, StateLocked)
 	}
 
-	r.stateDP.OnEvent(string(StateUnlocked))
+	fireLockEnum(t, r.stateDP, string(StateUnlocked))
 	st, ok = r.lock.LockState()
 	if !ok || st != StateUnlocked {
 		t.Errorf("State() after unlock event = %q ok=%v, want unlocked", st, ok)

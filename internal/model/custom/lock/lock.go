@@ -123,17 +123,20 @@ type Lock struct {
 	unlockMu      sync.Mutex
 	unlockHistory []UnlockEvent
 
-	// IP-locks expose LOCK_STATE as an enum-string sensor and
-	// DIRECTION as a separate string sensor. RF / Button locks expose
-	// only a boolean STATE plus the optional jam flag — the
-	// CCU does not report a separate direction parameter.
-	stateDp     *generic.Sensor[string]
-	directionDp *generic.Sensor[string]
+	// IP-locks expose LOCK_STATE and DIRECTION as read-only ENUM
+	// parameters, which the resolver projects onto raw-index Sensor[int32]
+	// slots; the string label is resolved on read via
+	// [custom.EnumLabelValue]. RF / Button locks expose only a boolean
+	// STATE plus the optional jam flag — the CCU does not report a
+	// separate direction parameter.
+	stateDp     *generic.Sensor[int32]
+	directionDp *generic.Sensor[int32]
 	jammedDp    *generic.BinarySensor
-	// rfErrorDp carries the HM-Sec-Key (RF lock) ERROR string parameter.
-	// RF locks report jammed state as ERROR != "NO_ERROR" rather than
-	// through a binary ERROR_JAMMED flag.
-	rfErrorDp *generic.Sensor[string]
+	// rfErrorDp carries the HM-Sec-Key (RF lock) ERROR parameter (a
+	// read-only ENUM, so also an index sensor). RF locks report jammed
+	// state as ERROR != "NO_ERROR" rather than through a binary
+	// ERROR_JAMMED flag.
+	rfErrorDp *generic.Sensor[int32]
 	// boolStateDp carries the RF / Button bool wire value. Semantics
 	// differ per kind: RF STATE reads false="locked" / true="unlocked",
 	// while the button-lock parameter (GLOBAL_BUTTON_LOCK) reads
@@ -189,13 +192,13 @@ func New(cfg Config) *Lock {
 	// RF locks (HM-Sec-Key family) carry a string ERROR parameter instead of
 	// the binary ERROR_JAMMED that IP/Button locks use.
 	if cfg.Kind == KindRF {
-		l.rfErrorDp = custom.StringSensorField(cfg.Channel, hmenum.ParameterError)
+		l.rfErrorDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterError)
 	}
 	switch cfg.Kind {
 	case KindIP:
-		// HmIP locks: LOCK_STATE (enum string) + DIRECTION.
-		l.stateDp = custom.StringSensorField(cfg.Channel, hmenum.ParameterLockState)
-		l.directionDp = custom.StringSensorField(cfg.Channel, hmenum.ParameterDirection)
+		// HmIP locks: LOCK_STATE (read-only ENUM) + DIRECTION (read-only ENUM).
+		l.stateDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterLockState)
+		l.directionDp = custom.EnumSensorField(cfg.Channel, hmenum.ParameterDirection)
 	case KindRF:
 		// RF locks: bool STATE only — the CCU does not expose LOCK_STATE /
 		// DIRECTION on these channels.
@@ -217,10 +220,10 @@ func New(cfg Config) *Lock {
 	// BUTTON_LOCK without going through LockInvoke, so each wire slot needs
 	// its own hook to guarantee DataVersionFilter sees the change.
 	if l.stateDp != nil {
-		_ = l.stateDp.OnConfirmedUpdate(func(_, _ string) { l.dataVersion.Bump() })
+		_ = l.stateDp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
 	}
 	if l.directionDp != nil {
-		_ = l.directionDp.OnConfirmedUpdate(func(_, _ string) { l.dataVersion.Bump() })
+		_ = l.directionDp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
 	}
 	if l.boolStateDp != nil {
 		_ = l.boolStateDp.OnConfirmedUpdate(func(_, _ bool) { l.dataVersion.Bump() })
@@ -229,7 +232,7 @@ func New(cfg Config) *Lock {
 		_ = l.jammedDp.OnConfirmedUpdate(func(_, _ bool) { l.dataVersion.Bump() })
 	}
 	if l.rfErrorDp != nil {
-		_ = l.rfErrorDp.OnConfirmedUpdate(func(_, _ string) { l.dataVersion.Bump() })
+		_ = l.rfErrorDp.OnConfirmedUpdate(func(_, _ int32) { l.dataVersion.Bump() })
 	}
 	l.registerServices()
 	return l
@@ -322,10 +325,7 @@ func (l *Lock) LockState() (State, bool) {
 		}
 		return StateLocked, true
 	}
-	if l.stateDp == nil {
-		return StateUnknown, false
-	}
-	s, ok := l.stateDp.Value()
+	s, ok := custom.EnumLabelValue(l.stateDp)
 	if !ok {
 		return StateUnknown, false
 	}
@@ -348,10 +348,7 @@ func (l *Lock) IsLocked() (locked, observed bool) {
 
 // Direction returns the current motor direction.
 func (l *Lock) Direction() (Direction, bool) {
-	if l.directionDp == nil {
-		return DirectionNone, false
-	}
-	d, ok := l.directionDp.Value()
+	d, ok := custom.EnumLabelValue(l.directionDp)
 	if !ok {
 		return DirectionNone, false
 	}
@@ -398,7 +395,7 @@ func (l *Lock) NamePostfix() string {
 // binary ERROR_JAMMED parameter.
 func (l *Lock) IsJammed() bool {
 	if l.Kind == KindRF && l.rfErrorDp != nil {
-		v, ok := l.rfErrorDp.Value()
+		v, ok := custom.EnumLabelValue(l.rfErrorDp)
 		if !ok {
 			return false
 		}
@@ -603,11 +600,15 @@ func (l *Lock) observeCommand(cmd command) {
 	// harmless because the next CCU push overwrites the synthesised value.
 	// Documented as a deliberate divergence in docs/parity/by_design.md.
 	if l.stateDp != nil {
+		var label string
 		switch cmd {
 		case commandLock:
-			l.stateDp.OnEvent(string(StateLocked))
+			label = string(StateLocked)
 		case commandUnlock, commandOpen:
-			l.stateDp.OnEvent(string(StateUnlocked))
+			label = string(StateUnlocked)
+		}
+		if idx, ok := custom.EnumLabelIndex(l.stateDp, label); ok {
+			l.stateDp.OnEvent(idx)
 		}
 		return
 	}

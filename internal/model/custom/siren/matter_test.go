@@ -110,7 +110,7 @@ func TestSirenOnOffOffCommandTurnsOff(t *testing.T) {
 // SMOKE_DETECTOR_ALARM_STATUS + SMOKE_DETECTOR_COMMAND DPs.
 type smokeRig struct {
 	siren  *SmokeSiren
-	status *generic.Sensor[string]
+	status *generic.Sensor[int32]
 }
 
 func newSmokeRig(t *testing.T) *smokeRig {
@@ -133,7 +133,7 @@ func newSmokeRig(t *testing.T) *smokeRig {
 		ch.Put(dp)
 		return dp
 	}
-	statusDP := mk(hmenum.ParameterSmokeDetectorAlarmStatus)
+	statusDP := attachSmokeStatusSensor(ch)
 	mk(hmenum.ParameterSmokeDetectorCommand)
 	return &smokeRig{
 		siren:  NewSmokeSiren(SmokeSirenConfig{Channel: ch, Writer: w}),
@@ -165,7 +165,7 @@ func TestSmokeSirenStatusToAlarmState(t *testing.T) {
 	}
 	for _, tc := range cases {
 		r := newSmokeRig(t)
-		r.status.OnEvent(string(tc.status))
+		fireSmokeStatus(t, r.status, string(tc.status))
 		srv := findCluster(t, r.siren, 0x005C)
 		v, ok := srv.MatterRead(0x0001) // SmokeState
 		if !ok || v.(uint8) != tc.want {
@@ -264,8 +264,8 @@ func TestSmokeSirenOnMatterValueChangedFiresOnConfirmedStatusChange(t *testing.T
 	r := newSmokeRig(t)
 	var count int
 	_ = r.siren.OnMatterValueChanged(func() { count++ })
-	r.status.OnEvent(string(SmokeStatusPrimaryAlarm))
-	r.status.OnEvent(string(SmokeStatusIdleOff))
+	fireSmokeStatus(t, r.status, string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, r.status, string(SmokeStatusIdleOff))
 	if count != 2 {
 		t.Fatalf("expected 2 callback invocations, got %d", count)
 	}
@@ -277,9 +277,9 @@ func TestSmokeSirenOnMatterValueChangedUnsubscribeStopsCallback(t *testing.T) {
 	r := newSmokeRig(t)
 	var count int
 	unsub := r.siren.OnMatterValueChanged(func() { count++ })
-	r.status.OnEvent(string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, r.status, string(SmokeStatusPrimaryAlarm))
 	unsub()
-	r.status.OnEvent(string(SmokeStatusIdleOff))
+	fireSmokeStatus(t, r.status, string(SmokeStatusIdleOff))
 	if count != 1 {
 		t.Fatalf("expected 1 callback invocation after unsub, got %d", count)
 	}
@@ -300,5 +300,5 @@ func TestSmokeSirenOnMatterValueChangedNilSafe(t *testing.T) {
 	if unsub2 == nil {
 		t.Fatal("nil callback: OnMatterValueChanged must return non-nil unsub")
 	}
-	r.status.OnEvent(string(SmokeStatusPrimaryAlarm)) // must not panic with no subscriber
+	fireSmokeStatus(t, r.status, string(SmokeStatusPrimaryAlarm)) // must not panic with no subscriber
 }

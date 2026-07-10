@@ -110,13 +110,37 @@ func TestState_BoolStateDPTrueIsUnlocked(t *testing.T) {
 	}
 }
 
+// newIPRigWithValueList builds a bare KindIP Lock wired to a LOCK_STATE
+// ENUM index sensor carrying a caller-supplied VALUE_LIST, for tests that
+// need a label outside the canonical LOCK_STATE set used by newRig.
+func newIPRigWithValueList(t *testing.T, address string, valueList []string) (*Lock, *generic.Sensor[int32]) {
+	t.Helper()
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "VLR0001"})
+	ch := d.AddChannel(address, 1, "LOCK", hmenum.ParamsetKeyValues)
+	stateDP := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterLockState),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  valueList,
+		},
+	})
+	ch.Put(stateDP)
+	l := New(Config{Channel: ch, Writer: &stubWriter{}, Kind: KindIP})
+	return l, stateDP
+}
+
 // TestState_UnknownStringIsPreserved verifies that an unknown string
 // value coming from the CCU is returned as-is.
 func TestState_UnknownStringIsPreserved(t *testing.T) {
 	t.Parallel()
-	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.stateDP.OnEvent("OPENING")
-	st, ok := r.lock.LockState()
+	l, stateDP := newIPRigWithValueList(t, "HmIP-DLD:1", []string{"UNKNOWN", "LOCKED", "UNLOCKED", "OPENING"})
+	fireLockEnum(t, stateDP, "OPENING")
+	st, ok := l.LockState()
 	if !ok {
 		t.Fatal("State() must be observed after DP event")
 	}
@@ -129,9 +153,9 @@ func TestState_UnknownStringIsPreserved(t *testing.T) {
 // from the CCU maps to StateUnknown.
 func TestState_EmptyStringIsUnknown(t *testing.T) {
 	t.Parallel()
-	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.stateDP.OnEvent("")
-	st, ok := r.lock.LockState()
+	l, stateDP := newIPRigWithValueList(t, "HmIP-DLD:1", []string{"", "LOCKED", "UNLOCKED"})
+	fireLockEnum(t, stateDP, "")
+	st, ok := l.LockState()
 	if !ok {
 		t.Fatal("State() must be observed even for empty string")
 	}
@@ -304,7 +328,7 @@ func TestStatePayload_DefaultsWhenUnobserved(t *testing.T) {
 func TestStatePayload_Locked(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.stateDP.OnEvent(string(StateLocked))
+	fireLockEnum(t, r.stateDP, string(StateLocked))
 	p, ok := r.lock.State().(*payload.LockState)
 	if !ok || p == nil {
 		t.Fatal("StatePayload must return a non-nil *payload.LockState")
@@ -337,7 +361,7 @@ func TestStatePayload_DirectionEmittedUnconditionally(t *testing.T) {
 func TestStatePayload_WithDirectionLocking(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.dirDP.OnEvent(string(DirectionLocking))
+	fireLockEnum(t, r.dirDP, string(DirectionLocking))
 	p, ok := r.lock.State().(*payload.LockState)
 	if !ok || p == nil {
 		t.Fatal("StatePayload must return a non-nil *payload.LockState")
@@ -358,7 +382,7 @@ func TestStatePayload_WithDirectionLocking(t *testing.T) {
 func TestStatePayload_WithDirectionUnlocking(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-DLD:1", KindIP, &stubWriter{}, custom.LockCapabilities{})
-	r.dirDP.OnEvent(string(DirectionUnlock))
+	fireLockEnum(t, r.dirDP, string(DirectionUnlock))
 	p, ok := r.lock.State().(*payload.LockState)
 	if !ok || p == nil {
 		t.Fatal("StatePayload must return a non-nil *payload.LockState")

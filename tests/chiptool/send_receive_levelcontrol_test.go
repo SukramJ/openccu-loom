@@ -41,15 +41,23 @@ func TestSendReceive_LevelControl(t *testing.T) {
 		t.Fatalf("could not resolve CCU address for LevelControl endpoint %d", ep)
 	}
 
-	// SEND — a controller move-to-level(128, 0, 0, 0) must reach the CCU
-	// as LEVEL = matterLevelToHM(128) = 128/254 ~= 0.503937.
+	// SEND — a controller move-to-level-with-on-off(128, 0, 0, 0) must reach
+	// the CCU as LEVEL = matterLevelToHM(128) = 128/254 ~= 0.503937.
+	//
+	// The WithOnOff variant is used deliberately: a HM dimmer sits at
+	// LEVEL=0 (off) between runs, and per Matter §1.6.4.1.2 a PLAIN
+	// MoveToLevel on an off device with no ExecuteIfOff option is a silent
+	// no-op (matter.js LevelControlServer.ts:245 returns without acting) —
+	// LEVEL would stay 0. MoveToLevelWithOnOff couples the level to OnOff
+	// and always executes, which is how a controller dims a light up from
+	// off; it is the correct SEND operation to exercise the LEVEL write.
 	t.Run("send/move-to-level", func(t *testing.T) {
-		if _, err := b.SharedCtl.Invoke(ctx, t, "levelcontrol", "move-to-level", ep, "128", "0", "0", "0"); err != nil {
-			t.Fatalf("invoke move-to-level: %v", err)
+		if _, err := b.SharedCtl.Invoke(ctx, t, "levelcontrol", "move-to-level-with-on-off", ep, "128", "0", "0", "0"); err != nil {
+			t.Fatalf("invoke move-to-level-with-on-off: %v", err)
 		}
 		got, ok := b.CCU.GetDPValue(address, "LEVEL")
 		if !ok {
-			t.Fatalf("LEVEL absent on CCU after move-to-level")
+			t.Fatalf("LEVEL absent on CCU after move-to-level-with-on-off")
 		}
 		want := 128.0 / 254.0
 		if !valueNear(got, want, 0.01) {

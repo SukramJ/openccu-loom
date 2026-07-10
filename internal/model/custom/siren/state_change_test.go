@@ -32,14 +32,47 @@ func attachStringSensor(ch *device.Channel, param hmenum.Parameter) *generic.Sen
 	return dp
 }
 
+// attachSmokeStatusSensor attaches SMOKE_DETECTOR_ALARM_STATUS as the
+// read-only ENUM index sensor the resolver projects it onto (see
+// custom.EnumSensorField), mirroring production's *generic.Sensor[int32]
+// shape rather than a *generic.Sensor[string].
+func attachSmokeStatusSensor(ch *device.Channel) *generic.Sensor[int32] {
+	dp := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterSmokeDetectorAlarmStatus),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"IDLE_OFF", "IDLE_ON", "PRIMARY_ALARM", "INTRUSION_ALARM", "SECONDARY_ALARM"},
+		},
+	})
+	ch.Put(dp)
+	return dp
+}
+
+// fireSmokeStatus fires a CCU event on a SMOKE_DETECTOR_ALARM_STATUS index
+// sensor for the given VALUE_LIST label, mirroring how the resolver delivers
+// a raw 0-based index for this read-only ENUM parameter.
+func fireSmokeStatus(t *testing.T, dp *generic.Sensor[int32], label string) {
+	t.Helper()
+	idx, ok := custom.EnumLabelIndex(dp, label)
+	if !ok {
+		t.Fatalf("label %q not in VALUE_LIST", label)
+	}
+	dp.OnEvent(idx)
+}
+
 // newSmokeSirenWithDPs builds a SmokeSiren backed by real
 // SMOKE_DETECTOR_ALARM_STATUS and SMOKE_DETECTOR_COMMAND DPs so that
 // IsActive / IsStateChange read real observed values.
-func newSmokeSirenWithDPs(t *testing.T) (*SmokeSiren, *generic.Sensor[string]) {
+func newSmokeSirenWithDPs(t *testing.T) (*SmokeSiren, *generic.Sensor[int32]) {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "SWSD001"})
 	ch := d.AddChannel("SWSD001:1", 1, "SIREN", hmenum.ParamsetKeyValues)
-	statusDP := attachStringSensor(ch, hmenum.ParameterSmokeDetectorAlarmStatus)
+	statusDP := attachSmokeStatusSensor(ch)
 	attachStringSensor(ch, hmenum.ParameterSmokeDetectorCommand)
 	ss := NewSmokeSiren(SmokeSirenConfig{Channel: ch})
 	return ss, statusDP
@@ -124,7 +157,7 @@ func TestSmokeSirenIsStateChangeReturnsFalseWhenAlreadyActive(t *testing.T) {
 	t.Parallel()
 
 	ss, statusDP := newSmokeSirenWithDPs(t)
-	statusDP.OnEvent(string(SmokeStatusPrimaryAlarm))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusPrimaryAlarm))
 	if ss.IsStateChange(true) {
 		t.Error("SmokeSiren.IsStateChange(true) when active = true, want false")
 	}
@@ -136,7 +169,7 @@ func TestSmokeSirenIsStateChangeReturnsTrueWhenTransitioningToActive(t *testing.
 	t.Parallel()
 
 	ss, statusDP := newSmokeSirenWithDPs(t)
-	statusDP.OnEvent(string(SmokeStatusIdleOff))
+	fireSmokeStatus(t, statusDP, string(SmokeStatusIdleOff))
 	if !ss.IsStateChange(true) {
 		t.Error("SmokeSiren.IsStateChange(true) when idle = false, want true")
 	}
