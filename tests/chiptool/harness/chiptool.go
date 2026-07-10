@@ -582,3 +582,111 @@ func (c *Controller) subscribeAndAwait(
 	}
 	return out, nil
 }
+
+// SubscribeEventInteractiveAndAwait subscribes to an event inside a chip-tool
+// INTERACTIVE session, which — unlike the single-command subscribe-event, a
+// one-shot Subscribe-Init that exits before an event fired afterwards arrives —
+// stays alive across a device-originated event fired AFTER the subscription
+// establishes. It sends the subscribe-event command over stdin, waits for the
+// "Subscription established" marker, invokes fire() exactly once to drive the
+// event, then scans the live report stream until want() matches or timeout.
+//
+// This is the RECEIVE primitive for momentary/event-only clusters (GenericSwitch
+// button presses), which have no persisted attribute the read-reflection
+// AwaitProactiveReport path could observe.
+func (c *Controller) SubscribeEventInteractiveAndAwait(
+	ctx context.Context, t *testing.T,
+	cluster, evt string, endpointID uint16,
+	minIntervalSec, maxIntervalSec int,
+	fire func() error,
+	want func(out string) bool,
+	timeout time.Duration,
+) (string, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, c.ChipBin, "interactive", "start", "--storage-directory", c.StorageDir)
+	cmd.Env = append(os.Environ(), "TERM=dumb", "NO_COLOR=1")
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return "", fmt.Errorf("stdin pipe: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("stdout pipe: %w", err)
+	}
+	cmd.Stderr = cmd.Stdout // merge stderr into the same scanned stream
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start chip-tool interactive: %w", err)
+	}
+
+	// Issue the subscription into the live REPL session.
+	if _, err := fmt.Fprintf(stdin, "%s subscribe-event %s %d %d 0x%X %d\n",
+		cluster, evt, minIntervalSec, maxIntervalSec, c.NodeID, endpointID); err != nil {
+		cancel()
+		_ = cmd.Wait()
+		return "", fmt.Errorf("write subscribe-event command: %w", err)
+	}
+
+	var (
+		mu  sync.Mutex
+		buf bytes.Buffer
+	)
+	matched := make(chan struct{})
+	scanDone := make(chan struct{})
+	var matchOnce, fireOnce sync.Once
+
+	go func() {
+		defer close(scanDone)
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			mu.Lock()
+			buf.WriteString(scanner.Text())
+			buf.WriteByte('\n')
+			snapshot := stripANSI(buf.String())
+			mu.Unlock()
+			// Once the subscription is live, fire the device-originated event
+			// exactly once. A transient event's Subscribe-Init report is empty,
+			// so a match can only come from the change we drive here.
+			if strings.Contains(snapshot, "Subscription established") {
+				fireOnce.Do(func() {
+					if err := fire(); err != nil {
+						t.Logf("SubscribeEventInteractiveAndAwait: fire failed: %v", err)
+					}
+				})
+			}
+			if want(snapshot) {
+				matchOnce.Do(func() { close(matched) })
+				return
+			}
+		}
+	}()
+
+	var runErr error
+	select {
+	case <-matched:
+	case <-scanDone:
+		runErr = errors.New("chip-tool interactive exited before the expected event arrived")
+	case <-ctx.Done():
+		runErr = fmt.Errorf("timeout after %s waiting for expected event", timeout)
+	}
+
+	// Best-effort graceful quit, then force-stop the session.
+	_, _ = fmt.Fprint(stdin, "quit\n")
+	cancel()
+	_ = cmd.Wait()
+	<-scanDone
+
+	mu.Lock()
+	out := stripANSI(buf.String())
+	mu.Unlock()
+
+	if runErr != nil {
+		return out, fmt.Errorf("%w\n--- output ---\n%s", runErr, out)
+	}
+	return out, nil
+}

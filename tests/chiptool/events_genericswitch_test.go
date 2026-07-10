@@ -7,6 +7,7 @@ package chiptool
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -14,53 +15,89 @@ import (
 	"github.com/SukramJ/openccu-loom/tests/chiptool/harness"
 )
 
-// TestSendReceive_GenericSwitch is the vertical slice for the
-// GenericSwitch (Switch, 0x003B) cluster — HmIP button/action DPs
-// surfaced through a button channel (HmIP-BSM ch1/2 or HmIP-BDT
-// ch1/2; needs allowlist exposure, no dedicated device in the
-// default fleet).
+// TestSendReceive_GenericSwitch is the vertical slice for the GenericSwitch
+// (Switch, 0x003B) cluster — HmIP button/action DPs surfaced through a button
+// channel (HmIP-BSM ch1/2). It diverges from every other row in the send/
+// receive matrix in two ways:
 //
-// This cluster diverges from every other row in the send/receive
-// matrix: it is EVENT-driven, not attribute-driven. A button press
-// has no persisted attribute to read back (CurrentPosition is a
-// spec-mandated constant 0 for a momentary switch — see
-// cluster/wire/genericswitch.go MatterRead), so the RECEIVE cell
-// goes through chip-tool's `subscribe-event` path
-// (Controller.SubscribeEventAndAwait) fed by the bridge's
-// MatterEventEmitter, instead of harness.AwaitProactiveReport's
-// attribute-report path.
+//   - It is EVENT-driven, not attribute-driven. A button press has no persisted
+//     attribute to read back (CurrentPosition is a spec-mandated constant 0 for
+//     a momentary switch), so the read-reflection AwaitProactiveReport path
+//     cannot observe it. The RECEIVE cells instead drive a PERSISTENT chip-tool
+//     interactive event listener (Controller.SubscribeEventInteractiveAndAwait):
+//     the single-command subscribe-event is a one-shot Subscribe-Init that exits
+//     before an event fired afterwards arrives, so the subscription must live in
+//     an interactive session across the injected press.
+//   - The button channel's GenericSwitch endpoint is beyond the shared bridge's
+//     wildcard-discovery truncation point, so this test brings up its own
+//     isolated single-device bridge and enumerates the endpoint itself.
 func TestSendReceive_GenericSwitch(t *testing.T) {
-	t.Skip("WIP: GenericSwitch button events are transient ACTION events. chip-tool's subscribe-event is a one-shot that exits before an event fired afterwards arrives, and — unlike an attribute — a fired event is not re-readable, so neither the fire-then-subscribe nor the subscribe-then-fire ordering captures it. Deferred to a follow-up that drives a persistent Matter event listener.")
-	b := requireBridge(t)
-	eps := discoverEndpointsWith(t, b, 0x003B, 1)
-	if len(eps) == 0 {
-		t.Skip("no GenericSwitch (0x003B) endpoint — button channel needs allowlist exposure; godevccu fleet has no exposed HmIP-BSM/BDT button channel")
-	}
-	ep := eps[0]
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	chipBin := harness.RequireChipTool(t)
+	b := harness.Start(t, chipBin, harness.Options{
+		CASEEnabled: true,
+		Devices:     []string{"HmIP-BSM"},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x003B)
+	// Light up the exposures so the button channel materialises a GenericSwitch
+	// endpoint, then commission so the controller can subscribe to it.
+	expCtx, expCancel := context.WithTimeout(ctx, 15*time.Second)
+	if _, err := b.EnableAllExposures(expCtx); err != nil {
+		t.Fatalf("enable exposures: %v", err)
+	}
+	expCancel()
+	time.Sleep(1500 * time.Millisecond)
+
+	ctl := harness.NewController(t, chipBin, 0x5201)
+	out, err := ctl.PairFull(ctx, t, harness.PairTargetHost, b.MatterPort())
+	if err != nil {
+		t.Fatalf("commission: %v\n%s", err, out)
+	}
+	if !harness.PairingSuccess(out) {
+		t.Fatalf("pairing did not report success:\n%s", out)
+	}
+	// [Bridge.ResolveCCUAddress] reads through b.SharedCtl.
+	b.SharedCtl = ctl
+
+	// Find the lowest-ID GenericSwitch (0x003B) endpoint via one wildcard
+	// server-list read (per-EP reads accumulate CASE sessions).
+	slOut, err := ctl.ReadAttr(ctx, t, "descriptor", "server-list", 0xFFFF)
+	if err != nil {
+		t.Fatalf("wildcard server-list: %v", err)
+	}
+	perEP := harness.ServerListIDsPerEndpoint(slOut)
+	eps := make([]uint16, 0, len(perEP))
+	for ep := range perEP {
+		eps = append(eps, ep)
+	}
+	sort.Slice(eps, func(i, j int) bool { return eps[i] < eps[j] })
+	var ep uint16
+	found := false
+	for _, e := range eps {
+		if harness.HasCluster(perEP[e], 0x003B) {
+			ep = e
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Skip("no GenericSwitch (0x003B) endpoint materialised for HmIP-BSM's button channel")
+	}
+
+	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x003B, "PRESS_SHORT")
 	if !ok {
 		t.Fatalf("could not resolve CCU address for GenericSwitch endpoint %d", ep)
 	}
 
-	// SEND — negative: Switch (0x003B) is server-to-client only. Every
-	// attribute is read-only per Matter §1.13; genericswitch.go
-	// MatterWrite rejects unconditionally with a "read-only" error,
-	// which the dispatcher's writeErrorStatus heuristic maps to IM
-	// StatusUnsupportedWrite (0x88). chip-tool itself always offers a
-	// `write` subcommand per attribute (the ZAP template does not know
-	// about server-side read-only enforcement), so this exercises the
-	// bridge's own rejection, not a client-side refusal to issue the
-	// write.
+	// SEND — negative: Switch (0x003B) is server-to-client only. Every attribute
+	// is read-only per Matter §1.13; the bridge rejects the write with a
+	// "read-only" error, mapped to IM StatusUnsupportedWrite (0x88).
 	t.Run("send/current-position-rejected", func(t *testing.T) {
-		out, err := b.SharedCtl.WriteAttr(ctx, t, "switch", "current-position", "1", ep)
-		if err == nil {
-			t.Fatalf("expected write rejection for Switch.CurrentPosition, chip-tool reported success:\n%s", out)
-		}
-		status, found := harness.WriteStatus(out)
-		if !found {
+		out, _ := ctl.WriteAttr(ctx, t, "switch", "current-position", "1", ep)
+		status, ok := harness.WriteStatus(out)
+		if !ok {
 			t.Fatalf("could not parse write status from output:\n%s", out)
 		}
 		if status != "0x88" {
@@ -68,20 +105,12 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 		}
 	})
 
-	// RECEIVE — initial-press: a simulated PRESS_SHORT must reach the
-	// controller as a proactive InitialPress event. genericSwitchAwaitEvent
-	// mirrors harness.AwaitProactiveReport's subscribe-then-fire
-	// ordering (subscribe first, let it settle, THEN inject) so a
-	// broken/unwired MatterEventEmitter is caught rather than masked by
-	// some other coincidental report.
-	//
-	// PRESS_SHORT is an ACTION-typed param: godevccu's PutParamset
-	// hard-codes the fired value to true and never persists it (matrix
-	// gap G6), so FireDeviceEvent is fire-only — there is no GetDPValue
-	// readback for this direction.
+	// RECEIVE — a simulated PRESS_SHORT must reach the controller as a proactive
+	// InitialPress event. The persistent interactive listener subscribes, fires
+	// the press only after the subscription is live, and scans the live stream.
 	t.Run("receive/initial-press", func(t *testing.T) {
-		out, err := genericSwitchAwaitEvent(ctx, t, b.SharedCtl, "initial-press", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "PRESS_SHORT", true) },
+		out, err := ctl.SubscribeEventInteractiveAndAwait(ctx, t, "switch", "initial-press", ep, 0, 90,
+			func() error { return b.CCU.FireDeviceEvent(address, dpKey, true) },
 			genericSwitchWantEvent("InitialPress", "NewPosition"),
 			30*time.Second)
 		if err != nil {
@@ -89,15 +118,13 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 		}
 	})
 
-	// RECEIVE — short-release: model/generic/button.go's
-	// WireMatterSwitchHandler fans PRESS_SHORT out to BOTH
-	// FireInitialPress and FireShortRelease on the same rising edge;
-	// assert the release half independently so a regression that drops
-	// just the MSR (Momentary Switch Release) event is caught even if
-	// InitialPress still fires.
+	// RECEIVE — model/generic/button.go's WireMatterSwitchHandler fans PRESS_SHORT
+	// out to BOTH FireInitialPress and FireShortRelease on the same rising edge;
+	// assert the release half independently so a regression that drops just the
+	// MSR (Momentary Switch Release) event is caught even if InitialPress fires.
 	t.Run("receive/short-release", func(t *testing.T) {
-		out, err := genericSwitchAwaitEvent(ctx, t, b.SharedCtl, "short-release", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "PRESS_SHORT", true) },
+		out, err := ctl.SubscribeEventInteractiveAndAwait(ctx, t, "switch", "short-release", ep, 0, 90,
+			func() error { return b.CCU.FireDeviceEvent(address, dpKey, true) },
 			genericSwitchWantEvent("ShortRelease", "PreviousPosition"),
 			30*time.Second)
 		if err != nil {
@@ -106,45 +133,11 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 	})
 }
 
-// genericSwitchAwaitEvent is the GenericSwitch (event-report)
-// counterpart to harness.AwaitProactiveReport, which only knows how
-// to drive chip-tool's attribute-report `subscribe` path. It
-// subscribes to the event FIRST via Controller.SubscribeEventAndAwait,
-// waits for the subscription to settle, THEN fires inject() to drive
-// the simulated device-originated press — so the only way want() can
-// be satisfied is the bridge's own MatterEventEmitter wiring, not a
-// race against the subscribe's own setup.
-func genericSwitchAwaitEvent(
-	ctx context.Context, t *testing.T, ctl *harness.Controller,
-	evt string, endpointID uint16,
-	inject func() error,
-	want func(out string) bool,
-	timeout time.Duration,
-) (string, error) {
-	t.Helper()
-	go func() {
-		select {
-		case <-time.After(3 * time.Second):
-		case <-ctx.Done():
-			return
-		}
-		if err := inject(); err != nil {
-			t.Logf("genericSwitchAwaitEvent: inject failed: %v", err)
-		}
-	}()
-	// maxIntervalSec is set well beyond the timeout so no heartbeat
-	// report can satisfy want() before the injected press does.
-	maxIntervalSec := int(timeout/time.Second) + 60
-	return ctl.SubscribeEventAndAwait(ctx, t, "switch", evt, endpointID, 0, maxIntervalSec, want, timeout)
-}
-
-// genericSwitchWantEvent builds a want() predicate for
-// genericSwitchAwaitEvent that requires BOTH the event's chip-tool
-// label (e.g. "InitialPress") and its payload field name (e.g.
-// "NewPosition") to appear in the scanned output — chip-tool's
-// DataModelLogger prints the event as "<Label>: {" followed by the
-// nested "<Field>: <value>" line, so requiring both rules out a
-// coincidental substring match against an unrelated log line.
+// genericSwitchWantEvent builds a want() predicate that requires BOTH the
+// event's chip-tool label (e.g. "InitialPress") and its payload field name
+// (e.g. "NewPosition") to appear — chip-tool's DataModelLogger prints the event
+// as "<Label>: {" followed by the nested "<Field>: <value>" line, so requiring
+// both rules out a coincidental substring match against an unrelated log line.
 func genericSwitchWantEvent(label, field string) func(out string) bool {
 	return func(out string) bool {
 		return strings.Contains(out, label) && strings.Contains(out, field)
