@@ -329,8 +329,8 @@ func applyFieldVisibility(
 	// primary channel set; iterating once over rebased.Fields and
 	// Targeting `ch` mirrors
 	// `self._channel.address` lookup.
-	for _, fv := range rebased.Fields {
-		applyFieldValueToChannel(ch, fv, model)
+	for field, fv := range rebased.Fields {
+		applyFieldValueToChannel(ch, field, fv, model)
 	}
 
 	// Channel-specific fields (rebased to absolute channel numbers).
@@ -338,8 +338,8 @@ func applyFieldVisibility(
 		if chNo == AnyChannelOffset {
 			// Python `None` key — applied to the *primary* channel
 			// (== ch) verbatim; mirrors `_add_channel_data_points`.
-			for _, fv := range fields {
-				applyFieldValueToChannel(ch, fv, model)
+			for field, fv := range fields {
+				applyFieldValueToChannel(ch, field, fv, model)
 			}
 			continue
 		}
@@ -347,8 +347,8 @@ func applyFieldVisibility(
 		if target == nil {
 			continue
 		}
-		for _, fv := range fields {
-			applyFieldValueToChannel(target, fv, model)
+		for field, fv := range fields {
+			applyFieldValueToChannel(target, field, fv, model)
 		}
 	}
 
@@ -358,8 +358,8 @@ func applyFieldVisibility(
 		if target == nil {
 			continue
 		}
-		for _, fv := range fields {
-			applyFieldValueToChannel(target, fv, model)
+		for field, fv := range fields {
+			applyFieldValueToChannel(target, field, fv, model)
 		}
 	}
 }
@@ -383,7 +383,7 @@ func applyFieldVisibility(
 // time and is not subject to the pipeline ordering that would make the
 // instance-method `IsForcedSensor()` return false here (ApplyForceSensorMarks
 // runs AFTER materialiseCustomDataPoints).
-func applyFieldValueToChannel(ch *device.Channel, fv FieldValue, model string) {
+func applyFieldValueToChannel(ch *device.Channel, field hmenum.Field, fv FieldValue, model string) {
 	param, isVisible := ResolveFieldValue(fv)
 	if isVisible == nil {
 		return
@@ -398,6 +398,16 @@ func applyFieldValueToChannel(ch *device.Channel, fv FieldValue, model string) {
 	// this point in the pipeline — it is called by ApplyForceSensorMarks which
 	// runs after materialiseCustomDataPoints.
 	if *isVisible && generic.IsForceSensorParameter(model, param) {
+		return
+	}
+	// The group-STATE field marks the status-transmitter DP a custom entity
+	// spans off its primary channel — visible like CDP_VISIBLE for HA / MQTT /
+	// REST, but tagged CDP_STATE so the Matter projection can drop this
+	// redundant status channel by default without hiding genuine extra
+	// CDP_VISIBLE sensors (HUMIDITY, a contact STATE). See
+	// [hmenum.DataPointUsageCDPState].
+	if *isVisible && field == hmenum.FieldGroupState {
+		forceUsageOnDataPoint(dp, hmenum.DataPointUsageCDPState)
 		return
 	}
 	forceDataPointUsage(dp, *isVisible)

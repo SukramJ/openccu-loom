@@ -180,13 +180,14 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 
 	advertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; subtype responder uses context.Background() with a nolint inside
 	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
-		Listen:        mc.Listen,
-		PreferIPv4:    mc.PreferIPv4,
-		VendorID:      mc.VendorID,
-		ProductID:     mc.ProductID,
-		NodeLabel:     mc.NodeLabel,
-		Discriminator: mc.Discriminator,
-		Labels:        labels,
+		Listen:                  mc.Listen,
+		PreferIPv4:              mc.PreferIPv4,
+		VendorID:                mc.VendorID,
+		ProductID:               mc.ProductID,
+		NodeLabel:               mc.NodeLabel,
+		Discriminator:           mc.Discriminator,
+		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
+		Labels:                  labels,
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
@@ -3123,7 +3124,7 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 					if u == nil || u.ModelRegistry == nil {
 						continue
 					}
-					out = append(out, eligibility.CollectCandidates(u.Name(), u.ModelRegistry.List())...)
+					out = append(out, eligibility.CollectCandidates(u.Name(), u.ModelRegistry.List(), cfg.North.Matter.ExposeSecondaryChannels)...)
 				}
 				return out
 			},

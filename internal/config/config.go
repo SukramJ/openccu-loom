@@ -592,6 +592,23 @@ type NorthMatter struct {
 	// IPv6 dual-stack socket which also accepts IPv4 traffic.
 	PreferIPv4 bool `yaml:"prefer_ipv4" json:"prefer_ipv4" cfg:"expert"`
 
+	// ExposeSecondaryChannels, when true, projects a device's secondary
+	// channel-group members — the status transmitter channel and the
+	// additional virtual-receiver actor channels — as their own Matter
+	// endpoints in addition to the primary (group-master) channel.
+	//
+	// Default false: one physical HmIP device projects a SINGLE Matter
+	// endpoint from its primary channel. A switch / dimmer / cover / lock /
+	// siren / valve models its actor as a channel group (primary receiver +
+	// a status transmitter + extra virtual-receiver link slots); exposing
+	// every member would surface the same physical device as several
+	// duplicate endpoints in Apple / Google Home. This mirrors HA-Discovery,
+	// which already marks secondary channels enabled-by-default false.
+	//
+	// Matter-only: MQTT, HA-Discovery and the REST/WS surfaces always carry
+	// every channel regardless of this flag.
+	ExposeSecondaryChannels bool `yaml:"expose_secondary_channels" json:"expose_secondary_channels" cfg:"expert"`
+
 	// VendorID is the bridge's IANA-assigned vendor identifier.
 	// Defaults to 0xFFF1 (the test/development vendor block) when unset
 	// — never ship that value in production.

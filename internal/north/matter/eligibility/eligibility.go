@@ -22,6 +22,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -50,6 +51,8 @@ const (
 // channel-specific parameter labels (`POWER` on
 // `ENERGIE_METER_TRANSMITTER` resolves differently from the bare
 // parameter table).
+//
+// loom:reachable:reason="return type of CollectCandidates, the GET /api/v1/matter/exposable entry point reached through the daemon's matterCandidateProviderAdapter interface dispatch the reachability analyzer's RTA heuristic does not trace"
 type Candidate struct {
 	Key         store.EndpointKey
 	DisplayName string
@@ -60,6 +63,8 @@ type Candidate struct {
 // Classify returns the verdict for one source. It honours
 // [interfaces.MatterEligibilitySource] when present, otherwise falls
 // back to [DeriveMatterEligibility] for the structural default.
+//
+// loom:reachable:reason="reached from GET /api/v1/matter/exposable via CollectCandidates; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic"
 func Classify(src any) Verdict {
 	if src == nil {
 		return Verdict{State: StateUnmappable, Reason: "nil source"}
@@ -83,6 +88,8 @@ func Classify(src any) Verdict {
 // [interfaces.MatterEligibilitySource] directly and override the
 // derivation; they typically call DeriveMatterEligibility for the
 // base verdict and then patch in `State = Partial` plus a reason.
+//
+// loom:reachable:reason="reached from GET /api/v1/matter/exposable via Classify; the daemon's matterCandidateProviderAdapter interface dispatch is not traced by the reachability analyzer's RTA heuristic"
 func DeriveMatterEligibility(src any) Verdict {
 	if ep, ok := src.(interfaces.MatterEndpointSource); ok {
 		dt := ep.MatterDeviceType()
@@ -121,7 +128,28 @@ func DeriveMatterEligibility(src any) Verdict {
 // CollectCandidates walks every channel of every device on a central
 // and returns one Candidate per (channel, dp_kind, dp_key) the model
 // layer carries. Used by `/api/v1/matter/exposable`.
-func CollectCandidates(centralName string, devices []*device.Device) []Candidate {
+//
+// When exposeSecondary is false (the default), a custom-DP entity's
+// non-primary CONSTITUENTS are dropped so a multi-channel HmIP actor
+// (switch / dimmer / cover / lock / siren / valve) surfaces a single
+// primary endpoint instead of several duplicate accessories:
+//
+//   - its SECONDARY virtual-receiver actor channels — the same custom-DP
+//     secondary classification HA-Discovery marks enabled-by-default false
+//     ([device.Channel.IsCustomDPSecondaryChannel]); and
+//   - its ce_state status DP — the group-state transmitter a custom
+//     entity spans off its primary (e.g. the WATER_SWITCH_TRANSMITTER
+//     STATE feeding a valve), classified [hmenum.DataPointUsageCDPState].
+//
+// It also drops the ignored service params and the no_create raw
+// constituents an aggregating parent consumes (see hideFromMatter), so the
+// candidate set matches the entity-creation gate MQTT / HA / REST apply.
+// Genuinely standalone DPs — buttons (event), measurements / battery
+// (data_point), a channel-0 maintenance sensor — are always collected. This
+// is Matter-only; every other north-bound surface still enumerates all channels.
+//
+// loom:reachable:reason="Matter exposure entry point — reached from GET /api/v1/matter/exposable via the daemon's matterCandidateProviderAdapter (cmd/openccu-loom); that adapter's interface dispatch is not traced by the reachability analyzer's RTA heuristic"
+func CollectCandidates(centralName string, devices []*device.Device, exposeSecondary bool) []Candidate {
 	var out []Candidate
 	for _, dev := range devices {
 		if dev == nil {
@@ -131,20 +159,70 @@ func CollectCandidates(centralName string, devices []*device.Device) []Candidate
 			if ch == nil {
 				continue
 			}
-			collectChannelCandidates(centralName, dev, ch, &out)
+			if !exposeSecondary && ch.IsCustomDPSecondaryChannel() {
+				continue
+			}
+			collectChannelCandidates(centralName, dev, ch, exposeSecondary, &out)
 		}
 	}
 	return out
 }
 
-func collectChannelCandidates(centralName string, dev *device.Device, ch *device.Channel, out *[]Candidate) {
+// hideFromMatter reports whether a data-point source should be dropped from
+// the Matter projection, aligning the candidate set with the same
+// entity-creation gate MQTT / HA / REST apply. `channelHasCustom` is whether
+// the source's channel already hosts a custom DP that owns its projection;
+// `exposeSecondary` is the operator's `north.matter.expose_secondary_channels`
+// choice. A source without a Usage() is never hidden here.
+//
+//   - `ignored` — service / status / overflow params the visibility gate hides
+//     everywhere (INSTALL_TEST, *_STATUS, *_OVERFLOW, PROCESS, …). Never a
+//     Matter candidate, regardless of the expert flag.
+//   - `no_create` — consumed by an aggregating parent (custom / combined / week
+//     profile). On the channel that owns that parent the parent projects
+//     instead, so the raw constituent must never duplicate it; on a bare
+//     secondary channel the expose_secondary_channels flag reveals it.
+//   - `ce_secondary` / `ce_state` — a custom-entity secondary member or its
+//     group-state transmitter (a status DP restating the primary's on/off);
+//     hidden by default, revealed by the flag. Genuine ce_visible extra
+//     sensors (HUMIDITY, a contact STATE) are NOT hidden.
+func hideFromMatter(source any, channelHasCustom, exposeSecondary bool) bool {
+	u, ok := source.(interface{ Usage() hmenum.DataPointUsage })
+	if !ok {
+		return false
+	}
+	switch u.Usage() {
+	case hmenum.DataPointUsageIgnored:
+		return true
+	case hmenum.DataPointUsageNoCreate:
+		return channelHasCustom || !exposeSecondary
+	case hmenum.DataPointUsageCDPSecondary, hmenum.DataPointUsageCDPState:
+		return !exposeSecondary
+	default:
+		return false
+	}
+}
+
+func collectChannelCandidates(centralName string, dev *device.Device, ch *device.Channel, exposeSecondary bool, out *[]Candidate) {
 	displayName := dev.Name
 	if displayName == "" {
 		displayName = dev.Address
 	}
+	channelHasCustom := ch.CustomDataPoint() != nil
 
 	emit := func(kind store.DPKind, source any) {
 		if source == nil {
+			return
+		}
+		// Align the Matter candidate set with the entity-creation gate the
+		// other north-bound surfaces apply: drop ignored service params, the
+		// raw no_create constituents of an aggregating parent, and (unless the
+		// operator opted in) the ce_secondary / ce_state secondary channels.
+		// Only generic DPs are gated — a custom / calculated / combined DP is
+		// the aggregating entity itself (and a custom wrapper promotes its
+		// embedded constituent's no_create usage, so it must not be filtered
+		// by that usage).
+		if kind == store.DPKindGeneric && hideFromMatter(source, channelHasCustom, exposeSecondary) {
 			return
 		}
 		// A structurally-incomplete device — e.g. a custom light whose LEVEL

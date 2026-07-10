@@ -698,6 +698,7 @@ func (d *DataPoint[T]) EnabledByDefault() bool {
 	switch d.Usage() { //nolint:exhaustive // CDPSecondary and NoCreate are internal book-keeping usages; EnabledByDefault correctly returns false for them
 	case hmenum.DataPointUsageCDPPrimary,
 		hmenum.DataPointUsageCDPVisible,
+		hmenum.DataPointUsageCDPState,
 		hmenum.DataPointUsageDataPoint,
 		hmenum.DataPointUsageEvent:
 		return true

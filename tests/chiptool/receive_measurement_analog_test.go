@@ -89,20 +89,23 @@ func TestReceive_MeasurementAnalog(t *testing.T) {
 			t.Skip("no IlluminanceMeasurement endpoint — godevccu fleet lacks HmIP-SMI")
 		}
 		ep := eps[0]
-		address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0400)
+		address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0400)
 		if !ok {
 			t.Fatalf("could not resolve CCU address for illuminancemeasurement endpoint %d", ep)
 		}
 
-		// RECEIVE — CURRENT_ILLUMINATION (lux) must reach the controller
-		// as MeasuredValue using Matter's log-encoded lux representation
+		// RECEIVE — the endpoint's lux source (ILLUMINATION or
+		// CURRENT_ILLUMINATION, whichever the device exposes — fire the
+		// dp_key the resolver reports, not a hard-coded name the endpoint
+		// may not be backed by) must reach the controller as MeasuredValue
+		// using Matter's log-encoded lux representation
 		// (10000 * log10(lux) + 1, rounded). Computed here rather than
 		// pinned as a literal so the row documents the encoding it
 		// exercises.
 		want := analogMeasurementLuxToMatter(300)
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"illuminancemeasurement", "measured-value", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "CURRENT_ILLUMINATION", 300) },
+			func() error { return b.CCU.FireDeviceEvent(address, dpKey, 300) },
 			func(out string) bool {
 				v, ok := harness.FindAttrUint(out, "MeasuredValue")
 				return ok && v == want

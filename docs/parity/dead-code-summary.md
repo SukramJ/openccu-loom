@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 35fc5810
-HEAD: 35fc5810
+Generated: e672f867
+HEAD: e672f867
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24386 |
-| Reachable | 3825 |
-| Whitelisted | 17653 |
-| **Unreachable** | **2908** |
+| Total Exported | 24398 |
+| Reachable | 3827 |
+| Whitelisted | 17664 |
+| **Unreachable** | **2907** |
 
 ## Top-20 Packages by Dead Code
 
@@ -180,7 +180,6 @@ HEAD: 35fc5810
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/filter | 0 | 1 | 0 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/eligibility | 0 | 1 | 0 |
 | internal/north/matter/endpoint | 0 | 9 | 0 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/secure/aesccm | 0 | 1 | 10 |

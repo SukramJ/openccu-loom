@@ -13,22 +13,31 @@ import (
 	"github.com/SukramJ/openccu-loom/tests/chiptool/harness"
 )
 
-// TestReceive_BooleanStateContact exercises BooleanState (0x0045) on
-// HmIP-SWDO (a generic.BinarySensor contact device). The cluster is
-// read-only at the wire layer (measurement.BooleanStateServer.MatterWrite
-// always returns errReadOnly), so the SEND direction is a negative case
-// rather than a value round-trip.
+// TestReceive_BooleanStateContact exercises BooleanState (0x0045) on the
+// fleet's first BooleanState source — a generic bool sensor (a shutter
+// contact STATE, a SABOTAGE tamper switch, …). The cluster is read-only at
+// the wire layer (measurement.BooleanStateServer.MatterWrite always returns
+// errReadOnly), so the SEND direction is a negative case rather than a value
+// round-trip.
+//
+// The injected parameter is the dp_key ResolveCCUAddress reports for the
+// discovered endpoint, NOT a hard-coded "STATE": the harness maps a bridged
+// endpoint back to its CCU device (via BridgedDeviceBasicInformation.
+// SerialNumber) and then to that device's first BooleanState channel, which
+// on a multi-BooleanState device (SABOTAGE on ch0, contact STATE on ch1) is
+// the ch0 SABOTAGE row — firing a hard-coded "STATE" there hits a parameter
+// the channel does not describe.
 func TestReceive_BooleanStateContact(t *testing.T) {
 	b := requireBridge(t)
 	eps := discoverEndpointsWith(t, b, 0x0045, 1)
 	if len(eps) == 0 {
-		t.Skip("no BooleanState endpoint — godevccu fleet lacks a contact-sensor device")
+		t.Skip("no BooleanState endpoint — godevccu fleet lacks a bool-sensor device")
 	}
 	ep := eps[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	address, _, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0045)
+	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0045)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for BooleanState endpoint %d", ep)
 	}
@@ -46,7 +55,7 @@ func TestReceive_BooleanStateContact(t *testing.T) {
 		}
 	})
 
-	// RECEIVE — a contact-sensor open must reach the controller as a
+	// RECEIVE — a bool-sensor trip must reach the controller as a
 	// proactive StateValue report. StateValue is non-nullable: an
 	// unobserved attribute defaults to false, so injecting true only
 	// after the subscription is live is the only way to prove the
@@ -55,7 +64,7 @@ func TestReceive_BooleanStateContact(t *testing.T) {
 	t.Run("receive/state-value", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"booleanstate", "state-value", ep,
-			func() error { return b.CCU.FireDeviceEvent(address, "STATE", true) },
+			func() error { return b.CCU.FireDeviceEvent(address, dpKey, true) },
 			func(out string) bool {
 				v, ok := harness.FindAttrBool(out, "StateValue")
 				return ok && v

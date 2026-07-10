@@ -13,6 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -31,6 +32,14 @@ type Config struct {
 	// [interfaces.MatterMeasurementSource] (but not MatterEndpointSource)
 	// produce standalone sensor endpoints. Off by default.
 	IncludeMeasurements bool
+	// ExposeSecondaryChannels, when true, materialises a Matter endpoint
+	// for a device's group-secondary channels (the status transmitter and
+	// the additional virtual-receiver actors) as well as the primary
+	// (group-master) channel. Off by default: a multi-channel HmIP actor
+	// projects a single endpoint from its primary channel, so one physical
+	// device is one Matter accessory rather than several duplicates. Mirrors
+	// [config.NorthMatter.ExposeSecondaryChannels].
+	ExposeSecondaryChannels bool
 	// Labels resolves the locale-aware parameter label embedded as the
 	// NodeLabel suffix of measurement sub-endpoints, pre-bound to the
 	// daemon locale. Shares [device.TranslatedParameterLabel] +
@@ -240,6 +249,20 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
 	out := make([]*Endpoint, 0, 4)
 
+	// Collapse a multi-channel custom-DP actor onto its primary endpoint by
+	// default: a switch / dimmer / cover / lock / siren / valve spans its
+	// primary channel plus extra virtual-receiver actor channels, and
+	// materialising every member would surface one physical device as
+	// several duplicate accessories. Only the CDP-primary channel projects
+	// unless the operator opts into the secondary channels. Standalone
+	// generic channels (buttons, measurements, a status transmitter's
+	// BooleanState) are not custom-DP secondaries and are never affected.
+	// Matter-only — every other north-bound surface still carries all
+	// channels.
+	if !a.cfg.ExposeSecondaryChannels && ch.IsCustomDPSecondaryChannel() {
+		return out, nil
+	}
+
 	allow := func(kind store.DPKind, key string) (bool, error) {
 		exposed, err := a.exposures.IsExposed(ctx, store.EndpointKey{
 			CentralName:   centralName,
@@ -351,6 +374,14 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		if key == "" {
 			continue
 		}
+		// Align the Matter projection with the entity-creation gate the other
+		// north-bound surfaces apply: drop ignored service params, the raw
+		// no_create constituents of an aggregating parent, and (unless the
+		// operator opted in) the ce_secondary / ce_state secondary channels.
+		// See [config.NorthMatter.ExposeSecondaryChannels].
+		if hideFromMatter(gdp, channelHasCustom, a.cfg.ExposeSecondaryChannels) {
+			continue
+		}
 		// Path 1: Generic-DP actor. Only material when the channel has
 		// no Custom-DP wrapper; otherwise the wrapper owns the
 		// projection (the wrapper itself wires the same DP under the
@@ -396,6 +427,40 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 	}
 
 	return out, nil
+}
+
+// hideFromMatter reports whether a generic DP should be dropped from the
+// assembled Matter topology, aligning it with the entity-creation gate the
+// other north-bound surfaces apply. `channelHasCustom` is whether the DP's
+// channel already hosts a custom DP that owns its projection; `exposeSecondary`
+// is the operator's `north.matter.expose_secondary_channels` choice.
+//
+//   - `ignored` — service / status / overflow params hidden everywhere; never
+//     projected, regardless of the expert flag.
+//   - `no_create` — consumed by an aggregating parent; the parent projects on
+//     its own channel, so the raw constituent must not duplicate it. On a bare
+//     secondary channel the flag reveals it.
+//   - `ce_secondary` / `ce_state` — secondary member / group-state transmitter;
+//     hidden by default, revealed by the flag. Genuine ce_visible extra sensors
+//     (HUMIDITY, a contact STATE) are NOT hidden.
+//
+// Mirrors the identically named eligibility helper so the candidate list and
+// the assembled topology agree on what the projection hides.
+func hideFromMatter(source any, channelHasCustom, exposeSecondary bool) bool {
+	u, ok := source.(interface{ Usage() hmenum.DataPointUsage })
+	if !ok {
+		return false
+	}
+	switch u.Usage() {
+	case hmenum.DataPointUsageIgnored:
+		return true
+	case hmenum.DataPointUsageNoCreate:
+		return channelHasCustom || !exposeSecondary
+	case hmenum.DataPointUsageCDPSecondary, hmenum.DataPointUsageCDPState:
+		return !exposeSecondary
+	default:
+		return false
+	}
 }
 
 // genericDPKeyForMeasurement returns the allowlist dp_key for a

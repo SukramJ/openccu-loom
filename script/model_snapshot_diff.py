@@ -130,6 +130,29 @@ def canon_hidden_usage(dp: dict) -> dict:
     return out
 
 
+# OpenCCU-Loom splits the aiohomematic `ce_visible` usage into two: genuine
+# extra sensors stay `ce_visible`, while a custom entity's group-STATE status
+# transmitter (the redundant channel that restates the primary's projection)
+# is tagged `ce_state` so the Matter projection can drop it by default without
+# hiding real extra sensors. Both are visible constituents behaviourally
+# identical to `ce_visible` for HA / MQTT / REST; the reference model has only
+# `ce_visible`, so canonicalise `ce_state` back to it (both sides) before the
+# diff. See docs/parity/by_design.md.
+def canon_state_usage(dp: dict) -> dict:
+    """Canonicalise the OpenCCU-Loom-only `ce_state` usage (and matching
+    forced_usage) back to `ce_visible` so the split does not register as drift.
+    Applied to BOTH sides — the reference side never carries `ce_state`, so a
+    real drift where only one side is `ce_visible` still surfaces."""
+    if dp.get("usage") != "ce_state" and dp.get("forced_usage") != "ce_state":
+        return dp
+    out = dict(dp)
+    if out.get("usage") == "ce_state":
+        out["usage"] = "ce_visible"
+    if out.get("forced_usage") == "ce_state":
+        out["forced_usage"] = "ce_visible"
+    return out
+
+
 # OpenCCU-Loom replaces the raw schedule channel-lock bitfield DPs with a
 # structured per-channel ScheduleChannelSwitch surface and suppresses the raw
 # DPs (usage=no_create, enabled_default=false) so Home Assistant does not show
@@ -225,8 +248,8 @@ def is_redundant_forced_usage(go: dict, py: dict, drift: dict) -> bool:
 def diff_dp(go_dp: dict, py_dp: dict) -> dict:
     """Per-field comparison; returns a dict {field: (go, py)} for any
     diverging field. Empty dict means no drift."""
-    go = canon_hidden_usage(normalise_dp(go_dp))
-    py = canon_hidden_usage(normalise_dp(py_dp))
+    go = canon_state_usage(canon_hidden_usage(normalise_dp(go_dp)))
+    py = canon_state_usage(canon_hidden_usage(normalise_dp(py_dp)))
     drift: dict[str, tuple[Any, Any]] = {}
     for field in set(go) | set(py):
         if field in TOLERATED_DP_FIELDS:

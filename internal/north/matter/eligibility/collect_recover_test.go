@@ -55,7 +55,7 @@ func TestCollectCandidates_SkipsPanickingDevice(t *testing.T) {
 				t.Fatalf("CollectCandidates panicked on a broken device instead of skipping it: %v", r)
 			}
 		}()
-		got = eligibility.CollectCandidates("central", []*device.Device{broken, healthy})
+		got = eligibility.CollectCandidates("central", []*device.Device{broken, healthy}, false)
 	}()
 
 	if len(got) != 1 {

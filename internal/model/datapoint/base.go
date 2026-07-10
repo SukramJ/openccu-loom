@@ -255,6 +255,7 @@ func (b *BaseDataPointFields) EnabledByDefault() bool {
 	switch *forced { //nolint:exhaustive // CDPSecondary, NoCreate and Ignored are non-user-visible usages; EnabledByDefault correctly returns false for them.
 	case hmenum.DataPointUsageCDPPrimary,
 		hmenum.DataPointUsageCDPVisible,
+		hmenum.DataPointUsageCDPState,
 		hmenum.DataPointUsageDataPoint,
 		hmenum.DataPointUsageEvent:
 		return true

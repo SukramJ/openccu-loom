@@ -108,6 +108,14 @@ type Config struct {
 	// daemon config flag.
 	IncludeMeasurements bool
 
+	// ExposeSecondaryChannels passes [endpoint.Config.ExposeSecondaryChannels]
+	// through to the assembler. Off by default: a multi-channel HmIP actor
+	// (switch / dimmer / cover / lock / siren / valve) projects a single
+	// Matter endpoint from its primary channel instead of duplicating the
+	// physical device across its status transmitter and virtual-receiver
+	// actor channels. Sourced from [config.NorthMatter.ExposeSecondaryChannels].
+	ExposeSecondaryChannels bool
+
 	// Labels passes [endpoint.Config.Labels] through to the assembler:
 	// the daemon-locale-bound parameter translator used for the
 	// NodeLabel suffix of measurement sub-endpoints. Nil is tolerated
@@ -385,11 +393,12 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 	}
 
 	asm, err := endpoint.New(s, endpoint.Config{
-		VendorID:            cfg.VendorID,
-		ProductID:           cfg.ProductID,
-		NodeLabel:           cfg.NodeLabel,
-		IncludeMeasurements: cfg.IncludeMeasurements,
-		Labels:              cfg.Labels,
+		ExposeSecondaryChannels: cfg.ExposeSecondaryChannels,
+		VendorID:                cfg.VendorID,
+		ProductID:               cfg.ProductID,
+		NodeLabel:               cfg.NodeLabel,
+		IncludeMeasurements:     cfg.IncludeMeasurements,
+		Labels:                  cfg.Labels,
 	}, logger)
 	if err != nil {
 		return nil, fmt.Errorf("bridge: assembler: %w", err)
