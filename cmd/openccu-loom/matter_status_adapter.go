@@ -6,6 +6,8 @@ package main
 import (
 	"context"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/config"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
@@ -95,18 +97,32 @@ func (a *matterCommissioningCloserAdapter) CloseCommissioningWindow(ctx context.
 	return a.window.RevokeWindow(ctx)
 }
 
-// matterCandidateProviderAdapter walks the daemon's central registry
-// and returns the eligibility candidate list for the allowlist UI.
-// The closure is rebuilt on every call so freshly-discovered devices
-// surface immediately.
+// matterCandidateProviderAdapter walks the daemon's central registry and
+// returns the eligibility candidate list for the allowlist UI. The registry is
+// walked on every call so freshly-discovered devices surface immediately, and
+// cfg is read live so the operator's expose_secondary_channels choice is always
+// current.
 type matterCandidateProviderAdapter struct {
-	walk func() []eligibility.Candidate
+	reg *central.Registry
+	cfg *config.Config
 }
 
-// MatterCandidates implements [handlers.MatterCandidateProvider].
+// MatterCandidates implements [handlers.MatterCandidateProvider]. It calls
+// [eligibility.CollectCandidates] directly (rather than through a stored
+// closure) so the production reachability graph can trace the Matter
+// eligibility entry points from this method — the reachability analyzer seeds
+// the REST handler that invokes this as an entry point but cannot follow an
+// indirect call through a func-typed struct field.
 func (a *matterCandidateProviderAdapter) MatterCandidates(_ context.Context) []eligibility.Candidate {
-	if a == nil || a.walk == nil {
+	if a == nil || a.reg == nil || a.cfg == nil {
 		return nil
 	}
-	return a.walk()
+	var out []eligibility.Candidate
+	for _, u := range a.reg.List() {
+		if u == nil || u.ModelRegistry == nil {
+			continue
+		}
+		out = append(out, eligibility.CollectCandidates(u.Name(), u.ModelRegistry.List(), a.cfg.North.Matter.ExposeSecondaryChannels)...)
+	}
+	return out
 }
