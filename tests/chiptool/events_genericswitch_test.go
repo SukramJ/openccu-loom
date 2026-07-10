@@ -114,7 +114,7 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 			genericSwitchWantEvent("InitialPress", "NewPosition"),
 			30*time.Second)
 		if err != nil {
-			t.Fatalf("await proactive InitialPress event: %v\n%s", err, out)
+			t.Fatalf("await proactive InitialPress event: %v\n%s\n--- daemon subscribe log ---\n%s", err, out, daemonSubscribeLog(b))
 		}
 	})
 
@@ -131,6 +131,24 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 			t.Fatalf("await proactive ShortRelease event: %v\n%s", err, out)
 		}
 	})
+}
+
+// daemonSubscribeLog returns the tail of the daemon's stdout filtered to the
+// subscribe / IM-receive lines — a diagnostic for why an event subscribe was
+// rejected, since the CI log only carries chip-tool's client side.
+func daemonSubscribeLog(b *harness.Bridge) string {
+	var keep []string
+	for _, line := range strings.Split(b.Stdout(), "\n") {
+		l := strings.ToLower(line)
+		if strings.Contains(l, "subscribe") || strings.Contains(l, "invalid") ||
+			strings.Contains(l, "rx.im") || strings.Contains(l, "eventrequest") {
+			keep = append(keep, line)
+		}
+	}
+	if len(keep) > 40 {
+		keep = keep[len(keep)-40:]
+	}
+	return strings.Join(keep, "\n")
 }
 
 // genericSwitchWantEvent builds a want() predicate that requires BOTH the
