@@ -175,13 +175,27 @@ func TestLifecycle_BootidRotation_UniqueIDChanges(t *testing.T) {
 	b.Restart(t)
 
 	// Re-read UID via the same fabric (CASE pickup) → must DIFFER.
-	uidOut2, err := ctl.ReadAttr(ctx, t, "bridgeddevicebasicinformation", "unique-id", first)
-	if err != nil {
-		t.Fatalf("read UID post-restart: %v", err)
-	}
-	uid2, ok := harness.FindAttrString(uidOut2, "UniqueID")
-	if !ok || uid2 == "" {
-		t.Fatalf("UID2 not parsed:\n%s", uidOut2)
+	// b.Restart waits for the Matter UDP listener but NOT for the bridge
+	// to finish re-registering its bridged endpoints, so a read of a
+	// bridged endpoint (not the always-present root/aggregator) can race
+	// the re-assembly and return UNSUPPORTED_ENDPOINT. A real commissioner
+	// tolerates that transient window by retrying; so does this read.
+	var uid2, lastOut string
+	var lastErr error
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		out, err := ctl.ReadAttr(ctx, t, "bridgeddevicebasicinformation", "unique-id", first)
+		lastOut, lastErr = out, err
+		if err == nil {
+			if v, ok := harness.FindAttrString(out, "UniqueID"); ok && v != "" {
+				uid2 = v
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("read UID post-restart did not succeed within 15s (endpoint %d): %v\n%s", first, lastErr, lastOut)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 	if uid1 == uid2 {
 		t.Errorf("UniqueID did not rotate across restart: UID1=%s UID2=%s — bootid salt not mixed in?", uid1, uid2)
