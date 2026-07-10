@@ -77,7 +77,12 @@ func (b *Bridge) ResolveCCUAddress(ctx context.Context, t *testing.T, endpointID
 	}
 	for _, it := range items {
 		if it.Enabled && it.DeviceAddress == addr {
-			return it.DeviceAddress, it.DPKey, true
+			// Return the CHANNEL address (ADDRESS:CHANNEL), not the device
+			// root: the VALUES paramset a SEND assertion reads and a RECEIVE
+			// injection writes lives on the channel, so godevccu's
+			// GetValue/SetValue/SimulateDeviceEvent reject the bare device
+			// address with `paramset "VALUES" not found on "VCU…"`.
+			return fmt.Sprintf("%s:%d", it.DeviceAddress, it.ChannelNo), it.DPKey, true
 		}
 	}
 	return "", "", false
