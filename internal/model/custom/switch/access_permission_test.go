@@ -157,6 +157,19 @@ func TestAccessPermissionKeyAndCategory(t *testing.T) {
 	}
 }
 
+// TestAccessPermissionAvailabilityGatesOnState pins the availability gate to
+// its primary state carrier (STATE); see docs/parity/by_design.md.
+func TestAccessPermissionAvailabilityGatesOnState(t *testing.T) {
+	ap, state, _ := newTestAccessPermission(t, "VCU0002:10", &stubWriter{})
+	if ap.IsRefreshed() {
+		t.Fatal("IsRefreshed() must be false before any wire event")
+	}
+	state.OnEvent(true)
+	if !ap.IsRefreshed() {
+		t.Fatal("IsRefreshed() must be true after STATE observed")
+	}
+}
+
 func TestNewAccessPermissionNilWhenFieldsAbsent(t *testing.T) {
 	// A channel with only STATE (no un-ignored ACCESS_AUTHORIZATION) yields no
 	// custom DP — mirrors the materializer skip for a missing required field.

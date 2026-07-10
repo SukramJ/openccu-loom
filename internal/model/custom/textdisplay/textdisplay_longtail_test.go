@@ -80,6 +80,23 @@ func TestBurstLimitWarning_TrueWhenDPAsserted(t *testing.T) {
 	}
 }
 
+// TestTextDisplayAvailabilityGatesOnBurstLimitWarning pins the availability
+// gate to its primary state carrier (BURST_LIMIT_WARNING); see
+// docs/parity/by_design.md.
+func TestTextDisplayAvailabilityGatesOnBurstLimitWarning(t *testing.T) {
+	td := New("ADDR:1", &stubTDWriter{})
+	dp := newBurstSensor()
+	td.SetBurstLimitWarningDP(dp)
+
+	if td.IsRefreshed() {
+		t.Fatal("IsRefreshed() must be false before any wire event")
+	}
+	dp.OnEvent(true)
+	if !td.IsRefreshed() {
+		t.Fatal("IsRefreshed() must be true after BURST_LIMIT_WARNING observed")
+	}
+}
+
 // TestWriteRowValidation_ErrRowTooLong is returned by Write before any wire call.
 func TestWriteRowValidation_ErrRowTooLong(t *testing.T) {
 	td := New("ADDR:1", &stubTDWriter{})

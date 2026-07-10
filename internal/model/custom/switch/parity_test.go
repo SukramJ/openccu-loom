@@ -191,6 +191,9 @@ func TestParityGroupStateValues(t *testing.T) {
 
 // TestParityIsRefreshedAfterObservation verifies IsRefreshed returns false
 // before any wire event and true after.
+//
+// Pins the availability gate to its primary state carrier (STATE); see
+// docs/parity/by_design.md.
 func TestParityIsRefreshedAfterObservation(t *testing.T) {
 	t.Parallel()
 
