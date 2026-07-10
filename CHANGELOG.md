@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-07-10
+
 ### Added
 
 - **Matter now bridges `valve.Irrigation` as an on/off endpoint.** The

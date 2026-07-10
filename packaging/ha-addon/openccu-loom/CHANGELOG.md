@@ -1,5 +1,27 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.31.0
+
+- **Irrigation valves now work in Matter.** An HmIP irrigation valve is now
+  bridged as an on/off device, so you can switch it from Apple Home, Google
+  Home or Alexa like any other switch.
+- **Cleaner Matter device list.** The Matter exposure screen no longer lists
+  internal service, status and overflow parameters (things you can never
+  usefully expose) — only real, exposable data points appear.
+- **New expert option `expose_secondary_channels`** (off by default). Turn it
+  on if you want a multi-channel device's extra actor channels and its status
+  channel to each appear as their own Matter endpoint.
+- **Matter pairing no longer hangs after "Commissioning complete".** Adding the
+  bridge to Apple/Google Home could spin a CPU core and abort with "could not
+  add accessory"; pairing now completes cleanly.
+- **Thermostat changes from Apple/Google now take effect.** Setting the target
+  temperature or mode from a Matter controller reached the daemon but was
+  rejected before it hit the CCU — it now applies.
+- **Changes made elsewhere now reach Matter controllers.** Turning a light,
+  thermostat, cover, lock or siren on/off at the wall or via a CCU program now
+  updates the accessory in Apple/Google Home instead of only reflecting
+  commands the app itself sent.
+
 ## 0.30.0
 
 - **Thermostat away mode now takes effect.** Setting an away/holiday period on an
