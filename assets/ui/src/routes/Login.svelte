@@ -3,6 +3,7 @@
   import { authStore } from "$lib/stores/auth.svelte";
   import { api } from "$lib/api/client";
   import BrandMark from "$lib/components/ui/BrandMark.svelte";
+  import WeavePattern from "$lib/components/ui/WeavePattern.svelte";
   import { t } from "$lib/i18n";
 
   let username = $state("");
@@ -37,14 +38,17 @@
   }
 </script>
 
-<section class="flex min-h-screen items-center justify-center px-4">
-  <form
-    onsubmit={onSubmit}
-    class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-  >
-    <div class="mb-6 flex items-center justify-center">
-      <BrandMark mode="wordmark" height={40} />
-    </div>
+<section class="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+  <!-- Signature loom backdrop woven behind the card (decorative, aria-hidden). -->
+  <div class="relative w-full max-w-sm">
+    <WeavePattern class="-inset-8 rounded-3xl" />
+    <form
+      onsubmit={onSubmit}
+      class="relative z-10 w-full rounded-xl border border-slate-200 bg-white p-8 shadow-md dark:border-slate-800 dark:bg-slate-900"
+    >
+      <div class="mb-8 flex items-center justify-center">
+        <BrandMark mode="wordmark" height={48} />
+      </div>
 
     <label class="mb-3 block">
       <span class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -106,5 +110,6 @@
         {t("login.ccu_hint")}
       </p>
     {/if}
-  </form>
+    </form>
+  </div>
 </section>

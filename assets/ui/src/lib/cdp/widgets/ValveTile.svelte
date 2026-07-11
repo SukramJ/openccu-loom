@@ -16,6 +16,7 @@
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
+  import EmptyTile from "$lib/control/tile/EmptyTile.svelte";
   import NumericInputFeature from "$lib/control/features/NumericInputFeature.svelte";
   import TimedActionFeature from "$lib/control/features/TimedActionFeature.svelte";
   import ControlButtonGroup from "$lib/control/controls/ControlButtonGroup.svelte";
@@ -51,6 +52,12 @@
     (isModulating ? levelDP?.observed : stateDP?.observed) ?? false,
   );
 
+  // Open/close stay operable regardless of the observed state (neither
+  // button is gated on a live read), so this tile never falls back to
+  // the compact EmptyTile.
+  const hasControls = true;
+  const showEmpty = $derived(!observed && !hasControls);
+
   const tileColor = $derived(
     isOn && observed
       ? "var(--state-switch-active-color, var(--ha-primary-color))"
@@ -58,7 +65,7 @@
   );
 
   const secondary = $derived.by(() => {
-    if (!observed) return "—";
+    if (!observed) return undefined;
     if (isModulating) return t("cdp.valve.secondary_open", { pct: Math.round(level * 100) });
     return isOn ? t("cdp.valve.state_open") : t("cdp.valve.state_closed");
   });
@@ -99,6 +106,9 @@
     {error}
   </div>
 {/if}
+{#if showEmpty}
+  <EmptyTile icon="mdi:gauge" title={displayTitle} />
+{:else}
 <ControlTile {tileColor} focused={isOn}>
     {#snippet icon()}
       <ControlTileIcon active={isOn} label={displayTitle}>
@@ -144,3 +154,4 @@
       {/if}
     {/snippet}
   </ControlTile>
+{/if}

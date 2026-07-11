@@ -51,4 +51,32 @@ describe("ConnectionBadge", () => {
     const countSpan = container.querySelector(".tabular-nums");
     expect(countSpan).toBeNull();
   });
+
+  it("paints the disconnected dot neutral-warning (amber), never red", () => {
+    wsStatusValue = "closed";
+    const { container } = render(ConnectionBadge);
+    const dot = container.querySelector("span.rounded-full");
+    expect(dot).not.toBeNull();
+    // Disconnected is an expected, self-healing state — amber, not red.
+    expect(dot!.className).toContain("bg-amber-500");
+    expect(dot!.className).not.toContain("bg-red");
+  });
+
+  it("uses emerald for the connected dot", () => {
+    wsStatusValue = "open";
+    const { container } = render(ConnectionBadge);
+    const dot = container.querySelector("span.rounded-full");
+    expect(dot!.className).toContain("bg-emerald-500");
+  });
+
+  it("exposes an explanatory title and aria-label even when the text label is hidden", () => {
+    wsStatusValue = "closed";
+    const { container } = render(ConnectionBadge);
+    const badge = container.querySelector("span[title]");
+    expect(badge).not.toBeNull();
+    // Both the tooltip and the aria-label carry the plain-language explanation
+    // so the meaning survives on phones, where only the dot is visible.
+    expect(badge!.getAttribute("title")).toContain("connection.tooltip.off");
+    expect(badge!.getAttribute("aria-label")).toContain("connection.tooltip.off");
+  });
 });

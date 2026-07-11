@@ -26,6 +26,7 @@
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
+  import EmptyTile from "$lib/control/tile/EmptyTile.svelte";
   import ToggleFeature from "$lib/control/features/ToggleFeature.svelte";
   import NumericInputFeature from "$lib/control/features/NumericInputFeature.svelte";
   import ControlHueSlider from "$lib/control/controls/ControlHueSlider.svelte";
@@ -83,6 +84,12 @@
   const observed = $derived(levelDP?.observed ?? false);
   const isOn = $derived(level > 0);
 
+  // The on/off toggle stays operable regardless of the observed level
+  // (no `disabled` is wired to it below), so this tile never falls
+  // back to the compact EmptyTile.
+  const hasControls = true;
+  const showEmpty = $derived(!observed && !hasControls);
+
   // Picker mode — only relevant when both HSV and CT coexist (RGBW).
   let mode = $state<"color" | "temp">("color");
   $effect(() => {
@@ -101,7 +108,7 @@
   });
 
   const secondary = $derived.by(() => {
-    if (!observed) return "—";
+    if (!observed) return undefined;
     const parts = [`${Math.round(level * 100)} %`];
     if (mode === "color" && hasHsvColor) parts.push(`H ${Math.round(hue)}°`);
     if (mode === "temp" && hasColorTemp) parts.push(`${Math.round(kelvin)} K`);
@@ -149,6 +156,9 @@
     {error}
   </div>
 {/if}
+{#if showEmpty}
+  <EmptyTile icon="mdi:lightbulb" title={displayTitle} />
+{:else}
 <ControlTile {tileColor} focused={isOn}>
     {#snippet icon()}
       <ControlTileIcon active={isOn} label={displayTitle}>
@@ -250,3 +260,4 @@
       {/if}
     {/snippet}
   </ControlTile>
+{/if}

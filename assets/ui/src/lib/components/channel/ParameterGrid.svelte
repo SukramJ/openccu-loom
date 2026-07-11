@@ -5,6 +5,9 @@
   import DstSubgroup from "./DstSubgroup.svelte";
   import { detectTimePairs } from "$lib/channel/time-pairs";
   import { detectDstGroups, dstHeader } from "$lib/channel/dst-groups";
+  import { disambiguateLabels } from "$lib/channel/disambiguate-labels";
+  import type { LabelDisambiguation } from "$lib/channel/disambiguate-labels";
+  import { t } from "$lib/i18n";
   import type { ParamValues } from "$lib/channel/validate";
 
   type Props = {
@@ -112,6 +115,26 @@
     }
     return out;
   });
+
+  // Duplicate-label disambiguation for the flat (non-category) render.
+  // Category groups compute their own map per group in the template.
+  const ungroupedDisambiguation = $derived(disambiguateLabels(ungroupedParams));
+
+  // Append the localized directional qualifier to a colliding label so
+  // two parameters that share a server-provided label (differing only
+  // by an upper/lower threshold suffix in their name) can be told
+  // apart. Returns the label unchanged when there is nothing to add.
+  function decorateLabel(
+    p: UISchemaParameter,
+    dis: LabelDisambiguation | undefined,
+  ): string | undefined {
+    if (!dis || dis.direction === null) return p.label;
+    const qualifier =
+      dis.direction === "upper"
+        ? t("parameter.threshold.upper")
+        : t("parameter.threshold.lower");
+    return `${p.label ?? p.name} (${qualifier})`;
+  }
 </script>
 
 {#if dst.start.length > 0 || dst.end.length > 0}
@@ -155,8 +178,10 @@
   {/each}
   {#if !useCategoryGrouping}
     {#each ungroupedParams as p (p.name)}
+      {@const dis = ungroupedDisambiguation.get(p.name)}
       <ParameterField
-        parameter={p}
+        parameter={dis ? { ...p, label: decorateLabel(p, dis) } : p}
+        nameBadge={dis?.emphasizeName ?? false}
         value={currentValue(p)}
         dirty={dirty.has(p.name)}
         error={errors[p.name] ?? null}
@@ -171,14 +196,17 @@
 {#if useCategoryGrouping}
   <div class="space-y-4">
     {#each categoryGroups as g (g.category)}
+      {@const groupDisambiguation = disambiguateLabels(g.params)}
       <section>
         <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
           {g.label}
         </h4>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           {#each g.params as p (p.name)}
+            {@const dis = groupDisambiguation.get(p.name)}
             <ParameterField
-              parameter={p}
+              parameter={dis ? { ...p, label: decorateLabel(p, dis) } : p}
+              nameBadge={dis?.emphasizeName ?? false}
               value={currentValue(p)}
               dirty={dirty.has(p.name)}
               error={errors[p.name] ?? null}

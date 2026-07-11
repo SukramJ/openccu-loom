@@ -27,7 +27,7 @@
 
 <header class={`mb-4 flex flex-wrap items-start justify-between gap-3 ${cls}`}>
   <div>
-    <h1 class="text-2xl font-semibold">{title}</h1>
+    <h1 class="text-balance text-2xl font-bold tracking-tight">{title}</h1>
     {#if subtitle}
       <p class="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
     {/if}

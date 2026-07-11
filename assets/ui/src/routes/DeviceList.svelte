@@ -322,7 +322,7 @@
         </label>
         <Button
           type="button"
-          variant="default"
+          variant="outline"
           onclick={async () => {
             try {
               await api.refreshDevices();

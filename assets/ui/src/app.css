@@ -17,11 +17,36 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas;
 
-  /* Accent palette — keep in sync with the daemon's hm-themed blue */
-  --color-brand-50: oklch(0.98 0.02 240);
-  --color-brand-500: oklch(0.63 0.18 245);
-  --color-brand-700: oklch(0.48 0.17 245);
-  --color-brand-900: oklch(0.30 0.12 245);
+  /*
+   * Brand palette — Loom teal (logo #14B8A6 ≈ Tailwind teal-500).
+   *
+   * Deliberate contrast-shifted mapping: the 500–900 rungs are sourced
+   * one Tailwind step DARKER than their name (brand-600 := teal-700,
+   * … brand-900 := teal-950; brand-500 sits between teal-600 and
+   * teal-700 to clear 4.5:1 under white text). The dominant fill
+   * pattern in this SPA is `bg-brand-500` + `text-white` (buttons, pills,
+   * active chips), so brand-500 is the value that carries white body text
+   * — it must clear the WCAG 4.5:1 body-text ratio against white. Plain
+   * teal-500 is far too light under white; teal-600 is the darkest teal
+   * that still reads as "brand teal" rather than "slate". The 50–400 rungs
+   * stay the unshifted teal tints so subtle backgrounds/borders keep the
+   * full light range. brand-950 extends the scale one rung below teal-950.
+   *
+   * Values 50–400 and 600–900 are copied verbatim from
+   * tailwindcss/theme.css — do not hand-tune; re-read them from
+   * node_modules on any Tailwind bump. 500 and 950 are custom rungs.
+   */
+  --color-brand-50: oklch(98.4% 0.014 180.72);
+  --color-brand-100: oklch(95.3% 0.051 180.801);
+  --color-brand-200: oklch(91% 0.096 180.426);
+  --color-brand-300: oklch(85.5% 0.138 181.071);
+  --color-brand-400: oklch(77.7% 0.152 181.912);
+  --color-brand-500: oklch(54.5% 0.11 184.7); /* between teal-600/700 — #008478, 4.68:1 on white so white button labels clear WCAG AA body text */
+  --color-brand-600: oklch(51.1% 0.096 186.391); /* teal-700 */
+  --color-brand-700: oklch(43.7% 0.078 188.216); /* teal-800 */
+  --color-brand-800: oklch(38.6% 0.063 188.416); /* teal-900 */
+  --color-brand-900: oklch(27.7% 0.046 192.524); /* teal-950 */
+  --color-brand-950: oklch(0.22 0.04 192.524); /* below teal-950 */
 }
 
 /* Default dark-mode preference comes from the user-agent; we also
@@ -32,8 +57,9 @@
  * over hard-coded slate utility classes so a future theme picker
  * can re-skin the SPA without touching component markup. */
 :root {
-  --ha-primary-color: oklch(0.63 0.18 245);
-  --ha-primary-color-hover: oklch(0.48 0.17 245);
+  /* Primary tracks brand-500/600. */
+  --ha-primary-color: oklch(54.5% 0.11 184.7);
+  --ha-primary-color-hover: oklch(51.1% 0.096 186.391);
   --ha-card-background-color: #ffffff;
   --ha-secondary-background-color: #fafafa;
   --ha-divider-color: #e0e0e0;
@@ -43,7 +69,9 @@
   --ha-error-color: #dc2626;
   --ha-warning-color: #d97706;
   --ha-success-color: #059669;
-  --ha-info-color: oklch(0.63 0.18 245);
+  /* Info is deliberately blue (Tailwind sky-600) so it stays
+   * distinguishable from the teal primary. */
+  --ha-info-color: oklch(58.8% 0.158 241.966);
   --ha-elevation-card: 0 1px 2px 0 rgb(0 0 0 / 0.04);
   --ha-elevation-modal: 0 10px 25px -5px rgb(0 0 0 / 0.15);
   --ha-radius-card: 12px;
@@ -51,8 +79,10 @@
 }
 
 html.dark {
-  --ha-primary-color: oklch(0.70 0.15 245);
-  --ha-primary-color-hover: oklch(0.78 0.13 245);
+  /* Dark surfaces need a lighter teal for AA text/icon contrast:
+   * primary := teal-400, hover := teal-300. */
+  --ha-primary-color: oklch(77.7% 0.152 181.912);
+  --ha-primary-color-hover: oklch(85.5% 0.138 181.071);
   --ha-card-background-color: #0f172a;
   --ha-secondary-background-color: #111827;
   --ha-divider-color: #1f2937;
@@ -62,9 +92,20 @@ html.dark {
   --ha-error-color: #f87171;
   --ha-warning-color: #fbbf24;
   --ha-success-color: #34d399;
-  --ha-info-color: oklch(0.78 0.13 245);
+  /* Info stays blue on dark too (Tailwind sky-400). */
+  --ha-info-color: oklch(74.6% 0.16 232.661);
   --ha-elevation-card: 0 1px 2px 0 rgb(0 0 0 / 0.30);
   --ha-elevation-modal: 0 10px 25px -5px rgb(0 0 0 / 0.50);
+}
+
+/* Base document colours track the theme tokens so the boot paint and any
+ * overscroll / rubber-band area never flash white in dark mode. The inline
+ * pre-paint script in index.html sets `.dark` before the first paint, so
+ * these already resolve to the dark values on the very first frame. */
+html,
+body {
+  background-color: var(--ha-card-background-color);
+  color: var(--ha-primary-text-color);
 }
 
 /* Reusable utility classes that bind the semantic tokens to elements

@@ -14,6 +14,7 @@
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
+  import EmptyTile from "$lib/control/tile/EmptyTile.svelte";
   import ControlButtonGroup from "$lib/control/controls/ControlButtonGroup.svelte";
   import ControlButton from "$lib/control/controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -53,6 +54,12 @@
     (acousticDP?.observed || opticalDP?.observed || levelDP?.observed) ?? false,
   );
 
+  // Off/Test stay operable regardless of the observed state (neither
+  // button is gated on a live read), so this tile never falls back to
+  // the compact EmptyTile.
+  const hasControls = true;
+  const showEmpty = $derived(!observed && !hasControls);
+
   const tileColor = $derived(
     isActive
       ? "var(--state-siren-active-color, var(--ha-error-color))"
@@ -60,7 +67,7 @@
   );
 
   const secondary = $derived.by(() => {
-    if (!observed) return "—";
+    if (!observed) return undefined;
     if (isActive) {
       const parts: string[] = [];
       if (activeAcoustic) parts.push(t("cdp.siren.state_acoustic"));
@@ -106,6 +113,9 @@
     {error}
   </div>
 {/if}
+{#if showEmpty}
+  <EmptyTile icon="mdi:alert-triangle" title={displayTitle} />
+{:else}
 <ControlTile {tileColor} focused={isActive}>
     {#snippet icon()}
       <ControlTileIcon active={isActive} label={displayTitle}>
@@ -142,6 +152,7 @@
       {/if}
     {/snippet}
   </ControlTile>
+{/if}
 
 <style>
   .pulse {

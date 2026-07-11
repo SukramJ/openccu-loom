@@ -14,8 +14,40 @@
     <link rel="icon" href="favicon-16.png" type="image/png" sizes="16x16" />
     <link rel="apple-touch-icon" href="apple-touch-icon-180.png" />
     <link rel="manifest" href="manifest.webmanifest" />
+    <script>
+      // Apply the persisted / system theme BEFORE the first paint so the
+      // app shell never flashes light on a cold load in dark mode. The
+      // `.dark` class is what both the Tailwind `dark:` variant and the
+      // --ha-* token overrides key off; without this it was only added
+      // in App.svelte's onMount (after first paint), which is the root
+      // cause of the reported white top-bar on boot. Mirrors
+      // applyTheme() in src/lib/stores/preferences.svelte.ts; the store
+      // re-applies (idempotently) on mount and tracks OS changes.
+      (function () {
+        try {
+          var theme = "system";
+          var raw = localStorage.getItem("openccu-loom.prefs.v1");
+          if (raw) {
+            var p = JSON.parse(raw);
+            if (p && (p.theme === "light" || p.theme === "dark" || p.theme === "system")) {
+              theme = p.theme;
+            }
+          }
+          var dark =
+            theme === "dark" ||
+            (theme === "system" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var root = document.documentElement;
+          root.classList.toggle("dark", dark);
+          root.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {
+          /* localStorage / JSON unavailable — fall back to light. */
+        }
+      })();
+    </script>
   </head>
-  <body class="bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+  <body class="antialiased">
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -44,8 +44,15 @@ vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: vi.fn().mockResolvedValue(false) },
 }));
 
+// A plain mutable object (not a Svelte $state proxy) so individual tests
+// can flip prefs.expertMode before render() to exercise the expert-only
+// go_type badge. vi.mock factories are hoisted above top-level const
+// declarations, so this must go through vi.hoisted() to be visible inside
+// the factory below.
+const { mockPrefs } = vi.hoisted(() => ({ mockPrefs: { expertMode: false } }));
+
 vi.mock("$lib/stores/preferences.svelte", () => ({
-  prefs: { expertMode: false },
+  prefs: mockPrefs,
   applyTheme: vi.fn(),
   setLocale: vi.fn(),
   setTheme: vi.fn(),
@@ -123,6 +130,7 @@ function renderEditor(fields: ConfigSchemaField[]) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPrefs.expertMode = false;
   mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
   mockPutConfigSection.mockResolvedValue({
     section: "north.rest",
@@ -447,5 +455,150 @@ describe("SectionEditor.save — tri-state *bool field", () => {
       b.textContent?.includes("settings.tristate.default"),
     );
     expect(triggerBtn).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 4 — `bool` field renders as the design-system Switch
+//
+// Review finding: bool fields used to render as a native <input
+// type="checkbox">, inconsistent with the Switch used by the channel
+// configurator. They must now render as the shared Switch (a
+// role="switch" element, bits-ui), stay label-associated via id/for,
+// and route toggles through the same setIn() update path a checkbox
+// onchange used to.
+// ---------------------------------------------------------------------------
+
+const ENABLED_FIELD: ConfigSchemaField = {
+  path: "north.rest.enabled",
+  class: "basic",
+  go_type: "bool",
+};
+
+const OIDC_CLIENT_SECRET_FIELD: ConfigSchemaField = {
+  path: "north.rest.auth.oidc.client_secret",
+  class: "secret",
+  go_type: "string",
+};
+
+describe("SectionEditor — bool field renders as a Switch", () => {
+  it("renders a role=switch element instead of a checkbox", async () => {
+    mockGetConfigSectionResult = { enabled: true };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container, getByRole } = renderEditor([ENABLED_FIELD]);
+
+    await waitFor(() => {
+      expect(container.querySelector('[role="switch"]')).not.toBeNull();
+    });
+
+    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+    expect(getByRole("switch")).toBeTruthy();
+  });
+
+  it("is reachable via its associated label (id/for kept)", async () => {
+    mockGetConfigSectionResult = { enabled: true };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { getByLabelText } = renderEditor([ENABLED_FIELD]);
+
+    // humanize("enabled") -> "Enabled" (the i18n mock returns the raw
+    // key, so fieldLabel() falls through to the humanised tail key).
+    await waitFor(() => {
+      expect(getByLabelText("Enabled")).toBeTruthy();
+    });
+  });
+
+  it("toggling the switch dirties the form and persists the new value on save", async () => {
+    mockGetConfigSectionResult = { enabled: false };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container, getByRole } = renderEditor([ENABLED_FIELD]);
+
+    await waitFor(() => {
+      expect(container.querySelector('[role="switch"]')).not.toBeNull();
+    });
+
+    const toggle = getByRole("switch");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    await fireEvent.click(toggle);
+
+    await waitFor(() => {
+      const saveBtn = (
+        Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+      ).find((b) => b.textContent?.trim().includes("common.save"));
+      expect(saveBtn).toBeDefined();
+      expect(saveBtn!.disabled).toBe(false);
+    });
+
+    const saveBtn = (
+      Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim().includes("common.save"))!;
+    await fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockPutConfigSection).toHaveBeenCalledTimes(1);
+    });
+
+    const payload = mockPutConfigSection.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload.enabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 5 — go_type badge is expert-mode-only
+//
+// Review finding: the font-mono go_type span (e.g. "bool", "string") is
+// developer-facing jargon and must only render when prefs.expertMode is
+// on; basic-mode operators must not see it.
+// ---------------------------------------------------------------------------
+
+describe("SectionEditor — go_type badge visibility", () => {
+  it("hides the go_type badge in basic mode", async () => {
+    mockPrefs.expertMode = false;
+    mockGetConfigSectionResult = { public_url: "https://example.com" };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container, queryByText } = renderEditor([PUBLIC_URL_FIELD]);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('input[type="text"]').length).toBeGreaterThan(0);
+    });
+
+    expect(queryByText("string")).toBeNull();
+  });
+
+  it("shows the go_type badge in expert mode", async () => {
+    mockPrefs.expertMode = true;
+    mockGetConfigSectionResult = { public_url: "https://example.com" };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container, queryByText } = renderEditor([PUBLIC_URL_FIELD]);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('input[type="text"]').length).toBeGreaterThan(0);
+    });
+
+    expect(queryByText("string")).not.toBeNull();
+  });
+
+  it("hides the go_type badge for a secret field in basic mode", async () => {
+    mockPrefs.expertMode = false;
+    // AUTH_USERS_FIELD/AUTH_TOKENS_FIELD are excluded from SectionEditor's
+    // rendering (MANAGED_ELSEWHERE — they have dedicated admin surfaces),
+    // so use a secret field that actually renders here: the OIDC client
+    // secret, which shares north.rest.auth.oidc.client_secret with
+    // secretEnvName()'s known env-override mapping.
+    mockGetConfigSectionResult = { auth: { oidc: { client_secret: "***" } } };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container, queryByText } = renderEditor([OIDC_CLIENT_SECRET_FIELD]);
+
+    await waitFor(() => {
+      expect(container.querySelector('input[type="password"]')).not.toBeNull();
+    });
+
+    expect(queryByText("string")).toBeNull();
   });
 });

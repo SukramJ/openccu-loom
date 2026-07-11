@@ -75,7 +75,11 @@
   {:else if error}
     <ErrorState message={t("fleet.load_error", { error })} onRetry={() => void load()} />
   {:else if sortedCcus.length === 0}
-    <EmptyState message={t("fleet.empty")} icon="mdi:server-network" />
+    <EmptyState
+      message={t("fleet.empty")}
+      description={t("fleet.empty.description")}
+      icon="mdi:server-network"
+    />
   {:else}
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {#each sortedCcus as ccu (ccu.name)}

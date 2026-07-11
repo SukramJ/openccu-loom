@@ -32,23 +32,39 @@
         : t("connection.live_off"),
   );
 
+  // A disconnected live-stream is an expected, self-healing state (the pump
+  // reconnects on its own), so it must not read as a hard failure: amber on a
+  // neutral slate badge, never red. Red stays reserved for genuine errors.
   const dotClass = $derived(
     wsState === "open"
       ? "bg-emerald-500"
       : wsState === "connecting"
         ? "bg-amber-500 animate-pulse"
-        : "bg-red-500",
+        : "bg-amber-500 dark:bg-amber-400",
+  );
+
+  // Plain-language explanation of the current state — carried in the title
+  // and the aria-label so the meaning survives even on phones, where the
+  // text label collapses to just the coloured dot.
+  const explain = $derived(
+    wsState === "open"
+      ? t("connection.tooltip.on")
+      : wsState === "connecting"
+        ? t("connection.tooltip.connecting")
+        : t("connection.tooltip.off"),
   );
 
   const diag = $derived(diagnostics());
   const tooltip = $derived(
-    `${t("connection.ws_tooltip")} — ${label} · ${diag.received} ${t("connection.events")}${diag.lastType ? ` · ${t("connection.last")}: ${diag.lastType}` : ""}`,
+    `${explain}${diag.received ? ` · ${diag.received} ${t("connection.events")}` : ""}${diag.lastType ? ` · ${t("connection.last")}: ${diag.lastType}` : ""}`,
   );
+  const ariaLabel = $derived(`${label} — ${explain}`);
 </script>
 
 <span
   class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-xs dark:border-slate-700"
   title={tooltip}
+  aria-label={ariaLabel}
 >
   <span class="inline-block h-2 w-2 rounded-full {dotClass}" aria-hidden="true"></span>
   <span class="hidden sm:inline">{label}</span>

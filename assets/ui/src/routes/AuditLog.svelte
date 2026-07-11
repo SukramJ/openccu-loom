@@ -295,6 +295,7 @@
         persistKey="audit-log"
         initialSort={{ key: "time", asc: false }}
         emptyMessage={t("audit.empty")}
+        emptyDescription={t("audit.empty.description")}
         emptyIcon="mdi:history"
       >
         {#snippet cell(entry, col)}

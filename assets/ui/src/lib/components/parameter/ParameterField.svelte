@@ -29,6 +29,14 @@
     forceDisabled?: boolean;
     onChange: (value: unknown) => void;
     onAction?: () => void;
+    /**
+     * When true the machine name (rendered next to the label) is the
+     * only thing distinguishing this field from another with an
+     * identical label, so it is surfaced as a badge instead of the
+     * usual muted inline suffix. Set by ParameterGrid's duplicate-label
+     * disambiguation.
+     */
+    nameBadge?: boolean;
   };
 
   let {
@@ -39,6 +47,7 @@
     forceDisabled = false,
     onChange,
     onAction,
+    nameBadge = false,
   }: Props = $props();
 
   // Writability model with two distinct axes so the UI can react
@@ -170,13 +179,17 @@
   />
 {:else}
 <div class="flex flex-col gap-1">
-  <div class="flex items-baseline gap-2">
-    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
+  <div class="flex flex-wrap items-baseline gap-2">
+    <span class="min-w-0 break-words text-sm font-medium text-slate-700 dark:text-slate-300">
       {parameter.label || parameter.name}
       {#if parameter.label && parameter.name !== parameter.label}
-        <span class="ml-1 font-mono text-[10px] text-[var(--ha-secondary-text-color)]">
-          {parameter.name}
-        </span>
+        {#if nameBadge}
+          <Badge variant="muted" class="ml-1 align-middle font-mono">{parameter.name}</Badge>
+        {:else}
+          <span class="ml-1 font-mono text-[10px] text-[var(--ha-secondary-text-color)]">
+            {parameter.name}
+          </span>
+        {/if}
       {/if}
     </span>
     {#if parameter.unit}

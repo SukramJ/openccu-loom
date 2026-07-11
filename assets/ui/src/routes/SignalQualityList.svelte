@@ -116,6 +116,7 @@
       persistKey="signal-quality"
       initialSort={{ key: "rssi_device", asc: true }}
       emptyMessage={t("signal.empty")}
+      emptyDescription={t("signal.empty.description")}
       emptyIcon="mdi:signal"
     >
       {#snippet cell(d, col)}

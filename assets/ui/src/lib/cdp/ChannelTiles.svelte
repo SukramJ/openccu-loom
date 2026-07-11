@@ -51,10 +51,18 @@
   // thermostat or a contact) used only a third of the width on a 3-col
   // grid. Drop to two columns when there is little to show so the tiles
   // fill more of the row.
+  //
+  // `items-start` keeps every tile at its own content height instead of
+  // CSS Grid's default stretch-to-row-height: a tall ClimateTile (many
+  // feature rows) and a short LockTile (two buttons) can land in the
+  // same row without the short tile's card being stretched into a
+  // near-empty box. Row order stays DOM/row-major (unlike a CSS
+  // multi-column masonry layout, which would reorder tiles into
+  // column-major reading order) — only the vertical alignment changes.
   const tileGridClass = $derived(
     renderable.length + autoTileChannels.length <= 2
-      ? "grid grid-cols-1 gap-3 sm:grid-cols-2"
-      : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3",
+      ? "grid grid-cols-1 items-start gap-3 sm:grid-cols-2"
+      : "grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3",
   );
 </script>
 

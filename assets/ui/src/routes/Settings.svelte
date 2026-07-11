@@ -15,7 +15,13 @@
   import SystemUpdatePanel from "$lib/components/settings/SystemUpdatePanel.svelte";
   import ChangesOverview from "$lib/components/settings/ChangesOverview.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
-  import { prefs, setLocale, setExpertMode } from "$lib/stores/preferences.svelte";
+  import {
+    prefs,
+    setLocale,
+    setExpertMode,
+    setTheme,
+    type Theme,
+  } from "$lib/stores/preferences.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { t } from "$lib/i18n";
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
@@ -392,6 +398,20 @@
                 </select>
               </label>
 
+              <label class="flex items-center gap-3 text-sm">
+                <span class="min-w-24">{t("settings.theme")}</span>
+                <select
+                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  value={prefs.theme}
+                  onchange={(e) =>
+                    setTheme((e.target as HTMLSelectElement).value as Theme)}
+                >
+                  <option value="light">{t("settings.theme.light")}</option>
+                  <option value="dark">{t("settings.theme.dark")}</option>
+                  <option value="system">{t("settings.theme.system")}</option>
+                </select>
+              </label>
+
               <div class="flex items-start gap-3">
                 <div class="min-w-24 pt-0.5">
                   <label class="flex items-center gap-2 text-sm">
@@ -455,7 +475,7 @@
                 {t("settings.mqtt.reload_description")}
               </p>
               <div class="flex flex-wrap items-center gap-3">
-                <Button onclick={() => void reloadMQTT()} disabled={mqttReloading}>
+                <Button variant="outline" onclick={() => void reloadMQTT()} disabled={mqttReloading}>
                   {mqttReloading
                     ? t("settings.mqtt.reload_running")
                     : t("settings.mqtt.reload")}
