@@ -97,6 +97,20 @@
     return `${n}${suffix}`;
   }
 
+  // HmIP radio modules report an out-of-band sentinel (commonly 0, or a
+  // value outside any real radio's dynamic range) on RSSI_DEVICE/
+  // RSSI_PEER before the first real measurement arrives. The daemon now
+  // filters these at the source, but the SPA renders defensively too:
+  // real Homematic RSSI readings are negative and sit roughly between
+  // -30 dBm (very strong) and -120 dBm (very weak) — anything missing
+  // or outside that band renders as "—" rather than a misleading number.
+  function fmtRssi(v: unknown): string {
+    if (v === undefined || v === null || v === "") return "—";
+    const n = Number(v);
+    if (!Number.isFinite(n) || n > -30 || n < -120) return "—";
+    return `${n} dBm`;
+  }
+
   const items = $derived.by<StatusItem[]>(() => {
     const out: StatusItem[] = [];
     if (values.UNREACH !== undefined) {
@@ -112,14 +126,14 @@
       out.push({
         icon: "mdi:signal",
         label: t("device.maintenance.rssi_device"),
-        value: fmtNumber(values.RSSI_DEVICE, " dBm"),
+        value: fmtRssi(values.RSSI_DEVICE),
       });
     }
     if (values.RSSI_PEER !== undefined) {
       out.push({
         icon: "mdi:signal",
         label: t("device.maintenance.rssi_peer"),
-        value: fmtNumber(values.RSSI_PEER, " dBm"),
+        value: fmtRssi(values.RSSI_PEER),
       });
     }
     if (values.LOW_BAT !== undefined) {

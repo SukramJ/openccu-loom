@@ -21,6 +21,7 @@ import {
   Bell,
   BellOff,
   Box,
+  Ban,
   Calendar,
   CalendarClock,
   Check,
@@ -28,6 +29,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Circle,
   CircleAlert,
   Cloud,
   CloudRain,
@@ -35,6 +37,7 @@ import {
   Cog,
   Copy,
   DoorClosed,
+  DoorOpen,
   Download,
   Droplets,
   Eye,
@@ -115,9 +118,11 @@ export type IconName =
   | "mdi:bell-off"
   | "mdi:calendar"
   | "mdi:calendar-clock"
+  | "mdi:cancel"
   | "mdi:check"
   | "mdi:check-circle"
   | "mdi:chevron-down"
+  | "mdi:circle-outline"
   | "mdi:chevron-right"
   | "mdi:chevron-up"
   | "mdi:close"
@@ -126,6 +131,7 @@ export type IconName =
   | "mdi:cog"
   | "mdi:content-copy"
   | "mdi:door-closed"
+  | "mdi:door-open"
   | "mdi:download"
   | "mdi:export"
   | "mdi:filter"
@@ -196,9 +202,11 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:bell-off": BellOff,
   "mdi:calendar": Calendar,
   "mdi:calendar-clock": CalendarClock,
+  "mdi:cancel": Ban,
   "mdi:check": Check,
   "mdi:check-circle": CheckCircle2,
   "mdi:chevron-down": ChevronDown,
+  "mdi:circle-outline": Circle,
   "mdi:chevron-right": ChevronRight,
   "mdi:chevron-up": ChevronUp,
   "mdi:close": X,
@@ -207,6 +215,7 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:cog": Cog,
   "mdi:content-copy": Copy,
   "mdi:door-closed": DoorClosed,
+  "mdi:door-open": DoorOpen,
   "mdi:download": Download,
   "mdi:export": FileDown,
   "mdi:filter": Filter,

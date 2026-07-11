@@ -22,6 +22,7 @@
     initialSort = null,
     persistKey = "",
     emptyMessage,
+    emptyDescription = "",
     emptyIcon = "mdi:format-list-bulleted",
     cell,
     rowClass,
@@ -35,6 +36,8 @@
     // When set, sort + search persist under this localStorage key.
     persistKey?: string;
     emptyMessage: string;
+    // Optional muted second line under the empty message (see EmptyState).
+    emptyDescription?: string;
     emptyIcon?: IconName;
     cell?: Snippet<[Row, DataColumn<Row>]>;
     rowClass?: (row: Row) => string;
@@ -145,7 +148,7 @@
 {/if}
 
 {#if processed.length === 0}
-  <EmptyState message={emptyMessage} icon={emptyIcon} />
+  <EmptyState message={emptyMessage} description={emptyDescription} icon={emptyIcon} />
 {:else}
   <div class="overflow-x-auto">
     <table class="table-reflow w-full text-sm">

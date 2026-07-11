@@ -1,16 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
+  import type { IconName } from "$lib/icons";
   import { matterStore } from "$lib/stores/matter.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
-  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Card from "$lib/components/ui/Card.svelte";
-  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
-  import type { MatterExposure } from "$lib/api/matter-types";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import type { MatterExposure, MatterMappability } from "$lib/api/matter-types";
 
   onMount(async () => {
     await matterStore.loadExposures();
@@ -69,8 +70,8 @@
     selectedClasses = new Set();
   }
 
-  // Pass the pre-filtered list to DataTable so the external search/kind/class
-  // filters are not duplicated by DataTable's own search feature.
+  // Pre-filter the exposure list against the external search/kind/class
+  // controls; grouping then folds the result into per-device buckets.
   const filteredItems = $derived.by(() => {
     const q = searchText.trim().toLowerCase();
     const classFilterActive = selectedClasses.size > 0;
@@ -95,25 +96,66 @@
     });
   });
 
-  function stateIcon(item: MatterExposure): string {
-    if (item.mappable === "unmappable") return "⛔";
-    if (item.enabled && item.mappable === "mappable") return "●";
-    if (item.enabled && item.mappable === "partially_mappable") return "⚠";
-    return "◯";
+  // Grouping — one bucket per device address. The device name repeats on
+  // every parameter row of a device, so hoisting it into a group header keeps
+  // the list scannable (a device with 8 DPs no longer prints its name 8×).
+  // Groups sort by device name; rows within a group sort by channel then
+  // parameter (a fixed order that replaces per-column header sorting, which
+  // would fight the grouping).
+  type ExposureGroup = { address: string; name: string; rows: MatterExposure[] };
+  const groups = $derived.by<ExposureGroup[]>(() => {
+    const byDevice = new Map<string, MatterExposure[]>();
+    for (const item of filteredItems) {
+      const bucket = byDevice.get(item.device_address);
+      if (bucket) bucket.push(item);
+      else byDevice.set(item.device_address, [item]);
+    }
+    const out: ExposureGroup[] = [];
+    for (const [address, rows] of byDevice) {
+      const sorted = [...rows].sort((a, b) => {
+        if (a.channel_no !== b.channel_no) return a.channel_no - b.channel_no;
+        const pa = a.parameter_label || a.dp_key;
+        const pb = b.parameter_label || b.dp_key;
+        return pa.localeCompare(pb, undefined, { sensitivity: "base", numeric: true });
+      });
+      out.push({ address, name: sorted[0].display_name || address, rows: sorted });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
+    return out;
+  });
+
+  // State descriptor for the status icon. Mirrors the four operator-facing
+  // states with an icon + colour + localized label (used both in the table
+  // cells and the legend). Registry icons replace platform-dependent
+  // Unicode emoji so rendering is identical across OSes.
+  type StateDescriptor = { icon: IconName; color: string; label: string };
+
+  function stateInfo(item: MatterExposure): StateDescriptor {
+    if (item.mappable === "unmappable")
+      return { icon: "mdi:cancel", color: "text-red-600 dark:text-red-400", label: t("matter.expose.state_unmappable") };
+    if (item.enabled && item.mappable === "mappable")
+      return { icon: "mdi:check-circle", color: "text-green-600 dark:text-green-400", label: t("matter.expose.state_exposed") };
+    if (item.enabled && item.mappable === "partially_mappable")
+      return { icon: "mdi:alert-circle", color: "text-amber-600 dark:text-amber-400", label: t("matter.expose.state_partial") };
+    return { icon: "mdi:circle-outline", color: "text-slate-400 dark:text-slate-500", label: t("matter.expose.state_available") };
   }
 
-  function stateColorClass(item: MatterExposure): string {
-    if (item.mappable === "unmappable") return "text-slate-300 dark:text-slate-600";
-    if (item.enabled && item.mappable === "mappable") return "text-green-500 dark:text-green-400";
-    if (item.enabled && item.mappable === "partially_mappable") return "text-amber-500 dark:text-amber-400";
-    return "text-slate-400 dark:text-slate-500";
+  // Drawer variant keys off pure mappability (ignores the enabled flag) so the
+  // detail panel always describes what the DP could map to.
+  function drawerStateInfo(m: MatterMappability): StateDescriptor {
+    if (m === "unmappable")
+      return { icon: "mdi:cancel", color: "text-red-600 dark:text-red-400", label: t("matter.expose.state_unmappable") };
+    if (m === "partially_mappable")
+      return { icon: "mdi:alert-circle", color: "text-amber-600 dark:text-amber-400", label: t("matter.expose.state_partial") };
+    return { icon: "mdi:check-circle", color: "text-green-600 dark:text-green-400", label: t("matter.expose.state_exposed") };
   }
 
-  function mappabilityIcon(m: string): string {
-    if (m === "mappable") return "●";
-    if (m === "partially_mappable") return "⚠";
-    return "⛔";
-  }
+  const legendItems = $derived<StateDescriptor[]>([
+    { icon: "mdi:check-circle", color: "text-green-600 dark:text-green-400", label: t("matter.expose.state_exposed") },
+    { icon: "mdi:alert-circle", color: "text-amber-600 dark:text-amber-400", label: t("matter.expose.state_partial") },
+    { icon: "mdi:circle-outline", color: "text-slate-400 dark:text-slate-500", label: t("matter.expose.state_available") },
+    { icon: "mdi:cancel", color: "text-red-600 dark:text-red-400", label: t("matter.expose.state_unmappable") },
+  ]);
 
   function isBulkable(item: MatterExposure): boolean {
     return item.mappable !== "unmappable";
@@ -211,30 +253,6 @@
     const row = drawerConflictRows.find((r) => r.dp_kind === "custom");
     return row?.dp_key ?? "";
   });
-
-  // DataTable columns — the select and state columns use the cell snippet for
-  // custom rendering; name/channel/parameter/kind/class are sortable text fields.
-  const columns: DataColumn<MatterExposure>[] = $derived([
-    { key: "select", label: t("matter.expose.col_select") },
-    { key: "state", label: t("matter.expose.col_state"), sortable: true, get: (r) => (r.enabled ? 1 : 0) },
-    {
-      key: "name",
-      label: t("matter.expose.col_name"),
-      sortable: true,
-      title: true,
-      get: (r) => matterStore.pendingUpdates.get(matterStore.exposureKey(r))?.friendly_name ?? (r.friendly_name || r.display_name),
-    },
-    { key: "channel", label: t("matter.expose.col_channel"), sortable: true, get: (r) => r.channel_no },
-    { key: "parameter", label: t("matter.expose.col_parameter"), sortable: true, get: (r) => r.parameter_label || r.dp_key },
-    { key: "kind", label: t("matter.expose.filter_kind"), sortable: true, get: (r) => r.dp_kind },
-    { key: "class", label: t("matter.expose.filter_class"), sortable: true, get: (r) => r.device_type_label },
-  ]);
-
-  // Row highlight for the selected state via DataTable's rowClass prop.
-  function rowClass(item: MatterExposure): string {
-    const key = matterStore.exposureKey(item);
-    return selectedKeys.has(key) ? "bg-black/5 dark:bg-white/5" : "";
-  }
 </script>
 
 <div>
@@ -312,68 +330,109 @@
     <LoadingState message={t("common.loading")} />
   {:else if matterStore.exposuresError}
     <ErrorState message={matterStore.exposuresError} onRetry={() => void matterStore.loadExposures()} />
+  {:else if groups.length === 0}
+    <EmptyState message={t("matter.expose.empty")} icon="mdi:list-checks" />
   {:else}
     <Card class="p-4">
-      <DataTable
-        rows={filteredItems}
-        {columns}
-        rowKey={(item) => matterStore.exposureKey(item)}
-        {rowClass}
-        emptyMessage={t("matter.expose.empty")}
-        emptyIcon="mdi:list-checks"
-        initialSort={{ key: "name", asc: true }}
-      >
-        {#snippet cell(item, col)}
-          {@const key = matterStore.exposureKey(item)}
-          {@const selected = selectedKeys.has(key)}
-          {@const bulkable = isBulkable(item)}
-          {@const pending = matterStore.pendingUpdates.has(key)}
-          {#if col.key === "select"}
-            <label class="flex items-center justify-center">
-              <input
-                type="checkbox"
-                checked={selected}
-                disabled={!bulkable}
-                onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
-                class="cursor-pointer h-5 w-5"
-                aria-label={t("matter.expose.select_row")}
-              />
-            </label>
-          {:else if col.key === "state"}
-            <span class="text-base {stateColorClass(item)}">
-              {stateIcon(item)}
-            </span>
-          {:else if col.key === "name"}
-            <button
-              type="button"
-              class="text-left font-medium text-slate-900 dark:text-slate-100 hover:underline w-full"
-              onclick={() => openDrawer(item)}
-            >
-              {(matterStore.pendingUpdates.get(key)?.friendly_name ?? item.friendly_name) || item.display_name}
-              {#if pending}
-                <span class="ml-1 text-xs text-brand-600 dark:text-brand-400">{t("common.modified")}</span>
-              {/if}
-            </button>
-          {:else if col.key === "channel"}
-            <span class="text-slate-500 dark:text-slate-400">{item.channel_no}</span>
-          {:else if col.key === "parameter"}
-            {#if item.parameter_label}
-              <span class="text-slate-500 dark:text-slate-400">{item.parameter_label}</span>
-              <span class="ml-1 font-mono text-[10px] opacity-60">{item.dp_key}</span>
-            {:else}
-              <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{item.dp_key}</span>
-            {/if}
-          {:else if col.key === "kind"}
-            <span class="text-slate-500 dark:text-slate-400">
-              {t(`matter.expose.kind.${item.dp_kind}`) ?? item.dp_kind}
-            </span>
-          {:else if col.key === "class"}
-            <span class="text-slate-500 dark:text-slate-400">
-              {item.device_type_label || "—"}
-            </span>
-          {/if}
-        {/snippet}
-      </DataTable>
+      <!-- Legend — one dezent row explaining the four status icons. -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-slate-500 dark:text-slate-400">
+        <span class="font-semibold">{t("matter.expose.legend")}:</span>
+        {#each legendItems as li}
+          <span class="inline-flex items-center gap-1">
+            <Icon name={li.icon} size={14} class={li.color} />
+            <span>{li.label}</span>
+          </span>
+        {/each}
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead
+            class="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)] dark:border-slate-800"
+          >
+            <tr>
+              <th class="px-3 py-2 w-10" scope="col">
+                <span class="sr-only">{t("matter.expose.col_select")}</span>
+              </th>
+              <th class="px-3 py-2 w-10 text-center" scope="col">{t("matter.expose.col_state")}</th>
+              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.col_channel")}</th>
+              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.col_parameter")}</th>
+              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.filter_kind")}</th>
+              <th class="px-3 py-2 text-left" scope="col">{t("matter.expose.filter_class")}</th>
+            </tr>
+          </thead>
+          {#each groups as group (group.address)}
+            <tbody>
+              <!-- Group header: device name + address + row count. -->
+              <tr class="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+                <th colspan="6" scope="colgroup" class="px-3 py-2 text-left font-normal">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-semibold text-slate-900 dark:text-slate-100">{group.name}</span>
+                    <span class="font-mono text-[11px] text-slate-500 dark:text-slate-400">{group.address}</span>
+                    <span
+                      class="ml-auto text-[10px] tabular-nums rounded-full px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                      aria-label={t("matter.expose.group_count", { count: String(group.rows.length) })}
+                    >{group.rows.length}</span>
+                  </div>
+                </th>
+              </tr>
+              {#each group.rows as item (matterStore.exposureKey(item))}
+                {@const key = matterStore.exposureKey(item)}
+                {@const selected = selectedKeys.has(key)}
+                {@const bulkable = isBulkable(item)}
+                {@const pending = matterStore.pendingUpdates.has(key)}
+                {@const si = stateInfo(item)}
+                <tr
+                  class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40 {selected ? 'bg-black/5 dark:bg-white/5' : ''}"
+                >
+                  <td class="px-3 py-2 w-10">
+                    <label class="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={!bulkable}
+                        title={bulkable ? undefined : t("matter.expose.unmappable_checkbox_title")}
+                        onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
+                        class="cursor-pointer h-5 w-5 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label={t("matter.expose.select_row")}
+                      />
+                    </label>
+                  </td>
+                  <td class="px-3 py-2 w-10 text-center">
+                    <span class="inline-flex justify-center">
+                      <Icon name={si.icon} size={18} class={si.color} aria-label={si.label} title={si.label} />
+                    </span>
+                  </td>
+                  <td class="px-3 py-2 text-slate-500 dark:text-slate-400">{item.channel_no}</td>
+                  <td class="px-3 py-2">
+                    <button
+                      type="button"
+                      class="text-left hover:underline"
+                      onclick={() => openDrawer(item)}
+                    >
+                      {#if item.parameter_label}
+                        <span class="text-slate-700 dark:text-slate-200">{item.parameter_label}</span>
+                        <span class="ml-1 font-mono text-[10px] opacity-60">{item.dp_key}</span>
+                      {:else}
+                        <span class="font-mono text-xs text-slate-600 dark:text-slate-300">{item.dp_key}</span>
+                      {/if}
+                      {#if pending}
+                        <span class="ml-1 text-xs text-brand-600 dark:text-brand-400">{t("common.modified")}</span>
+                      {/if}
+                    </button>
+                  </td>
+                  <td class="px-3 py-2 text-slate-500 dark:text-slate-400">
+                    {t(`matter.expose.kind.${item.dp_kind}`) ?? item.dp_kind}
+                  </td>
+                  <td class="px-3 py-2 text-slate-500 dark:text-slate-400">
+                    {item.device_type_label || "—"}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          {/each}
+        </table>
+      </div>
     </Card>
   {/if}
 </div>
@@ -381,6 +440,7 @@
 <!-- Side drawer -->
 {#if drawerExposure}
   {@const item = drawerExposure}
+  {@const dsi = drawerStateInfo(item.mappable)}
   <!-- Backdrop -->
   <div
     class="fixed inset-0 z-40 bg-black/30"
@@ -427,7 +487,8 @@
           id="drawer-enabled"
           bind:checked={drawerEnabled}
           disabled={item.mappable === "unmappable"}
-          class="cursor-pointer"
+          title={item.mappable === "unmappable" ? t("matter.expose.unmappable_checkbox_title") : undefined}
+          class="cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
         />
         <label for="drawer-enabled" class="text-sm text-slate-900 dark:text-slate-100">
           {t("matter.status.enabled")}
@@ -437,7 +498,7 @@
       {#if drawerConflictCustomActive}
         <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
           <p class="font-semibold flex items-center gap-1">
-            <span aria-hidden="true">⚠</span>
+            <Icon name="mdi:alert-circle" size={16} class="shrink-0 text-amber-600 dark:text-amber-400" />
             {t("matter.expose.conflict_hint")}
           </p>
           <p class="text-xs text-amber-800 dark:text-amber-300">
@@ -449,7 +510,7 @@
       {#if drawerConflictGenericActive}
         <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
           <p class="font-semibold flex items-center gap-1">
-            <span aria-hidden="true">⚠</span>
+            <Icon name="mdi:alert-circle" size={16} class="shrink-0 text-amber-600 dark:text-amber-400" />
             {t("matter.expose.conflict_hint")}
           </p>
           <p class="text-xs text-amber-800 dark:text-amber-300">
@@ -462,15 +523,17 @@
         <p class="text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">
           {t("matter.expose.drawer_state")}
         </p>
-        <p class="text-sm">
-          {mappabilityIcon(item.mappable)}
-          {#if item.mappable === "unmappable"}
-            {t("matter.expose.unmappable_hint")}
-          {:else if item.mappable === "partially_mappable"}
-            {t("matter.expose.partially_mappable_hint")}
-          {:else}
-            {t("matter.status.enabled")}
-          {/if}
+        <p class="text-sm flex items-center gap-1.5">
+          <Icon name={dsi.icon} size={16} class={dsi.color} />
+          <span>
+            {#if item.mappable === "unmappable"}
+              {t("matter.expose.unmappable_hint")}
+            {:else if item.mappable === "partially_mappable"}
+              {t("matter.expose.partially_mappable_hint")}
+            {:else}
+              {t("matter.status.enabled")}
+            {/if}
+          </span>
         </p>
         {#if item.reason}
           <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.reason}</p>

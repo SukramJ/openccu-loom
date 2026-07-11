@@ -15,6 +15,7 @@
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
+  import EmptyTile from "$lib/control/tile/EmptyTile.svelte";
   import LockCommandsFeature from "$lib/control/features/LockCommandsFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
 
@@ -42,6 +43,14 @@
   const isLocked = $derived(Boolean(stateDP?.value));
   const observed = $derived(stateDP?.observed ?? false);
 
+  // Lock/unlock stay operable regardless of the observed state — the
+  // commands feature always renders one enabled button (canLock and
+  // canUnlock below are hardcoded true) — so this tile never falls
+  // back to the compact EmptyTile. Kept explicit for parity with the
+  // other widgets' `hasControls` / `showEmpty` pattern.
+  const hasControls = true;
+  const showEmpty = $derived(!observed && !hasControls);
+
   const tileColor = $derived(
     !isLocked && observed
       ? "var(--state-lock-active-color, var(--ha-error-color))"
@@ -50,7 +59,7 @@
 
   const secondary = $derived.by(() => {
     if (uncertainDP?.value) return t("control.status_unknown");
-    if (!observed) return "—";
+    if (!observed) return undefined;
     return isLocked ? t("control.locked") : t("control.unlocked");
   });
 
@@ -90,7 +99,10 @@
     {error}
   </div>
 {/if}
-<ControlTile {tileColor} focused={!isLocked && observed}>
+{#if showEmpty}
+  <EmptyTile icon="mdi:lock" title={displayTitle} />
+{:else}
+  <ControlTile {tileColor} focused={!isLocked && observed}>
     {#snippet icon()}
       <ControlTileIcon active={!isLocked} label={displayTitle}>
         <Icon name={isLocked ? "mdi:lock" : "mdi:lock-open"} size={22} />
@@ -112,3 +124,4 @@
       />
     {/snippet}
   </ControlTile>
+{/if}

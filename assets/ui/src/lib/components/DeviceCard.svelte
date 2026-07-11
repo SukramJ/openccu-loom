@@ -64,20 +64,31 @@
          Prefer the real eQ-3 image proxied from the CCU; fall back to a
          type glyph when it is unavailable. -->
     <div class="relative mt-0.5 flex-shrink-0" style="color: var(--ha-secondary-text-color);">
-      {#if iconFailed}
-        <Icon name={typeIcon} size={26} aria-label={subtitle} title={subtitle} />
-      {:else}
-        <img
-          src={iconUrl}
-          alt={subtitle}
-          title={subtitle}
-          width="26"
-          height="26"
-          loading="lazy"
-          class="h-[26px] w-[26px] object-contain"
-          onerror={() => (iconFailed = true)}
-        />
-      {/if}
+      <!-- Neutral photo tile: eQ-3 product photos are frequently not
+           transparency-cropped and carry a baked-in white background.
+           A plain white tile (in both themes) turns that into an
+           intentional "product photo card" look instead of a stray
+           white box floating on a dark card in dark mode. The type-glyph
+           fallback shares the same tile so the two states don't jump in
+           size when the image request fails. -->
+      <div
+        class="flex h-9 w-9 items-center justify-center rounded-lg bg-white p-1 ring-1 ring-slate-200 dark:ring-slate-700"
+      >
+        {#if iconFailed}
+          <Icon name={typeIcon} size={22} aria-label={subtitle} title={subtitle} />
+        {:else}
+          <img
+            src={iconUrl}
+            alt={subtitle}
+            title={subtitle}
+            width="22"
+            height="22"
+            loading="lazy"
+            class="h-[22px] w-[22px] object-contain"
+            onerror={() => (iconFailed = true)}
+          />
+        {/if}
+      </div>
       <span
         class="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full"
         class:bg-emerald-500={device.available}

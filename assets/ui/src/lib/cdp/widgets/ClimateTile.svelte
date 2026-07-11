@@ -22,6 +22,7 @@
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
+  import EmptyTile from "$lib/control/tile/EmptyTile.svelte";
   import TargetTemperatureFeature from "$lib/control/features/TargetTemperatureFeature.svelte";
   import HvacModesFeature from "$lib/control/features/HvacModesFeature.svelte";
   import PresetModesFeature from "$lib/control/features/PresetModesFeature.svelte";
@@ -121,7 +122,7 @@
   );
 
   const secondary = $derived.by(() => {
-    if (!observed) return "—";
+    if (!observed) return undefined;
     const parts: string[] = [];
     if (currentModeLabel) parts.push(currentModeLabel);
     if (isSimple) {
@@ -199,6 +200,23 @@
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  // Mirrors every `{#if …}` gate in the features snippet below — true
+  // when at least one actionable control will actually render (and,
+  // where the widget already conditions a control on write
+  // permission, is not disabled). Drives the compact EmptyTile
+  // fallback when the CDP has neither an observed value nor anything
+  // operable yet.
+  const hasControls = $derived(
+    (isSimple && Boolean(stateDP?.operations.write)) ||
+      Boolean(setpointDP?.operations.write) ||
+      (isHmIP && Boolean(setpointModeDP)) ||
+      (isHmIP && hmipPresets.length > 0) ||
+      isRf ||
+      presetModes.length > 0 ||
+      Boolean(caps.away),
+  );
+  const showEmpty = $derived(!observed && !hasControls);
+
   // Away-mode state from the configured Capability flag (also
   // surfaced server-side as preset_mode="away" in the aggregated
   // StatePayload — but tiles read DPs only, so we use the HmIP
@@ -260,6 +278,9 @@
     {error}
   </div>
 {/if}
+{#if showEmpty}
+  <EmptyTile icon="mdi:thermometer" title={displayTitle} />
+{:else}
 <ControlTile {tileColor}>
     {#snippet icon()}
       <ControlTileIcon active={observed} label={displayTitle}>
@@ -425,3 +446,4 @@
       {/if}
     {/snippet}
   </ControlTile>
+{/if}

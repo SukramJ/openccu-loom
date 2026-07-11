@@ -5,6 +5,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
   import SourceBadge from "$lib/components/ui/SourceBadge.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -171,10 +172,10 @@
     if (f.go_type === "time.Duration" && typeof v === "number") {
       return formatDuration(v);
     }
-    // Booleans render directly via the checkbox; no placeholder
+    // Booleans render directly via the Switch; no placeholder
     // string makes sense for them. parseValue() already pre-
     // populates the working state with the default so the
-    // checkbox visually reflects the default state on a fresh
+    // Switch visually reflects the default state on a fresh
     // DB.
     if (f.go_type === "*bool" || f.go_type === "bool") return "";
     if (f.go_type === "[]string" && Array.isArray(v)) {
@@ -625,7 +626,9 @@
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-1">
         <span class="text-sm font-medium">{fieldLabel(f.path)}</span>
-        <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{f.go_type}</span>
+        {#if prefs.expertMode}
+          <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{f.go_type}</span>
+        {/if}
         {#if f.restart_required}
           <Badge variant="warning">{t("settings.restart_required")}</Badge>
         {/if}
@@ -660,11 +663,18 @@
   {@const rel = relativePath(f.path)}
   {@const v = getDeep(working, rel)}
   {@const help = fieldHelp(f.path)}
+  {@const fieldId = "field-" + f.path}
   <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 py-2 last:border-0 dark:border-slate-800">
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-1">
-        <span class="text-sm font-medium">{fieldLabel(f.path)}</span>
-        <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{f.go_type}</span>
+        {#if f.go_type === "bool"}
+          <label for={fieldId} class="text-sm font-medium">{fieldLabel(f.path)}</label>
+        {:else}
+          <span class="text-sm font-medium">{fieldLabel(f.path)}</span>
+        {/if}
+        {#if prefs.expertMode}
+          <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{f.go_type}</span>
+        {/if}
         {#if f.restart_required}
           <Badge variant="warning">{t("settings.restart_required")}</Badge>
         {/if}
@@ -676,11 +686,10 @@
     <div class="flex w-full min-w-0 flex-col items-stretch gap-1 sm:w-auto sm:items-end">
       <SourceBadge source={sources[f.path] ?? "default"} />
       {#if f.go_type === "bool"}
-        <input
-          type="checkbox"
+        <Switch
+          id={fieldId}
           checked={!!v}
-          onchange={(e) => (working = setIn(working, rel, (e.target as HTMLInputElement).checked))}
-          class="h-4 w-4"
+          onCheckedChange={(checked) => (working = setIn(working, rel, checked))}
         />
       {:else if f.go_type === "*bool"}
         <Select

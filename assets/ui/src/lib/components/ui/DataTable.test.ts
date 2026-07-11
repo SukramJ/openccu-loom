@@ -87,6 +87,19 @@ describe("DataTable — empty state", () => {
     // No table rendered — the EmptyState branch skips the <table>.
     expect(container.querySelectorAll("tbody tr").length).toBe(0);
   });
+
+  it("passes emptyDescription through to the EmptyState second line", () => {
+    const { getByText } = render(DataTable, {
+      props: {
+        ...baseProps,
+        rows: [],
+        emptyDescription: "Nothing to see — items will appear once created.",
+      } as unknown as ComponentProps<typeof DataTable>,
+    });
+
+    expect(getByText("Nothing here")).toBeTruthy();
+    expect(getByText("Nothing to see — items will appear once created.")).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -291,7 +291,7 @@
     <div class="{sidebarPad} pt-safe pr-safe transition-[padding] duration-200">
       <header
         class="flex h-14 items-center gap-2 border-b px-4"
-        style="border-color: var(--ha-divider-color);"
+        style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color);"
       >
         <button
           type="button"

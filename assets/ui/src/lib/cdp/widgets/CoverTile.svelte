@@ -20,6 +20,7 @@
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
+  import EmptyTile from "$lib/control/tile/EmptyTile.svelte";
   import CoverOpenCloseFeature from "$lib/control/features/CoverOpenCloseFeature.svelte";
   import NumericInputFeature from "$lib/control/features/NumericInputFeature.svelte";
   import ControlButtonGroup from "$lib/control/controls/ControlButtonGroup.svelte";
@@ -59,6 +60,14 @@
   const tilt = $derived(typeof tiltDP?.value === "number" ? tiltDP.value : 0);
   const observed = $derived((levelDP?.observed || stateDP?.observed) ?? false);
 
+  // Open/close/stop stay operable regardless of the observed position —
+  // neither the garage button group nor CoverOpenCloseFeature gate
+  // open/close on a live read (only the optional stop/tilt/position
+  // controls depend on capability flags, which are static CDP
+  // metadata) — so this tile never falls back to the compact EmptyTile.
+  const hasControls = true;
+  const showEmpty = $derived(!observed && !hasControls);
+
   // Garage state mapping.
   const garageState = $derived<string>(
     typeof stateDP?.value === "string" ? stateDP.value : "",
@@ -84,7 +93,7 @@
   );
 
   const secondary = $derived.by(() => {
-    if (!observed) return "—";
+    if (!observed) return undefined;
     if (isGarage) {
       const key = STATE_KEY[garageState];
       return key ? t(key) : t("cdp.cover.state_unknown");
@@ -132,6 +141,9 @@
     {error}
   </div>
 {/if}
+{#if showEmpty}
+  <EmptyTile icon={isGarage ? "mdi:door-closed" : "mdi:sliders"} title={displayTitle} />
+{:else}
 <ControlTile {tileColor} focused={isOpen}>
     {#snippet icon()}
       <ControlTileIcon active={isOpen} label={displayTitle}>
@@ -204,3 +216,4 @@
       {/if}
     {/snippet}
   </ControlTile>
+{/if}

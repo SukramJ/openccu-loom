@@ -604,7 +604,7 @@
             </Button>
             <Button
               type="button"
-              variant="destructive"
+              variant="outline-destructive"
               size="sm"
               onclick={() => void onDelete()}
               disabled={deleting}
@@ -654,16 +654,23 @@
           <CdpTilesPanel {detail} />
         </div>
       {:else if topTab === "configure"}
-        <!-- Sub-tab strip: Geräte-Konfiguration / Kanäle / Verknüpfungen / Zeitplan -->
-        <div class="mb-4 flex flex-wrap gap-2" role="tablist" aria-label={t("device.aria.configure_sub_tabs")}>
+        <!-- Sub-tab strip: Geräte-Konfiguration / Kanäle / Verknüpfungen / Zeitplan.
+             Rendered as a quiet segmented control (recessed track + raised active
+             card) so the brand-underlined top-level tab stays the only branded
+             navigation marker and this second level does not compete with it. -->
+        <div
+          class="mb-4 inline-flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800"
+          role="tablist"
+          aria-label={t("device.aria.configure_sub_tabs")}
+        >
           {#each configSubs as sub (sub.key)}
             <button
               type="button"
               role="tab"
               aria-selected={configSub === sub.key}
-              class="rounded-md border px-3 py-1.5 text-sm transition {configSub === sub.key
-                ? 'border-brand-500 bg-brand-500 text-white'
-                : 'border-slate-300 text-slate-700 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300'}"
+              class="rounded-md px-3 py-1.5 text-sm font-medium transition {configSub === sub.key
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'}"
               onclick={() => (configSub = sub.key)}
             >
               {sub.label}
@@ -726,9 +733,9 @@
                 role="tab"
                 aria-selected={ch.number === selectedChannel}
                 onclick={() => clickChannelInStrip(ch)}
-                class="-mb-px border-b-2 px-3 py-2 text-sm transition {ch.number === selectedChannel
-                  ? 'border-brand-500 text-brand-700 dark:text-brand-300'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'} {isVirt ? '[border-style:dashed]' : ''}"
+                class="-mb-px border-b-2 px-3 py-2 text-xs transition {ch.number === selectedChannel
+                  ? 'border-slate-500 font-semibold text-slate-900 dark:border-slate-400 dark:text-white'
+                  : 'border-transparent font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'} {isVirt ? '[border-style:dashed]' : ''}"
                 title={ch.type_label ? `${ch.address} · ${ch.type_label}` : ch.address}
               >
                 {ch.name?.trim() || ch.type_label || t("device.channel_n", { n: ch.number })}

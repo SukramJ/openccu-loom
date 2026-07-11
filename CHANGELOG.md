@@ -6,6 +6,67 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-07-11
+
+SPA design & UX overhaul driven by a structured UI review, plus one backend
+data-quality fix. No REST/WS API surface changes.
+
+### Fixed
+
+- **RSSI no-signal sentinels no longer surface as measurements.** The
+  ReGa-script boot seed decodes JSON numbers as floats, which bypassed the
+  RSSI normalisation (it only handled integer wire types) — devices could
+  show "RSSI 128 dBm" until the first radio event. The SQLite value-cache
+  restore path had the same gap. All numeric wire types now funnel through
+  the sentinel filter, and the SPA additionally masks out-of-range RSSI
+  values defensively.
+- **Dark mode no longer flashes/strands a white top bar.** The `.dark` class
+  was applied after first paint; a pre-paint script in `index.html` now sets
+  it synchronously, the header carries an explicit token background, and
+  `html`/`body` base colours track the theme tokens.
+- **Seven previously undefined `brand-*` colour rungs.** The Tailwind theme
+  declared only 4 of the 11 brand shades used in markup; utilities like
+  `dark:text-brand-100` silently produced no CSS (unreadable active states
+  in the settings navigation, washed-out accents). The scale is now complete.
+- **Disabled buttons are recognisably disabled in dark mode** (explicit
+  disabled fills instead of opacity-only dimming).
+
+### Changed
+
+- **Brand palette switched from generic blue to the logo's Loom teal** —
+  full `brand-50…950` scale derived from Tailwind teal, contrast-shifted so
+  white button labels meet WCAG AA (4.5:1); info tones stay blue on purpose.
+- **Login, loading and empty surfaces carry a subtle woven signature**
+  (reusable `WeavePattern` SVG, loom-thread loader; `prefers-reduced-motion`
+  respected), and page titles use a tighter display treatment.
+- **Overview tiles**: grid rows no longer stretch short tiles to the tallest
+  neighbour; widgets without observed state and without operable controls
+  collapse to a compact single-row tile ("No state received yet").
+- **Matter exposure table**: rows are grouped per device with a header
+  (name + address + row count), platform-dependent emoji state glyphs are
+  replaced by registry icons with a legend, disabled checkboxes explain why,
+  and the redundant selection column header is gone.
+- **Device views**: product photos sit in a neutral tile (no more white
+  boxes in dark mode), "Remove device" is a red outline action instead of
+  the loudest button in the header, and "CCU Refresh" became a secondary
+  "Reload from CCU" action.
+- **Channel configurator**: the sub-navigation is a quiet segmented control
+  (the active top tab is the only brand-marked nav level), channel tabs are
+  visually subordinated, duplicate parameter labels within a group are
+  disambiguated (upper/lower threshold qualifiers), and long labels wrap.
+- **Settings editor**: value-source dots have tooltips + screen-reader
+  labels (bootstrap source is violet now), Go type badges only show in
+  expert mode, booleans use the design-system switch, and section panels
+  keep a single primary action ("Save").
+- **Connection badge**: the disconnected state is amber (red stays reserved
+  for real errors) and all states explain themselves via tooltip, including
+  the mobile dot-only variant.
+- **Empty states** across messages, audit log, signal quality and fleet
+  views gained explanatory descriptions; "Un-Ignore" is now called
+  "Hidden parameters" / "Ausgeblendete Parameter".
+- **Theme can be set in Settings → Interface** (light/dark/system, same
+  preference the sidebar toggle cycles).
+
 ## [0.33.0] — 2026-07-11
 
 Matter interop hardening. The changes below adopt verified findings from a

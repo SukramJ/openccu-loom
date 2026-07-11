@@ -267,6 +267,7 @@
         persistKey="messages-alarm"
         initialSort={{ key: "time", asc: false }}
         emptyMessage={t("messages.empty.alarms")}
+        emptyDescription={t("messages.empty.alarms.description")}
         emptyIcon="mdi:bell-off"
       >
         {#snippet cell(a, col)}
@@ -345,6 +346,7 @@
         persistKey="messages-service"
         initialSort={{ key: "time", asc: false }}
         emptyMessage={t("messages.empty.service")}
+        emptyDescription={t("messages.empty.service.description")}
         emptyIcon="mdi:bell-off"
       >
         {#snippet cell(s, col)}

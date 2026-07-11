@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/svelte";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, fireEvent, cleanup } from "@testing-library/svelte";
+
+// Renders share document.body, so unmount between cases — otherwise leftover
+// nodes from a prior test collide with same-text queries in the next one.
+afterEach(() => cleanup());
 
 // i18n is mocked to echo keys so assertions stay locale-independent.
 vi.mock("$lib/i18n", () => ({
@@ -29,6 +33,20 @@ describe("EmptyState", () => {
   it("renders the message", () => {
     const { getByText } = render(EmptyState, { props: { message: "devices.empty" } });
     expect(getByText("devices.empty")).toBeTruthy();
+  });
+
+  it("renders the optional description line when provided", () => {
+    const { getByText } = render(EmptyState, {
+      props: { message: "devices.empty", description: "devices.empty.hint" },
+    });
+    expect(getByText("devices.empty")).toBeTruthy();
+    expect(getByText("devices.empty.hint")).toBeTruthy();
+  });
+
+  it("omits the description line when not provided", () => {
+    const { container } = render(EmptyState, { props: { message: "devices.empty" } });
+    // Only the message paragraph is present, no second (description) line.
+    expect(container.querySelectorAll("p").length).toBe(1);
   });
 });
 

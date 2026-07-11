@@ -14,6 +14,7 @@
   import ControlTile from "$lib/control/tile/ControlTile.svelte";
   import ControlTileIcon from "$lib/control/tile/ControlTileIcon.svelte";
   import ControlTileInfo from "$lib/control/tile/ControlTileInfo.svelte";
+  import EmptyTile from "$lib/control/tile/EmptyTile.svelte";
   import ToggleFeature from "$lib/control/features/ToggleFeature.svelte";
   import TimedActionFeature from "$lib/control/features/TimedActionFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -40,15 +41,22 @@
   const isOn = $derived(Boolean(stateDP?.value));
   const observed = $derived(stateDP?.observed ?? false);
 
+  // The toggle stays operable even before the first observed value —
+  // it is only truly non-operable when the STATE parameter itself is
+  // read-only. Drives the compact EmptyTile fallback below.
+  const hasControls = $derived(stateDP?.operations.write ?? true);
+  const showEmpty = $derived(!observed && !hasControls);
+
   const tileColor = $derived(
     isOn && observed
       ? "var(--state-switch-active-color, var(--ha-primary-color))"
       : "var(--ha-secondary-text-color)",
   );
 
-  const secondary = $derived(
-    !observed ? "—" : isOn ? t("quick.on") : t("quick.off"),
-  );
+  // No placeholder dash while unobserved — an operable tile stays a
+  // normal card without a status region; a non-operable one renders
+  // EmptyTile instead (see `showEmpty`).
+  const secondary = $derived(observed ? (isOn ? t("quick.on") : t("quick.off")) : undefined);
 
   async function load() {
     error = null;
@@ -86,7 +94,10 @@
     {error}
   </div>
 {/if}
-<ControlTile {tileColor} focused={isOn}>
+{#if showEmpty}
+  <EmptyTile icon="mdi:power" title={displayTitle} />
+{:else}
+  <ControlTile {tileColor} focused={isOn}>
     {#snippet icon()}
       <ControlTileIcon active={isOn} label={displayTitle}>
         <Icon name="mdi:power" size={22} />
@@ -113,3 +124,4 @@
       {/if}
     {/snippet}
   </ControlTile>
+{/if}

@@ -1,13 +1,14 @@
 <script lang="ts">
   // SourceBadge renders the resolved origin of a config field
-  // (bootstrap / db / env / default). Wave-D introduces it as the
-  // dezent-but-immer-sichtbar "set by integration"-style pill that
-  // sits next to every Settings field.
+  // (bootstrap / db / env / default) as a small coloured dot next
+  // to every Settings field.
   //
   // In basic mode (prefs.expertMode = false) the pill is rendered
-  // as a small coloured dot without a label; in expert mode the
-  // label spells out the source. Hover always reveals the full
-  // text via the native title tooltip.
+  // as a small coloured dot without a visible label; in expert mode
+  // the label spells out the source. The dot alone is not
+  // self-explanatory (colour-only signal), so it always carries a
+  // native title tooltip plus a screen-reader-only text describing
+  // the source in full.
   import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import { cn } from "$lib/utils";
@@ -17,11 +18,13 @@
 
   let { source, class: className }: Props = $props();
 
-  // Colour mapping: bootstrap = blue (operator-pinned via YAML),
+  // Colour mapping: bootstrap = violet (operator-pinned via YAML),
   // db = green (managed via this UI), env = amber (resolved at
-  // runtime), default = grey (no override).
+  // runtime), default = grey (no override). Violet, not blue — the
+  // brand colour is teal and a blue dot would read as a second,
+  // competing accent.
   const palette: Record<Source, string> = {
-    bootstrap: "bg-blue-500",
+    bootstrap: "bg-violet-500",
     db: "bg-emerald-500",
     env: "bg-amber-500",
     default: "bg-slate-400",
@@ -38,7 +41,9 @@
   )}
   title={longLabel}
 >
-  <span class={cn("inline-block size-2 rounded-full", palette[source])}></span>
+  <span class={cn("inline-block size-2 rounded-full", palette[source])}>
+    <span class="sr-only">{longLabel}</span>
+  </span>
   {#if prefs.expertMode}
     <span class="font-medium uppercase tracking-wide">{shortLabel}</span>
   {/if}

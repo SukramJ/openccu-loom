@@ -7,6 +7,7 @@
 <script lang="ts">
   import ControlButtonGroup from "../controls/ControlButtonGroup.svelte";
   import ControlButton from "../controls/ControlButton.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -40,7 +41,8 @@
     label={t("lock.lock")}
     onClick={onLock}
   >
-    🔒 {t("lock.locked")}
+    <Icon name="mdi:lock" size={16} />
+    {t("lock.locked")}
   </ControlButton>
   <ControlButton
     active={!isLocked}
@@ -49,9 +51,12 @@
     label={t("lock.unlock")}
     onClick={onUnlock}
   >
-    🔓 {t("lock.unlocked")}
+    <Icon name="mdi:lock-open" size={16} />
+    {t("lock.unlocked")}
   </ControlButton>
   {#if canOpenDoor}
-    <ControlButton {color} label={t("lock.open_door")} onClick={onOpen}>🚪</ControlButton>
+    <ControlButton {color} label={t("lock.open_door")} onClick={onOpen}>
+      <Icon name="mdi:door-open" size={16} />
+    </ControlButton>
   {/if}
 </ControlButtonGroup>

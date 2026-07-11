@@ -1,5 +1,23 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.34.0
+
+Design & usability overhaul of the web UI.
+
+- **Fresh look**: the UI now uses the Loom teal brand colour throughout,
+  with a complete light/dark palette and a subtle woven signature on the
+  login and loading screens.
+- **Dark mode fixes**: no more white top bar, unreadable active menu
+  entries or disabled buttons that look clickable.
+- **Correct radio quality readings**: devices no longer show a bogus
+  "RSSI 128 dBm" before their first radio event.
+- **Clearer Matter page**: parameters are grouped per device, status icons
+  come with a legend, and greyed-out checkboxes explain why.
+- **Friendlier details**: destructive "Remove" is toned down, product
+  photos render cleanly in dark mode, empty lists explain what will appear
+  there, the connection badge explains itself, and the theme (light/dark/
+  system) can now be set in Settings → Interface.
+
 ## 0.33.0
 
 Matter interop hardening release.
