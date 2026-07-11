@@ -144,12 +144,14 @@ func TestSendReceive_WindowCovering(t *testing.T) {
 // (HmIP-MOD-HO) project onto the *same* Matter cluster ID as the
 // plain Shutter [TestSendReceive_WindowCovering] already exercises,
 // so this attribute pair is the only way to pick the right endpoint
-// out of a mixed fleet: Blind reports Type=EndProductType=8
-// (TiltBlindLiftAndTilt on both attributes), Garage reports Type=0
-// (RollerShade — "no garage Type code") + EndProductType=8
-// (GarageDoor). See the MatterRead methods on coverWCServer,
-// blindWCServer, and garageWCServer in
-// internal/model/custom/cover/matter.go.
+// out of a mixed fleet: Blind reports Type=8 (TiltBlindLiftAndTilt) +
+// EndProductType=10 (InteriorBlind), Garage reports Type=0
+// (RollerShade — the enum has no garage code) + EndProductType=0
+// (RollerShade). A plain Shutter reports Type=6 + EndProductType=17
+// and falls into the "cover" default. See the MatterRead methods on
+// coverWCServer, blindWCServer, and garageWCServer in
+// internal/model/custom/cover/matter.go (values sourced from
+// matter.js WindowCovering.element.ts).
 func windowcoveringClassify(ctx context.Context, t *testing.T, ctl *harness.Controller, ep uint16) string {
 	t.Helper()
 	typeOut, err := ctl.ReadAttr(ctx, t, "windowcovering", "type", ep)
@@ -163,9 +165,9 @@ func windowcoveringClassify(ctx context.Context, t *testing.T, ctl *harness.Cont
 	typ, okT := harness.FindAttrUint(typeOut, "Type")
 	ept, okE := harness.FindAttrUint(epOut, "EndProductType")
 	switch {
-	case okE && ept == 8 && okT && typ == 8:
+	case okE && ept == 10 && okT && typ == 8:
 		return "blind"
-	case okE && ept == 8 && okT && typ == 0:
+	case okE && ept == 0 && okT && typ == 0:
 		return "garage"
 	default:
 		return "cover"

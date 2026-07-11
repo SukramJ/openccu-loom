@@ -27,20 +27,38 @@ import (
 // internal/north/matter/bridge/subscribe.go wireMeasurementListenersLocked).
 func TestReceive_ElectricalPowerMeasurement(t *testing.T) {
 	b := requireBridge(t)
-	eps := discoverEndpointsWith(t, b, 0x0090, 1)
+	eps := discoverEndpointsWith(t, b, 0x0090, 0)
 	if len(eps) == 0 {
 		t.Skip("no ElectricalPowerMeasurement endpoint — godevccu fleet lacks a HmIP-BSM device")
 	}
-	ep := eps[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	// Prefer the POWER row: ElectricalPower rides on the switch host endpoint
 	// (channel with STATE) AND the meter channel, so the device-scoped resolve
 	// must pick the channel POWER actually lives on to inject against.
-	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0090, "POWER")
+	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, eps[0], 0x0090, "POWER")
 	if !ok {
-		t.Fatalf("could not resolve CCU address for ElectricalPowerMeasurement endpoint %d", ep)
+		t.Fatalf("could not resolve CCU address for ElectricalPowerMeasurement endpoint %d", eps[0])
+	}
+
+	// Pick the endpoint whose ActivePower actually tracks the POWER
+	// parameter. The cluster materialises on several endpoints of the
+	// same device (the switch host plus one generic endpoint per meter
+	// quantity — CURRENT / FREQUENCY / POWER / VOLTAGE all share
+	// ElectricalPowerMeasurement), and endpoint numbering is
+	// store-history-dependent, so "lowest endpoint with the cluster"
+	// may be a sibling quantity whose ActivePower is permanently null.
+	// Fire the parameter once and use the endpoint that shows it.
+	ep, ok := electricalEndpointFor(ctx, t, b, eps,
+		"electricalpowermeasurement", "active-power",
+		func() error { return b.CCU.FireDeviceEvent(address, dpKey, 100.0) },
+		func(out string) bool {
+			v, ok := harness.FindAttrInt(out, "ActivePower")
+			return ok && v == 100000
+		})
+	if !ok {
+		t.Fatalf("no ElectricalPowerMeasurement endpoint in %v reflects the injected POWER value", eps)
 	}
 
 	// SEND — negative. ElectricalPowerServer.MatterWrite unconditionally
@@ -82,19 +100,31 @@ func TestReceive_ElectricalPowerMeasurement(t *testing.T) {
 // a proactive CumulativeEnergyImported report, same read-only wire contract.
 func TestReceive_ElectricalEnergyMeasurement(t *testing.T) {
 	b := requireBridge(t)
-	eps := discoverEndpointsWith(t, b, 0x0091, 1)
+	eps := discoverEndpointsWith(t, b, 0x0091, 0)
 	if len(eps) == 0 {
 		t.Skip("no ElectricalEnergyMeasurement endpoint — godevccu fleet lacks a HmIP-BSM device")
 	}
-	ep := eps[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	// Prefer the ENERGY_COUNTER row — the cluster rides on both the switch host
 	// endpoint and the meter channel; inject against the channel it lives on.
-	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x0091, "ENERGY_COUNTER")
+	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, eps[0], 0x0091, "ENERGY_COUNTER")
 	if !ok {
-		t.Fatalf("could not resolve CCU address for ElectricalEnergyMeasurement endpoint %d", ep)
+		t.Fatalf("could not resolve CCU address for ElectricalEnergyMeasurement endpoint %d", eps[0])
+	}
+
+	// Same endpoint disambiguation as the power test: pick the endpoint
+	// whose CumulativeEnergyImported actually tracks ENERGY_COUNTER.
+	ep, ok := electricalEndpointFor(ctx, t, b, eps,
+		"electricalenergymeasurement", "cumulative-energy-imported",
+		func() error { return b.CCU.FireDeviceEvent(address, dpKey, 1500.0) },
+		func(out string) bool {
+			return strings.Contains(out, "Cluster: 0x0000_0091 Attribute 0x0000_0001") &&
+				strings.Contains(out, "Data = 1500000")
+		})
+	if !ok {
+		t.Fatalf("no ElectricalEnergyMeasurement endpoint in %v reflects the injected ENERGY_COUNTER value", eps)
 	}
 
 	// SEND — negative. ElectricalEnergyServer.MatterWrite unconditionally
@@ -136,4 +166,39 @@ func TestReceive_ElectricalEnergyMeasurement(t *testing.T) {
 			t.Fatalf("await proactive CumulativeEnergyImported=1500000: %v\n%s", err, out)
 		}
 	})
+}
+
+// electricalEndpointFor selects, among the endpoints advertising an
+// electrical-measurement cluster, the one whose target attribute
+// actually tracks the injected CCU parameter. fire pushes the
+// device-originated value once; the candidates are then probed with a
+// plain chip-tool read and the first endpoint whose output satisfies
+// match wins. Returns false when no candidate reflects the value —
+// that means the projection itself is broken, not the numbering, and
+// callers should fail loudly.
+func electricalEndpointFor(
+	ctx context.Context, t *testing.T, b *harness.Bridge,
+	eps []uint16, cluster, attr string,
+	fire func() error, match func(out string) bool,
+) (uint16, bool) {
+	t.Helper()
+	if err := fire(); err != nil {
+		t.Fatalf("inject device-originated change: %v", err)
+	}
+	// Give the event a moment to propagate godevccu → daemon model.
+	select {
+	case <-time.After(500 * time.Millisecond):
+	case <-ctx.Done():
+		t.Fatalf("context done while settling: %v", ctx.Err())
+	}
+	for _, ep := range eps {
+		out, err := b.SharedCtl.ReadAttr(ctx, t, cluster, attr, ep)
+		if err != nil {
+			continue
+		}
+		if match(out) {
+			return ep, true
+		}
+	}
+	return 0, false
 }

@@ -621,20 +621,15 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	// are subscribed to the cluster's Fire* surface so HM-pushed press
 	// events flow through to subscribed Matter commissioners.
 	//
-	// Tear the previous topology's press-DP subscriptions down first:
-	// each wiring below registers an update hook on the underlying
-	// press DP(s), and stale hooks from an earlier reassemble would
-	// keep firing through their old cluster instances — one duplicate
-	// Matter event per prior rebuild.
-	b.mu.Lock()
-	staleSwitchUnsubs := b.switchUnsubscribers
-	b.switchUnsubscribers = nil
-	b.mu.Unlock()
-	for _, unsub := range staleSwitchUnsubs {
-		if unsub != nil {
-			unsub()
-		}
-	}
+	// Each wiring below registers an update hook on the underlying
+	// press DP(s). The PREVIOUS topology's hooks are exchanged and
+	// drained inside the swap section further down (under b.mu), not
+	// here: two concurrent reassembles both wire fresh hooks off-lock,
+	// and only the swap decides whose list survives — draining the
+	// swapped-out list there guarantees every superseded hook set is
+	// torn down exactly once (the loser's hooks are removed by the
+	// winner's swap), so no stale hook keeps firing through its old
+	// cluster instance and no physical press emits duplicate events.
 	var switchUnsubs []func()
 	for _, ep := range topology.Endpoints {
 		if ep == nil {
@@ -683,10 +678,22 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	prevTopology := b.topology
 	b.topology = topology
 	b.dispatcher = dispatcher
+	staleSwitchUnsubs := b.switchUnsubscribers
 	b.switchUnsubscribers = switchUnsubs
 	b.wireMeasurementListenersLocked()
 	hook := b.onReassembled
 	b.mu.Unlock()
+
+	// Drain the swapped-out press-DP hooks now that the new topology
+	// is live. Doing this after the swap (instead of before wiring)
+	// keeps concurrent reassembles safe: whichever swap runs last
+	// drains its predecessor's list, so superseded hooks never leak
+	// and never double-fire.
+	for _, unsub := range staleSwitchUnsubs {
+		if unsub != nil {
+			unsub()
+		}
+	}
 
 	// Reap subscriptions for endpoints that no longer exist in the new
 	// topology. Mirrors matter.js

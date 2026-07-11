@@ -89,7 +89,7 @@ OpenCCU-Loom maps Homematic devices to these Matter device types. Anything it ca
 | Window Covering | Blind / shutter / cover |
 | Thermostat | Heating thermostat |
 | Door Lock | Door lock / keymatic |
-| Contact Sensor | Door/window contact, water/leak sensor |
+| Contact Sensor | Door/window contact (leak-class sensors will also surface here once classified) |
 | Occupancy Sensor | Motion / presence sensor |
 | Temperature Sensor | Temperature measurement |
 | Humidity Sensor | Humidity measurement |
@@ -109,7 +109,7 @@ Matter controllers do not implement the specification uniformly — each ecosyst
 
 - **Amazon Alexa commissions bridges only on UDP port 5540.** A bridge bound to any other port pairs fine with Apple Home and Google Home but silently fails Alexa commissioning. This matters when another Matter service on the same host already occupies port 5540 (for example, Home Assistant's Matter server add-on): commission Alexa while the bridge is listening on 5540 (`north.matter.listen`), because pairing on an alternative port will not work with Alexa.
 - **Alexa caps the number of devices per bridge.** Alexa cannot pair with a bridge that exposes too many accessories — the practical limit is roughly 80–100 devices. Larger fleets should not be exposed wholesale to an Alexa fabric; trim the selection first (see [Choosing which devices are exposed](#choosing-which-devices-are-exposed)).
-- **Alexa lags behind current Matter device-type revisions.** Newer detector device types — such as the Water Leak Detector introduced in Matter 1.4 — can render an entire bridge unresponsive on Alexa: every accessory on the bridge stops reacting. OpenCCU-Loom therefore exposes leak-class sensors as the universally supported Contact Sensor device type.
+- **Alexa lags behind current Matter device-type revisions.** Newer detector device types — such as the Water Leak Detector introduced in Matter 1.3 — can render an entire bridge unresponsive on Alexa: every accessory on the bridge stops reacting. OpenCCU-Loom therefore maps the leak measurement class to the universally supported Contact Sensor device type (leak/moisture parameters are not classified yet; the mapping is in place so future leak sensors never surface the hazardous detector type).
 - **The WaterValve device type is unsupported by both Google Home and Amazon Alexa.** OpenCCU-Loom exposes the irrigation valve as a plain on/off endpoint instead, which all three ecosystems handle — see [ADR 0049](../adr/0049-matter-one-endpoint-per-device.md).
 
 ## Limitations

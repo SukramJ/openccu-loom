@@ -59,8 +59,9 @@ project's field experience, with every mechanism mirrored from matter.js HEAD
   MinSetpointDeadBand, which HM single-setpoint devices cannot provide).
 - **Controllers no longer see the bridge as unresponsive for minutes after a
   restart.** The bridge now sends a Secure-Channel CloseSession StatusReport
-  before dropping a session (idle reap, stale same-peer CASE eviction, daemon
-  shutdown — capped at 2.5 s), closes a session immediately when the peer sends
+  before dropping a session (stale same-peer CASE eviction and daemon shutdown
+  — capped at 2.5 s; the session manager's reap paths carry the same farewell
+  once activated), closes a session immediately when the peer sends
   CloseSession (with subscription cleanup), and resumes mDNS broadcast once a
   peer has no remaining session. Mirrors matter.js ExchangeManager /
   SecureChannelProtocol behaviour.
