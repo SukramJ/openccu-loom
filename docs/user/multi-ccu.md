@@ -15,7 +15,7 @@ diagnostics.
 Design rationale and non-operational aspects are in
 [ADR 0002](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0002-multi-ccu-first-class.md).
 The mechanics
-described here all ship in v1.0 and are pinned by contract tests.
+described here have shipped since 0.1.0 and are pinned by contract tests.
 
 ---
 
@@ -82,14 +82,14 @@ During the restart:
 After the restart both CCUs should appear in the health aggregation:
 
 ```sh
-curl -s http://localhost:8119/api/v1/health | jq '.components[] | select(.name | contains("central"))'
+curl -s http://localhost:8119/api/v1/health | jq '.components[] | select(.name | endswith("/central"))'
 ```
 
 Expected output (status `healthy`):
 
 ```json
-{ "name": "central:ccu-haus",   "status": "healthy", ... }
-{ "name": "central:ccu-garage", "status": "healthy", ... }
+{ "name": "ccu-haus/central",   "status": "healthy", ... }
+{ "name": "ccu-garage/central", "status": "healthy", ... }
 ```
 
 In the config UI the central selector at the top-left now lists both
@@ -103,23 +103,27 @@ Every MQTT topic carries `central_name` as the second path segment
 under the configured `topic_base`:
 
 ```
-<topic_base>/<central_name>/<interface>/<device>/<channel>/<parameter>
+<topic_base>/<central_name>/<interface>/<device>/<channel>/<bucket>/<parameter>
 ```
 
-Examples:
+A `<bucket>` segment (`values` | `master` | `calculated`) sits between
+the channel and the parameter. Examples:
 
 ```
-openccu-loom/ccu-haus/HmIP-RF/000A0000000001/4/STATE
-openccu-loom/ccu-garage/HmIP-RF/000A0000000099/1/LEVEL
+openccu-loom/ccu-haus/HmIP-RF/000A0000000001/4/values/STATE
+openccu-loom/ccu-garage/HmIP-RF/000A0000000099/1/values/LEVEL
 ```
 
 ### 2.1 Home Assistant Discovery
 
-HA discovery object IDs include `central_name` as well:
+HA discovery config topics embed `central_name` in the node_id. The
+shape is `homeassistant/<component>/<node_id>/<object_id>/config`, where
+`node_id = <central>_<address>` and `object_id = <channel>_<suffix>`,
+both lower-cased:
 
 ```
-homeassistant/binary_sensor/openccu-loom_ccu-haus_000A0000000001_4_STATE/config
-homeassistant/sensor/openccu-loom_ccu-garage_000A0000000099_1_LEVEL/config
+homeassistant/binary_sensor/ccu-haus_000a0000000001/4_state/config
+homeassistant/sensor/ccu-garage_000a0000000099/1_level/config
 ```
 
 That eliminates topic collisions when both CCUs host devices with the
@@ -149,7 +153,7 @@ mosquitto_pub -h <broker> -t 'openccu-loom/ccu-haus/HmIP-RF/000A0000000001/#' \
               -r -n -l < /dev/null
 
 mosquitto_pub -h <broker> \
-  -t 'homeassistant/binary_sensor/openccu-loom_ccu-haus_000A0000000001_4_STATE/config' \
+  -t 'homeassistant/binary_sensor/ccu-haus_000a0000000001/4_state/config' \
   -r -n -l < /dev/null
 ```
 
@@ -208,8 +212,9 @@ same listener; each CCU learns the new port at its first reconnect.
 curl -s http://localhost:8119/api/v1/health | jq .
 ```
 
-Each central exposes a `central:<name>` component with sub-components
-`central:<name>:hub`, `central:<name>:<interface>`, etc. The aggregate
+Each central exposes several `<name>/<component>` health components:
+`<name>/central` (heartbeat), one `<name>/<interface>` per interface
+(e.g. `ccu-haus/HmIP-RF`), and `<name>/scheduler`. The aggregate
 daemon status flips to `unhealthy` as soon as a single central is
 unhealthy — HA discovery frontends and CI healthchecks therefore
 detect a bad CCU immediately.
@@ -250,16 +255,17 @@ histogram_quantile(0.95,
 
 ### 4.4 REST inspection
 
-Per-central device list:
+Per-central device list (scope the daemon-global `/devices` with the
+`central` query param):
 
 ```sh
-curl -s http://localhost:8119/api/v1/centrals/ccu-haus/devices | jq '.devices | length'
+curl -s 'http://localhost:8119/api/v1/devices?central=ccu-haus' | jq '.devices | length'
 ```
 
-Per-central audit log:
+Per-central audit log (the `since` filter expects an RFC3339 timestamp):
 
 ```sh
-curl -s 'http://localhost:8119/api/v1/audit?central=ccu-haus&since=1h' | jq .
+curl -s 'http://localhost:8119/api/v1/audit?central=ccu-haus&since=2026-07-11T00:00:00Z' | jq .
 ```
 
 In single-central mode the unscoped path `/api/v1/devices` is enough —
@@ -267,7 +273,7 @@ the router redirects automatically.
 
 ### 4.5 WebSocket events
 
-WebSocket subscription `wss://<host>:8119/api/v1/ws` carries events
+WebSocket subscription `wss://<host>:8119/api/v1/events` carries events
 from every central. Filter client-side on `event.central_name`:
 
 ```js
@@ -282,30 +288,34 @@ ws.onmessage = (e) => {
 
 ## 5. Backup + state layout
 
-State per daemon lives under `data_dir`:
+State for the whole daemon lives under `data_dir` as a small set of
+shared files — there is no per-central directory tree. Devices,
+paramsets and incidents are SQLite tables inside `openccu-loom.db`,
+scoped by a `central_name` column:
 
 ```
 <data_dir>/
-├── openccu-loom.db          # shared: users, tokens, sessions, sysvar cache
-└── centrals/
-    ├── ccu-haus/
-    │   ├── devices.json
-    │   ├── paramsets/
-    │   └── incidents/
-    └── ccu-garage/
-        ├── devices.json
-        ├── paramsets/
-        └── incidents/
+├── openccu-loom.db     # devices, paramsets, incidents, users, tokens, sessions, sysvar cache
+├── history.db          # measurement history (opt-in; ADR 0040)
+├── backups/            # generated backup archives
+├── secret.key          # config-secret encryption key
+└── .env                # optional env overlay
 ```
 
-Backups are per-central:
+Backups are listed daemon-globally:
 
 ```sh
-curl -s -u admin:secret http://localhost:8119/api/v1/centrals/ccu-haus/backups
+curl -s -u admin:secret http://localhost:8119/api/v1/backups
 ```
 
-Backup restore is also per-central — restoring a single CCU does not
-affect any other.
+To create a backup scoped to a single CCU, `POST /api/v1/backups` with a
+`central_name` body; restore is by backup id via
+`POST /api/v1/backups/{id}/restore` and does not affect any other CCU:
+
+```sh
+curl -s -u admin:secret -X POST http://localhost:8119/api/v1/backups \
+     -H 'Content-Type: application/json' -d '{"central_name":"ccu-haus"}'
+```
 
 ---
 
@@ -313,7 +323,7 @@ affect any other.
 
 | Symptom | Cause | Remedy |
 |---------|-------|--------|
-| Both CCUs deliver events, one suddenly goes silent | XML-RPC callback path mismatch — typically when `central_name` was changed in config without a fresh `init()` round-trip | Daemon restart or `POST /api/v1/centrals/<name>/reconnect` |
+| Both CCUs deliver events, one suddenly goes silent | XML-RPC callback path mismatch — typically when `central_name` was changed in config without a fresh `init()` round-trip | Daemon restart, or `POST /api/v1/interfaces/{id}/reconnect` for each of the central's interfaces |
 | HA Discovery shows duplicated devices | Migration between CCUs without retain cleanup | Manual MQTT retain wipe (see §2.3) |
 | `openccu_loom_client_state` metric missing for a central | CCU never connected (host / firewall / credentials) | Check `/health` component; filter daemon log on `central=<name>` |
 | Audit log mixes CCUs | Expected behaviour — the audit log is daemon-global with `central_name` as a column | Use `?central=...` query or the UI filter |

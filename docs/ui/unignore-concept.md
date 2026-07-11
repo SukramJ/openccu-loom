@@ -1,88 +1,83 @@
-# Un-Ignore UI Konzept
+# Un-Ignore UI Concept
 
-## Hintergrund
+**Status: Implemented.** Every layer described below has shipped —
+config knob, SQLite persistence, REST endpoints, and the Svelte
+screen. This document is kept as the design record for the feature;
+where the original concept differs from the shipped shape, the
+diff is called out inline.
 
-Die OpenCCU-Loom-Backend-Implementierung der `un_ignore`-Mechanik ist
-**vollständig vorhanden**, eine User-facing Steuerung (Config + REST +
-UI) fehlt. Aufgabe dieses Dokuments: Skizze der UI + dünner
-Wire-Up-Layer, der die Backend-Bausteine vom HMIP-Frontend her erreichbar
-macht.
+## Background
 
-## Bestandsaufnahme — Backend
+The `un_ignore` mechanism promotes parameters that would otherwise be
+suppressed by the visibility decider (internal service parameters,
+rarely-used MASTER knobs) into first-class data points, on a per
+`MODEL:CHANNEL:PARAMETER` pattern basis. This document sketches the
+UI + the thin wire-up layer that made the backend building blocks
+reachable from the SPA — all of it has since landed.
 
-| Baustein                                 | Datei                                                       | Status   |
-| ---------------------------------------- | ----------------------------------------------------------- | -------- |
-| Per-DP Markierung `MarkUnIgnored/IsUnIgnored` | `internal/model/datapoint/base.go:271-287`                  | da       |
-| Visibility-Decider                       | `internal/store/visibility/decider.go`                      | da       |
-| Parser für `MODEL:CHANNEL:PARAMETER`     | `internal/store/visibility/parser.go`                       | da       |
-| Materializer-Berücksichtigung            | `internal/model/custom/materialize.go:496+`                 | da       |
-| Pipeline-Anwendung pro Interface         | `internal/central/adapter/device_pipeline.go:443-454`       | da       |
-| QueryFacade-Kandidatenliste              | `internal/central/queryfacade.go:329 GetUnIgnoreCandidates` | da       |
-| Visibility-Registry-API `LoadUnIgnore`   | `internal/store/visibility/registry.go:47`                  | da       |
-| **Config-Knob (YAML)**                   | `internal/config/`                                          | **fehlt** |
-| **SQLite-Persistenz**                    | `internal/store/sqlite/`                                    | **fehlt** |
-| **REST-Endpunkt**                        | `internal/north/rest/handlers/`                             | **fehlt** |
-| **Svelte-Screen**                        | `assets/ui/src/routes/`                                     | **fehlt** |
+## Inventory — Backend
 
-Die fünf Punkte oberhalb der Trennlinie sind das Backend; die vier
-Punkte darunter sind diese Konzept-Lieferung.
+| Building block                                | File                                                          | Status  |
+| ---------------------------------------------- | --------------------------------------------------------------- | ------- |
+| Per-DP marking `MarkUnIgnored`/`IsUnIgnored`   | `internal/model/datapoint/base.go:271-287`                     | shipped |
+| Visibility decider                             | `internal/store/visibility/decider.go`                          | shipped |
+| Parser for `MODEL:CHANNEL:PARAMETER`           | `internal/store/visibility/parser.go`                            | shipped |
+| Materializer consideration                     | `internal/model/custom/materialize.go:496+`                      | shipped |
+| Per-interface pipeline application              | `internal/central/adapter/device_pipeline.go:443-454`            | shipped |
+| QueryFacade candidate list                     | `internal/central/queryfacade.go:329 GetUnIgnoreCandidates`      | shipped |
+| Visibility-registry API `LoadUnIgnore`          | `internal/store/visibility/registry.go:47`                       | shipped |
+| Config knob (YAML)                             | `config.CentralConfig.Visibility.UnIgnore []string` (`internal/config/config.go:1383`) | shipped |
+| SQLite persistence                             | `internal/store/sqlite/migrations/014_visibility_unignore.sql`   | shipped |
+| REST endpoints                                 | `internal/north/rest/handlers/visibility.go` (+ `_test.go`)      | shipped |
+| Svelte screen                                  | `assets/ui/src/routes/UnIgnoreList.svelte`                       | shipped |
 
-## Bestandsaufnahme — Python-Referenz
+## Inventory — Python reference
 
-`homematicip_local` (HA-Integration) führt den User durch den
-`Advanced Configuration`-Schritt im Config-Flow:
+`homematicip_local` (the HA integration) walks the user through the
+`Advanced Configuration` step in the config flow:
 
 1. Settings → Devices & Services → Homematic(IP) Local → Configure
-2. Tab "Interface" → "Advanced configuration" aktivieren
-3. Multi-Select-Dropdown mit allen Kandidaten (aus
+2. Tab "Interface" → enable "Advanced configuration"
+3. Multi-select dropdown over all candidates (from
    `query_facade.get_un_ignore_candidates`)
-4. Auswahl wird als `CONF_UN_IGNORES` im HA-ConfigEntry persistiert
-5. `control_unit.py` zieht die Liste beim Reload, leitet sie via
+4. The selection is persisted as `CONF_UN_IGNORES` in the HA config
+   entry
+5. `control_unit.py` picks up the list on reload and forwards it via
    `config_builder.with_un_ignore_list(...)` → `Registry.LoadUnIgnore`
-   weiter
-6. Integration wird automatisch reloaded
+6. The integration reloads automatically
 
-Format der einzelnen Einträge:
+Format of individual entries:
 
 ```
 DEVICE_TYPE:CHANNEL:PARAMETER
 ```
 
-mit `*`-Wildcards für DEVICE_TYPE bzw. CHANNEL. Beispiele:
+with `*` wildcards for `DEVICE_TYPE` and/or `CHANNEL`. Examples:
 
-| Pattern                 | Effekt                                       |
-| ----------------------- | -------------------------------------------- |
-| `HmIP-eTRV-2:0:LOW_BAT` | LOW_BAT auf Kanal 0 sichtbar machen          |
-| `*:*:RSSI_PEER`         | RSSI_PEER auf allen Kanälen aller Geräte     |
-| `*:0:OPERATING_VOLTAGE` | OPERATING_VOLTAGE auf Kanal 0 aller Geräte   |
-| `LOW_BAT`               | Short-Form: alle Geräte, alle Kanäle         |
+| Pattern                 | Effect                                       |
+| ------------------------ | -------------------------------------------- |
+| `HmIP-eTRV-2:0:LOW_BAT` | Surface LOW_BAT on channel 0                 |
+| `*:*:RSSI_PEER`         | RSSI_PEER on every channel of every device    |
+| `*:0:OPERATING_VOLTAGE` | OPERATING_VOLTAGE on channel 0 of every device |
+| `LOW_BAT`               | Short form: all devices, all channels         |
 
-## UI-Konzept (Svelte 5 SPA)
+## UI concept (Svelte 5 SPA)
 
-### Einbettung
+### Embedding
 
-Neuer Route-Eintrag `/settings/unignore` als Unterseite der bestehenden
-`Settings`-View, NICHT als top-level Sidebar-Punkt — die Funktion ist
-ein Power-User-Werkzeug und steht im Settings-Drawer neben Backups,
-Audit-Log, Diagnostics.
+Shipped as a standalone top-level route, `/visibility` (`App.svelte`:
+`if (path === "/visibility") return { kind: "visibility" };` renders
+`<UnIgnoreList />`) — not nested under Settings as the original
+concept proposed. It is reachable directly rather than as a Settings
+sub-page.
 
-```
-Settings
-├── General
-├── CCUs
-├── MQTT
-├── Matter
-├── Authentication
-└── Un-Ignore Parameters          ← neu
-```
+### View structure — `UnIgnoreList.svelte`
 
-### View-Struktur — `UnIgnoreList.svelte`
-
-Vorlage ist `assets/ui/src/routes/matter/MatterExposureList.svelte`
-(507 Zeilen) — gleiche Form: Multi-Select über
-Backend-Kandidatenliste, Bulk-Enable/Disable, Suche, Persistenz via
-REST PUT. Wiederverwertbare Bausteine: `$lib/components/ui/{Button,
-Input}`, `$lib/i18n`, `$lib/stores/toast.svelte`.
+Modeled on `assets/ui/src/routes/matter/MatterExposureList.svelte` —
+same shape: multi-select over the backend candidate list, bulk
+enable/disable, search, persistence via REST PUT. Shared building
+blocks: `$lib/components/ui/{Button, Input}`, `$lib/i18n`,
+`$lib/stores/toast.svelte`.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -117,43 +112,44 @@ Input}`, `$lib/i18n`, `$lib/stores/toast.svelte`.
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### Datenfluss
+### Data flow
 
 1. **Mount** → `GET /api/v1/visibility/unignore/candidates?include_master=false`
-   liefert sortierte Kandidatenliste der unsichtbaren Parameter
-   (Backend-Endpunkt nutzt `QueryFacade.GetUnIgnoreCandidates`).
-2. **Mount** → `GET /api/v1/visibility/unignore` liefert aktuelle
-   aktivierte Liste (aus SQLite-Persistenz).
-3. **Search/Filter/Toggle** → lokale Mutation eines `$state<Set<string>>`.
-4. **Add custom pattern** → öffnet Modal mit `<input>` für Free-Form-Eingabe;
-   client-side Validation gegen `^[A-Za-z0-9\-_*]+:[0-9*]+:[A-Z_]+$`,
-   inline-Hinweis falls Pattern keinen Kandidaten matched.
-5. **Save** → `PUT /api/v1/visibility/unignore` mit komplettem
-   Listenzustand; Server validiert via `ParseUnIgnoreLine`, persistiert
-   in SQLite, ruft `Registry.LoadUnIgnore` neu auf und triggert
-   Materializer-Re-Run pro Central.
-6. Response enthält `applied_count`, `parse_errors[]`,
-   `affected_devices`. Toast-Nachricht zeigt das Ergebnis.
-7. **Discard** → State auf serverseitigen Wert zurücksetzen.
+   returns the sorted candidate list of currently-hidden parameters
+   (backend endpoint uses `QueryFacade.GetUnIgnoreCandidates`).
+2. **Mount** → `GET /api/v1/visibility/unignore` returns the
+   currently-active list (from SQLite persistence).
+3. **Search/filter/toggle** → local mutation of a `$state<Set<string>>`.
+4. **Add custom pattern** → opens a modal with an `<input>` for
+   free-form entry; client-side validation against
+   `^[A-Za-z0-9\-_*]+:[0-9*]+:[A-Z_]+$`, inline hint if the pattern
+   matches no candidate.
+5. **Save** → `PUT /api/v1/visibility/unignore` with the complete list
+   state; the server validates via `ParseUnIgnoreLine`, persists to
+   SQLite, re-invokes `Registry.LoadUnIgnore`, and triggers a
+   materializer re-run per central.
+6. Response includes `applied_count`, `parse_errors[]`,
+   `affected_devices`. A toast shows the result.
+7. **Discard** → resets state to the server-side value.
 
-### Interaktionsdetails
+### Interaction details
 
-- **Bestätigungsdialog** vor "Save" wenn `include_master=true` oder
-  wenn das Diff MASTER-Pattern entfernt/hinzufügt: zeigt Anzahl der
-  betroffenen Devices + Re-Materialize-Hinweis. Apple-Home / MQTT /
-  REST haben offene Subscriptions, die nach dem Re-Run ein
-  Re-Discovery sehen.
-- **Bulk-Toggle** über Header-Checkbox: aktiviert/deaktiviert alle
-  gefilterten Zeilen.
-- **Optimistisches UI** — der Save-Roundtrip ist nicht-trivial
-  (Materializer-Lauf), daher Spinner + disabled Save-Button bis
-  Response da ist; bei Fehler Rollback auf vorherigen State.
-- **Read-Only-Modus** für Viewer-Rolle: zeigt die Liste, "Save"
-  ausgegraut.
+- **Confirmation dialog** before "Save" when `include_master=true` or
+  when the diff adds/removes a MASTER pattern: shows the count of
+  affected devices + a re-materialize hint. Apple Home / MQTT / REST
+  have open subscriptions that will see a re-discovery after the
+  re-run.
+- **Bulk toggle** via the header checkbox: enables/disables all
+  filtered rows.
+- **Optimistic UI** — the Save round-trip is non-trivial (a
+  materializer run), so a spinner + disabled Save button until the
+  response arrives; rollback to the previous state on error.
+- **Read-only mode** for the viewer role: shows the list, "Save"
+  greyed out.
 
-### i18n-Keys
+### i18n keys
 
-Neue Schlüssel in `internal/i18n/catalogs/{en,de}.json`:
+New keys in `internal/i18n/catalogs/{en,de}.json`:
 
 ```
 unignore.title                = Un-Ignore Parameters
@@ -170,13 +166,13 @@ unignore.no_candidates        = No hidden parameters available — all parameter
 unignore.saved                = Un-ignore list updated. {n} parameters now visible.
 ```
 
-## REST-Endpunkte
+## REST endpoints
 
-| Methode | Pfad                                          | Body                            | Status |
-| ------- | --------------------------------------------- | ------------------------------- | ------ |
-| GET     | `/api/v1/visibility/unignore`                 | —                               | neu    |
-| PUT     | `/api/v1/visibility/unignore`                 | `{patterns: ["..."]}`           | neu    |
-| GET     | `/api/v1/visibility/unignore/candidates`      | Query: `include_master=bool`    | neu    |
+| Method | Path                                       | Body                          |
+| ------ | -------------------------------------------- | -------------------------------- |
+| GET    | `/api/v1/visibility/unignore`                | —                                |
+| PUT    | `/api/v1/visibility/unignore`                | `{patterns: ["..."]}`            |
+| GET    | `/api/v1/visibility/unignore/candidates`     | Query: `include_master=bool`     |
 
 DTOs:
 
@@ -215,14 +211,14 @@ UnIgnoreCandidateList:
     include_master: { type: boolean }
 ```
 
-Authorisierung: `admin` zum Schreiben, `operator`/`admin` zum Lesen,
-`viewer` darf die Kandidatenliste sehen, aber nicht die aktive Liste
-(Sicherheits-Defense-in-Depth: Viewer soll keine MASTER-Pfade kennen).
+Authorization: `admin` to write, `operator`/`admin` to read the
+active list. `viewer` may see the candidate list but not the active
+list (defense-in-depth: viewers should not learn MASTER paths).
 
-## Persistenz
+## Persistence
 
-Neue SQLite-Tabelle in einer goose-Migration
-`internal/store/sqlite/migrations/00xx_visibility_unignore.sql`:
+SQLite table added via a goose migration,
+`internal/store/sqlite/migrations/014_visibility_unignore.sql`:
 
 ```sql
 -- +goose Up
@@ -237,16 +233,15 @@ CREATE TABLE visibility_unignore (
 DROP TABLE visibility_unignore;
 ```
 
-Die Tabelle wird pro `central_name` partitioniert (Multi-CCU-First-Class
-per ADR 0002). Beim Daemon-Start wird die Liste pro Central gelesen
-und via `Registry.LoadUnIgnore(strings.NewReader(strings.Join(patterns, "\n")))`
-zurückgespielt.
+The table is partitioned per `central_name` (multi-CCU first-class,
+per ADR 0002). On daemon start the list is read per central and
+replayed via `Registry.LoadUnIgnore(strings.NewReader(strings.Join(patterns, "\n")))`.
 
-## Config-Knob (YAML)
+## Config knob (YAML)
 
-Bootstrap-Pfad: ein zentraler Default kann via `config.yaml` gesetzt
-werden, dient als Erstbefüllung wenn die SQLite-Tabelle leer ist
-(nicht als Override — Runtime-Änderungen via REST gewinnen).
+Bootstrap path: a central-level default can be set via `config.yaml`,
+used as the initial fill when the SQLite table is empty (not as an
+override — runtime changes via REST win).
 
 ```yaml
 centrals:
@@ -258,65 +253,39 @@ centrals:
         - "*:*:RSSI_PEER"
 ```
 
-Mapped auf `config.CentralConfig.Visibility.UnIgnore []string`.
+Mapped to `config.CentralConfig.Visibility.UnIgnore []string`.
 
-## Roll-out-Reihenfolge
+## Test plan
 
-1. **REST + Persistenz + Config-Knob** (`config.go`, neue Migration,
-   `internal/north/rest/handlers/visibility.go`). Backend kann ohne UI
-   bereits via `curl` bedient werden.
-2. **Daemon-Wiring** im `cmd/openccu-loom/daemon.go`: nach Central-Init
-   die SQLite-Liste laden + `Registry.LoadUnIgnore` aufrufen + Pipeline
-   triggern.
-3. **Svelte-Screen** `UnIgnoreList.svelte` + Settings-Sub-Route +
-   i18n-Keys. Kann parallel zum REST-Schritt laufen sobald die
-   OpenAPI-Spec steht (frontend-types werden generiert).
-4. **Apple-Home / Matter-Bridge-Side-Effects** — wenn ein
-   MASTER-Parameter via un-ignore zur Bridge sichtbar wird, muss
-   `MatterEligibility` neu evaluiert werden. Die Materializer-Pipeline
-   feuert bereits ein `DeviceCreatedEvent` re-emission, die Bridge
-   hängt sich daran an. Smoke-Test vor Release.
-5. **Doku** `docs/user-guide.md` Abschnitt "Un-Ignore Parameters",
-   Verweis auf das Format + die Sicherheitswarnung.
+- **Unit**: `parser_test.go` covers `MODEL:CHANNEL:PARAMETER` parsing.
+  `handlers/visibility_test.go` covers the PUT round-trip + malformed
+  patterns.
+- **Integration** (`-tags=integration`): load a device via `godevccu`,
+  `LOW_BAT` is initially hidden, REST PUT makes it visible,
+  `GET /api/v1/devices/.../channels/0` contains the data point.
+- **Integration**: `tests/integration/visibility_unignore_test.go` pins the
+  `IGNORE_FOR_UN_IGNORE_PARAMETERS` list (parameters that must never
+  be un-ignored — e.g. internal service parameters) against the
+  Python constant.
+- **Snapshot parity**: `tests/integration/TestModelSnapshotDumpAgainstGodevccu`
+  runs with an un-ignore list on both sides — drift stays 0.
 
-## Test-Plan
+## Design decisions (recorded)
 
-- **Unit**: `parser_test.go` deckt das `MODEL:CHANNEL:PARAMETER`-Parsing
-  schon ab. Neu: `handlers/visibility_test.go` mit PUT-Roundtrip +
-  fehlerhaften Patterns.
-- **Integration** (`-tags=integration`): per `godevccu` ein Device
-  laden, `LOW_BAT` ist initial unsichtbar, REST-PUT macht es sichtbar,
-  `GET /api/v1/devices/.../channels/0` enthält den Datenpunkt.
-- **Contract**: neue Datei `tests/contract/unignore_visibility_test.go`
-  pinnt die `IGNORE_FOR_UN_IGNORE_PARAMETERS`-Liste (Parameter, die
-  niemals un-ignored werden dürfen — z. B. interne Service-Parameter)
-  gegen die Python-Konstante.
-- **Snapshot-Parity**: nach Implementierung
-  `tests/integration/TestModelSnapshotDumpAgainstGodevccu` mit einer
-  un-ignore-Liste auf beiden Seiten laufen lassen → Drift bleibt 0.
-
-## Beantwortete Fragen (Stand 2026-05-14)
-
-1. **MASTER-Reload-Hinweis** — entfällt. Operator-Feedback: MASTER-
-   Paramset-Änderungen brauchen keinen Geräte-Neustart. UI bleibt
-   konsistent zwischen VALUES und MASTER, kein Inline-Badge, kein
-   Confirm-Dialog. Die `include_master`-Checkbox bleibt aus reinem
-   Listen-Filter-Grund vorhanden (verhindert, dass die Default-
-   Kandidatenliste mit MASTER-Parametern überlaufen wird).
-2. **Export/Import** — nein. Liste lebt nur in SQLite; Sicherung
-   erfolgt indirekt über den bestehenden Backup-Mechanismus
-   (`var/backups/`). Spart einen REST-Endpunkt und einen Text-
-   Format-Kompat-Pfad.
-3. **Audit-Log-Integration** — ja, pro `PUT`-Roundtrip ein Audit-
-   Event mit:
-   - User (aus `reqctx`)
-   - Diff: `added[]`, `removed[]` Patterns
-   - `affected_devices` Counter
-   - Quelle: `rest` (oder später `config_yaml`, wenn der Bootstrap-
-     Knob die Liste setzt — diese Initiallast wird als ein einziges
-     System-Event geloggt, nicht pro Pattern)
-
-## Offene Fragen
-
-— alle drei Konzept-Fragen sind beantwortet. Implementierung wartet
-auf separates Go-Signal.
+1. **MASTER-reload hint** — dropped. MASTER paramset changes need no
+   device restart. The UI stays consistent between VALUES and MASTER,
+   with no inline badge and no confirm dialog. The `include_master`
+   checkbox remains as a pure list filter (prevents the default
+   candidate list from being swamped with MASTER parameters).
+2. **Export/Import** — no. The list lives only in SQLite; backup
+   happens indirectly through the existing backup mechanism
+   (`var/backups/`). This avoided an extra REST endpoint and a
+   text-format compatibility path.
+3. **Audit-log integration** — yes: every `PUT` round-trip emits an
+   audit event with:
+   - user (from `reqctx`)
+   - diff: `added[]`, `removed[]` patterns
+   - `affected_devices` counter
+   - source: `rest` (or `config_yaml` when the bootstrap knob sets the
+     list — that initial load is logged as a single system event, not
+     per pattern)

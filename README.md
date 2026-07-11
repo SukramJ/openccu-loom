@@ -52,29 +52,26 @@ wire side into the standard-protocol side.
 
 ## Status
 
-**0.15.0** (in development; latest release tag **v0.14.5**). All four
-north-bound bridges work end-to-end against a real CCU and the `godevccu`
-simulator. The 0.14.x line added CCU-delegated authentication (ADR 0043),
-single-port onboarding + opt-in HA Ingress auth passthrough (ADR 0044), and a
-critical HA-add-on data-persistence fix (`OPENCCU_LOOM_DATA_DIR` honoured
-without a config file); 0.15.0 reconciles the OpenAPI contract with the server
-(REST `APIVersion` 2.1.0), wires the `firmware.refresh` command + on-reload
-link-peer refresh, and adds a flag-gated Matter TimeSynchronization cluster.
-The earlier 0.2.0 baseline built on 0.1.0
-with deeper Home Assistant parity (MQTT discovery for the hub layer —
-system variables, programs, per-interface install-mode and
-virtual-remote buttons — usage-gated per-parameter discovery, and
-per-device firmware-update entities), a versioned external-client
-contract (`schema_digest` + `api_version` on `GET /api/v1/info`, see
-[ADR 0028](./docs/adr/0028-contract-digest-and-version-guard.md)),
-Home Assistant and CCU/RaspberryMatic add-on packaging, and a round
-of multi-CCU connection-reliability fixes.
+**0.34.0** (latest release tag **v0.34.0**, REST `APIVersion` 2.16.0).
+All four north-bound bridges work end-to-end against a real CCU and the
+`godevccu` simulator. See [`CHANGELOG.md`](./CHANGELOG.md) for the full
+per-release history; recent highlights include CCU-delegated
+authentication (ADR 0043) and single-port onboarding + opt-in HA Ingress
+auth passthrough (ADR 0044), the move of login / OIDC / onboarding into
+the SPA (ADR 0045), a persisted measurement-history recorder with
+in-SPA charts, Matter one-endpoint-per-device (ADR 0049) plus a round of
+Matter interop hardening (endpoint-ID persistence, GenericSwitch/button
+state machine, WindowCovering + Thermostat conformance, schema refreshed
+to matter.js HEAD / Matter 1.5.1), and a SPA/UX overhaul (teal rebrand +
+theme picker).
 
-- MQTT (HA Discovery + raw plane), REST + WebSocket, Svelte SPA + HTMX
-  bootstrap, and a native-Go Matter bridge with PASE/CASE, IM
+- MQTT (HA Discovery + raw plane), REST + WebSocket, a Svelte 5 SPA, and
+  a native-Go Matter bridge with PASE/CASE, IM
   Read/Write/Invoke/Subscribe/TimedRequest, 12 generic measurement
   cluster servers, 12 bridge-core clusters, and Custom-DP projections
-  for switch / light / cover / climate / lock / siren / valve.
+  for switch / light / cover / climate / lock / siren / valve /
+  generic-switch (button) / text-display, one Matter endpoint per
+  physical device (ADR 0049).
 - Production-grade Matter attestation requires vendor-supplied
   DAC/PAI/CD bundles via config; the bundled CSA Test PAA chain
   works for development and Apple-/Google-/chip-tool-driven testing.
@@ -248,22 +245,25 @@ this on a production host.
   CCU interface, every device profile, every reliability invariant
   (circuit breaker, retry, throttle, request coalescer, ping/pong).
 - **MQTT bridge** with Home Assistant Discovery **and** a raw topic
-  plane; bidirectional control via `/set` topic subscriptions. Pure
-  Go MQTT 3.1.1 client (no `paho` dependency).
-- **REST + WebSocket API** — ~90 REST endpoints (full catalogue in
-  [`assets/openapi.yaml`](./assets/openapi.yaml)) and 85 WebSocket
-  commands, OpenAPI 3.1 contract, RFC 9457 problem+json,
+  plane; bidirectional control via `/set` topic subscriptions. Pure-Go
+  MQTT 5.0 client (3.1.1 selectable), no `paho` dependency.
+- **REST + WebSocket API** — see the full catalogue in
+  [`assets/openapi.yaml`](./assets/openapi.yaml) (REST) and
+  [`assets/wsapi.json`](./assets/wsapi.json) (WebSocket commands +
+  broadcasts); OpenAPI 3.1 contract, RFC 9457 problem+json,
   Idempotency-Key middleware.
 - **Configuration UI** — Svelte 5 SPA (Tailwind 4 + Vite, embedded
-  via `go:embed`) as the primary surface; an HTMX + `html/template`
-  fallback covers login, setup wizard, and status dashboards without
-  JavaScript. Locale-aware i18n (de + en).
+  via `go:embed`) as the interactive surface. Login, OIDC, and the
+  first-run onboarding wizard all run in the SPA (ADR 0045); a minimal
+  server-rendered surface (`/health`, `/about`) remains only as a no-JS
+  SPA-down diagnostic anchor. Locale-aware i18n (en + de).
 - **Multi-CCU**: one daemon, many CCUs, all scoped cleanly.
 - **Authentication**: HTTP Basic, Bearer tokens, session cookies with
-  CSRF, OpenID Connect (PKCE + JWKS-verified RS256 signatures).
+  CSRF, OpenID Connect (PKCE + JWKS-verified RS256 signatures),
+  CCU-delegated login (ADR 0043), and HA Ingress passthrough (ADR 0044).
 - **Static single binary** (`CGO_ENABLED=0`) for Linux
-  amd64 / arm64 / armv7, plus macOS, Windows (best-effort). Docker
-  image published to `ghcr.io/sukramj/openccu-loom`.
+  amd64 / arm64 / armv7. Docker image published to
+  `ghcr.io/sukramj/openccu-loom`.
 
 ## Differences from `aiohomematic`
 
@@ -280,7 +280,7 @@ profile catalogue are kept in lockstep.
 | Multi-CCU | one `CentralUnit` per process | **many** `CentralUnit`s per process |
 | Config | programmatic (Pydantic) | YAML (with defaults) |
 | Persistence | JSON files | SQLite WAL + filesystem under `data_dir/` |
-| UI | none (HA provides one) | built-in Svelte 5 SPA (HTMX fallback for no-JS) |
+| UI | none (HA provides one) | built-in Svelte 5 SPA (minimal `/health` + `/about` no-JS diagnostic surface) |
 | Decorators (`@state_property`, `@inspector`) | Python runtime | Go struct tags; `@inspector` wrapping handled inline at call sites |
 | Device profiles | hand-written Python | generated from the `aiohomematic` registry, plus hand-written Go wrappers |
 

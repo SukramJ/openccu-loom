@@ -61,8 +61,10 @@ entry is recorded in `CHANGELOG.md` as `[manually verified]`.
 
 1. HA Core ≥ 2025.3 with the Matter add-on active (Matter Server
    ≥ 7.0.0).
-2. `/api/v1/matter/commissioning:open` (REST) → open the pairing
-   window, scan the QR code from the response in the HA UI.
+2. `POST /api/v1/matter/commissioning/window` (REST, body
+   `{"duration_seconds": N}`) → open the pairing window, scan the QR
+   code from the response in the HA UI. Early-close is
+   `POST /api/v1/matter/commissioning/window/close`.
 3. Expectation: HA lists the bridge under "Bridges" plus every
    bridged endpoint individually.
 4. Toggle a light endpoint → the CCU side mirrors it in MQTT.
@@ -102,6 +104,10 @@ mandatory-attribute drift.
 - **Apple Home multi-hub setups** with ≥ 3 hubs are not covered —
   the use cases are rare and HA Server conformance is enough for
   the release decision.
-- **Subscription resumption** across reboot is missing in v1.1 (see
-  the phase-7 docs) — smoke tests must factor in a fresh subscribe
-  phase after every reboot.
+
+**Subscription resumption** across reboot is implemented: persistent
+subscriptions survive restart via migration
+`018_matter_persistent_subscriptions.sql` +
+`internal/north/matter/store/subscriptions.go`, and CASE session
+resumption (Sigma2Resume) is wired in `secure/sigma`, so a controller
+re-attaches without a fresh subscribe phase after a bridge reboot.

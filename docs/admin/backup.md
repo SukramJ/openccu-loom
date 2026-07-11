@@ -181,9 +181,14 @@ API. These are admin-gated:
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/api/v1/backups` | trigger a CCU backup (returns a job id) |
-| `GET` | `/api/v1/backups` | list locally stored CCU backups |
+| `GET` | `/api/v1/backups` | list locally stored CCU backups (daemon-global, across all configured centrals) |
 | `GET` | `/api/v1/backups/{id}/download` | stream a stored `.sbk` |
-| `POST` | `/api/v1/backups/{id}/restore` | restore a stored CCU backup |
+| `POST` | `/api/v1/backups/{id}/restore` | restore a stored CCU backup by its id |
+
+`POST /api/v1/backups` accepts an optional JSON body
+`{"central_name": "..."}` to target a specific central explicitly; an
+omitted or empty body backs up the first registered central (the
+multi-CCU-correct path is naming the central).
 
 See the REST + WebSocket API reference (`docs/integrations/rest-ws.md`)
 for request/response detail.

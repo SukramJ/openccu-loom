@@ -437,8 +437,9 @@ func TestMatterBridgeSmoke_ServerListContainsBDBI(t *testing.T) {
 // TestMatterBridgeSmoke_BDBINodeLabelAndUniqueID verifies that BDBI cluster
 // (0x0039) is present on every bridged endpoint, NodeLabel (attr 0x0005) is
 // non-nil, UniqueID (attr 0x000F) is non-empty, and UniqueIDs are distinct
-// across endpoints (duplicate fingerprints cause Apple Home pair-abort per
-// matter_pair_uniqueid_root_cause.md).
+// across endpoints (duplicate fingerprints cause Apple Home pair-abort; the
+// distinctness invariant is catalogued in docs/parity/by_design.md, matter.js
+// section).
 //
 // Mirrors matter.js packages/node/test/endpoints/BridgeTest.ts:18
 // (expectBridgedLight asserting BridgedDeviceBasicInformationServer active).

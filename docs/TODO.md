@@ -1,5 +1,17 @@
 # OpenCCU-Loom — Open Work (grouped checklist)
 
+> **HISTORICAL — stale snapshot, last touched around v0.14.6.** The repo has
+> since shipped through 0.34.0; almost every item below is `[x]` done and the
+> handful of `[ ]`/`[planned]` items are years-old placeholders (e.g. "Tag &
+> release v0.14.6" refers to a release that shipped long ago under a
+> different version number). Treat this file as a point-in-time archive, not
+> an active backlog — `docs/roadmap.md` is the forward-looking plan and
+> `CHANGELOG.md` is the release-by-release ground truth. The only items still
+> worth checking before starting new work are §3's two `[planned]` Matter
+> deferrals (AccessRestrictionList, Actions) — cross-check them against
+> `docs/parity/by_design.md` since Matter has moved substantially since this
+> file was written.
+
 A working checklist of open items, grouped by area. Synthesised from
 `docs/roadmap.md`, `SPECIFICATION.md`, `docs/parity/by_design.md`,
 `docs/testplan.md` and code markers.

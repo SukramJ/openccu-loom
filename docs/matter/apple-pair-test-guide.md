@@ -46,13 +46,18 @@ swap to a fresh device.
 - A "Mein Zuhause" / "My Home" must exist already (Apple Home →
   + → "Add Home" if missing).
 - Ideally a clean iPad — once the HMHome cache for a given Matter UniqueID
-  family rots, no daemon-side `bootid` rotation fully recovers it.
+  family rots, no daemon-side change fully recovers it (even the dev-only
+  `matter.dev_rotate_unique_ids` rotation does not reliably clear it).
 
 ### 2.2 Daemon side
 
-The daemon must rotate its `bootid` salt every restart (already wired
-since commit `85a8b1f`); this guarantees that every UniqueID surface
-Apple sees is fresh and uncached.
+By default the bridge's Matter `UniqueID` surface is **stable** across
+restarts — matching matter.js / chip and the production UX Apple
+expects (`bootid.Salt()` returns a zeroed salt unless rotation is
+explicitly enabled). UniqueID rotation is a **dev-only opt-in** via the
+expert config flag `matter.dev_rotate_unique_ids` (default false); turn
+it on only when you deliberately want each restart to present a fresh,
+uncached UniqueID family to Apple during pairing debugging.
 
 Clean run procedure:
 
@@ -213,7 +218,7 @@ See §5 failure modes.
 | Bridge appears, accessories say "No response" | 2 fabrics, Subscribes alive, `subscribe.report reports=0` | DP not pushing values OR DataVersionFilter caching stale 1. Verify `measurement.notify endpoint=N` fires |
 | Bridge appears, sensor shows "—" / no value | Same as above | First Subscribe-Initial shipped a `null` (DP unobserved); the `load_data_point_value` boot warm-up should prevent this — check `initial_load.central_done errored=0` |
 | Bridge appears but only some accessories show | HAP-mapper rejected specific endpoints | Likely cluster-mandatory miss on those endpoints. Cross-check `cluster_servers` log for the missing ep |
-| Pair succeeds first time, second daemon restart fails | Old fabric still in DB | `bootid` salt rotation requires the daemon to start without prior fabric rows — clean DB before re-pair |
+| Pair succeeds first time, second daemon restart fails | Old fabric still in DB | Stale fabric rows survive the restart — clean the DB before re-pair (the §2.2 recipe) |
 
 ---
 
@@ -240,9 +245,8 @@ the daemon's mDNS announcements settle. After a level-3 reset, allow
 When validating a daemon-side change, follow this escalation ladder.
 **Stop at the first failure** and fix before moving up the ladder.
 
-1. `go build && go test ./...` — green (allow pre-existing
-   `tests/contract` failures: `TestServiceDiscoveryShape_Cover_Position`,
-   `TestDocPurity`).
+1. `go build && go test ./...` — green. All gates, including
+   `TestDocPurity`, must pass; `make test` blocks on them.
 2. `go test ./internal/north/matter/... -run 'Parity'` — Track B parity
    tests green. 244 PASS / 33 SKIP / 0 FAIL is the baseline (commit `2111bd0`).
 3. `go test -tags=integration ./tests/integration/... -run 'MatterBridgeSmoke'`
@@ -261,26 +265,28 @@ HMHome cache state is non-reproducible across attempts.
 
 ## 8 — Current State
 
-- **Track A**: 84/84 drift entries addressed (15 CRITICAL + 14 HIGH +
-  24 MED + 31 LOW). 100% closure rate.
-- **Track B**: 244 parity tests PASS, 33 SKIP-tagged future drift IDs.
-- **chip-tool v5 report**: pair succeeds via `pairing already-discovered`
-  in ~4 s; voll-wildcard returns 107 attribute reports without any
-  `UnsupportedAttribute` / `UnsupportedCluster`. Apple-independent
-  wire-correctness confirmed.
-- **Apple pair**: blocked by the developer's iPad HMHome cache being
-  corrupted from ~60 prior pair attempts on 2026-05-11/12. Daemon-side
-  is correct; verifying against a fresh iPad (or after a level-5 reset)
-  is the open empirical step.
+**Baseline: release 0.34.0.** The Matter interop hardening tracked in
+the earlier drift audit has shipped across 0.31.0–0.34.0 (endpoint-ID
+persistence, GenericSwitch press-cycle state machine, WindowCovering
+`EndProductType` / target, Thermostat `SystemMode` / `RunningMode`
+conformance, CASE/PASE/MRP correctness, ElectricalPower/Energy
+proactive reports, one-endpoint-per-device per ADR 0049, and the
+matter.js HEAD spec 1.5.1 schema refresh).
 
-Known stable invariants (verified by Track A audit, byte-exact):
+For the live status of every Matter parity finding — open vs. closed,
+per-release — see
+[`docs/parity/matter_behaviour_findings.md`](../parity/matter_behaviour_findings.md),
+which supersedes the point-in-time "Track A/B" audit counts this
+section used to carry. The TLV codec remains byte-exact against the
+pinned matter.js HEAD (`docs/parity/matter/tlv-wire-fixtures.json`),
+and the wire-correctness of the multi-fabric CASE responder,
+fabric-scoped ACL reads, operational mDNS SII/SAI floors, and OpCreds
+fabric resolution is held by the standing parity guards catalogued in
+[`docs/matter-parity-contract.md`](../matter-parity-contract.md).
 
-- TLV codec byte-exact against matter.js HEAD `ebe091744`
-- Bug A (Sigma2 multicast dedupe) wire-correct
-- Bug G (Multi-fabric CASE responder) wire-correct
-- Bug M (Fabric-scoped ACL read) wire-correct
-- Bug O (Operational mDNS SII/SAI floor) wire-correct
-- Bug P (OpCreds fabric resolution) wire-correct
+**Apple pair:** run against a clean iPad (or after a level-5 reset) —
+HMHome cache corruption from repeated pair attempts on one device is
+the dominant non-daemon failure mode (see §1 / §10).
 
 ---
 
@@ -352,8 +358,10 @@ still fails on a fresh iPad, suspect (in this order):
 4. **WLAN-side dropping IPv6 link-local multicast**: some consumer
    routers silently filter `ff02::fb` (mDNS over IPv6). Confirm with
    `tcpdump -i en0 ip6 multicast` while the iPad scans.
-5. **bridge-side bootid not rotating**: confirm `bootid.Salt()` returns
-   different bytes between two daemon restarts.
+5. **UniqueID rotation (dev-only)**: UniqueID is stable by default;
+   only if you enabled `matter.dev_rotate_unique_ids` should
+   `bootid.Salt()` differ between restarts. Do not expect rotation
+   unless that flag is set.
 
 ---
 

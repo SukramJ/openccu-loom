@@ -10,7 +10,7 @@ How to get a working OpenCCU-Loom build on your machine, run it locally, and kee
 | Tool | Version / note |
 | --- | --- |
 | Go | 1.26+ (`go.mod` pins `go 1.26`) |
-| `golangci-lint` | v1.60+ (installed by `make setup`) |
+| `golangci-lint` | v2 (installed by `make setup`; `.golangci.yaml` is v2-format, a v1 binary rejects it) |
 | `gofumpt` | formatter, stricter than `gofmt` |
 | `goose` | SQLite migrations |
 | Node + npm | only to build the Svelte SPA |
@@ -41,7 +41,7 @@ cp example.config.yaml config.yaml
 ./bin/openccu-loom --config config.yaml
 ```
 
-The REST API, WebSocket stream, and bootstrap UI (login, first-run `/setup`, `/health`, `/about`) all bind `:8119` by default (single listener since 0.14.0). See [Getting started](../getting-started.md) and [Configuration](../admin/configuration.md) for the config surface, and [Authentication](../admin/auth.md) for first-run credentials.
+The REST API, WebSocket stream, the Svelte SPA (login, OIDC, first-run onboarding — ADR 0045), and the minimal no-JS `/health` + `/about` diagnostic anchor all bind `:8119` by default (single listener since 0.14.0). See [Getting started](../getting-started.md) and [Configuration](../admin/configuration.md) for the config surface, and [Authentication](../admin/auth.md) for first-run credentials.
 
 To iterate on the SPA against a running daemon:
 

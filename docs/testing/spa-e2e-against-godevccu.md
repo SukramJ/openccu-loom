@@ -1,217 +1,177 @@
-# SPA-E2E gegen godevccu
+# SPA-E2E against godevccu
 
-End-to-End-Validierung der Svelte-SPA-Bedienoberflächen ohne
-physische CCU. Adressiert die Sichtbarkeitslücke bei Gerätetypen,
-die im Entwickler-Inventar fehlen (Cover, Lock, RGBW, …).
+End-to-end validation of the Svelte SPA's operating surfaces without a
+physical CCU. Addresses the visibility gap for device types that are
+missing from a given developer's own device inventory (cover, lock,
+RGBW, …).
 
 ## Motivation
 
-Drei Schichten müssen pro Bedienelement zusammenspielen:
+Three layers have to work together for a single tile click:
 
 ```
-Svelte-Tile ─── HTTP/WS ─── Daemon-CDP-Dispatcher ─── ChannelWriter ─── CCU
+Svelte tile ─── HTTP/WS ─── daemon CDP dispatcher ─── ChannelWriter ─── CCU
 ```
 
-Bei einer realen CCU testet der Entwickler nur die Geräte, die im
-eigenen Bestand stehen. Cover-Tiles auf HmIP-FBL, Lock auf
-HmIP-DLD, RGBW auf HmIP-RGBW — wenn die im Hausstand fehlen, geht
-jede Regression dort unentdeckt durch alle Stages bis zum
-Anwender.
+Against a real CCU, a developer only exercises the devices in their own
+household. Cover tiles on HmIP-FBL, lock on HmIP-DLD, RGBW on
+HmIP-RGBW — if those are missing from the household, a regression
+there goes undetected through every stage until it reaches a user.
 
-aiohomematic hat dieses Problem auf dem Backend gelöst: jeder
-Custom-DP hat Unit-Tests, die gegen pydevccu zeigen, dass ein
-Call gegen den DP die erwarteten Wire-Calls produziert. Auf der
-Backend-Seite besteht diese Abdeckung in OpenCCU-Loom
-strukturäquivalent (per-Custom-DP-Tests + Cross-Stack-Snapshot
-gegen aiohomematic).
+aiohomematic solved this problem on the backend: every custom DP has
+unit tests that show, against pydevccu, that a call against the DP
+produces the expected wire calls. OpenCCU-Loom has structurally
+equivalent backend-side coverage (per-custom-DP tests plus the
+cross-stack snapshot against aiohomematic).
 
-Diese Doku beschreibt die Erweiterung auf die SPA-Schicht: ein
-Test-Setup, das die Svelte-Tile-REST-Calls gegen den Daemon-mit-
-godevccu fährt und überprüft, dass die wire-seitige Antwort der
-Erwartung entspricht.
+This document describes the extension to the SPA layer: a test setup
+that drives the Svelte tiles' REST calls against the daemon-with-
+godevccu and verifies that the wire-side response matches expectation.
 
-## Architektur
+## Architecture (as implemented)
+
+Unlike the original proposal below, the implemented harness does not
+start a separate daemon process or an HTTP client — it builds the
+Central → Pipeline → CustomDPDispatcher stack in-process and drives it
+through the same interfaces the REST handler uses, then reads back the
+wire-side state from godevccu via `getValue` / `getParamset`:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ Go-Test-Prozess (tests/spa_e2e/, build-tag `e2e`)                │
+│ Go test process (tests/integration/, build tag `integration`)    │
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │ godevccu (in-process VirtualCCU)                           │  │
-│  │   • XML-RPC + JSON-RPC auf ephemeral ports                 │  │
-│  │   • komplette OCCU-Gerätevielfalt (~399 Modelle)           │  │
-│  │   • devicelogic schreibt SetValue / PutParamset durch      │  │
-│  │     und emittiert event() Push-Callbacks                   │  │
+│  │   • XML-RPC + JSON-RPC on ephemeral ports                  │  │
+│  │   • full OCCU device variety (~399 models)                 │  │
+│  │   • device logic writes SetValue / PutParamset through     │  │
+│  │     and emits event() push callbacks                       │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                  ▲ XML-RPC                                       │
 │                  │                                               │
 │  ┌────────────────────────────────────────────────────────────┐  │
-│  │ openccu-loom-Daemon (in-process, config.testdata.yaml)      │  │
-│  │   • central.CentralUnit zeigt auf godevccu                 │  │
-│  │   • REST + WS auf ephemeral port                           │  │
-│  │   • Auth = Single-User-Test-Token, im Test eingerichtet    │  │
-│  │   • Pfad: cmd/openccu-loom Hauptcode, kein Test-Surrogat    │  │
+│  │ In-process daemon stack (spaHarness)                        │  │
+│  │   • central.CentralUnit points at godevccu                 │  │
+│  │   • Pipeline + CustomDPDispatcher built directly, no HTTP   │  │
+│  │     listener — the test drives the same interfaces the     │  │
+│  │     REST handler calls                                     │  │
 │  └────────────────────────────────────────────────────────────┘  │
-│                  ▲ HTTP/WS                                       │
+│                  ▲                                                │
 │                  │                                               │
 │  ┌────────────────────────────────────────────────────────────┐  │
-│  │ E2E-Driver                                                 │  │
-│  │   • baut authentifizierten http.Client                     │  │
-│  │   • iteriert über CDP-Inventar (GET /cdps für jedes Gerät) │  │
-│  │   • führt pro CDP einen Bedien-Plan aus                    │  │
-│  │   • verifiziert Roundtrip (REST-Response + Wire-Side-Effect│  │
-│  │     + WS-Event)                                            │  │
+│  │ Plan runner (spaPlan.execute)                               │  │
+│  │   • dispatches a CDP operation plan (spaAction)             │  │
+│  │   • verifies the round trip (dispatch result + wire-side    │  │
+│  │     effect + emitted event)                                 │  │
 │  └────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-Die SPA selbst wird nicht gestartet — der Test fährt die REST-/WS-
-Calls direkt. Die Tests modellieren die *Bedien-Pläne* der Tiles
-1:1 (was der User mit einem Klick auslöst), nicht das Rendering.
-Rendering-Bugs deckt `svelte-check` + ein optionaler Visual-Test
-ab (außer Scope dieser Doku).
+The SPA itself is not started — the test drives the CDP operations
+directly. The tests model the tiles' *operation plans* 1:1 (what a
+user click triggers), not rendering. Rendering bugs are covered by
+`svelte-check` and the Playwright visual-regression suite
+(`assets/ui/tests/e2e/`), which are out of scope for this document.
 
-## Bedien-Plan pro CDP-Kind
+## Operation plan per CDP kind
 
-Jeder CDP-Kind bekommt einen Tabellen-Eintrag mit:
+Each CDP kind gets a plan built from a `spaPlan` (setup + a list of
+`spaAction` steps + expectations):
 
-| Feld | Bedeutung |
+| Field | Meaning |
 |---|---|
-| `setup` | Geräte-Modell + welcher Kanal — `("HmIP-BWTH", 1)` |
-| `pre-state` | Welche Wire-Werte gelten als Ausgangslage; ggf. via `godevccu.setValue` direkt gesetzt |
-| `actions` | Liste von `(operation, params)` — was der Tile bei Klick X sendet |
-| `expect_wire` | Welche Wire-Calls (`setValue` / `putParamset`) godevccu hätte sehen müssen |
-| `expect_state` | Welche Custom-DP-StatePayload-Felder nach dem Call den erwarteten Wert tragen |
-| `expect_ws` | Welche WS-Events (`data_point` / `custom_data_point`) durchgelaufen sein müssen |
+| setup | Device model + which channel |
+| pre-state | Wire values that hold as the starting state; set directly via godevccu where needed |
+| actions | List of (operation, params) — what the tile sends on click X |
+| expected wire effect | Which wire calls (`setValue` / `putParamset`) godevccu must have observed |
+| expected state | Which custom-DP state-payload fields must carry the expected value after the call |
+| expected event | Which emitted events (`data_point` / `custom_data_point`) must have fired |
 
-Beispiel — Climate HmIP-BWTH:
+## Coverage (Slice 1, ADR 0016 follow-up)
 
-```yaml
-- name: climate_hmip_set_mode_auto
-  setup: { model: HmIP-BWTH, channel: 1 }
-  actions:
-    - { op: set_mode, params: { mode: auto } }
-  expect_wire:
-    - { method: setValue, addr: "<addr>:1", param: CONTROL_MODE, value: 0 }
-  expect_state:
-    hvac_mode: auto
-  expect_ws:
-    - { type: custom_data_point, name: SET_POINT_TEMPERATURE, kind: climate_hmip }
-```
+Slice 1 covers the kind families that render in the overview view
+today, one Go test function per device model — see
+`tests/integration/spa_e2e_{climate,cover,light,lock,siren,switch}_test.go`:
 
-Pläne werden YAML-spezifiziert (oder Go-strukturiert) — bewusst
-deklarativ, damit jeder Tile-Refactor einen mechanischen Test-Update
-auslöst.
-
-## Erste Slice (ADR 0016 Follow-up)
-
-Slice 1 deckt die Kind-Familien ab, die in der Übersicht-View
-heute rendern:
-
-| Tile | godevccu-Modell | erste actions |
+| Tile | godevccu model | Test function |
 |---|---|---|
-| LightTile / `light_fixed_color` | HmIP-BSL | turn_on, set_color {color: RED}, turn_off |
-| LightTile / `light_rgbw` | HmIP-RGBW | turn_on, set_color {hue: 120, saturation: 1}, set_color_temperature {kelvin: 4000}, turn_off |
-| ClimateTile / `climate_hmip` | HmIP-BWTH | set_temperature {temperature: 21.5}, set_mode {mode: auto}, set_mode {mode: heat}, enable_boost / disable_boost, set_away_for_duration |
-| ClimateTile / `climate_rf` | HM-CC-RT-DN | set_temperature, set_mode (Auto / Boost / Manuell) |
-| CoverTile / `cover_blind` | HmIP-FBL | open, set_position {position: 0.5}, set_tilt {tilt: 0.3}, close, stop |
-| CoverTile / `cover_garage` | HmIP-MOD-HO | open, close, stop, ventilate |
-| LockTile | HmIP-DLD | lock, unlock, open |
-| SwitchTile | HmIP-PS / HmIP-BSM | turn_on, turn_off, turn_on_for {seconds: 5} |
-| SirenTile | HmIP-ASIR | turn_on, turn_off |
+| ClimateTile / `climate_hmip` | HmIP-BWTH | `TestSPAE2E_Climate_HmIP_BWTH` |
+| ClimateTile / `climate_rf` | HM-CC-RT-DN | `TestSPAE2E_Climate_RF_HMCCRTDN` |
+| CoverTile / `cover_blind` | HmIP-FBL | `TestSPAE2E_Cover_Blind_HmIPFBL` |
+| CoverTile / `cover_rf_blind` | HM-LC-Bl1-FM | `TestSPAE2E_Cover_RfBlind_HMLCBl1FM` |
+| CoverTile / `cover_garage` | HmIP-MOD-HO | `TestSPAE2E_Cover_Garage_HmIPMODHO` |
+| LightTile / dimmer | HmIP-BDT | `TestSPAE2E_Light_Dimmer_HmIPBDT` |
+| LightTile / `light_fixed_color` | HmIP-BSL | `TestSPAE2E_Light_FixedColor_HmIPBSL` |
+| LightTile / `light_rgbw` | HmIP-RGBW | `TestSPAE2E_Light_RGBW_HmIPRGBW` |
+| LightTile / RF dimmer | HM-LC-Dim1T-FM | `TestSPAE2E_Light_RfDimmer_HMLCDim1TFM` |
+| LockTile | HmIP-DLD | `TestSPAE2E_Lock_HmIPDLD` |
+| SwitchTile | HmIP-BSM | `TestSPAE2E_Switch_HmIPBSM` |
+| SirenTile | HmIP-ASIR | `TestSPAE2E_Siren_HmIPASIR` |
 
-Slice 1 reicht aus, wenn jeder kanonische Tile-Klick einmal grün
-durchgelaufen ist. Erweiterungen (Boundary-Werte, Fehlerpfade,
-unerlaubte Operationen) folgen in Slice 2.
+Extensions (boundary values, error paths, disallowed operations) are
+open follow-up work, not yet implemented.
 
-## Test-Layout
+## Test layout (as implemented)
 
 ```
-tests/spa_e2e/
-├── README.md
-├── harness.go            (build-tag e2e) — Daemon + godevccu start, Auth-Setup, http.Client-Factory
-├── plans.go              Bedien-Pläne als Go-strukturen (`type Plan struct { ... }`)
-├── runner.go             ExecutePlan(t, h, plan) — orchestriert action / expect-blöcke
-├── plan_climate_test.go  per Kind ein Datei → Liste an Plänen
-├── plan_cover_test.go
-├── plan_light_test.go
-├── …
-└── testdata/
-    └── config.yaml       Daemon-Config-Vorlage (godevccu-Backend, ephemere Ports)
+tests/integration/
+├── spa_e2e_harness_test.go   (build tag integration) — in-process Central/Pipeline/Dispatcher stack, godevccu wiring
+├── spa_e2e_plans_test.go     spaPlan / spaAction types + the plan runner (execute)
+├── spa_e2e_climate_test.go   per-kind test functions
+├── spa_e2e_cover_test.go
+├── spa_e2e_light_test.go
+├── spa_e2e_lock_test.go
+├── spa_e2e_siren_test.go
+└── spa_e2e_switch_test.go
 ```
 
-Build-Tag `e2e` hält die Tests aus dem Normal-Build heraus
-(Daemon-Boot dauert >1 s). CI fährt `make e2e-spa` als separate
-Stage (Branch-Protection-Gate, kein Pre-Merge-Block).
+Build tag `integration` keeps the tests out of the normal `make test`
+run. Run the whole suite (including these) via:
 
-## Wire-Side-Verification
+```sh
+make integration
+```
 
-Zwei Optionen die godevccu-Wire-Calls zu beobachten:
+or scope to just the SPA-E2E files:
 
-1. **godevccu Inspector**: aktuell hat godevccu keinen
-   öffentlichen "RecordedCalls()"-Hook. Erste Slice baut den Hook
-   in godevccu auf (~30 LOC: ein Slice `[]Call` an `Server.rpc`
-   anhängen, mit `Server.Calls() []Call` exportieren).
+```sh
+go test -tags=integration -run TestSPAE2E ./tests/integration/...
+```
 
-2. **Sniff-Adapter**: alternativ ein dünner XML-RPC-Proxy
-   zwischen Daemon und godevccu, der jede SetValue / PutParamset
-   protokolliert. Mehr Aufwand, brauchen wir nicht — Option 1
-   reicht.
+There is no separate `tests/spa_e2e/` directory and no `make e2e-spa`
+target — the original proposal below (test layout under
+`tests/spa_e2e/` with a dedicated `e2e` build tag and CI stage) was
+implemented directly inside `tests/integration/` under the existing
+`integration` build tag instead.
 
-Option 1 ist die Vorwahl.
+## Wire-side verification
 
-## Migration vs. Erweiterung
+The harness reads wire-side state back from godevccu directly via
+`getValue` / `getParamset` calls issued by the test after each plan
+step, rather than through a separate call-recording hook or sniffing
+proxy on the XML-RPC transport.
 
-Die existierenden Integration-Tests unter `tests/integration/`
-(godevccu) testen das **Daemon-Modell**: dass der Daemon aus
-godevccu-Events das richtige Custom-DP-Modell baut. Diese Tests
-bleiben. Die neuen SPA-E2E-Tests sitzen *über* dem Daemon, gehen
-durch REST, und decken speziell die SPA-Bedien-Pfade ab.
+## Migration vs. extension
 
-Die Trennung ist sauber: Daemon-Modell-Tests sehen kein REST,
-SPA-Tests sehen kein Custom-DP-internal.
+The existing integration tests under `tests/integration/` (godevccu)
+test the **daemon model**: that the daemon builds the correct custom-DP
+model from godevccu events. Those tests remain. The SPA-E2E tests sit
+*above* the daemon's dispatch surface and specifically cover the SPA
+operation paths.
 
-## Erste konkrete Anwendung
+The separation is clean: daemon-model tests never see the CDP
+dispatch surface; SPA-E2E tests never reach into custom-DP internals
+directly — both drive the same in-process stack from different angles.
 
-Der heutige User-Bericht — "Auto schalten geht nicht, gibt 502
-zurück" — ist der archetypische Anwendungsfall: ein Tile-Click,
-der lokal beim Entwickler einen Fehler produziert, den er per
-Daemon-Log nur schwer eingrenzen kann. Im E2E-Test gegen
-godevccu zeigt das Setup sofort:
+## Acceptance criterion
 
-- Wenn der Test gegen godevccu erfolgreich ist → der Bug liegt
-  in der echten CCU-Antwort (CCU-Firmware-Stand / Gerät verträgt
-  den Wire-Shape nicht).
-- Wenn der Test gegen godevccu auch failt → der Bug ist im
-  Daemon-Code; godevccu hat die Last-of-Truth, der Daemon
-  schreibt etwas, was kein CCU akzeptieren würde.
+Slice 1 is successful when:
 
-Die Implementation startet daher mit `climate_hmip.set_mode auto`
-als ersten Plan-Eintrag — die regression, die der User gerade
-gemeldet hat.
+- `go test -tags=integration -run TestSPAE2E ./tests/integration/...`
+  passes.
+- Every kind from the overview view has at least one plan.
+- A deliberately introduced regression bug (e.g. `set_mode` with the
+  wrong `CONTROL_MODE` value) is reliably caught by the test setup.
 
-## Offene Fragen (für die Implementierung)
-
-- **Auth-Setup im Test**: einfachster Weg ist ein Default-Admin-
-  Token, der per Migration ins SQLite gestempelt wird. Alternative:
-  Setup-Wizard durch eine REST-Sequence durchlaufen.
-- **Parallel-Execution**: jeder Plan braucht einen eigenen
-  Daemon-+-godevccu-Stack oder eine `t.Parallel`-Sperre. Erstes
-  reicht (godevccu-Start ist günstig).
-- **WS-Event-Capture**: ein simpler `gorilla/websocket`-Client
-  reicht; envelopes parse + assert.
-- **Test-Daemon-Konfig-Vorlage**: braucht eine eigene
-  config-Subset-Datei, weil die produktive `config.yaml` viel
-  enthält, das im Test nicht greift (MQTT, Matter, OIDC). Wir
-  ziehen den Subset-Schnitt entlang der `Deps`-Struktur in
-  `cmd/openccu-loom/daemon.go`.
-
-## Akzeptanzkriterium
-
-Slice 1 ist erfolgreich wenn:
-
-- `make e2e-spa` läuft grün durch
-- jeder Kind aus der Übersicht-View hat mindestens einen Plan
-- ein bewusst eingebauter Regression-Bug (z.B. set_mode mit
-  falschem CONTROL_MODE-Wert) wird vom Test-Setup zuverlässig
-  gefangen
+Both conditions hold for Slice 1 as implemented; see the coverage
+table above for source-of-truth kind ↔ test mapping.

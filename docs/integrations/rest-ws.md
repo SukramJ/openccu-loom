@@ -28,13 +28,25 @@ When a field, status code, or schema differs between this page and those files, 
 
 ## Authentication
 
-Every endpoint requires authentication except the three public ones:
+Most endpoints require authentication. A handful of routes are
+mounted outside the `AuthRequire` group by design — they either serve
+before any credentials exist (first-run) or must work for a logged-out
+client:
 
-- `GET /api/v1/info`
-- `GET /api/v1/health`
-- `POST /api/v1/auth/login`
+- `GET /api/v1/info`, `GET /api/v1/health` — public status probes.
+- `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`,
+  `GET /api/v1/auth/me` — the SPA's login lifecycle (`/auth/me` is
+  the startup probe; it returns 401 with no active session).
+- `GET /api/v1/setup/status`, `POST /api/v1/setup` — first-run
+  onboarding, unauthenticated because no admin exists yet.
+- `GET /api/v1/devices/{addr}/icon` — device-model icon proxy, public
+  like `/health` since it serves only non-sensitive artwork and must
+  resolve from a bare `<img>` tag.
+- `GET /api/v1/auth/oidc/start`, `GET /api/v1/auth/oidc/callback` —
+  the OIDC redirect dance, only mounted when OIDC is configured.
 
-Supported credentials are Basic auth, session cookies (after `POST /auth/login`), API tokens, and OIDC. Two role gates apply on top of authentication: an **operator** gate (`op`) for state-changing device calls, and an **admin** gate for system, user, and config administration. See [Authentication](../admin/auth.md) and the [Security guide](../SECURITY.md) for the full model.
+See `internal/north/rest/router.go` for the authoritative route
+mounting. Everything else sits behind `AuthRequire`. Supported credentials are Basic auth, session cookies (after `POST /auth/login`), API tokens, and OIDC. Two role gates apply on top of authentication: an **operator** gate (`op`) for state-changing device calls, and an **admin** gate for system, user, and config administration. See [Authentication](../admin/auth.md) and the [Security guide](../SECURITY.md) for the full model.
 
 ## Endpoint overview
 
@@ -75,7 +87,7 @@ Connect a WebSocket to:
 ws://<host>:8119/api/v1/events
 ```
 
-This is one multiplexed channel. The same connection carries command replies and topic broadcasts. The schema in [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) defines 98 command and broadcast entries.
+This is one multiplexed channel. The same connection carries command replies and topic broadcasts. The schema in [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) defines 118 entries — 95 invokable commands + 23 server-pushed broadcasts (`jq '.commands | length'` / `jq '[.commands[] | select(.kind=="broadcast")] | length'`).
 
 ### Envelope
 

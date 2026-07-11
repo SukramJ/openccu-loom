@@ -99,9 +99,34 @@ OpenCCU-Loom maps Homematic devices to these Matter device types. Anything it ca
 | Smoke / CO Alarm | Smoke detector |
 | Air Quality Sensor | CO₂ / particulate sensor |
 
+### Power and energy measurement
+
+Measuring devices — a switch-measuring plug such as the HmIP-PSM, for
+example — also surface their electrical readings to Matter. Instantaneous
+power, voltage, and current appear via the **Electrical Power Measurement**
+cluster and cumulative consumption via the **Electrical Energy Measurement**
+cluster, both attached to the device's parent endpoint. Ecosystem apps that
+understand these clusters (for example the energy screens in newer Apple Home
+and Google Home builds) show the live and accumulated values there.
+
+### Buttons / momentary switches
+
+Momentary controls — wall buttons, remotes — map to the **Generic Switch**
+device type, with **one endpoint per physical button**. Each button emits
+Matter switch events for a single press, a long press, and multi-press, so
+your ecosystem can distinguish short-tap, hold, and double-tap automations.
+
+!!! note "Button accessories re-learn once after updating"
+    The move to one endpoint per physical button renumbered how buttons are
+    exposed. After updating, a paired button device may appear with new
+    endpoints; re-create any automations that targeted the old ones. This is
+    a one-time step.
+
 ## Choosing which devices are exposed
 
 You do not have to expose everything. The **Matter** view lets you pick which devices the bridge advertises, so your Home app stays uncluttered. Changes take effect on the bridge without re-pairing it.
+
+By default OpenCCU-Loom exposes one Matter endpoint per device. The expert flag `north.matter.expose_secondary_channels` opts a device's *secondary* actor channels out into their own extra endpoints — useful for multi-channel actuators (for example a dual switch) where you want each channel as a separate Matter accessory. Leave it off unless you specifically need the fan-out; see [ADR 0049](../adr/0049-matter-one-endpoint-per-device.md).
 
 ## Controller ecosystem caveats
 

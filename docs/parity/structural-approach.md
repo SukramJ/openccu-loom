@@ -1,5 +1,19 @@
 # Structural Parity-Approach — Replacement for Audit-Sweep-Loop
 
+> **Addendum (2026-07-11): HISTORICAL — plan shipped, all four pillars are
+> now live and CI-enforced.** The 2026-05-29 numbers below (§10:
+> "Initial-Inventory 406 → 3 echte Dead-Code-Items übrig") are stale — the
+> current baseline is `docs/parity/dead-code-genuine.json` (15 genuine items,
+> with 8 MASKED annotations tracked in `docs/parity/loom-reachable-audit.md`).
+> `parity_request.md` (cited in §10) no longer exists in the repo.
+> `tests/e2e/` (Säule 3, cited as "heute leer") now holds ~24 Playwright
+> specs. Enforcement of all four pillars is live via
+> `.github/workflows/reachability.yml`,
+> `docs/parity/loom-reachable-audit.md`, and
+> `docs/parity/dead-code-production-only.json` — read those for the current
+> state; this document is the historical design rationale, not a live status
+> page.
+
 **Stand:** 2026-05-29
 **Status:** Plan
 **Kontext:** Nach v13–v16-Re-Audit-Schleifen reproduziert sich ein systemisches Pattern: ~20 % der "geschlossenen" Closures sind Dead-Code (Methode/Feld/Builder existiert, kein Production-Caller). Die Schleife konvergiert, aber wir produzieren das Pattern aktiv mit, weil Sub-Agents Surface ohne Caller-Verifikation patchen. Dieses Dokument ersetzt die Schleife durch ein strukturelles Sicherheitsnetz.

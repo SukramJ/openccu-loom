@@ -1,5 +1,15 @@
 # ha-client-wire-gaps.md — Open parity gaps blocking the Home Assistant drop-in
 
+> **RESOLVED on the daemon side (2026-06-21).** All seven gaps below were
+> triaged; the four genuine daemon gaps (G2, G4, G5, G6) shipped under
+> APIVersion 1.18.0 and the other three (G1, G3, G7) were reclassified as
+> client-side follow-ups or withdrawn. See **"Verification & resolution"**
+> below for the closing detail — the summary table and per-gap sections that
+> follow it describe the *original* (now-closed) daemon-side framing and are
+> kept for provenance. Nothing in this file currently describes open daemon
+> work; any remaining action items live in the `openccu-loom-client` /
+> `openccu-loom-types` repos, not here.
+
 **As of:** 2026-06-21
 **Purpose:** Catalogue of the **genuine, still-open** parity gaps that prevent the
 `py-openccu-loom-client` (and through it the Home Assistant integration

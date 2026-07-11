@@ -1,5 +1,15 @@
 # Implementation plan — North-bound bridges onto `bridge.Registry` (architecturally complete)
 
+> **Status: EXECUTED.** Every artifact this plan describes has shipped and
+> is live in `main`: `internal/north/bridge/{registry.go,service.go}`,
+> `cmd/openccu-loom/{mqtt_service.go,matter_service.go,
+> bridge_registration_guard_test.go}`, and `daemon.go` wiring
+> `northBridges.RegisterPhase`/`Register` at every north-bound bring-up site.
+> Nothing below is unshipped work — the plan carries no remaining actionable
+> content. The durable design record is
+> [ADR 0047](../adr/0047-northbound-bridge-registry.md); read that for the
+> decision, this file only for historical execution detail.
+
 **Status**: ✅ **DONE** (2026-07-01). All north-bound surfaces are on the
 registry with a phased start + reverse-order teardown, and the ADR §7
 registration-completeness + ordering guard is in place. Shipped across:

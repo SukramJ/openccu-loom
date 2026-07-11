@@ -104,9 +104,10 @@ curl -s -H "Authorization: Bearer $TOKEN" http://host:8119/info \
 
 ## 2. The tool surface
 
-Eighteen tools, in two tiers. **Read tools** are always registered (each
-gated on its backing subsystem being wired). **Write tools** are
-registered only when `allow_writes: true`.
+Nineteen tools, in two tiers: 16 read tools + 3 write tools. **Read
+tools** are always registered (each gated on its backing subsystem
+being wired). **Write tools** are registered only when
+`allow_writes: true`.
 
 Tool names follow one taxonomy across the whole surface: `list_<plural>`
 enumerates like entities, `get_<singular>` fetches one record or an
@@ -136,6 +137,7 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_alarm_messages` | `central_name?` | Active alarm messages (the alarm set, distinct from service messages). |
 | `list_inbox` | `central_name?` | Devices in the inbox — newly detected, not yet accepted into the configuration. |
 | `list_audit` | `limit?` (default 50, max 1000) | Recent config change-log, newest first (who changed what, when). |
+| `list_incidents` | `central_name?`, `limit?` (default 50, max 1000) | Recent reliability incident journal (circuit-breaker trips, ping/pong mismatches, retry exhaustion), newest first. Registered only when the daemon's `Incidents` dependency is wired. |
 | `get_health` | — | Overall daemon status + per-component status (CCU connectivity, subsystems). |
 | `get_system_info` | `central_name?` | Daemon version, plus per-central program/sysvar counts and CCU firmware-update state. |
 

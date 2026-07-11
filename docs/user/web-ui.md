@@ -36,8 +36,13 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 
 | View | What you do there |
 |------|-------------------|
+| **Overview** | Landing dashboard: at-a-glance daemon and CCU status. |
+| **Favorites** | Quick access to the devices you pin as favorites. |
 | **Devices** | Browse all devices across your CCUs, drill into channels and parameters. |
 | **Device detail** | Inspect one device, read and change its data points, and configure it. |
+| **Fleet** | Fleet-wide view across every configured CCU. |
+| **Energy** | Monitor power and energy readings from measuring devices. |
+| **Signal quality** | Review per-device radio signal strength (RSSI). |
 | **Un-ignore** | Reveal hidden / expert parameters so they appear and publish north-bound. |
 | **Matter** | Enable exposure of devices to Apple Home / Google Home / Alexa and pair. |
 | **Diagnostics** | Check health and troubleshooting information. |
@@ -46,7 +51,8 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **Inbox / Messages** | See pending notices from your CCUs. |
 | **Programs / System variables** | Browse CCU programs and system variables. |
 | **Audit log** | Review what changes were made and by whom. |
-| **Settings** | Adjust daemon and UI settings. |
+| **Log viewer** | Follow the daemon's live log stream (see [Installation & First Steps](../user-guide.md#log-viewer-logs)). |
+| **Settings** | Adjust daemon and UI settings, including the interface theme (light / dark / system — the same preference the sidebar toggle cycles). |
 
 ![The OpenCCU-Loom web UI: the navigation sidebar on the left and the Devices view listing discovered devices grouped by interface.](img/web-ui-device-list.png)
 
@@ -94,6 +100,17 @@ Some parameters are hidden by default to keep views clean — see [parameter vis
 3. Mark it to un-ignore.
 
 Once un-ignored, the parameter shows up in the device's data-point list and is published to MQTT, REST, and the other north-bound bridges like any other data point.
+
+## Charts and measurement history
+
+The device detail view has a **History** tab that charts a data point's
+recorded values over time — handy for seeing how a temperature,
+humidity, or power reading moved across a day or week.
+
+Measurement history is **opt-in**: nothing is recorded until you enable
+it (`persistence.history` in the configuration). Once on, the daemon
+stores samples in a separate `history.db` and the History tab plots
+them; before that the tab has nothing to show.
 
 ## Health and diagnostics
 

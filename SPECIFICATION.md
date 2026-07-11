@@ -4,8 +4,8 @@
 
 # OpenCCU-Loom — Specification
 
-**Status**: Living reference — last refresh 2026-06-26.
-**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom (shipped through v0.14.5; 0.15.0 in development, REST APIVersion 2.1.0).
+**Status**: Living reference — last refresh 2026-07-11.
+**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom (shipped through v0.34.0, REST APIVersion 2.16.0).
 
 ## What this document is — and what it is not
 
@@ -30,7 +30,7 @@ For implementation truth, consult the authoritative sources:
 | Build, packaging, release | `Makefile`, `.goreleaser.yaml`, `Dockerfile`, `CONTRIBUTING.md` |
 | Test strategy | `CLAUDE.md`, `docs/testplan.md` |
 | Release history | `CHANGELOG.md` |
-| Recent architecture audit + risk follow-ups | `docs/audit/architecture-review-2026-05-05.md` |
+| Recent architecture audit + risk follow-ups | `docs/audit/architecture-reassessment-2026-06-16.md` |
 | Cross-stack parity status against aiohomematic | `docs/parity/by_design.md` + the cross-stack model-snapshot pipeline (`script/model_snapshot_diff.py`) |
 
 If a topic is not in the table above and not in this document, the
@@ -182,7 +182,7 @@ for every subsequent release.
   programs, read/write sysvars, stream events.
 - Config UI (Svelte SPA) displays devices, channels, data points,
   programs, sysvars; supports setting values; shows connection
-  health. Default locale `de`, `en` switchable.
+  health. Default locale `en`, `de` switchable.
 - Setup Wizard (first run): admin user, CCU connection(s), UI
   language + theme.
 - Reconnects automatically after CCU restart, XML-RPC socket drop,
@@ -275,7 +275,7 @@ cross-domain communication inside the core.
 │   │  (driving ports)                  │        │  ADAPTER    │  │
 │   │  • MQTT Bridge                    │        │  (driven    │  │
 │   │  • REST + WebSocket               │        │   port)     │  │
-│   │  • UI (Svelte SPA, HTMX bootstrap)│        │             │  │
+│   │  • UI (Svelte SPA +/health,/about)│        │             │  │
 │   └───────────────┬───────────────────┘        └──────┬──────┘  │
 │                   │                                    │        │
 │                   │           DOMAIN CORE              │        │
@@ -479,13 +479,21 @@ contract tests in `tests/contract/` codify each one.
 
 ## 6. Matter Bridge
 
-**Status (2026-05-06)**: native-Go Matter is **end-to-end functional
-through full chip-tool commissioning** — all 19 commissioning stages
-clear with `chip-tool --bypass-attestation-verifier true`, including
-a `Secure Pairing Success` after AddNOC. Vendor-supplied DAC/PAI/CD
-via the config file flip on production validation. Implementation
-form, prioritised cluster subset, DP→cluster mapping, and effort
-estimates live in
+**Status**: native-Go Matter is **end-to-end functional through full
+chip-tool commissioning** — the commissioning stages clear with
+`chip-tool --bypass-attestation-verifier true`, including a `Secure
+Pairing Success` after AddNOC. Vendor-supplied DAC/PAI/CD via the
+config file flip on production validation. Since 0.31.0 the bridge
+emits **one Matter endpoint per physical device**
+(**[ADR 0049](docs/adr/0049-matter-one-endpoint-per-device.md)**); the
+0.31.0–0.33.0 line hardened Matter interop (endpoint-ID persistence,
+GenericSwitch/button state machine, WindowCovering EndProductType +
+target, Thermostat SystemMode/RunningMode conformance) and refreshed
+the schema to matter.js HEAD / Matter 1.5.1. The binding parity contract
+is **[docs/matter-parity-contract.md](docs/matter-parity-contract.md)**;
+it, not this frozen enumeration, is the current source of truth for the
+shipped cluster + device-type set. Implementation form, prioritised
+cluster subset, DP→cluster mapping, and effort estimates live in
 **[ADR 0012](docs/adr/0012-matter-pure-go-implementation.md)**.
 Bring-up bug lessons (7 structural bugs from the live chip-tool
 smoke runs, waves 7–12) are recorded in
@@ -521,10 +529,14 @@ the REST API); the daemon wires the bridge behind
   (ColorControl, DoorLock).
 - **Custom-DP projections**: switch / light (incl. ColorTemp /
   Color / RGBW) / cover (Cover, Blind, Garage) / climate / lock /
-  siren (incl. SmokeSiren) all implement
+  siren (incl. SmokeSiren) / valve (Irrigation, bridged as OnOff) /
+  generic-switch (button, per-button endpoint with a press-cycle
+  state machine) / text-display all implement
   `interfaces.MatterEndpointSource` + `MatterClusterServer`.
   `switchdev.Switch` accepts optional Power/Energy sources via
-  `AttachPowerSource` / `AttachEnergySource`.
+  `AttachPowerSource` / `AttachEnergySource`. The bridge composes one
+  Matter endpoint per physical device (ADR 0049). This list is a
+  snapshot; the parity contract is authoritative.
 - **mDNS**: operational (`_matter._tcp`) + commissionable
   (`_matterc._udp`) records via the mdns advertiser; the bridge
   publishes the operational record at Start.
@@ -626,7 +638,7 @@ an ADR.
 
 | # | Question | Resolution |
 |---|---|---|
-| Q1 | Default UI locale | `de` default, `en` via `Accept-Language` |
+| Q1 | Default UI locale | `en` default (`de` fully translated), other locales via `Accept-Language` / `locale` config |
 | Q2 | CSS / UI framework | Svelte 5 SPA primary (Tailwind 4 via Vite); the server-rendered `/health` + `/about` diagnostic pages use a tiny hand-rolled CSS only |
 | Q3 | MQTT QoS defaults | Sensible defaults (0 state, 1 discovery / commands), per-interface and per-category overridable in YAML |
 | Q4 | Matter implementation form | Pure-Go, hand-rolled (ADR 0012). On-network commissioning only in 0.1.0. No CGo, no Node.js / Rust sidecar. |

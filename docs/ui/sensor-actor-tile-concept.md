@@ -140,7 +140,7 @@ Pick the primary state DP in this order:
 3. **First read+event DP overall** — last-resort safety net.
 
 The table extends with new channel types when the upstream registry
-adds them; small enough to maintain in `quickcontrol/primary.ts`.
+adds them; small enough to maintain in `lib/sensor-actor/primary.ts`.
 
 ### Tile composition
 

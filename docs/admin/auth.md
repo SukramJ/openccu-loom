@@ -1,8 +1,9 @@
 # Authentication & Users
 
-Enable and operate the four authentication schemes OpenCCU-Loom ships
-with — Basic, API tokens, browser sessions, and OIDC — plus how roles,
-the first-admin bootstrap, and CSRF behave.
+Enable and operate the authentication schemes OpenCCU-Loom ships
+with — Basic, API tokens, browser sessions, OIDC, CCU-delegated login,
+and HA Ingress passthrough — plus how roles, the first-admin bootstrap,
+and CSRF behave.
 
 !!! info "Who this page is for"
     Administrators wiring up access control for the daemon's REST API and
@@ -80,9 +81,13 @@ SPA's core login mechanism and has no config gate.
 - The `Secure` flag is set when the daemon is told it sits behind TLS —
   pair this with `north.rest.csrf_secure: true` behind an HTTPS proxy.
 
-!!! note "Sessions are in-memory"
-    The default session store does not survive a daemon restart; users
-    re-authenticate after a restart.
+!!! note "Sessions are persisted to SQLite"
+    Sessions are saved to the `auth_sessions` table (migration `021`) and
+    are rehydrated on boot, so a daemon restart does **not** log users
+    out — sessions remain valid until their TTL expires. The in-memory
+    store is only a fallback that engages when the database is
+    unavailable at startup; in that degraded mode sessions do not
+    survive a restart. See [ADR 0041](../adr/0041-persist-auth-sessions.md).
 
 ## API tokens (Bearer)
 
@@ -195,6 +200,97 @@ Step by step:
     [OIDC signature verification](../SECURITY.md#oidc-signature-verification)
     for details.
 
+## CCU-delegated login
+
+Instead of maintaining a separate Loom account, operators can sign in
+with their existing CCU username/password; the daemon validates the
+credentials against the CCU's own user database and derives the Loom
+role from the CCU's `UserLevel`. See
+[ADR 0043](../adr/0043-ccu-authentication-provider.md) for the full
+design.
+
+```yaml
+north:
+  rest:
+    auth:
+      ccu:
+        enabled: ~                # tri-state; unset = build-stamp default
+        primary: ~                # tri-state; unset = true (CCU tried first)
+        central: ""                # central to authenticate against (empty = first configured)
+        min_user_level: 1          # reject CCU UserLevel below this (0 = UPL_NONE always denied)
+        role_mapping:               # override the default UserLevel -> role map
+          "8": admin
+          "2": operator
+          "1": viewer
+```
+
+Mechanics:
+
+1. The daemon opens a short-lived, dedicated CCU session with the
+   submitted credentials (`Session.login`) and logs it out immediately
+   — a validation login never reuses the daemon's own service session.
+2. On success it reads the user's `UserLevel()` via a privileged ReGa
+   script and maps it to a Loom role. Default mapping:
+
+   | CCU `UserLevel()` | Loom role |
+   |---|---|
+   | `8` (`UPL_ADMIN`) | `admin` |
+   | `2` (`UPL_USER`) | `operator` |
+   | `1` (`UPL_GUEST`) | `viewer` |
+   | `0` (`UPL_NONE`) or unknown | denied |
+
+3. A successful check issues a normal Loom session (the same
+   persisted-session mechanism as any other scheme) — the CCU is not
+   consulted again for the lifetime of that session.
+
+**Break-glass fallback.** The auth chain always keeps a local
+break-glass path: when `primary` is true (the default once CCU login
+is enabled), the CCU store is tried first but any failure — wrong
+credentials *or* the CCU being unreachable — is mapped to
+"unauthenticated", so the chain falls through to local SQLite users
+and, ultimately, the in-memory store. A CCU outage therefore blocks
+only CCU-backed logins, never local admins. Set `primary: false` to
+flip the order (local users tried first, CCU last).
+
+**Enabled by default in the CCU add-on.** `enabled` is tri-state: left
+unset, it resolves to the build's add-on stamp — **on** in the CCU
+add-on, **off** in a plain binary or Docker build. An explicit
+`true`/`false` always overrides the build default.
+
+## HA Ingress passthrough
+
+Supervised Home Assistant add-on deployments can let the HA Supervisor
+vouch for a request instead of requiring a second local credential.
+See [ADR 0044](../adr/0044-single-port-onboarding-and-ha-ingress-auth.md)
+for the full trust-chain rationale.
+
+```yaml
+north:
+  rest:
+    auth:
+      ha_ingress:
+        enabled: ~                        # tri-state; unset = supervised build-stamp default
+        trusted_proxy_cidr: "172.30.32.0/23"  # HA Supervisor subnet
+        role: admin                        # role granted to a trusted Ingress request
+```
+
+A request qualifies for passthrough only when **all** of the following
+hold: the daemon is a supervised build (`OPENCCU_LOOM_SUPERVISOR` /
+the add-on build stamp), the TCP peer address (never
+`X-Forwarded-For`, which is trivially spoofable) falls inside
+`trusted_proxy_cidr`, and the HA Supervisor's `X-Ingress-Path` header
+is present. A genuine Bearer token, session cookie, or Basic
+credential on the same request always wins — passthrough is
+evaluated only as a fallback when no other credential is supplied.
+
+This is an admin-level bypass gated on the add-on's `config.yaml`
+carrying `panel_admin: true` (only HA admins can open the Ingress
+panel). `enabled` defaults to the supervised build stamp — **on** in
+the HA add-on, **off** everywhere else — and an explicit `true`/`false`
+overrides it. Passthrough sessions are recorded in the audit log with
+`subject: "ha-ingress"` and `scheme: "ingress"` so they are
+distinguishable from local logins.
+
 ## CSRF for browser vs API clients
 
 `north.rest.csrf_enabled` (default **true**) installs a double-submit
@@ -218,3 +314,6 @@ cookie carries the `Secure` flag.
 - [Security guide](../SECURITY.md) — threat model, secrets at rest, TLS.
 - Configuration reference — the full `north.rest.auth` schema lives in
   the admin configuration guide (`docs/admin/configuration.md`).
+- [ADR 0041 — persist auth sessions](../adr/0041-persist-auth-sessions.md).
+- [ADR 0043 — CCU authentication provider](../adr/0043-ccu-authentication-provider.md).
+- [ADR 0044 — single-port onboarding and HA Ingress auth](../adr/0044-single-port-onboarding-and-ha-ingress-auth.md).

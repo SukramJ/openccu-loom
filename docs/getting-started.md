@@ -36,7 +36,7 @@ existing wins): `$OPENCCU_LOOM_CONFIG`, `./config.yaml`,
 
 | Port | Purpose |
 | --- | --- |
-| `8119` | REST + WebSocket API, Config UI (Svelte SPA + HTMX bootstrap), MCP route |
+| `8119` | REST + WebSocket API, Config UI (Svelte SPA), MCP route, and a minimal no-JS `/health` + `/about` diagnostic surface |
 | `8120` | XML-RPC push callback server (HmIP-RF, BidCos, …) |
 | `8129` | BIN-RPC push callback server (CUxD) |
 

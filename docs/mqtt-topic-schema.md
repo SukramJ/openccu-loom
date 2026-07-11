@@ -37,6 +37,7 @@ degenerate case with one entry under that segment.
 |---|---|
 | Per-DP VALUES state | `<base>/<central>/<iface>/<addr>/<ch>/values/<param>` |
 | Per-DP MASTER state | `<base>/<central>/<iface>/<addr>/<ch>/master/<param>` |
+| Per-DP CALCULATED state | `<base>/<central>/<iface>/<addr>/<ch>/calculated/<param>` |
 | Custom-DP derived state | `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>` |
 | Device availability | `<base>/<central>/<iface>/<addr>/availability` |
 | Device info snapshot | `<base>/<central>/<iface>/<addr>/info` |
@@ -76,14 +77,15 @@ Go builder method: `TopicBuilder.DiscoveryConfig`.
 | System-variable state | `<base>/<central>/hub/sysvars/<name>/state` |
 | System-variable set | `<base>/<central>/hub/sysvars/<name>/set` |
 | Program trigger | `<base>/<central>/hub/programs/<id>/trigger` |
-| Interface connectivity | `<base>/<central>/connectivity/<iface>` |
+| Interface connectivity | `<base>/<central>/hub/connectivity/<iface>` |
 | System status event | `<base>/<central>/system/status` |
 
 Go builder methods: `TopicBuilder.BridgeStatus`, `TopicBuilder.BridgeHealth`,
-`TopicBuilder.HubStatus`, `TopicBuilder.HubInfo`,
-`TopicBuilder.HubSysvar`, `TopicBuilder.HubSysvarCommand`,
-`TopicBuilder.HubProgramTrigger`, `TopicBuilder.Connectivity`,
-`TopicBuilder.SystemStatus`.
+`TopicBuilder.HubStatus`, `TopicBuilder.HubInfo`, `TopicBuilder.SystemStatus`.
+The sysvar/program/connectivity topics are built by `internal/model/naming`
+free functions rather than `TopicBuilder` methods: `naming.MQTTHubSysvarState`,
+`naming.MQTTHubSysvarCommand`, `naming.MQTTHubProgramTrigger`,
+`naming.MQTTHubConnectivity`.
 
 ---
 
