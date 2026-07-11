@@ -9,6 +9,15 @@ is still open, blocked, or a recorded decision *not* to do something.
 Accepted items link to a detailed, transferable implementation plan
 under [`docs/plans/`](./plans/) where one exists.
 
+**This is the canonical forward-looking plan.** Related backlog documents
+each cover a different scope and should not be read as alternatives to this
+one: [`DOC-TODO.md`](../DOC-TODO.md) (root) tracks documentation gaps only;
+[`todo.md`](../todo.md) (root) is an archived, fully-shipped codebase-sweep
+log kept for provenance; [`docs/TODO.md`](./TODO.md) is a stale,
+point-in-time snapshot from around v0.14.6; [`docs/audit/deep-audit-backlog.md`](./audit/deep-audit-backlog.md)
+tracks findings from a specific audit pass. When in doubt about what is
+still open, trust this file plus `CHANGELOG.md`.
+
 ## Open development items
 
 ### Matter

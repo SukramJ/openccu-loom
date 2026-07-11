@@ -95,6 +95,7 @@ exclude_docs: |
   audit/
   matter/
   parity/
+  plans/
   testing/
   ui/
   contributor/goland-debugging.md
@@ -105,7 +106,9 @@ exclude_docs: |
   roadmap.md
   matter-conformance.md
   matter-ui-concept.md
+  TODO.md
   external-clients/asks.md
+  external-clients/ha-parity-plan.md
 
 markdown_extensions:
   - abbr

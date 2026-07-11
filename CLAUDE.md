@@ -51,21 +51,20 @@ the spec; when in doubt about *implementation*, read the code.
    side under `../` on the developer's
    machine. See §[aiohomematic as a Reference](#aiohomematic-as-a-reference)
    for the mapping and when to consult which.
-4. The project has shipped through **v0.22.0** (latest git tag;
-   `internal/build/version.go` reads `0.22.0`, REST `APIVersion` 2.12.0);
-   the authoritative release history is
-   `CHANGELOG.md`. Phases 0–10 are
-   complete. Approximate code size as of the 0.1.0 snapshot (kept as a
-   rough baseline, not re-counted each release):
-   ~547 k Go LOC across
-   2 099 files (817 production / 194 k LOC + 1 282 tests / 353 k LOC),
-   all 8 coordinators, all
-   three transports (XML-RPC, BIN-RPC, JSON-RPC), 25 REST handler
-   files (~80 endpoints in `assets/openapi.yaml`), 85 WebSocket
-   commands, 20 ReGa scripts, 139 generated device profiles. The
-   primary config UI is a Svelte 5 SPA under `assets/ui/` (embedded
-   via `go:embed all:spa_dist`); login, OIDC, and the first-run
-   onboarding wizard all live in the SPA (ADR 0045). A minimal
+4. The project has shipped through **v0.34.0** (latest git tag;
+   `internal/build/version.go` reads `0.34.0`; the REST `APIVersion`
+   `2.16.0` lives in `internal/north/rest/handlers/info.go` and is
+   bumped independently of the build version); the authoritative
+   release history is `CHANGELOG.md`. It is a large Go codebase
+   spanning all 8 coordinators and all three transports (XML-RPC,
+   BIN-RPC, JSON-RPC), with roughly 68 REST handler files (~148 paths /
+   ~190 operations in `assets/openapi.yaml`), ~95 WebSocket commands
+   (+23 broadcasts) in `assets/wsapi.json`, 27 ReGa scripts, and 141
+   generated device profiles. Prefer the schema files and `CHANGELOG.md`
+   over these counts when a number matters — they re-drift every
+   release. The primary config UI is a Svelte 5 SPA under `assets/ui/`
+   (embedded via `go:embed all:spa_dist`); login, OIDC, and the
+   first-run onboarding wizard all live in the SPA (ADR 0045). A minimal
    server-rendered surface (`/health`, `/about`) remains only as a
    no-JS SPA-down diagnostic anchor. The SPA has a shared design-system
    (`assets/ui/src/lib/components/ui/`) and a homogeneous operating
@@ -73,13 +72,12 @@ the spec; when in doubt about *implementation*, read the code.
    destructive actions, and shared `LoadingState`/`EmptyState`/
    `ErrorState` surfaces — see §[Architecture Quick Reference](#architecture-quick-reference)),
    locked in by a committed Playwright browser-e2e + visual-regression
-   layer (`assets/ui/tests/e2e/`). Open work focuses on depth parity
-   against aiohomematic, not the skeleton build-out — architectural
-   divergences are documented as by-design items in
-   `docs/parity/by_design.md`. Ongoing correctness is held by standing
-   build- and test-time parity guards rather than regenerated audit
-   reports; for the Matter side the binding contract is
-   [`docs/matter-parity-contract.md`](./docs/matter-parity-contract.md).
+   layer (`assets/ui/tests/e2e/`). Open work is driven by
+   OpenCCU-Loom's own product needs; aiohomematic remains a reference
+   implementation and its knowledge is preserved in `docs/parity/`.
+   Standing build- and test-time parity guards remain regression
+   detectors, not the roadmap; for the Matter side the binding contract
+   is [`docs/matter-parity-contract.md`](./docs/matter-parity-contract.md).
 
 ---
 
@@ -87,9 +85,10 @@ the spec; when in doubt about *implementation*, read the code.
 
 **OpenCCU-Loom** is a standalone Go daemon that talks to Homematic CCUs
 and bridges their devices to MQTT, a REST + WebSocket API, a web
-Config UI, and a Matter bridge. It is a Go port of
-[`aiohomematic`](https://github.com/SukramJ/aiohomematic) that adds
-the standalone-daemon surface on top; the two projects coexist —
+Config UI, and a Matter bridge. It originated as a Go port of
+[`aiohomematic`](https://github.com/SukramJ/aiohomematic) and now
+develops independently; `aiohomematic` remains a reference
+implementation for CCU-side semantics. The two projects coexist —
 `aiohomematic` powers the Home Assistant integration, OpenCCU-Loom
 serves users who want MQTT / REST / UI / Matter access without HA.
 
@@ -320,6 +319,8 @@ openccu-loom/
 │   ├── hmevent/             — domain event types
 │   ├── hmlog/               — contextual slog helpers + request filters
 │   ├── hmapi/               — REST/WS DTOs shared with external clients
+│   ├── hmreliability/       — reliability primitives (CB, retry, throttle)
+│   ├── hmui/               — shared UI-facing DTO/enum surface
 │   ├── interfaces/          — DI contracts (Protocol interfaces)
 │   └── hmproto/             — Homematic wire shapes + normalization
 ├── internal/                — daemon-internal, non-reusable
@@ -328,30 +329,45 @@ openccu-loom/
 │   ├── build/               — version metadata
 │   ├── ccudata/             — embedded openccu-data extracts
 │   │                          (translations, easymodes, profiles)
-│   ├── central/             — CentralUnit, coordinators, registries,
-│   │                          callback servers (XML-RPC + BIN-RPC)
+│   ├── central/             — CentralUnit, coordinators, registries;
+│   │                          subpackages: adapter, events, registry,
+│   │                          statemachine, cachereset, rpcserver
+│   │                          (XML-RPC + BIN-RPC callback servers)
 │   ├── client/              — InterfaceClient, backends, transports,
 │   │                          ReGa runner, reliability (CB, retry, throttle)
 │   ├── clock/               — wall-clock abstraction for test seams
-│   ├── config/              — config loading (koanf wiring)
+│   ├── config/              — config loading (YAML + curated env overlay;
+│   │                          two-tier bootstrap vs DB-tier sections)
+│   ├── configstore/         — DB-tier config section facade
 │   ├── configui/            — form schema, grouping, labels, sessions
 │   │                          (port of aiohomematic-config)
+│   ├── diagnostics/         — operator runtime diagnostic artefacts
 │   ├── health/              — unified health tracker
+│   ├── history/             — time-series measurement history
 │   ├── i18n/                — translation catalogues (de, en)
 │   ├── metrics/             — Prometheus collectors
 │   ├── model/               — domain model (devices, data points,
 │   │                          custom profiles, calculated, combined,
 │   │                          optimistic, schedule, week_profile, hub)
-│   ├── north/               — REST, WS, UI (Svelte SPA + no-JS /health,/about), MQTT adapters
+│   ├── netutil/             — network helpers (interface/IP selection)
+│   ├── north/               — northbound adapters: rest (incl. ws
+│   │                          subpackage), ui (Svelte SPA + no-JS
+│   │                          /health,/about), mqtt, matter, mcp,
+│   │                          webhook, bridge, discovery, filter
 │   ├── observability/       — instrumentation + tracing helpers
+│   ├── orderedjson/         — order-preserving JSON encoding
 │   ├── parameter/           — validation, coercion, diff
 │   ├── payload/             — north-bound payload assembly + topology
 │   ├── reqctx/              — request-scoped context (locale, user, …)
+│   ├── restapi/             — REST DI ports
+│   ├── routingkey/          — routing-key derivation
 │   ├── scheduler/           — periodic jobs
-│   └── store/               — SQLite persistence (migrations, sessions,
-│                              paramsets, devices, incidents, audit)
-│                              + in-memory caches (visibility, patches,
-│                              master/link profile, devicedetails)
+│   ├── secret/              — at-rest secret encryption (ADR 0027)
+│   ├── store/               — SQLite persistence (migrations, sessions,
+│   │                          paramsets, devices, incidents, audit)
+│   │                          + in-memory caches (visibility, patches,
+│   │                          master/link profile, devicedetails)
+│   └── syncx/               — concurrency helpers (typed sync primitives)
 ├── assets/
 │   ├── ui/                  — Svelte 5 SPA source (Tailwind 4, Vite)
 │   │   ├── src/lib/components/ui/ — shared design-system primitives
@@ -384,6 +400,10 @@ openccu-loom/
     ├── contract/            — protocol / capability invariants
     ├── golden/              — session replay
     ├── integration/         — godevccu-based (in-process)
+    ├── e2e/                 — black-box tests against the built binary
+    ├── chiptool/            — real chip-tool commissioner (//go:build chiptool)
+    ├── harness/             — shared daemon+godevccu test harness
+    ├── loadtest/            — load / soak scenarios
     └── bench/
 ```
 
@@ -409,7 +429,9 @@ gitignored — regenerated in CI, not committed).
 
 ### Everyday commands
 
-Once Phase 0 has produced the `Makefile`:
+The `Makefile` drives every everyday task (the list below is a subset —
+`make generate-matter-schema`, `make coverage`, `make chiptool-test`, the
+snapshot targets, etc. also exist):
 
 ```sh
 make build           # build ./bin/openccu-loom
@@ -797,12 +819,13 @@ Short runs on every PR; longer nightly.
 
 ### Cross-stack model-snapshot verification
 
-End-to-end parity check: OpenCCU-Loom's domain model (Devices →
-Channels → DataPoints) is compared against aiohomematic's model
-when both stacks load the same wire data. The snapshot infrastructure
-is the canonical test that the OpenCCU-Loom→aiohomematic port produces
-equivalent output. **Mandatory before any release** — the four-script
-cross-stack snapshot pipeline below is the release gate.
+End-to-end regression check: OpenCCU-Loom's domain model (Devices →
+Channels → DataPoints) is compared against aiohomematic's model as a
+reference when both stacks load the same wire data. This catches
+unintended model regressions — it runs as a scoped parity guard, not
+as a measure that output must match aiohomematic (parity is no longer
+the project's primary goal). The four-script pipeline below is the
+snapshot regression run.
 
 Four scripts, run in this order:
 
@@ -854,14 +877,20 @@ update the codegen pipeline in one shot:
 make generate-matter-schema
 ```
 
-This runs three steps:
-1. `python3 script/extract_matterjs_head.py` — re-extracts
-   `docs/parity/matter/matter-schema-snapshot.json` from
-   `../matter.js/packages/model/src/standard/elements/*.element.ts`.
-2. `go run ./script/generate_matter_schema.go` — reads the snapshot and
+This runs four steps:
+1. Extract the schema from the built matter.js checkout by running the
+   TypeScript extractor `docs/parity/matter/extract-from-matter-js.ts`
+   with `node` inside `../matter.js` (it is copied in so the
+   `@matter/model` import resolves), writing
+   `docs/parity/matter/matter-schema-snapshot.json`. (matter.js's
+   `packages/model` must be built first — `npm run build`.)
+2. Copy the snapshot to the parity embed at
+   `internal/north/matter/parity/schema.json` (kept in sync with the
+   snapshot; see `internal/north/matter/parity/parity.go`).
+3. `go run ./script/generate_matter_schema.go` — reads the snapshot and
    regenerates `internal/north/matter/schema/clusters.go` and
    `internal/north/matter/schema/devicetypes.go`.
-3. `gofumpt -w internal/north/matter/schema/` — formats the output.
+4. `gofumpt -w internal/north/matter/schema/` — formats the output.
 
 After regeneration, run `go test ./internal/north/matter/schema/...` — the
 `TestParityCodeMatchesGeneratedSchema` test will flag any cluster where the
@@ -876,15 +905,17 @@ automatically propagates the update without requiring a second manual edit.
 ### Regenerate device profiles from aiohomematic
 
 ```sh
-./script/generate_profiles.py --aiohomematic-version=2026.7.1 \
-    --out-go=internal/model/custom \
-    --out-test=tests/contract/profile_parity_generated_test.go
+make generate
+# or run the generator directly — it takes no CLI args, auto-discovers
+# the repo root, reads aiohomematic from the active Python env, and
+# emits the fixed output paths:
+python3 script/generate_profiles.py
 ```
 
 ### Add a new device type (new profile in aiohomematic → follow here)
 
-1. Bump the aiohomematic pin in the generator.
-2. Regenerate profiles.
+1. Update the installed aiohomematic version in the Python env.
+2. Regenerate profiles (`make generate`).
 3. Review the diff; any new `DeviceProfile` enum values require a
    hand-written Go wrapper type under `internal/model/custom/<cat>/`.
 4. Add or update contract tests.
@@ -894,7 +925,8 @@ automatically propagates the update without requiring a second manual edit.
 1. Update `assets/openapi.yaml` first (spec-driven).
 2. Implement the handler in `internal/north/rest/handlers/`.
 3. Route it in `internal/north/rest/router.go`.
-4. Add request/response DTOs in `internal/north/rest/dto/`.
+4. Add request/response DTOs in `pkg/hmapi` (shared external types) or
+   alongside the handler in `internal/north/rest/handlers/`.
 5. Unit tests + integration test.
 6. Regenerate OpenAPI client if we publish one.
 
@@ -1104,8 +1136,9 @@ file — left side mirrors aiohomematic, right side mirrors matter.js.
 
 ## Implementation Policy
 
-The project is at 0.22.0 (latest tag v0.22.0); release
-history is in `CHANGELOG.md`.
+The current release is in `internal/build/version.go`; the release
+history is in `CHANGELOG.md` (the single source of truth for the
+version — this line no longer pins a number).
 
 ### Completion checklist (per change)
 

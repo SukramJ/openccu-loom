@@ -322,19 +322,14 @@ fields plus a precomputed `ui_hint` envelope:
 +      Min         any  `json:"min,omitempty"`
 +      Max         any  `json:"max,omitempty"`
 +      Default     any  `json:"default,omitempty"`
-+      UIHint      *UIHint `json:"ui_hint,omitempty"`
++      UIHint      *hmui.Hint `json:"ui_hint,omitempty"`
    }
-
-+  // UIHint is the backend's classification of the DP for the
-+  // SPA's AutoTile composer. The SPA renders icon + label + format
-+  // verbatim; no JS-side inference runs.
-+  type UIHint struct {
-+      Icon           string  `json:"icon"`            // "mdi:thermometer"
-+      Semantic       string  `json:"semantic"`        // "temperature"
-+      Format         string  `json:"format"`          // "%.1f °C"
-+      StateColorRule string  `json:"state_color_rule,omitempty"` // "temp_heat"
-+  }
 ```
+
+The names above are illustrative of the wizard's intent; the shipped
+type is `hmui.Hint` (`pkg/hmui/quantity.go`), exposed on
+`DataPointSummary.UIHint` — the SPA renders icon + label + format
+verbatim, no JS-side inference runs.
 
 A new Go package `pkg/hmui/quantity.go` owns the catalogue
 (unit → hint, parameter-substring → hint, ENUM-shape → hint) and
@@ -372,7 +367,8 @@ fields).
    Per wizard Q5, `SensorActorTile.svelte` is **deleted**; its
    logic (channel-type → primary parameter, DP classification)
    migrates into `composer.ts`. The `primary.ts` + `classify.ts`
-   helpers move under `composer/` and become composer internals.
+   helpers survive as composer internals, next to `composer.ts` and
+   `AutoTile.svelte`, under `assets/ui/src/lib/sensor-actor/`.
    `CdpTilesPanel` falls through CDP → CONTROL → AutoTile (no
    third tile component). The primitives (`TogglePill`,
    `ActionButton`, `NumericActionFeature`) stay and are consumed
@@ -444,8 +440,9 @@ rules) lands as one-line additions to the Go-side catalogue.
    on a 2-cell tile; everything below threshold stays uniform.
 5. **SensorActorTile retired.** AutoTile is the single fallback
    component after CDP and CONTROL widgets. `SensorActorTile.svelte`
-   is deleted in Phase 4; `primary.ts` + `classify.ts` migrate
-   into `composer/` as internals. Primitives
+   is deleted in Phase 4; `primary.ts` + `classify.ts` survive as
+   internals under `assets/ui/src/lib/sensor-actor/`, alongside
+   `composer.ts`. Primitives
    (`TogglePill` / `ActionButton` / `NumericActionFeature`) are
    preserved and consumed directly by AutoTile.
 

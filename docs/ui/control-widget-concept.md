@@ -4,16 +4,17 @@
 
 Implemented. The Svelte primitives + widget tree live under
 `assets/ui/src/lib/control/`. The CONTROL family inventory is in
-`docs/ui/control-inventory.md`. The DeviceDetail surface routes channels
-through `ChannelControl.svelte` (single-channel host) /
-`ControlTilesPanel.svelte` (grid), with a runtime toggle
-("Neue Bedienelemente") for users to revert to the legacy ParameterField
-list while we shake the new surface out in real installations.
+`docs/ui/control-inventory.md`. The DeviceDetail surface routes
+channels through `ChannelControl.svelte` (single-channel host),
+embedded directly inside `CdpTilesPanel.svelte`'s "Sonstige Kanäle"
+section for channels that have no CDP or whose CDP kind has no
+registered widget. There is no separate grid component, no runtime
+toggle, and no legacy-ParameterField revert path.
 
 > **Context:** the CONTROL-aware widget tree documented here backs the
-> **Kanäle** view of the device-detail surface. The default
-> **Übersicht** view renders one tile per Custom-DP (semantic
-> operations rather than per-slot writes) — see
+> orphan-channel section of the unified device-detail `overview` tab.
+> The primary surface of `overview` renders one tile per Custom-DP
+> (semantic operations rather than per-slot writes) — see
 > [`cdp-widget-concept.md`](./cdp-widget-concept.md) and
 > [ADR 0016](../adr/0016-custom-dp-aware-ui-rendering.md). The two
 > trees share their primitives (`ControlTile`, `ToggleFeature`,
@@ -213,15 +214,15 @@ ControlTile
 | 2 | Primitives — `ControlSlider`, `ControlButton`, `ControlButtonGroup`, `ControlNumberButtons`, `ControlHueSlider`, `ControlSaturationSlider`, `ControlColorTempSlider`, `ControlColorPalette`, `ControlEnumSelect` | ✅ shipped (`lib/control/controls/`) |
 | 3 | Tile — `ControlTile`, `ControlTileIcon`, `ControlTileInfo`, `state-color.ts` | ✅ shipped (`lib/control/tile/`) |
 | 4 | Features — `ToggleFeature`, `NumericInputFeature`, `TargetTemperatureFeature`, `HvacModesFeature`, `PresetModesFeature`, `StatReadoutFeature`, `CoverOpenCloseFeature`, `LockCommandsFeature` | ✅ shipped (`lib/control/features/`) |
-| 5 | Widgets — Switch, Dimmer, Blind, Climate, Lock, Powermeter, Sensor, BinarySensor, ColorLight, ColorTempLight, FixedColorLight, UniversalLight, Garage, Siren, ButtonEvent | ✅ 15 widgets shipped (`lib/control/widgets/`) |
-| 6 | Resolver + Family Registry — `families.ts`, `resolver.ts`, `widgets/index.ts` | ✅ shipped; 81 of 85 families routed |
-| 7 | DeviceDetail integration — `ChannelControl.svelte` + `ControlTilesPanel.svelte`, runtime toggle | ✅ shipped (`lib/control/`, `routes/DeviceDetail.svelte`) |
+| 5 | Widgets — Switch, Dimmer, Blind, Climate, Lock, Powermeter, Sensor, BinarySensor, ColorLight, ColorTempLight, FixedColorLight, UniversalLight, Garage, Siren, ButtonEvent, SimpleRfThermostat | ✅ 16 widgets shipped (`lib/control/widgets/`) |
+| 6 | Resolver + Family Registry — `families.ts`, `resolver.ts`, `widgets/index.ts` | ✅ shipped; 81 of 84 families routed |
+| 7 | DeviceDetail integration — `ChannelControl.svelte` embedded in `CdpTilesPanel.svelte`'s orphan-channel section | ✅ shipped (`lib/control/`, `lib/cdp/CdpTilesPanel.svelte`, `routes/DeviceDetail.svelte`) |
 | 8 | Icon harmonisation — all tile glyphs via `$lib/icons` (Lucide / mdi-style names) | ✅ shipped |
 | 9 | Unit tests — Vitest covering resolver, state-color, widget registry, slot-aware routing | ✅ 56 cases |
 | 10 | Slot-aware routing — `widgetForResolved()` upgrades widgets based on the channel's slot inventory in addition to the dominant family | ✅ shipped (see §"Slot-aware routing" below) |
 | 11 | REST PUT value path — body coerced against the descriptor's TYPE via `parameter.Coerce`, so integer-valued JSON numbers reach FLOAT parameters without collapsing to int | ✅ shipped (`internal/north/rest/handlers/devices.go`) |
 
-### Widget × family routing (81 / 85)
+### Widget × family routing (81 / 84)
 
 | Widget | Families routed |
 |---|---|
@@ -240,6 +241,7 @@ ControlTile
 | `UniversalLight` (slot-aware) | UNIVERSAL_LIGHT_RECEIVER (HmIP-RGBW, HmIP-DRG-DALI) — HSV + ColorTemp + EFFECT rendered conditionally |
 | `Siren` | ACOUSTIC_SIGNAL_TRANSMITTER, ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER, ALARM_SWITCH_VIRTUAL_RECEIVER, _ALARM_SWITCH_VIRTUAL_RECEIVER, OPTICAL_SIGNAL_RECEIVER |
 | `ButtonEvent` | BUTTON, BTN_SHORT_ONLY |
+| `SimpleRfThermostat` (slot-aware, multi-family) | SWITCH + TEMP siblings (HM-CC-TC: `SWITCH.STATE` + `TEMP.SETPOINT` on one channel) — see "Slot-aware routing" below |
 
 ### Resolver tie-break
 
@@ -262,10 +264,14 @@ enriched beyond its base shape:
 |---|---|---|---|
 | `DIMMER` or `DIMMER_REAL` | `COLOR` slot present | `FixedColorLight` | HmIP-BSL (LEVEL + COLOR + COLOR_BEHAVIOUR) |
 | `DIMMER` or `DIMMER_REAL` | `COLOR_TEMPERATURE` slot present | `ColorTempLight` | (currently unobserved; reserved for kelvin-extended dimmer variants) |
+| `SWITCH` | sibling `TEMP.SETPOINT` on the same channel | `SimpleRfThermostat` | HM-CC-TC (CLIMATECONTROL_REGULATOR channel: `SWITCH.STATE` + `TEMP.SETPOINT`) |
+| `TEMP` | sibling `SWITCH.STATE` on the same channel | `SimpleRfThermostat` | HM-CC-TC (same channel, resolved from either dominant family) |
 
-The same mechanism is the right place for future slot-driven
-disambiguations (e.g. switched powermeter combinations, multi-family
-channels — see §"Open architecture work" below).
+`resolveChannel()` exposes a `siblings` map alongside the dominant
+family so multi-family channels (one CONTROL family per slot, same
+channel) can be detected without changing the tie-break itself. The
+same mechanism is the place for future slot-driven disambiguations
+(e.g. switched powermeter combinations).
 
 ### Climate dual-family handling
 
@@ -310,11 +316,6 @@ discussion or a non-trivial code change beyond a per-widget addition.
   today renders one tile per CCU channel and the user sees the
   fragmentation. A future SPA layer could group channels by
   custom-DP identity and present one tile.
-- **Multi-family channel routing.** HM-CC-TC channel 2 surfaces
-  `SWITCH.STATE` + `TEMP.SETPOINT` on the same channel, one slot per
-  family. The dominant-family resolver picks SWITCH alphabetically,
-  and the setpoint disappears. A `siblings` extension to the
-  resolver + a `SimpleRfThermostat` widget will close this gap.
 - **Hub-entities and wall-displays.** Sysvars / Programs (CCU hub)
   and HmIP-WRC* wall-display rendering live outside the
   channel-CONTROL pipeline and have their own surfaces. Not in scope

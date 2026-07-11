@@ -4,33 +4,37 @@
 
 Implemented (ADR 0016, Accepted 2026-05-20).
 
-The SPA's device-detail surface has two interactive views:
+The SPA's device-detail surface (`DeviceDetail.svelte`) uses three
+top-level tabs — `overview` / `configure` / `history` — not a
+separate Übersicht/Kanäle view selector. `overview` renders the
+unified `CdpTilesPanel.svelte`:
 
-- **Übersicht** (default) — one tile per Custom-DP, semantic
-  operations via `POST /devices/{addr}/cdps/{name}/{operation}`.
-  Driven by the widget tree under `assets/ui/src/lib/cdp/`.
-- **Kanäle** — one tile per CCU channel, slot-aware CONTROL widgets.
-  Driven by the widget tree under `assets/ui/src/lib/control/`. See
+- One tile per Custom-DP, semantic operations via
+  `POST /devices/{addr}/cdps/{name}/{operation}`. Driven by the
+  widget tree under `assets/ui/src/lib/cdp/`.
+- Channels that are *not* attached to a CDP (or whose CDP kind has no
+  registered widget) render inline in the same panel via
+  `ChannelControl.svelte`, the slot-aware CONTROL widget host under
+  `assets/ui/src/lib/control/`. See
   [`control-widget-concept.md`](./control-widget-concept.md).
 
-The selector lives in `DeviceDetail.svelte`; the preference is
-persisted per-user in `localStorage` under
-`openccu-loom.deviceDetailView`. The Übersicht / Kanäle toggle is
-only visible when the user has the "Neue Bedienelemente" master
-toggle enabled (legacy `QuickControlTab` users see the old surface).
+There is no per-user view preference, no `localStorage` selector, and
+no "Neue Bedienelemente" master toggle — CDP tiles and CONTROL-family
+orphan channels appear together in the single `overview` tab.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Übersicht-mode DeviceDetail.svelte                              │
+│ DeviceDetail.svelte — "overview" top-tab                        │
 │   └─ CdpTilesPanel.svelte                                       │
 │      ├─ GET /devices/{addr}/cdps  →  list of CustomDPSummary     │
 │      ├─ for each CDP with a registered widget:                  │
 │      │    dispatch.ts → cdpWidgetFor(cdp.kind)                  │
 │      │    └─ LightTile / CoverTile / ClimateTile / LockTile /   │
-│      │       SirenTile / SwitchTile                             │
-│      └─ orphan channels (no CDP) → ChannelControl.svelte        │
+│      │       SirenTile / SwitchTile / TextDisplayTile / ValveTile│
+│      └─ orphan channels (no CDP, or unregistered kind)          │
+│           → ChannelControl.svelte (same panel, "Sonstige Kanäle")│
 ├─────────────────────────────────────────────────────────────────┤
 │ each CDP tile:                                                  │
 │   - reads cdp.kind + cdp.capabilities + cdp.channel_no          │
@@ -72,14 +76,15 @@ toggle enabled (legacy `QuickControlTab` users see the old surface).
 | `lock` | `*lock.Lock` | `LockTile` | lock / unlock / open |
 | `siren` | `*siren.Siren` | `SirenTile` | turn_on / turn_off |
 | `switch` | `*switchdev.Switch` | `SwitchTile` | turn_on / turn_off / turn_on_for |
+| `text_display` | `*textdisplay.TextDisplay` | `TextDisplayTile` | write {id, text, icon?, color?} |
+| `valve_irrigation` | `*valve.Irrigation` | `ValveTile` | open / close |
+| `valve_modulating` | `*valve.Modulating` | `ValveTile` | open / close / set_level |
 
-Every kind in the dispatcher has a registered widget — see
-`assets/ui/src/lib/cdp/dispatch.ts` for the canonical mapping
-(`text_display` → `TextDisplayTile`, `valve_irrigation` +
-`valve_modulating` → `ValveTile`, etc.). Kinds the backend ships
-that are NOT in the dispatcher fall through to the orphan-channel
-section in CdpTilesPanel; the CONTROL-aware tree there handles
-them via the channel-side widgets.
+Every kind in the dispatcher (`assets/ui/src/lib/cdp/dispatch.ts`)
+has a registered widget. Kinds the backend ships that are NOT (yet)
+in the dispatcher fall through to the orphan-channel section in
+`CdpTilesPanel`; the CONTROL-aware tree there handles them via the
+channel-side widgets.
 
 ## Capability flags
 
@@ -121,21 +126,22 @@ is registered. Practically this means:
 
 - Maintenance / Identification / device-root channels (which never
   carry a CDP).
-- Channels whose CDP kind has no widget yet (`text_display`,
-  `valve_*` at the moment).
-- Channels that the user explicitly wants to inspect at the raw
-  CONTROL-family granularity (the Kanäle view stays available as
-  the full-channel alternative).
+- Channels whose CDP kind has no registered widget yet (new kinds the
+  backend ships ahead of a dispatcher entry).
+- Status-only channels that AutoTile renders as read-only cards (see
+  [`auto-tile-concept.md`](./auto-tile-concept.md)) rather than
+  through a full CONTROL widget.
 
-The orphan section uses the same `ChannelControl.svelte` host the
-Kanäle view uses, so behaviour is identical to what the user gets
-from the segmented selector — only the filter set differs.
+The orphan section uses the same `ChannelControl.svelte` host,
+embedded directly in `CdpTilesPanel` — there is no separate route or
+view to switch to; orphan channels simply render alongside the CDP
+tiles in the one `overview` panel.
 
 ## Why semantic operations rather than per-slot writes
 
-The Kanäle view writes through `PUT .../data-points/{param}/value`;
-each tile maps user gestures into per-slot value changes. The CDP
-view writes through `POST .../cdps/{name}/{operation}` — semantic
+Orphan CONTROL channels write through `PUT .../data-points/{param}/value`;
+each widget maps user gestures into per-slot value changes. The CDP
+tiles write through `POST .../cdps/{name}/{operation}` — semantic
 verbs like `set_temperature {temperature}` or
 `set_color {hue, saturation}`. Two benefits:
 
@@ -150,12 +156,10 @@ verbs like `set_temperature {temperature}` or
    north-bound interface is "drive the existing operations", not
    "find another slot recipe".
 
-## Open follow-ups (tracked in `adr-todo.md`)
+## Open follow-ups
 
 - WS event aggregation decision (per-CDP topic vs SPA-side
   assembly).
-- `text_display` + `valve_*` CDP tiles when the use case lands.
-- The view selector exposes a single per-user preference; consider a
-  per-device override if the default ratio turns out off.
-- Telemetry on the Übersicht ↔ Kanäle toggle rate to validate
-  whether the default is correct in real installations.
+- New CDP kinds the backend ships ahead of a dispatcher entry render
+  via the orphan-channel `ChannelControl` fallback until a dedicated
+  widget lands.

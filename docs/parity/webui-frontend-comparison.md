@@ -1,5 +1,16 @@
 # Frontend-Vergleich: OpenCCU-Loom SPA vs. homematicip-local-frontend Config-Panel
 
+> **Addendum (2026-07-11): snapshot may be stale, C2/C3 already re-scored
+> below.** This assessment is a point-in-time code read from 2026-06-24; the
+> SPA has shipped further since. Two of the original "Totalausfall" (=1)
+> ratings no longer hold and have been corrected in place: **C2 Räume &
+> Gewerke** now ships `RoomsFunctionsAdmin.svelte` + REST `/rooms/{name}` and
+> `/functions/{name}` write endpoints; **C3 Favoriten/Start-Dashboard** now
+> ships `Favorites.svelte` + `stores/favorites.svelte.ts`. Every other row
+> and the qualitative prose is unverified against current code — treat scores
+> outside C2/C3 as directional, not current-state ground truth, and re-check
+> before relying on a specific number.
+
 **Referenz (10/10):** Legacy CCU-WebUI (`occu/WebUI/www`), **ohne** die
 ausgeschlossenen Bereiche *Programme (Bearbeiten)* und *Skripte*.
 **Bewertung 1–10**, 10 = funktionale Gleichwertigkeit zur WebUI.
@@ -27,8 +38,8 @@ Quelle: Code-Analyse (nicht Dokumentation), Stand 2026-06-24.
 | **B2** | Direkte Verknüpfungen | **7** | 6 | **SPA rendert nur Receiver-Seite** des Link-Paramsets — Sender-LINK fehlt (PANEL hat beides). |
 | **B3** | Heiz-/Zeitprofile, Wochenprogramme | **8** | 8 | Gleichwertig; PANEL bessere Timeline-Visualisierung + Drag-Resize, SPA mehr Copy/Fill-Funktionen. |
 | **C1** | Systemvariable | **8** | 1 | SPA: Voll-CRUD, alle 5 Typen. Fehlt: Kanalbindung, isLogged-Toggle, Wert-Trend. PANEL: fehlt komplett. |
-| **C2** | **Räume & Gewerke** | **1** | 1 | **Beide: keine Verwaltung/Zuordnung.** Vollständige Lücke. |
-| **C3** | **Favoriten / Start-Dashboard** | **1** | 1 | **Beide: kein Favoriten-/Dashboard-Konzept.** Vollständige Lücke. |
+| **C2** | Räume & Gewerke *(shipped since 06-24, re-scored)* | **7** | 1 | SPA: `RoomsFunctionsAdmin.svelte` + REST `/rooms/{name}`, `/functions/{name}` (Rename/CRUD). PANEL: weiterhin keine Verwaltung. |
+| **C3** | Favoriten / Start-Dashboard *(shipped since 06-24, re-scored)* | **6** | 1 | SPA: `Favorites.svelte` + `favorites.svelte.ts` (Pin/Quick-Access). PANEL: weiterhin kein Konzept. |
 | **C4** | Verlauf / Audit / Systemprotokoll | **8** | 4 | SPA: Audit-Diff, Live-Log-Stream, Incidents. Fehlt: CSV-Export, Datums-/Zeitfilter, Pagination. |
 | **C5** | Programme (nur Liste/Status) | **9** | 1 | SPA erfüllt Ziel (Liste + Enable/Execute). PANEL: fehlt. |
 | **D1** | Benutzerverwaltung + API-Tokens | **8** | 1 | SPA vollständig. PANEL: HA-delegiert. |
@@ -45,9 +56,9 @@ Quelle: Code-Analyse (nicht Dokumentation), Stand 2026-06-24.
 
 | | SPA | PANEL |
 |---|:---:|:---:|
-| Ungewichteter Mittelwert über 18 anwendbare Bereiche | **≈ 7,0** | **≈ 3,6** |
+| Ungewichteter Mittelwert über 18 anwendbare Bereiche | **≈ 7,0 (Stand 06-24; C2/C3-Update nicht neu gemittelt)** | **≈ 3,6** |
 | Bereiche auf WebUI-Niveau (≥8) | 11 / 18 | 1 / 18 |
-| Bereiche mit Totalausfall (=1) | 2 (Räume, Favoriten) | 9 |
+| Bereiche mit Totalausfall (=1) | 0 (C2/C3 seit 06-24 nachgezogen, s. Addendum) | 9 |
 
 **Quantität:** Die SPA deckt nahezu den gesamten WebUI-Funktionsumfang ab
 (18/20 Bereiche real implementiert), das PANEL deckt nur den Geräte-/Kanal-/
@@ -62,9 +73,12 @@ Schedule-Timeline, Touch-UX), aber als Gesamt-WebUI-Ersatz unvollständig.
 
 ## Priorisierte echte Defizite der SPA (Ziel: WebUI-Ersatz)
 
-1. **Räume & Gewerke (C2 = 1)** — keine Verwaltung/Kanalzuordnung. Eine der
-   zwei Kern-Organisationsachsen der CCU fehlt vollständig.
-2. **Favoriten / Start-Dashboard (C3 = 1)** — kein Schnellzugriffs-/Landing-Konzept.
+1. **Räume & Gewerke (C2, seit 06-24 auf 7 nachgezogen)** — `RoomsFunctionsAdmin.svelte`
+   deckt Verwaltung ab; verbleibende Lücken gegen WebUI (Kanal-Bulk-Zuordnung
+   o.ä.) nicht neu verifiziert.
+2. **Favoriten / Start-Dashboard (C3, seit 06-24 auf 6 nachgezogen)** — `Favorites.svelte`
+   liefert einen Quick-Access-Mechanismus; ein echtes Landing-Dashboard fehlt
+   weiterhin.
 3. **Link-Sender-Paramset (B2)** — `LinkConfigPanel.svelte:55-61` zeigt nur die
    Receiver-Seite; die Sender-LINK-Parametrierung fehlt (PANEL kann beides).
 4. **Wartung & Sicherheit (D6=4 / D3=6)** — kein Log-Level-UI, kein

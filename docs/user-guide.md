@@ -49,15 +49,17 @@ Other subcommands: `openccu-loom version`, `openccu-loom backup`,
 
 | Port | Purpose | Direction |
 | --- | --- | --- |
-| `8119` | REST + WebSocket API, Config UI (Svelte SPA + HTMX bootstrap), MCP route | inbound from clients and browsers |
+| `8119` | REST + WebSocket API, Config UI (Svelte SPA), MCP route | inbound from clients and browsers |
 | `8120` | XML-RPC push callback server (HmIP-RF, BidCos, …) | inbound from the CCU |
 | `8129` | BIN-RPC push callback server (CUxD) | inbound from the CCU |
 | `5540` | Matter bridge (UDP; **off by default**) | inbound from controllers |
 
-Since 0.14.0 the REST API, Svelte SPA, and HTMX bootstrap surface (login,
-`/setup`, OIDC callback, `/health`, `/about`) all share port `8119`. The
-separate `:8081` listener has been removed, along with the `north.ui.listen`
-config key — there is no separate UI bind address.
+The REST API and the Svelte SPA share port `8119`. Login, first-run
+onboarding, and the OIDC callback all live inside the SPA (ADR 0045);
+the only server-rendered pages are a minimal no-JS `/health` and
+`/about`, which act as a diagnostic anchor when the SPA cannot load.
+The separate `:8081` listener has been removed, along with the
+`north.ui.listen` config key — there is no separate UI bind address.
 
 The two callback ports are how the CCU pushes value changes back to
 the daemon, so they must be reachable **from** the CCU. The Matter
@@ -158,29 +160,36 @@ curl -X PUT \
   -u alice:change-me \
   -H 'Content-Type: application/json' \
   -d '{"value": true, "priority": "high"}' \
-  http://localhost:8119/api/v1/devices/0001ABCD/channels/1/data_points/STATE/value
+  http://localhost:8119/api/v1/devices/0001ABCD/channels/1/data-points/STATE/value
 ```
 
 ## MQTT topic layout
 
 Raw plane (always on when MQTT is enabled):
 
+A `<bucket>` segment (`values` | `master` | `calculated`) sits between
+the channel and the parameter:
+
 ```
-<base>/<central>/<interface>/<addr>/<channel>/<parameter>       state (retained)
-<base>/<central>/<interface>/<addr>/<channel>/<parameter>/set   command
-<base>/<central>/<interface>/<addr>/availability                online|offline (retained)
-<base>/<central>/hub/programs/<id>                              state (retained)
-<base>/<central>/hub/programs/<id>/trigger                      command
-<base>/<central>/hub/sysvars/<name>                             value (retained)
-<base>/<central>/hub/sysvars/<name>/set                         command
-<base>/bridge/status                                            LWT (retained)
+<base>/<central>/<interface>/<addr>/<channel>/<bucket>/<parameter>       state (retained)
+<base>/<central>/<interface>/<addr>/<channel>/<bucket>/<parameter>/set   command
+<base>/<central>/<interface>/<addr>/availability                        online|offline (retained)
+<base>/<central>/hub/programs/<id>/state                                state (retained)
+<base>/<central>/hub/programs/<id>/trigger                              command
+<base>/<central>/hub/sysvars/<name>/state                               value (retained)
+<base>/<central>/hub/sysvars/<name>/set                                 command
+<base>/bridge/status                                                    LWT (retained)
 ```
 
 Home Assistant Discovery plane (same state topics, separate config messages):
 
 ```
-homeassistant/<component>/openccu-loom/<object_id>/config
+homeassistant/<component>/<node_id>/<object_id>/config
 ```
+
+The `node_id` is `<central>_<address>` (lower-cased) — there is no
+literal `openccu-loom` segment. Embedding `central_name` keeps
+discovery IDs collision-free across CCUs.
 
 ## Troubleshooting
 

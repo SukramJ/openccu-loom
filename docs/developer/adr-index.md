@@ -36,9 +36,33 @@ The table below catalogues every ADR. Each links to the record on GitHub.
 | [0025](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md) | MCP server as a north-bound adapter | The MCP server is a north-bound adapter. |
 | [0026](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0026-mcp-dev-mode.md) | MCP dev-mode | A build-tag-gated MCP introspection surface. |
 | [0027](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0027-encrypt-config-secrets-at-rest.md) | Encrypt config secrets at rest | Config secrets are encrypted at rest. |
+| [0028](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0028-contract-digest-and-version-guard.md) | Contract digest & version guard | A contract digest and version guard couple API-schema changes to the types-repo release. |
+| [0029](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0029-tier-model-stop-teardown.md) | Tier-model teardown for `Unit.Stop` | `Unit.Stop` tears down subsystems in tiered order. |
+| [0030](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0030-eventbus-dispatch-striping-rejected.md) | Event-bus dispatch striping: rejected | Per-central isolation already meets the goal; dispatch striping is rejected. |
+| [0031](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0031-im-opcode-dispatch-seam.md) | IM opcode dispatch seam | A testable gate and per-opcode seam are extracted from `handleIMOpcode`. |
+| [0032](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0032-sigma-resume-extraction.md) | Sigma resumption extraction | Sigma-resumption extraction is already satisfied; the finding is corrected. |
+| [0033](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0033-groups-cluster-stays-stub.md) | Groups cluster stays a stub | The minimal Groups-cluster stub is a deliberate, matter.js-conformant divergence. |
+| [0034](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0034-adapter-package-taxonomy.md) | Adapter package taxonomy | `internal/central/adapter` stays one package with a documented taxonomy. |
+| [0035](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0035-hub-refresh-set-extraction.md) | Hub refresh-set extraction | The refresh-coordination sub-component is extracted from `HubCoordinator`. |
+| [0036](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0036-bridge-decomposition.md) | Matter `Bridge` decomposition | The `CommissioningSession`/`IMEngine` facade split is deferred. |
+| [0037](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0037-otlp-span-exporter.md) | OTLP span exporter | A pluggable span exporter ships a lean OTLP/HTTP exporter, not the OTel-gRPC SDK. |
+| [0038](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0038-cross-stack-ci-gate.md) | Cross-stack CI gate | The cross-stack model-snapshot parity gate runs in nightly CI. |
+| [0039](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0039-subscribe-dispatch-seam.md) | Subscribe dispatch seam | Cohesive sub-helpers are extracted from `handleSubscribeRequest`. |
+| [0040](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0040-measurement-history.md) | Measurement history | Measurement history is stored in embedded SQLite with an opt-in push exporter. |
+| [0041](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0041-persist-auth-sessions.md) | Persist auth sessions | Auth sessions persist in SQLite as a save-through cache. |
+| [0042](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0042-clear-ccu-cache-and-repull.md) | Clear CCU cache and re-pull | Clearing CCU-derivable caches and re-pulling is a first-class operation. |
+| [0043](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0043-ccu-authentication-provider.md) | CCU as an authentication provider | Login can be delegated to a CCU's own user database. |
+| [0044](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md) | Single-port onboarding + HA Ingress auth | Onboarding runs on a single port with HA Ingress auth passthrough. |
+| [0045](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0045-login-and-onboarding-into-spa.md) | Login + onboarding into the SPA | Login and first-run onboarding live in the Svelte SPA. |
+| [0046](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0046-ssdp-ccu-discovery.md) | SSDP CCU discovery | CCUs are discovered on the LAN via active SSDP/UPnP. |
+| [0047](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0047-northbound-bridge-registry.md) | North-bound bridge registry | North-bound bridges are `Service`s owned by a `Registry`. |
+| [0048](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0048-chiptool-godevccu-send-receive-matrix.md) | chip-tool ↔ godevccu send/receive matrix | A hermetic per-DP-type Matter send/receive suite runs chip-tool against godevccu. |
+| [0049](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0049-matter-one-endpoint-per-device.md) | Matter one endpoint per device | Matter exposes one endpoint per physical device by default. |
+| [0050](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0050-mqtt-transport-shared-module.md) | MQTT transport → shared go-mqtt module | The in-tree MQTT transport is extracted into the external shared `go-mqtt` module. |
+| [0051](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0051-northbound-authorization-model.md) | North-bound authorization model | Role-based MinRole gating unified across REST + WS, plus backup-at-rest sealing. |
 
 ## Related reading
 
 - [Architecture](architecture.md) — how these decisions show up in the package layout.
 - [`SPECIFICATION.md`](https://github.com/SukramJ/openccu-loom/blob/main/SPECIFICATION.md) — the design intent the ADRs implement.
-- [Matter parity contract](../matter-parity-contract.md) — the binding rules for the Matter-side ADRs (0012, 0013).
+- [Matter parity contract](../matter-parity-contract.md) — the binding rules for the Matter-side ADRs (0012, 0013, 0031, 0033, 0036, 0039, 0048, 0049).

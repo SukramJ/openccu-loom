@@ -83,9 +83,11 @@ resync state — relying on the event stream alone would silently
 miss the events that aged out of the buffer.
 
 The replay buffer ceiling is **1024 events** in the default
-configuration; bursty operators on multi-CCU deployments can scale
-it via `Hub.SetReplayCapacity` in code (no config knob today —
-deferred until concrete operational need surfaces).
+configuration. It is a first-class operator knob:
+`north.rest.ws.replay_capacity` (`cfg:"expert"`, default `1024`) —
+bursty operators on multi-CCU deployments raise it in the daemon
+config; the daemon applies it to the hub via `Hub.SetReplayCapacity`
+at startup.
 
 ## Auth lifecycle on long-lived connections
 
@@ -231,21 +233,34 @@ configured name or subscribe via wildcard.
 The full broadcast catalogue is machine-readable in
 [`assets/wsapi.json`](../../assets/wsapi.json) — every entry with
 `"kind": "broadcast"` carries `topic` (pattern) and `payload` (schema
-name in `openapi.yaml`). The table below is the human-readable view
-of what is emitted today.
+name in `openapi.yaml`). `assets/wsapi.json` holds 23 broadcast
+entries (17 non-Matter + 6 Matter); the table below is the
+human-readable view of all 17 non-Matter broadcasts emitted today —
+`tests/contract/ws_broadcast_emitter_test.go::TestWSBroadcastsHaveProductionEmitter`
+enforces that every one of them has a production emitter, so this
+list does not drift from reality.
 
 ### Core broadcasts (daemon-emitted, openapi-described)
 
 | Type (`name`) | Topic pattern | Payload schema |
 |---|---|---|
 | `datapoint.value_changed` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`DataPointValueChangedPayload`](../../assets/openapi.yaml) |
+| `datapoint.optimistic_rolled_back` | `device.{address}.channels.{channel}.data_points.{parameter}` | [`OptimisticRollbackPayload`](../../assets/openapi.yaml) |
 | `custom_data_point.state_changed` | `device.{address}.cdps.{name}` | [`CustomDataPointStateChangedPayload`](../../assets/openapi.yaml) |
+| `device.trigger` | `device.{address}.channels.{channel}.trigger` | [`DeviceTriggerPayload`](../../assets/openapi.yaml) |
+| `device.created` | `device.{address}.lifecycle` | [`DeviceCreatedPayload`](../../assets/openapi.yaml) |
+| `device.removed` | `device.{address}.lifecycle` | [`DeviceRemovedPayload`](../../assets/openapi.yaml) |
 | `central.state_changed` | `central.{name}.state` | [`CentralStateChangedPayload`](../../assets/openapi.yaml) |
 | `system.status_changed` | `system.{central}.status` | [`SystemStatusChangedPayload`](../../assets/openapi.yaml) |
 | `hub.sysvar_changed` | `hub.{central}.sysvars.{name}` | [`SysvarChangedPayload`](../../assets/openapi.yaml) |
 | `hub.program_executed` | `hub.{central}.programs.{id}` | [`ProgramExecutedPayload`](../../assets/openapi.yaml) |
-| `device.created` | `device.{address}.lifecycle` | [`DeviceCreatedPayload`](../../assets/openapi.yaml) |
-| `device.removed` | `device.{address}.lifecycle` | [`DeviceRemovedPayload`](../../assets/openapi.yaml) |
+| `hub.install_mode_changed` | `hub.{central}.install_mode` | [`InstallModeChangedPayload`](../../assets/openapi.yaml) |
+| `hub.alarm_message` | `hub.{central}.alarm_messages` | [`HubCountChangedPayload`](../../assets/openapi.yaml) |
+| `hub.service_message` | `hub.{central}.service_messages` | [`HubCountChangedPayload`](../../assets/openapi.yaml) |
+| `hub.inbox_changed` | `hub.{central}.inbox` | [`HubCountChangedPayload`](../../assets/openapi.yaml) |
+| `hub.metrics_changed` | `hub.{central}.metrics` | [`HubMetricChangedPayload`](../../assets/openapi.yaml) |
+| `connectivity.changed` | `hub.{central}.connectivity.{interface_id}` | [`HubConnectivityChangedPayload`](../../assets/openapi.yaml) |
+| `hub.system_update_changed` | `hub.{central}.system_update` | [`HubSystemUpdateChangedPayload`](../../assets/openapi.yaml) |
 
 ### Matter broadcasts
 
@@ -265,29 +280,6 @@ on topic `matter.exposable_changed`), while core broadcasts use the
 The `wsapi.json` `name` field reflects the topic in both cases. This
 asymmetry is tracked for future alignment; clients should not rely on
 either convention for cross-namespace generic dispatch.
-
-## Not yet pushed (deferred asks)
-
-The following internal `hmevent` types exist but are not currently
-broadcast over the WebSocket surface. They are tracked in the project
-backlog as deferred work:
-
-- `DataPointOptimisticRolledBackEvent` — declared in
-  `pkg/hmevent/catalogue.go` but **not emitted** by any producer.
-  Loom handles optimistic-write conflicts differently (the
-  `lastSentLevel`-slot, 60 s TTL, see CHANGELOG 2026-05-12) — the
-  rollback-on-mismatch concept from aiohomematic has no wire
-  representation here. Consumers MUST NOT simulate it from
-  observed deltas.
-- `InstallModeChangedEvent` — install-mode toggle
-- `ConnectivityChangedEvent` — per-interface connectivity flips
-- `AlarmMessageEvent` / `ServiceMessageEvent` — CCU message lifecycle
-
-A future PR may surface any of these as broadcasts; each addition
-follows the same flow: add `Publish*` helper + topic function in
-`internal/north/rest/ws/`, subscribe in a subscriber file, annotate in
-`wsapi.json`, add payload schema in `openapi.yaml`, append to this
-table.
 
 ## Reserved namespaces
 

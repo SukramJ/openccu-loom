@@ -1,6 +1,11 @@
 # Implementation plan — A1: Matter IM protocol depth
 
-**Status:** prioritised, not started.
+**Status:** partially executed. Step 2 (timed-required enforcement coverage)
+shipped; Step 4 (OTA Software Update Provider) is deferred by design (see
+Step 4 below); Step 3 (GroupKeyManagement group table) is a documented,
+low-value gap. **Step 1 (persistent-subscription save/restore) is still
+genuinely open** — no production caller invokes
+`SavePersistentSubscription`/`LoadPersistentSubscriptions`.
 **Audience:** a fresh Claude-Opus environment with no access to the
 review conversation. Everything needed is inline. Read
 [`CLAUDE.md`](../../CLAUDE.md) §"matter.js as the Matter Gold Standard"

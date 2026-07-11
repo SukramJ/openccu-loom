@@ -55,10 +55,16 @@
 # ---------------------------------------------------------------------
 # Bootstrap tier — read before the database opens (all have defaults)
 # ---------------------------------------------------------------------
+#
+# The strict bootstrap tier is: data_dir, logging, north.rest.listen,
+# bootstrap.allow_first_run_setup, and env_file. `locale` below is NOT
+# a bootstrap-tier value — it is a first-run seed for the DB-tier
+# `locale` section (see the "Initial seed" note further down).
 
 # Default UI language for the very first SPA load (operators can
-# flip per-user via the Settings tab). [default: en]
-locale: de
+# flip per-user via the Settings tab). Seeded into the database on
+# first start; edit it in the SPA afterwards. [default: en]
+locale: en
 
 # On-disk root for SQLite, sessions, backups, logs. Must be
 # writable by the daemon user; created on first start.  [default: ./var]
@@ -72,14 +78,17 @@ logging:
 
 # REST bind address. This cannot be edited from the SPA itself —
 # the SPA needs to reach it BEFORE it can render its Settings tab.
-# The bootstrap UI (login, /setup, /health, /about) shares this same
-# listener — there is no separate UI bind address. Everything else
-# under `north:` is managed in the SPA (MQTT, Matter, mDNS, CORS,
-# OIDC, rate-limit).
+# The Svelte SPA — including login, OIDC, and the first-run onboarding
+# wizard (ADR 0045) — is served on this same listener; there is no
+# separate UI bind address. The only server-rendered pages are the
+# no-JS /health and /about diagnostic anchors. Everything else under
+# `north:` is managed in the SPA (MQTT, Matter, mDNS, CORS, OIDC,
+# rate-limit).
 #
-# REST and the bootstrap UI default to enabled — omit the `enabled:`
-# key and the daemon turns them on. Set `enabled: false` only to
-# intentionally run a daemon without the matching surface.
+# REST (and the no-JS diagnostic surface under `north.ui`) default to
+# enabled — omit the `enabled:` key and the daemon turns them on. Set
+# `enabled: false` only to intentionally run a daemon without the
+# matching surface.
 north:
   rest:
     listen: ":8119"
@@ -217,10 +226,12 @@ centrals: []
 #    # Per-CCU password — preferred path is to set it via the SPA's
 #    # CCU dialog (stored in the SQLite `centrals` table, redacted
 #    # on backup unless --include-secrets is passed). For declarative
-#    # deployment, set it inline here (initial seed only) or point at
-#    # an env variable:
-#    #     password_env: CCU_HOME_PASSWORD
-#    password_env: ""
+#    # YAML seeding the only supported field is the inline `password:`
+#    # below (initial seed only; encrypted into the DB on first start).
+#    # NOTE: there is no per-central `password_env:` YAML key — that
+#    # env-reference field exists only on SPA/DB-created central rows,
+#    # not on YAML seeds. A `password_env:` line here is silently ignored.
+#    password: ""
 #    tls: false
 
 # ---------------------------------------------------------------------
@@ -240,6 +251,6 @@ centrals: []
 # * Re-import a snapshot:
 #   openccu-loom config import my-config.json
 #
-# * Full reference (every YAML-side field that was supported in 0.0.x
-#   and that you can still set declaratively if you prefer YAML over
-#   SPA): see docs/configuration-reference.md
+# * Full reference (every YAML-side field you can still set
+#   declaratively if you prefer YAML over the SPA):
+#   see example.config.full.yaml and docs/admin/configuration.md

@@ -25,7 +25,8 @@ make test
 Prerequisites:
 
 - Go 1.26+
-- `golangci-lint` v1.60+ (installed by `make setup`)
+- `golangci-lint` v2 (installed by `make setup`; the repo's `.golangci.yaml`
+  is v2-format, a v1 binary rejects the config)
 - `gofumpt`
 - Docker + Buildx (for Docker image + Mosquitto integration tests)
 - Python 3.14+ (only for the profile generator script)
@@ -55,10 +56,8 @@ Prerequisites:
 - `context.Context` is the first argument on every I/O method.
 - Interfaces live in the consumer package (Go convention). The only
   exception is `pkg/interfaces` for cross-cutting protocol contracts.
-- Feedback memories the team has persisted over time live in
-  `memory/`; check the index before opening a PR.
 
-## Pin-Tests für neue Wiring
+## Pin tests for new wiring
 
 When you add a new exported method, constructor, or event subscriber that
 is wired through an indirect path — factory closure, callback field,
@@ -109,42 +108,58 @@ The four helper signatures available in `tests/contract/wiring_helpers.go`:
 | `MustFindMethodCall` | `receiver.Method(...)` call on a named receiver |
 | `MustFindStructLiteralField` | `StructName{FieldName: ...}` composite literal |
 
-## Reachability (Säule 1)
+## Reachability
 
-Vor jeder PR mit neuem exported Identifier:
+Before any PR that adds a new exported identifier:
 
 ```bash
 make reachability
 go run ./script/reachability/crosscheck.go
 ```
 
-Wenn dein neues exported Symbol als "genuine dead-code" auftaucht:
-1. **Wenn produktiv genutzt:** Production-Caller einbauen
-2. **Wenn via Reflection/Factory:** `// loom:reachable:reason="..."` über der Deklaration
-3. **Wenn echter Library-Export:** ebenfalls Annotation
-4. **Wenn überflüssig:** vorschlagen für Löschung (Review-Marker)
+If your new exported symbol shows up as "genuine dead code":
+1. **If it is used in production:** wire in a production caller.
+2. **If it is reached via reflection/factory:** annotate the declaration
+   with `// loom:reachable:reason="..."`.
+3. **If it is a genuine library export:** annotate it as well.
+4. **If it is superfluous:** propose it for deletion (review marker).
 
-## Wire-Snapshots (Säule 3)
+## Wire snapshots
 
-Bei Änderungen an Custom-DP-Settern:
+Whenever you change a custom-DP setter:
 
 ```bash
 make wire-snapshots                                 # regen
 git diff tests/contract/wire_snapshots/snapshots/   # review
 ```
 
-Diff zeigt jede Wire-Byte-Änderung. Erwartete Änderungen → committen.
-Unbeabsichtigte Änderungen → fix den Code.
+The diff shows every wire-byte change. Expected changes → commit them.
+Unintended changes → fix the code.
 
-## E2E-Smoke (Säule 4)
+## E2E smoke
 
-Vor Release oder bei Architektur-Änderungen:
+Before a release or after an architectural change:
 
 ```bash
 make e2e
 ```
 
-10 Boot-Smoke-Tests gegen embedded godevccu + mochi-mqtt.
+The black-box E2E suite (`tests/e2e/`) drives the built binary against
+an embedded godevccu + mochi-mqtt broker, exercising REST, WebSocket,
+MQTT discovery, the SPA, Prometheus, and the CLI end to end.
+
+## SPA tests
+
+The Svelte SPA (`assets/ui/`) has its own test pillars — none of them
+run as part of `make test`:
+
+```sh
+cd assets/ui
+npm run test       # vitest — component-level unit tests
+npm run e2e        # Playwright browser-e2e + visual regression (mocked API)
+npm run typecheck  # tsc — must be green before a release merge
+npm run check      # svelte-check
+```
 
 ## Commit style
 
@@ -162,8 +177,15 @@ docs(adr): clarify CUxD wire switch
 go test ./internal/central/...                    # unit
 go test -tags=bench -bench=. ./tests/bench/...    # benchmarks
 go test -tags=integration ./tests/integration/... # godevccu + Mosquitto
+go test -tags=loadtest ./tests/loadtest/...       # production-load harness
 go test -cover ./...                              # coverage report
 ```
+
+The Matter bridge also has a real chip-tool commissioner suite
+(`tests/chiptool/`, `//go:build chiptool`, run via `make chiptool-test`
+or `make matter-smoke`) — it requires a real `chip-tool` binary and only
+runs in CI (macOS runners cannot execute it; see
+[`docs/developer/testing.md`](./docs/developer/testing.md)).
 
 ## Reviewing a PR
 

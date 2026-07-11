@@ -15,7 +15,7 @@ flowchart TB
         mqtt[mqtt]
         rest[rest]
         ws[rest/ws]
-        ui[ui · Svelte SPA + HTMX]
+        ui[ui · Svelte SPA + no-JS /health,/about]
         matter[matter]
         mcp[mcp]
     end
@@ -77,8 +77,10 @@ Three transports cover every interface in the MVP, and every interface supports 
 
 | Transport | Interfaces | Callback server |
 | --- | --- | --- |
-| XML-RPC + JSON-RPC | HmIP-RF, BidCos-RF, BidCos-Wired, HmIP-Wired, VirtualDevices | XML-RPC over HTTP on `:8120` |
+| XML-RPC + JSON-RPC | HmIP-RF, BidCos-RF, BidCos-Wired, VirtualDevices | XML-RPC over HTTP on `:8120` |
 | BIN-RPC | CUxD | BIN-RPC over raw TCP on `:8129` |
+
+HmIP-Wired is not a separate south-bound interface — [ADR 0023](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0023-hmipwired-is-product-group.md) models it as a `ProductGroup` carried on the HmIP-RF interface.
 
 Two listeners run, one per protocol, shared across all centrals:
 

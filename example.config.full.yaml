@@ -23,8 +23,12 @@
 #      fields in the YAML file are ignored until the corresponding
 #      DB row is deleted.
 #      Known section names: locale, north.mqtt, north.matter,
-#      north.discovery, north.rest, north.rest.auth.oidc, north.ui,
-#      callback, ccu_data, reliability, persistence, security.
+#      north.mcp, north.discovery, north.webhook, north.rest,
+#      north.rest.auth.oidc, north.rest.auth.ccu,
+#      north.rest.auth.ha_ingress, north.ui, callback, ccu_data,
+#      reliability, persistence, security.
+#      (`backup` is a root-level YAML field, not a DB config_section —
+#       it is read from this file on every start, not seeded once.)
 #
 # ─── Secrets ─────────────────────────────────────────────────────────────────
 #
@@ -63,9 +67,12 @@
 # =============================================================================
 
 # Default UI language for the first SPA request (BCP-47).
-# Users can change the language individually via the SPA settings tab.
-# This value acts as the daemon-wide fallback.  [default: en]
-locale: de
+# NOTE: `locale` is NOT bootstrap-tier — it is a DB-tier section
+# (`locale`) that is SEEDED from this value on first start. Users can
+# change the language individually via the SPA settings tab; after the
+# first start the DB wins. This value acts as the daemon-wide fallback.
+# [default: en]
+locale: en
 
 # Writable directory for the SQLite DB, sessions, backups, and logs.
 # Created on first start if it does not exist.  [default: ./var]
@@ -160,12 +167,19 @@ north:
 
     # ─── Authentication ─────────────────────────────────────────────────
     auth:
-      # Enable HTTP Basic Auth.  [default: false]
+      # Header-scheme gates are tri-state pointer-bools: omit the key →
+      # enabled. Set to false to reject that scheme even when credentials
+      # below are configured.
+      # Enable HTTP Basic Auth (curl / CI).  [default: true]
       basic_enabled: true
-      # Enable Bearer token auth.  [default: false]
+      # Enable Bearer token auth (Authorization header).  [default: true]
+      # NOTE: the literal `false` below is an explicit OVERRIDE that
+      # disables bearer auth; omit the key to keep the default (enabled).
       bearer_enabled: false
-      # Enable session cookie auth.  [default: false]
-      session_enabled: true
+      # Session-cookie login (the SPA flow) is ALWAYS on and has no config
+      # gate — SessionMiddleware is the SPA's core login and cannot be
+      # disabled here. (There is no `session_enabled` key; it would be
+      # silently ignored.)
 
       # User map: username → bcrypt hash (or plaintext on initial seed).
       # secret — encrypted at rest; prefer providing it via an env var (see example.env)
@@ -190,21 +204,72 @@ north:
         client_id: ""
         # secret — encrypted at rest; prefer providing it via an env var (see example.env)
         client_secret: ""
-        # Redirect URL after a successful OIDC login.
-        redirect_url: "http://localhost:8119/login/oidc/callback"
+        # Redirect URL after a successful OIDC login. Must match the
+        # callback route the daemon serves and the URL registered with
+        # the provider: /api/v1/auth/oidc/callback.
+        redirect_url: "http://localhost:8119/api/v1/auth/oidc/callback"
         # Name of the claim in the ID token that carries the user's role.
-        # Empty = no role mapping via OIDC.
+        # Empty defaults to the "role" claim (it does NOT disable mapping).
         role_claim: "groups"
+
+      # ─── CCU-delegated login (DB section: north.rest.auth.ccu, ADR 0043) ─
+      # Delegate login to the CCU's own user database: operators sign in
+      # with their existing CCU accounts instead of a separate Loom user
+      # list. Local users above remain a break-glass fallback in every
+      # order (a CCU failure — wrong password OR CCU down — falls through
+      # to the local store).
+      ccu:
+        # Tri-state: omit to use the build default (ON in the CCU add-on
+        # build, OFF otherwise). Resolved by the composition root.
+        enabled: false
+        # Tri-state: omit → true (CCU tried first, local as fallback).
+        # false → local first, CCU last.
+        primary: true
+        # CentralConfig name to authenticate against (empty = first CCU).
+        central: ""
+        # Reject users below this CCU UserLevel (0 = UPL_NONE always denied,
+        # 1 = guest, 2 = user, 8 = admin).  [default: 1]
+        min_user_level: 1
+        # Optional override of the CCU-level → Loom-role map. Keys are the
+        # CCU UserLevel as a string. Empty = ADR 0043 defaults
+        # (8→admin, 2→operator, 1→viewer).
+        role_mapping: {}
+        #   "8": admin
+        #   "2": operator
+        #   "1": viewer
+
+      # ─── HA Ingress passthrough (DB section: north.rest.auth.ha_ingress, ADR 0044) ─
+      # Supervised HA add-on only. When enabled, a request proxied by the
+      # HA Supervisor (real TCP peer inside trusted_proxy_cidr AND carrying
+      # the X-Ingress-Path header) is accepted as the configured role
+      # WITHOUT a local credential. Safe only because the add-on keeps
+      # panel_admin: true (Ingress is HA-admin-only). A real Bearer token /
+      # session always wins over the passthrough.
+      ha_ingress:
+        # Tri-state: omit → ON in the HA add-on (supervised), OFF in a plain
+        # build / Docker image. Set true/false to override (false opts out).
+        enabled: false
+        # Network the Ingress request must originate from (real RemoteAddr).
+        # Empty = HA Supervisor default (172.30.32.0/23).
+        trusted_proxy_cidr: "172.30.32.0/23"
+        # Loom role granted to a trusted Ingress request: admin | operator | viewer.
+        # [default: admin]
+        role: admin
 
 
   # =============================================================================
-  # NORTH — Bootstrap UI (HTMX, login, setup wizard, /health, /about)
+  # NORTH — no-JS diagnostic surface (/health, /about)
   # DB section: north.ui
   # Served on the REST listener (:8119) — no separate bind address.
+  # Login, logout, OIDC, and the first-run onboarding wizard all live in
+  # the Svelte SPA (ADR 0045), NOT here. This section gates only the two
+  # server-rendered no-JS pages that remain as an SPA-down diagnostic
+  # anchor: /health and /about.
   # =============================================================================
 
   ui:
-    # Master switch. false = no bootstrap UI.
+    # Master switch. false = no server-rendered /health + /about pages
+    # (the SPA and REST API are unaffected).
     # Pointer-bool: nil → true.  [default: true]
     # enabled: true
 
@@ -240,11 +305,12 @@ north:
     # Enable HA auto-discovery.  [default: false]
     discovery_enabled: false
 
-    # Payload format for state topics.
-    # "" / "bare" = primitive scalar (backwards compatible).
-    # "json" = {"value":..,"available":..} — enables value_template.
-    # WARNING: switching breaks bare-value subscribers.  [default: bare]
-    payload_format: bare
+    # Payload format for state topics — CURRENTLY A NO-OP / RESERVED.
+    # The value is accepted and validated (only "" | "bare" | "json"),
+    # but the bridge never reads it: state topics ALWAYS carry the JSON
+    # envelope {"value":..,"available":..}. There is no primitive-scalar
+    # ("bare") mode today. Left in place for a future format switch.
+    # payload_format: ""
 
     # Sub-devices: splits devices with multiple channel groups into one
     # HA device per group. Parent device is linked via via_device.
@@ -296,16 +362,28 @@ north:
     discriminator: 0xF00
 
     # mDNS advertiser implementation.
-    # "" / "noop" = no multicast (unit tests, out-of-band discovery).
-    # "zeroconf" = _matter._tcp + _matterc._udp records via multicast.
-    # [default: noop]
-    mdns_advertise: noop
+    # "zeroconf" = _matter._tcp + _matterc._udp records via multicast —
+    #   REQUIRED for a commissioner (Apple Home / Google Home) to discover
+    #   and pair the bridge. This is the default and the value you want.
+    # "noop" = no multicast (hermetic unit tests / out-of-band discovery
+    #   only); pairing then fails because no commissionable record is
+    #   published. Use it deliberately, not as a copy-paste default.
+    # [default: zeroconf]
+    mdns_advertise: zeroconf
 
     # Intentional UniqueID rotation on every boot (for T11 chip-tool test).
     # false = stable UniqueID across restarts (production: Apple Home / Google Home).
     # true = breaks accessory recognition after daemon restart (dev/test only).
     # [default: false]
     dev_rotate_unique_ids: false
+
+    # Mount the TimeSynchronization cluster (0x0038) on the Root endpoint.
+    # WARNING: matter.js lists TimeSynchronization as optional-only on the
+    # RootNode, and Apple Home's HAP service mapper may REJECT an
+    # unexpected RootNode cluster at pairing. Leave unset/false unless a
+    # controller genuinely needs a time-sync surface (re-pair afterwards).
+    # Pointer-bool: nil → false.  [default: false]
+    # enable_time_sync: false
 
     # ─── PASE / Commissioning ───────────────────────────────────────────
     commissioning:
@@ -367,6 +445,19 @@ north:
       # Also used as the leading component of the wire interface_id (ADR-0024).
       instance_name: ""
 
+    # Active SSDP / UPnP discovery of Homematic / OpenCCU central units on
+    # the LAN (ADR 0046). When enabled the daemon periodically multicasts
+    # an M-SEARCH, follows each responder's basic_dev.cgi, and surfaces
+    # matching CCUs in the UI so the operator can adopt or ignore them.
+    # This is a read-only LAN scan — a multicast probe; no data about the
+    # daemon leaves the LAN, and it simply finds nothing where multicast
+    # is unavailable (some container networks).
+    ssdp:
+      # Toggle the discovery scan. Pointer-bool: nil → true.  [default: true]
+      enabled: true
+      # How often the M-SEARCH scan re-runs. 0 = default (60s).  [default: 60s]
+      interval: 60s
+
 
   # =============================================================================
   # NORTH — MCP (Model Context Protocol) server
@@ -383,6 +474,58 @@ north:
 
     # HTTP mount path on the REST listener.  [default: /mcp]
     path: /mcp
+
+
+  # =============================================================================
+  # NORTH — Webhook bridge (outbound + inbound)
+  # DB section: north.webhook
+  # =============================================================================
+
+  webhook:
+    # Outbound bridge master switch. false = the daemon subscribes to no
+    # event bus and POSTs nothing. Changing it is restart-required (the
+    # bridge is wired once at boot).  [default: false]
+    enabled: false
+
+    # Absolute http(s) endpoint each event is POSTed to. Empty disables
+    # delivery even when enabled: true.
+    url: ""
+
+    # Shared key for the HMAC-SHA256 body signature sent in the
+    # X-OpenCCU-Signature header. Empty = no signature header (the
+    # receiver cannot verify authenticity).
+    # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+    secret: ""
+
+    # Event-type allowlist (e.g. "datapoint.value_changed"). Empty = all.
+    events: []
+
+    # CCU-name allowlist. Empty = all centrals.
+    centrals: []
+
+    # Datapoint-event parameter-name glob (e.g. "*TEMPERATURE*"). Empty =
+    # no parameter filter. Non-datapoint events are unaffected.
+    parameter_glob: ""
+
+    # Per-delivery HTTP timeout (ms). 0 / negative = default (10000).
+    # [default: 10000]
+    timeout_ms: 10000
+
+    # Inbound direction: a REST surface external systems POST to in order
+    # to set a datapoint value (POST /api/v1/webhook/value) or trigger a
+    # program (POST /api/v1/webhook/program). These are real device writes
+    # / program runs and carry the same authorization weight as the
+    # equivalent REST calls. Disabled by default; the routes are mounted
+    # only when enabled, so toggling it is restart-required.
+    inbound:
+      # Master switch. false = no inbound route (404).  [default: false]
+      enabled: false
+      # Optional inbound-specific bearer token accepted in addition to the
+      # normal REST auth chain, so a header-only caller (e.g. a doorbell)
+      # can POST without a session/user token. Empty = normal auth only.
+      # Sent as `Authorization: Bearer <token>`.
+      # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+      token: ""
 
 
 # =============================================================================
@@ -409,6 +552,16 @@ callback:
   # behind NAT and the CCU must reach a different address than the
   # local bind address. Empty = host value is used.
   public_host: ""
+
+  # Per-listener concurrent-connection cap (each of XML-RPC / BIN-RPC).
+  # Guards against a runaway or hostile peer exhausting file descriptors.
+  # 0 = default (64).  [default: 64]
+  max_connections: 64
+
+  # Source-IP allowlist. false accepts callbacks from any address.
+  # true accepts them only from the configured CCU hosts (plus loopback) —
+  # a hardening measure on shared/untrusted networks.  [default: false]
+  restrict_source_ips: false
 
 
 # =============================================================================
@@ -475,6 +628,16 @@ persistence:
     # How long raw samples are kept. 0 = default (720h / 30 days).
     # retention: 720h
 
+    # How long the hourly rollup tier (measurements_hourly) is kept.
+    # 0 = default (~13 months). Purged only after the rows have been
+    # folded into the daily tier.  [default: ~9360h (13 months)]
+    # retention_hourly: 9360h
+
+    # How long the daily rollup tier (measurements_daily) is kept.
+    # 0 = keep forever (daily rows are tiny: one per data point per day),
+    # which is the default — there is no built-in expiry.  [default: 0 (forever)]
+    # retention_daily: 0s
+
     # Batch-flush cadence. 0 = default (5s).
     # flush_interval: 5s
 
@@ -506,6 +669,40 @@ persistence:
       # Name of the environment variable holding the write token. The
       # token is a secret and is NEVER stored inline (read from env_file).
       token_env: ""       # e.g. OPENCCU_INFLUX_TOKEN
+
+
+# =============================================================================
+# SECURITY — cross-cutting safety toggles
+# DB section: security
+# NOTE: this section has NO YAML seed path — it is DB-tier / SPA-managed
+# only (it is deliberately excluded from the YAML→DB seeder). The block
+# below documents the field for reference; set it in the SPA, not here.
+# =============================================================================
+#
+# security:
+#   # When true, SPA/DB-created central rows may store a plaintext CCU
+#   # password (password_plain column) instead of an env-variable
+#   # reference. Default false — production daemons resolve every central
+#   # secret from the environment; this knob exists for test rigs and
+#   # one-off dev installs.  [default: false]
+#   allow_plaintext_secrets: false
+
+
+# =============================================================================
+# BACKUP — automatic scheduled CCU backups
+# Root-level YAML field (read on every start; hot-reloaded).
+# =============================================================================
+#
+# Off by default (a backup touches the CCU and produces files, so it is
+# opt-in). Each configured central is backed up independently; the archives
+# appear in the same Backups view as manual backups. The first automatic
+# backup runs one interval after start.
+# backup:
+#   # How often each central is backed up. 0 = disabled.  [default: 0]
+#   schedule: 24h
+#   # Retain the newest N scheduled backups per central; older ones are
+#   # pruned after a successful backup. 0 = keep all.  [default: 0]
+#   keep_last: 7
 
 
 # =============================================================================

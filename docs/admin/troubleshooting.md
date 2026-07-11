@@ -86,11 +86,11 @@ primary interface (default: the `HmIP-RF`-matching one) is down.
 
 **Symptom.** Fresh install — you cannot log in because no user exists.
 
-**Fix.** The HTMX bootstrap surface (served on the REST listener, default `:8119`) exposes a
-first-run `/setup` wizard that creates the initial admin account.
-Visit it before configuring anything else. `/` redirects to `/health`,
-and `/health` is server-rendered so it works even when the SPA bundle
-is unavailable.
+**Fix.** The Svelte SPA (served on the REST listener, default `:8119`)
+runs the first-run onboarding wizard that creates the initial admin
+account (ADR 0045). Open the UI before configuring anything else. If the
+SPA bundle is unavailable, the minimal server-rendered `/health` and
+`/about` diagnostic pages still respond (`/` redirects to `/health`).
 
 ## Authentication lockout
 

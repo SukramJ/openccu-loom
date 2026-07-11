@@ -29,9 +29,11 @@ doc tasks but must be tracked so the docs and the code converge.
       call `Client.VerifyIDToken`, which checks the RS256 signature against
       the provider's JWKS and validates `issuer` / `audience` / `exp`.
       `docs/SECURITY.md` and `docs/admin/auth.md` are updated accordingly.
-- [ ] Confirm whether `GET /api/v1/metrics` is auth-gated; the router
-      mounts it conditionally. Document the final answer in
-      `docs/admin/observability.md`.
+- [x] `GET /api/v1/metrics` **is auth-gated**: `internal/north/rest/router.go`
+      mounts it under the protected router (`pr.Get`), so it is subject to
+      the same auth middleware as every other protected route. Still needs a
+      one-line callout in `docs/admin/observability.md` (out of this file's
+      scope — tracked there, not here).
 
 ---
 

@@ -1,12 +1,24 @@
 # OpenCCU-Loom — Test Plan
 
-This document captures the test-debt landscape and the migration
-strategy the project is following to close it. The reference list
-of which Python tests have Go counterparts is regenerated on demand
-via `script/test_migration_inventory.py`; this file is the operational
-dashboard contributors check before touching tests.
+!!! note "Historical migration record"
+    This document was written while the project's primary goal was
+    porting Python test coverage from the aiohomematic family 1:1.
+    That is no longer the project's primary goal — OpenCCU-Loom now
+    develops independently, and aiohomematic remains a reference
+    implementation whose knowledge is preserved in docs (see
+    `docs/parity/by_design.md`). The volume snapshot, cluster mapping,
+    and effort estimates below are the original migration-tier
+    reasoning as a historical record; they are not a current test-debt
+    scoreboard and are not re-measured every release. For today's test
+    pillars, run targets, and the pre-release checklist, see
+    [Testing](developer/testing.md).
 
-## Volume snapshot (2026-04-27)
+This document captures the test-debt landscape and the migration
+strategy the project followed to close it. The reference list
+of which Python tests have Go counterparts can be regenerated on demand
+via `script/test_migration_inventory.py`.
+
+## Volume snapshot (2026-04-27, historical)
 
 | Source | Files | LOC | Notes |
 |---|---|---|---|
@@ -15,10 +27,12 @@ dashboard contributors check before touching tests.
 | aiohomematic2mqtt (`tests/`) | 34 | ~4 690 | high async share |
 | homematicip_local (`tests/`) | 33 | ~17 300 | mid async share |
 | **Python family total** | **209** | **~107 600** | — |
-| **OpenCCU-Loom** | **152** | **~24 000** | goroutine + channel idiom |
+| **OpenCCU-Loom (as of this snapshot)** | **152** | **~24 000** | goroutine + channel idiom |
 
-Coverage ratio against the Python family: ~22 % by LOC. The test gap
-is the project's single largest deficit.
+The Go test suite has grown substantially since this snapshot (well
+into the thousands of `*_test.go` files); the ~22 %-by-LOC coverage
+ratio below is a point-in-time historical figure, not a live gap
+indicator.
 
 ## Cluster mapping
 
@@ -163,10 +177,10 @@ that don't translate — update both this document and the audit.
 test entry whenever a CLAUDE.md / SPECIFICATION.md rule otherwise has
 no Go-side guard.
 
-- **CommandPriority.Critical = 0** — `enum_parity_test.go`
-- **All MVP interfaces support push** — `enum_parity_test.go`
+- **CommandPriority.Critical = 0** — `hmenum_constants_test.go`
+- **All MVP interfaces support push** — `hmenum_constants_test.go`
 - **CUxD is BIN-RPC only** — `backend_capabilities_test.go`
-- **JSON-RPC-only interfaces stay empty** — `enum_parity_test.go`
+- **JSON-RPC-only interfaces stay empty** — `backend_capabilities_test.go`
 - **Coordinator floors per file** — `coordinator_size_test.go`
 - **CircuitBreaker needs two HALF_OPEN successes to CLOSE** — `reliability_constants_test.go`
 - **CircuitBreaker re-opens on HALF_OPEN failure** — `reliability_constants_test.go`
@@ -174,7 +188,7 @@ no Go-side guard.
 - **Profile parity vs. aiohomematic** — `profile_parity_generated_test.go`
 - **Event catalogue completeness** — `event_catalogue_test.go`
 - **OpenAPI schema matches handlers** — `openapi_test.go`, `openapi_schema_test.go`
-- **i18n catalogue parity** — `i18n_parity_test.go`
+- **i18n catalogue parity** — `i18n_catalog_keys_test.go`
 - **Normalisation rules** — `normalization_test.go`
 
 ## Open migration items (still 1:1 portable)

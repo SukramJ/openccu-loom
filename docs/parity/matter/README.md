@@ -65,7 +65,7 @@ or edit the `matterJsRoot` constant at the top of the generator.
 |---|---|
 | `matter-schema-snapshot.json` | `internal/north/matter/parity/` |
 | `tlv-wire-fixtures.json` | `internal/north/matter/tlv/` (look for `parity_matterjs_test.go`) |
-| `im-wire-fixtures.json` | `internal/north/matter/im/parity_wire_fixtures_test.go` |
+| `im-wire-fixtures.json` | `internal/north/matter/im/wire_fixtures_parity_test.go` |
 
 ---
 

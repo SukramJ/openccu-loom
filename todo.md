@@ -1,5 +1,39 @@
 # TODO — Codebase Sweep → 0.28.0
 
+> **HISTORICAL — archived sweep log.** This file tracked the one-time
+> codebase-improvement sweep (Matter excluded) that shipped as release
+> **0.28.0** (`CHANGELOG.md` `[0.28.0]`). The repo has since moved to
+> **0.34.0**; every Tier 1–4 group and both release-prep items below are
+> `[x]` done and landed on `main`. Kept for historical provenance, not as an
+> active backlog. The handful of items that were **not** fully closed by the
+> sweep are pulled out into **Live remnants** immediately below; everything
+> after that heading is the archived, completed sweep record.
+
+## Live remnants (still open)
+
+These three items came out of the 0.28.0 sweep but were deferred or only
+partially done; they remain the only actionable content in this file.
+
+- [ ] **A4 · Two different pagination envelopes across list endpoints** (S, low)
+  `/devices` returns `{items,page,per_page,total}`; hub lists return a bare array
+  + `X-Total-Count`. Pick one (header form is more common) and align.
+- [!] **A5 · Path-naming drift: snake_case + colon-action segments** (S, low)
+  `week_profile` (+ children) and `/devices/values:batch` break the kebab-case /
+  plain-segment convention. Deferred/reverted: renaming a served path *removes*
+  the old one, which `oasdiff` (the `api contract guard` CI job) classifies as a
+  BREAKING change requiring a major-version bump — disproportionate for a
+  cosmetic rename inside an additive release. The rename commit was reverted; the
+  paths keep their existing spelling. Revisit only bundled with a real
+  deprecation cycle (serve both paths, mark the old one `deprecated`).
+- Deferred feature ideas (never started; see the original "Deferred" section
+  below for the full list): local event-driven automation/rules engine,
+  scenes, built-in push sinks (ntfy/Pushover/Telegram), energy cost/tariff
+  tracking, `LinkCoordinator.SetLinkInfo/GetLinkInfo` wiring.
+
+---
+
+## Archived sweep record (0.28.0, shipped)
+
 Tracking document for the codebase-improvement sweep (Matter excluded).
 Source: multi-agent survey + adversarial verification (29 confirmed, 1 refuted).
 Branch: `fix/codebase-sweep-0.28.0` — one branch, one commit per group, one PR.

@@ -329,16 +329,44 @@ completeness:
   `UPDATE_PENDING`) — these are Discovery diagnostics (`entity_category
   = diagnostic`), but do not belong in Matter since Matter provides its
   own reachability / update clusters.
-- `PRESS_SHORT` / `PRESS_LONG` etc. as trigger-only events route
-  through the GenericSwitch cluster (0x003B) implemented in
-  `cluster/wire/genericswitch.go`. The HM `Button` / `Action` DP
-  exposes a `MatterEligibilitySource` returning `Mappable` once it
-  is wired to emit the cluster events; until that wiring lands the
-  classifier surfaces them as `Unmappable` with a "model wiring
-  pending" reason.
+Note: `PRESS_SHORT` / `PRESS_LONG` etc. are **not** in the
+non-mappable set. Press parameters (`PRESS`, `PRESS_SHORT`,
+`PRESS_LONG`, …) classify as `MatterMeasurementMomentarySwitch`
+(`internal/model/generic/matter.go`) and resolve to a **Mappable**
+verdict via `eligibility.go` `DeriveMatterEligibility`. The HM
+`Button` / `Action` DP is exposed through the GenericSwitch cluster
+(0x003B) implemented in `cluster/wire/genericswitch.go`, one Matter
+endpoint per button with a press-cycle state machine.
 
 The mapper output is delivered via `GET /api/v1/matter/exposable`
 together with the allowlist, so the UI works with a single round-trip.
+
+---
+
+## 4b. One Endpoint per Device (ADR 0049)
+
+Since 0.31.0 the bridge emits **one Matter endpoint per physical
+device** rather than one endpoint per Discovery entity
+([ADR 0049](./adr/0049-matter-one-endpoint-per-device.md)). This
+reshapes the candidate list the "Expose" tab renders:
+
+- **Secondary / group-STATE constituents are folded by default.**
+  `eligibility.go` `CollectCandidates` drops a custom-DP entity's
+  non-primary constituents when `exposeSecondary` is false (the
+  default). Only the device's primary host entity surfaces as a
+  candidate. The redundant per-channel group-STATE rows no longer
+  clutter the list.
+- **Expert opt-in.** Set `north.matter.expose_secondary_channels`
+  (expert config flag, default false) to reveal the folded secondary
+  channels as independent candidates — matching the pre-0.31 flat
+  per-entity view for operators who need it.
+- **Visibility gate.** The `/api/v1/matter/exposable` list also
+  applies the visibility gate, so entities marked ignored / no_create
+  are dropped from the candidate list up front.
+- **Measurements ride the host endpoint.** Measurement DPs such as
+  battery / power / energy are attached to the device's host endpoint
+  as measurement clusters (device-type 0), instead of each becoming
+  its own standalone endpoint.
 
 ---
 
@@ -375,8 +403,13 @@ matter.fabric.unpair_confirm
 
 ## 6. Auth & Audit
 
-- All endpoints are behind the new permission `matter.admin`. Default
-  roles: `admin` yes, `viewer` no.
+- Access is role-based, not gated by a named `matter.*` permission.
+  Mutations require the `admin` role (`router.go` gates
+  `DELETE /fabrics/{id}`, `PUT`/`POST /exposable`,
+  `POST /commissioning/window` + `/close`, `POST /share` via
+  `pr.With(admin)`). The read endpoints (`GET status` / `fabrics` /
+  `setup-payload` / `exposable`) are available to any authenticated
+  identity, including viewer/operator.
 - Every mutation (`PUT /exposable`, `POST /exposable/bulk`,
   `POST /commissioning/window`, `POST /commissioning/window/close`,
   `POST /share`, `DELETE /fabrics/{id}`) produces an audit log entry
@@ -401,10 +434,14 @@ matter.fabric.unpair_confirm
   DPs) remains invisible to Matter as well.
 - **Aggregated multi-parameter endpoints from Generic DPs.** No UI
   to bundle, for example, temperature + humidity + battery of a Generic
-  channel into a composite `Air Quality Sensor` endpoint. Each
-  Generic/Calculated DP becomes its own endpoint; bundling is reserved
-  for Custom DPs (where the profile knows which parameters belong
-  together).
+  channel into a composite `Air Quality Sensor` endpoint. Under the
+  one-endpoint-per-device model (ADR 0049, see §4b) measurement DPs
+  (battery / power / energy, and similar) ride the device's host
+  endpoint as measurement clusters rather than each becoming its own
+  standalone endpoint; standalone Generic/Calculated sensor endpoints
+  are still created where a device carries no primary custom-DP host.
+  Bundling of a device's own parameters is otherwise driven by the
+  profile (where the Custom DP knows which parameters belong together).
 - **BLE pairing.** ADR 0012 excludes BLE in v1.1 → the "Pair" tab
   shows exclusively the on-network path.
 

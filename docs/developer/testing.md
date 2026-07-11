@@ -13,11 +13,16 @@ The test pillars OpenCCU-Loom is held to, the make target behind each, what the 
 | Contract | `tests/contract/` | `make contract` | Protocol / capability invariants — each test states a hard rule and fails if violated. |
 | Golden / replay | `tests/golden/` | `make test` | Recorded CCU sessions replayed against the daemon; assertions compare emitted events / JSON to golden files. |
 | Integration | `tests/integration/` | `make integration` | Daemon run against the in-process `godevccu` simulator plus Mosquitto (Docker); end-to-end behavior. |
-| End-to-end | `tests/e2e/` | `make e2e` | Full end-to-end flows. |
+| End-to-end | `tests/e2e/` | `make e2e` | Full black-box end-to-end flows against the built binary (REST, WS, MQTT, SPA, Prometheus, CLI). |
+| Chip-tool commissioner | `tests/chiptool/` (`//go:build chiptool`) | `make chiptool-test`, `make matter-smoke` | Real `chip-tool` commissioner runs against the Matter bridge — the only guard that exercises a real Matter controller, not just parity fixtures. CI-only; cannot run on macOS. |
+| Load test | `tests/loadtest/` | `go test -tags=loadtest ./tests/loadtest/...` | Production-shaped load harness (documented in [`docs/testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/testplan.md)). |
 | Benchmarks | `tests/bench/` | `make bench` | Performance; regressions > 20 % block release. |
 | Fuzz | per package | `make fuzz` | XML-RPC / BIN-RPC / JSON-RPC parsers and paramset normalization. |
+| SPA unit (vitest) | `assets/ui/src/**/*.test.ts` | `cd assets/ui && npm run test` | Component-level Svelte tests. Not covered by `make test`. |
+| SPA browser-e2e | `assets/ui/tests/e2e/` | `cd assets/ui && npm run e2e` | Playwright browser-e2e + light/dark visual-regression baselines, mocked API. Not covered by `make test`. |
+| SPA typecheck | `assets/ui/` | `cd assets/ui && npm run typecheck` | `tsc` type-checking; not covered by `make test` and must be green before a release merge. |
 
-`make test` runs the unit and contract pillars together; `make race` adds `-race`. Integration, e2e, bench, and fuzz are heavier and run on their own targets.
+`make test` runs the unit and contract pillars together; `make race` adds `-race`. Integration, e2e, bench, fuzz, chip-tool, load-test, and the SPA suites are heavier and run on their own targets.
 
 !!! note "Delegate test boilerplate"
     Production code (architecture, public API, wire decisions) belongs in the main work; the mechanical per-test work — fakes, table cases, assertions, race scaffolding — is well suited to a sub-agent. Name the file and surface, list the cases, and point at an existing test for style.
@@ -66,6 +71,10 @@ Run before tagging a release. All of these must pass:
 - [ ] `make integration` and `make e2e` green.
 - [ ] `make bench` shows no regression > 20 %.
 - [ ] `make snapshot` exits 0 (cross-stack parity).
+- [ ] `make chiptool-test` / `make matter-smoke` green when the change touches the Matter bridge (CI-only, needs-chiptool label).
+- [ ] `cd assets/ui && npm run typecheck` clean (not covered by `make test`).
+- [ ] `cd assets/ui && npm run test` (vitest) green.
+- [ ] `cd assets/ui && npm run e2e` (Playwright visual regression) green.
 - [ ] `make licenses` clean — no GPL / LGPL / MPL / AGPL dependencies.
 - [ ] `make vuln` and `make secrets` clean.
 - [ ] No CGo introduced (`CGO_ENABLED=0` default build).
@@ -73,3 +82,10 @@ Run before tagging a release. All of these must pass:
 - [ ] `make release` (goreleaser snapshot) and `make docker` build cleanly for all target architectures.
 
 See the [Security guide](../SECURITY.md) for the wider security review expectations that accompany a release.
+
+## Related, repo-only testing docs
+
+Not part of the published site nav, but worth reading in the checkout:
+
+- [`docs/testing/spa-e2e-against-godevccu.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/testing/spa-e2e-against-godevccu.md) — SPA end-to-end validation against the embedded `godevccu` simulator, without a physical CCU.
+- [`docs/testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/testplan.md) and [`docs/e2e-testplan.md`](https://github.com/SukramJ/openccu-loom/blob/main/docs/e2e-testplan.md) — the fuller test-debt dashboard and the E2E suite's design plan / as-built log.

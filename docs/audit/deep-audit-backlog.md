@@ -6,6 +6,11 @@
   re-assessment (`architecture-reassessment-2026-06-16.md`, overall 8.8),
   ~141 non-merge commits and ~33k LOC have landed — mostly in areas that
   have not had a dedicated deep audit since.
+- **Related audit-scope docs**: the Matter-side equivalent of this backlog is
+  [`docs/parity/matter_behaviour_findings.md`](../parity/matter_behaviour_findings.md);
+  the SPA-vs-panel gap assessment is
+  [`docs/parity/webui-frontend-comparison.md`](../parity/webui-frontend-comparison.md).
+  The forward-looking product roadmap is [`docs/roadmap.md`](../roadmap.md).
 
 ## Already covered (no re-audit needed now)
 

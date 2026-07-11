@@ -54,18 +54,18 @@ E2E proves **the door works**, not how the lock looks inside.
 
 | # | Interface | Endpoint | Driver in E2E | Schema source |
 |---|---|---|---|---|
-| 1 | REST API (~80 ops) | `:8119/api/...` | `net/http` + OpenAPI walker | `assets/openapi.yaml` |
-| 2 | WebSocket (85 cmds) | `:8119/api/ws` | `coder/websocket` + WSAPI walker | `assets/wsapi.json` |
+| 1 | REST API (see `assets/openapi.yaml` for the current path/operation count) | `:8119/api/...` | `net/http` + OpenAPI walker | `assets/openapi.yaml` |
+| 2 | WebSocket (see `assets/wsapi.json` for the current command/broadcast count) | `:8119/api/ws` | `coder/websocket` + WSAPI walker | `assets/wsapi.json` |
 | 3 | MQTT (HA Discovery + raw) | `tcp://broker:1883` | `paho.mqtt.golang` | `docs/mqtt-topic-schema.md` |
-| 4 | Config UI (Svelte SPA) | `:8119/` | `net/http` static smoke | `internal/north/ui/spa_dist/` |
-| 5 | HTMX bootstrap | `:8119/login`, `:8119/setup`, `:8119/health`, `:8119/about` | `net/http` form roundtrip | templates |
+| 4 | Config UI (Svelte SPA — login, OIDC, onboarding, ADR 0045) | `:8119/` | `net/http` static smoke | `internal/north/ui/spa_dist/` |
+| 5 | No-JS diagnostic anchor | `:8119/health`, `:8119/about` | `net/http` roundtrip | `internal/north/ui/templates/` |
 | 6 | Prometheus | `:8119/metrics` | `expfmt.TextParser` | `pkg/hmlog`, `internal/metrics` |
 | 7 | Auth — Basic | `Authorization: Basic` | `net/http` | `assets/openapi.yaml` |
 | 8 | Auth — Session | cookies | `net/http.CookieJar` | login flow |
 | 9 | Auth — API Token | `Authorization: Bearer` | `net/http` | `auth.tokens` config |
 | 10 | Auth — OIDC | `/auth/oidc/{start,callback}` | mock OP | OIDC discovery |
 | 11 | CLI `hmcli` | sub-process | `os/exec` | `cmd/hmcli` |
-| 12 | Matter (v1.1) | TCP/CHIP | `make matter-smoke` (Linux only) | out of CI scope |
+| 12 | Matter (spec 1.5.1 / matter.js HEAD) | TCP/CHIP | `make matter-smoke` (Linux only) | out of CI scope |
 
 South-bound transports (XML-RPC / JSON-RPC / BIN-RPC) are exercised
 indirectly — the daemon talks to godevccu in-process; tests assert on
@@ -211,6 +211,23 @@ tests/e2e/
 ```
 
 Every `*_test.go` file carries `//go:build e2e`.
+
+!!! note "As-built layout differs from this plan"
+    §§1-10 are the original design plan; §11 below is the as-built log.
+    The implemented `tests/e2e/` layout diverges from the sketch above:
+    the auth quartet is one file (`auth_test.go`), the UI suites are one
+    file (`ui_test.go`, no more `ui_htmx_test.go`/`ui_spa_static_test.go`
+    split — `/login` and `/setup` no longer exist as server-rendered
+    routes, see ADR 0045), the CLI suite is `cli_test.go`, and MQTT is
+    split across `mqtt_test.go` / `mqtt_discovery_test.go` /
+    `mqtt_subscriber_test.go` / `mqtt_collector_test.go`. `harness/` has
+    `config.go` + `ws_client.go` instead of `mqtt_topics.go`, and an
+    `openapi_skip.txt` **and** `wsapi_skip.txt` both exist. The suite
+    also grew several boot/lifecycle-focused files not in the original
+    plan: `boot_test.go`, `bringup_test.go`, `cold_boot_test.go`,
+    `hot_plug_test.go`, `reconnect_test.go`, `matter_boot_test.go`,
+    `degraded_state_test.go`, `visibility_test.go`,
+    `custom_dp_roundtrip_test.go`, `hub_aggregates_test.go`.
 
 ---
 
@@ -532,7 +549,16 @@ implementation, or the daemon learns to populate DPs from XML-RPC
 
 **Implemented**: 2026-05-08, step 8.
 
-Seven HTTP-only tests cover both browser-facing surfaces:
+!!! warning "Historical entry — HTMX login/setup since removed"
+    This entry documents the suite as it stood on 2026-05-08. Since
+    ADR 0045, `/login` and `/setup` no longer exist as server-rendered
+    routes — login, OIDC, and first-run onboarding all moved into the
+    Svelte SPA. The `TestUIHTMX*` tests described below have been
+    replaced; the current server-rendered surface is only `/health` +
+    `/about`, covered by `tests/e2e/ui_test.go`.
+
+Seven HTTP-only tests cover both browser-facing surfaces (as of
+2026-05-08; see the warning above for what changed since):
 
 **Svelte SPA (REST listener, `/app/*`)**:
 
@@ -639,18 +665,24 @@ mochi-mqtt broker is shown to behave identically there (no Docker
 dependency, so cross-platform runs are gated on a future iteration
 rather than on infra work).
 
-The full suite stands at **20 tests** in ~13 s wallclock; `make e2e`
-including build is ~17 s on a developer laptop. Coverage breakdown:
+The suite stood at **20 tests** in ~13 s wallclock as of this log entry
+(2026-05-08); `make e2e` including build was ~17 s on a developer
+laptop then. Coverage breakdown at the time:
 
-| Schicht | Tests |
+| Layer | Tests |
 |---|---|
 | Bring-up | 1 |
-| REST-Walker (51 GET-Ops) | 1 |
-| WS-Walker (84/87 Cmds) | 1 |
+| REST-Walker (GET ops, walked from `assets/openapi.yaml`) | 1 |
+| WS-Walker (commands, walked from `assets/wsapi.json`) | 1 |
 | Auth (Basic/Session/Token/OIDC) | 4 |
 | MQTT (Bridge online + Discovery + Set) | 3 |
 | UI (4 SPA + 3 HTMX) | 7 |
 | Prometheus | 1 |
 | CLI (version + config + help) | 3 |
 | **Total** | **20** |
+
+The suite has grown well past this point since (see the as-built note
+in §6) — `tests/e2e/` now holds many more files covering boot/reconnect
+lifecycle, Matter, visibility, and custom-DP round-trips; this table is
+a historical snapshot, not the current count.
 
