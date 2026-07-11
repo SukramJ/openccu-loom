@@ -302,6 +302,14 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		if p.functions != nil {
 			ch.Functions = p.functions[dd.Address]
 		}
+		// Stamp the channel's CCU ise_id from the DeviceDetails cache (seeded
+		// in WireHub before ingest). It lets a system variable / program whose
+		// name carries the channel identifier be linked to this channel — see
+		// [device.Device.IdentifyChannel] and the Python reference's
+		// `model/device.py:1012` (Channel.ise_id via get_address_id).
+		if p.unit.DeviceDetails != nil {
+			ch.IseID = p.unit.DeviceDetails.GetAddressID(dd.Address)
+		}
 	}
 	return ctx.Err()
 }
@@ -320,6 +328,15 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 	}
 	if p.functions != nil {
 		functions = p.functions[dd.Address]
+	}
+	// The device's CCU ise_id from the DeviceDetails cache (seeded in WireHub
+	// before ingest). It lets a system variable / program whose name carries
+	// the device identifier be linked to this device — see
+	// [device.Device.IdentifyChannel] and the Python reference's
+	// `model/device.py:308` (Device.ise_id via get_address_id).
+	var deviceISEID int
+	if p.unit.DeviceDetails != nil {
+		deviceISEID = p.unit.DeviceDetails.GetAddressID(dd.Address)
 	}
 	// Derive schema version from the wire VERSION field (a *int that is nil /
 	// absent on older CCU firmwares).
@@ -348,6 +365,7 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 		ProductGroup:  hmenum.ProductGroupForModel(dd.Type, iface),
 		Rooms:         rooms,
 		Functions:     functions,
+		IseID:         deviceISEID,
 		SchemaVersion: schemaVersion,
 		Firmware: device.FirmwareInfo{
 			Current:   dd.Firmware,

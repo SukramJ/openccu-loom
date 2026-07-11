@@ -35,7 +35,7 @@ func TestHubDiscoverySkipsWithoutSerial(t *testing.T) {
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu-01")
 	items := map[string]DiscoveryItem{
 		"sysvar":              db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{Name: "Foo", ValueType: hmenum.HubValueTypeLogic}),
-		"program":             db.BuildProgramDiscovery("ccu-01", "PRG_1", "Prog"),
+		"program":             db.BuildProgramDiscovery("ccu-01", "PRG_1", "Prog", ""),
 		"alarm":               db.BuildAlarmMessagesDiscovery("ccu-01"),
 		"service":             db.BuildServiceMessagesDiscovery("ccu-01"),
 		"inbox":               db.BuildInboxDiscovery("ccu-01"),

@@ -6,9 +6,12 @@ package device
 import (
 	"context"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -584,20 +587,93 @@ func (d *Device) HasReadableDataPoint() bool {
 	return false
 }
 
-// IdentifyChannel scans the device's channels for one whose address is a
-// suffix of text. Returns nil when no channel matches.
+// IdentifyChannel finds the channel referenced by text — a CCU system-variable
+// or program name — so a variable whose name carries a device/channel
+// identifier can be associated with that device. A channel matches when:
+//
+//   - text ends with the channel address (e.g. "…VCU0000123:1"), or
+//   - the channel's ise_id appears in text as a standalone token, or
+//   - the owning device's ise_id appears in text as a standalone token
+//     (associated with the device via its lowest-addressed channel).
+//
+// Returns nil when no channel matches.
+//
+// Mirrors the Python reference's `model/device.py:742-752`
+// (Device.identify_channel). Two deliberate refinements keep the Go port
+// deterministic: channels are scanned in sorted-address order (Go map
+// iteration is unordered), and channel-specific matches (address suffix,
+// channel ise_id) take precedence over the device-wide ise_id fallback
+// rather than depending on channel insertion order.
 func (d *Device) IdentifyChannel(text string) *Channel {
 	if text == "" {
 		return nil
 	}
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	for addr, ch := range d.channels {
+
+	addrs := make([]string, 0, len(d.channels))
+	for addr := range d.channels {
+		addrs = append(addrs, addr)
+	}
+	sort.Strings(addrs)
+
+	for _, addr := range addrs {
+		ch := d.channels[addr]
 		if addr != "" && strings.HasSuffix(text, addr) {
 			return ch
 		}
+		if ch.IseID != 0 && containsWord(text, strconv.Itoa(ch.IseID)) {
+			return ch
+		}
+	}
+	// Device-wide match: the name carries the device's own ise_id rather than
+	// a specific channel's. Attach it to the device via its first channel.
+	if d.IseID != 0 && len(addrs) > 0 && containsWord(text, strconv.Itoa(d.IseID)) {
+		return d.channels[addrs[0]]
 	}
 	return nil
+}
+
+// containsWord reports whether word appears in text as a standalone token —
+// bounded by a non-word character (or a string boundary) on both sides. This
+// stops an ise_id like "123" from matching inside a larger number such as
+// "41234". A word character is a letter, a digit, or an underscore.
+//
+// Mirrors the Python reference's `model/device.py:169` (_contains_word); the
+// rune-aware boundary check keeps non-ASCII variable names (e.g. German
+// umlauts) intact where Python relies on str.isalnum().
+func containsWord(text, word string) bool {
+	if word == "" {
+		return false
+	}
+	for start := 0; ; {
+		i := strings.Index(text[start:], word)
+		if i < 0 {
+			return false
+		}
+		i += start
+		beforeOK := true
+		if i > 0 {
+			r, _ := utf8.DecodeLastRuneInString(text[:i])
+			beforeOK = !isWordChar(r)
+		}
+		afterOK := true
+		if end := i + len(word); end < len(text) {
+			r, _ := utf8.DecodeRuneInString(text[end:])
+			afterOK = !isWordChar(r)
+		}
+		if beforeOK && afterOK {
+			return true
+		}
+		start = i + 1
+	}
+}
+
+// isWordChar reports whether r is alphanumeric or an underscore. Mirrors the
+// Python reference's `model/device.py` (_is_word_char): char.isalnum()
+// or char == "_".
+func isWordChar(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 // LastUpdated is the most recent ModifiedAt across every data point

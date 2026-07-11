@@ -4,6 +4,7 @@
 package hub
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
@@ -64,9 +65,15 @@ type HubDataPoint struct {
 	// set the initial state — any newly zeroed HubDataPoint starts
 	// "uncertain" by virtue of the zero value being false.
 	stateConfirmed bool
-	// channelRef is the optional HA channel name associated with this
-	// hub data point. Set by the hub coordinator via SetChannel when
-	// the data point's legacy_name matches a registered channel.
+	// channelRef is the optional channel ADDRESS (e.g. "0001ABCD:3")
+	// associated with this hub data point. It is set by the southbound
+	// wiring via SetChannel when the data point's legacy_name carries a
+	// device/channel identifier that matches a registered device (see the
+	// Python reference's `model/hub/data_point.py:84`). Empty until a match is
+	// established; consumers derive the owning device address from the
+	// part before the ":". Mirrors the reference `channel` link, but
+	// stores the address rather than a Channel object so the model layer
+	// stays free of a device-package import.
 	channelRef string
 }
 
@@ -101,19 +108,35 @@ func (h *HubDataPoint) LegacyName() string {
 	return h.Name
 }
 
-// Channel returns the optional HA channel association for this hub data
-// Point — an
-// matching the data point's legacy_name against registered channel
-// names. In openccu-loom the association is established externally by
-// the hub coordinator; this field is nil until [SetChannel] is called.
+// Channel returns the optional channel-address association for this hub data
+// point, or "" when the data point's legacy_name did not match any device.
+// The association is established externally by the southbound wiring (see
+// [SetChannel]); DeviceAddress derives the owning device from it.
 func (h *HubDataPoint) Channel() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.channelRef
 }
 
-// SetChannel stores the optional HA channel association. Called by the hub
-// coordinator when a channel name match is found.
+// DeviceAddress returns the owning device address of the associated channel
+// (the part before the ":"), or "" when no channel is associated. A channel
+// address without a ":" (a device-level address) is returned unchanged.
+func (h *HubDataPoint) DeviceAddress() string {
+	ch := h.Channel()
+	if ch == "" {
+		return ""
+	}
+	if i := strings.IndexByte(ch, ':'); i >= 0 {
+		return ch[:i]
+	}
+	return ch
+}
+
+// SetChannel stores the optional channel-address association (or "" to clear
+// it). Called by the southbound wiring's assignment pass when a device/channel
+// identifier in the data point's legacy_name matches — or no longer matches —
+// a registered device. Idempotent: safe to re-run after every device ingest
+// and hub refresh.
 func (h *HubDataPoint) SetChannel(channel string) {
 	h.mu.Lock()
 	h.channelRef = channel

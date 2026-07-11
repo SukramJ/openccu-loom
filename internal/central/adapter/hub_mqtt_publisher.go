@@ -128,6 +128,19 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 		p.wireOneSysvar(ctx, centralName, sv, disco, b, w)
 	}
 
+	// --- Device-link changes (sysvar/program → device) ---
+	// The southbound assignHubChannels pass runs after devices materialise and
+	// after every hub refresh; when it changes a device link it publishes
+	// HubChannelsAssignedEvent. Re-publish the affected discovery so linked
+	// entities move onto the correct device card. Discovery only — state and
+	// the OnUpdate subscriptions above are left intact.
+	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.HubChannelsAssignedEvent) {
+		if e.CentralName != centralName {
+			return
+		}
+		p.republishHubEntityDiscovery(ctx, centralName, hubModel, disco, b)
+	}))
+
 	// --- AlarmMessages ---
 	// PublishAlarmMessages is on the Bridge (the Wiring wrapper is not yet
 	// generated); call through w.Bridge() so we keep the same error-
@@ -378,7 +391,7 @@ func (p *HubMQTTPublisher) wireOneProgram(
 		return
 	}
 	active, _ := prog.Active()
-	_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, prog.ID, prog.Name))
+	_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, prog.ID, prog.Name, prog.DeviceAddress()))
 	w.PublishProgramState(ctx, centralName, prog, active)
 	p.addUnsub(prog.OnUpdate(func(e hub.ProgramEvent) {
 		w.PublishProgramState(ctx, centralName, prog, e.Active)
@@ -399,24 +412,59 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 	if sv == nil {
 		return
 	}
-	spec := mqtt.HubSysvarSpec{
-		Name:        sv.Name,
-		Description: sv.Description,
-		Unit:        sv.Unit,
-		ValueList:   sv.ValueList,
-		ValueType:   sv.ValueType,
-		Writable:    sv.Writer != nil,
-		IsExtended:  sv.IsExtended,
-		Min:         paramValueAsFloat(sv.Min),
-		Max:         paramValueAsFloat(sv.Max),
-	}
-	_ = b.PublishHubDiscovery(ctx, disco.BuildSysvarDiscovery(centralName, spec))
+	_ = b.PublishHubDiscovery(ctx, disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv)))
 	if val, observed := sv.Value(); observed {
 		w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, val.Unwrap()))
 	}
 	p.addUnsub(sv.OnUpdate(func(_, next hmtypes.ParamValue) {
 		w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
 	}))
+}
+
+// sysvarSpecFor projects a model sysvar onto the narrow discovery contract,
+// including the current device link (DeviceAddress). Shared by wireOneSysvar
+// and republishHubEntityDiscovery so both build an identical payload.
+func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
+	return mqtt.HubSysvarSpec{
+		Name:          sv.Name,
+		Description:   sv.Description,
+		Unit:          sv.Unit,
+		ValueList:     sv.ValueList,
+		ValueType:     sv.ValueType,
+		Writable:      sv.Writer != nil,
+		IsExtended:    sv.IsExtended,
+		Min:           paramValueAsFloat(sv.Min),
+		Max:           paramValueAsFloat(sv.Max),
+		DeviceAddress: sv.DeviceAddress(),
+	}
+}
+
+// republishHubEntityDiscovery re-publishes ONLY the discovery payload — not
+// state, not subscriptions — for every program and sysvar of the central. It
+// runs when assignHubChannels changes a device link (via
+// [hmevent.HubChannelsAssignedEvent]): the entity's `device` block flips to
+// the physical device (or back to the hub card), so HA moves it to the right
+// device. State topics and the OnUpdate slots wired in wireOne* stay untouched,
+// so re-running leaks nothing.
+func (p *HubMQTTPublisher) republishHubEntityDiscovery(
+	ctx context.Context,
+	centralName string,
+	hubModel *hub.Hub,
+	disco *mqtt.DefaultDiscoveryBuilder,
+	b *mqtt.Bridge,
+) {
+	for _, prog := range hubModel.Programs() {
+		if prog == nil || prog.IsInternal {
+			continue
+		}
+		_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, prog.ID, prog.Name, prog.DeviceAddress()))
+	}
+	for _, sv := range hubModel.Sysvars() {
+		if sv == nil {
+			continue
+		}
+		_ = b.PublishHubDiscovery(ctx, disco.BuildSysvarDiscovery(centralName, sysvarSpecFor(sv)))
+	}
 }
 
 // hubConnectivityTopics is a shared zero-value Connectivity used

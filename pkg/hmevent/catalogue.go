@@ -52,12 +52,18 @@ const (
 	EventTypeRecoveryFailed              EventType = "recovery.failed"
 	EventTypeProgramExecuted             EventType = "hub.program_executed"
 	EventTypeSysvarChanged               EventType = "hub.sysvar_changed"
-	EventTypeInstallModeChanged          EventType = "hub.install_mode_changed"
-	EventTypeSystemStatusChanged         EventType = "system.status_changed"
-	EventTypeAlarmMessage                EventType = "hub.alarm_message"
-	EventTypeServiceMessage              EventType = "hub.service_message"
-	EventTypeConnectivityChanged         EventType = "connectivity.changed"
-	EventTypeDriftCorrected              EventType = "reconciliation.drift_corrected"
+	// EventTypeHubChannelsAssigned fires when the device-association pass
+	// (assignHubChannels) changes which physical device one or more system
+	// variables / programs are linked to. North-bound adapters re-publish the
+	// affected hub-entity discovery so the linked entities move to the correct
+	// device card.
+	EventTypeHubChannelsAssigned EventType = "hub.channels_assigned"
+	EventTypeInstallModeChanged  EventType = "hub.install_mode_changed"
+	EventTypeSystemStatusChanged EventType = "system.status_changed"
+	EventTypeAlarmMessage        EventType = "hub.alarm_message"
+	EventTypeServiceMessage      EventType = "hub.service_message"
+	EventTypeConnectivityChanged EventType = "connectivity.changed"
+	EventTypeDriftCorrected      EventType = "reconciliation.drift_corrected"
 	// EventTypeIncidentRecorded fires after a reliability incident
 	// (circuit-breaker trip, ping/pong mismatch, retry-exhausted, …) has
 	// been persisted. It mirrors the recorded [IncidentRecordedEvent] onto
@@ -290,6 +296,19 @@ type DeviceRemovedEvent struct {
 
 // Type implements Event.
 func (DeviceRemovedEvent) Type() EventType { return EventTypeDeviceRemoved }
+
+// HubChannelsAssignedEvent fires when the device-association pass changes the
+// device link of at least one system variable or program on a central (a
+// variable whose name carries a device/channel identifier is associated with,
+// or detached from, that device). It carries no per-entity detail: consumers
+// re-derive the current links from the hub model. See assignHubChannels.
+type HubChannelsAssignedEvent struct {
+	Base
+	CentralName string
+}
+
+// Type implements Event.
+func (HubChannelsAssignedEvent) Type() EventType { return EventTypeHubChannelsAssigned }
 
 // DeviceTriggerEvent fires for non-state device events (keypress,
 // impulse, error).

@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **System variables and programs are now linked to their device.** A CCU
+  system variable (or program) whose name carries a device or channel
+  identifier — the channel address, a channel `ise_id`, or the device
+  `ise_id` — is associated with that device, mirroring aiohomematic's
+  `channel_lookup.identify_channel`. The identifier must appear as a
+  standalone token (bounded by non-word characters), so an `ise_id` of `123`
+  no longer matches inside a larger number such as `41234`. In Home Assistant
+  MQTT discovery the linked sysvar/program entity now renders on the physical
+  device's card instead of the synthetic central hub card. The association is
+  a device-population-driven pass: it is (re)established after every interface
+  ingest and after each periodic sysvar/program refresh, and is cleared again
+  when the referenced device disappears.
+
 ## [0.34.0] — 2026-07-11
 
 SPA design & UX overhaul driven by a structured UI review, plus one backend

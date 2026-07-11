@@ -19,6 +19,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
@@ -30,6 +31,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -319,10 +321,21 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	if unit.Hub != nil {
 		unit.Hub.SetRefreshHooks(coordinators.RefreshHooks{
 			Programs: func(ctx context.Context) error {
-				return loadPrograms(ctx, jc, runner, unit.HubModel, writer, scanOpts)
+				if err := loadPrograms(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
+					return err
+				}
+				// A refresh may add programs whose name carries a device
+				// identifier; (re)establish the device links so discovery lands
+				// on the right card.
+				assignHubChannels(unit)
+				return nil
 			},
 			Sysvars: func(ctx context.Context) error {
-				return loadSysvars(ctx, jc, runner, unit.HubModel, writer, scanOpts)
+				if err := loadSysvars(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
+					return err
+				}
+				assignHubChannels(unit)
+				return nil
 			},
 			Inbox: func(ctx context.Context) error {
 				return loadInbox(ctx, runner, unit)
@@ -925,6 +938,56 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		}
 	}
 	return nil
+}
+
+// assignHubChannels associates every system variable and program whose
+// legacy_name carries a device or channel identifier — an address suffix, a
+// channel ise_id, or a device ise_id — with the owning channel, and clears the
+// association for those that no longer match. When any association changes it
+// publishes a [hmevent.HubChannelsAssignedEvent] so north-bound adapters
+// re-publish the affected discovery.
+//
+// This is the openccu-loom equivalent of the Python reference's
+// channel_lookup.identify_channel wiring at hub data-point construction
+// (`model/hub/data_point.py:84`). openccu-loom materialises devices
+// AFTER the hub is scanned (WireHub runs before the per-interface
+// IngestFromBackend), so the link cannot be resolved at construction time; it
+// is re-established here as an idempotent post-pass, invoked after each device
+// ingest and after each periodic sysvar/program refresh. Re-running is cheap
+// and safe: every data point is (re)set to its current best match or cleared.
+func assignHubChannels(unit *central.Unit) {
+	if unit == nil || unit.HubModel == nil || unit.ModelRegistry == nil {
+		return
+	}
+	resolve := func(legacyName string) string {
+		if _, ch, ok := unit.ModelRegistry.IdentifyChannel(legacyName); ok {
+			return ch.Address
+		}
+		return ""
+	}
+	changed := false
+	for _, sv := range unit.HubModel.Sysvars() {
+		if next := resolve(sv.LegacyName()); next != sv.Channel() {
+			sv.SetChannel(next)
+			changed = true
+		}
+	}
+	for _, p := range unit.HubModel.Programs() {
+		if next := resolve(p.LegacyName()); next != p.Channel() {
+			p.SetChannel(next)
+			changed = true
+		}
+	}
+	if changed && unit.EventBus != nil {
+		// Signal north-bound adapters (MQTT discovery) to re-publish the
+		// affected hub-entity discovery so linked entities move to the right
+		// device card. A single per-central event is enough — consumers
+		// re-read the current links from the hub model.
+		events.Publish(unit.EventBus, hmevent.HubChannelsAssignedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: unit.Name(),
+		})
+	}
 }
 
 // loadInbox fetches the pending-device inbox via the ReGa script engine and
