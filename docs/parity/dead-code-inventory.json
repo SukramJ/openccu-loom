@@ -1,6 +1,6 @@
 {
-  "generated": "3f05fe00",
-  "head": "3f05fe00",
+  "generated": "acb0f84f",
+  "head": "acb0f84f",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,9 +8,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24497,
-    "reachable": 4197,
-    "whitelisted": 17755,
+    "total_exported": 24533,
+    "reachable": 4201,
+    "whitelisted": 17787,
     "unreachable": 2545
   },
   "by_package": [
@@ -1612,14 +1612,14 @@
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 456,
+      "line": 469,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 456,
+      "line": 469,
       "kind": "type"
     },
     {
@@ -2102,14 +2102,14 @@
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 1586,
+      "line": 1649,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 1586,
+      "line": 1649,
       "kind": "var"
     },
     {
@@ -2172,14 +2172,14 @@
       "package": "internal/central/adapter",
       "identifier": "HubData",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 47,
+      "line": 49,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "HubData",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 47,
+      "line": 49,
       "kind": "type"
     },
     {
@@ -2228,14 +2228,14 @@
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 448,
+      "line": 461,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 448,
+      "line": 461,
       "kind": "type"
     },
     {
@@ -2333,14 +2333,14 @@
       "package": "internal/central/adapter",
       "identifier": "NameMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 40,
+      "line": 42,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "NameMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 40,
+      "line": 42,
       "kind": "type"
     },
     {
@@ -7800,14 +7800,14 @@
       "package": "internal/model/device",
       "identifier": "Config",
       "file": "internal/model/device/device.go",
-      "line": 19,
+      "line": 22,
       "kind": "type"
     },
     {
       "package": "internal/model/device",
       "identifier": "Config",
       "file": "internal/model/device/device.go",
-      "line": 19,
+      "line": 22,
       "kind": "type"
     },
     {
@@ -8500,14 +8500,14 @@
       "package": "internal/model/hub",
       "identifier": "HubDataPointer",
       "file": "internal/model/hub/generic_data_point.go",
-      "line": 225,
+      "line": 248,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "HubDataPointer",
       "file": "internal/model/hub/generic_data_point.go",
-      "line": 225,
+      "line": 248,
       "kind": "type"
     },
     {
@@ -12854,14 +12854,14 @@
       "package": "internal/north/mqtt",
       "identifier": "HubInfo",
       "file": "internal/north/mqtt/hub_discovery.go",
-      "line": 65,
+      "line": 71,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "HubInfo",
       "file": "internal/north/mqtt/hub_discovery.go",
-      "line": 65,
+      "line": 71,
       "kind": "type"
     },
     {
@@ -17642,7 +17642,7 @@
       "package": "pkg/hmevent",
       "identifier": "IntegrationIssue",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 763,
+      "line": 782,
       "kind": "type"
     },
     {
@@ -27876,6 +27876,48 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestAssignHubChannelsClearsOnDeviceRemoval",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_channel_assignment_test.go",
+      "line": 164
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestAssignHubChannelsIdempotent",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_channel_assignment_test.go",
+      "line": 130
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestAssignHubChannelsNilSafety",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_channel_assignment_test.go",
+      "line": 204
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestAssignHubChannelsProgramDeviceIseIDMatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_channel_assignment_test.go",
+      "line": 100
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestAssignHubChannelsSysvarDeviceIseIDMatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_channel_assignment_test.go",
+      "line": 39
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestAssignHubChannelsSysvarNoMatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_channel_assignment_test.go",
+      "line": 74
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestAttachNonClimateWeekProfileAttachesForCDPGroups",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/week_profile_targets_test.go",
@@ -34089,6 +34131,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/adapter_multi_unit_test.go",
       "line": 3326
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestIngestPopulatesIseIDFromDeviceDetails",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/device_pipeline_iseid_test.go",
+      "line": 22
     },
     {
       "package": "internal/central/adapter",
@@ -46738,6 +46787,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/registry/model_registry_test.go",
       "line": 48
+    },
+    {
+      "package": "internal/central/registry",
+      "identifier": "TestModelRegistryIdentifyChannelEmptyText",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/registry/model_registry_identify_channel_test.go",
+      "line": 70
+    },
+    {
+      "package": "internal/central/registry",
+      "identifier": "TestModelRegistryIdentifyChannelMatchesRegisteredDevice",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/registry/model_registry_identify_channel_test.go",
+      "line": 30
+    },
+    {
+      "package": "internal/central/registry",
+      "identifier": "TestModelRegistryIdentifyChannelNoMatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/registry/model_registry_identify_channel_test.go",
+      "line": 55
     },
     {
       "package": "internal/central/registry",
@@ -77464,6 +77534,13 @@
     },
     {
       "package": "internal/model/device",
+      "identifier": "TestContainsWord",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 194
+    },
+    {
+      "package": "internal/model/device",
       "identifier": "TestCustomDataPointName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/naming_test.go",
@@ -77692,6 +77769,69 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_test.go",
       "line": 473
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelChannelMatchTakesPriorityOverDeviceMatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 142
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelDeviceWideMatchIsDeterministic",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 168
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelEmptyText",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 16
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelMatchesByAddressSuffix",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 31
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelMatchesByChannelIseID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 49
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelMatchesByDeviceIseID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 70
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelWordBoundaryNegative",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 91
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelWordBoundaryPositive",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 105
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestDeviceIdentifyChannelZeroIseIDIgnored",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 126
     },
     {
       "package": "internal/model/device",
@@ -77972,6 +78112,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_test.go",
       "line": 708
+    },
+    {
+      "package": "internal/model/device",
+      "identifier": "TestIsWordChar",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/device/device_identify_channel_test.go",
+      "line": 231
     },
     {
       "package": "internal/model/device",
@@ -79245,14 +79392,14 @@
       "identifier": "FixRSSI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 20
+      "line": 23
     },
     {
       "package": "internal/model/generic",
       "identifier": "FixRSSI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 20
+      "line": 23
     },
     {
       "package": "internal/model/generic",
@@ -79301,14 +79448,14 @@
       "identifier": "IsRSSIParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 36
+      "line": 39
     },
     {
       "package": "internal/model/generic",
       "identifier": "IsRSSIParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 36
+      "line": 39
     },
     {
       "package": "internal/model/generic",
@@ -79749,14 +79896,14 @@
       "identifier": "NewFloatSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 61
+      "line": 64
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewFloatSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 61
+      "line": 64
     },
     {
       "package": "internal/model/generic",
@@ -79777,14 +79924,14 @@
       "identifier": "NewIntegerSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 64
+      "line": 67
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewIntegerSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 64
+      "line": 67
     },
     {
       "package": "internal/model/generic",
@@ -79805,28 +79952,28 @@
       "identifier": "NewSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 55
+      "line": 58
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 55
+      "line": 58
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewStringSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 67
+      "line": 70
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewStringSensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 67
+      "line": 70
     },
     {
       "package": "internal/model/generic",
@@ -80057,14 +80204,14 @@
       "identifier": "Sensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 50
+      "line": 53
     },
     {
       "package": "internal/model/generic",
       "identifier": "Sensor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 50
+      "line": 53
     },
     {
       "package": "internal/model/generic",
@@ -80113,14 +80260,14 @@
       "identifier": "SensorValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 43
+      "line": 46
     },
     {
       "package": "internal/model/generic",
       "identifier": "SensorValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 43
+      "line": 46
     },
     {
       "package": "internal/model/generic",
@@ -81191,7 +81338,7 @@
       "identifier": "TestFixRSSITable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 35
+      "line": 36
     },
     {
       "package": "internal/model/generic",
@@ -82262,49 +82409,63 @@
       "identifier": "TestSensorNonRSSIOnEventPassesThrough",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 117
+      "line": 118
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "TestSensorOnWireValue_RSSI_FloatNormalized",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/generic/sensor_rssi_test.go",
+      "line": 177
     },
     {
       "package": "internal/model/generic",
       "identifier": "TestSensorOnWireValue_RSSI_InvalidValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 159
+      "line": 160
     },
     {
       "package": "internal/model/generic",
       "identifier": "TestSensorOnWireValue_RSSI_ValidInt",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 133
+      "line": 134
     },
     {
       "package": "internal/model/generic",
       "identifier": "TestSensorOnWireValue_RSSI_ValidInt32",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 145
-    },
-    {
-      "package": "internal/model/generic",
-      "identifier": "TestSensorOnWireValue_RSSI_WrongType",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 174
+      "line": 146
     },
     {
       "package": "internal/model/generic",
       "identifier": "TestSensorRSSIOnEventAppliesFixRSSI",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 82
+      "line": 83
     },
     {
       "package": "internal/model/generic",
       "identifier": "TestSensorRSSIOnWireValueAppliesFixRSSI",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/sensor_rssi_test.go",
-      "line": 187
+      "line": 265
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "TestSensorRSSIOnWireValueNormalizesFloatSeed",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/generic/sensor_rssi_test.go",
+      "line": 197
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "TestSensorRSSIRestoreCachedValueNormalizes",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/generic/sensor_rssi_test.go",
+      "line": 235
     },
     {
       "package": "internal/model/generic",
@@ -83277,14 +83438,14 @@
       "identifier": "TransformSensorValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 139
+      "line": 171
     },
     {
       "package": "internal/model/generic",
       "identifier": "TransformSensorValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/sensor.go",
-      "line": 139
+      "line": 171
     },
     {
       "package": "internal/model/generic",
@@ -84293,6 +84454,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/generic_data_point_test.go",
       "line": 108
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "TestHubDataPointDeviceAddressEmptyWhenNoChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/generic_data_point_device_link_test.go",
+      "line": 29
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "TestHubDataPointDeviceAddressSplitsChannelAddress",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/generic_data_point_device_link_test.go",
+      "line": 12
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "TestHubDataPointDeviceAddressWithoutColon",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/generic_data_point_device_link_test.go",
+      "line": 52
     },
     {
       "package": "internal/model/hub",
@@ -108698,6 +108880,20 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestHubEntityDeviceIdentifierIsLowercased",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_discovery_device_link_test.go",
+      "line": 169
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestHubEntityDeviceIdentifierMatchesPerDeviceDiscovery",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_discovery_device_link_test.go",
+      "line": 125
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestHubSysvarCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
@@ -109293,6 +109489,20 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestProgramDiscoveryWithDeviceAddressLinksToPhysicalDevice",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_discovery_device_link_test.go",
+      "line": 79
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestProgramDiscoveryWithoutDeviceAddressStaysOnHubCard",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_discovery_device_link_test.go",
+      "line": 101
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestPublishCombinedSensorDiscovery",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_combined_test.go",
@@ -109871,6 +110081,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/hub_discovery_test.go",
       "line": 1063
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestSysvarDiscoveryWithDeviceAddressLinksToPhysicalDevice",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_discovery_device_link_test.go",
+      "line": 19
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestSysvarDiscoveryWithoutDeviceAddressStaysOnHubCard",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_discovery_device_link_test.go",
+      "line": 52
     },
     {
       "package": "internal/north/mqtt",
