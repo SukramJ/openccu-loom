@@ -367,7 +367,7 @@ func TestSysvarPayloadListWritableOptions(t *testing.T) {
 func TestProgramBuilderHappyPath(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "Morning Lights")
+	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "Morning Lights", "")
 
 	if !item.OK {
 		t.Fatal("expected OK=true")
@@ -405,7 +405,7 @@ func TestProgramBuilderHappyPath(t *testing.T) {
 func TestProgramBuilderEmptyNameFallsBackToID(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "")
+	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "", "")
 	if !item.OK {
 		t.Fatal("expected OK=true")
 	}
@@ -418,7 +418,7 @@ func TestProgramBuilderEmptyNameFallsBackToID(t *testing.T) {
 func TestProgramBuilderEmptyIDReturnsNotOK(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "", "X")
+	item := db.BuildProgramDiscovery("ccu-01", "", "X", "")
 	if item.OK {
 		t.Fatal("expected OK=false for empty program id")
 	}

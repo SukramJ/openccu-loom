@@ -1084,8 +1084,17 @@ type deviceWithSubDevices interface {
 // logical sub-device (one HA device per channel group) and stamps the
 // parent device as `via_device`. Otherwise the descriptor identifies the
 // physical device with the central as `via_device`.
+// physicalDeviceIdentifier returns the HA device-block `identifiers` value for
+// a physical CCU device. It is the single source of truth for that string so
+// per-device-DP discovery ([deviceDescriptor]) and device-linked hub-entity
+// discovery ([hubEntityDeviceBlock]) always agree — HA only merges an entity
+// into a device when the identifier matches byte-for-byte.
+func physicalDeviceIdentifier(deviceAddress string) string {
+	return "openccu-loom_" + strings.ToLower(deviceAddress)
+}
+
 func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
-	parentID := "openccu-loom_" + strings.ToLower(ev.DeviceAddress)
+	parentID := physicalDeviceIdentifier(ev.DeviceAddress)
 	desc := map[string]any{
 		"identifiers":  []string{parentID},
 		"manufacturer": "eQ-3",

@@ -56,6 +56,12 @@ type HubSysvarSpec struct {
 	IsExtended bool
 	Min        *float64
 	Max        *float64
+	// DeviceAddress, when non-empty, is the physical CCU device this sysvar is
+	// linked to because its name carries the device's (or one of its channels')
+	// identifier. It moves the HA entity from the synthetic central hub card
+	// onto that device's card (see [hubEntityDeviceBlock]). Empty for an
+	// unlinked, hub-level sysvar.
+	DeviceAddress string
 }
 
 // HubInfo carries the optional CCU metadata that enriches the synthetic
@@ -106,6 +112,28 @@ func hubDeviceBlock(centralName string, info HubInfo) map[string]any {
 		block["configuration_url"] = info.URL
 	}
 	return block
+}
+
+// hubEntityDeviceBlock chooses the HA `device` block for a hub entity (sysvar
+// or program). When deviceAddress is set the entity is linked to a physical
+// CCU device — carrying its name/channel identifier — so the block references
+// that device (by the shared [physicalDeviceIdentifier]) instead of the
+// synthetic central hub card. HA then merges the entity into the physical
+// device's card, inheriting the name/model/via_device the per-DP discovery
+// already published for it; only `identifiers` (plus `via_device` for the
+// device-not-yet-published case) is needed here. When deviceAddress is empty
+// the entity stays on the central hub card via [hubDeviceBlock].
+//
+// This is the north-bound consumer of the sysvar-to-device association
+// (the Python reference's `model/hub/data_point.py:84` via channel.device).
+func hubEntityDeviceBlock(centralName, deviceAddress string, info HubInfo) map[string]any {
+	if deviceAddress == "" {
+		return hubDeviceBlock(centralName, info)
+	}
+	return map[string]any{
+		"identifiers": []string{physicalDeviceIdentifier(deviceAddress)},
+		"via_device":  "openccu-loom_central_" + safeLower(centralName),
+	}
 }
 
 func hubAvailability(t *TopicBuilder) []map[string]string {
@@ -251,7 +279,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		"state_topic":       stateTopic,
 		"availability":      hubAvailability(d.TopicBuilder),
 		"availability_mode": "all",
-		"device":            hubDeviceBlock(centralName, d.hubFor(centralName)),
+		"device":            hubEntityDeviceBlock(centralName, sv.DeviceAddress, d.hubFor(centralName)),
 		"origin":            BuildOriginInfo(),
 	}
 
@@ -380,8 +408,9 @@ func displaySysvarName(sv HubSysvarSpec) string {
 
 // BuildProgramDiscovery emits one HA `switch` per CCU program.
 // `turn_on` triggers the program (write to /trigger); state reflects
-// the most recent execution active flag.
-func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name string) DiscoveryItem {
+// the most recent execution active flag. deviceAddress, when non-empty, links
+// the program to a physical CCU device (see [hubEntityDeviceBlock]).
+func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name, deviceAddress string) DiscoveryItem {
 	if id == "" {
 		return DiscoveryItem{}
 	}
@@ -415,7 +444,7 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name st
 		"optimistic":        false,
 		"availability":      hubAvailability(d.TopicBuilder),
 		"availability_mode": "all",
-		"device":            hubDeviceBlock(centralName, d.hubFor(centralName)),
+		"device":            hubEntityDeviceBlock(centralName, deviceAddress, d.hubFor(centralName)),
 		"origin":            BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)

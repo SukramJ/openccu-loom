@@ -54,6 +54,27 @@ func (r *ModelRegistry) List() []*device.Device {
 	return out
 }
 
+// IdentifyChannel scans every registered device for the channel referenced by
+// text — a CCU system-variable or program name — and returns the owning device
+// and channel. Devices are visited in sorted-address order (via List) so the
+// result is deterministic when more than one device could match. Returns
+// (nil, nil, false) when text matches no channel.
+//
+// Mirrors the Python reference's `central/device_registry.py:187-203`
+// (DeviceRegistry.identify_channel): the per-device decision is delegated to
+// [device.Device.IdentifyChannel].
+func (r *ModelRegistry) IdentifyChannel(text string) (*device.Device, *device.Channel, bool) {
+	if text == "" {
+		return nil, nil, false
+	}
+	for _, d := range r.List() {
+		if ch := d.IdentifyChannel(text); ch != nil {
+			return d, ch, true
+		}
+	}
+	return nil, nil, false
+}
+
 // Remove drops the device and reports whether one existed.
 func (r *ModelRegistry) Remove(address string) bool {
 	r.mu.Lock()
