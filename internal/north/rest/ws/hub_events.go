@@ -47,6 +47,15 @@ type SysvarChangedPayload struct {
 	UniqueID string `json:"unique_id"`
 	Value    any    `json:"value"`
 	Previous any    `json:"previous,omitempty"`
+	// Channel is the canonical channel address ("ADDR:idx") of the device
+	// channel this sysvar is associated with (explicit CCU assignment or
+	// name match — the same value the REST SysvarSummary carries). Omitted
+	// when the sysvar belongs to no device: clients then attach the entity
+	// to the central hub device.
+	Channel string `json:"channel,omitempty"`
+	// DeviceAddress is the device part of Channel (before the ":");
+	// omitted together with Channel.
+	DeviceAddress string `json:"device_address,omitempty"`
 }
 
 // ProgramExecutedPayload is the WebSocket payload published on the
@@ -65,6 +74,14 @@ type ProgramExecutedPayload struct {
 	// key is empty for a program not yet loaded. The REST ProgramSummary,
 	// which iterates resolved Program objects, always carries it.
 	UniqueID string `json:"unique_id,omitempty"`
+	// Channel is the canonical channel address ("ADDR:idx") of the device
+	// channel this program is associated with (name match — the same value
+	// the REST ProgramSummary carries). Omitted when the program belongs to
+	// no device or is not yet loaded in the hub model.
+	Channel string `json:"channel,omitempty"`
+	// DeviceAddress is the device part of Channel (before the ":");
+	// omitted together with Channel.
+	DeviceAddress string `json:"device_address,omitempty"`
 }
 
 // SysvarTopic returns the canonical topic for a sysvar-change event:
@@ -100,6 +117,43 @@ func programUniqueID(reg *central.Registry, centralName, programID string) strin
 		return ""
 	}
 	return p.CanonicalUniqueID(reg.SerialSuffix(centralName))
+}
+
+// sysvarDeviceLink resolves the current device association of the named
+// sysvar from the central's hub model: the channel address plus the derived
+// device address. Both are empty when the central, the sysvar, or the
+// association is unknown — the payload fields are optional and clients fall
+// back to the hub card.
+func sysvarDeviceLink(reg *central.Registry, centralName, name string) (channel, deviceAddress string) {
+	if reg == nil {
+		return "", ""
+	}
+	h := reg.HubFor(centralName)
+	if h == nil {
+		return "", ""
+	}
+	sv, ok := h.Sysvar(name)
+	if !ok || sv == nil {
+		return "", ""
+	}
+	return sv.Channel(), sv.DeviceAddress()
+}
+
+// programDeviceLink is the program counterpart of [sysvarDeviceLink], keyed
+// by program id.
+func programDeviceLink(reg *central.Registry, centralName, programID string) (channel, deviceAddress string) {
+	if reg == nil {
+		return "", ""
+	}
+	h := reg.HubFor(centralName)
+	if h == nil {
+		return "", ""
+	}
+	p, ok := h.Program(programID)
+	if !ok || p == nil {
+		return "", ""
+	}
+	return p.Channel(), p.DeviceAddress()
 }
 
 // HubEventsSubscriber bridges per-central [hmevent.SysvarChangedEvent]
@@ -138,6 +192,7 @@ func (s *HubEventsSubscriber) Start() {
 		hub := s.hub
 		reg := s.reg
 		unsubSv := events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) {
+			channel, deviceAddress := sysvarDeviceLink(reg, centralName, e.Name)
 			hub.Publish(Event{
 				Topic: SysvarTopic(centralName, e.Name),
 				Type:  string(hmevent.EventTypeSysvarChanged),
@@ -149,22 +204,27 @@ func (s *HubEventsSubscriber) Start() {
 					UniqueID: routingkey.CanonicalUniqueID(
 						reg.SerialSuffix(centralName), "sysvar", routingkey.HubSlug(e.Name), "",
 					),
-					Value:    e.NewValue.Unwrap(),
-					Previous: e.OldValue.Unwrap(),
+					Value:         e.NewValue.Unwrap(),
+					Previous:      e.OldValue.Unwrap(),
+					Channel:       channel,
+					DeviceAddress: deviceAddress,
 				},
 			})
 		})
 		unsubPg := events.Subscribe(bus, func(e hmevent.ProgramExecutedEvent) {
+			channel, deviceAddress := programDeviceLink(reg, centralName, e.ProgramID)
 			hub.Publish(Event{
 				Topic: ProgramTopic(centralName, e.ProgramID),
 				Type:  string(hmevent.EventTypeProgramExecuted),
 				When:  e.Timestamp(),
 				Payload: ProgramExecutedPayload{
-					Central:   centralName,
-					ProgramID: e.ProgramID,
-					Trigger:   e.Trigger,
-					Success:   e.Success,
-					UniqueID:  programUniqueID(reg, centralName, e.ProgramID),
+					Central:       centralName,
+					ProgramID:     e.ProgramID,
+					Trigger:       e.Trigger,
+					Success:       e.Success,
+					UniqueID:      programUniqueID(reg, centralName, e.ProgramID),
+					Channel:       channel,
+					DeviceAddress: deviceAddress,
 				},
 			})
 		})

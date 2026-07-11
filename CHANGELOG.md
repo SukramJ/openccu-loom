@@ -6,6 +6,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **System variables honour the CCU's explicit channel assignment and expose
+  their device link over REST/WS.** The sysvar scan now reads the channel the
+  operator assigned to a variable in the CCU WebUI ("Kanalzuordnung") and uses
+  it as the primary device-link source — the existing name-based matching
+  (channel address, channel/device `ise_id` in the variable name) remains the
+  fallback, so e.g. the CCU's auto-generated
+  `svEnergyCounter_<ise_id>_<ADDRESS>:<ch>` variables keep resolving. An
+  assignment referencing a device the daemon does not serve falls back to name
+  matching. Linked sysvars/programs appear under their physical device in Home
+  Assistant both via MQTT discovery (as before) **and now via the REST/WS
+  API**: `GET /api/v1/sysvars` / `GET /api/v1/programs` (and the WS
+  `sysvars.list` / `programs.list` commands plus the `hub.sysvar_changed` /
+  `hub.program_executed` broadcasts) carry new optional `channel` and
+  `device_address` fields — absent fields mean the entity belongs on the
+  central hub card. Assignment changes are logged
+  (`hub.sysvar.channel_assigned`, source `explicit`/`name`/`none`) for field
+  diagnosability. REST API version bumps to 2.17.0 (additive).
+
 ## [0.35.0] — 2026-07-11
 
 Ingress and dark-mode fixes for the Home Assistant add-on deployment (device

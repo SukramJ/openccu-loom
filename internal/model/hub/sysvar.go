@@ -70,6 +70,16 @@ type Sysvar struct {
 	unconfirmedAt    time.Time           // timestamp of last WriteUnconfirmedValue
 	observed         bool
 	callbacks        []func(old, next hmtypes.ParamValue)
+	// explicitChannel is the channel address the operator explicitly
+	// assigned to this variable in the CCU WebUI ("Kanalzuordnung"),
+	// as reported by the sysvar-description ReGa script. It is stored
+	// separately from the derived HubDataPoint channel link so refreshes
+	// can distinguish the assignment source: the explicit assignment is
+	// raw CCU input (it may reference a device that is filtered out or
+	// lives on another central), while the effective link — resolved by
+	// the southbound assignment pass with explicit-first precedence — is
+	// what SetChannel stores. Empty when no explicit assignment exists.
+	explicitChannel string
 }
 
 // NewSysvar constructs a [Sysvar] with a fully initialised
@@ -241,6 +251,27 @@ func sysvarParamValue(vt hmenum.HubValueType, raw any) (hmtypes.ParamValue, erro
 		}
 		return hmtypes.ParamValue{}, fmt.Errorf("%w: %q unsupported value type", payload.ErrServiceInvalidParam, "value")
 	}
+}
+
+// ExplicitChannel returns the channel address explicitly assigned to this
+// variable on the CCU ("Kanalzuordnung"), or "" when the variable carries no
+// assignment. This is the raw CCU-side input to the southbound assignment
+// pass, NOT the effective device link — read [HubDataPoint.Channel] for the
+// resolved association.
+func (s *Sysvar) ExplicitChannel() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.explicitChannel
+}
+
+// SetExplicitChannel records the CCU-side explicit channel assignment (or ""
+// to clear it). Called by the southbound sysvar scan on every load/refresh so
+// an assignment added, changed, or removed in the CCU WebUI propagates on the
+// next refresh cycle.
+func (s *Sysvar) SetExplicitChannel(channel string) {
+	s.mu.Lock()
+	s.explicitChannel = channel
+	s.mu.Unlock()
 }
 
 // TranslationKey returns "sysvar" as the HA entity translation key.

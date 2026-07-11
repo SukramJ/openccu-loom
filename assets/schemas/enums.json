@@ -561,6 +561,10 @@
           "wire_value": "ce_secondary"
         },
         {
+          "go_name": "DataPointUsageCDPState",
+          "wire_value": "ce_state"
+        },
+        {
           "go_name": "DataPointUsageCDPVisible",
           "wire_value": "ce_visible"
         },

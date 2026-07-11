@@ -346,6 +346,13 @@ func (w *wsHubQuery) ListPrograms(_ context.Context) ([]map[string]any, error) {
 		if ts, ok := p.LastExecution(); ok {
 			e["last_executed"] = ts.UTC().Format(time.RFC3339)
 		}
+		// Device association (name match). Present only when the program
+		// belongs to a device — clients without the fields fall back to the
+		// hub card. Mirrors the REST ProgramSummary shape.
+		if ch := p.Channel(); ch != "" {
+			e["channel"] = ch
+			e["device_address"] = p.DeviceAddress()
+		}
 		out = append(out, e)
 	}
 	return out, nil
@@ -389,6 +396,14 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 		}
 		if s.Max != nil {
 			e["max"] = s.Max.Float
+		}
+		// Device association (explicit CCU channel assignment or name
+		// match). Present only when the sysvar belongs to a device —
+		// clients without the fields fall back to the hub card. Mirrors
+		// the REST SysvarSummary shape.
+		if ch := s.Channel(); ch != "" {
+			e["channel"] = ch
+			e["device_address"] = s.DeviceAddress()
 		}
 		out = append(out, e)
 	}

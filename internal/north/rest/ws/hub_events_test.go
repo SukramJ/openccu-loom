@@ -432,6 +432,67 @@ func TestHubEventsSubscriberProgramUniqueIDUnresolvable(t *testing.T) {
 	}
 }
 
+// TestHubEventsSubscriberSysvarDeviceLink verifies that a sysvar with a
+// resolved device link (channel set by the southbound assignment pass)
+// carries channel + device_address on the change broadcast, while a sysvar
+// without a link omits both fields.
+func TestHubEventsSubscriberSysvarDeviceLink(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	linked := hub.NewSysvar("home", "svEnergyCounter_14884_000858A994D482:7", "", hmenum.HubValueType("FLOAT"), nil)
+	linked.SetChannel("000858A994D482:7")
+	cu.HubModel.PutSysvar(linked)
+	cu.HubModel.PutSysvar(hub.NewSysvar("home", "Unlinked", "", hmenum.HubValueType("FLOAT"), nil))
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	events.Publish(cu.EventBus, hmevent.SysvarChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "home",
+		Name:        "svEnergyCounter_14884_000858A994D482:7",
+		ValueType:   hmenum.HubValueType("FLOAT"),
+		NewValue:    hmtypes.FloatValue(5.5),
+		OldValue:    hmtypes.FloatValue(4.0),
+	})
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == SysvarTopic("home", "svEnergyCounter_14884_000858A994D482:7")
+	})
+	p, ok := ev.Payload.(SysvarChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want SysvarChangedPayload", ev.Payload)
+	}
+	if p.Channel != "000858A994D482:7" {
+		t.Fatalf("channel = %q, want %q", p.Channel, "000858A994D482:7")
+	}
+	if p.DeviceAddress != "000858A994D482" {
+		t.Fatalf("device_address = %q, want %q", p.DeviceAddress, "000858A994D482")
+	}
+
+	events.Publish(cu.EventBus, hmevent.SysvarChangedEvent{
+		Base:        hmevent.NewBase(),
+		CentralName: "home",
+		Name:        "Unlinked",
+		ValueType:   hmenum.HubValueType("FLOAT"),
+		NewValue:    hmtypes.FloatValue(1.0),
+		OldValue:    hmtypes.FloatValue(0.0),
+	})
+	ev = pollHub(t, h, func(topic string) bool {
+		return topic == SysvarTopic("home", "Unlinked")
+	})
+	p, ok = ev.Payload.(SysvarChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want SysvarChangedPayload", ev.Payload)
+	}
+	if p.Channel != "" || p.DeviceAddress != "" {
+		t.Fatalf("unlinked sysvar must omit channel/device_address, got %q/%q", p.Channel, p.DeviceAddress)
+	}
+}
+
 // --- SystemUpdate tests ---
 
 // TestSystemUpdateTopicFormat verifies the canonical SystemUpdateTopic format.

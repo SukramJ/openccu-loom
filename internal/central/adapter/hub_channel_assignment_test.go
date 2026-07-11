@@ -51,7 +51,7 @@ func TestAssignHubChannelsSysvarDeviceIseIDMatch(t *testing.T) {
 	})
 	defer unsub()
 
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
 
 	if got := sv.Channel(); got != ch.Address {
 		t.Fatalf("Channel() = %q, want %q", got, ch.Address)
@@ -84,7 +84,7 @@ func TestAssignHubChannelsSysvarNoMatch(t *testing.T) {
 	})
 	defer unsub()
 
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
 
 	if got := sv.Channel(); got != "" {
 		t.Fatalf("Channel() = %q, want empty (no match)", got)
@@ -110,7 +110,7 @@ func TestAssignHubChannelsProgramDeviceIseIDMatch(t *testing.T) {
 	})
 	defer unsub()
 
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
 
 	if got := prog.Channel(); got != ch.Address {
 		t.Fatalf("Channel() = %q, want %q", got, ch.Address)
@@ -140,7 +140,7 @@ func TestAssignHubChannelsIdempotent(t *testing.T) {
 	})
 	defer unsub()
 
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
 	if fired != 1 {
 		t.Fatalf("first call: expected 1 event, got %d", fired)
 	}
@@ -148,7 +148,7 @@ func TestAssignHubChannelsIdempotent(t *testing.T) {
 		t.Fatalf("Channel() = %q, want %q", got, ch.Address)
 	}
 
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
 	if fired != 1 {
 		t.Fatalf("second (no-op) call must not publish another event, got %d", fired)
 	}
@@ -174,7 +174,7 @@ func TestAssignHubChannelsClearsOnDeviceRemoval(t *testing.T) {
 	})
 	defer unsub()
 
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
 	if got := sv.Channel(); got != ch.Address {
 		t.Fatalf("Channel() after initial assignment = %q, want %q", got, ch.Address)
 	}
@@ -186,7 +186,7 @@ func TestAssignHubChannelsClearsOnDeviceRemoval(t *testing.T) {
 		t.Fatal("Remove: expected device to be present")
 	}
 
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
 
 	if got := sv.Channel(); got != "" {
 		t.Fatalf("Channel() after device removal = %q, want empty", got)
@@ -204,11 +204,193 @@ func TestAssignHubChannelsClearsOnDeviceRemoval(t *testing.T) {
 func TestAssignHubChannelsNilSafety(t *testing.T) {
 	t.Parallel()
 
-	assignHubChannels(nil)
+	assignHubChannels(nil, nil)
 
 	c, err := central.New(central.Config{Name: "ccu-01"})
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	assignHubChannels(c)
+	assignHubChannels(c, nil)
+}
+
+// TestAssignHubChannelsExplicitAssignmentWins verifies precedence rule (a):
+// a sysvar whose name ALSO matches a device by name-lookup is nevertheless
+// linked to the channel the operator explicitly assigned on the CCU
+// ("Kanalzuordnung") when that channel is registered on this central.
+func TestAssignHubChannelsExplicitAssignmentWins(t *testing.T) {
+	t.Parallel()
+	c, _, _ := hubChannelAssignmentFixture(t)
+
+	// Second device provides the explicit target channel.
+	other := device.New(device.Config{Address: "0002EFGH", IseID: 300})
+	otherCh := other.AddChannel("0002EFGH:2", 2, "TYPE", hmenum.ParamsetKeyValues)
+	otherCh.IseID = 400
+	c.ModelRegistry.Put(other)
+
+	// Name matches device 0001ABCD (ise_id 100); explicit points elsewhere.
+	sv := hub.NewSysvar("ccu-01", "svEnergy 100", "", hmenum.HubValueTypeString, nil)
+	sv.SetExplicitChannel("0002EFGH:2")
+	c.HubModel.PutSysvar(sv)
+
+	var fired int
+	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+		fired++
+	})
+	defer unsub()
+
+	assignHubChannels(c, nil)
+
+	if got := sv.Channel(); got != "0002EFGH:2" {
+		t.Fatalf("Channel() = %q, want explicit %q to beat the name match", got, "0002EFGH:2")
+	}
+	if got := sv.DeviceAddress(); got != "0002EFGH" {
+		t.Fatalf("DeviceAddress() = %q, want %q", got, "0002EFGH")
+	}
+	if fired != 1 {
+		t.Fatalf("expected exactly 1 HubChannelsAssignedEvent, got %d", fired)
+	}
+}
+
+// TestAssignHubChannelsExplicitUnresolvableFallsBackToName verifies
+// precedence rule (a)→(b): an explicit assignment referencing a channel this
+// central never registered (device filtered out, on another central, or
+// removed) must not be trusted — the pass falls through to name matching.
+func TestAssignHubChannelsExplicitUnresolvableFallsBackToName(t *testing.T) {
+	t.Parallel()
+	c, _, ch := hubChannelAssignmentFixture(t)
+
+	sv := hub.NewSysvar("ccu-01", "svEnergy 100", "", hmenum.HubValueTypeString, nil)
+	sv.SetExplicitChannel("FFFF0000:9") // not registered anywhere
+	c.HubModel.PutSysvar(sv)
+
+	var fired int
+	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+		fired++
+	})
+	defer unsub()
+
+	assignHubChannels(c, nil)
+
+	if got := sv.Channel(); got != ch.Address {
+		t.Fatalf("Channel() = %q, want name-match fallback %q", got, ch.Address)
+	}
+	if fired != 1 {
+		t.Fatalf("expected exactly 1 HubChannelsAssignedEvent, got %d", fired)
+	}
+}
+
+// TestAssignHubChannelsExplicitChangeRepublishes verifies that a changed
+// explicit assignment (e.g. the operator re-assigns the variable in the CCU
+// WebUI and the next sysvar refresh carries the new address) moves the link
+// and publishes a further HubChannelsAssignedEvent — while an unchanged
+// explicit assignment stays silent (idempotency across refresh cycles).
+func TestAssignHubChannelsExplicitChangeRepublishes(t *testing.T) {
+	t.Parallel()
+	c, _, ch := hubChannelAssignmentFixture(t)
+
+	other := device.New(device.Config{Address: "0002EFGH", IseID: 300})
+	otherCh := other.AddChannel("0002EFGH:2", 2, "TYPE", hmenum.ParamsetKeyValues)
+	otherCh.IseID = 400
+	c.ModelRegistry.Put(other)
+
+	sv := hub.NewSysvar("ccu-01", "svNoNameHint", "", hmenum.HubValueTypeString, nil)
+	sv.SetExplicitChannel(ch.Address)
+	c.HubModel.PutSysvar(sv)
+
+	var fired int
+	unsub := events.Subscribe(c.EventBus, func(hmevent.HubChannelsAssignedEvent) {
+		fired++
+	})
+	defer unsub()
+
+	assignHubChannels(c, nil)
+	if got := sv.Channel(); got != ch.Address {
+		t.Fatalf("Channel() = %q, want %q", got, ch.Address)
+	}
+	if fired != 1 {
+		t.Fatalf("expected 1 event after initial assignment, got %d", fired)
+	}
+
+	// Idempotent re-run: no change, no event.
+	assignHubChannels(c, nil)
+	if fired != 1 {
+		t.Fatalf("no-op re-run must not publish another event, got %d", fired)
+	}
+
+	// Operator re-assigns on the CCU; the refresh stores the new address.
+	sv.SetExplicitChannel("0002EFGH:2")
+	assignHubChannels(c, nil)
+	if got := sv.Channel(); got != "0002EFGH:2" {
+		t.Fatalf("Channel() after re-assignment = %q, want %q", got, "0002EFGH:2")
+	}
+	if fired != 2 {
+		t.Fatalf("expected a 2nd event once the explicit assignment moved, got %d", fired)
+	}
+}
+
+// TestAssignHubChannelsEnergyCounterNameShape pins the real-world CCU
+// auto-generated energy-counter name shape
+// `svEnergyCounter_<channel_ise_id>_<CHANNELADDRESS>` (field example:
+// `svEnergyCounter_14884_000858A994D482:7`). The link resolves via the
+// address-suffix rule — the `_`-joined ise_id is deliberately NOT a
+// standalone token (word characters bound it), so the suffix match is the
+// rule that must hold. Also pins that the name family passes the sysvar
+// exclusion filter: operators see these variables in HA today.
+func TestAssignHubChannelsEnergyCounterNameShape(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	d := device.New(device.Config{Address: "000858A994D482", IseID: 14880})
+	ch := d.AddChannel("000858A994D482:7", 7, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	ch.IseID = 14884
+	c.ModelRegistry.Put(d)
+
+	const name = "svEnergyCounter_14884_000858A994D482:7"
+	if sysvarIsExcluded(name, "1234") {
+		t.Fatalf("sysvarIsExcluded(%q) = true, want false — the energy-counter family is user-visible", name)
+	}
+
+	sv := hub.NewSysvar("ccu-01", name, "", hmenum.HubValueTypeFloat, nil)
+	c.HubModel.PutSysvar(sv)
+
+	assignHubChannels(c, nil)
+
+	if got := sv.Channel(); got != "000858A994D482:7" {
+		t.Fatalf("Channel() = %q, want address-suffix match %q", got, "000858A994D482:7")
+	}
+	if got := sv.DeviceAddress(); got != "000858A994D482" {
+		t.Fatalf("DeviceAddress() = %q, want %q", got, "000858A994D482")
+	}
+}
+
+// TestChannelRegistered exercises the explicit-assignment validation helper
+// across the resolvable and unresolvable shapes assignHubChannels feeds it.
+func TestChannelRegistered(t *testing.T) {
+	t.Parallel()
+	c, _, ch := hubChannelAssignmentFixture(t)
+
+	cases := []struct {
+		name    string
+		address string
+		want    bool
+	}{
+		{"registered channel", ch.Address, true},
+		{"device-level address", "0001ABCD", true},
+		{"unknown channel index", "0001ABCD:9", false},
+		{"unknown device", "FFFF0000:1", false},
+		{"empty address", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := channelRegistered(c.ModelRegistry, tc.address); got != tc.want {
+				t.Fatalf("channelRegistered(%q) = %v, want %v", tc.address, got, tc.want)
+			}
+		})
+	}
+	if channelRegistered(nil, ch.Address) {
+		t.Fatal("channelRegistered(nil, …) must be false")
+	}
 }

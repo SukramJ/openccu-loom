@@ -312,12 +312,19 @@ func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescripti
 type SystemVariableDescription struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
+	// ChannelAddress is the address of the channel explicitly assigned to
+	// the variable in the CCU WebUI ("Kanalzuordnung"); empty when the
+	// variable has no assignment. Older CCU firmwares (or cached script
+	// results) that omit the field decode to the empty string, so callers
+	// treat "" as "no explicit assignment".
+	ChannelAddress string `json:"channel_address"`
 }
 
-// GetSystemVariableDescriptions returns the URI-encoded description string for
-// every CCU system variable by running the get_system_variable_descriptions.fn
-// ReGa script. The Description field values are URL-encoded; callers should
-// apply url.QueryUnescape before display.
+// GetSystemVariableDescriptions returns the URI-encoded description string
+// and the explicitly assigned channel address for every CCU system variable
+// by running the get_system_variable_descriptions.fn ReGa script. The
+// Description and ChannelAddress field values are URL-encoded; callers
+// should apply url.QueryUnescape before use.
 func (r *Runner) GetSystemVariableDescriptions(ctx context.Context) ([]SystemVariableDescription, error) {
 	var descs []SystemVariableDescription
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetSystemVariableDescriptions, nil, &descs); err != nil {

@@ -1,10 +1,17 @@
 !# openccu-loom — get_system_variable_descriptions
-!# Output: [{"id":"<sysvar-id>","description":"<uri-encoded info>"}...]
+!# Output: [{"id":"<sysvar-id>","description":"<uri-encoded info>","channel_address":"<uri-encoded addr or empty>"}...]
 !#
 !# Walks the system-variable collection and emits a JSON array. The
 !# description is URL-encoded because sysvar .DPInfo() strings may
 !# contain quotes, backslashes, or newlines that would otherwise break
 !# our framing.
+!#
+!# channel_address carries the channel explicitly assigned to the
+!# variable in the WebUI ("Kanalzuordnung"). oVar.Channel() returns the
+!# assigned channel's ise_id as an integer; the id resolves to the
+!# channel object whose .Address() we emit. Unassigned or unresolvable
+!# assignments emit an empty string. The address is URL-encoded
+!# defensively, matching the framing convention of the other fields.
 
 string sVarId;
 boolean bFirst = true;
@@ -14,6 +21,14 @@ foreach (sVarId, dom.GetObject(ID_SYSTEM_VARIABLES).EnumIDs()) {
     object oVar = dom.GetObject(sVarId);
     if (oVar) {
         string sDescription = oVar.DPInfo().UriEncode();
+        string sChannelAddress = "";
+        integer iChn = oVar.Channel();
+        if (iChn > 0) {
+            object oCh = dom.GetObject(iChn);
+            if (oCh) {
+                sChannelAddress = oCh.Address().UriEncode();
+            }
+        }
 
         if (bFirst) {
             bFirst = false;
@@ -21,7 +36,7 @@ foreach (sVarId, dom.GetObject(ID_SYSTEM_VARIABLES).EnumIDs()) {
             WriteLine(',');
         }
 
-        Write('{"id":"' # sVarId # '","description":"' # sDescription # '"}');
+        Write('{"id":"' # sVarId # '","description":"' # sDescription # '","channel_address":"' # sChannelAddress # '"}');
     }
 }
 Write(']');

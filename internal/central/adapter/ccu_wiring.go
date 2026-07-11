@@ -940,7 +940,7 @@ func wireInterface(
 		// here as an idempotent post-pass. Cheap and safe to repeat after each
 		// interface ingest; the links converge once every interface's devices
 		// are present.
-		assignHubChannels(unit)
+		assignHubChannels(unit, logger)
 
 		// Schedule a background paramset-consistency check for the HmIP-RF
 		// interface. HmIP-RF and HmIP-Wired devices both arrive through this
