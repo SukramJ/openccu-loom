@@ -149,6 +149,15 @@ func (p *deviceIconProxy) fetch(ctx context.Context, filename, centralName strin
 	if err != nil {
 		return nil, ""
 	}
+	// A CCU with authentication enabled protects its web-server paths.
+	// Sending the central's credentials mirrors the XML-RPC transport
+	// (internal/client/transport/xmlrpc/client.go) so the icon still
+	// resolves when the daemon runs off-box (e.g. as an HA add-on)
+	// against such a CCU; a CCU that does not require auth ignores the
+	// header.
+	if cc.Username != "" {
+		req.SetBasicAuth(cc.Username, cc.Password)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, ""

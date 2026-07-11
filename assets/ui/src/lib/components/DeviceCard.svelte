@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { DeviceSummary } from "$lib/api/types";
+  import { apiBase } from "$lib/api/base";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { deviceTypeIcon } from "$lib/device-icon";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
@@ -14,9 +15,14 @@
 
   const subtitle = $derived(device.model_label || device.model);
   const typeIcon = $derived(deviceTypeIcon(device));
-  // Real eQ-3 device image, proxied from the CCU. Falls back to the
-  // type glyph when the CCU has no icon for this model or is offline.
-  const iconUrl = $derived(`/api/v1/devices/${encodeURIComponent(device.address)}/icon`);
+  // Real eQ-3 device image, proxied from the CCU. Falls back to the type
+  // glyph when the CCU has no icon for this model or is offline. The URL
+  // MUST carry the ingress prefix (apiBase) — a hard-coded /api/v1 bypasses
+  // the Home Assistant Ingress proxy and hits the HA origin instead, so
+  // every icon 404s and shows only the fallback glyph when the daemon runs
+  // as an HA add-on (it works untouched as a CCU add-on, where the prefix
+  // is empty). See lib/api/base.ts.
+  const iconUrl = $derived(`${apiBase()}/devices/${encodeURIComponent(device.address)}/icon`);
   let iconFailed = $state(false);
   // Reset the failure flag if this card instance is reused for another
   // device (defensive — the list is keyed by address).
@@ -64,15 +70,17 @@
          Prefer the real eQ-3 image proxied from the CCU; fall back to a
          type glyph when it is unavailable. -->
     <div class="relative mt-0.5 flex-shrink-0" style="color: var(--ha-secondary-text-color);">
-      <!-- Neutral photo tile: eQ-3 product photos are frequently not
-           transparency-cropped and carry a baked-in white background.
-           A plain white tile (in both themes) turns that into an
-           intentional "product photo card" look instead of a stray
-           white box floating on a dark card in dark mode. The type-glyph
-           fallback shares the same tile so the two states don't jump in
-           size when the image request fails. -->
+      <!-- Icon plate. The CCU device artwork is monochrome line-art: some
+           models ship a transparent PNG with dark strokes, others a PNG
+           with a baked-in white background. A white plate keeps both
+           legible in light mode. In dark mode that white plate is a
+           glaring box, so the plate goes transparent and the grayscale art
+           is inverted (dark strokes -> light) to sit cleanly on the dark
+           card. The type-glyph fallback (a currentColor SVG) shares the
+           plate so the two states keep the same footprint — it must NOT be
+           inverted, so dark:invert lives on the <img> only. -->
       <div
-        class="flex h-9 w-9 items-center justify-center rounded-lg bg-white p-1 ring-1 ring-slate-200 dark:ring-slate-700"
+        class="flex h-9 w-9 items-center justify-center rounded-lg bg-white p-1 ring-1 ring-slate-200 dark:bg-transparent dark:ring-slate-700"
       >
         {#if iconFailed}
           <Icon name={typeIcon} size={22} aria-label={subtitle} title={subtitle} />
@@ -84,7 +92,7 @@
             width="22"
             height="22"
             loading="lazy"
-            class="h-[22px] w-[22px] object-contain"
+            class="h-[22px] w-[22px] object-contain dark:invert"
             onerror={() => (iconFailed = true)}
           />
         {/if}
