@@ -8,10 +8,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.35.0] — 2026-07-11
 
-Device-icon fixes for the Home Assistant add-on deployment (icons were
-placeholder-only behind Ingress and glaring white in dark mode), plus CCU
-system variables and programs now linked to their physical device. No
-REST/WS API surface changes.
+Ingress and dark-mode fixes for the Home Assistant add-on deployment (device
+icons were placeholder-only behind Ingress and glaring white in dark mode;
+the "Login with OIDC" button 404'd behind Ingress), plus CCU system variables
+and programs now linked to their physical device. No REST/WS API surface
+changes.
 
 ### Added
 
@@ -39,6 +40,15 @@ REST/WS API surface changes.
   like every other REST call. The icon proxy additionally sends the
   central's credentials, so icons also resolve against a CCU with
   authentication enabled when reached off-box.
+- **The "Login with OIDC" button works behind Home Assistant Ingress.** The
+  login page linked the OIDC start endpoint with a hard-coded `/api/v1/…`
+  path, which bypasses the Ingress proxy prefix and hits the Home Assistant
+  origin (404) when the daemon runs as an HA add-on. The link now carries the
+  Ingress prefix via `apiBase()`, like every other REST URL, so the SSO flow
+  is reachable. (Completing the round-trip still requires the operator's
+  registered OIDC `redirect_uri` to point at a daemon URL the browser can
+  reach — an inherent Ingress/OIDC deployment constraint the SPA cannot
+  derive, since Ingress strips its prefix server-side.)
 - **Device icons are no longer glaring white tiles in dark mode.** The CCU
   model artwork is monochrome line-art (some ships transparent, some with a
   baked-in white background) and sat on a permanent white plate. In dark

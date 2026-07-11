@@ -73,6 +73,26 @@ describe("Login — rendering", () => {
     expect(sso).toHaveAttribute("href", "/api/v1/auth/oidc/start");
   });
 
+  it("carries the Home Assistant Ingress prefix on the SSO link", () => {
+    const original = globalThis.location;
+    (globalThis as { location?: unknown }).location = {
+      pathname: "/api/hassio_ingress/tok-xyz/app/",
+      hash: "",
+    } as Location;
+    try {
+      render(Login);
+      const sso = screen.getByRole("link", { name: "login.sso" });
+      // Prefix-less /api/v1/... would bypass the Ingress proxy and 404
+      // against the Home Assistant origin.
+      expect(sso).toHaveAttribute(
+        "href",
+        "/api/hassio_ingress/tok-xyz/api/v1/auth/oidc/start",
+      );
+    } finally {
+      (globalThis as { location?: unknown }).location = original;
+    }
+  });
+
   it("does not show the CCU hint when auth.ccu.v1 is absent from capabilities", async () => {
     mockInfo.mockResolvedValue({ capabilities: [] });
     render(Login);
