@@ -736,6 +736,8 @@ const stopSessionCloseBudget = 2500 * time.Millisecond
 // StatusReport, and draining every session gracefully at shutdown.
 // Backed by `secure/operational.Manager` in the production daemon via
 // [Bridge.AttachSessionRegistry]; tests substitute a fake.
+//
+// loom:reachable:reason="parameter contract of AttachSessionRegistry, which the daemon calls with the operational manager; the call site satisfies the interface implicitly, so the type name itself never appears in production references"
 type SessionRegistry interface {
 	// Close removes the session and runs the manager's close hooks
 	// (subscription cascade). Returns an error when the id is unknown.
