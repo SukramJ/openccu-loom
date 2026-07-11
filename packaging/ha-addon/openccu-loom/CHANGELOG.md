@@ -1,5 +1,19 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.35.0
+
+Device-icon fixes and device-linked system variables.
+
+- **Device icons now appear as an HA add-on**: the real CCU device pictures
+  showed only a generic placeholder when the add-on ran under Home Assistant
+  (they already worked on the CCU add-on) — they now load correctly through
+  the Ingress proxy.
+- **Device icons in dark mode**: the icons no longer sit in a glaring white
+  box; the line-art is inverted to sit cleanly on the dark card.
+- **System variables and programs on the right device**: a sysvar or program
+  whose name references a device or channel now shows on that physical
+  device's card instead of the central hub card.
+
 ## 0.34.0
 
 Design & usability overhaul of the web UI.

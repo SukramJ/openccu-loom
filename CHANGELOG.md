@@ -6,6 +6,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-07-11
+
+Device-icon fixes for the Home Assistant add-on deployment (icons were
+placeholder-only behind Ingress and glaring white in dark mode), plus CCU
+system variables and programs now linked to their physical device. No
+REST/WS API surface changes.
+
 ### Added
 
 - **System variables and programs are now linked to their device.** A CCU
