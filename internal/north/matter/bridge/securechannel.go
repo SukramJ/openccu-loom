@@ -6,12 +6,14 @@ package bridge
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
@@ -267,7 +269,8 @@ func (b *Bridge) AttachAckHandler(h AckHandler) {
 //   - 0x30 Sigma1                → CaseHandler.ProcessSigma1 → 0x31 Sigma2
 //   - 0x32 Sigma3                → CaseHandler.ProcessSigma3 (no reply or status ack)
 //   - 0x33 Sigma2Resume          → CaseHandler.ProcessSigma2Resume → 0x33 reply
-//   - 0x40 StatusReport          → log (no reply)
+//   - 0x40 StatusReport          → CloseSession closes the session;
+//     anything else logs (no reply)
 //   - everything else (incl. 0x21/0x23/0x25/0x31 = bridge-initiated
 //     responses we should never receive on the listener) → drop with
 //     debug log.
@@ -288,6 +291,16 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		if ack != nil {
 			ack.Discharge(requestHdr.SessionID, proto.ExchangeID)
 		}
+	}
+
+	// Remember the authenticated peer address per secure session
+	// (Secure-Channel datagrams reach this router only after the
+	// decrypt in receive.go succeeds). The graceful CloseSession
+	// StatusReport sender routes on it — matter.js keeps the same
+	// association on the session itself via its MessageChannel
+	// (packages/protocol/src/session/Session.ts, `get channel()`).
+	if requestHdr.SessionID != 0 && src != nil {
+		b.sessionPeerAddrs.Store(requestHdr.SessionID, src)
 	}
 
 	switch proto.Opcode {
@@ -394,11 +407,7 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 			ch.ProcessSigma2Resume)
 
 	case mrp.SCOpcodeStatusReport:
-		b.logger.Debug("matter.rx.sc.status_report",
-			slog.String("src", srcString(src)),
-			slog.Int("payload_bytes", len(payload)),
-			slog.String("hex", hex.EncodeToString(payload)))
-		return nil
+		return b.handleSecureChannelStatusReport(src, requestHdr, payload)
 
 	default:
 		b.logger.Debug("matter.rx.sc.unhandled",
@@ -703,4 +712,331 @@ func (b *Bridge) forgetSigma1Replied(exchangeID uint16) {
 // sees many half-completed CASE attempts.
 func (b *Bridge) ForgetSigma1Replied(exchangeID uint16) {
 	b.forgetSigma1Replied(exchangeID)
+}
+
+// ---------------------------------------------------------------------------
+// Graceful secure-session teardown (Secure-Channel CloseSession).
+// ---------------------------------------------------------------------------
+
+// scStatusProtocolCloseSession is the Secure-Channel StatusReport
+// protocol code announcing that the sender will close the current
+// session. Verbatim from matter.js packages/types/src/protocol/
+// definitions/secure-channel.ts:76 (`CloseSession = 0x0003`).
+const scStatusProtocolCloseSession uint16 = 0x0003
+
+// stopSessionCloseBudget caps the total time [Bridge.Stop] spends on
+// graceful secure-session teardown. Each per-session notification is a
+// single best-effort UDP datagram, so the budget is generous — it
+// exists so a wedged wire path can never stall daemon shutdown.
+const stopSessionCloseBudget = 2500 * time.Millisecond
+
+// SessionRegistry is the bridge-side seam to the operational session
+// manager for session lifecycle actions the Secure-Channel wire path
+// initiates: closing a single session on an inbound CloseSession
+// StatusReport, and draining every session gracefully at shutdown.
+// Backed by `secure/operational.Manager` in the production daemon via
+// [Bridge.AttachSessionRegistry]; tests substitute a fake.
+//
+// loom:reachable:reason="parameter contract of AttachSessionRegistry, which the daemon calls with the operational manager; the call site satisfies the interface implicitly, so the type name itself never appears in production references"
+type SessionRegistry interface {
+	// Close removes the session and runs the manager's close hooks
+	// (subscription cascade). Returns an error when the id is unknown.
+	Close(sessionID uint16) error
+	// CloseAllGraceful notifies every peer (best-effort CloseSession
+	// StatusReport via the registry's graceful-close notifier) and
+	// closes all sessions. Notifications stop once deadline passes;
+	// local teardown always completes. Returns the sessions closed.
+	CloseAllGraceful(deadline time.Time) int
+}
+
+// gracefulCloseNotifierSetter is the optional capability a
+// [SessionRegistry] implements to receive the bridge's outbound
+// CloseSession sender. The operational manager fires it once per
+// session before zeroising the keys on graceful teardown — the Go
+// translation of matter.js ExchangeManager.ts:635 observing
+// session.gracefulClose and shipping the report via #sendCloseSession.
+type gracefulCloseNotifierSetter interface {
+	SetGracefulCloseNotifier(fn func(sessionID uint16, sess *channel.Session))
+}
+
+// reannounceTriggerSetter is the optional capability a
+// [SessionRegistry] implements to receive the bridge's mDNS
+// broadcast-resume trigger, fired after a reap / eviction leaves a
+// peer with zero live sessions (matter.js DeviceAdvertiser.ts:132-149).
+type reannounceTriggerSetter interface {
+	SetReannounceTrigger(fn func())
+}
+
+// AttachSessionRegistry wires the operational session manager into the
+// bridge's Secure-Channel path. Beyond storing the registry for the
+// inbound-CloseSession and shutdown paths, it self-wires the reverse
+// hooks when the registry supports them: the graceful-close notifier
+// (outbound CloseSession StatusReport before key zeroise) and the
+// mDNS reannounce trigger. Pass nil to detach.
+func (b *Bridge) AttachSessionRegistry(reg SessionRegistry) {
+	b.mu.Lock()
+	b.sessionRegistry = reg
+	b.mu.Unlock()
+	if reg == nil {
+		return
+	}
+	if setter, ok := reg.(gracefulCloseNotifierSetter); ok {
+		setter.SetGracefulCloseNotifier(b.sendCloseSessionReport)
+	}
+	if setter, ok := reg.(reannounceTriggerSetter); ok {
+		setter.SetReannounceTrigger(b.triggerSessionReannounce)
+	}
+}
+
+// decodeStatusReport splits a Secure-Channel StatusReport body into
+// its fixed fields per Matter §4.10.1.1: LE uint16 generalCode ||
+// uint32 protocolID || uint16 protocolCode (|| optional protocolData,
+// ignored here). Mirrors matter.js SecureChannelStatusMessageSchema
+// decode (packages/protocol/src/securechannel/
+// SecureChannelStatusMessageSchema.ts). ok=false on a truncated body.
+func decodeStatusReport(payload []byte) (generalCode uint16, protocolID uint32, protocolCode uint16, ok bool) {
+	if len(payload) < 8 {
+		return 0, 0, 0, false
+	}
+	return binary.LittleEndian.Uint16(payload[0:2]),
+		binary.LittleEndian.Uint32(payload[2:6]),
+		binary.LittleEndian.Uint16(payload[6:8]),
+		true
+}
+
+// handleSecureChannelStatusReport services an inbound Secure-Channel
+// StatusReport. The only initial StatusReport a peer legitimately
+// opens an exchange with is CloseSession — the session it rides on is
+// closed immediately (subscription cleanup cascades through the
+// registry's close hooks); every other combination is a stray peer
+// retransmit and is ignored with a debug log. Mirrors matter.js
+// SecureChannelProtocol.ts:54-82 handleInitialStatusReport: non-close
+// reports log + close the exchange, CloseSession resolves the session
+// and calls session.handlePeerClose (SecureChannelProtocol.ts:81-82
+// "Closed by peer").
+func (b *Bridge) handleSecureChannelStatusReport(src *net.UDPAddr, requestHdr *message.Header, payload []byte) error {
+	generalCode, protocolID, protocolCode, ok := decodeStatusReport(payload)
+	isClose := ok &&
+		generalCode == mrp.SCStatusGeneralSuccess &&
+		protocolID == uint32(mrp.SecureChannelProtocolID) &&
+		protocolCode == scStatusProtocolCloseSession
+	if !isClose || requestHdr.SessionID == 0 {
+		// matter.js ignores unexpected initial StatusReports with a
+		// debug log (SecureChannelProtocol.ts:71-77); an unsecured
+		// CloseSession is meaningless (session 0 has no keys to drop).
+		b.logger.Debug("matter.rx.sc.status_report",
+			slog.String("src", srcString(src)),
+			slog.Int("session_id", int(requestHdr.SessionID)),
+			slog.Int("payload_bytes", len(payload)),
+			slog.String("hex", hex.EncodeToString(payload)))
+		return nil
+	}
+	b.sessionPeerAddrs.Delete(requestHdr.SessionID)
+	b.mu.RLock()
+	reg := b.sessionRegistry
+	b.mu.RUnlock()
+	if reg == nil {
+		b.logger.Debug("matter.rx.sc.close_session.no_registry",
+			slog.Int("session_id", int(requestHdr.SessionID)))
+		return nil
+	}
+	if err := reg.Close(requestHdr.SessionID); err != nil {
+		// Already gone — racing a local reap / fabric teardown.
+		b.logger.Debug("matter.rx.sc.close_session.miss",
+			slog.Int("session_id", int(requestHdr.SessionID)),
+			slog.String("err", err.Error()))
+		return nil
+	}
+	b.logger.Info("matter.rx.sc.close_session",
+		slog.String("src", srcString(src)),
+		slog.Int("session_id", int(requestHdr.SessionID)))
+	return nil
+}
+
+// resolveSessionPeerAddr finds the last-known UDP address for a secure
+// session so the graceful CloseSession StatusReport can be routed.
+// Resolution order:
+//
+//  1. the authenticated Secure-Channel receive path's per-session
+//     record (StandaloneAcks and other SC datagrams),
+//  2. the per-subscription routing targets (a subscribed controller —
+//     the common Apple Home case — always has one),
+//  3. the owed-ack exchange table (a recent reliable IM request).
+//
+// Returns nil when the peer address was never observed; the caller
+// skips the notification (best-effort, matching the try/catch around
+// matter.js ExchangeManager.ts:658-666 #sendCloseSession).
+func (b *Bridge) resolveSessionPeerAddr(sessionID uint16) *net.UDPAddr {
+	if raw, ok := b.sessionPeerAddrs.Load(sessionID); ok {
+		if addr, ok := raw.(*net.UDPAddr); ok && addr != nil {
+			return addr
+		}
+	}
+	var addr *net.UDPAddr
+	b.routing.subTargets.Range(func(_, v any) bool {
+		if t, ok := v.(subTarget); ok && t.sessionID == sessionID && t.src != nil {
+			addr = t.src
+			return false
+		}
+		return true
+	})
+	if addr != nil {
+		return addr
+	}
+	b.routing.exchangeSrcs.Range(func(k, v any) bool {
+		key, ok := k.(mrp.ExchangeKey)
+		if !ok || key.SessionID != sessionID {
+			return true
+		}
+		if t, ok := v.(exchangeReplyTarget); ok && t.src != nil {
+			addr = t.src
+			return false
+		}
+		return true
+	})
+	return addr
+}
+
+// sendCloseSessionReport ships a Secure-Channel CloseSession
+// StatusReport (GeneralCode=SUCCESS, ProtocolCode=CLOSE_SESSION) to
+// the session's peer on a fresh bridge-initiated exchange. Wired as
+// the operational manager's graceful-close notifier, so it runs while
+// the session keys are still live. Strictly best-effort: any failure
+// (unknown peer address, encrypt error, socket error) is logged at
+// debug and swallowed — matter.js wraps the same send in a
+// try/catch-and-warn (ExchangeManager.ts:658-666 #sendCloseSession).
+//
+// Wire shape mirrors matter.js SecureChannelMessenger.ts:156-158
+// sendCloseSession → #sendStatusReport(Success, CloseSession,
+// requiresAck=false): the report is NOT MRP-tracked, the peer does not
+// ack a farewell.
+func (b *Bridge) sendCloseSessionReport(sessionID uint16, sess *channel.Session) {
+	b.mu.RLock()
+	listener := b.listener
+	b.mu.RUnlock()
+	if listener == nil || sess == nil {
+		return
+	}
+	dst := b.resolveSessionPeerAddr(sessionID)
+	if dst == nil {
+		b.logger.Debug("matter.tx.sc.close_session.no_peer_addr",
+			slog.Int("session_id", int(sessionID)))
+		return
+	}
+	proto := message.ProtocolHeader{
+		Initiator:  true,
+		Opcode:     mrp.SCOpcodeStatusReport,
+		ExchangeID: b.nextOutboundExchangeID(),
+		ProtocolID: mrp.SecureChannelProtocolID,
+		NeedsAck:   false,
+	}
+	body := append(proto.Marshal(), mrp.EncodeStatusReport(
+		mrp.SCStatusGeneralSuccess,
+		uint32(mrp.SecureChannelProtocolID),
+		scStatusProtocolCloseSession,
+		nil,
+	)...)
+	// Stamp the peer's view of the SessionID so their inbound table
+	// resolves the session — see [Bridge.sendReply] for the rationale.
+	hdr := message.Header{SessionID: sess.PeerSessionID()}
+	if hdr.SessionID == 0 {
+		hdr.SessionID = sessionID
+	}
+	// Deliberately NOT [Bridge.encryptSecureOutbound]: the farewell seals
+	// for a session that is being torn down — its manager entry is already
+	// gone, and refreshing activity on a dying session would be
+	// meaningless at best.
+	enc, err := sess.Encrypt(&hdr, securityFlagsByte(&hdr), body)
+	if err != nil {
+		b.logger.Debug("matter.tx.sc.close_session.encrypt",
+			slog.Int("session_id", int(sessionID)),
+			slog.String("err", err.Error()))
+		return
+	}
+	datagram := append(hdr.Marshal(), enc.Ciphertext...) //nolint:gocritic // single-allocation join
+	if err := listener.Send(dst, datagram); err != nil {
+		b.logger.Debug("matter.tx.sc.close_session.send",
+			slog.Int("session_id", int(sessionID)),
+			slog.String("err", err.Error()))
+		return
+	}
+	b.sessionPeerAddrs.Delete(sessionID)
+	b.logger.Debug("matter.tx.sc.close_session",
+		slog.String("dst", srcString(dst)),
+		slog.Int("session_id", int(sessionID)))
+}
+
+// triggerSessionReannounce resumes mDNS broadcast after a session
+// teardown left a peer with zero live sessions, so the controller
+// rediscovers the bridge and re-establishes CASE instead of showing it
+// unresponsive until the next periodic re-announce tick. Mirrors
+// matter.js DeviceAdvertiser.ts:132-149 (sessions.deleted →
+// serviceDisconnected resumes broadcasting).
+//
+// Fire-and-forget: the republish runs on its own goroutine bounded by
+// the advertise timeout, because the trigger fires from the reaper /
+// receive paths which must not block on mDNS probe/announce rounds.
+// No-op once the bridge stopped — matter.js shuts the advertiser down
+// before removing sessions to prevent exactly this re-announce
+// (ServerNetworkRuntime.ts:427).
+func (b *Bridge) triggerSessionReannounce() {
+	b.mu.RLock()
+	started := b.started
+	advertiser := b.advertiser
+	timeout := b.cfg.AdvertiseTimeout
+	b.mu.RUnlock()
+	if !started || advertiser == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		// Zeroconf exposes a direct republish trigger; other
+		// advertisers degrade to a per-record re-publish, which the
+		// [mdns.Advertiser] contract defines as a re-announce.
+		if fast, ok := advertiser.(interface{ TriggerReannounce(context.Context) }); ok {
+			fast.TriggerReannounce(ctx)
+		} else {
+			active := advertiser.Active()
+			for i := range active {
+				if err := advertiser.Publish(ctx, active[i]); err != nil {
+					b.logger.Debug("matter.mdns.session_reannounce",
+						slog.String("instance", active[i].InstanceName),
+						slog.String("err", err.Error()))
+				}
+			}
+		}
+		b.logger.Debug("matter.mdns.session_reannounce.done")
+	}()
+}
+
+// closeSecureSessionsForShutdown drains every operational session with
+// a best-effort CloseSession StatusReport per peer, bounded by
+// [stopSessionCloseBudget]. Called by [Bridge.Stop] BEFORE the UDP
+// listener is torn down — without the farewell, controllers keep their
+// CASE sessions alive and show the bridge unresponsive for minutes
+// after a restart while their retransmits time out. The overall select
+// cap guarantees Stop never blocks on the teardown even if the
+// registry wedges; the registry additionally enforces the same
+// deadline per notification.
+func (b *Bridge) closeSecureSessionsForShutdown() {
+	b.mu.RLock()
+	started := b.started
+	reg := b.sessionRegistry
+	b.mu.RUnlock()
+	if !started || reg == nil {
+		return
+	}
+	deadline := time.Now().Add(stopSessionCloseBudget)
+	done := make(chan int, 1)
+	go func() { done <- reg.CloseAllGraceful(deadline) }()
+	select {
+	case n := <-done:
+		if n > 0 {
+			b.logger.Info("matter.bridge.stop.sessions_closed", slog.Int("count", n))
+		}
+	case <-time.After(stopSessionCloseBudget):
+		b.logger.Warn("matter.bridge.stop.session_close_timeout",
+			slog.Duration("budget", stopSessionCloseBudget))
+	}
 }

@@ -152,6 +152,20 @@ type Unit struct {
 	// DeviceCreatedEvent subscription installed by [WireDevicesCreatedGate].
 	devicesCreatedUnsub func()
 
+	// southboundReadyMu guards southboundReady below.
+	southboundReadyMu sync.RWMutex
+	// southboundReady latches once the initial southbound bring-up (the
+	// readiness-gated CCU device load) has completed. It is the queryable
+	// twin of [hmevent.CentralSouthboundReadyEvent]: the event only reaches
+	// subscribers that exist when it fires, while this flag lets a late
+	// subscriber (e.g. the Matter bridge wiring, which starts after the
+	// bring-up goroutines) seed its view instead of waiting for an event
+	// that will never re-fire. Set by the southbound adapter exactly where
+	// it publishes the event; never cleared for the unit's lifetime — the
+	// loaded model survives mid-life CCU reconnects, so the registry view
+	// stays authoritative once the initial load has completed.
+	southboundReady bool
+
 	// stopHooksMu guards stopHooks.
 	stopHooksMu sync.Mutex
 	// stopHooks holds teardown functions grouped by shutdown tier (see
@@ -382,6 +396,27 @@ func (u *Unit) IsDevicesCreated() bool {
 		return true
 	}
 	return u.devicesCreated
+}
+
+// MarkSouthboundReady latches the central's initial southbound bring-up as
+// complete. Called by the southbound adapter at the exact point it publishes
+// [hmevent.CentralSouthboundReadyEvent] (set BEFORE the publish, so an event
+// handler that queries the flag always observes true). Idempotent; the latch
+// is never cleared — see the southboundReady field doc.
+func (u *Unit) MarkSouthboundReady() {
+	u.southboundReadyMu.Lock()
+	u.southboundReady = true
+	u.southboundReadyMu.Unlock()
+}
+
+// IsSouthboundReady reports whether the initial southbound bring-up has
+// completed at least once. Late subscribers of
+// [hmevent.CentralSouthboundReadyEvent] seed from this accessor to close the
+// subscribe-after-fire race.
+func (u *Unit) IsSouthboundReady() bool {
+	u.southboundReadyMu.RLock()
+	defer u.southboundReadyMu.RUnlock()
+	return u.southboundReady
 }
 
 // SetLinkResolver installs the [coordinators.ClientResolver] used by

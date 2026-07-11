@@ -66,13 +66,13 @@ const (
 // Cluster revisions. Matched against the model-layer constants in
 // `internal/model/custom/.../matter*.go`.
 const (
-	tempMeasClusterRevision      uint16 = 5
-	humidityClusterRevision      uint16 = 4
-	illuminanceClusterRevision   uint16 = 4
-	pressureClusterRevision      uint16 = 4
-	booleanStateClusterRevision  uint16 = 2
-	occupancyClusterRevision     uint16 = 6 // matter.js HEAD `occupancy-sensing.element.ts:20` default=6
-	concentrationClusterRevision uint16 = 4 // CO2 / PM2.5 / PM10 base cluster — matter.js HEAD `concentration-measurement.element.ts:20` default=4
+	tempMeasClusterRevision      uint16 = 6 // matter.js HEAD `temperature-measurement.element.ts:14` default=6
+	humidityClusterRevision      uint16 = 5 // matter.js HEAD `relative-humidity-measurement.element.ts:14` default=5
+	illuminanceClusterRevision   uint16 = 5 // matter.js HEAD `illuminance-measurement.element.ts:19` default=5
+	pressureClusterRevision      uint16 = 5 // matter.js HEAD `pressure-measurement.element.ts:18` default=5
+	booleanStateClusterRevision  uint16 = 3 // matter.js HEAD `boolean-state.element.ts:19` default=3
+	occupancyClusterRevision     uint16 = 7 // matter.js HEAD `occupancy-sensing.element.ts:20` default=7
+	concentrationClusterRevision uint16 = 5 // CO2 / PM2.5 / PM10 base cluster — matter.js HEAD `concentration-measurement.element.ts:19` default=5
 	powerSourceClusterRevision   uint16 = 3 // matter.js HEAD (@matter/model 0.16.11)
 )
 
@@ -213,6 +213,18 @@ type AccuracyStruct struct {
 	MinAccuracy     uint16
 	MaxAccuracy     uint16
 	AccuracyRanges  []AccuracyRangeStruct
+}
+
+// EnergyMeasurementStruct is the wire payload of the
+// ElectricalEnergyMeasurement Cumulative/PeriodicEnergy* attributes per
+// Matter §2.14.5.2. Only the mandatory Energy field (tag 0, int64 mWh,
+// "0 to 2^62") is emitted: the StartTimestamp/EndTimestamp/StartSystime/
+// EndSystime fields (tags 1-4) describe the recording period of PERIODIC
+// measurements and are omitted for cumulative readings per their field
+// descriptions. matter.js ref: packages/model/src/standard/elements/
+// electrical-energy-measurement.element.ts:88-96 (EnergyMeasurementStruct).
+type EnergyMeasurementStruct struct {
+	Energy int64
 }
 
 // errReadOnly surfaces from MatterWrite — every server in this
@@ -614,9 +626,11 @@ func hPaToMatter(hpa float64) int16 {
 // --- BooleanState (0x0045) ---------------------------------------------
 
 // BooleanStateServer projects a [interfaces.MatterBoolMeasurementSource]
-// onto Matter BooleanState. Used for ContactSensor / WaterLeakDetector
-// / generic alarm endpoints. The polarity is set by the model-layer
-// classifier (see `internal/model/generic/matter.go::matterMeasurementForBinaryParameter`).
+// onto Matter BooleanState. Used for ContactSensor and generic alarm
+// endpoints (leak-class sensors also materialise as ContactSensor —
+// see `pkg/interfaces/matter.go::MatterMeasurementClassDeviceType`).
+// The polarity is set by the model-layer classifier (see
+// `internal/model/generic/matter.go::matterMeasurementForBinaryParameter`).
 //
 // BooleanStateServer embeds [cluster.DataVersionTracker] and implements
 // [interfaces.MatterClusterDataVersion]. See TemperatureServer for the
@@ -1058,7 +1072,11 @@ func (s *ElectricalEnergyServer) MatterRead(attrID uint32) (any, bool) {
 		if !ok {
 			return nil, true
 		}
-		return whToMilliWattHours(v), true
+		// The attribute type is EnergyMeasurementStruct, NOT a bare
+		// energy-mWh scalar — chip-tool's typed StructDecodeIterator
+		// rejects a plain int64 here with "Wrong TLV type" (the report
+		// path's generic logger masked that for a while).
+		return EnergyMeasurementStruct{Energy: whToMilliWattHours(v)}, true
 	case attrElEnCumulativeExported:
 		// HM-PSM has no exported-energy concept; surface as null.
 		return nil, true

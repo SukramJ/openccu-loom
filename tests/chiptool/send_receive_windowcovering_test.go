@@ -47,13 +47,29 @@ func TestSendReceive_WindowCovering(t *testing.T) {
 		if _, err := b.SharedCtl.Invoke(ctx, t, "windowcovering", "go-to-lift-percentage", ep, "7500"); err != nil {
 			t.Fatalf("invoke go-to-lift-percentage: %v", err)
 		}
-		got, ok := b.CCU.GetDPValue(address, "LEVEL")
+		// GoTo*Percentage commands are slider-gesture debounced: the
+		// bridge acknowledges immediately and defers the radio write
+		// (~400 ms gesture-start delay) so controller slider drags
+		// coalesce into one duty-cycle-friendly write. Poll for the
+		// deferred CCU write instead of a tight readback.
+		// UpOrOpen/DownOrClose/Stop stay immediate writes.
+		deadline := time.Now().Add(2500 * time.Millisecond)
+		var got any
+		var ok bool
+		for {
+			got, ok = b.CCU.GetDPValue(address, "LEVEL")
+			if ok && valueNear(got, 0.25, 0.01) {
+				return
+			}
+			if time.Now().After(deadline) {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 		if !ok {
-			t.Fatalf("LEVEL absent on CCU after go-to-lift-percentage")
+			t.Fatalf("LEVEL absent on CCU after go-to-lift-percentage (waited 2.5s for the debounced write)")
 		}
-		if !valueNear(got, 0.25, 0.01) {
-			t.Fatalf("CCU LEVEL = %v, want ~0.25", got)
-		}
+		t.Fatalf("CCU LEVEL = %v, want ~0.25 (waited 2.5s for the debounced write)", got)
 	})
 
 	// SEND — DownOrClose must drive LEVEL to fully closed (0.0).
@@ -128,12 +144,14 @@ func TestSendReceive_WindowCovering(t *testing.T) {
 // (HmIP-MOD-HO) project onto the *same* Matter cluster ID as the
 // plain Shutter [TestSendReceive_WindowCovering] already exercises,
 // so this attribute pair is the only way to pick the right endpoint
-// out of a mixed fleet: Blind reports Type=EndProductType=8
-// (TiltBlindLiftAndTilt on both attributes), Garage reports Type=0
-// (RollerShade — "no garage Type code") + EndProductType=8
-// (GarageDoor). See the MatterRead methods on coverWCServer,
-// blindWCServer, and garageWCServer in
-// internal/model/custom/cover/matter.go.
+// out of a mixed fleet: Blind reports Type=8 (TiltBlindLiftAndTilt) +
+// EndProductType=10 (InteriorBlind), Garage reports Type=0
+// (RollerShade — the enum has no garage code) + EndProductType=0
+// (RollerShade). A plain Shutter reports Type=6 + EndProductType=17
+// and falls into the "cover" default. See the MatterRead methods on
+// coverWCServer, blindWCServer, and garageWCServer in
+// internal/model/custom/cover/matter.go (values sourced from
+// matter.js WindowCovering.element.ts).
 func windowcoveringClassify(ctx context.Context, t *testing.T, ctl *harness.Controller, ep uint16) string {
 	t.Helper()
 	typeOut, err := ctl.ReadAttr(ctx, t, "windowcovering", "type", ep)
@@ -147,9 +165,9 @@ func windowcoveringClassify(ctx context.Context, t *testing.T, ctl *harness.Cont
 	typ, okT := harness.FindAttrUint(typeOut, "Type")
 	ept, okE := harness.FindAttrUint(epOut, "EndProductType")
 	switch {
-	case okE && ept == 8 && okT && typ == 8:
+	case okE && ept == 10 && okT && typ == 8:
 		return "blind"
-	case okE && ept == 8 && okT && typ == 0:
+	case okE && ept == 0 && okT && typ == 0:
 		return "garage"
 	default:
 		return "cover"

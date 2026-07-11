@@ -68,6 +68,12 @@ type Garage struct {
 	// so the value survives cluster-server reconstruction.
 	matterTarget matterTargetState
 
+	// matterGoTo debounces GoToLiftPercentage slider gestures into a
+	// single deferred DOOR_COMMAND write. Owned here so pending writes
+	// survive cluster-server reconstruction and stop on
+	// [Garage.Subscribe] detach.
+	matterGoTo goToDebouncer
+
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. Keyed on DOOR_COMMAND
 	// (the primary write parameter for garage doors).
@@ -310,6 +316,10 @@ func (g *Garage) Subscribe(ch *device.Channel) func() {
 		custom.ReplayCurrentValue(dp, applySection)
 	}
 	return func() {
+		// Detach also stops any pending debounced Matter position
+		// write — teardown must not leave a timer that writes to the
+		// CCU after the data point is unbound.
+		g.matterGoTo.cancelAll()
 		for _, u := range unsubs {
 			if u != nil {
 				u()
@@ -327,11 +337,23 @@ func (g *Garage) OnState(s DoorState) {
 }
 
 // OnSection records a CCU-emitted SECTION update.
+//
+// A moving→stopped transition snaps the stored Matter target back to
+// mirroring the current position — the matter.js handleStopMovement
+// semantics (WindowCoveringServer.ts:485-493) applied to a stop the
+// drive reports on its own (wall button, end position reached) rather
+// than a Matter StopMotion command. See [Cover.OnDirection] for the
+// DIRECTION-based counterpart.
 func (g *Garage) OnSection(v int32) {
 	g.mu.Lock()
+	wasMoving := g.hasSec && (g.sectionV == sectionOpening || g.sectionV == sectionClosing)
 	g.sectionV = v
 	g.hasSec = true
+	nowMoving := v == sectionOpening || v == sectionClosing
 	g.mu.Unlock()
+	if wasMoving && !nowMoving {
+		g.matterTarget.clear()
+	}
 }
 
 func toInt32(v any) (int32, bool) {

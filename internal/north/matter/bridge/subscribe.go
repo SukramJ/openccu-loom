@@ -624,7 +624,7 @@ func (b *Bridge) sendUnsolicitedIM(target subTarget, opcode uint8, payload []byt
 		if peerID := sess.PeerSessionID(); peerID != 0 {
 			respHdr.SessionID = peerID
 		}
-		enc, err := sess.Encrypt(&respHdr, securityFlagsByte(&respHdr), body)
+		enc, err := b.encryptSecureOutbound(sess, target.sessionID, &respHdr, body)
 		if err != nil {
 			return 0, fmt.Errorf("%w: %w", ErrUnsolicitedEncrypt, err)
 		}

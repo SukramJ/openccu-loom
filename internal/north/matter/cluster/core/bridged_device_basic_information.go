@@ -70,7 +70,7 @@ type BridgedDeviceBasicInformation struct {
 // Cluster ID + revision per Matter §9.13.
 const (
 	bridgedBasicInfoClusterID       uint32 = 0x0039
-	bridgedBasicInfoClusterRevision uint16 = 5 // matter.js HEAD (@matter/model 0.16.11)
+	bridgedBasicInfoClusterRevision uint16 = 6 // matter.js HEAD bridged-device-basic-information.element.ts:20 default=6
 
 	bridgedBasicInfoAttrVendorName         uint32 = 0x0001
 	bridgedBasicInfoAttrVendorID           uint32 = 0x0002

@@ -1383,24 +1383,43 @@ func TestClimateThermostatServerMatterWriteSystemModeUnknownMode(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// hmModeToMatter / matterToHmMode
+// systemModeFromHmMode / matterToHmMode
 // ---------------------------------------------------------------------------
 
-func TestHmModeToMatter(t *testing.T) {
+func TestSystemModeFromHmModeClampsToFeatureMap(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	srv := climateThermostatServer{c: r.climate}
+
+	heatOnly := matterThermFeatureHeat
+	heatCool := matterThermFeatureHeat | matterThermFeatureCool
+	withAuto := heatCool | matterThermFeatureAuto
+
 	cases := []struct {
+		name string
 		mode Mode
+		fm   uint32
 		want uint8
 	}{
-		{ModeAuto, matterSysModeAuto},
-		{ModeHeat, matterSysModeHeat},
-		{ModeCool, matterSysModeCool},
-		{ModeOff, matterSysModeOff},
-		{Mode("unknown"), matterSysModeAuto}, // default
+		{"auto clamps to Heat without AUTO feature", ModeAuto, heatOnly, matterSysModeHeat},
+		{"auto stays Auto with AUTO feature", ModeAuto, withAuto, matterSysModeAuto},
+		{"heat maps to Heat", ModeHeat, heatOnly, matterSysModeHeat},
+		{"cool maps to Cool with COOL feature", ModeCool, heatCool, matterSysModeCool},
+		{"cool clamps to Heat without COOL feature", ModeCool, heatOnly, matterSysModeHeat},
+		{"off maps to Off", ModeOff, heatOnly, matterSysModeOff},
+		{"unknown mode defaults to Heat", Mode("unknown"), heatOnly, matterSysModeHeat},
 	}
 	for _, tc := range cases {
-		if got := hmModeToMatter(tc.mode); got != tc.want {
-			t.Errorf("hmModeToMatter(%q) = %d, want %d", tc.mode, got, tc.want)
+		if got := srv.systemModeFromHmMode(tc.mode, tc.fm); got != tc.want {
+			t.Errorf("%s: systemModeFromHmMode(%q, 0x%02X) = %d, want %d",
+				tc.name, tc.mode, tc.fm, got, tc.want)
 		}
+	}
+
+	// A cooling-direction hybrid clamps ModeAuto to Cool instead of Heat.
+	r.climate.OnHeatingCooling("COOLING")
+	if got := srv.systemModeFromHmMode(ModeAuto, heatCool); got != matterSysModeCool {
+		t.Errorf("systemModeFromHmMode(ModeAuto, HEAT|COOL) in cooling direction = %d, want %d",
+			got, matterSysModeCool)
 	}
 }
 

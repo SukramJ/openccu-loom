@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
@@ -437,8 +438,15 @@ func (s lightOnOffServer) MatterGeneratedCommands() []uint32 {
 // lightLevelServer projects [Light] onto the Matter LevelControl
 // cluster (0x0008). Only emitted for dimmable lights.
 //
-// Transition time is currently ignored; it would map to HM's RAMP_TIME
-// parameter via [Light.TurnOnWith] / [Light.TurnOffWithRamp].
+// A positive MoveToLevel / MoveToLevelWithOnOff TransitionTime maps to
+// HM's RAMP_TIME parameter via [Light.TurnOnWith] /
+// [Light.TurnOffWithRamp] on devices that accept RAMP_TIME
+// ([custom.LightCapabilities.Transition]); a null or zero transition
+// time keeps the instant SetLevel path — matter.js
+// LevelControlServer.ts:297-303 (moveToLevelLogic) only derives a rate
+// from a truthy transition time, and transition()'s changePerS contract
+// (LevelControlServer.ts:459) reads "0 or nullish means transition
+// instantly".
 // The non-WithOnOff command variants are gated on the effective
 // ExecuteIfOff option while the device is off (matter.js
 // LevelControlServer.ts:596 #optionsAllowExecution); the WithOnOff
@@ -481,8 +489,9 @@ func (s lightLevelServer) MatterRead(attrID uint32) (any, bool) {
 		return nil, true
 	case matterAttrLevelRemainingTime:
 		// RemainingTime (uint16, conformance LT): time left in the current
-		// transition, in 1/10 s. The bridge applies levels instantly, so
-		// there is never an in-flight transition → 0.
+		// transition, in 1/10 s. Transitions are delegated to the device's
+		// native RAMP_TIME handling and the CCU does not report ramp
+		// progress, so the bridge never tracks an in-flight transition → 0.
 		// matter.js level-control.element.ts:33.
 		return uint16(0), true
 	case matterAttrLevelStartUpLevel:
@@ -542,6 +551,20 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 			// HM dimmers carry a single LEVEL knob, so "CurrentLevel=min +
 			// OnOff=false" projects to LEVEL=0.
 			target = 0
+		}
+		if ramp, ramped := transitionRampDuration(req.TransitionTime); ramped && s.l.Capabilities.Transition {
+			// A positive transition time becomes the device-side ramp:
+			// matter.js LevelControlServer.ts:297-303 (moveToLevelLogic)
+			// turns it into a rate towards the target level; HM dimmers
+			// ramp natively when RAMP_TIME accompanies LEVEL in one
+			// atomic put_paramset, so the bridge delegates the whole
+			// transition to the device. Devices without RAMP_TIME
+			// (Capabilities.Transition unset) keep the instant path.
+			if err := s.setLevelRamped(ctx, target, ramp, priority); err != nil {
+				return nil, err
+			}
+			s.l.dataVersion.Bump()
+			return nil, nil
 		}
 		if err := s.l.SetLevel(ctx, target, priority); err != nil {
 			return nil, err
@@ -703,6 +726,34 @@ func cropMatterLevel(level uint8) uint8 {
 		return matterLevelMax
 	}
 	return level
+}
+
+// transitionRampDuration converts a decoded MoveToLevel TransitionTime
+// (nullable uint16, tenths of a second per Matter §1.6.7.1) into the
+// RAMP_TIME duration handed to the CCU. Null/absent and 0 both report
+// ramped=false so the caller keeps the instant SetLevel path: matter.js
+// LevelControlServer.ts:297-303 (moveToLevelLogic) only computes an
+// effectiveRate for a truthy transition time, and transition()'s
+// changePerS contract (LevelControlServer.ts:459) documents "0 or
+// nullish means transition instantly".
+func transitionRampDuration(tenths *uint16) (ramp time.Duration, ramped bool) {
+	if tenths == nil || *tenths == 0 {
+		return 0, false
+	}
+	return time.Duration(*tenths) * 100 * time.Millisecond, true
+}
+
+// setLevelRamped drives LEVEL to target over the given ramp duration.
+// The off direction (target 0, only reachable via the WithOnOff
+// MinLevel coupling) goes through [Light.TurnOffWithRamp]; every other
+// target goes through [Light.TurnOnWith] — both bundle
+// {LEVEL, RAMP_TIME, ON_TIME=NotUsed} into one atomic put_paramset so
+// the device performs the transition natively.
+func (s lightLevelServer) setLevelRamped(ctx context.Context, target float64, ramp time.Duration, priority hmenum.CommandPriority) error {
+	if target == 0 {
+		return s.l.TurnOffWithRamp(ctx, ramp, priority)
+	}
+	return s.l.TurnOnWith(ctx, OnConfig{Brightness: &target, RampTime: &ramp}, priority)
 }
 
 // extractMoveToLevel pulls the MoveToLevel / MoveToLevelWithOnOff

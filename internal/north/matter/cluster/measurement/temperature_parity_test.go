@@ -45,22 +45,19 @@ func TestParityMatterJS_TempServer_ClusterID(t *testing.T) {
 	}
 }
 
-// TestParityMatterJS_TempServer_Revision5 pins the cluster revision at 5.
-// matter.js HEAD temperature-measurement.element.ts:5 ships revision 5;
-// chip TemperatureMeasurementCluster.cpp also declares revision 5 in
-// CHIP_CONFIG_DATA_MODEL_SPEC_REVISION.
+// TestParityMatterJS_TempServer_Revision6 pins the cluster revision at 6.
 //
 // Mirrors matter.js packages/model/src/standard/elements/
-// temperature-measurement.element.ts:5 (revision: 5).
-func TestParityMatterJS_TempServer_Revision5(t *testing.T) {
+// temperature-measurement.element.ts:14 (ClusterRevision default: 6).
+func TestParityMatterJS_TempServer_Revision6(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewTemperatureServer(fakeFloat{val: 20.0, obs: true})
 	v, ok := s.MatterRead(0xFFFD) // ClusterRevision
 	if !ok {
 		t.Fatal("ClusterRevision: ok=false")
 	}
-	if got := v.(uint16); got != 5 {
-		t.Errorf("ClusterRevision = %d, want 5 (matter.js HEAD)", got)
+	if got := v.(uint16); got != 6 {
+		t.Errorf("ClusterRevision = %d, want 6 (matter.js HEAD)", got)
 	}
 }
 

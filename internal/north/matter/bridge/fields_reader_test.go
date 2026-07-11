@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 )
@@ -493,6 +494,60 @@ func TestCommandFieldsReader_CommissioningComplete(t *testing.T) {
 	}
 }
 
+// TestCommandFieldsReader_MoveToLevelVariants_AbsentTransitionTime
+// verifies that both LevelControl command IDs that dispatch to the
+// typed MoveToLevel decoder — MoveToLevel (0x00) and
+// MoveToLevelWithOnOff (0x04) — decode a payload whose TransitionTime
+// context tag 1 is entirely ABSENT (no TLV Null placeholder) into a
+// [wire.MoveToLevelRequest] with TransitionTime nil. Google Home's
+// brightness slider sends exactly this shape, so the absent-tag wire
+// form is a controller-interop contract for the dispatch path, not a
+// decoder corner case. Mirrors matter.js
+// packages/types/src/tlv/TlvObject.ts:205 decodeTlvInternalValue and
+// packages/node/src/behaviors/level-control/LevelControlServer.ts:297
+// moveToLevelLogic (unset transition time falls back to the device
+// default).
+func TestCommandFieldsReader_MoveToLevelVariants_AbsentTransitionTime(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		command uint32
+	}{
+		{name: "MoveToLevel", command: 0x00},
+		{name: "MoveToLevelWithOnOff", command: 0x04},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			enc := tlv.NewEncoder()
+			enc.StartStruct(tlv.AnonymousTag())
+			enc.PutUint(tlv.ContextTag(0), 128) // Level
+			// Context tag 1 (TransitionTime) intentionally absent.
+			enc.PutUint(tlv.ContextTag(2), 0) // OptionsMask
+			enc.PutUint(tlv.ContextTag(3), 0) // OptionsOverride
+			_ = enc.EndContainer()
+			raw, _ := enc.Bytes()
+			dec := tlv.NewDecoder(raw)
+			opener, _ := dec.Next()
+
+			v, err := commandFieldsReader(cmdPath(0x0008, tc.command), dec, opener)
+			if err != nil {
+				t.Fatalf("commandFieldsReader %s: %v", tc.name, err)
+			}
+			req, ok := v.(wire.MoveToLevelRequest)
+			if !ok {
+				t.Fatalf("expected wire.MoveToLevelRequest, got %T", v)
+			}
+			if req.Level != 128 {
+				t.Errorf("Level: want 128, got %d", req.Level)
+			}
+			if req.TransitionTime != nil {
+				t.Errorf("TransitionTime: want nil for absent tag, got %v", *req.TransitionTime)
+			}
+		})
+	}
+}
+
 func TestCommandFieldsReader_UnknownCommand_GenericTagMap(t *testing.T) {
 	t.Parallel()
 	// An unknown cluster/command must NOT silently drop its fields —
@@ -912,6 +967,44 @@ func TestDecodeMoveToLevelRequest_NullTransitionTime(t *testing.T) {
 	}
 	if req.TransitionTime != nil {
 		t.Errorf("TransitionTime: want nil, got %v", *req.TransitionTime)
+	}
+}
+
+// TestDecodeMoveToLevelRequest_AbsentTransitionTime verifies that a
+// payload with the TransitionTime context tag 1 entirely ABSENT (not
+// TLV Null) decodes successfully and leaves TransitionTime nil. Google
+// Home's brightness slider omits the transitionTime field altogether,
+// so the tag-walking decoder's tolerance for a missing tag is
+// load-bearing controller interop — a strict "all spec tags present"
+// refactor would silently break Google Home dimming. Mirrors matter.js
+// packages/types/src/tlv/TlvObject.ts:205 decodeTlvInternalValue
+// (structure decode leaves a missing member unset instead of erroring)
+// and packages/node/src/behaviors/level-control/LevelControlServer.ts:297
+// moveToLevelLogic (`transitionTime ?? onOffTransitionTime ?? null` —
+// an unset transition time means "use the device default").
+func TestDecodeMoveToLevelRequest_AbsentTransitionTime(t *testing.T) {
+	t.Parallel()
+	dec := buildDecoderAfterStructOpen(func(enc *tlv.Encoder) {
+		enc.PutUint(tlv.ContextTag(0), 77) // Level
+		// Context tag 1 (TransitionTime) intentionally absent.
+		enc.PutUint(tlv.ContextTag(2), 1) // OptionsMask
+		enc.PutUint(tlv.ContextTag(3), 0) // OptionsOverride
+	})
+	req, err := decodeMoveToLevelRequest(dec)
+	if err != nil {
+		t.Fatalf("decodeMoveToLevelRequest: %v", err)
+	}
+	if req.Level != 77 {
+		t.Errorf("Level: want 77, got %d", req.Level)
+	}
+	if req.TransitionTime != nil {
+		t.Errorf("TransitionTime: want nil for absent tag, got %v", *req.TransitionTime)
+	}
+	if req.OptionsMask != 1 {
+		t.Errorf("OptionsMask: want 1, got %d", req.OptionsMask)
+	}
+	if req.OptionsOverride != 0 {
+		t.Errorf("OptionsOverride: want 0, got %d", req.OptionsOverride)
 	}
 }
 

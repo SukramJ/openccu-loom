@@ -134,8 +134,8 @@ func TestBasicInfo_ClusterRevision(t *testing.T) {
 	if !ok {
 		t.Fatal("ClusterRevision: ok=false")
 	}
-	if v.(uint16) != 5 {
-		t.Fatalf("ClusterRevision = %v, want 5", v)
+	if v.(uint16) != 6 {
+		t.Fatalf("ClusterRevision = %v, want 6", v)
 	}
 }
 
@@ -1172,4 +1172,102 @@ func TestBasicInfo_MatterAttributesWithOptionals(t *testing.T) {
 			t.Errorf("MatterAttributes() missing %s (0x%04X) when set", name, id)
 		}
 	}
+}
+
+// TestSoftwareVersionFromString pins the semver-string → numeric
+// SoftwareVersion derivation (major*1_000_000 + minor*1_000 + patch,
+// components clamped to 999, pre-release/build suffixes dropped,
+// result floored at 1) for release, rc, and dev build strings.
+func TestSoftwareVersionFromString(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		version string
+		want    uint32
+	}{
+		{"0.32.1", 32_001},
+		{"1.2.3", 1_002_003},
+		{"v1.0.0", 1_000_000},
+		{"12.34.56", 12_034_056},
+		{"0.32", 32_000},
+		{"0.32.0-rc.1", 32_000},
+		{"0.32.1+g4add313", 32_001},
+		{"1.0.0-beta.2+meta", 1_000_000},
+		{"0.32.x", 32_000},
+		{"1.1000.0", 1_999_000}, // component clamp at 999
+		{"dev", 1},
+		{"", 1},
+		{"0.0.0", 1}, // floor: never advertise matter.js's dev default 0
+		{" 0.32.1 ", 32_001},
+	}
+	for _, tc := range cases {
+		if got := core.SoftwareVersionFromString(tc.version); got != tc.want {
+			t.Errorf("SoftwareVersionFromString(%q) = %d, want %d", tc.version, got, tc.want)
+		}
+	}
+}
+
+// TestBasicInfo_SoftwareVersionDerivedFromVersionString verifies that a
+// config carrying only the human-readable version string yields a
+// numerically consistent SoftwareVersion attribute (0x0009), while an
+// explicitly supplied numeric value always wins over the derivation.
+func TestBasicInfo_SoftwareVersionDerivedFromVersionString(t *testing.T) {
+	t.Parallel()
+	t.Run("derived from string", func(t *testing.T) {
+		t.Parallel()
+		cfg := validBasicInfoConfig()
+		cfg.SoftwareVersion = 0
+		cfg.SoftwareVersionStr = "0.32.1"
+		b, err := core.NewBasicInformation(cfg)
+		if err != nil {
+			t.Fatalf("NewBasicInformation: %v", err)
+		}
+		v, ok := b.MatterRead(0x0009)
+		if !ok {
+			t.Fatal("SoftwareVersion: ok=false")
+		}
+		if got := v.(uint32); got != 32_001 {
+			t.Errorf("SoftwareVersion = %d, want 32001 (derived from %q)", got, cfg.SoftwareVersionStr)
+		}
+		s, ok := b.MatterRead(0x000A)
+		if !ok {
+			t.Fatal("SoftwareVersionString: ok=false")
+		}
+		if got := s.(tlv.BoundedString).Value; got != "0.32.1" {
+			t.Errorf("SoftwareVersionString = %q, want %q", got, "0.32.1")
+		}
+	})
+	t.Run("explicit numeric wins", func(t *testing.T) {
+		t.Parallel()
+		cfg := validBasicInfoConfig()
+		cfg.SoftwareVersion = 7
+		cfg.SoftwareVersionStr = "0.32.1"
+		b, err := core.NewBasicInformation(cfg)
+		if err != nil {
+			t.Fatalf("NewBasicInformation: %v", err)
+		}
+		v, ok := b.MatterRead(0x0009)
+		if !ok {
+			t.Fatal("SoftwareVersion: ok=false")
+		}
+		if got := v.(uint32); got != 7 {
+			t.Errorf("SoftwareVersion = %d, want 7 (explicit config value)", got)
+		}
+	})
+	t.Run("non-semver dev build never yields zero", func(t *testing.T) {
+		t.Parallel()
+		cfg := validBasicInfoConfig()
+		cfg.SoftwareVersion = 0
+		cfg.SoftwareVersionStr = "dev"
+		b, err := core.NewBasicInformation(cfg)
+		if err != nil {
+			t.Fatalf("NewBasicInformation: %v", err)
+		}
+		v, ok := b.MatterRead(0x0009)
+		if !ok {
+			t.Fatal("SoftwareVersion: ok=false")
+		}
+		if got := v.(uint32); got == 0 {
+			t.Error("SoftwareVersion = 0 for a dev build — must be floored at 1")
+		}
+	})
 }

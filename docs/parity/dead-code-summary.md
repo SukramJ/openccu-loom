@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 4969aa7d
-HEAD: 4969aa7d
+Generated: 3f05fe00
+HEAD: 3f05fe00
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24398 |
-| Reachable | 4195 |
-| Whitelisted | 17658 |
+| Total Exported | 24497 |
+| Reachable | 4197 |
+| Whitelisted | 17755 |
 | **Unreachable** | **2545** |
 
 ## Top-20 Packages by Dead Code

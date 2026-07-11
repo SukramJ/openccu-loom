@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -369,6 +370,12 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 	//      no Generic-DP endpoints surface, matching the §1 "Allowlist
 	//      instead of Denylist" rule.
 	channelHasCustom := ch.CustomDataPoint() != nil
+	// Press-event DPs (PRESS_SHORT / PRESS_LONG / PRESS_CONT / …) never
+	// project per-DP: every allowed press parameter of the channel is
+	// collected here and consolidated into ONE GenericSwitch endpoint per
+	// physical button after the loop. See [generic.ButtonGroup] and
+	// [ButtonGroupDPKey].
+	var pressMembers []device.ParameterDataPoint
 	for _, gdp := range ch.DataPoints() {
 		key := genericDPKeyForMeasurement(gdp)
 		if key == "" {
@@ -418,6 +425,14 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		if !allowed {
 			continue
 		}
+		if meas.MatterMeasurementClass() == interfaces.MatterMeasurementMomentarySwitch {
+			// Defer press DPs to the per-channel consolidation below.
+			// The allowlist stays per-parameter: only allowed members
+			// join the group, so an operator can e.g. expose the short
+			// press while keeping the long-press events private.
+			pressMembers = append(pressMembers, gdp)
+			continue
+		}
 		ep, err := a.makeMeasurementEndpoint(ctx, centralName, dev, ch, store.DPKindGeneric, key, meas)
 		if err != nil {
 			return nil, err
@@ -426,7 +441,89 @@ func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev
 		out = append(out, ep)
 	}
 
+	if len(pressMembers) > 0 {
+		ep, err := a.makeButtonGroupEndpoint(ctx, centralName, dev, ch, pressMembers)
+		if err != nil {
+			return nil, err
+		}
+		if ep != nil {
+			seen[ep.SourceKey] = struct{}{}
+			out = append(out, ep)
+		}
+	}
+
 	return out, nil
+}
+
+// ButtonGroupDPKey is the synthetic dp_key persisted for the
+// per-channel consolidated GenericSwitch endpoint. All press-event DPs
+// of one channel (PRESS_SHORT / PRESS_LONG / PRESS_CONT /
+// PRESS_LONG_RELEASE / …) share ONE endpoint: a physical button is one
+// Matter switch, and the §1.13 press-cycle events (InitialPress →
+// LongPress → LongRelease) only sequence correctly on a single cluster
+// instance — so no single member parameter can serve as the row key.
+// Multi-button remotes keep one endpoint per button because each
+// button is its own channel; this extends the one-endpoint-per-device
+// rule of docs/adr/0049-matter-one-endpoint-per-device.md to the
+// per-parameter fan-out inside a button channel.
+//
+// Older per-parameter rows (dp_key = "PRESS_SHORT", …) no longer
+// appear in the assembled set and are garbage-collected on the next
+// model-complete assembly; the consolidated endpoint is allocated a
+// fresh endpoint id, so controllers re-learn button devices once.
+const ButtonGroupDPKey = "BUTTON"
+
+// makeButtonGroupEndpoint builds the single GenericSwitch endpoint for
+// one physical button from the channel's allowed press DPs. Returns
+// (nil, nil) when no member survives the group's press-family filter —
+// defensive only, since the MomentarySwitch classification and the
+// group's press family enumerate the same parameters.
+func (a *Assembler) makeButtonGroupEndpoint(
+	ctx context.Context,
+	centralName string,
+	dev *device.Device,
+	ch *device.Channel,
+	members []device.ParameterDataPoint,
+) (*Endpoint, error) {
+	srcs := make([]generic.PressEventSource, 0, len(members))
+	for _, m := range members {
+		srcs = append(srcs, m)
+	}
+	group := generic.NewButtonGroup(srcs...)
+	if group == nil {
+		return nil, nil
+	}
+	sourceKey := store.EndpointKey{
+		CentralName:   centralName,
+		DeviceAddress: dev.Address,
+		ChannelNo:     ch.Number,
+		DPKind:        store.DPKindGeneric,
+		DPKey:         ButtonGroupDPKey,
+	}
+	deviceType := measurementDeviceType(interfaces.MatterMeasurementMomentarySwitch)
+	id, err := a.assignOrReuseID(ctx, sourceKey, deviceType)
+	if err != nil {
+		return nil, err
+	}
+	return &Endpoint{
+		ID:         id,
+		DeviceType: deviceType,
+		Reachable:  dev.Available(),
+		// The endpoint stands for the whole physical button (the
+		// channel), not one PRESS_* parameter — no parameter suffix.
+		FriendlyName:  friendlyName(dev, ch, ""),
+		BridgedDevice: dev,
+		Channel:       ch,
+		Measurement:   group,
+		SourceKey:     sourceKey,
+		// Reuse the DataVersion tracker set bound to this stable source
+		// key so the endpoint's per-cluster version survives reassembly.
+		versions: a.versions.setFor(sourceKey),
+		// Bridged under the Aggregator (EP 1), same parent chain as
+		// every other bridged endpoint.
+		ParentEndpointID:    1,
+		HasParentEndpointID: true,
+	}, nil
 }
 
 // hideFromMatter reports whether a generic DP should be dropped from the
@@ -592,8 +689,32 @@ func (a *Assembler) assignOrReuseID(ctx context.Context, sourceKey store.Endpoin
 // gcVanished removes store rows for sources that no longer appear
 // in any snapshot. seen contains every key produced this run; we
 // list the persisted keys per central and drop the difference.
+//
+// Snapshots that are not model-complete are exempt: at daemon boot the
+// topology is assembled before the readiness-gated CCU device load has
+// populated the model, so a registered central briefly contributes an
+// empty (or partial) device list. Treating that as "every device
+// vanished" would delete all persisted endpoint-ID rows on each boot
+// and renumber the bridged fleet — controllers key their accessory
+// cache on the endpoint number, so persisted numbers must survive a
+// restart. Mirrors matter.js, which reserves persisted endpoint
+// numbers at initialization (packages/node/src/storage/server/
+// ServerEndpointStores.ts, assignNumber) and erases one only on
+// explicit endpoint deletion (packages/node/src/node/server/
+// ServerEndpointInitializer.ts, eraseDescendant).
 func (a *Assembler) gcVanished(ctx context.Context, snapshots []Snapshot, seen map[store.EndpointKey]struct{}) error {
 	for _, snap := range snapshots {
+		if !snap.ModelComplete {
+			// The central has not finished its initial device load; an
+			// absent source is "not loaded yet", not "vanished". Keep
+			// every persisted row until a model-complete snapshot vouches
+			// for the fleet.
+			a.logger.Debug(
+				"matter endpoint gc skipped: model incomplete",
+				slog.String("central", snap.CentralName),
+			)
+			continue
+		}
 		records, err := a.store.ListEndpoints(ctx, snap.CentralName)
 		if err != nil {
 			return fmt.Errorf("endpoint: gc list: %w", err)

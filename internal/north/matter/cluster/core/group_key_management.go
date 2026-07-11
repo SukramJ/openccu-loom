@@ -56,7 +56,7 @@ type GroupStoreFacade interface {
 // Cluster ID + revision per Matter §11.2.10.
 const (
 	groupKeyMgmtClusterID       uint32 = 0x003F
-	groupKeyMgmtClusterRevision uint16 = 2 // 1.5.1 baseline
+	groupKeyMgmtClusterRevision uint16 = 3 // matter.js HEAD group-key-management.element.ts:20 default=3
 
 	groupKeyMgmtAttrGroupKeyMap           uint32 = 0x0000
 	groupKeyMgmtAttrGroupTable            uint32 = 0x0001

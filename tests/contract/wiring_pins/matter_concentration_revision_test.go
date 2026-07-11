@@ -10,12 +10,14 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 )
 
-// TestPin_ConcentrationClusters_SchemaRevision4 pins that the embedded
-// matter.js HEAD schema snapshot reports revision 4 for the three
-// concentration-measurement sub-clusters (0x040C family). The runtime
-// cluster servers already advertise revision 4; this test ensures the
-// schema snapshot used by parity tests is consistent with that value.
-func TestPin_ConcentrationClusters_SchemaRevision4(t *testing.T) {
+// TestPin_ConcentrationClusters_SchemaRevision5 pins that the embedded
+// matter.js HEAD schema snapshot reports revision 5 for the three
+// concentration-measurement sub-clusters (0x040C family), mirroring
+// matter.js HEAD concentration-measurement.element.ts:19 (default: 5).
+// The runtime cluster servers already advertise revision 5; this test
+// ensures the schema snapshot used by parity tests is consistent with
+// that value.
+func TestPin_ConcentrationClusters_SchemaRevision5(t *testing.T) {
 	t.Parallel()
 	raw := parity.SchemaJSON()
 	var schema struct {
@@ -39,8 +41,8 @@ func TestPin_ConcentrationClusters_SchemaRevision4(t *testing.T) {
 	for _, c := range schema.Clusters {
 		if name, ok := want[c.ID]; ok {
 			found[c.ID] = true
-			if c.Revision != 4 {
-				t.Errorf("cluster 0x%04X (%s): schema revision = %d, want 4", c.ID, name, c.Revision)
+			if c.Revision != 5 {
+				t.Errorf("cluster 0x%04X (%s): schema revision = %d, want 5", c.ID, name, c.Revision)
 			}
 		}
 	}

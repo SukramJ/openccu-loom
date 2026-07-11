@@ -1183,7 +1183,7 @@ func TestAccessControl_ReadFeatureMap(t *testing.T) {
 	}
 }
 
-// TestAccessControl_ReadClusterRevision verifies ClusterRevision is 2.
+// TestAccessControl_ReadClusterRevision verifies ClusterRevision is 3.
 func TestAccessControl_ReadClusterRevision(t *testing.T) {
 	t.Parallel()
 	ac := newValidAccessControl(t)
@@ -1191,8 +1191,8 @@ func TestAccessControl_ReadClusterRevision(t *testing.T) {
 	if !ok {
 		t.Fatal("ClusterRevision: ok=false")
 	}
-	if v.(uint16) != 2 {
-		t.Fatalf("ClusterRevision = %v, want 2", v)
+	if v.(uint16) != 3 {
+		t.Fatalf("ClusterRevision = %v, want 3", v)
 	}
 }
 

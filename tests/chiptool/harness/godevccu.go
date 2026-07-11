@@ -31,7 +31,8 @@ import (
 //     (hue/saturation + colour temperature simultaneously)
 //   - HmIP-FBL    — Tilting blind → WindowCovering (tilt variant)
 //   - HmIP-MOD-HO — Garage door module → WindowCovering with
-//     EndProductType=GarageDoor
+//     Type=RollerShade + EndProductType=RollerShade (the Matter enum
+//     has no garage code)
 //   - HmIP-SMI    — Motion detector → OccupancySensing
 //   - HmIP-SWDO   — Shutter contact (window/door sensor) →
 //     BooleanState (second fixture on this cluster, distinct wire

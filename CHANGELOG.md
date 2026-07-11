@@ -6,6 +6,124 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-07-11
+
+Matter interop hardening. The changes below adopt verified findings from a
+systematic comparison against the
+[home-assistant-matter-hub](https://github.com/RiDDiX/home-assistant-matter-hub)
+project's field experience, with every mechanism mirrored from matter.js HEAD
+(not from the compared project).
+
+### Fixed
+
+- **Matter endpoint numbers now genuinely survive daemon restarts.** The
+  boot-time topology assembly ran before the readiness-gated CCU device load and
+  garbage-collected every persisted endpoint-ID row of a still-loading central —
+  on every boot. Endpoint numbers stayed stable only by accidental re-allocation
+  order, so any fleet change across a restart renumbered endpoints and broke
+  controller-side groups/automations. Vanished-device GC is now gated on the
+  per-central `ModelComplete` readiness latch; endpoint numbers stay reserved
+  until a device is genuinely removed (mirroring matter.js
+  `ServerEndpointStores` number reservation, Matter §9.12.4).
+- **One GenericSwitch endpoint per physical button.** All press parameters of a
+  button channel (PRESS_SHORT / PRESS_LONG / PRESS_CONT / PRESS_LONG_RELEASE)
+  now share a single endpoint with a spec-conformant press-cycle state machine
+  (InitialPress → LongPress → LongRelease). Previously each press parameter
+  materialised its own endpoint, so long-press releases landed on a different
+  cluster than the long press (orphaned by construction) and a held BidCos
+  button emitted a LongPress event every ~300 ms. Also fixes press events never
+  reaching commissioners from real devices (a dead wiring type-assertion) and
+  duplicate events after topology reassembly. **Button devices receive new
+  Matter endpoint numbers; Apple/Google re-learn button accessories once after
+  the update.**
+- **WindowCovering `EndProductType` reports enum-correct values** per cover
+  profile — Curtain→CentralCurtain(16), Shutter/Window→RollerShutter(17),
+  Awning→AwningTerracePatio(19), Blind→InteriorBlind(10), Garage→RollerShade(0)
+  — instead of wrongly reusing the `Type` enum code (which read as
+  PleatedShade/LayeredShade/CellularShade/SheerShade) or a fabricated
+  GarageDoor value. Controllers cache Type/EndProductType at commissioning, so
+  already-paired bridges show the corrected values after a re-sync or re-pair.
+- **WindowCovering target/direction for externally started movement.** When a
+  cover moves via wall button or CCU program, TargetPosition is now inferred
+  from the CCU-reported motion instead of staying stale, a device-side stop
+  snaps the target back to the current position, Target attributes are
+  proactively reported, and the motion parameter (DIRECTION / ACTIVITY_STATE,
+  including the previously unwired HmIP fallback) fires Matter reports — Apple
+  Home now shows the correct direction arrow for wall-button movement.
+- **Thermostat SystemMode/RunningMode conformance.** HM AUTO (week-program)
+  mode no longer reads back as `SystemMode=Auto(1)` on a FeatureMap without the
+  AUTO feature — controllers echoing that read value on state sync received
+  ConstraintError. Reads clamp to Heat/Cool per the active HEATING_COOLING
+  direction, RunningMode uses the Auto-less enum, and cooling-capable profiles
+  advertise COOL without AUTO (Matter AutoMode requires dual setpoints +
+  MinSetpointDeadBand, which HM single-setpoint devices cannot provide).
+- **Controllers no longer see the bridge as unresponsive for minutes after a
+  restart.** The bridge now sends a Secure-Channel CloseSession StatusReport
+  before dropping a session (stale same-peer CASE eviction, idle-session reap
+  — operational sessions without traffic for 5 minutes are evicted on a 60 s
+  sweep; controller acks on subscription heartbeats keep live sessions marked
+  active — and daemon shutdown, capped at 2.5 s), closes a session immediately
+  when the peer sends CloseSession (with subscription cleanup), and resumes
+  mDNS broadcast once a peer has no remaining session. Mirrors matter.js
+  ExchangeManager / SecureChannelProtocol behaviour.
+- **`BasicInformation.SoftwareVersion` is derived from the build version**
+  (`major*1_000_000 + minor*1_000 + patch`) instead of a hard-coded `1`,
+  keeping it consistent with `SoftwareVersionString` — a divergent pair crashed
+  some ecosystem hubs (e.g. Aqara) during bridge synchronisation.
+- **`ElectricalEnergyMeasurement.CumulativeEnergyImported` is wire-valid.**
+  The attribute was emitted as a bare int64 instead of the spec's
+  `EnergyMeasurementStruct` (Matter §2.14.5.2) — typed decoders (chip-tool and
+  potentially ecosystem controllers) rejected a plain read with "Wrong TLV
+  type"; only the untyped report dump masked it. The value now encodes as a
+  struct carrying the mandatory `Energy` field.
+- **Matter endpoint readiness is race-free and covers runtime-adopted CCUs.**
+  The per-central readiness latch is now queryable and seeded at subscribe
+  time (a CCU whose device load finished before the Matter bridge subscribed
+  was previously never latched), and centrals adopted at runtime get the same
+  readiness + reassemble-on-ready wiring as boot-time centrals.
+
+### Changed
+
+- **Matter schema refreshed to matter.js HEAD (spec 1.5.1).** Cluster
+  revisions bumped (AccessControl 3, BasicInformation 6,
+  BridgedDeviceBasicInformation 6, GeneralDiagnostics 3, GroupKeyManagement 3,
+  BooleanState 3, SmokeCoAlarm 2, Thermostat 11, OccupancySensing 7, and the
+  measurement/concentration clusters +1 each), device-type revisions updated
+  (Thermostat 6; WaterLeakDetector, WaterFreezeDetector and RainSensor 2), and
+  the new spec-1.5.1 read-only attributes were added to the write gate.
+
+- **Leak-class sensors will materialise as ContactSensor (0x0015), not
+  WaterLeakDetector (0x0043).** Amazon Alexa is pinned below the Matter-1.3
+  detector device types; field evidence shows a single 0x0043 endpoint renders
+  an entire Alexa bridge unresponsive. The wire surface is identical (mandatory
+  BooleanState), polarity stays non-inverted (leak detected → StateValue=true).
+  No classifier emits the leak class yet, so this lands before any moisture
+  parameter is wired.
+- **WindowCovering slider gestures are debounced.** `GoToLiftPercentage` /
+  `GoToTiltPercentage` commands debounce per axis (400 ms gesture-start /
+  150 ms active-drag; commands within 1 % of the current position are
+  acknowledged without a radio write), so Apple/Google slider drags send one
+  settled position to duty-cycle-limited HmIP actuators instead of 5–10
+  stuttering intermediate writes. The commanded TargetPosition updates
+  immediately; StopMotion / UpOrOpen / DownOrClose cancel pending writes.
+
+### Added
+
+- **Dimmer transitions.** LevelControl `MoveToLevel` / `MoveToLevelWithOnOff`
+  now honour `TransitionTime`: a positive value is delegated to the device as
+  `RAMP_TIME` in one atomic paramset write (a WithOnOff min-level target ramps
+  off via ramp-time off). Null/0 keep the instant path; devices without
+  `RAMP_TIME` support fall back to instant.
+- **Regression guard for Google Home's LevelControl wire shape.** Google omits
+  the `transitionTime` field entirely (not TLV-null); the lenient decode of the
+  absent field is now pinned by tests so a future strict-validation pass cannot
+  silently break Google Home dimming.
+- **Controller-ecosystem caveats documentation** (`docs/user/matter.md`): Alexa
+  commissions only on UDP port 5540 (also noted in the `north.matter.listen`
+  config help, en+de), Alexa's ~80–100 device cap per bridge, detector device
+  types breaking Alexa bridges, and WaterValve being unsupported on Google
+  Home/Alexa.
+
 ## [0.32.0] — 2026-07-10
 
 ### Fixed

@@ -85,7 +85,11 @@ func newBlindRig(t *testing.T, address string, w Writer, caps custom.CoverCapabi
 	level2 := mk(hmenum.ParameterLevel2)
 	ch.Put(level)
 	ch.Put(level2)
-	return NewBlind(BlindConfig{Channel: ch, Writer: w, Capabilities: caps, Kind: kind})
+	b := NewBlind(BlindConfig{Channel: ch, Writer: w, Capabilities: caps, Kind: kind})
+	// Deferred GoTo*Percentage writes fire only via flushGoToWrites so
+	// tests stay deterministic.
+	neuterGoToTimers(&b.matterGoTo)
+	return b
 }
 
 func TestBlindHMSetTiltSendsLevelCombined(t *testing.T) {

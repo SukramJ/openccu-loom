@@ -11,11 +11,145 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	endpointpkg "github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
+
+// pressButtonDP builds an event-only press DP the way the resolver does
+// for KEY / KEY_TRANSCEIVER channels.
+func pressButtonDP(channelAddr string, p hmenum.Parameter) *generic.Button {
+	return generic.NewButton(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "iface",
+			ChannelAddress: channelAddr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(p),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeAction,
+			Operations: hmenum.OperationsEvent,
+		},
+	})
+}
+
+// TestReassemble_ButtonGroupPressEventsFlowOnce verifies the full
+// model → bridge press-event pipeline against REAL model DPs:
+//
+//  1. A button channel's press DPs assemble into ONE consolidated
+//     GenericSwitch endpoint whose group is actually wired — the
+//     matterSwitchSubscribable assertion must match the concrete
+//     *generic.ButtonGroup (a bridge-local emitter interface in the
+//     method signature silently never matches, and no press event
+//     reaches the event log at all).
+//  2. A press produces exactly one InitialPress + ShortRelease pair in
+//     the event log.
+//  3. A Reassemble drains the previous wiring before installing the
+//     new one — a press after N reassembles still emits exactly ONE
+//     event pair, not N+1 duplicates.
+func TestReassemble_ButtonGroupPressEventsFlowOnce(t *testing.T) {
+	t.Parallel()
+
+	dev := device.New(device.Config{Address: "BTN0001", Name: "Taster"})
+	ch := dev.AddChannel("BTN0001:1", 1, "KEY", hmenum.ParamsetKeyValues)
+	short := pressButtonDP("BTN0001:1", hmenum.ParameterPressShort)
+	ch.Put(short)
+	ch.Put(pressButtonDP("BTN0001:1", hmenum.ParameterPressLong))
+
+	snapshotter := func(_ context.Context) []endpointpkg.Snapshot {
+		return []endpointpkg.Snapshot{{
+			CentralName:   "ccu1",
+			Devices:       []*device.Device{dev},
+			ModelComplete: true,
+		}}
+	}
+
+	b, err := New(
+		NewFakeStore(),
+		snapshotter,
+		mdns.NewNoop(),
+		Config{
+			Listen:    ":0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "button-wiring-test",
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer stopCancel()
+		_ = b.Stop(stopCtx)
+	})
+	if err := b.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Locate the consolidated button endpoint.
+	topo := b.Topology()
+	if topo == nil {
+		t.Fatal("no topology after Start")
+	}
+	var buttonEP uint16
+	found := 0
+	for _, ep := range topo.Bridged() {
+		if ep.SourceKey.DPKey == endpointpkg.ButtonGroupDPKey {
+			buttonEP = ep.ID
+			found++
+		}
+	}
+	if found != 1 {
+		t.Fatalf("expected exactly one consolidated button endpoint, got %d", found)
+	}
+
+	const (
+		switchCluster     uint32 = 0x003B
+		evInitialPress    uint32 = 0x01
+		evShortRelease    uint32 = 0x03
+		expectAfterFirst         = 1
+		expectAfterSecond        = 2
+	)
+	countEvents := func(eventID uint32) int {
+		return len(b.EventLog().Query(buttonEP, switchCluster, eventID, 0))
+	}
+
+	// One physical short press → exactly one InitialPress + ShortRelease.
+	short.OnEvent(true)
+	if got := countEvents(evInitialPress); got != expectAfterFirst {
+		t.Fatalf("InitialPress count after first press = %d, want %d", got, expectAfterFirst)
+	}
+	if got := countEvents(evShortRelease); got != expectAfterFirst {
+		t.Fatalf("ShortRelease count after first press = %d, want %d", got, expectAfterFirst)
+	}
+
+	// Reassemble twice; stale press-DP hooks must be drained each time.
+	if err := b.Reassemble(ctx); err != nil {
+		t.Fatalf("Reassemble: %v", err)
+	}
+	if err := b.Reassemble(ctx); err != nil {
+		t.Fatalf("second Reassemble: %v", err)
+	}
+
+	short.OnEvent(true)
+	if got := countEvents(evInitialPress); got != expectAfterSecond {
+		t.Fatalf("InitialPress count after reassembles = %d, want %d (stale wiring must not duplicate)",
+			got, expectAfterSecond)
+	}
+	if got := countEvents(evShortRelease); got != expectAfterSecond {
+		t.Fatalf("ShortRelease count after reassembles = %d, want %d", got, expectAfterSecond)
+	}
+}
 
 // TestReassemble_ReapsSubscriptionsForRemovedEndpoints verifies that when a
 // topology swap removes endpoint 5, any subscription referencing endpoint 5

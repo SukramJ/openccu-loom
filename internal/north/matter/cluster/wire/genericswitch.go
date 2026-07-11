@@ -39,9 +39,11 @@ import (
 // recognition. AS / MSM / LS are off in v1.1.
 //
 // The cluster is event-driven: attribute reads return spec-mandated
-// constants, and HM events arrive via [GenericSwitch.Fire*] methods
-// fed from the model layer; the cluster forwards them to the
-// bridge-injected [interfaces.MatterEventEmitter].
+// constants (CurrentPosition additionally reads live through the
+// optional [GenericSwitchPositionSource] capability), and HM events
+// arrive via [GenericSwitch.Fire*] methods fed from the model layer;
+// the cluster forwards them to the bridge-injected
+// [interfaces.MatterEventEmitter].
 const (
 	matterClusterGenericSwitch uint32 = 0x003B
 
@@ -88,10 +90,10 @@ const (
 	switchFeatureMSM uint32 = 1 << 4
 )
 
-// GenericSwitchSource is the model-side surface a HM Button / Action
-// DP exposes. The cluster server reads `NumberOfPositions` once at
-// construction and supports long-press recognition opt-in via
-// `SupportsLongPress`.
+// GenericSwitchSource is the model-side surface a HM button source
+// (the per-channel press group, or a lone Button / Action DP) exposes.
+// The cluster server reads `NumberOfPositions` once at construction
+// and supports long-press recognition opt-in via `SupportsLongPress`.
 type GenericSwitchSource interface {
 	// MatterSwitchPositions returns the static NumberOfPositions
 	// (Matter §1.13.5.1). Typical: 2 for a single button (idle +
@@ -102,6 +104,19 @@ type GenericSwitchSource interface {
 	// FeatureMap exposes MSL and the cluster forwards LongPress /
 	// LongRelease events when the source fires them.
 	MatterSwitchSupportsLongPress() bool
+}
+
+// GenericSwitchPositionSource is the optional source capability for a
+// live CurrentPosition (Matter §1.13.5.2). Sources that run a press-
+// cycle state machine report 1 (pressed) while a hold is open and 0
+// (idle) otherwise, mirroring matter.js
+// packages/node/src/behaviors/switch/SwitchServer.ts, where
+// `state.currentPosition` moves to the pressed position for the
+// duration of the press and returns to `momentaryNeutralPosition`
+// (default 0) on release. Sources without the capability read as the
+// constant neutral position.
+type GenericSwitchPositionSource interface {
+	MatterSwitchCurrentPosition() uint8
 }
 
 // GenericSwitch is the cluster-server. Implements
@@ -141,15 +156,27 @@ func (s *GenericSwitch) MatterRead(attrID uint32) (any, bool) {
 		}
 		return n, true
 	case matterAttrSwitchCurrentPosition:
-		// Stateless from the bridge's perspective: HM presses are
-		// momentary events, not held positions. Always 0 (idle) for
-		// momentary switches; LS feature would add real state tracking.
+		// Live position when the source tracks its press cycle
+		// (see [GenericSwitchPositionSource]): 1 while a long press
+		// is held, back to the neutral 0 after release. Short presses
+		// arrive as a single CCU event (press + release in one
+		// dispatch), so reads only observe 1 during a held long press.
+		// Sources without press-cycle tracking stay at the constant
+		// idle position.
+		if pos, ok := s.src.(GenericSwitchPositionSource); ok {
+			return pos.MatterSwitchCurrentPosition(), true
+		}
 		return uint8(0), true
 	case matterAttrSwitchMultiPressMax:
-		// MSM feature is off in v1.1 — return 0 (no multi-press
-		// support advertised). Reading this is optional unless MSM is
-		// in the FeatureMap; including the read keeps controllers
-		// that always probe optional attributes happy.
+		// MSM feature is off — return 0 (no multi-press support
+		// advertised). MultiPressMax carries the constraint "min 2"
+		// (matter.js packages/model/src/standard/elements/
+		// Switch.element.ts), so a bridge without multi-press
+		// recognition must drop the MSM feature instead of
+		// advertising max=1; the attribute is likewise omitted from
+		// MatterAttributes below. Reading it is optional unless MSM
+		// is in the FeatureMap; answering the read keeps controllers
+		// that probe optional attributes happy.
 		return uint8(0), true
 	case matterAttrSwitchFeatureMap:
 		return s.featureMap(), true

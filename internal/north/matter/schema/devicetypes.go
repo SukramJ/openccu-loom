@@ -35,13 +35,13 @@ var DeviceTypeRevisions = map[uint32]uint16{
 	0x002C: 1, // AirQualitySensor
 	0x002D: 2, // AirPurifier
 	0x0040: 1, // IrrigationSystem
-	0x0041: 1, // WaterFreezeDetector
+	0x0041: 2, // WaterFreezeDetector
 	0x0042: 1, // WaterValve
-	0x0043: 1, // WaterLeakDetector
-	0x0044: 1, // RainSensor
+	0x0043: 2, // WaterLeakDetector
+	0x0044: 2, // RainSensor
 	0x0045: 1, // SoilSensor
-	0x0070: 2, // Refrigerator
-	0x0071: 5, // TemperatureControlledCabinet
+	0x0070: 3, // Refrigerator
+	0x0071: 6, // TemperatureControlledCabinet
 	0x0072: 3, // RoomAirConditioner
 	0x0073: 2, // LaundryWasher
 	0x0074: 4, // RoboticVacuumCleaner
@@ -83,7 +83,7 @@ var DeviceTypeRevisions = map[uint32]uint16{
 	0x0230: 1, // Closure
 	0x0231: 1, // ClosurePanel
 	0x023E: 1, // ClosureController
-	0x0301: 5, // Thermostat
+	0x0301: 6, // Thermostat
 	0x0302: 3, // TemperatureSensor
 	0x0303: 3, // Pump
 	0x0304: 4, // PumpController

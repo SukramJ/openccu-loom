@@ -60,15 +60,15 @@ func TestParityCodeMatchesGeneratedSchema(t *testing.T) {
 		codeRev uint16
 	}{
 		// core/ cluster servers
-		{0x001F, "AccessControl", 2},
-		{0x0028, "BasicInformation", 5},
+		{0x001F, "AccessControl", 3},
+		{0x0028, "BasicInformation", 6},
 		{0x001E, "Binding", 1},
-		{0x0039, "BridgedDeviceBasicInformation", 5},
+		{0x0039, "BridgedDeviceBasicInformation", 6},
 		{0x001D, "Descriptor", 3},
 		{0x0032, "DiagnosticLogs", 1},
 		{0x0030, "GeneralCommissioning", 2},
-		{0x0033, "GeneralDiagnostics", 2},
-		{0x003F, "GroupKeyManagement", 2},
+		{0x0033, "GeneralDiagnostics", 3},
+		{0x003F, "GroupKeyManagement", 3},
 		{0x0046, "IcdManagement", 3},
 		{0x0003, "Identify", 6},
 		{0x0031, "NetworkCommissioning", 2},
@@ -78,15 +78,15 @@ func TestParityCodeMatchesGeneratedSchema(t *testing.T) {
 		{0x0038, "TimeSynchronization", 2},
 
 		// measurement/ cluster servers
-		{0x0402, "TemperatureMeasurement", 5},
-		{0x0405, "RelativeHumidityMeasurement", 4},
-		{0x0400, "IlluminanceMeasurement", 4},
-		{0x0403, "PressureMeasurement", 4},
-		{0x0045, "BooleanState", 2},
-		{0x0406, "OccupancySensing", 6},
-		{0x040D, "CarbonDioxideConcentrationMeasurement", 4},
-		{0x042A, "Pm25ConcentrationMeasurement", 4},
-		{0x042D, "Pm10ConcentrationMeasurement", 4},
+		{0x0402, "TemperatureMeasurement", 6},
+		{0x0405, "RelativeHumidityMeasurement", 5},
+		{0x0400, "IlluminanceMeasurement", 5},
+		{0x0403, "PressureMeasurement", 5},
+		{0x0045, "BooleanState", 3},
+		{0x0406, "OccupancySensing", 7},
+		{0x040D, "CarbonDioxideConcentrationMeasurement", 5},
+		{0x042A, "Pm25ConcentrationMeasurement", 5},
+		{0x042D, "Pm10ConcentrationMeasurement", 5},
 		{0x0090, "ElectricalPowerMeasurement", 3},
 		{0x0091, "ElectricalEnergyMeasurement", 2},
 
@@ -99,11 +99,11 @@ func TestParityCodeMatchesGeneratedSchema(t *testing.T) {
 		{0x0004, "Groups", 4},
 		{0x0008, "LevelControl", 7},
 		{0x0300, "ColorControl", 9},
-		{0x0201, "Thermostat", 10},
+		{0x0201, "Thermostat", 11},
 		{0x0204, "ThermostatUserInterfaceConfiguration", 2},
 		{0x0102, "WindowCovering", 8},
 		{0x0101, "DoorLock", 10},
-		{0x005C, "SmokeCoAlarm", 1},
+		{0x005C, "SmokeCoAlarm", 2},
 		{0x0062, "ScenesManagement", 1},
 	}
 
@@ -137,7 +137,7 @@ func TestDeviceTypeRevisionLookup(t *testing.T) {
 		{0x000E, "Aggregator", 2},
 		{0x0013, "BridgedNode", 3},
 		{0x0015, "ContactSensor", 2},
-		{0x0043, "WaterLeakDetector", 1},
+		{0x0043, "WaterLeakDetector", 2},
 		{0x002C, "AirQualitySensor", 1},
 		{0x0076, "SmokeCoAlarm", 1},
 		{0x0106, "LightSensor", 4},
@@ -152,7 +152,7 @@ func TestDeviceTypeRevisionLookup(t *testing.T) {
 		{0x010C, "ColorTemperatureLight", 4},
 		{0x010D, "ExtendedColorLight", 4},
 		{0x0202, "WindowCovering", 6},
-		{0x0301, "Thermostat", 5},
+		{0x0301, "Thermostat", 6},
 		{0x000A, "DoorLock", 4},
 	}
 

@@ -33,6 +33,134 @@ type Manager struct {
 	sessions       map[uint16]*Entry
 	nextID         uint16
 	onSessionClose func(sessionID uint16)
+
+	// onGracefulClose, when non-nil, fires once per session BEFORE its
+	// key material is zeroised on every locally-initiated ("graceful")
+	// teardown: idle reap, same-peer stale-CASE eviction, on-demand
+	// ClosePeer, and shutdown via [Manager.CloseAllGraceful]. The wire
+	// layer wires a best-effort Secure-Channel CloseSession
+	// StatusReport sender here so the peer learns the session is gone
+	// instead of retransmitting into a void. Mirrors matter.js
+	// packages/protocol/src/protocol/ExchangeManager.ts:635
+	// (`observers.on(session.gracefulClose, () =>
+	// this.#sendCloseSession(session))`) — the session emits
+	// gracefulClose while its keys are still live
+	// (packages/protocol/src/session/NodeSession.ts:343) and the
+	// exchange layer ships the CloseSession report. Deliberately NOT
+	// fired for peer-initiated closes ([Manager.Close] — the peer
+	// already knows; NodeSession.ts:284 handlePeerClose marks the peer
+	// lost so close() skips the gracefulClose emit) nor for the fabric
+	// teardown paths (CloseFabric / CloseFabricExcept /
+	// ClosePASESessions), where the close is the protocol-visible
+	// consequence of a command the peer itself issued.
+	onGracefulClose func(sessionID uint16, sess *channel.Session)
+
+	// onReannounce, when non-nil, fires once per teardown sweep when at
+	// least one closed session's (fabric, peer) pair has no remaining
+	// live session — the peer is fully disconnected and mDNS broadcast
+	// should resume so the controller can rediscover + re-CASE the
+	// bridge instead of showing it unresponsive. Mirrors matter.js
+	// packages/protocol/src/protocol/DeviceAdvertiser.ts:132-149
+	// (sessions.deleted → skip when `fabric.hasSessionForPeer(...)`,
+	// otherwise `ad.serviceDisconnected()` resumes broadcasting). Not
+	// fired by [Manager.CloseAllGraceful]: matter.js kicks off the
+	// advertiser shutdown before removing sessions precisely to prevent
+	// re-announces during teardown (packages/node/src/behavior/system/
+	// network/ServerNetworkRuntime.ts:427).
+	onReannounce func()
+}
+
+// SetGracefulCloseNotifier registers the wire-layer callback invoked
+// once per session before a graceful local teardown zeroises its keys
+// — see the [Manager.onGracefulClose] field docs for the exact firing
+// matrix and the matter.js provenance. Passing nil clears the hook.
+// The callback runs outside the manager's lock and must be fast
+// (single best-effort datagram); it MUST NOT call back into APIs that
+// mutate the session table.
+func (m *Manager) SetGracefulCloseNotifier(fn func(sessionID uint16, sess *channel.Session)) {
+	m.mu.Lock()
+	m.onGracefulClose = fn
+	m.mu.Unlock()
+}
+
+// SetReannounceTrigger registers the callback fired after a teardown
+// sweep leaves a peer with zero live sessions — see the
+// [Manager.onReannounce] field docs. Passing nil clears the hook. The
+// callback runs outside the manager's lock; implementations should be
+// non-blocking (fire-and-forget into the mDNS layer).
+func (m *Manager) SetReannounceTrigger(fn func()) {
+	m.mu.Lock()
+	m.onReannounce = fn
+	m.mu.Unlock()
+}
+
+// notifyGracefulClose dispatches the graceful-close hook for every
+// live entry in entries. Caller MUST hold no manager locks and MUST
+// invoke this BEFORE closeStaleEntries — the hook encrypts the
+// CloseSession StatusReport under the session's still-live keys, the
+// same ordering matter.js guarantees by emitting gracefulClose from
+// NodeSession.ts:343 close() before the key state is dropped.
+//
+// A non-zero deadline bounds the sweep: once passed, the remaining
+// notifications are skipped so a shutdown never blocks on a slow or
+// wedged wire path.
+func (m *Manager) notifyGracefulClose(entries []*Entry, deadline time.Time) {
+	m.mu.RLock()
+	hook := m.onGracefulClose
+	m.mu.RUnlock()
+	if hook == nil {
+		return
+	}
+	for _, e := range entries {
+		if e == nil || e.Session == nil {
+			continue
+		}
+		if !deadline.IsZero() && time.Now().After(deadline) {
+			return
+		}
+		hook(e.SessionID, e.Session)
+	}
+}
+
+// hasSessionForPeer reports whether any live session matches the
+// (fabricIndex, peerNodeID) pair. Mirrors the guard matter.js applies
+// before resuming operational broadcast on session deletion
+// (DeviceAdvertiser.ts:138 `fabric.hasSessionForPeer(...)`).
+func (m *Manager) hasSessionForPeer(fabricIndex uint8, peerNodeID uint64) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, e := range m.sessions {
+		if e == nil || e.Session == nil {
+			continue
+		}
+		if e.FabricIndex() == fabricIndex && e.Session.PeerNodeID() == peerNodeID {
+			return true
+		}
+	}
+	return false
+}
+
+// fireReannounceIfPeerGone fires the reannounce trigger once when at
+// least one victim's peer has no remaining live session. Called after
+// the victims are removed from the table, so a same-peer replacement
+// session installed by a CASE re-establishment naturally suppresses
+// the trigger — matter.js semantics (DeviceAdvertiser.ts:132-149).
+func (m *Manager) fireReannounceIfPeerGone(victims []*Entry) {
+	m.mu.RLock()
+	hook := m.onReannounce
+	m.mu.RUnlock()
+	if hook == nil {
+		return
+	}
+	for _, e := range victims {
+		if e == nil || e.Session == nil {
+			continue
+		}
+		if !m.hasSessionForPeer(e.FabricIndex(), e.Session.PeerNodeID()) {
+			hook()
+			return
+		}
+	}
 }
 
 // SetOnSessionClose registers a callback invoked once per session
@@ -325,6 +453,11 @@ func (m *Manager) OpenFromSigma(fabricIndex uint8, localNodeID, peerNodeID uint6
 	}
 	m.sessions[id] = entry
 	m.mu.Unlock()
+	// Tell the evicted peer its old session is gone BEFORE zeroising
+	// the keys — matter.js emits gracefulClose (NodeSession.ts:343)
+	// while the session can still encrypt, and the exchange layer
+	// ships the CloseSession StatusReport (ExchangeManager.ts:658).
+	m.notifyGracefulClose(stale, time.Time{})
 	closeStaleEntries(stale)
 	m.fireOnSessionClose(stale)
 	return entry, nil
@@ -412,6 +545,12 @@ func (m *Manager) OpenFromSigmaWithID(id uint16, fabricIndex uint8, localNodeID,
 	// entry next.
 	m.sessions[id] = entry
 	m.mu.Unlock()
+	// Graceful CloseSession to the evicted stale session's peer before
+	// key zeroise — see OpenFromSigma for the matter.js provenance. No
+	// reannounce here: the replacement session for the same peer was
+	// just installed, which is exactly the `hasSessionForPeer` skip in
+	// matter.js DeviceAdvertiser.ts:138.
+	m.notifyGracefulClose(stale, time.Time{})
 	closeStaleEntries(stale)
 	m.fireOnSessionClose(stale)
 	return entry, nil
@@ -550,6 +689,16 @@ func (m *Manager) AdoptFabricIndex(sessionID uint16, newFabricIndex uint8) error
 }
 
 // Close terminates a session and frees its id slot.
+//
+// Used for peer-initiated teardown (an inbound Secure-Channel
+// CloseSession StatusReport) among others, so it deliberately does
+// NOT fire the graceful-close notifier — echoing a CloseSession back
+// at a peer that just closed would be wrong. Mirrors matter.js
+// NodeSession.ts:284-288 handlePeerClose, which marks the peer lost so
+// close() skips the gracefulClose emit. The reannounce trigger still
+// fires when the peer has no remaining session, matching matter.js
+// DeviceAdvertiser.ts:132-149 (every session deletion conditionally
+// resumes broadcast).
 func (m *Manager) Close(sessionID uint16) error {
 	m.mu.Lock()
 	entry, ok := m.sessions[sessionID]
@@ -561,7 +710,42 @@ func (m *Manager) Close(sessionID uint16) error {
 	m.mu.Unlock()
 	entry.Session.Close()
 	m.fireOnSessionClose([]*Entry{entry})
+	m.fireReannounceIfPeerGone([]*Entry{entry})
 	return nil
+}
+
+// CloseAllGraceful tears down every live session, notifying each peer
+// via the graceful-close hook (best-effort CloseSession StatusReport)
+// before its keys are zeroised. Pre-allocated id placeholders are
+// dropped silently. Returns the number of real sessions closed.
+//
+// deadline bounds the per-peer notification sweep: once passed, the
+// remaining peers are closed locally without a wire notification so a
+// daemon shutdown never blocks on the network. The reannounce trigger
+// deliberately does not fire — the caller is shutting the bridge down
+// and matter.js likewise kicks off the advertiser shutdown before
+// removing sessions "to prevent re-announces when removing sessions"
+// (packages/node/src/behavior/system/network/ServerNetworkRuntime.ts:427).
+//
+// Mirrors the matter.js shutdown chain: each session's close emits
+// gracefulClose (Session.ts:248 initiateClose → NodeSession.ts:343)
+// and the exchange layer ships a CloseSession StatusReport per session
+// (ExchangeManager.ts:658 #sendCloseSession).
+func (m *Manager) CloseAllGraceful(deadline time.Time) int {
+	m.mu.Lock()
+	victims := make([]*Entry, 0, len(m.sessions))
+	for id, e := range m.sessions {
+		delete(m.sessions, id)
+		if e == nil || e.Session == nil {
+			continue // placeholder — no keys, no peer to notify
+		}
+		victims = append(victims, e)
+	}
+	m.mu.Unlock()
+	m.notifyGracefulClose(victims, deadline)
+	closeStaleEntries(victims)
+	m.fireOnSessionClose(victims)
+	return len(victims)
 }
 
 // CloseFabric tears down every session associated with fabricIndex.
@@ -653,8 +837,13 @@ func (m *Manager) ClosePeer(fabricIndex uint8, peerNodeID uint64) int {
 		}
 	}
 	m.mu.Unlock()
+	// Graceful close notification before key zeroise, then the
+	// conditional broadcast resume — matter.js ExchangeManager.ts:658
+	// / DeviceAdvertiser.ts:132-149 (see the hook field docs).
+	m.notifyGracefulClose(victims, time.Time{})
 	closeStaleEntries(victims)
 	m.fireOnSessionClose(victims)
+	m.fireReannounceIfPeerGone(victims)
 	return len(victims)
 }
 
@@ -752,8 +941,16 @@ func (m *Manager) reapIdle(idleTimeout time.Duration) {
 		}
 	}
 	m.mu.Unlock()
+	// Tell each reaped peer its session is gone while the keys can
+	// still seal the CloseSession StatusReport, then resume mDNS
+	// broadcast for peers left with zero sessions so they rediscover
+	// the bridge instead of retransmitting into a dead session.
+	// Mirrors matter.js ExchangeManager.ts:635/658 (gracefulClose →
+	// #sendCloseSession) + DeviceAdvertiser.ts:132-149.
+	m.notifyGracefulClose(victims, time.Time{})
 	closeStaleEntries(victims)
 	m.fireOnSessionClose(victims)
+	m.fireReannounceIfPeerGone(victims)
 }
 
 // PersistResumption stores a resumption-id pre-shared secret so a

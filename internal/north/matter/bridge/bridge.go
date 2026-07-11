@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
@@ -191,12 +192,21 @@ type Bridge struct {
 	// reassemble the listeners would either leak (no cleanup) or point
 	// at stale topology entries (cleanup but no re-bind).
 	measurementUnsubscribers []func()
-	handlerCtx               context.Context // cancelled at Stop so in-flight IM handlers unwind
-	serveCancel              context.CancelFunc
-	serveDone                chan struct{}
-	pumpCancel               context.CancelFunc // optional; nil when no AckTracker wired
-	pumpDone                 chan struct{}
-	started                  bool
+	// switchUnsubscribers holds the unsubscribe closures returned by
+	// [generic.ButtonGroup.WireMatterSwitchHandler] (via the
+	// matterSwitchSubscribable assertion) for every bridged
+	// GenericSwitch endpoint. Drained at the start of each reassemble:
+	// the wiring registers update hooks on the underlying press DP(s),
+	// and without teardown the hooks would accumulate across
+	// reassembles — every physical press would then emit one duplicate
+	// Matter event per prior topology rebuild.
+	switchUnsubscribers []func()
+	handlerCtx          context.Context // cancelled at Stop so in-flight IM handlers unwind
+	serveCancel         context.CancelFunc
+	serveDone           chan struct{}
+	pumpCancel          context.CancelFunc // optional; nil when no AckTracker wired
+	pumpDone            chan struct{}
+	started             bool
 
 	// routing bundles the exchange-src / timed-deadline / sub-target /
 	// status-response-wait tables the receive, ack-pump, and subscribe
@@ -364,6 +374,25 @@ type Bridge struct {
 	// the same on the wire, but a once-per-burst INFO log makes the
 	// failure mode self-diagnosing.
 	sessionMissTracker sessionMissBurst
+
+	// sessionRegistry is the optional seam to the operational session
+	// manager, wired via [Bridge.AttachSessionRegistry]. The
+	// Secure-Channel path uses it to close a session on an inbound
+	// CloseSession StatusReport, and [Bridge.Stop] uses it to drain
+	// every session with a graceful CloseSession farewell before the
+	// listener goes away. nil when the daemon has not wired one (test
+	// fixtures) — both paths degrade to no-ops.
+	sessionRegistry SessionRegistry
+
+	// sessionPeerAddrs remembers the last authenticated UDP source
+	// address per secure session (sessionID → *net.UDPAddr), fed by
+	// the Secure-Channel receive router. The outbound CloseSession
+	// sender routes on it; matter.js keeps the equivalent association
+	// on the session itself via its MessageChannel
+	// (packages/protocol/src/session/Session.ts, `get channel()`).
+	// Entries are dropped when the session closes; the id space is
+	// uint16 so the map stays bounded regardless.
+	sessionPeerAddrs sync.Map
 }
 
 // New constructs a Bridge. The store and snapshotter are required;
@@ -588,9 +617,20 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	// materialised cluster slice is the authoritative set; walk every
 	// endpoint (root + bridged) and inject ourselves as the emitter
 	// on each receiver. Sources that implement the model-side wiring
-	// helper (e.g. Button.WireMatterSwitchHandler) are subscribed to
-	// the cluster's Fire* surface so HM-pushed press events flow
-	// through to subscribed Matter commissioners.
+	// helper (the per-channel button group's WireMatterSwitchHandler)
+	// are subscribed to the cluster's Fire* surface so HM-pushed press
+	// events flow through to subscribed Matter commissioners.
+	//
+	// Each wiring below registers an update hook on the underlying
+	// press DP(s). The PREVIOUS topology's hooks are exchanged and
+	// drained inside the swap section further down (under b.mu), not
+	// here: two concurrent reassembles both wire fresh hooks off-lock,
+	// and only the swap decides whose list survives — draining the
+	// swapped-out list there guarantees every superseded hook set is
+	// torn down exactly once (the loser's hooks are removed by the
+	// winner's swap), so no stale hook keeps firing through its old
+	// cluster instance and no physical press emits duplicate events.
+	var switchUnsubs []func()
 	for _, ep := range topology.Endpoints {
 		if ep == nil {
 			continue
@@ -619,13 +659,15 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 			if endpointSetter, ok := srv.(matterEndpointReceiver); ok {
 				endpointSetter.SetEndpoint(ep.ID)
 			}
-			// If the cluster server is a GenericSwitch and the source
-			// implements [generic.WireMatterSwitchHandler]-style
-			// wiring, subscribe so HM updates fan out as Matter events.
+			// If the cluster server exposes the GenericSwitch Fire*
+			// surface and the endpoint's measurement source implements
+			// the model-side wiring helper, subscribe so HM press
+			// updates fan out as Matter events. The unsubscribe is
+			// retained so the next reassemble tears the hook down.
 			if !ep.IsRoot() {
-				if emitter, ok := srv.(matterSwitchEventEmitter); ok {
+				if emitter, ok := srv.(generic.MatterSwitchEventEmitter); ok {
 					if subscriber, ok := ep.Measurement.(matterSwitchSubscribable); ok {
-						subscriber.WireMatterSwitchHandler(emitter)
+						switchUnsubs = append(switchUnsubs, subscriber.WireMatterSwitchHandler(emitter))
 					}
 				}
 			}
@@ -636,9 +678,22 @@ func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit
 	prevTopology := b.topology
 	b.topology = topology
 	b.dispatcher = dispatcher
+	staleSwitchUnsubs := b.switchUnsubscribers
+	b.switchUnsubscribers = switchUnsubs
 	b.wireMeasurementListenersLocked()
 	hook := b.onReassembled
 	b.mu.Unlock()
+
+	// Drain the swapped-out press-DP hooks now that the new topology
+	// is live. Doing this after the swap (instead of before wiring)
+	// keeps concurrent reassembles safe: whichever swap runs last
+	// drains its predecessor's list, so superseded hooks never leak
+	// and never double-fire.
+	for _, unsub := range staleSwitchUnsubs {
+		if unsub != nil {
+			unsub()
+		}
+	}
 
 	// Reap subscriptions for endpoints that no longer exist in the new
 	// topology. Mirrors matter.js
@@ -733,26 +788,26 @@ type matterEndpointReceiver interface {
 	SetEndpoint(uint16)
 }
 
-// matterSwitchEventEmitter mirrors the four Fire* methods the
-// `cluster/wire.GenericSwitch` cluster server exposes. Defined here
-// (instead of importing wire) so the bridge's reassemble path stays
-// independent of the wire package's concrete type.
-type matterSwitchEventEmitter interface {
-	FireInitialPress(newPosition uint8)
-	FireShortRelease(previousPosition uint8)
-	FireLongPress(newPosition uint8)
-	FireLongRelease(previousPosition uint8)
+// matterSwitchSubscribable is the model-side surface of a press
+// source (the per-channel [generic.ButtonGroup], or a lone Button /
+// Action DP) that translates its CCU press updates into Matter §1.13
+// switch events. The signature deliberately names the model-side
+// [generic.MatterSwitchEventEmitter] interface: Go interface
+// satisfaction requires identical parameter types, so a bridge-local
+// emitter interface in this position can never be satisfied by the
+// model types' method set — the assertion in the reassemble wiring
+// would then silently never match and no press event would reach a
+// commissioner. The returned unsubscribe closure is retained in
+// [Bridge.switchUnsubscribers] and drained on the next reassemble.
+type matterSwitchSubscribable interface {
+	WireMatterSwitchHandler(generic.MatterSwitchEventEmitter) func()
 }
 
-// matterSwitchSubscribable is the model-side counterpart: any DP
-// (Button / Action) that knows how to translate its OnUpdate stream
-// into Matter switch events. The `WireMatterSwitchHandler` returns
-// an unsubscribe closure the caller could call on teardown; v1.1
-// rebuilds the topology on every Reassemble so the closure is left
-// to GC.
-type matterSwitchSubscribable interface {
-	WireMatterSwitchHandler(matterSwitchEventEmitter) func()
-}
+// Compile-time guard: the consolidated button group — the shape the
+// endpoint assembler mounts as ep.Measurement on every GenericSwitch
+// endpoint — must satisfy the reassemble wiring assertion. Fails the
+// build if the two interfaces drift apart again.
+var _ matterSwitchSubscribable = (*generic.ButtonGroup)(nil)
 
 // SetOnFabricAdded wires the post-AddNOC hook. The bridge does not
 // install fabrics itself — the OperationalCredentials cluster does —
@@ -945,11 +1000,21 @@ func (b *Bridge) AttachAggregatorPartsListProvider(provider func() []uint16) boo
 	return false
 }
 
-// Stop tears down the bridge: closes the UDP listener, withdraws
+// Stop tears down the bridge: gracefully closes every secure session
+// (best-effort CloseSession StatusReport per peer, capped by
+// [stopSessionCloseBudget]), closes the UDP listener, withdraws
 // every published mDNS record, and waits up to ctx's deadline for
 // the serve goroutine to exit. Idempotent — a second call is a
 // no-op. Safe to call after a failed [Start].
 func (b *Bridge) Stop(ctx context.Context) error {
+	// Session farewell FIRST, while the listener can still ship the
+	// CloseSession StatusReports — without it controllers keep stale
+	// CASE sessions and show the bridge unresponsive for minutes after
+	// a restart. Mirrors matter.js's shutdown ordering: sessions close
+	// gracefully (Session.ts:248 initiateClose → gracefulClose →
+	// ExchangeManager.ts:658 #sendCloseSession) before the transport
+	// is torn down (ServerNetworkRuntime.ts:410-447 stop()).
+	b.closeSecureSessionsForShutdown()
 	b.mu.Lock()
 	if !b.started {
 		b.mu.Unlock()

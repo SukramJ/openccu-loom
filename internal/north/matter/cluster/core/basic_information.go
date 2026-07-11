@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -108,7 +109,7 @@ type CapabilityMinimaStruct struct {
 // Cluster ID + revision per Matter §11.1.
 const (
 	basicInfoClusterID       uint32 = 0x0028
-	basicInfoClusterRevision uint16 = 5 // matter.js HEAD (@matter/model 0.16.11)
+	basicInfoClusterRevision uint16 = 6 // matter.js HEAD basic-information.element.ts:20 default=6
 
 	basicInfoAttrDataModelRevision    uint32 = 0x0000
 	basicInfoAttrVendorName           uint32 = 0x0001
@@ -236,12 +237,28 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 			hwStr = "1.0"
 		}
 	}
+	// SoftwareVersion (0x0009) and SoftwareVersionString (0x000A) must
+	// describe the same release. matter.js holds that invariant by
+	// deriving the string from the numeric value —
+	// BasicInformationServer.ts:71
+	// `setDefault("softwareVersionString", state.softwareVersion.toString())`
+	// — so the pair can never diverge. This bridge's authoritative
+	// version is the human-readable build string, so when the caller
+	// supplies only the string the derivation runs in the opposite
+	// direction via [SoftwareVersionFromString]. A divergent pair (a
+	// hard-coded numeric 1 next to string "0.32.1") crashes at least one
+	// ecosystem hub (Aqara) during bridge synchronisation.
+	swVersion := cfg.SoftwareVersion
 	swStr := cfg.SoftwareVersionStr
+	if swVersion == 0 && swStr != "" {
+		swVersion = SoftwareVersionFromString(swStr)
+	}
 	if swStr == "" {
-		swStr = fmt.Sprintf("%d.0", cfg.SoftwareVersion)
-		if cfg.SoftwareVersion == 0 {
-			swStr = "1.0"
-		}
+		// Mirrors matter.js BasicInformationServer.ts:71 — the string
+		// default is the decimal rendering of the numeric value. Even 0
+		// renders as one byte, so the SoftwareVersionString constraint
+		// "1 to 64" (basic-information.element.ts) always holds.
+		swStr = strconv.FormatUint(uint64(swVersion), 10)
 	}
 	bi := &BasicInformation{
 		dataModelRevision:    dmr,
@@ -254,7 +271,7 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 		productAppearance:    cfg.ProductAppearance,
 		hardwareVersion:      cfg.HardwareVersion,
 		hardwareString:       hwStr,
-		softwareVersion:      cfg.SoftwareVersion,
+		softwareVersion:      swVersion,
 		softwareString:       swStr,
 		manufacturingDate:    cfg.ManufacturingDate,
 		partNumber:           cfg.PartNumber,
@@ -267,6 +284,68 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 	}
 	validateBasicInfoAttributes(cfg)
 	return bi, nil
+}
+
+// SoftwareVersionFromString derives the numeric SoftwareVersion
+// attribute (Matter §11.1.5.10, uint32) from a human-readable
+// semver-style version string so both version attributes advertise the
+// same release.
+//
+// matter.js has no string-to-numeric path — its default flow derives
+// the string FROM the numeric value (matter.js packages/node/src/
+// behaviors/basic-information/BasicInformationServer.ts:71
+// `setDefault("softwareVersionString", state.softwareVersion.toString())`)
+// so the pair can never diverge. This bridge's authoritative version is
+// the build string, so the same "one release, two renderings" invariant
+// is held by deriving in the opposite direction with a stable,
+// monotonic encoding:
+//
+//	numeric = major*1_000_000 + minor*1_000 + patch
+//
+// with each component clamped to 999 ("0.32.1" → 32_001, "1.2.3" →
+// 1_002_003). Semver pre-release / build-metadata suffixes are dropped
+// before parsing ("0.32.0-rc.1" → 32_000): a uint32 cannot express
+// pre-release ordering and controllers only compare the numeric for
+// update detection. A leading "v"/"V" is tolerated. Strings without a
+// leading numeric major component ("dev", "") map deterministically to
+// 1, and the result is floored at 1: SoftwareVersion is mandatory on
+// the Root endpoint, and 0 is matter.js's development default
+// (BasicInformationServer.ts:59) that its initializer warns about — a
+// production bridge never advertises it.
+func SoftwareVersionFromString(version string) uint32 {
+	v := strings.TrimSpace(version)
+	v = strings.TrimPrefix(v, "v")
+	v = strings.TrimPrefix(v, "V")
+	// Drop semver pre-release ("-rc.1") and build metadata ("+g4ad313").
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		v = v[:i]
+	}
+	var parts [3]uint32
+	majorParsed := false
+	for i, p := range strings.SplitN(v, ".", 4) {
+		if i > 2 {
+			break
+		}
+		n, err := strconv.ParseUint(p, 10, 32)
+		if err != nil {
+			// Stop at the first non-numeric component; what parsed so
+			// far keeps the derivation deterministic ("0.32.x" → 32_000).
+			break
+		}
+		if n > 999 {
+			n = 999
+		}
+		parts[i] = uint32(n)
+		majorParsed = true
+	}
+	if !majorParsed {
+		return 1
+	}
+	n := parts[0]*1_000_000 + parts[1]*1_000 + parts[2]
+	if n == 0 {
+		return 1
+	}
+	return n
 }
 
 // validateBasicInfoAttributes emits slog debug diagnostics for suspicious

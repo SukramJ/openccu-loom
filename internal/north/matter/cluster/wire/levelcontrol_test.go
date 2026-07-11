@@ -62,6 +62,44 @@ func TestDecodeMoveToLevelNullTransitionTime(t *testing.T) {
 	}
 }
 
+// TestDecodeMoveToLevelOmitsTransitionTime verifies that a payload with
+// the TransitionTime context tag 1 entirely ABSENT (not TLV Null)
+// decodes successfully and leaves TransitionTime nil. Google Home's
+// brightness slider emits MoveToLevel / MoveToLevelWithOnOff (both
+// command IDs route through DecodeMoveToLevel) without the
+// transitionTime field at all, so the absent-tag shape is load-bearing
+// controller interop, not just decoder leniency. Mirrors matter.js
+// packages/types/src/tlv/TlvObject.ts:205 decodeTlvInternalValue
+// (structure decode leaves a missing member unset instead of erroring)
+// and packages/node/src/behaviors/level-control/LevelControlServer.ts:297
+// moveToLevelLogic (`transitionTime ?? onOffTransitionTime ?? null` —
+// an unset transition time means "use the device default").
+func TestDecodeMoveToLevelOmitsTransitionTime(t *testing.T) {
+	t.Parallel()
+	payload := buildPayload(t, func(e *tlv.Encoder) {
+		e.PutUint(tlv.ContextTag(0), 77) // Level
+		// Context tag 1 (TransitionTime) intentionally absent.
+		e.PutUint(tlv.ContextTag(2), 1) // OptionsMask
+		e.PutUint(tlv.ContextTag(3), 0) // OptionsOverride
+	})
+	got, err := wire.DecodeMoveToLevel(payload)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Level != 77 {
+		t.Errorf("Level = %d, want 77", got.Level)
+	}
+	if got.TransitionTime != nil {
+		t.Errorf("TransitionTime = %v, want nil for absent tag", *got.TransitionTime)
+	}
+	if got.OptionsMask != 1 {
+		t.Errorf("OptionsMask = %d, want 1", got.OptionsMask)
+	}
+	if got.OptionsOverride != 0 {
+		t.Errorf("OptionsOverride = %d, want 0", got.OptionsOverride)
+	}
+}
+
 // TestDecodeMoveToLevelTruncated verifies a truncated payload wraps
 // ErrLevelControlMalformed.
 func TestDecodeMoveToLevelTruncated(t *testing.T) {
@@ -178,6 +216,45 @@ func TestDecodeStepNullTransitionTime(t *testing.T) {
 	}
 	if got.TransitionTime != nil {
 		t.Errorf("TransitionTime = %v, want nil", got.TransitionTime)
+	}
+}
+
+// TestDecodeStepOmitsTransitionTime verifies that a Step / StepWithOnOff
+// payload with the TransitionTime context tag 2 entirely ABSENT (not TLV
+// Null) decodes successfully and leaves TransitionTime nil. Google
+// Home's relative-brightness commands omit the transitionTime field
+// rather than encoding TLV Null, so the absent-tag shape must keep
+// decoding. Mirrors matter.js packages/types/src/tlv/TlvObject.ts:205
+// decodeTlvInternalValue (absent member stays unset at decode) and
+// packages/node/src/behaviors/level-control/LevelControlServer.ts:417
+// stepLogic (a null transition time means "move as fast as able").
+func TestDecodeStepOmitsTransitionTime(t *testing.T) {
+	t.Parallel()
+	payload := buildPayload(t, func(e *tlv.Encoder) {
+		e.PutUint(tlv.ContextTag(0), uint64(wire.LevelStepModeUp))
+		e.PutUint(tlv.ContextTag(1), 25) // StepSize
+		// Context tag 2 (TransitionTime) intentionally absent.
+		e.PutUint(tlv.ContextTag(3), 1) // OptionsMask
+		e.PutUint(tlv.ContextTag(4), 0) // OptionsOverride
+	})
+	got, err := wire.DecodeStep(payload)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.StepMode != wire.LevelStepModeUp {
+		t.Errorf("StepMode = %d, want %d (Up)", got.StepMode, wire.LevelStepModeUp)
+	}
+	if got.StepSize != 25 {
+		t.Errorf("StepSize = %d, want 25", got.StepSize)
+	}
+	if got.TransitionTime != nil {
+		t.Errorf("TransitionTime = %v, want nil for absent tag", *got.TransitionTime)
+	}
+	if got.OptionsMask != 1 {
+		t.Errorf("OptionsMask = %d, want 1", got.OptionsMask)
+	}
+	if got.OptionsOverride != 0 {
+		t.Errorf("OptionsOverride = %d, want 0", got.OptionsOverride)
 	}
 }
 

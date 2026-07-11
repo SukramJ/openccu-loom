@@ -246,7 +246,7 @@ const (
 	MatterMeasurementPM10                                   // 0x042D PM10ConcentrationMeasurement
 	MatterMeasurementOccupancy                              // 0x0406 OccupancySensing
 	MatterMeasurementContact                                // 0x0045 BooleanState (ContactSensor endpoint)
-	MatterMeasurementLeak                                   // 0x0045 BooleanState (WaterLeakDetector endpoint)
+	MatterMeasurementLeak                                   // 0x0045 BooleanState (ContactSensor endpoint; see MatterMeasurementClassDeviceType)
 	MatterMeasurementBattery                                // 0x002F PowerSource
 	MatterMeasurementPower                                  // 0x0090 ElectricalPowerMeasurement
 	MatterMeasurementEnergy                                 // 0x0091 ElectricalEnergyMeasurement
@@ -448,10 +448,26 @@ func MatterMeasurementClassDeviceType(class MatterMeasurementClass) uint16 {
 		return 0x002C // AirQualitySensor
 	case MatterMeasurementOccupancy:
 		return 0x0107 // OccupancySensor
-	case MatterMeasurementContact:
+	case MatterMeasurementContact, MatterMeasurementLeak:
+		// Leak deliberately materialises as ContactSensor (0x0015)
+		// instead of the dedicated WaterLeakDetector (0x0043, a
+		// Matter-1.3-introduced detector type; matter.js
+		// packages/model/src/standard/elements/water-leak-detector.element.ts).
+		// Ecosystem ceiling: Amazon Alexa's bridge support predates the
+		// detector device types, and a single endpoint advertising
+		// 0x0043 renders the whole bridged node unresponsive there.
+		// Wire shape mirrors matter.js
+		// packages/model/src/standard/elements/contact-sensor.element.ts
+		// (device type 0x15, mandatory BooleanState 0x45 server).
+		// Polarity is non-inverted alarm semantics: the model's boolean
+		// passes through verbatim, so a detected leak reports
+		// StateValue=true (which ContactSensor renders as
+		// "closed/contact" per cluster §1.7.5.1, matter.js
+		// packages/model/src/standard/resources/boolean-state.resource.ts)
+		// and dry reports StateValue=false ("open/no contact").
+		// Divergence from matter.js device-type selection is recorded
+		// in docs/parity/by_design.md.
 		return 0x0015 // ContactSensor
-	case MatterMeasurementLeak:
-		return 0x0043 // WaterLeakDetector
 	case MatterMeasurementMomentarySwitch:
 		return 0x000F // GenericSwitch
 	default:

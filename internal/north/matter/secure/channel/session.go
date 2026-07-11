@@ -277,6 +277,16 @@ func (s *Session) PeerCATs() []uint32 {
 
 // Close zeroises the session keys and prevents further Encrypt /
 // Decrypt calls. Idempotent.
+//
+// Close is the LOCAL half of session teardown only. A graceful
+// (locally-initiated) close must notify the peer with a
+// Secure-Channel CloseSession StatusReport BEFORE calling Close —
+// once the keys are zeroised the report can no longer be sealed.
+// The operational manager owns that ordering via its graceful-close
+// notifier; the split mirrors matter.js, where Session.ts:248
+// initiateClose emits gracefulClose while the keys are live and the
+// exchange layer ships the report (ExchangeManager.ts:658
+// #sendCloseSession) before the session state is dropped.
 func (s *Session) Close() {
 	s.closed.Store(true)
 	for i := range s.encKey {

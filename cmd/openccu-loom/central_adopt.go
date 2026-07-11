@@ -30,12 +30,14 @@ import (
 var errCentralNotLive = errors.New("central_adopt: central not live-managed")
 
 // centralHandle is what [centralOrchestrator] tracks for one live-adopted
-// central: the config it was adopted with (purge needs the interface list)
-// and the north-bound closers [wireCentralNorthbound] returned.
+// central: the config it was adopted with (purge needs the interface list),
+// the north-bound closers [wireCentralNorthbound] returned, and the Matter
+// per-central unwire (nil when the bridge is disabled).
 type centralHandle struct {
 	cc      config.CentralConfig
 	avail   func()
 	climate func()
+	matter  func()
 }
 
 // centralOrchestrator is the live-CCU-adopt composition seam: it drives one
@@ -60,6 +62,24 @@ type centralOrchestrator struct {
 
 	mu      sync.Mutex
 	handles map[string]*centralHandle
+	// matterHook wires an adopted central into the running Matter bridge
+	// (readiness latch + reassemble-on-ready + reachable forward). Set via
+	// [centralOrchestrator.setMatterCentralHook] after the Matter runtime
+	// is stood up (the orchestrator is constructed first); nil while the
+	// bridge is disabled or never came up.
+	matterHook matterCentralHook
+}
+
+// setMatterCentralHook installs the per-central Matter wiring hook. Nil-safe
+// on both sides: a nil orchestrator (southbound never came up) and a nil hook
+// (Matter bridge disabled) are both tolerated no-ops.
+func (o *centralOrchestrator) setMatterCentralHook(hook matterCentralHook) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.matterHook = hook
+	o.mu.Unlock()
 }
 
 // newCentralOrchestrator builds the orchestrator from the daemon's
@@ -164,6 +184,25 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 		return fmt.Errorf("central_adopt: start %s: %w", cc.Name, err)
 	}
 
+	// Wire the central into the Matter bridge BEFORE the southbound
+	// bring-up starts: the readiness/reassemble subscriptions are then in
+	// place before the central's CentralSouthboundReadyEvent can possibly
+	// fire, so the Matter snapshotter latches ModelComplete and the
+	// topology reassembles exactly as for a boot-time central. (The hook's
+	// seed from Unit.IsSouthboundReady would cover a late wiring too, but
+	// subscribing first makes the window a non-event.) Nil when the Matter
+	// bridge is disabled.
+	o.mu.Lock()
+	matterHook := o.matterHook
+	o.mu.Unlock()
+	var matterUnwire func()
+	if matterHook != nil {
+		matterUnwire = matterHook(unit)
+		if matterUnwire != nil {
+			undo = append(undo, matterUnwire)
+		}
+	}
+
 	// Southbound bring-up (callback routes + readiness-gated device pull) and
 	// the north-bound hooks run AFTER Start, matching wireSouthbound's
 	// boot-time order (reg.StartAll happens before wireSouthbound/
@@ -180,7 +219,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	avail, climate := wireCentralNorthbound(o.sbDeps, unit)
 
 	o.mu.Lock()
-	o.handles[cc.Name] = &centralHandle{cc: cc, avail: avail, climate: climate}
+	o.handles[cc.Name] = &centralHandle{cc: cc, avail: avail, climate: climate, matter: matterUnwire}
 	o.mu.Unlock()
 
 	o.logger.Info("central.adopt.live", slog.String("central", cc.Name))
@@ -216,6 +255,12 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 
 	o.bringUp.RemoveCentral(name)
 
+	// Drop the Matter per-central subscriptions first — no readiness /
+	// reassemble / reachable signal must be processed for a central whose
+	// teardown has begun.
+	if h.matter != nil {
+		h.matter()
+	}
 	// Climate before availability, mirroring wireSouthbound's teardown order
 	// (its LIFO defer runs climate closers before availability closers).
 	if h.climate != nil {

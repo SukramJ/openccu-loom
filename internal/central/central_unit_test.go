@@ -16,6 +16,31 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// TestUnitSouthboundReadyLatch verifies the queryable southbound-ready flag:
+// a fresh unit reports not-ready, MarkSouthboundReady latches it, the latch
+// is idempotent and never clears. Late subscribers of
+// CentralSouthboundReadyEvent (e.g. the Matter bridge wiring) seed from this
+// accessor, so losing the latch would silently re-open the
+// event-fired-before-subscribe boot race.
+func TestUnitSouthboundReadyLatch(t *testing.T) {
+	c, err := central.New(central.Config{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.IsSouthboundReady() {
+		t.Error("IsSouthboundReady() = true on a fresh unit, want false (bring-up pending)")
+	}
+	c.MarkSouthboundReady()
+	if !c.IsSouthboundReady() {
+		t.Error("IsSouthboundReady() = false after MarkSouthboundReady, want true")
+	}
+	// Idempotent: a re-init publishes the ready event (and the latch) again.
+	c.MarkSouthboundReady()
+	if !c.IsSouthboundReady() {
+		t.Error("IsSouthboundReady() = false after repeated MarkSouthboundReady, want true (latched)")
+	}
+}
+
 // TestUnitAvailable_DegradedHealthIsAvailable verifies that
 // Available returns true when health is DEGRADED.
 func TestUnitAvailable_DegradedHealthIsAvailable(t *testing.T) {

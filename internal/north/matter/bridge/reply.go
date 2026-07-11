@@ -14,6 +14,7 @@ import (
 	matterlock "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/lock"
 	mattermeasure "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 )
@@ -39,6 +40,28 @@ var (
 // commissioner that never reaches counter exhaustion in practice).
 func (b *Bridge) nextUnsecuredCounter() uint32 {
 	return b.unsecuredCounter.Add(1)
+}
+
+// encryptSecureOutbound seals body for sess and refreshes the session's
+// Tx activity timestamp on success — the single outbound-activity
+// chokepoint shared by every secure send path (IM replies, unsolicited
+// subscription reports, standalone acks). Mirrors matter.js
+// packages/protocol/src/protocol/MessageExchange.ts:562/:814, where
+// #notifyActivity(false) accompanies every channel send.
+//
+// localSessionID is the bridge-local session id (the operational
+// manager's map key): at encrypt time hdr.SessionID already carries the
+// PEER's view of the session id (PeerSessionID) and must not be used
+// for the activity lookup. The graceful CloseSession farewell
+// deliberately bypasses this helper — it seals for a session that is
+// being torn down, whose entry has already left the manager's table.
+func (b *Bridge) encryptSecureOutbound(sess *channel.Session, localSessionID uint16, hdr *message.Header, body []byte) (*channel.EncryptResult, error) {
+	enc, err := sess.Encrypt(hdr, securityFlagsByte(hdr), body)
+	if err != nil {
+		return nil, err
+	}
+	b.notifySessionActivity(localSessionID, false)
+	return enc, nil
 }
 
 // sendReply is a thin wrapper around [Bridge.sendReplyOpts] that
@@ -204,7 +227,7 @@ func (b *Bridge) sendReplyOpts(
 	if respHdr.SessionID == 0 {
 		respHdr.SessionID = requestHdr.SessionID
 	}
-	enc, err := sess.Encrypt(&respHdr, securityFlagsByte(&respHdr), body)
+	enc, err := b.encryptSecureOutbound(sess, requestHdr.SessionID, &respHdr, body)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrReplyEncrypt, err)
 	}
@@ -785,6 +808,18 @@ func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeVa
 			enc.PutUint16(tlv.ContextTag(1), dt.Revision)
 			_ = enc.EndContainer()
 		}
+		_ = enc.EndContainer()
+	case mattermeasure.EnergyMeasurementStruct:
+		// ElectricalEnergyMeasurement Cumulative/PeriodicEnergy*
+		// attribute payload per Matter §2.14.5.2: struct{ [0] Energy
+		// int64 mWh }. The period fields (tags 1-4) describe PERIODIC
+		// recordings and are omitted for cumulative readings. A bare
+		// int64 here is wire-invalid — chip-tool's typed
+		// StructDecodeIterator rejects it with "Wrong TLV type".
+		// matter.js ref: packages/model/src/standard/elements/
+		// electrical-energy-measurement.element.ts:88-96.
+		enc.StartStruct(tag)
+		enc.PutInt64(tlv.ContextTag(0), x.Energy)
 		_ = enc.EndContainer()
 	case []mattermeasure.AccuracyStruct:
 		// ElectricalPowerMeasurement.Accuracy (0x0090:0x0002) and

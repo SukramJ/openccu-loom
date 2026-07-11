@@ -67,6 +67,42 @@ func TestCoverSubscribeRoutesDirectionUpdates(t *testing.T) {
 	}
 }
 
+// TestCoverSubscribeRoutesActivityStateUpdates verifies the HmIP
+// fallback: a channel without DIRECTION but with ACTIVITY_STATE (same
+// UP/DOWN indices) still feeds Cover.OnDirection through Subscribe, so
+// IsOpening / IsClosing work on HmIP actuators too.
+func TestCoverSubscribeRoutesActivityStateUpdates(t *testing.T) {
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
+	ch := d.AddChannel("ABC0001:1", 1, "BLIND", hmenum.ParamsetKeyValues)
+	ch.Put(levelDP(ch.Address, stubWriter{}))
+
+	actDP := generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterActivityState)},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeEnum,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			ValueList:  []string{"UNKNOWN", "UP", "DOWN", "STABLE"},
+		},
+	})
+	ch.Put(actDP)
+
+	c := cover.New(cover.Config{Channel: ch, Writer: stubWriter{}, Capabilities: custom.CoverCapabilities{}})
+	ch.SetCustomDataPoint(c)
+
+	actDP.OnEvent(2) // DOWN
+
+	got, observed := c.Direction()
+	if !observed {
+		t.Fatalf("Direction should be observed after ACTIVITY_STATE update")
+	}
+	if got != cover.DirectionDown {
+		t.Fatalf("Direction = %v want DirectionDown(2)", got)
+	}
+	if !c.IsClosing() {
+		t.Fatalf("Cover should report IsClosing after ACTIVITY_STATE=DOWN")
+	}
+}
+
 func TestCoverSetCustomDataPointReleasesPriorSubscription(t *testing.T) {
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "ABC0001"})
 	ch := d.AddChannel("ABC0001:1", 1, "BLIND", hmenum.ParamsetKeyValues)
