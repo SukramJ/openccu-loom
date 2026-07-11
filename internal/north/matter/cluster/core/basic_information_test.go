@@ -134,8 +134,8 @@ func TestBasicInfo_ClusterRevision(t *testing.T) {
 	if !ok {
 		t.Fatal("ClusterRevision: ok=false")
 	}
-	if v.(uint16) != 5 {
-		t.Fatalf("ClusterRevision = %v, want 5", v)
+	if v.(uint16) != 6 {
+		t.Fatalf("ClusterRevision = %v, want 6", v)
 	}
 }
 

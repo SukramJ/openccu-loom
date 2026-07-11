@@ -115,7 +115,7 @@ const (
 // Cluster ID + revision per Matter §11.12.
 const (
 	gendiagClusterID       uint32 = 0x0033
-	gendiagClusterRevision uint16 = 2
+	gendiagClusterRevision uint16 = 3 // matter.js HEAD general-diagnostics.element.ts:21 default=3
 
 	gendiagAttrNetworkInterfaces        uint32 = 0x0000
 	gendiagAttrRebootCount              uint32 = 0x0001

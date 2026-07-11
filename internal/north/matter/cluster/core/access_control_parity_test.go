@@ -43,21 +43,21 @@ func TestParityMatterJS_AccessControl_ClusterID(t *testing.T) {
 	}
 }
 
-// TestParityMatterJS_AccessControl_ClusterRevision2 pins revision 2.
+// TestParityMatterJS_AccessControl_ClusterRevision3 pins revision 3.
 //
 // Mirrors matter.js packages/model/src/standard/elements/
-// access-control.element.ts:5 (revision: 2). Revision drift causes
-// chip-tool's "validate cluster revision" step to fail and Apple's HAP
-// mapper to bucket the cluster as "unknown".
-func TestParityMatterJS_AccessControl_ClusterRevision2(t *testing.T) {
+// access-control.element.ts:21 (ClusterRevision default: 3). Revision
+// drift causes chip-tool's "validate cluster revision" step to fail and
+// Apple's HAP mapper to bucket the cluster as "unknown".
+func TestParityMatterJS_AccessControl_ClusterRevision3(t *testing.T) {
 	t.Parallel()
 	ac := newAccessControl(t)
 	v, ok := ac.MatterRead(0xFFFD) // ClusterRevision
 	if !ok {
 		t.Fatal("ClusterRevision: ok=false")
 	}
-	if got := v.(uint16); got != 2 {
-		t.Errorf("ClusterRevision = %d, want 2 (matter.js HEAD access-control.element.ts:5)", got)
+	if got := v.(uint16); got != 3 {
+		t.Errorf("ClusterRevision = %d, want 3 (matter.js HEAD access-control.element.ts:21)", got)
 	}
 }
 

@@ -132,12 +132,10 @@ const (
 	matterCmdOnWithTimedOff          uint32 = 0x42
 
 	matterOnOffClusterRevision        uint16 = 6
-	matterBooleanStateClusterRevision uint16 = 2 // matter.js HEAD (@matter/model 0.16.11)
-	// matterSmokeCOAlarmClusterRevision pinned to Matter 1.5.1
-	// (connectedhomeip tag v1.5.1.0 / smoke-co-alarm-cluster.xml
-	// globalAttribute 0xFFFD = 1). The 1.4 Mute-attribute promotion
-	// did not bump the cluster revision — the value stays at 1.
-	matterSmokeCOAlarmClusterRevision uint16 = 1
+	matterBooleanStateClusterRevision uint16 = 3 // matter.js HEAD boolean-state.element.ts:19 default=3
+	// matterSmokeCOAlarmClusterRevision mirrors matter.js HEAD
+	// smoke-co-alarm-cluster.element.ts:21 default=2 (spec 1.5.1).
+	matterSmokeCOAlarmClusterRevision uint16 = 2
 
 	// SmokeCOAlarm AlarmStateEnum (spec 2.11.5.1):
 	// 0 = Normal, 1 = Warning, 2 = Critical.

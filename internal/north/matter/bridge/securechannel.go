@@ -942,6 +942,10 @@ func (b *Bridge) sendCloseSessionReport(sessionID uint16, sess *channel.Session)
 	if hdr.SessionID == 0 {
 		hdr.SessionID = sessionID
 	}
+	// Deliberately NOT [Bridge.encryptSecureOutbound]: the farewell seals
+	// for a session that is being torn down — its manager entry is already
+	// gone, and refreshing activity on a dying session would be
+	// meaningless at best.
 	enc, err := sess.Encrypt(&hdr, securityFlagsByte(&hdr), body)
 	if err != nil {
 		b.logger.Debug("matter.tx.sc.close_session.encrypt",

@@ -492,6 +492,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// auditDB (ov.db) is threaded through rather than opened again — see
 	// openLoomDB in daemon_boot.go.
 	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, auditDB, healthTracker, parameterLabels, logger, wsHub)
+	// Hand the per-central Matter wiring hook to the live-adopt
+	// orchestrator so a runtime-added central latches readiness, triggers
+	// a reassemble, and forwards reachability exactly like a boot-time
+	// central. Nil-safe on both sides (bridge disabled / orchestrator
+	// unavailable).
+	centralOrch.setMatterCentralHook(matter.centralHook)
 	// Matter's ordered teardown is owned by the north-bound registry (it
 	// stops after REST, before the webhook). Only registered when enabled —
 	// a disabled bridge yields a no-op matterStop and is not a surface. The

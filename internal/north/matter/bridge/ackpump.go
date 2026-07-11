@@ -417,7 +417,7 @@ func (b *Bridge) emitStandaloneAck(obl mrp.AckObligation) {
 			hdr.SessionID = target.sessionID
 		}
 		body := proto.Marshal()
-		enc, err := sess.Encrypt(&hdr, securityFlagsByte(&hdr), body)
+		enc, err := b.encryptSecureOutbound(sess, target.sessionID, &hdr, body)
 		if err != nil {
 			b.logger.Warn("matter.tx.ack_pump.encrypt",
 				slog.Int("exchange_id", int(obl.ExchangeID)),

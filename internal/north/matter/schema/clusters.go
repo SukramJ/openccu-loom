@@ -17,9 +17,9 @@ var ClusterRevisions = map[uint32]uint16{
 	0x0008: 7,  // LevelControl
 	0x001D: 3,  // Descriptor
 	0x001E: 1,  // Binding
-	0x001F: 2,  // AccessControl
+	0x001F: 3,  // AccessControl
 	0x0025: 1,  // Actions
-	0x0028: 5,  // BasicInformation
+	0x0028: 6,  // BasicInformation
 	0x0029: 1,  // OtaSoftwareUpdateProvider
 	0x002A: 1,  // OtaSoftwareUpdateRequestor
 	0x002B: 1,  // LocalizationConfiguration
@@ -30,20 +30,20 @@ var ClusterRevisions = map[uint32]uint16{
 	0x0030: 2,  // GeneralCommissioning
 	0x0031: 2,  // NetworkCommissioning
 	0x0032: 1,  // DiagnosticLogs
-	0x0033: 2,  // GeneralDiagnostics
+	0x0033: 3,  // GeneralDiagnostics
 	0x0034: 1,  // SoftwareDiagnostics
 	0x0035: 3,  // ThreadNetworkDiagnostics
 	0x0036: 1,  // WiFiNetworkDiagnostics
 	0x0037: 1,  // EthernetNetworkDiagnostics
 	0x0038: 2,  // TimeSynchronization
-	0x0039: 5,  // BridgedDeviceBasicInformation
+	0x0039: 6,  // BridgedDeviceBasicInformation
 	0x003B: 2,  // Switch
 	0x003C: 1,  // AdministratorCommissioning
 	0x003E: 2,  // OperationalCredentials
-	0x003F: 2,  // GroupKeyManagement
+	0x003F: 3,  // GroupKeyManagement
 	0x0040: 1,  // FixedLabel
 	0x0041: 1,  // UserLabel
-	0x0045: 2,  // BooleanState
+	0x0045: 3,  // BooleanState
 	0x0046: 3,  // IcdManagement
 	0x0048: 2,  // OvenCavityOperationalState
 	0x0049: 2,  // OvenMode
@@ -58,17 +58,19 @@ var ClusterRevisions = map[uint32]uint16{
 	0x0057: 1,  // RefrigeratorAlarm
 	0x0059: 3,  // DishwasherMode
 	0x005B: 1,  // AirQuality
-	0x005C: 1,  // SmokeCoAlarm
+	0x005C: 2,  // SmokeCoAlarm
 	0x005D: 1,  // DishwasherAlarm
 	0x005E: 2,  // MicrowaveOvenMode
 	0x005F: 1,  // MicrowaveOvenControl
 	0x0060: 3,  // OperationalState
 	0x0061: 3,  // RvcOperationalState
 	0x0062: 1,  // ScenesManagement
+	0x0064: 1,  // TemperatureAlarm
+	0x0065: 1,  // Groupcast
 	0x0071: 1,  // HepaFilterMonitoring
 	0x0072: 1,  // ActivatedCarbonFilterMonitoring
 	0x0079: 1,  // WaterTankLevelMonitoring
-	0x0080: 1,  // BooleanStateConfiguration
+	0x0080: 2,  // BooleanStateConfiguration
 	0x0081: 1,  // ValveConfigurationAndControl
 	0x0090: 3,  // ElectricalPowerMeasurement
 	0x0091: 2,  // ElectricalEnergyMeasurement
@@ -89,27 +91,28 @@ var ClusterRevisions = map[uint32]uint16{
 	0x0105: 1,  // ClosureDimension
 	0x0150: 2,  // ServiceArea
 	0x0200: 5,  // PumpConfigurationAndControl
-	0x0201: 10, // Thermostat
+	0x0201: 11, // Thermostat
 	0x0202: 6,  // FanControl
 	0x0204: 2,  // ThermostatUserInterfaceConfiguration
 	0x0300: 9,  // ColorControl
-	0x0400: 4,  // IlluminanceMeasurement
-	0x0402: 5,  // TemperatureMeasurement
-	0x0403: 4,  // PressureMeasurement
-	0x0404: 4,  // FlowMeasurement
-	0x0405: 4,  // RelativeHumidityMeasurement
-	0x0406: 6,  // OccupancySensing
-	0x040C: 4,  // CarbonMonoxideConcentrationMeasurement
-	0x040D: 4,  // CarbonDioxideConcentrationMeasurement
-	0x0413: 4,  // NitrogenDioxideConcentrationMeasurement
-	0x0415: 4,  // OzoneConcentrationMeasurement
-	0x042A: 4,  // Pm25ConcentrationMeasurement
-	0x042B: 4,  // FormaldehydeConcentrationMeasurement
-	0x042C: 4,  // Pm1ConcentrationMeasurement
-	0x042D: 4,  // Pm10ConcentrationMeasurement
-	0x042E: 4,  // TotalVolatileOrganicCompoundsConcentrationMeasurement
-	0x042F: 4,  // RadonConcentrationMeasurement
+	0x0400: 5,  // IlluminanceMeasurement
+	0x0402: 6,  // TemperatureMeasurement
+	0x0403: 5,  // PressureMeasurement
+	0x0404: 5,  // FlowMeasurement
+	0x0405: 5,  // RelativeHumidityMeasurement
+	0x0406: 7,  // OccupancySensing
+	0x040C: 5,  // CarbonMonoxideConcentrationMeasurement
+	0x040D: 5,  // CarbonDioxideConcentrationMeasurement
+	0x0413: 5,  // NitrogenDioxideConcentrationMeasurement
+	0x0415: 5,  // OzoneConcentrationMeasurement
+	0x042A: 5,  // Pm25ConcentrationMeasurement
+	0x042B: 5,  // FormaldehydeConcentrationMeasurement
+	0x042C: 5,  // Pm1ConcentrationMeasurement
+	0x042D: 5,  // Pm10ConcentrationMeasurement
+	0x042E: 5,  // TotalVolatileOrganicCompoundsConcentrationMeasurement
+	0x042F: 5,  // RadonConcentrationMeasurement
 	0x0430: 1,  // SoilMeasurement
+	0x0431: 1,  // AmbientContextSensing
 	0x0451: 1,  // WiFiNetworkManagement
 	0x0452: 1,  // ThreadBorderRouterManagement
 	0x0453: 1,  // ThreadNetworkDirectory
@@ -128,7 +131,7 @@ var ClusterRevisions = map[uint32]uint16{
 	0x050F: 1,  // ContentControl
 	0x0510: 1,  // ContentAppObserver
 	0x0550: 1,  // ZoneManagement
-	0x0551: 1,  // CameraAvStreamManagement
+	0x0551: 2,  // CameraAvStreamManagement
 	0x0552: 1,  // CameraAvSettingsUserLevelManagement
 	0x0553: 2,  // WebRtcTransportProvider
 	0x0554: 2,  // WebRtcTransportRequestor
@@ -201,6 +204,8 @@ var ClusterNames = map[uint32]string{
 	0x0060: "OperationalState",
 	0x0061: "RvcOperationalState",
 	0x0062: "ScenesManagement",
+	0x0064: "TemperatureAlarm",
+	0x0065: "Groupcast",
 	0x0071: "HepaFilterMonitoring",
 	0x0072: "ActivatedCarbonFilterMonitoring",
 	0x0079: "WaterTankLevelMonitoring",
@@ -246,6 +251,7 @@ var ClusterNames = map[uint32]string{
 	0x042E: "TotalVolatileOrganicCompoundsConcentrationMeasurement",
 	0x042F: "RadonConcentrationMeasurement",
 	0x0430: "SoilMeasurement",
+	0x0431: "AmbientContextSensing",
 	0x0451: "WiFiNetworkManagement",
 	0x0452: "ThreadBorderRouterManagement",
 	0x0453: "ThreadNetworkDirectory",

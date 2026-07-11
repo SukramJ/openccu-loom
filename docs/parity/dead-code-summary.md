@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 0313bb9f
-HEAD: 0313bb9f
+Generated: 3f05fe00
+HEAD: 3f05fe00
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24477 |
+| Total Exported | 24497 |
 | Reachable | 4197 |
-| Whitelisted | 17735 |
+| Whitelisted | 17755 |
 | **Unreachable** | **2545** |
 
 ## Top-20 Packages by Dead Code

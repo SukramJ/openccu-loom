@@ -38,8 +38,8 @@ func TestGKM_ClusterRevision(t *testing.T) {
 	if !ok {
 		t.Fatal("ClusterRevision: ok=false")
 	}
-	if v.(uint16) != 2 {
-		t.Fatalf("ClusterRevision = %v, want 2", v)
+	if v.(uint16) != 3 {
+		t.Fatalf("ClusterRevision = %v, want 3", v)
 	}
 }
 

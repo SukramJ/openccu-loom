@@ -81,7 +81,7 @@ type ACLStoreFacade interface {
 // Cluster ID + revision per Matter §9.10.
 const (
 	accessControlClusterID       uint32 = 0x001F
-	accessControlClusterRevision uint16 = 2 // matter.js HEAD (@matter/model 0.16.11)
+	accessControlClusterRevision uint16 = 3 // matter.js HEAD access-control.element.ts:21 default=3
 
 	accessControlAttrACL                           uint32 = 0x0000
 	accessControlAttrExtension                     uint32 = 0x0001

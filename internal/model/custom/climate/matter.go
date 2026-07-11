@@ -104,13 +104,13 @@ const (
 	// Thermostat command IDs.
 	matterCmdSetpointRaiseLower uint32 = 0x00
 
-	// Cluster revisions: Thermostat 10, ThermostatUI 2,
-	// TemperatureMeasurement 5, RelativeHumidityMeasurement 4.
+	// Cluster revisions: Thermostat 11, ThermostatUI 2,
+	// TemperatureMeasurement 6, RelativeHumidityMeasurement 5.
 	// Pinned via docs/parity/matter/matter-schema-snapshot.json.
-	matterThermClusterRevision    uint16 = 10
+	matterThermClusterRevision    uint16 = 11
 	matterThermUIClusterRevision  uint16 = 2
-	matterTempMeasClusterRevision uint16 = 5
-	matterHumidityClusterRevision uint16 = 4
+	matterTempMeasClusterRevision uint16 = 6
+	matterHumidityClusterRevision uint16 = 5
 
 	// Matter Thermostat SystemMode enum values (spec 4.3.7.4.4).
 	matterSysModeOff  uint8 = 0

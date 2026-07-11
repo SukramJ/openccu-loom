@@ -109,7 +109,7 @@ type CapabilityMinimaStruct struct {
 // Cluster ID + revision per Matter §11.1.
 const (
 	basicInfoClusterID       uint32 = 0x0028
-	basicInfoClusterRevision uint16 = 5 // matter.js HEAD (@matter/model 0.16.11)
+	basicInfoClusterRevision uint16 = 6 // matter.js HEAD basic-information.element.ts:20 default=6
 
 	basicInfoAttrDataModelRevision    uint32 = 0x0000
 	basicInfoAttrVendorName           uint32 = 0x0001

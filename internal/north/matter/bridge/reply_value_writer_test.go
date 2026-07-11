@@ -309,6 +309,23 @@ func TestDefaultAttributeValueWriter_AccuracyStructSlice(t *testing.T) {
 	verifyNonEmpty(t, "[]AccuracyStruct", callAttributeWriter(im.AttributeValue{Value: v}))
 }
 
+func TestDefaultAttributeValueWriter_EnergyMeasurementStruct(t *testing.T) {
+	t.Parallel()
+	// CumulativeEnergyImported must encode as EnergyMeasurementStruct
+	// (anonymous struct container carrying Energy at context tag 0) —
+	// a bare int64 is rejected by chip-tool's typed StructDecodeIterator
+	// with "Wrong TLV type". Matter §2.14.5.2; matter.js
+	// electrical-energy-measurement.element.ts:88-96.
+	b := verifyNonEmpty(t, "EnergyMeasurementStruct",
+		callAttributeWriter(im.AttributeValue{Value: mattermeasure.EnergyMeasurementStruct{Energy: 1500000}}))
+	// TLV control byte 0x15 = structure, anonymous tag. A signed-int
+	// encoding (control 0x00-0x03) here would regress to the bare-int
+	// wire shape.
+	if b[0] != 0x15 {
+		t.Fatalf("EnergyMeasurementStruct leading control byte = 0x%02X, want 0x15 (anonymous structure)", b[0])
+	}
+}
+
 func TestDefaultAttributeValueWriter_StartUpEvent(t *testing.T) {
 	t.Parallel()
 	verifyNonEmpty(t, "StartUpEvent", callAttributeWriter(im.AttributeValue{Value: mattercore.StartUpEvent{SoftwareVersion: 42}}))

@@ -323,7 +323,36 @@ func (b *Bridge) decryptIfNeeded(hdr *message.Header, body []byte) (plaintext []
 			slog.String("err", err.Error()))
 		return nil, false, err
 	}
+	// Single inbound-activity chokepoint: every message that decrypted
+	// and authenticated — MRP retransmits (duplicate=true) included —
+	// refreshes the session's Rx activity so the idle reaper never
+	// evicts a session whose peer is demonstrably alive. Mirrors
+	// matter.js packages/protocol/src/protocol/MessageExchange.ts:429,
+	// where #notifyActivity(true) fires before the duplicate branch.
+	b.notifySessionActivity(hdr.SessionID, true)
 	return plain, duplicate, nil
+}
+
+// notifySessionActivity refreshes the operational session's activity
+// timestamps through the attached lookup's optional
+// [SessionActivityMarker] capability. rx=true marks an authenticated
+// inbound decrypt (idle-reaper timestamp + peer-activity timestamp),
+// rx=false marks an outbound secure send (idle-reaper timestamp only).
+// The Go translation of matter.js Session.ts:127 notifyActivity — a
+// lookup without the capability (test fakes) degrades to a no-op.
+func (b *Bridge) notifySessionActivity(sessionID uint16, rx bool) {
+	b.mu.RLock()
+	lookup := b.sessions
+	b.mu.RUnlock()
+	marker, ok := lookup.(SessionActivityMarker)
+	if !ok {
+		return
+	}
+	if rx {
+		marker.MarkActiveRx(sessionID)
+		return
+	}
+	marker.MarkActiveTx(sessionID)
 }
 
 // handleIMOpcode fans out by opcode into the IM Handle* surfaces and

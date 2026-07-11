@@ -43,21 +43,21 @@ func TestParityMatterJS_BridgedServer_ClusterID(t *testing.T) {
 	}
 }
 
-// TestParityMatterJS_BridgedServer_ClusterRevision5 pins revision 5.
+// TestParityMatterJS_BridgedServer_ClusterRevision6 pins revision 6.
 //
 // Mirrors matter.js packages/model/src/standard/elements/
-// bridged-device-basic-information.element.ts:5 (revision: 5).
-// Apple Home pair aborts when the advertised revision lags the
-// matter.js gold-standard value, so this pin is load-bearing.
-func TestParityMatterJS_BridgedServer_ClusterRevision5(t *testing.T) {
+// bridged-device-basic-information.element.ts:20 (ClusterRevision
+// default: 6). Apple Home pair aborts when the advertised revision lags
+// the matter.js gold-standard value, so this pin is load-bearing.
+func TestParityMatterJS_BridgedServer_ClusterRevision6(t *testing.T) {
 	t.Parallel()
 	b := newValidBridged(t)
 	v, ok := b.MatterRead(cluster.AttrGlobalClusterRevision)
 	if !ok {
 		t.Fatal("ClusterRevision: ok=false")
 	}
-	if got := v.(uint16); got != 5 {
-		t.Errorf("ClusterRevision = %d, want 5 (matter.js HEAD bridged-device-basic-information.element.ts:5)", got)
+	if got := v.(uint16); got != 6 {
+		t.Errorf("ClusterRevision = %d, want 6 (matter.js HEAD bridged-device-basic-information.element.ts:20)", got)
 	}
 }
 

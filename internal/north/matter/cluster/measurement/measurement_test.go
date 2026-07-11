@@ -90,7 +90,7 @@ func TestTemperatureServerHappyPath(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(ClusterRevision) ok = false")
 	}
-	if got, want := rev.(uint16), uint16(5); got != want {
+	if got, want := rev.(uint16), uint16(6); got != want {
 		t.Errorf("ClusterRevision = %d, want %d", got, want)
 	}
 }
@@ -243,7 +243,7 @@ func TestHumidityServerHappyPath(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(ClusterRevision) ok = false")
 	}
-	if got, want := rev.(uint16), uint16(4); got != want {
+	if got, want := rev.(uint16), uint16(5); got != want {
 		t.Errorf("ClusterRevision = %d, want %d", got, want)
 	}
 }
@@ -297,7 +297,7 @@ func TestIlluminanceServerHappyPath(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(ClusterRevision) ok = false")
 	}
-	if got, want := rev.(uint16), uint16(4); got != want {
+	if got, want := rev.(uint16), uint16(5); got != want {
 		t.Errorf("ClusterRevision = %d, want %d", got, want)
 	}
 }
@@ -364,7 +364,7 @@ func TestPressureServerHappyPath(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(ClusterRevision) ok = false")
 	}
-	if got, want := rev.(uint16), uint16(4); got != want {
+	if got, want := rev.(uint16), uint16(5); got != want {
 		t.Errorf("ClusterRevision = %d, want %d", got, want)
 	}
 }
@@ -436,7 +436,7 @@ func TestBooleanStateServerTrue(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(ClusterRevision) ok = false")
 	}
-	if got, want := rev.(uint16), uint16(2); got != want {
+	if got, want := rev.(uint16), uint16(3); got != want {
 		t.Errorf("ClusterRevision = %d, want %d", got, want)
 	}
 }
@@ -490,7 +490,7 @@ func TestOccupancyServerOccupied(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(ClusterRevision) ok = false")
 	}
-	if got, want := rev.(uint16), uint16(6); got != want {
+	if got, want := rev.(uint16), uint16(7); got != want {
 		t.Errorf("ClusterRevision = %d, want %d", got, want)
 	}
 }
@@ -729,9 +729,9 @@ func TestCO2ConcentrationServerHappyPath(t *testing.T) {
 	if !ok {
 		t.Fatal("MatterRead(ClusterRevision) ok = false")
 	}
-	// matter.js HEAD `concentration-measurement.element.ts:20` declares
-	// default=4 for the base ConcentrationMeasurement cluster.
-	if got, want := rev.(uint16), uint16(4); got != want {
+	// matter.js HEAD `concentration-measurement.element.ts:19` declares
+	// default=5 for the base ConcentrationMeasurement cluster.
+	if got, want := rev.(uint16), uint16(5); got != want {
 		t.Errorf("ClusterRevision = %d, want %d", got, want)
 	}
 }
@@ -1237,13 +1237,15 @@ func TestElectricalEnergyServerHappyPath(t *testing.T) {
 		t.Errorf("ClusterID = 0x%04X, want 0x%04X", got, measurement.ClusterElectricalEnergy)
 	}
 
-	// CumulativeEnergyImported at 0x0001 = int64 mWh: 12345.0 Wh * 1000 = 12345000.
+	// CumulativeEnergyImported at 0x0001 = EnergyMeasurementStruct with
+	// Energy in int64 mWh: 12345.0 Wh * 1000 = 12345000. A bare int64
+	// is wire-invalid — chip-tool's typed decode rejects it.
 	ce, ok := s.MatterRead(0x0001)
 	if !ok {
 		t.Fatal("MatterRead(0x0001 CumulativeImported) ok = false")
 	}
-	if got, want := ce.(int64), int64(12345000); got != want {
-		t.Errorf("CumulativeEnergyImported = %d, want %d", got, want)
+	if got, want := ce.(measurement.EnergyMeasurementStruct), (measurement.EnergyMeasurementStruct{Energy: 12345000}); got != want {
+		t.Errorf("CumulativeEnergyImported = %+v, want %+v", got, want)
 	}
 
 	// FeatureMap at 0xFFFC = uint32(1) (IMPE bit, 1<<0).

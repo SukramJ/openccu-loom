@@ -130,6 +130,11 @@ type matterBridgeBundle struct {
 	opCreds        *mattercore.OperationalCredentials
 	configuredPase *matterbridge.PaseAdapter // nil when ConcurrentPairings is enabled or no passcode is configured
 	rootRefs       rootClusterRefs           // typed handles for daemon-side lifecycle wiring
+	// readiness is the per-central model-complete latch feeding the
+	// snapshotter. Exposed so wireMatterRuntime can hand it to the
+	// live-adopt hook ([newMatterCentralHook]) — a runtime-added central
+	// must latch into the SAME tracker the snapshotter reads.
+	readiness *matterCentralReadiness
 }
 
 // db is the shared <DataDir>/openccu-loom.db handle opened once by
@@ -493,7 +498,24 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			return 0, false
 		}
 		return entry.RetransmitBaseInterval(now), true
-	})
+	}).WithActivityMarkers(
+		// Session activity feeds the idle reaper (StartReaper below) and
+		// the MRP peer-active determination. Mirrors matter.js
+		// packages/protocol/src/session/Session.ts:127 notifyActivity —
+		// invoked by the bridge's receive path for every authenticated
+		// inbound message and by its outbound seal path for every secure
+		// send (MessageExchange.ts:429 / :562).
+		func(id uint16) {
+			if entry, err := opMgr.Get(id); err == nil && entry != nil {
+				entry.MarkActiveRx()
+			}
+		},
+		func(id uint16) {
+			if entry, err := opMgr.Get(id); err == nil && entry != nil {
+				entry.MarkActiveTx()
+			}
+		},
+	)
 	bridge.AttachSessionLookup(sessionLookup)
 
 	ackTracker := mrp.NewAckTracker(mrp.DefaultStandaloneAckDelay)
@@ -529,6 +551,17 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// packages/protocol/src/protocol/ExchangeManager.ts #sendCloseSession
 	// and SecureChannelProtocol.ts inbound-close handling.
 	bridge.AttachSessionRegistry(opMgr)
+
+	// Idle-session reaper: evict operational sessions with no traffic for
+	// [operational.SessionIdleTimeout] (5 min), sweeping every
+	// [matterSessionReapInterval]. The TTL must stay comfortably above the
+	// subscription publisher's heartbeat cadence — min(maxInterval/2, 30s),
+	// see the keep-alive branch in the IM subscription engine tick — so a
+	// live but quiet subscription is never reaped: controllers ack every
+	// heartbeat report, and each ack refreshes the session's Rx activity
+	// through the receive path (WithActivityMarkers above). Reaped sessions
+	// ship the same graceful CloseSession farewell as shutdown.
+	opMgr.StartReaper(ctx, operational.SessionIdleTimeout, matterSessionReapInterval)
 
 	// Initial value warm-up REMOVED. A previous per-device LoadAllValues
 	// sweep ran here so Apple Home's HAP-mapper would see observed
@@ -938,6 +971,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		opCreds:        opCreds,
 		configuredPase: configuredPase,
 		rootRefs:       rootRefs,
+		readiness:      readiness,
 	}
 }
 
@@ -2707,11 +2741,21 @@ type matterWiring struct {
 	pub           *matterEventPublisher
 	reassembler   handlers.MatterTopologyReassembler
 	bi            *mattercore.BasicInformation
+	// centralHook wires a runtime-adopted central into the running bridge
+	// (readiness latch + reassemble-on-ready + reachable forward). Nil when
+	// the bridge is disabled; the live-adopt orchestrator skips it then.
+	centralHook matterCentralHook
 }
 
 // matterReassembleReadyDebounce coalesces a burst of CentralSouthboundReadyEvents
 // (staggered multi-CCU bring-ups) into a single topology reassemble.
 const matterReassembleReadyDebounce = 750 * time.Millisecond
+
+// matterSessionReapInterval is the sweep cadence of the operational
+// idle-session reaper (see the StartReaper call in startMatterBridge).
+// idleTimeout/poll ≈ 5:1 keeps eviction latency bounded at TTL + 60 s
+// while the sweep itself stays negligible.
+const matterSessionReapInterval = 60 * time.Second
 
 // wireMatterReassembleOnReady rebuilds the Matter bridge topology once each
 // central's southbound bring-up has completed. The topology is first assembled
@@ -2723,36 +2767,36 @@ const matterReassembleReadyDebounce = 750 * time.Millisecond
 //
 // The event handler only signals (non-blocking) so it never blocks the
 // serialized bus dispatch; the actual Reassemble runs on a dedicated debounce
-// goroutine that stops when ctx is cancelled. Returns the subscription closers.
+// goroutine that stops when ctx is cancelled. Returns the subscription closers
+// plus the non-blocking trigger, so the live-adopt hook can subscribe a
+// runtime-added central's bus onto the same debounce pipeline later (see
+// [newMatterCentralHook]). The debounce goroutine starts whenever reassemble
+// is non-nil — even with zero boot-time buses — because a daemon can boot with
+// no configured centrals and adopt its first one at runtime.
 func wireMatterReassembleOnReady(
 	ctx context.Context,
 	buses []*events.Bus,
 	reassemble func(context.Context) error,
 	debounce time.Duration,
 	logger *slog.Logger,
-) []func() {
+) (closers []func(), trigger func()) {
 	if reassemble == nil {
-		return nil
+		return nil, nil
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	signal := make(chan struct{}, 1)
-	closers := make([]func(), 0, len(buses))
-	for _, bus := range buses {
-		if bus == nil {
-			continue
+	trigger = func() {
+		select {
+		case signal <- struct{}{}:
+		default:
 		}
-		unsub := events.Subscribe(bus, func(hmevent.CentralSouthboundReadyEvent) {
-			select {
-			case signal <- struct{}{}:
-			default:
-			}
-		})
-		closers = append(closers, unsub)
 	}
-	if len(closers) == 0 {
-		return nil
+	for _, bus := range buses {
+		if unsub := subscribeMatterReadyTrigger(bus, trigger); unsub != nil {
+			closers = append(closers, unsub)
+		}
 	}
 	go func() {
 		for {
@@ -2775,7 +2819,20 @@ func wireMatterReassembleOnReady(
 			runMatterReassemble(ctx, reassemble, logger)
 		}
 	}()
-	return closers
+	return closers, trigger
+}
+
+// subscribeMatterReadyTrigger subscribes trigger to bus's
+// CentralSouthboundReadyEvent. Shared by the boot-time wiring
+// ([wireMatterReassembleOnReady]) and the live-adopt hook so both feed the
+// same debounce pipeline. Returns nil when there is nothing to wire.
+func subscribeMatterReadyTrigger(bus *events.Bus, trigger func()) func() {
+	if bus == nil || trigger == nil {
+		return nil
+	}
+	return events.Subscribe(bus, func(hmevent.CentralSouthboundReadyEvent) {
+		trigger()
+	})
 }
 
 // runMatterReassemble invokes reassemble with panic isolation so a fault in the
@@ -2842,14 +2899,35 @@ func wireMatterCentralReadiness(reg *central.Registry) (readiness *matterCentral
 	units := reg.List()
 	unsubs = make([]func(), 0, len(units))
 	for _, u := range units {
-		if u == nil || u.EventBus == nil {
-			continue
+		if unsub := wireMatterCentralReadinessForUnit(readiness, u); unsub != nil {
+			unsubs = append(unsubs, unsub)
 		}
-		unsubs = append(unsubs, events.Subscribe(u.EventBus, func(e hmevent.CentralSouthboundReadyEvent) {
-			readiness.markReady(e.CentralName)
-		}))
 	}
 	return readiness, unsubs
+}
+
+// wireMatterCentralReadinessForUnit latches one central's readiness into the
+// tracker: it subscribes to the unit's CentralSouthboundReadyEvent for
+// go-forward transitions, then seeds from the unit's queryable latched flag
+// ([central.Unit.IsSouthboundReady]). The seed closes the boot-window race:
+// southbound bring-up goroutines start before the Matter bridge wires its
+// subscriptions, so a fast CCU (or a runtime-adopted central) can fire its
+// ready event before this subscription exists — the event never re-fires, and
+// without the seed the central would stay model-incomplete (GC deferred) for
+// the whole process lifetime. Seeding AFTER subscribing means every
+// interleaving is covered: a pre-subscription event is caught by the seed, a
+// post-seed event by the subscription, and one in between by both.
+func wireMatterCentralReadinessForUnit(readiness *matterCentralReadiness, u *central.Unit) func() {
+	if readiness == nil || u == nil || u.EventBus == nil {
+		return nil
+	}
+	unsub := events.Subscribe(u.EventBus, func(e hmevent.CentralSouthboundReadyEvent) {
+		readiness.markReady(e.CentralName)
+	})
+	if u.IsSouthboundReady() {
+		readiness.markReady(u.Name())
+	}
+	return unsub
 }
 
 // matterSnapshotter builds the bridge's topology snapshotter: one
@@ -2871,6 +2949,74 @@ func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness)
 			})
 		}
 		return out
+	}
+}
+
+// wireMatterDeviceReachableForward forwards one central's device-availability
+// lifecycle signal into the bridge so the matching bridged endpoints fire the
+// §9.13.6 ReachableChanged event (see [matterbridge.Bridge.NotifyDeviceReachable]
+// for the full rationale). Shared by the boot-time wiring and the live-adopt
+// hook. Returns nil when there is nothing to wire.
+func wireMatterDeviceReachableForward(u *central.Unit, notify func(centralName, address string, reachable bool)) func() {
+	if u == nil || u.EventBus == nil || notify == nil {
+		return nil
+	}
+	cName := u.Name()
+	return events.Subscribe(u.EventBus, func(e hmevent.DeviceLifecycleEvent) {
+		if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
+			return
+		}
+		notify(cName, e.Address, e.Available)
+	})
+}
+
+// matterCentralHook wires one central into the running Matter bridge:
+// readiness latch (+ seed from the unit's queryable ready flag),
+// reassemble-on-ready onto the shared debounce pipeline, and the
+// device-availability → BridgedDeviceBasicInformation.Reachable forward.
+// The live-adopt orchestrator invokes it for runtime-added centrals so an
+// adopted central is wired into the bridge exactly like a boot-time one;
+// the returned unwire drops the subscriptions on live remove. Nil when the
+// Matter bridge is disabled.
+type matterCentralHook func(u *central.Unit) (unwire func())
+
+// newMatterCentralHook builds the per-central Matter wiring hook from the
+// bridge-start artefacts. Thanks to the readiness seed inside
+// [wireMatterCentralReadinessForUnit], an adopted central that became ready
+// before the hook ran is still latched.
+func newMatterCentralHook(
+	readiness *matterCentralReadiness,
+	reassembleTrigger func(),
+	notifyReachable func(centralName, address string, reachable bool),
+) matterCentralHook {
+	return func(u *central.Unit) func() {
+		if u == nil || u.EventBus == nil {
+			return nil
+		}
+		var unsubs []func()
+		if unsub := wireMatterCentralReadinessForUnit(readiness, u); unsub != nil {
+			unsubs = append(unsubs, unsub)
+		}
+		if unsub := subscribeMatterReadyTrigger(u.EventBus, reassembleTrigger); unsub != nil {
+			unsubs = append(unsubs, unsub)
+		}
+		// A model already loaded before the hook ran (ready event fired in
+		// the adopt window) needs a reassemble kick too — the event that
+		// would have triggered it is gone.
+		if reassembleTrigger != nil && u.IsSouthboundReady() {
+			reassembleTrigger()
+		}
+		if unsub := wireMatterDeviceReachableForward(u, notifyReachable); unsub != nil {
+			unsubs = append(unsubs, unsub)
+		}
+		if len(unsubs) == 0 {
+			return nil
+		}
+		return func() {
+			for _, unsub := range unsubs {
+				unsub()
+			}
+		}
 	}
 }
 
@@ -2927,17 +3073,9 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// per dispatch (endpoint/materialize.go); this supplies the push
 		// half so active subscriptions are notified, not just polled reads.
 		for _, u := range reg.List() {
-			if u == nil || u.EventBus == nil {
-				continue
+			if unsub := wireMatterDeviceReachableForward(u, mb.NotifyDeviceReachable); unsub != nil {
+				closers = append(closers, unsub)
 			}
-			cName := u.Name()
-			unsub := events.Subscribe(u.EventBus, func(e hmevent.DeviceLifecycleEvent) {
-				if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
-					return
-				}
-				mb.NotifyDeviceReachable(cName, e.Address, e.Available)
-			})
-			closers = append(closers, unsub)
 		}
 		// Reassemble the topology once each central's initial device load
 		// completes: the boot-time assembly above runs before the async CCU
@@ -2949,7 +3087,12 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 				readyBuses = append(readyBuses, u.EventBus)
 			}
 		}
-		closers = append(closers, wireMatterReassembleOnReady(ctx, readyBuses, mb.Reassemble, matterReassembleReadyDebounce, logger)...)
+		reassembleClosers, reassembleTrigger := wireMatterReassembleOnReady(ctx, readyBuses, mb.Reassemble, matterReassembleReadyDebounce, logger)
+		closers = append(closers, reassembleClosers...)
+		// Per-central hook for the live-adopt orchestrator: a runtime-added
+		// central gets the same readiness latch, reassemble-on-ready and
+		// reachable-forward wiring as the boot-time centrals above.
+		wiring.centralHook = newMatterCentralHook(bundle.readiness, reassembleTrigger, mb.NotifyDeviceReachable)
 		// Wire the Root Descriptor's dynamic PartsList provider to
 		// the bridge's live topology so `0:0x001D:0x0003` reflects the
 		// freshly-assembled bridged endpoints. Apple Home reads

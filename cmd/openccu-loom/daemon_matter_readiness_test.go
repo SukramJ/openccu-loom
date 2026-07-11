@@ -46,6 +46,48 @@ func TestWireMatterCentralReadiness_LatchesOnSouthboundReady(t *testing.T) {
 	}
 }
 
+// TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag closes the
+// boot-window race: southbound bring-up goroutines start before the Matter
+// bridge subscribes readiness, so a fast CCU can fire its
+// CentralSouthboundReadyEvent before any subscriber exists. The unit's
+// latched flag must seed the tracker at subscribe time — WITHOUT any event
+// delivery — and the snapshotter must stamp ModelComplete accordingly, or
+// the central would stay model-incomplete (endpoint GC deferred) for the
+// whole process lifetime.
+func TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-a", "ccu-b")
+	unitA, _ := reg.Get("ccu-a")
+	// The bring-up completed (and its ready event fired) before the Matter
+	// wiring exists — only the latched flag survives.
+	unitA.MarkSouthboundReady()
+
+	readiness, unsubs := wireMatterCentralReadiness(reg)
+	t.Cleanup(func() {
+		for _, u := range unsubs {
+			u()
+		}
+	})
+
+	if !readiness.isReady("ccu-a") {
+		t.Error("ccu-a should be seeded ready from the unit's latched flag, without any event")
+	}
+	if readiness.isReady("ccu-b") {
+		t.Error("ccu-b must stay model-incomplete; its bring-up has not completed")
+	}
+
+	byName := map[string]endpoint.Snapshot{}
+	for _, s := range matterSnapshotter(reg, readiness)(context.Background()) {
+		byName[s.CentralName] = s
+	}
+	if !byName["ccu-a"].ModelComplete {
+		t.Error("ccu-a: ModelComplete = false, want true (seeded from latched flag)")
+	}
+	if byName["ccu-b"].ModelComplete {
+		t.Error("ccu-b: ModelComplete = true without readiness, want false")
+	}
+}
+
 // TestWireMatterCentralReadiness_UnsubscribeStopsLatching verifies teardown:
 // after the closers run, a late ready event no longer mutates the latch.
 func TestWireMatterCentralReadiness_UnsubscribeStopsLatching(t *testing.T) {

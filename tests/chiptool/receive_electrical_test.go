@@ -154,16 +154,17 @@ func TestReceive_ElectricalEnergyMeasurement(t *testing.T) {
 	//
 	// chip-tool's DataModelLogger has no friendly name for
 	// ElectricalEnergyMeasurement.CumulativeEnergyImported (0x0091:0x0001) in
-	// the pinned build — unlike ElectricalPower.ActivePower — so it logs the
-	// decoded value as a raw "Data = …" on that cluster/attribute path. Match
-	// the cluster + attribute + value rather than an attribute name.
+	// the pinned build — unlike ElectricalPower.ActivePower — so it dumps the
+	// decoded EnergyMeasurementStruct generically on that cluster/attribute
+	// path (the Energy field renders as a nested value line). Match the
+	// cluster + attribute path plus the unambiguous mWh value.
 	t.Run("receive/cumulative-energy-imported", func(t *testing.T) {
 		out, err := harness.AwaitProactiveReport(ctx, t, b.SharedCtl,
 			"electricalenergymeasurement", "cumulative-energy-imported", ep,
 			func() error { return b.CCU.FireDeviceEvent(address, dpKey, 1500.0) },
 			func(out string) bool {
 				return strings.Contains(out, "Cluster: 0x0000_0091 Attribute 0x0000_0001") &&
-					strings.Contains(out, "Data = 1500000")
+					strings.Contains(out, "1500000")
 			},
 			30*time.Second)
 		if err != nil {

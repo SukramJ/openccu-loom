@@ -59,18 +59,38 @@ project's field experience, with every mechanism mirrored from matter.js HEAD
   MinSetpointDeadBand, which HM single-setpoint devices cannot provide).
 - **Controllers no longer see the bridge as unresponsive for minutes after a
   restart.** The bridge now sends a Secure-Channel CloseSession StatusReport
-  before dropping a session (stale same-peer CASE eviction and daemon shutdown
-  — capped at 2.5 s; the session manager's reap paths carry the same farewell
-  once activated), closes a session immediately when the peer sends
-  CloseSession (with subscription cleanup), and resumes mDNS broadcast once a
-  peer has no remaining session. Mirrors matter.js ExchangeManager /
-  SecureChannelProtocol behaviour.
+  before dropping a session (stale same-peer CASE eviction, idle-session reap
+  — operational sessions without traffic for 5 minutes are evicted on a 60 s
+  sweep; controller acks on subscription heartbeats keep live sessions marked
+  active — and daemon shutdown, capped at 2.5 s), closes a session immediately
+  when the peer sends CloseSession (with subscription cleanup), and resumes
+  mDNS broadcast once a peer has no remaining session. Mirrors matter.js
+  ExchangeManager / SecureChannelProtocol behaviour.
 - **`BasicInformation.SoftwareVersion` is derived from the build version**
   (`major*1_000_000 + minor*1_000 + patch`) instead of a hard-coded `1`,
   keeping it consistent with `SoftwareVersionString` — a divergent pair crashed
   some ecosystem hubs (e.g. Aqara) during bridge synchronisation.
+- **`ElectricalEnergyMeasurement.CumulativeEnergyImported` is wire-valid.**
+  The attribute was emitted as a bare int64 instead of the spec's
+  `EnergyMeasurementStruct` (Matter §2.14.5.2) — typed decoders (chip-tool and
+  potentially ecosystem controllers) rejected a plain read with "Wrong TLV
+  type"; only the untyped report dump masked it. The value now encodes as a
+  struct carrying the mandatory `Energy` field.
+- **Matter endpoint readiness is race-free and covers runtime-adopted CCUs.**
+  The per-central readiness latch is now queryable and seeded at subscribe
+  time (a CCU whose device load finished before the Matter bridge subscribed
+  was previously never latched), and centrals adopted at runtime get the same
+  readiness + reassemble-on-ready wiring as boot-time centrals.
 
 ### Changed
+
+- **Matter schema refreshed to matter.js HEAD (spec 1.5.1).** Cluster
+  revisions bumped (AccessControl 3, BasicInformation 6,
+  BridgedDeviceBasicInformation 6, GeneralDiagnostics 3, GroupKeyManagement 3,
+  BooleanState 3, SmokeCoAlarm 2, Thermostat 11, OccupancySensing 7, and the
+  measurement/concentration clusters +1 each), device-type revisions updated
+  (Thermostat 6; WaterLeakDetector, WaterFreezeDetector and RainSensor 2), and
+  the new spec-1.5.1 read-only attributes were added to the write gate.
 
 - **Leak-class sensors will materialise as ContactSensor (0x0015), not
   WaterLeakDetector (0x0043).** Amazon Alexa is pinned below the Matter-1.3

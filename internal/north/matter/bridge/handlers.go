@@ -728,6 +728,8 @@ type OperationalSessionLookup struct {
 	fabricFor   func(sessionID uint16) (uint8, bool)
 	subjectFor  func(sessionID uint16) (uint64, []uint32, bool)
 	intervalFor func(sessionID uint16, now time.Time) (time.Duration, bool)
+	markRx      func(sessionID uint16)
+	markTx      func(sessionID uint16)
 }
 
 // SessionFabricResolver is an optional capability a [SessionLookup]
@@ -751,6 +753,25 @@ type SessionFabricResolver interface {
 // and the tracker falls back to the spec idle default.
 type SessionRetransmitIntervalResolver interface {
 	RetransmitBaseInterval(sessionID uint16, now time.Time) (time.Duration, bool)
+}
+
+// SessionActivityMarker is an optional capability a [SessionLookup] can
+// implement so the wire paths can refresh a session's activity
+// timestamps: MarkActiveRx after every successfully decrypted and
+// authenticated inbound message, MarkActiveTx after every outbound
+// secure send. The operational manager's idle reaper reads the
+// timestamp to evict dead sessions; the Rx half additionally feeds the
+// MRP peer-active determination. Mirrors matter.js
+// packages/protocol/src/session/Session.ts:127-133
+// notifyActivity(messageReceived) — `timestamp` refreshes in both
+// directions, `activeTimestamp` (peer activity) only on receive —
+// invoked from MessageExchange.ts:429 (receive, duplicates included)
+// and :562/:814 (sends).
+//
+// loom:reachable:reason="optional-capability contract satisfied via type assertion on the wired session lookup; the type name never appears in production references, which the reachability analyzer's type heuristic cannot see"
+type SessionActivityMarker interface {
+	MarkActiveRx(sessionID uint16)
+	MarkActiveTx(sessionID uint16)
 }
 
 // SessionSubjectResolver is an optional capability a [SessionLookup]
@@ -851,4 +872,35 @@ func (l *OperationalSessionLookup) SubjectFor(sessionID uint16) (nodeID uint64, 
 		return 0, nil, false
 	}
 	return l.subjectFor(sessionID)
+}
+
+// WithActivityMarkers wires the optional [SessionActivityMarker] side of
+// the adapter. Pass closures that resolve the operational entry and call
+// its MarkActiveRx / MarkActiveTx (unknown sessions are a no-op).
+// Returns the receiver so callers can chain.
+func (l *OperationalSessionLookup) WithActivityMarkers(markRx, markTx func(sessionID uint16)) *OperationalSessionLookup {
+	if l == nil {
+		return nil
+	}
+	l.markRx = markRx
+	l.markTx = markTx
+	return l
+}
+
+// MarkActiveRx implements [SessionActivityMarker]. No-op when the
+// adapter was built without activity-marker closures.
+func (l *OperationalSessionLookup) MarkActiveRx(sessionID uint16) {
+	if l == nil || l.markRx == nil {
+		return
+	}
+	l.markRx(sessionID)
+}
+
+// MarkActiveTx implements [SessionActivityMarker]. No-op when the
+// adapter was built without activity-marker closures.
+func (l *OperationalSessionLookup) MarkActiveTx(sessionID uint16) {
+	if l == nil || l.markTx == nil {
+		return
+	}
+	l.markTx(sessionID)
 }

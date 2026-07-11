@@ -254,6 +254,12 @@ func gatedCentralBringUp(
 			// health verdict down forever even though the central is now healthy).
 			// The interface + central components take over from here.
 			resolveCentralWaiting(unit)
+			// Latch the queryable ready flag BEFORE publishing the event:
+			// subscribers that exist see the event; late subscribers seed
+			// from [central.Unit.IsSouthboundReady]. A subscriber wired
+			// between the latch and the publish observes readiness through
+			// both paths, so no interleaving can lose the transition.
+			unit.MarkSouthboundReady()
 			events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: cc.Name,

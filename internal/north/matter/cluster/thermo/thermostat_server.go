@@ -22,7 +22,7 @@ import (
 // Thermostat cluster ID and revision per Matter §4.3.
 const (
 	ThermostatClusterID       uint32 = 0x0201
-	ThermostatClusterRevision uint16 = 10 // Mirrors matter.js packages/model/src/standard/elements/thermostat-cluster.element.ts (revision 10)
+	ThermostatClusterRevision uint16 = 11 // Mirrors matter.js packages/model/src/standard/elements/thermostat-cluster.element.ts:21 (revision 11)
 )
 
 // Feature bits per Matter §4.3.4

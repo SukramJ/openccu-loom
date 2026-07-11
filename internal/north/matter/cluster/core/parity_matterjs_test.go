@@ -441,7 +441,7 @@ func TestParityMatterJS_DeviceTypeRevisions(t *testing.T) {
 		// Bridged endpoint primary types — matches helpers.go::deviceTypeRevision.
 		{0x0013, "BridgedNode", 3},
 		{0x0015, "ContactSensor", 2},
-		{0x0043, "WaterLeakDetector", 1},
+		{0x0043, "WaterLeakDetector", 2},
 		{0x002C, "AirQualitySensor", 1},
 		{0x0076, "SmokeCoAlarm", 1},
 		{0x0106, "LightSensor", 4},
@@ -456,7 +456,7 @@ func TestParityMatterJS_DeviceTypeRevisions(t *testing.T) {
 		{0x010C, "ColorTemperatureLight", 4},
 		{0x010D, "ExtendedColorLight", 4},
 		{0x0202, "WindowCovering", 6},
-		{0x0301, "Thermostat", 5},
+		{0x0301, "Thermostat", 6},
 		{0x000A, "DoorLock", 4},
 	}
 	for _, c := range cases {

@@ -1,6 +1,6 @@
 {
-  "generated": "0313bb9f",
-  "head": "0313bb9f",
+  "generated": "3f05fe00",
+  "head": "3f05fe00",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,9 +8,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24477,
+    "total_exported": 24497,
     "reachable": 4197,
-    "whitelisted": 17735,
+    "whitelisted": 17755,
     "unreachable": 2545
   },
   "by_package": [
@@ -1584,14 +1584,14 @@
       "package": "internal/central",
       "identifier": "SystemInfo",
       "file": "internal/central/central.go",
-      "line": 194,
+      "line": 208,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "SystemInfo",
       "file": "internal/central/central.go",
-      "line": 194,
+      "line": 208,
       "kind": "type"
     },
     {
@@ -9039,14 +9039,14 @@
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1273,
+      "line": 1280,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "CommissioningAdvertisement",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 1273,
+      "line": 1280,
       "kind": "type"
     },
     {
@@ -9207,42 +9207,42 @@
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncode",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 27,
+      "line": 28,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncode",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 27,
+      "line": 28,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncrypt",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 30,
+      "line": 31,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplyEncrypt",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 30,
+      "line": 31,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplySend",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 32,
+      "line": 33,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "ErrReplySend",
       "file": "internal/north/matter/bridge/reply.go",
-      "line": 32,
+      "line": 33,
       "kind": "var"
     },
     {
@@ -9410,14 +9410,14 @@
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 932,
+      "line": 939,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "PartsListProviderSetter",
       "file": "internal/north/matter/bridge/bridge.go",
-      "line": 932,
+      "line": 939,
       "kind": "type"
     },
     {
@@ -9515,14 +9515,14 @@
       "package": "internal/north/matter/bridge",
       "identifier": "SessionFabricResolver",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 741,
+      "line": 743,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "SessionFabricResolver",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 741,
+      "line": 743,
       "kind": "type"
     },
     {
@@ -9543,28 +9543,28 @@
       "package": "internal/north/matter/bridge",
       "identifier": "SessionRetransmitIntervalResolver",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 752,
+      "line": 754,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "SessionRetransmitIntervalResolver",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 752,
+      "line": 754,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "SessionSubjectResolver",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 763,
+      "line": 784,
       "kind": "type"
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "SessionSubjectResolver",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 763,
+      "line": 784,
       "kind": "type"
     },
     {
@@ -10530,14 +10530,14 @@
       "package": "internal/north/matter/schema",
       "identifier": "ClusterNames",
       "file": "internal/north/matter/schema/clusters.go",
-      "line": 149,
+      "line": 152,
       "kind": "var"
     },
     {
       "package": "internal/north/matter/schema",
       "identifier": "ClusterNames",
       "file": "internal/north/matter/schema/clusters.go",
-      "line": 149,
+      "line": 152,
       "kind": "var"
     },
     {
@@ -21681,6 +21681,41 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCentralHook_AdoptedCentralReadinessReachesSnapshotter",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
+      "line": 51
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCentralHook_ForwardsAvailabilityChanges",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
+      "line": 140
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCentralHook_NilUnitIsNoop",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
+      "line": 222
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCentralHook_SeedsAlreadyReadyCentral",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
+      "line": 113
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMatterCentralHook_UnwireStopsSubscriptions",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_matter_central_hook_test.go",
+      "line": 182
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestMatterCommissioningCloserAdapter_LiveWindow_RevokeWhenClosed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/ws_adapters_domain_paths_test.go",
@@ -21894,14 +21929,14 @@
       "identifier": "TestMatterSnapshotter_NilReadinessFailsSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 140
+      "line": 182
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMatterSnapshotter_StampsModelCompletePerCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 92
+      "line": 134
     },
     {
       "package": "cmd/openccu-loom",
@@ -24015,35 +24050,49 @@
       "identifier": "TestWireMatterCentralReadiness_NilRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 72
+      "line": 114
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestWireMatterCentralReadiness_SeedsFromLatchedUnitFlag",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
+      "line": 57
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireMatterCentralReadiness_UnsubscribeStopsLatching",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/daemon_matter_readiness_test.go",
-      "line": 51
+      "line": 93
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireMatterReassembleOnReady_CoalescesBurst",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_reassemble_on_ready_test.go",
-      "line": 59
+      "line": 62
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireMatterReassembleOnReady_NoBusesOrNilReassemble",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_reassemble_on_ready_test.go",
-      "line": 111
+      "line": 117
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestWireMatterReassembleOnReady_StopsOnCtxCancel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/matter_reassemble_on_ready_test.go",
-      "line": 86
+      "line": 89
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestWireMatterReassembleOnReady_TriggerDrivesDebounce",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/matter_reassemble_on_ready_test.go",
+      "line": 140
     },
     {
       "package": "cmd/openccu-loom",
@@ -90361,14 +90410,14 @@
       "identifier": "NewOperationalSessionLookup",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 777
+      "line": 798
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "NewOperationalSessionLookup",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/handlers.go",
-      "line": 777
+      "line": 798
     },
     {
       "package": "internal/north/matter/bridge",
@@ -90425,6 +90474,20 @@
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/bridge/pase_provider.go",
       "line": 50
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "SessionActivityMarker",
+      "reason": "optional-capability contract satisfied via type assertion on the wired session lookup; the type name never appears in production references, which the reachability analyzer's type heuristic cannot see",
+      "file": "internal/north/matter/bridge/handlers.go",
+      "line": 772
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "SessionActivityMarker",
+      "reason": "optional-capability contract satisfied via type assertion on the wired session lookup; the type name never appears in production references, which the reachability analyzer's type heuristic cannot see",
+      "file": "internal/north/matter/bridge/handlers.go",
+      "line": 772
     },
     {
       "package": "internal/north/matter/bridge",
@@ -91852,21 +91915,21 @@
       "identifier": "TestDefaultAttributeValueWriter_AccessControlEntryChangedEvent_NilLatestValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 337
+      "line": 354
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultAttributeValueWriter_AccessControlEntryChangedEvent_WithLatestValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 351
+      "line": 368
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultAttributeValueWriter_AccessControlEntryChangedEvent_WithTargets",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 369
+      "line": 386
     },
     {
       "package": "internal/north/matter/bridge",
@@ -91901,7 +91964,7 @@
       "identifier": "TestDefaultAttributeValueWriter_BootReasonEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 327
+      "line": 344
     },
     {
       "package": "internal/north/matter/bridge",
@@ -91937,6 +92000,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
       "line": 287
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDefaultAttributeValueWriter_EnergyMeasurementStruct",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/reply_value_writer_test.go",
+      "line": 312
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92006,7 +92076,7 @@
       "identifier": "TestDefaultAttributeValueWriter_LeaveEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 322
+      "line": 339
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92083,21 +92153,21 @@
       "identifier": "TestDefaultAttributeValueWriter_ReachableChangedEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 332
+      "line": 349
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultAttributeValueWriter_ShutDownEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 317
+      "line": 334
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultAttributeValueWriter_StartUpEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 312
+      "line": 329
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92174,63 +92244,63 @@
       "identifier": "TestDefaultCommandFieldsWriter_ArmFailSafeResponse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 399
+      "line": 416
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_AttestationResponse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 414
+      "line": 431
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_CSRResponse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 428
+      "line": 445
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_CertificateChainResponse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 423
+      "line": 440
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_CommissioningCompleteResponse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 409
+      "line": 426
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_DefaultStatusOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 448
+      "line": 465
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_NOCResponse_NoOptional",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 437
+      "line": 454
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_NOCResponse_WithFabricAndDebug",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 442
+      "line": 459
     },
     {
       "package": "internal/north/matter/bridge",
       "identifier": "TestDefaultCommandFieldsWriter_SetRegulatoryConfigResponse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/reply_value_writer_test.go",
-      "line": 404
+      "line": 421
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92441,6 +92511,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/write_chunked_dispatch_test.go",
       "line": 142
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDispatch_AuthenticatedInboundMarksRxActivity",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/session_activity_test.go",
+      "line": 112
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestDispatch_FailedDecryptDoesNotMarkActivity",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/session_activity_test.go",
+      "line": 151
     },
     {
       "package": "internal/north/matter/bridge",
@@ -92833,6 +92917,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/dormant_wiring_test.go",
       "line": 113
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestOperationalSessionLookup_ActivityMarkers",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/session_activity_test.go",
+      "line": 238
     },
     {
       "package": "internal/north/matter/bridge",
@@ -93785,6 +93876,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/bridge/subscribe_initiated_test.go",
       "line": 158
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestSendReplyOpts_EncryptFailureDoesNotMarkTx",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/session_activity_test.go",
+      "line": 213
+    },
+    {
+      "package": "internal/north/matter/bridge",
+      "identifier": "TestSendReplyOpts_SecureReplyMarksTxActivity",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/bridge/session_activity_test.go",
+      "line": 175
     },
     {
       "package": "internal/north/matter/bridge",
@@ -96843,28 +96948,28 @@
       "identifier": "BooleanStateServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 626
+      "line": 638
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "BooleanStateServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 626
+      "line": 638
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "CO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1193
+      "line": 1209
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "CO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1193
+      "line": 1209
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -97039,322 +97144,336 @@
       "identifier": "ElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1007
+      "line": 1019
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "ElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1007
+      "line": 1019
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "ElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 878
+      "line": 890
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "ElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 878
+      "line": 890
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "EnergyMeasurementStruct",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 226
+    },
+    {
+      "package": "internal/north/matter/cluster/measurement",
+      "identifier": "EnergyMeasurementStruct",
+      "reason": "auto-whitelist:pattern=matter-cluster-impl",
+      "file": "internal/north/matter/cluster/measurement/measurement.go",
+      "line": 226
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "FromMeasurementClass",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 805
+      "line": 817
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "FromMeasurementClass",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 805
+      "line": 817
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "HumidityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 351
+      "line": 363
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "HumidityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 351
+      "line": 363
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "IlluminanceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 438
+      "line": 450
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "IlluminanceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 438
+      "line": 450
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewBooleanStateServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 635
+      "line": 647
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewBooleanStateServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 635
+      "line": 647
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewCO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1199
+      "line": 1215
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewCO2ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1199
+      "line": 1215
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1016
+      "line": 1028
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalEnergyServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1016
+      "line": 1028
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 887
+      "line": 899
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewElectricalPowerServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 887
+      "line": 899
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewHumidityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 360
+      "line": 372
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewHumidityServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 360
+      "line": 372
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewIlluminanceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 447
+      "line": 459
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewIlluminanceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 447
+      "line": 459
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewOccupancySensingServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 710
+      "line": 722
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewOccupancySensingServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 710
+      "line": 722
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1227
+      "line": 1243
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1227
+      "line": 1243
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1213
+      "line": 1229
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1213
+      "line": 1229
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1262
+      "line": 1278
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1262
+      "line": 1278
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPressureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 538
+      "line": 550
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewPressureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 538
+      "line": 550
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewTemperatureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 249
+      "line": 261
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "NewTemperatureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 249
+      "line": 261
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "OccupancySensingServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 701
+      "line": 713
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "OccupancySensingServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 701
+      "line": 713
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1221
+      "line": 1237
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PM10ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1221
+      "line": 1237
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1207
+      "line": 1223
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PM25ConcentrationServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1207
+      "line": 1223
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1248
+      "line": 1264
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PowerSourceServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 1248
+      "line": 1264
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PressureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 529
+      "line": 541
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "PressureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 529
+      "line": 541
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "TemperatureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 243
+      "line": 255
     },
     {
       "package": "internal/north/matter/cluster/measurement",
       "identifier": "TemperatureServer",
       "reason": "auto-whitelist:pattern=matter-cluster-impl",
       "file": "internal/north/matter/cluster/measurement/measurement.go",
-      "line": 243
+      "line": 255
     },
     {
       "package": "internal/north/matter/cluster/measurement",
@@ -103354,6 +103473,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/secure/operational/manager_close_parity_test.go",
       "line": 170
+    },
+    {
+      "package": "internal/north/matter/secure/operational",
+      "identifier": "TestStartReaper_ActiveSessionSurvivesSweeps",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/operational/manager_idle_reaper_test.go",
+      "line": 63
+    },
+    {
+      "package": "internal/north/matter/secure/operational",
+      "identifier": "TestStartReaper_EvictsIdleSessionGracefully",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/operational/manager_idle_reaper_test.go",
+      "line": 25
+    },
+    {
+      "package": "internal/north/matter/secure/operational",
+      "identifier": "TestStartReaper_NeverMarkedSessionIsNotReaped",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/secure/operational/manager_idle_reaper_test.go",
+      "line": 105
     },
     {
       "package": "internal/north/matter/secure/setup",
@@ -142186,10 +142326,10 @@
     },
     {
       "package": "tests/contract/wiring_pins",
-      "identifier": "TestPin_ConcentrationClusters_SchemaRevision4",
+      "identifier": "TestPin_ConcentrationClusters_SchemaRevision5",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/matter_concentration_revision_test.go",
-      "line": 18
+      "line": 20
     },
     {
       "package": "tests/contract/wiring_pins",
