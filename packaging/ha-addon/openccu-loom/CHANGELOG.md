@@ -10,6 +10,9 @@ Device-icon fixes and device-linked system variables.
   the Ingress proxy.
 - **Device icons in dark mode**: the icons no longer sit in a glaring white
   box; the line-art is inverted to sit cleanly on the dark card.
+- **"Login with OIDC" button works as an HA add-on**: the single sign-on
+  button previously ran into a 404 under Home Assistant Ingress; it now
+  reaches the login flow correctly.
 - **System variables and programs on the right device**: a sysvar or program
   whose name references a device or channel now shows on that physical
   device's card instead of the central hub card.
