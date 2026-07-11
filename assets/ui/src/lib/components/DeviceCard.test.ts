@@ -97,6 +97,53 @@ describe("DeviceCard — name and subtitle", () => {
   });
 });
 
+describe("DeviceCard — device icon", () => {
+  afterEach(() => {
+    delete (globalThis as { location?: unknown }).location;
+  });
+
+  it("builds the icon src from apiBase (served directly → no prefix)", () => {
+    (globalThis as { location?: unknown }).location = {
+      pathname: "/app/devices",
+    } as Location;
+    const { container } = render(DeviceCard, {
+      props: { device: makeDevice({ address: "ABC123" }) },
+    });
+    const img = container.querySelector("img");
+    // Raw attribute (not the resolved .src property) so the prefix is visible.
+    expect(img?.getAttribute("src")).toBe("/api/v1/devices/ABC123/icon");
+  });
+
+  it("carries the Home Assistant Ingress prefix on the icon src", () => {
+    (globalThis as { location?: unknown }).location = {
+      pathname: "/api/hassio_ingress/tok-123/app/devices",
+    } as Location;
+    const { container } = render(DeviceCard, {
+      props: { device: makeDevice({ address: "ABC123" }) },
+    });
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toBe(
+      "/api/hassio_ingress/tok-123/api/v1/devices/ABC123/icon",
+    );
+  });
+
+  it("percent-encodes the device address in the icon src", () => {
+    const { container } = render(DeviceCard, {
+      props: { device: makeDevice({ address: "OEQ 12/34" }) },
+    });
+    const img = container.querySelector("img");
+    expect(img?.getAttribute("src")).toContain("OEQ%2012%2F34");
+  });
+
+  it("inverts the raster icon in dark mode (dark:invert on the img only)", () => {
+    const { container } = render(DeviceCard, {
+      props: { device: makeDevice() },
+    });
+    const img = container.querySelector("img");
+    expect(img?.className).toContain("dark:invert");
+  });
+});
+
 describe("DeviceCard — availability dot", () => {
   it("renders emerald dot for available device", () => {
     const { container } = render(DeviceCard, {

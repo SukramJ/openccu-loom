@@ -6,6 +6,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-07-11
+
+Device-icon fixes for the Home Assistant add-on deployment (icons were
+placeholder-only behind Ingress and glaring white in dark mode), plus CCU
+system variables and programs now linked to their physical device. No
+REST/WS API surface changes.
+
 ### Added
 
 - **System variables and programs are now linked to their device.** A CCU
@@ -20,6 +27,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a device-population-driven pass: it is (re)established after every interface
   ingest and after each periodic sysvar/program refresh, and is cleared again
   when the referenced device disappears.
+
+### Fixed
+
+- **CCU device icons now load behind Home Assistant Ingress.** The
+  device-list card built its icon URL as a hard-coded `/api/v1/…` path,
+  which bypasses the Ingress proxy prefix and hits the Home Assistant
+  origin — so every icon 404'd and fell back to the generic glyph when the
+  daemon ran as an HA add-on (it worked untouched as a CCU add-on, where no
+  prefix applies). The URL now carries the Ingress prefix (`apiBase()`),
+  like every other REST call. The icon proxy additionally sends the
+  central's credentials, so icons also resolve against a CCU with
+  authentication enabled when reached off-box.
+- **Device icons are no longer glaring white tiles in dark mode.** The CCU
+  model artwork is monochrome line-art (some ships transparent, some with a
+  baked-in white background) and sat on a permanent white plate. In dark
+  mode the grayscale art is now inverted and the plate goes transparent, so
+  icons sit cleanly on the dark card instead of as bright white squares.
 
 ## [0.34.0] — 2026-07-11
 

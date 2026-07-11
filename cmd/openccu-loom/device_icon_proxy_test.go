@@ -137,6 +137,81 @@ func TestDeviceIconProxy_Icon_HappyPath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// deviceIconProxy.Icon — CCU authentication
+// ---------------------------------------------------------------------------
+
+// TestDeviceIconProxy_Icon_SendsBasicAuth verifies the icon fetch carries
+// the central's credentials as HTTP Basic Auth when a username is set (so a
+// CCU with authentication enabled, reached off-box, still serves the image),
+// and sends no Authorization header when no username is configured.
+func TestDeviceIconProxy_Icon_SendsBasicAuth(t *testing.T) {
+	t.Parallel()
+
+	const iconFile = "swdo.png"
+	const iconPath = "/config/img/devices/250/" + iconFile
+
+	cases := []struct {
+		name         string
+		username     string
+		password     string
+		wantAuth     bool
+		wantUser     string
+		wantPassword string
+	}{
+		{name: "credentials set → Basic Auth", username: "Admin", password: "s3cret", wantAuth: true, wantUser: "Admin", wantPassword: "s3cret"},
+		{name: "no username → no auth header", username: "", password: "", wantAuth: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var gotAuth atomic.Bool
+			var gotUser, gotPass atomic.Value
+			gotUser.Store("")
+			gotPass.Store("")
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != iconPath {
+					http.NotFound(w, r)
+					return
+				}
+				if u, p, ok := r.BasicAuth(); ok {
+					gotAuth.Store(true)
+					gotUser.Store(u)
+					gotPass.Store(p)
+				}
+				w.Header().Set("Content-Type", "image/png")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("PNGDATA"))
+			}))
+			defer srv.Close()
+
+			host, port := splitHostPort(t, srv.URL)
+			cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false, Username: tc.username, Password: tc.password}
+
+			locate := func(_ string) (string, string, bool) { return iconFile, "ccu", true }
+			proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
+
+			if _, _, ok := proxy.Icon(context.Background(), "AABB0001"); !ok {
+				t.Fatal("expected ok=true")
+			}
+			if gotAuth.Load() != tc.wantAuth {
+				t.Fatalf("Basic Auth present = %v, want %v", gotAuth.Load(), tc.wantAuth)
+			}
+			if tc.wantAuth {
+				if u := gotUser.Load().(string); u != tc.wantUser {
+					t.Errorf("Basic Auth user = %q, want %q", u, tc.wantUser)
+				}
+				if p := gotPass.Load().(string); p != tc.wantPassword {
+					t.Errorf("Basic Auth password = %q, want %q", p, tc.wantPassword)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // deviceIconProxy.Icon — caching
 // ---------------------------------------------------------------------------
 
