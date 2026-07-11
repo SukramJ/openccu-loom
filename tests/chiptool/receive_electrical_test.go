@@ -116,12 +116,16 @@ func TestReceive_ElectricalEnergyMeasurement(t *testing.T) {
 
 	// Same endpoint disambiguation as the power test: pick the endpoint
 	// whose CumulativeEnergyImported actually tracks ENERGY_COUNTER.
+	// The probe matcher is value-only: a plain chip-tool READ renders
+	// the EnergyMeasurementStruct differently than the report logger
+	// (the strict "Data = …" shape below is report-specific), and the
+	// injected 1'500'000 mWh is unambiguous within a single-attribute
+	// read either way.
 	ep, ok := electricalEndpointFor(ctx, t, b, eps,
 		"electricalenergymeasurement", "cumulative-energy-imported",
 		func() error { return b.CCU.FireDeviceEvent(address, dpKey, 1500.0) },
 		func(out string) bool {
-			return strings.Contains(out, "Cluster: 0x0000_0091 Attribute 0x0000_0001") &&
-				strings.Contains(out, "Data = 1500000")
+			return strings.Contains(out, "1500000")
 		})
 	if !ok {
 		t.Fatalf("no ElectricalEnergyMeasurement endpoint in %v reflects the injected ENERGY_COUNTER value", eps)
@@ -191,14 +195,26 @@ func electricalEndpointFor(
 	case <-ctx.Done():
 		t.Fatalf("context done while settling: %v", ctx.Err())
 	}
+	probed := make(map[uint16]string, len(eps))
 	for _, ep := range eps {
 		out, err := b.SharedCtl.ReadAttr(ctx, t, cluster, attr, ep)
 		if err != nil {
+			probed[ep] = "read error: " + err.Error()
 			continue
 		}
 		if match(out) {
 			return ep, true
 		}
+		probed[ep] = out
+	}
+	// Self-diagnosing failure: dump what each candidate actually
+	// answered so a matcher/format drift is attributable from the CI
+	// log alone.
+	for ep, out := range probed {
+		if len(out) > 2000 {
+			out = out[len(out)-2000:]
+		}
+		t.Logf("endpoint %d %s/%s probe output (tail):\n%s", ep, cluster, attr, out)
 	}
 	return 0, false
 }
