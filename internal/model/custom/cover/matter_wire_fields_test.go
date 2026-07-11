@@ -28,6 +28,7 @@ func TestGoToLiftPercentageWireFields(t *testing.T) {
 	if _, err := srv.MatterInvoke(context.Background(), 0x05, fields, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("GoToLiftPercentage wire-shape err: %v", err)
 	}
+	flushGoToWrites(&c.matterGoTo)
 	if w.last.(float64) != 0.25 {
 		t.Fatalf("Matter 7500 → HM %v, want 0.25", w.last)
 	}

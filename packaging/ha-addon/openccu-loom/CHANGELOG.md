@@ -1,5 +1,29 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.33.0
+
+Matter interop hardening release.
+
+- **Matter device numbering now survives restarts.** Endpoint numbers were
+  silently re-allocated on every daemon start; fleet changes across a restart
+  could break controller-side groups and automations.
+- **Buttons behave like real Matter switches.** All press variants of a button
+  now share one endpoint with correct press/long-press/release event sequences;
+  held buttons no longer spam long-press events. Apple/Google re-learn button
+  accessories once after this update.
+- **Covers/blinds:** Apple Home now shows the correct direction arrow when a
+  cover is moved from a wall button or CCU program; slider drags no longer send
+  a burst of radio writes to duty-cycle-limited actuators; cover product types
+  report correct values (visible after a controller re-sync).
+- **Thermostats:** conformant SystemMode reporting — controllers syncing state
+  back no longer get errors while a TRV runs its week program.
+- **Faster reconnects:** controllers no longer show the bridge as unresponsive
+  for minutes after a restart (graceful Matter session close on shutdown).
+- **Dimmer transitions:** Matter transition times are now passed to the device
+  as ramp time.
+- New documentation on controller-ecosystem limits (Alexa needs UDP port 5540
+  for pairing, ~80–100 devices per bridge, and more) in `docs/user/matter.md`.
+
 ## 0.32.0
 
 - **Power/energy meters now update live in Matter.** A switch with a power meter

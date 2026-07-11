@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/thermo"
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
 )
 
@@ -113,8 +115,10 @@ func TestParityMatterJS_ThermostatFeatureMapBits(t *testing.T) {
 // TestParityMatterJS_ThermostatMandatoryAttributeIDs verifies that every
 // unconditionally-mandatory attribute (conformance "M") of Thermostat
 // (0x0201) is present in MatterAttributes() and handled in MatterRead().
-// The bridge advertises HEAT|AUTO (not COOL), so COOL-conditional attrs
-// are excluded; this is documented in docs/parity/by_design.md.
+// The heat-only default profile advertises HEAT alone (COOL follows
+// SupportsCool; AUTO is never advertised — see featureMap), so
+// COOL/AUTO-conditional attrs are excluded; this is documented in
+// docs/parity/by_design.md.
 func TestParityMatterJS_ThermostatMandatoryAttributeIDs(t *testing.T) {
 	t.Parallel()
 
@@ -151,6 +155,78 @@ func TestParityMatterJS_ThermostatMandatoryAttributeIDs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestParityMatterJS_SystemModeAutoRequiresAutoFeature aligns the
+// climate Thermostat projection with the standalone
+// [thermo.ThermostatServer] on the AUTO conformance chain from matter.js
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:
+//   - SystemModeEnum Auto(1) has conformance "AUTO" (line 558), so no
+//     server may surface or accept Auto without the AUTO feature bit;
+//   - MinSetpointDeadBand (0x0019) has conformance "AUTO" (lines
+//     100-104), so AUTO must not be advertised without a deadband
+//     attribute and true dual setpoints.
+//
+// The standalone server enforces the weaker half (it clears AUTO unless
+// HEAT+COOL are both configured and does serve MinSetpointDeadBand);
+// the climate projection enforces the stronger half (never AUTO,
+// because HM devices are single-setpoint and the projection implements
+// no MinSetpointDeadBand). Both must agree that a heat-only
+// configuration never carries AUTO and never yields SystemMode=Auto.
+func TestParityMatterJS_SystemModeAutoRequiresAutoFeature(t *testing.T) {
+	t.Parallel()
+
+	t.Run("standalone server clears AUTO without HEAT+COOL", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := thermo.DefaultThermostatConfig()
+		cfg.Features = thermo.ThermostatFeatureHEAT | thermo.ThermostatFeatureAUTO
+		srv := thermo.NewThermostatServer(cfg)
+
+		fm, ok := srv.MatterRead(cluster.AttrGlobalFeatureMap)
+		if !ok {
+			t.Fatal("FeatureMap read reports not-present")
+		}
+		if fm.(uint32)&thermo.ThermostatFeatureAUTO != 0 {
+			t.Errorf("FeatureMap = 0x%08X keeps AUTO without COOL", fm)
+		}
+		v, ok := srv.MatterRead(0x001C)
+		if !ok || v.(uint8) == 1 {
+			t.Errorf("SystemMode = (%v, %v): Auto(1) without the AUTO feature violates SystemModeEnum conformance", v, ok)
+		}
+	})
+
+	t.Run("climate projection never advertises AUTO or serves SystemMode=Auto", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tc := range []struct {
+			name string
+			caps custom.ClimateCapabilities
+		}{
+			{"heat-only", custom.ClimateCapabilities{}},
+			{"heat+cool", custom.ClimateCapabilities{SupportsCool: true}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, tc.caps)
+				r.climate.mu.Lock()
+				r.climate.mode = ModeAuto
+				r.climate.hasMode = true
+				r.climate.mu.Unlock()
+
+				srv := climateThermostatServer{c: r.climate}
+				if fm := srv.featureMap(); fm&matterThermFeatureAuto != 0 {
+					t.Errorf("featureMap() = 0x%08X advertises AUTO without dual setpoints + MinSetpointDeadBand", fm)
+				}
+				v, ok := srv.MatterRead(matterAttrThermSystemMode)
+				if !ok || v.(uint8) == matterSysModeAuto {
+					t.Errorf("SystemMode = (%v, %v): Auto(1) without the AUTO feature violates SystemModeEnum conformance", v, ok)
+				}
+				if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
+					t.Error("ThermostatRunningMode served without the AUTO feature (conformance \"TEVT & AUTO, [AUTO]\")")
+				}
+			})
+		}
+	})
 }
 
 // TestParityMatterJS_ThermostatUIMandatoryAttributeIDs verifies that both

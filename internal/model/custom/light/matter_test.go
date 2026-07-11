@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -455,8 +456,8 @@ func TestLevelWriteWrongTypeRejected(t *testing.T) {
 }
 
 // TestLevelInvokeMoveToLevel routes a MoveToLevel command through to
-// SetLevel. Transition time is intentionally ignored in the worked
-// example.
+// SetLevel. The bare-uint8 shape carries no transition time, so the
+// instant SetLevel path applies.
 // The plain MoveToLevel variant (0x00, no OnOff coupling) is gated on the
 // effective ExecuteIfOff option while the light is off (matter.js
 // LevelControlServer.ts:596 #optionsAllowExecution); with no options set it
@@ -490,6 +491,150 @@ func TestLevelInvokeMoveToLevelWithOnOffMap(t *testing.T) {
 	// 64/254 ≈ 0.252
 	if w.last < 0.24 || w.last > 0.26 {
 		t.Fatalf("MoveToLevelWithOnOff(64) wrote %v, want ~0.252", w.last)
+	}
+}
+
+// TestLevelInvokeMoveToLevelTransitionMapsToRampTime verifies that a
+// positive TransitionTime (tenths of a second, Matter §1.6.7.1) on
+// MoveToLevel (0x00) and MoveToLevelWithOnOff (0x04) is delegated to
+// the device as one atomic put_paramset carrying LEVEL + RAMP_TIME
+// (30 tenths → 3.0 s) + the ON_TIME=NotUsed sentinel, mirroring how
+// matter.js LevelControlServer.ts:297-303 (moveToLevelLogic) derives a
+// transition rate from a truthy transition time.
+func TestLevelInvokeMoveToLevelTransitionMapsToRampTime(t *testing.T) {
+	for _, cmdID := range []uint32{0x00, 0x04} {
+		t.Run(fmt.Sprintf("cmd=0x%02X", cmdID), func(t *testing.T) {
+			w := &putWriter{}
+			l, _ := newLightRigPut(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true, Transition: true})
+			l.OnLevel(0.5) // the plain variant (0x00) is gated on the light being on
+			srv := levelServer(t, l)
+			versionBefore := l.MatterDataVersion()
+			tt := uint16(30)
+			fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
+			if _, err := srv.MatterInvoke(context.Background(), cmdID, fields, hmenum.CommandPriorityHigh); err != nil {
+				t.Fatalf("cmd 0x%02X with TransitionTime=30 error: %v", cmdID, err)
+			}
+			if len(w.puts) != 1 {
+				t.Fatalf("expected 1 put_paramset, got %d", len(w.puts))
+			}
+			got := w.puts[0]
+			// 190/254 ≈ 0.748
+			if lvl := got[string(hmenum.ParameterLevel)].(float64); lvl < 0.74 || lvl > 0.76 {
+				t.Errorf("LEVEL=%v, want ~0.748", lvl)
+			}
+			if ramp := got[string(hmenum.ParameterRampTime)].(float64); ramp != 3.0 {
+				t.Errorf("RAMP_TIME=%v, want 3.0 (30 tenths of a second)", ramp)
+			}
+			// ON_TIME=NotUsed must accompany a stand-alone ramp so the CCU
+			// does not overlay an implicit off-timer.
+			if on := got[string(hmenum.ParameterOnTime)].(float64); on != NotUsed {
+				t.Errorf("ON_TIME=%v, want NotUsed (%v)", on, NotUsed)
+			}
+			if l.MatterDataVersion() == versionBefore {
+				t.Error("ramped MoveToLevel must bump the cluster data version")
+			}
+		})
+	}
+}
+
+// TestLevelInvokeMoveToLevelWithOnOffTransitionToMinRampsOff verifies
+// that MoveToLevelWithOnOff to MinLevel with a positive TransitionTime
+// ramps the light off: the MinLevel→Off coupling (matter.js
+// LevelControlServer.ts:500 couple) projects to LEVEL=0 on the single
+// HM LEVEL knob, and the transition rides along as RAMP_TIME in the
+// same atomic put_paramset.
+func TestLevelInvokeMoveToLevelWithOnOffTransitionToMinRampsOff(t *testing.T) {
+	w := &putWriter{}
+	l, _ := newLightRigPut(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true, Transition: true})
+	l.OnLevel(0.5)
+	srv := levelServer(t, l)
+	tt := uint16(30)
+	fields := wire.MoveToLevelRequest{Level: 1, TransitionTime: &tt}
+	if _, err := srv.MatterInvoke(context.Background(), 0x04, fields, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MoveToLevelWithOnOff(min, TransitionTime=30) error: %v", err)
+	}
+	if len(w.puts) != 1 {
+		t.Fatalf("expected 1 put_paramset, got %d", len(w.puts))
+	}
+	got := w.puts[0]
+	if lvl := got[string(hmenum.ParameterLevel)].(float64); lvl != 0 {
+		t.Errorf("LEVEL=%v, want 0 (MinLevel + WithOnOff couples to off)", lvl)
+	}
+	if ramp := got[string(hmenum.ParameterRampTime)].(float64); ramp != 3.0 {
+		t.Errorf("RAMP_TIME=%v, want 3.0", ramp)
+	}
+	if on := got[string(hmenum.ParameterOnTime)].(float64); on != NotUsed {
+		t.Errorf("ON_TIME=%v, want NotUsed (%v)", on, NotUsed)
+	}
+}
+
+// TestLevelInvokeMoveToLevelNilTransitionIsInstant verifies that a
+// null/absent TransitionTime keeps the instant SetLevel path (no
+// put_paramset, no RAMP_TIME) even on a ramp-capable device — matter.js
+// LevelControlServer.ts:297 substitutes onOffTransitionTime ?? null and
+// only builds a rate for a truthy value.
+func TestLevelInvokeMoveToLevelNilTransitionIsInstant(t *testing.T) {
+	w := &putWriter{}
+	l, _ := newLightRigPut(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true, Transition: true})
+	l.OnLevel(0.5)
+	srv := levelServer(t, l)
+	fields := wire.MoveToLevelRequest{Level: 190}
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MoveToLevel(nil TransitionTime) error: %v", err)
+	}
+	if len(w.puts) != 0 {
+		t.Fatalf("nil TransitionTime must not put_paramset, got %d puts", len(w.puts))
+	}
+	if w.last < 0.74 || w.last > 0.76 {
+		t.Fatalf("instant SetLevel wrote %v, want ~0.748", w.last)
+	}
+}
+
+// TestLevelInvokeMoveToLevelZeroTransitionIsInstant verifies that
+// TransitionTime=0 means "move as fast as able", i.e. the instant
+// SetLevel path — matter.js LevelControlServer.ts:459 documents the
+// transition rate contract as "0 or nullish means transition
+// instantly", and moveToLevelLogic (LevelControlServer.ts:300) skips
+// rate derivation for a zero transition time.
+func TestLevelInvokeMoveToLevelZeroTransitionIsInstant(t *testing.T) {
+	w := &putWriter{}
+	l, _ := newLightRigPut(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true, Transition: true})
+	l.OnLevel(0.5)
+	srv := levelServer(t, l)
+	tt := uint16(0)
+	fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MoveToLevel(TransitionTime=0) error: %v", err)
+	}
+	if len(w.puts) != 0 {
+		t.Fatalf("TransitionTime=0 must not put_paramset, got %d puts", len(w.puts))
+	}
+	if w.last < 0.74 || w.last > 0.76 {
+		t.Fatalf("instant SetLevel wrote %v, want ~0.748", w.last)
+	}
+}
+
+// TestLevelInvokeMoveToLevelTransitionWithoutRampSupportIsInstant
+// verifies the capability gate: a device that does not accept
+// RAMP_TIME (Capabilities.Transition unset) falls back to the instant
+// SetLevel path even when the command carries a positive
+// TransitionTime — sending RAMP_TIME to such a channel would fault the
+// put_paramset on the CCU.
+func TestLevelInvokeMoveToLevelTransitionWithoutRampSupportIsInstant(t *testing.T) {
+	w := &putWriter{}
+	l, _ := newLightRigPut(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+	l.OnLevel(0.5)
+	srv := levelServer(t, l)
+	tt := uint16(30)
+	fields := wire.MoveToLevelRequest{Level: 190, TransitionTime: &tt}
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, fields, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MoveToLevel(TransitionTime=30, no ramp support) error: %v", err)
+	}
+	if len(w.puts) != 0 {
+		t.Fatalf("device without RAMP_TIME must not put_paramset, got %d puts", len(w.puts))
+	}
+	if w.last < 0.74 || w.last > 0.76 {
+		t.Fatalf("instant SetLevel wrote %v, want ~0.748", w.last)
 	}
 }
 

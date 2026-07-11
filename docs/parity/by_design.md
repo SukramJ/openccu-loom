@@ -962,13 +962,39 @@ container, and missing-mandatory post-decrypt fields. OpenCCU-Loom's live
 `Decoder.Next()` (`internal/north/matter/tlv/`) enforces these only via the
 opt-in `Validate()`, which the Sigma/PASE decoders do not call.
 
-**Rationale:** OpenCCU-Loom is a pure Matter **responder**; real
-controllers (Apple Home, Google Home, chip-tool) emit spec-valid TLV, so
-the permissive path is never reached on the wire — confirmed by the
-byte-aligned crypto/tag/status verification in the 2026-05-30 audit. The
-strictness is a fuzz/robustness backlog (parity audit CHIP L9-01..04), not
-an interop gap. The crypto core (HKDF salts/info/nonces, Sigma TLV tags,
-status codes, control octets) IS byte-verbatim with connectedhomeip HEAD.
+**Rationale (corrected 2026-07):** OpenCCU-Loom is a pure Matter
+**responder** — but the permissive command-field decode path is NOT dead
+defensive code: it is load-bearing controller interop. Google Home's
+brightness slider omits the mandatory-but-nullable TransitionTime field
+ENTIRELY (absent context tag, not TLV Null) in LevelControl MoveToLevel /
+MoveToLevelWithOnOff / Step, so the lenient tag-walking decoders
+(`internal/north/matter/bridge/fields_reader.go`
+`decodeMoveToLevelRequest`; `internal/north/matter/cluster/wire/levelcontrol.go`
+`DecodeMoveToLevel` / `DecodeStep`) must keep decoding that shape to
+`TransitionTime == nil`. matter.js HEAD itself decodes an absent struct
+member leniently (`packages/types/src/tlv/TlvObject.ts:205`
+`decodeTlvInternalValue` leaves it unset); the strict mandatory-field
+rejection (`ValidationMandatoryFieldMissingError`, `TlvObject.ts:258`)
+lives only in the separate `validate()` step, invoked at command-invoke
+time by `packages/protocol/src/action/server/CommandInvokeResponse.ts:446`
+— so stock matter.js HEAD would reject Google Home's field-absent shape at
+its invoke validate step, and matter.js-based bridges have to relax exactly
+that check for Google Home's LevelControl commands. Loom therefore
+deliberately diverges from stock matter.js strictness here. The earlier
+claim that "real controllers emit spec-valid TLV, so the permissive path is
+never reached on the wire" is WRONG for command fields and is withdrawn.
+
+The wire shape is pinned by regression tests:
+`TestDecodeMoveToLevelOmitsTransitionTime`,
+`TestDecodeStepOmitsTransitionTime` (cluster/wire),
+`TestDecodeMoveToLevelRequest_AbsentTransitionTime`,
+`TestCommandFieldsReader_MoveToLevelVariants_AbsentTransitionTime`
+(bridge). Any future strict-validation refactor MUST keep tolerating
+absent LevelControl TransitionTime tags or it silently breaks Google Home
+dimming. Sigma/PASE container/tag strictness remains a fuzz/robustness
+backlog item (parity audit CHIP L9-01..04), not an interop gap. The crypto
+core (HKDF salts/info/nonces, Sigma TLV tags, status codes, control octets)
+IS byte-verbatim with connectedhomeip HEAD.
 
 ### BD-Matter-mDNSDeviceType — commissionable DT advertises RootNode, not Aggregator
 
@@ -1044,6 +1070,193 @@ requirement. WIP scaffolding for the id-preserving store lives on the
 unmerged `wip/a1-subscription-persistence` branch; the corrected scope is
 recorded in the A1 implementation plan.
 
+### BD-Matter-LeakAsContactSensor — leak measurement class materialises as ContactSensor (0x0015), not WaterLeakDetector (0x0043)
+
+matter.js `packages/model/src/standard/elements/water-leak-detector.element.ts`
+defines the dedicated WaterLeakDetector device type (0x0043, a
+Matter-1.3-introduced detector type) that a matter.js bridge would advertise
+for leak sensors. OpenCCU-Loom (`pkg/interfaces/matter.go`,
+`MatterMeasurementClassDeviceType`) instead maps `MatterMeasurementLeak` to
+ContactSensor (0x0015, `contact-sensor.element.ts`).
+
+**Rationale (ecosystem ceiling):** Amazon Alexa's bridge support is pinned
+below the detector device-type revisions — field evidence shows that a single
+endpoint advertising 0x0043 renders the ENTIRE Alexa-side bridge unresponsive,
+taking every other bridged device down with it. ContactSensor keeps the
+identical wire surface (mandatory BooleanState 0x0045 server per
+`contact-sensor.element.ts`), so only the DeviceTypeList entry differs.
+Polarity is non-inverted alarm semantics: the model's boolean passes through
+`BooleanStateServer` verbatim, so a detected leak reports StateValue=true
+(which ContactSensor renders as "closed or contact" per cluster §1.7.5.1,
+`boolean-state.resource.ts`) and dry reports StateValue=false ("open or no
+contact"). No loom classifier emits the Leak class yet
+(`internal/model/generic/matter.go` has no leak/moisture parameter case), so
+the flip landed before any moisture parameter was wired — there is no
+migration concern. Pinned by `TestLeakClassMapsToContactSensorDeviceType`
+(`pkg/interfaces/matter_funcs_test.go`). Revisit only when the major
+ecosystems demonstrably accept the detector device types.
+
+### BD-Matter-ButtonPressCycleFromDiscreteFrames — Switch (0x003B) events from discrete CCU frames, not a position stream
+
+matter.js derives Switch (0x003B) events from a continuous currentPosition
+stream plus timers (`SwitchServer.ts`: `debounceTimer`,
+`longPressTimer`/`longPressDelay`); the CCU instead delivers discrete,
+pre-thresholded semantic frames (PRESS_SHORT, PRESS_LONG, PRESS_CONT repeats,
+PRESS_LONG_RELEASE). OpenCCU-Loom therefore maps frames directly onto the
+event sequence via a per-endpoint press-cycle state machine
+(`generic.ButtonGroup`) instead of porting the timer machinery: the
+long-press threshold is already applied device-side, so `longPressDelay`
+collapses into the PRESS_LONG/PRESS_LONG_START mapping, and hold tracking
+(`held`/`longEmitted`) replaces `longPressTimer`/`currentIsLongPress`.
+
+Buttons without a PRESS_LONG_RELEASE parameter (HmIP KEY channels) cannot
+signal hold end, so each PRESS_LONG completes the full
+InitialPress→LongPress→LongRelease cycle immediately; with a release
+parameter, device-side repeats (PRESS_CONT ~every 300 ms on BidCos, repeated
+PRESS_LONG) are suppressed until the release closes the cycle, and the
+release synthesizes any missing InitialPress/LongPress prefix so LongRelease
+never arrives unpaired. The sequence contract itself is unchanged from
+matter.js (ShortRelease only when no LongPress since the previous
+InitialPress; LongRelease only after a LongPress). Guarded by
+`TestParityMatterJS_GenericSwitchPressCycleSequences`
+(`internal/north/matter/cluster/wire`) and the ButtonGroup suite
+(`internal/model/generic`).
+
+### BD-Matter-ButtonGroupCurrentPositionReporting — Switch.CurrentPosition answered on read, not proactively reported
+
+matter.js's reactive state proactively reports Switch.CurrentPosition
+(quality N) changes to subscribers whenever `state.currentPosition` moves.
+OpenCCU-Loom's consolidated button endpoint answers CurrentPosition READs
+live (1 while a long-press cycle is held open, 0 idle, via
+`wire.GenericSwitchPositionSource`) but does not proactively dirty-mark the
+attribute on press flips: press gestures are delivered exclusively through
+the §1.13 event pipe.
+
+**Rationale:** the bridge's measurement-notifier wiring scopes a notifier to
+its own cluster only when the notifier is itself a cluster server
+(`filterPathsByNotifierCluster`); a model-side group notifier would fall back
+to dirty-marking EVERY reportable path on the endpoint (Identify, Descriptor,
+BridgedDeviceBasicInformation) per press — exactly the bursty multi-cluster
+report shape the bridge deliberately avoids for Apple Home. Short presses are
+atomic on the CCU wire (press+release in one frame), so there is no
+observable position interval to report anyway; only CONT-holds would ever
+surface a transient 1.
+
+### BD-Matter-WindowCovering-EndProductType — garage doors report RollerShade (0), not Unknown (255)
+
+The matter.js EndProductTypeEnum
+(`packages/model/src/standard/elements/window-covering-cluster.element.ts:166-192`)
+carries no garage value, and neither does TypeEnum. The garage projection
+therefore reports the neutral RollerShade (0) on both Type and EndProductType
+rather than the semantically "honest" Unknown (255): at least one ecosystem's
+automation/routine device picker drops devices that report
+EndProductType=Unknown, which would make a bridged garage door
+un-automatable. Similarly, curtains report CentralCurtain (16) as the generic
+pick among the three curtain geometries (LateralLeftCurtain=14 /
+LateralRightCurtain=15 / CentralCurtain=16) because the HM channel does not
+report which geometry the actuator drives. Pinned by
+`TestParityMatterJS_WindowCoveringTypeAndEndProductType` in
+`internal/model/custom/cover/parity_matterjs_test.go`.
+
+### BD-Matter-WindowCovering-InferredTarget — inferred TargetPosition on externally initiated movement
+
+**Where:** `internal/model/custom/cover/matter.go` (`liftTargetRead`),
+`cover.go` (`Cover.OnDirection`), `garage.go` (`Garage.OnSection`).
+
+**matter.js behaviour:** `WindowCoveringServer` derives OperationalStatus
+FROM target-vs-current (`#handleLiftTargetPositionChanging` →
+`#computeOperationalState`,
+`packages/node/src/behaviors/window-covering/WindowCoveringServer.ts:215-222, :271-281`),
+because on a native Matter device every movement starts with a command that
+first writes the target. There is no upstream code path for movement that
+begins without a target write.
+
+**OpenCCU-Loom divergence (bridge-domain, deliberate):** a bridged HM cover
+can start moving with no Matter command at all — wall button, CCU program —
+surfacing only as a DIRECTION / ACTIVITY_STATE (Cover/Blind) or SECTION
+(Garage) push. Reporting the stale commanded target then makes controllers
+that derive the motion arrow from target-vs-current (Apple Home) render the
+wrong or no arrow. The projection therefore inverts matter.js's derivation
+and infers the target from the motion: while opening, a commanded target is
+kept only if strictly ahead of current (`target < current` in percent100ths,
+0 = open), otherwise the reported target is the direction limit 0; closing is
+the mirror image (keep `target > current`, else 10000); at rest the commanded
+target is reported while in effect, otherwise the read mirrors
+CurrentPosition (matter.js startup init `:142`, StopMotion snap `:490`). An
+externally reported moving→stopped transition additionally clears the stored
+commanded target (the `handleStopMovement` snap semantics,
+`WindowCoveringServer.ts:485-493`, applied to a device-initiated stop).
+Pinned by `TestCoverInferredTarget_*`,
+`TestBlindInferredTarget_LiftInferredTiltCommandedUntilStop`, and
+`TestGarageInferredTarget_SectionMovementAndStop` in
+`internal/model/custom/cover/matter_target_position_test.go`. The Blind tilt
+axis has no motion signal in the model, so no tilt inference applies
+(matching the existing OperationalStatus tilt limitation).
+
+### BD-Matter-WindowCovering-SliderDebounce — GoTo*Percentage two-phase slider debounce with accepted-before-written CCU write
+
+**Where:** `internal/model/custom/cover/matter_debounce.go`; the
+`MatterInvoke` GoToLiftPercentage / GoToTiltPercentage / StopMotion /
+UpOrOpen / DownOrClose cases in `internal/model/custom/cover/matter.go`.
+
+**matter.js behaviour:** `WindowCoveringServer.goToLiftPercentage` /
+`goToTiltPercentage` store `TargetPosition*Percent100ths` immediately and
+trigger the movement as a detached worker — the invoke returns Success
+before the movement completes
+(`packages/node/src/behaviors/window-covering/WindowCoveringServer.ts:574-605`,
+`:379-383` "this method returns before actual movement completes"). There is
+no command coalescing: a native motor consumes every target write.
+
+**Loom divergence:** the bridged CCU write for a GoTo*Percentage command is
+debounced per (device, axis). Delay is two-phase: 400 ms for the first
+command of a gesture (a quick swipe's first value is an unwanted
+intermediate step) and 150 ms while a drag is active (previous command in
+the slot less than 600 ms old). Each new command cancels and replaces the
+pending write. A command whose destination is within 1 % (100 percent100ths)
+of the observed current position is acknowledged without any radio write and
+additionally drops a pending intermediate drag value. StopMotion cancels all
+pending axis writes; UpOrOpen / DownOrClose cancel the pending writes of the
+axes they drive. Consequence: the Matter command returns Success on
+acceptance, and a subsequently failing deferred CCU write is only logged
+(`cover: deferred window covering position write failed`) — the commanded
+target stays reported and the position mismatch surfaces through the normal
+CCU value-event echo.
+
+**Why:** Apple Home / Google Home slider drags emit 5-10 GoTo commands in
+quick succession. HM cover actuators sit behind a duty-cycle-limited radio;
+forwarding every intermediate value as its own LEVEL / LEVEL_COMBINED /
+DOOR_COMMAND write makes the motor stutter and burns duty cycle. Loom's
+client-side coalescer is singleflight-for-identical-calls and never
+coalesces distinct slider values. matter.js needs no such layer because it
+drives a native motor, not a radio-constrained bridge target. REST / MQTT /
+WS set-position paths are deliberately NOT debounced — only the Matter GoTo
+invoke path carries slider-gesture bursts.
+
+**Guards:** `internal/model/custom/cover/matter_debounce_test.go`
+(gesture-start vs active-drag delays via fake clock, drag replace, at-target
+skip incl. pending-drop, StopMotion cancellation, Subscribe-detach
+cancellation, per-axis independence on Blind, real-timer smoke test) and
+`TestParityMatterJS_GoToPercentageStoresTargetBeforeDeviceWrite` (target
+readable at invoke return, CCU write only after the debounce window).
+
+### BD-Matter-LevelControl-NativeRamp — RemainingTime stays 0 during device-native ramps
+
+A positive MoveToLevel / MoveToLevelWithOnOff TransitionTime is delegated to
+the HM device as RAMP_TIME inside one atomic put_paramset ({LEVEL, RAMP_TIME,
+ON_TIME=NotUsed} via `Light.TurnOnWith` / `Light.TurnOffWithRamp`); the
+device performs the transition natively. matter.js's default
+LevelControlServer manages transitions host-side (`Transitions.ts`) and can
+tick RemainingTime while stepping, but explicitly sanctions delegating to
+native hardware transitions (`LevelControlServer.ts:36-41`,
+`createTransitions` override note). The CCU reports no ramp progress, so the
+bridge keeps RemainingTime at a constant 0 while a device-side ramp runs.
+Null/0 transition times keep the instant SetLevel path, matching
+`moveToLevelLogic`'s truthy-only rate derivation
+(`LevelControlServer.ts:297-303`) and the `changePerS` contract "0 or
+nullish means transition instantly" (`LevelControlServer.ts:459`). Devices
+whose channel lacks RAMP_TIME (`LightCapabilities.Transition` unset) always
+take the instant path.
+
 > **Rule of thumb (CLAUDE.md):** matter.js HEAD is the gold standard for everything under `internal/north/matter/`. Cluster IDs / revisions / attribute IDs / constraints / defaults / wire shape are taken verbatim. Any item below is a **deliberate** divergence with a documented reason. Bug-class drift (hand-coded revisions etc.) does **not** belong here — it belongs in a fix.
 
 ### Idiomatic translations TypeScript → Go (not real divergence)
@@ -1091,6 +1304,7 @@ These rewrite TypeScript constructs into Go. Wire output is identical; the surfa
 | BD-CCU-IsConnected | `interface_client.py:841-866` — `is_connected()` runs an active RPC ping via `check_connection_availability()`, increments `_connection_error_count` on failure, transitions CONNECTED → DISCONNECTED + `_mark_all_devices_forced_availability(FORCE_FALSE)` when count exceeds `connectivity_error_threshold` | `internal/central/jobs.go:328-372` — `central.check_connection` job polls every 120 s; publishes `ConnectionLostEvent` immediately on `StateMachine.State() != Connected` OR `!IsCallbackAlive()`, recovery coordinator's `alreadyActive` guard dedupes subsequent firings, `WireDeviceAvailability` (`internal/central/adapter/device_availability.go`) propagates the `ClientStateChanged → Disconnected` transition to per-device Force-False | openccu-loom's BIN-RPC push-event architecture inverts the responsibility: the bridge does not need an active probe because callback events are the primary liveness signal. The check-connection job validates the state machine + callback-alive flag instead of issuing an RPC ping. The error-count threshold from aiohomematic's `is_connected()` is replaced by the `alreadyActive` deduplication inside the recovery coordinator (`triggerRecovery`) — a single-tick glitch does not start a second recovery cycle. By design: equivalent end-state (FORCE_FALSE on persistent failure) reached via a different control loop. (Drift D-02 from `audit_runs/2026-05-18_resolution_status.md`, classified as PFAD-ASYMMETRIE on re-analysis.) |
 | BD-CCU-Fault-Timeout-Retryable | `client/command_retry.py:50-56` — `_RETRYABLE_FAULT_CODES = {-1, -8, -9, -10}`; fault -2 (XML-RPC generic Timeout) is NOT retried | `pkg/hmerr/errors.go::IsRetryable` — adds `-2 XMLRPCFaultTimeout` to the retryable set with the comment "emitted by transports as a generic timeout fault" | OpenCCU-Loom's transports surface generic socket-timeout / read-deadline failures via XML-RPC fault code -2; the reference Python stack maps those to a different exception type (`asyncio.TimeoutError`) that gets handled outside the fault-code retry path. Treating -2 as retryable is a Go-side equivalence path, not a behavioural deepening: both stacks retry transient transport timeouts; only the dispatch shape differs. (Drift D-09 from `audit_runs/2026-05-18_resolution_status.md`.) |
 | BD-Matter-UniqueID-Stable | matter.js `BasicInformationServer.createUniqueId()` — 32-char random persisted with Quality "FN" so the value survives bridge restarts | `internal/north/matter/cluster/core/basic_information.go::uniqueID` mixes `bootid.Salt()` into a deterministic SHA-256 derivation; `internal/north/matter/bootid/bootid.go` defaults `rotationEnabled = false`, so `Salt()` returns `[16]byte{}` and the hash collapses to a stable function of vendor/product/nodeLabel/serialNumber | OpenCCU-Loom produces a stable UniqueID across daemon restarts by default. Rotation is opt-in via `matter.dev_rotate_unique_ids=true` and is intended for the dev/debug workflow where pair-iteration has corrupted Apple's HMHome state. Audit drift L1-D19 (in `audit_runs/2026-05-18_resolution_status.md`) is a **false positive**: it assumes `bootid.Salt()` rotates unconditionally, but the default zeroed salt means the production daemon's UniqueID is stable. The bootid package docstring spells out the contract; no code change required. |
+| BD-Matter-SoftwareVersion-StringDerived | matter.js derives SoftwareVersionString from the numeric SoftwareVersion default (`packages/node/src/behaviors/basic-information/BasicInformationServer.ts:71` — `setDefault("softwareVersionString", state.softwareVersion.toString())`) and has no string-to-numeric path; its consumers supply the numeric value directly | OpenCCU-Loom's authoritative version is the human-readable daemon build string (`build.Version`), so `core.SoftwareVersionFromString` derives the numeric attribute from the string instead, using the stable monotonic encoding `major*1_000_000 + minor*1_000 + patch` (components clamped to 999; semver pre-release/build-metadata suffixes dropped, so "0.32.0-rc.1" → 32000; leading "v" tolerated; non-semver strings such as "dev" and all-zero results floor at 1, never advertising matter.js's development default 0 from `BasicInformationServer.ts:59`) | The matter.js invariant — both attributes describe the same release — is preserved; only the derivation direction differs. When the string is absent, the fallback mirrors matter.js exactly (decimal rendering of the numeric value). Guards: `TestSoftwareVersionFromString`, `TestBasicInfo_SoftwareVersionDerivedFromVersionString`, `TestParityMatterJS_BasicInfoServer_SoftwareVersionStringFallback`. |
 | BD-CCU-FieldNaming | `aiohomematic/model/custom/field.py` — `CustomDataPointField` with descriptor-style attribute names | `internal/model/custom/profile_schema.go` — `FieldValue` struct, semantically equivalent | Different module/type names reflect the Python-descriptor vs. Go-struct idiom split (cross-referenced in §A2 of this doc). Naming divergence only; behavioural parity verified by the custom-DP materialisation tests. (Audit drift D-12.) |
 | BD-CCU-PatchParameter | (no Python pendant) | `internal/central/coordinators/configuration.go` — `PatchParameter`, `ClearPatch` | Go-side extension: lets operators apply a runtime parameter patch (e.g. fix a vendor-side typo in a paramset description) without restarting the daemon. The reference Python stack requires a paramset-cache reload or a code-side patch file. No drift downward — Go strict-superset. (Audit drift D-13.) |
 | BD-CCU-PublishBatch | `central/events/bus.py:761` — `publish_batch` fans out via `asyncio.gather` so handlers run concurrently | `internal/central/events/batch.go` — `events.Batch.Flush()` publishes sequentially in batch-add order | Sequential flush gives deterministic ordering across batched DataPointValueChanged events at the cost of one extra wall-clock tick when handler counts are large. The reference behaviour is faster but loses ordering across concurrent handlers; for our north-bound consumers (MQTT, Matter, REST) ordering is more valuable than µs-scale latency. Sequential dispatch also avoids fan-out re-entrancy footguns in the Go event-bus (no goroutine-pool-managed concurrency). (Audit drift D-14.) |
@@ -1098,14 +1312,18 @@ These rewrite TypeScript constructs into Go. Wire output is identical; the surfa
 | BD-CCU-ConnectivityThreshold | `const.py:95` — `connectivity_error_threshold` (default 1) consumed by `is_connected()` | (no Go consumer) | Subsumed by `BD-CCU-IsConnected` above: OpenCCU-Loom's push-event architecture replaces the threshold-based active-probe logic with a `StateMachine.State() != Connected` / `!IsCallbackAlive()` check inside the `central.check_connection` job. The configuration key is reserved in the YAML schema but unused at runtime; surfacing it would be a no-op. (Audit drift D-11.) |
 | BD-Matter-TimeSync-NoUTCFeature | matter.js `time-synchronization.element.ts:32-35` — `UtcTime` and `Granularity` both carry `conformance: "M"` unconditionally; no `UTC` feature flag exists | `internal/north/matter/cluster/core/time_synchronization.go::MatterRead` returns `FeatureMap = 0` while exposing UTCTime + Granularity | The matter-exhaustive audit drift L1-D14 ("UTC-Feature-Bit nicht gesetzt obwohl UTCTime exponiert wird") is a **false positive**: it presumes a non-existent UTC feature flag. UTCTime and Granularity are mandatory regardless of any feature flag; the optional TZ / NTPC / NTPS / TSC features gate additional attributes (TimeZone, DefaultNtp, TrustedTimeSource, …) that the bridge intentionally does not implement. `FeatureMap = 0` is therefore correct — the bridge advertises no optional time-sync features, which matches the implemented surface. |
 | BD-Matter-Dispatcher-Synthesises-Globals | matter.js's behaviour layer auto-generates the Matter §7.13.2 global attributes (FeatureMap, ClusterRevision, AttributeList, AcceptedCommandList, GeneratedCommandList) on every cluster server | `internal/north/matter/endpoint/dispatcher.go::attributesFor` seeds the five universal globals at the start of every wildcard-attribute expansion and dedupes them against the per-server `MatterAttributes()` extras (lines 269-300 + 378-405) | The audit drifts L1-D04 / L1-D06 / L1-D12 ("MatterAttributes lister fehlt FeatureMap + ClusterRevision") are **false positives**: per-cluster `MatterAttributes()` enumerations focus on cluster-specific attributes; the dispatcher universally adds the five Matter-1.3 globals (EventList intentionally omitted — Apple iOS Matter SDK schema-mismatch reject). Regression tripwire: `TestRead_WildcardAttribute_ListerWithoutGlobalsStillGetsThem`. The wildcard-expansion contract is centrally enforced; per-cluster servers neither need nor benefit from listing globals again. |
-| BD-Matter-EndpointID-Persistent | matter.js `@matter/node` Storage-Layer persists endpoint IDs across restarts so commissioners can re-use cached subscription targets | `internal/north/matter/endpoint/assembler.go::assignOrReuseID` looks the (source-key → endpoint-id) record up in the `store.EndpointStore` (SQLite) and reuses the persisted ID; a fresh allocation only happens when no record exists for that source key | Audit drift L6-D01 ("Endpoint-IDs werden beim Reassemble potenziell neu vergeben … bootid-basiert") is a **false positive**. Endpoint IDs come from the persistent endpoint store (not from `bootid.Salt()` — that one only feeds the UniqueID hash, see `BD-Matter-UniqueID-Stable`). A reassemble that finds the same source key reuses the same endpoint ID, so Apple's HAP-Mapper does not see a topology shuffle. |
+| BD-Matter-EndpointID-Persistent | matter.js `@matter/node` Storage-Layer persists endpoint IDs across restarts so commissioners can re-use cached subscription targets | `internal/north/matter/endpoint/assembler.go::assignOrReuseID` looks the (source-key → endpoint-id) record up in the `store.EndpointStore` (SQLite) and reuses the persisted ID; a fresh allocation only happens when no record exists for that source key | Audit drift L6-D01 ("Endpoint-IDs werden beim Reassemble potenziell neu vergeben … bootid-basiert") is a **false positive**. Endpoint IDs come from the persistent endpoint store (not from `bootid.Salt()` — that one only feeds the UniqueID hash, see `BD-Matter-UniqueID-Stable`). A reassemble that finds the same source key reuses the same endpoint ID, so Apple's HAP-Mapper does not see a topology shuffle. Cross-restart durability of those store rows additionally depends on the boot-time GC gate documented in `BD-Matter-EndpointGC-ModelCompleteGate` (next row): before that gate landed, boot-time assembly against not-yet-loaded centrals erased every persisted row, and endpoint-number stability held only accidentally via deterministic re-allocation. |
+| BD-Matter-EndpointGC-ModelCompleteGate | matter.js has no boot-time "empty model" window: `packages/node/src/storage/server/ServerEndpointStores.ts` pre-allocates every persisted endpoint number at `load()` ("Ensure all known numbers are allocated") and `assignNumber` reuses the stored number; the only release path is `eraseStoreForEndpoint`, invoked from `packages/node/src/node/server/ServerEndpointInitializer.ts::eraseDescendant` on explicit endpoint deletion | OpenCCU-Loom assembles its topology from asynchronous CCU snapshots (Bridge.Start runs before the readiness-gated device load), so the same "numbers reserved until explicit removal" contract is enforced via `endpoint.Snapshot.ModelComplete`: `Assembler.gcVanished` (internal/north/matter/endpoint/assembler.go) skips vanished-source GC for any central whose initial southbound bring-up has not completed; `cmd/openccu-loom/daemon_matter.go::wireMatterCentralReadiness` latches per-central readiness from CentralSouthboundReadyEvent and `matterSnapshotter` stamps the flag | Mechanism divergence, behaviour parity: without the gate every daemon boot deleted ALL persisted endpoint-ID rows (boot assembly saw registered centrals with empty ModelRegistries and treated the whole fleet as vanished), so endpoint numbers were only accidentally stable via deterministic re-allocation and any fleet/exposure change across a restart renumbered everything after the change point — violating BD-Matter-EndpointID-Persistent and Matter §9.12.4 endpoint-number preservation. Failure direction is fail-safe: a missed ready event only defers GC of genuinely removed devices to a later model-complete assembly; it never deletes rows on stale information. Pinned by TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval, TestAssemble_GCSkipsCentralWithIncompleteModel, TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly (endpoint) and TestMatterSnapshotter_StampsModelCompletePerCentral (cmd). |
 | BD-Matter-Reassemble-Closes-Removed | matter.js packages/protocol/src/interaction/SubscriptionHandler.ts — when a BridgedNode endpoint is removed from the Aggregator the `endpoint.lifecycle.remove()` path causes any subscription targeting that endpoint to be closed by the InteractionServer | `internal/north/matter/im/subscription/manager.go::CloseEndpoint` terminates only the subscriptions whose paths reference the removed endpoint ID (via `subReferencesEndpoint`) — subscriptions on the other 29 of 30 endpoints stay open | Audit drift L6-D08 ("Reassemble closes all subscriptions; matter.js does partial update") is a **false positive**: it conflates "all subscriptions targeting the removed endpoint" with "all subscriptions in the bridge". `CloseEndpoint(endpointID)` is targeted; the partial-update story holds. matter.js's "partielles Endpoint-Update" applies to attribute reports on existing endpoints, not to endpoint removal. |
 | BD-Matter-SetReachable-LockReleased | matter.js BridgedDeviceBasicInformationServer emits ReachableChanged through its async `events.reachableChanged.emit` EventEmitter pattern | `internal/north/matter/cluster/core/bridged_device_basic_information.go::SetReachable` releases the internal `b.mu` **before** calling `emitter.MatterEmitEvent` (lines 438-455) so the emit path cannot deadlock against a Subscribe-Manager mutex acquired downstream | Audit drift L10-D06 ("ReachableChanged-Event synchron emittiert; Deadlock-Risiko wenn unter Lock") is a **false positive**: the emit runs after the unlock; there is no nesting of `b.mu` and any downstream lock. The synchronous-vs-asynchronous distinction is purely an internal-dispatch shape; observable behaviour is identical. |
 | BD-Matter-DN-TXT-Set | matter.js `MdnsBroadcaster.ts::buildCommissionableInstanceData` emits the `DN` TXT key when a device name is supplied | `internal/north/matter/mdns/service.go::BuildCommissionableService` emits `DN` when `cfg.DeviceName != ""`; `internal/north/matter/bridge/bridge.go:1156` sets `DeviceName: params.NodeLabel` so the bridge's NodeLabel surfaces as the DN value | Audit drift L7-D03 ("DN TXT-Key fehlt im commissionable Record") is a **false positive**: the DN key is already wired through the bridge's parameter pipe; an empty DeviceName (and therefore an omitted DN) only happens when the bridge is started without a NodeLabel, which is rejected by `Config.Validate()`. |
 | BD-Matter-PBKDF2-Documented | matter.js `PasePairing.ts` makes the PBKDF2 iteration count configurable; spec default is 1000 (Matter §3.10) | `example.config.yaml:240` documents `iterations: 1000` with the spec-mandated 1000..100000 range comment | Audit drift L5-D02 ("PBKDF2-Iterationsanzahl nicht in example.config.yaml dokumentiert") is a **false positive**: the annotated value is already present. `internal/north/matter/cluster/wire/admincommissioning.go:403-404` enforces the spec floor/ceiling at runtime. |
 | BD-Matter-CriticalEventBypassMin | matter.js `ServerSubscription.ts:281` — "Urgent events are sent immediately" — events tagged urgent bypass the MinIntervalFloor gate | `internal/north/matter/im/subscription/subscription.go::drainEventsIfElapsed` (lines 235-258) sets `hasCritical = true` for any event with `im.EventPriorityCritical` and short-circuits past the MinIntervalFloor check | Audit drift L10-D02 ("EventPriorityCritical als Bypass-Kriterium vs. matter.js 'urgent flag'") is functionally equivalent: OpenCCU-Loom's enum value is the equivalent of matter.js's urgent flag for Matter 1.3 / 1.4. When matter.js introduces additional priority/urgency tiers we will mirror them at the same point; until then the wire behaviour is identical. |
-| BD-Matter-RemainingAuditTestGaps | matter.js carries its own cluster-revision regression suite via `@matter/model` and per-behaviour parity tests | OpenCCU-Loom has parity tests for the actively-pair-tested cluster surface (OnOff, LevelControl on Switch/Light/Siren projections, the BridgedDeviceBasicInformation surface, the Aggregator + Root composition) but not for every device-type-projection cluster | Audit drifts L1-D07 (Thermostat), L1-D08 (DoorLock), L1-D09 (WindowCovering), L2-D03 (Switch power-source-attachment), L2-D04 (OnOffPlug→OnOffLight upgrade), L2-D05 (LevelControl OO feature-bit), L7-D06 (commissionable TXT golden test) are **PARITY-TEST-GAPs**, not code drifts. The corresponding production paths have been Apple-pair-verified end-to-end; adding parity tests is desirable but does not block release. Tracked as an open behavioural-parity-test gap; new cases are added per `docs/matter-parity-contract.md`. |
+| BD-Matter-RemainingAuditTestGaps | matter.js carries its own cluster-revision regression suite via `@matter/model` and per-behaviour parity tests | OpenCCU-Loom has parity tests for the actively-pair-tested cluster surface (OnOff, LevelControl on Switch/Light/Siren projections, the BridgedDeviceBasicInformation surface, the Aggregator + Root composition) but not for every device-type-projection cluster | Audit drifts L1-D08 (DoorLock), L1-D09 (WindowCovering), L2-D03 (Switch power-source-attachment), L2-D04 (OnOffPlug→OnOffLight upgrade), L2-D05 (LevelControl OO feature-bit), L7-D06 (commissionable TXT golden test) are **PARITY-TEST-GAPs**, not code drifts. The corresponding production paths have been Apple-pair-verified end-to-end; adding parity tests is desirable but does not block release. Tracked as an open behavioural-parity-test gap; new cases are added per `docs/matter-parity-contract.md`. L1-D07 (Thermostat) is superseded: the formerly Apple-pair-verified SystemMode read path surfaced Auto(1) whenever the HM device sat in its factory-default CONTROL_MODE=AUTO, violating SystemModeEnum conformance — Auto has conformance "AUTO" (matter.js `packages/model/src/standard/elements/thermostat-cluster.element.ts:558`) while the projection advertises a HEAT-only FeatureMap. Pair-success never exercised the state-sync echo: a controller writing the read value back received ConstraintError from the projection's own write gate, and RunningMode could yield Auto(1), which is not a ThermostatRunningModeEnum member at all (`element.ts:568-573`). Fixed in `internal/model/custom/climate/matter.go` (`systemModeFromHmMode` / `runningModeFromHmMode` clamp reads to the FeatureMap); pinned by `TestParityMatterJS_SystemModeAutoRequiresAutoFeature` and `TestThermostatSystemModeReadClampsHmAutoToFeatureMap`. See `BD-Matter-Thermostat-NoAutoFeature` (next row). |
+| BD-Matter-Thermostat-NoAutoFeature | matter.js Thermostat composition may include the AUTO (AutoMode) feature, which mandates independent dual setpoints plus MinSetpointDeadBand (0x0019, conformance "AUTO" — `packages/model/src/standard/elements/thermostat-cluster.element.ts:100-104`) and requires HEAT+COOL (FeatureMap conformance "AUTO, O.a+", `element.ts:24-25,28`) | `internal/model/custom/climate/matter.go::featureMap` advertises HEAT always and COOL for SupportsCool profiles, but never AUTO — even on cooling-capable hybrids | HM climates are single-setpoint devices: the Matter Cool setpoint aliases the one HM setpoint and the projection implements no MinSetpointDeadBand, so advertising AUTO would be a conformance violation. HM's AUTO (week-program) mode is a single-setpoint schedule, not Matter AutoMode; SystemMode reads surface it as Heat(4), or Cool(3) when HEATING_COOLING==COOLING. ThermostatRunningMode stays feature-gated on AUTO ("TEVT & AUTO, [AUTO]", `element.ts:117-120`) and its value space is ThermostatRunningModeEnum (Off/Cool/Heat — no Auto member, `element.ts:568-573`). Precondition for lighting AUTO up: a true dual-setpoint surface plus MinSetpointDeadBand. Aligned with thermo.ThermostatServer's AUTO-clearing constructor; pinned by `TestParityMatterJS_SystemModeAutoRequiresAutoFeature`. |
 | BD-Matter-TouchLastReport-Timing | matter.js sets the subscription's `lastReport` timestamp in the SubscribeResponse handler after the final Initial-Chunk has been pushed | `internal/north/matter/im/subscription/subscription.go:192-197` calls `TouchLastReport()` immediately after the Initial-Report flush sequence completes from the bridge's perspective | Audit drift L10-D04 is a timing-shape difference, not a correctness drift: the chunked Initial-Report sequence is owned by the bridge, which only signals "done" to the subscription after every chunk has been ack'd. The two stacks therefore land on the same effective `lastReport` instant; the only observable difference would be if a peer raced a Report into the gap before the final ack, which the bridge's ack-walk prevents. |
+| BD-Matter-CloseSession-PeerAddrHeuristic | matter.js binds every session to its MessageChannel (`packages/protocol/src/session/Session.ts` `get channel()`), so an outbound CloseSession StatusReport can always be routed | OpenCCU-Loom's UDP listener is connectionless and sessions do not own a channel object; the bridge resolves the peer address at send time from (1) the last authenticated Secure-Channel datagram per session (`Bridge.sessionPeerAddrs`), (2) the per-subscription routing target, (3) the owed-ack exchange table | A session whose peer address was never observed (no SC datagram, no subscription, no pending reliable exchange) skips the farewell with a debug log — acceptable because the notification is best-effort in matter.js too (try/catch-and-warn around `ExchangeManager.ts:658-666` `#sendCloseSession`) and the dominant controllers (Apple Home, chip-tool) always match at least one source. |
+| BD-Matter-CloseSession-FabricTeardownSilent | matter.js emits gracefulClose (and therefore a CloseSession StatusReport) on every non-peer-lost session close, including fabric removal | OpenCCU-Loom deliberately keeps CloseFabric / CloseFabricExcept / ClosePASESessions notification-free | The daemon defers the operational teardown after RemoveFabric so the NOCResponse can ride out on the closing session, and injecting a CloseSession farewell into that window would race the in-flight IM reply; the peer initiated the fabric operation and drops its sessions per protocol anyway. The graceful farewell is scoped to idle reap, same-peer stale-CASE eviction, on-demand ClosePeer invalidation, and daemon shutdown. |
 | L7-D07 | matter.js `MdnsAdvertiser.ts:213-232` — `DefaultBroadcastSchedule` with exponential back-off starting at 1 s, max 90 s; chip is event-driven (re-advertise on fabric change / reconnect) | `internal/north/matter/mdns/zeroconf.go::StartReannounceLoop` + `cmd/openccu-loom/daemon_matter.go:226` — fixed 30-min `StartReannounceLoop` | The 30-min cadence keeps Apple's `mDNSResponder` cache warm (TTL=4500 s ≈ 75 min). No controller correctness issue — all known commissioners accept periodic re-announcement. Event-driven re-announce (fabric add/remove, reconnect) plus a backoff burst matching matter.js's `DefaultBroadcastSchedule` is a v1.2 milestone. Drift L7-D07 (LOW by-design for v1.0). |
 | L8-D03 | matter.js `AdministratorCommissioningServer.ts:283-290` — 48-h extended window when `FabricCount == 0`; chip `CommissioningWindowManager.cpp:313-325` — `MaxCommissioningTimeout()` extends to 48 h for uncommissioned nodes | `internal/north/matter/bridge/commissioning_window.go` — `OpenWindowParams.IsUncommissioned` flag enables the 172800 s (48 h) cap via `commissioningWindowMaxSecUncommissioned` | Implemented (C-P2-4): the constant `commissioningWindowMaxSecUncommissioned = 172800` is wired into `OpenWindow`; the daemon must set `IsUncommissioned: fabricStore.Count() == 0` before calling OpenWindow. Default (IsUncommissioned=false) retains the 900-s cap. Wiring the fabric-count query into the commissioning-window open path is a daemon-side follow-up. |
 | L9-D9 | AccessControl.MatterReadFiltered + UpdateFabricLabel + UpdateNOC fabric resolution | `internal/north/matter/cluster/core/operational_credentials.go:252-286, 1058-1065, 1003-1008` | Confirmed correct by audit 2026-05-12 (L9-D9): Bug M + Bug P fixes are wire-correct; all three paths use `im.FabricFilterFromContext` with `currentFabric` fallback. No action required. Drift L9-D9 (LOW, confirmed ✓). |

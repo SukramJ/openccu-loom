@@ -118,6 +118,14 @@ const (
 	matterSysModeCool uint8 = 3
 	matterSysModeHeat uint8 = 4
 
+	// Matter ThermostatRunningModeEnum values (attribute 0x001E). The
+	// running-mode enum has NO Auto member — only Off(0), Cool(3) and
+	// Heat(4) are legal, unlike SystemModeEnum — matter.js
+	// packages/model/src/standard/elements/thermostat-cluster.element.ts:568-573.
+	matterRunningModeOff  uint8 = 0
+	matterRunningModeCool uint8 = 3
+	matterRunningModeHeat uint8 = 4
+
 	// ControlSequenceOfOperation values (spec 4.3.7.4.3).
 	matterCtrlSeqCoolingOnly       uint8 = 0
 	matterCtrlSeqHeatingOnly       uint8 = 2
@@ -196,27 +204,8 @@ func humidityToMatter(h float64) uint16 {
 	return uint16(v)
 }
 
-// hmModeToMatter maps the Climate domain Mode onto Matter's
-// SystemMode enum. Profile-overlay states (away, boost) collapse onto
-// their parent mode — Matter has no native equivalents and the
-// Thermostat-schedule surface is not yet wired (see ADR 0012).
-func hmModeToMatter(m Mode) uint8 {
-	switch m {
-	case ModeAuto:
-		return matterSysModeAuto
-	case ModeHeat:
-		return matterSysModeHeat
-	case ModeCool:
-		return matterSysModeCool
-	case ModeOff:
-		return matterSysModeOff
-	default:
-		return matterSysModeAuto
-	}
-}
-
-// matterToHmMode is the inverse of [hmModeToMatter] used by SystemMode
-// writes.
+// matterToHmMode maps a written SystemModeEnum value back onto the
+// Climate domain Mode.
 func matterToHmMode(m uint8) (Mode, error) {
 	switch m {
 	case matterSysModeOff:
@@ -408,21 +397,90 @@ type climateThermostatServer struct{ c *Climate }
 func (s climateThermostatServer) MatterClusterID() uint32 { return matterClusterThermostat }
 
 // featureMap computes the Thermostat FeatureMap this server actually
-// reports. Every climate profile registered in init.go sets
-// Capabilities.SupportsCool=false today, so COOL (and therefore AUTO,
-// which requires both HEAT and COOL) never light up in production — but
-// keying off the capability instead of hardcoding means a future
-// heat+cool HM profile flips both bits here automatically, and the
-// attribute gating in MatterRead/MatterAttributes/MatterWrite below
-// follows without further changes. AUTO requires HEAT+COOL per the
-// FeatureMap conformance table (HEAT/COOL: "AUTO, O.a+") — matter.js
-// packages/model/src/standard/elements/thermostat-cluster.element.ts:25-26,29.
+// reports. HEAT is always advertised; COOL follows the profile's
+// SupportsCool capability (hybrid wall thermostats driven by
+// HEATING_COOLING), and the attribute gating in
+// MatterRead/MatterAttributes/MatterWrite below follows automatically.
+//
+// AUTO is deliberately NEVER advertised — not even on SupportsCool
+// profiles. Matter AutoMode means independent dual setpoints and
+// mandates MinSetpointDeadBand (0x0019, conformance "AUTO") — matter.js
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:100-104
+// — while HM climates are single-setpoint devices (the Cool setpoint
+// here aliases the one HM setpoint) and this projection implements no
+// deadband attribute. Advertising AUTO without both is a conformance
+// violation. Precondition for lighting AUTO up: a true dual-setpoint
+// surface plus MinSetpointDeadBand (and per the FeatureMap conformance
+// table, HEAT and COOL both set — HEAT/COOL: "AUTO, O.a+",
+// thermostat-cluster.element.ts:24-25,28).
 func (s climateThermostatServer) featureMap() uint32 {
 	fm := matterThermFeatureHeat
 	if s.c.Capabilities.SupportsCool {
-		fm |= matterThermFeatureCool | matterThermFeatureAuto
+		fm |= matterThermFeatureCool
 	}
 	return fm
+}
+
+// systemModeFromHmMode maps the Climate domain Mode onto Matter's
+// SystemModeEnum, clamped to the values the FeatureMap fm makes legal:
+// Auto(1) has conformance "AUTO" and Cool(3) "[COOL]" — matter.js
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:556-566.
+// A read must never surface a value the FeatureMap forbids: controllers
+// (Apple Home, Google Home) echo the read SystemMode back on state
+// sync, and a non-conformant Auto answer turns that echo into the
+// ConstraintError that [systemModeAllowed] correctly raises on writes.
+// HM's AUTO (week-program) mode is a single-setpoint schedule, not
+// Matter AutoMode (independent dual setpoints + deadband); without the
+// AUTO feature it surfaces as Heat — or Cool when the wrapped hybrid
+// device currently operates in its COOLING direction (the same
+// HEATING_COOLING signal that derives ModeCool for MANU, see
+// [Climate.OnSetPointMode]). Profile-overlay states (away, boost)
+// collapse onto their parent mode — Matter has no native equivalents
+// and the Thermostat-schedule surface is not yet wired (see ADR 0012).
+func (s climateThermostatServer) systemModeFromHmMode(m Mode, fm uint32) uint8 {
+	switch m {
+	case ModeOff:
+		return matterSysModeOff
+	case ModeCool:
+		// ModeCool only derives on hybrid profiles whose FeatureMap
+		// carries COOL; clamp defensively so a heat-only FeatureMap can
+		// never leak the "[COOL]"-gated value.
+		if fm&matterThermFeatureCool == 0 {
+			return matterSysModeHeat
+		}
+		return matterSysModeCool
+	case ModeAuto:
+		if fm&matterThermFeatureAuto != 0 {
+			return matterSysModeAuto
+		}
+		if fm&matterThermFeatureCool != 0 && !s.c.IsHeating() {
+			return matterSysModeCool
+		}
+		return matterSysModeHeat
+	default: // ModeHeat and any future mode: HEAT is always advertised.
+		return matterSysModeHeat
+	}
+}
+
+// runningModeFromHmMode maps the Climate domain Mode onto Matter's
+// ThermostatRunningModeEnum. The enum only carries Off(0)/Cool(3)/Heat(4)
+// — Auto(1) is not a member (thermostat-cluster.element.ts:568-573) —
+// so HM's AUTO mode is projected onto the direction the device is
+// currently operating in rather than echoed as a SystemMode value.
+func (s climateThermostatServer) runningModeFromHmMode(m Mode) uint8 {
+	switch m {
+	case ModeOff:
+		return matterRunningModeOff
+	case ModeCool:
+		return matterRunningModeCool
+	case ModeHeat:
+		return matterRunningModeHeat
+	default: // ModeAuto: report the active HEATING_COOLING direction.
+		if !s.c.IsHeating() {
+			return matterRunningModeCool
+		}
+		return matterRunningModeHeat
+	}
 }
 
 // controlSequenceOfOperation derives the mandatory
@@ -523,16 +581,22 @@ func (s climateThermostatServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrThermSystemMode:
 		// SystemMode is mandatory. Null-on-unknown so a briefly-
 		// unreachable bridged device doesn't break HAP service
-		// construction (see LocalTemperature comment above).
+		// construction (see LocalTemperature comment above). The value
+		// is clamped to the FeatureMap so HM's AUTO (week-program) mode
+		// never surfaces as Auto(1) on a cluster that does not advertise
+		// the AUTO feature — see [systemModeFromHmMode].
 		m, ok := s.c.Mode()
 		if !ok {
 			return nil, true
 		}
-		return hmModeToMatter(m), true
+		return s.systemModeFromHmMode(m, fm), true
 	case matterAttrThermRunningMode:
 		// Conformance "TEVT & AUTO, [AUTO]" (thermostat-cluster.element.ts:117-120):
-		// disallowed without the AUTO feature. Apple Home reads it during
-		// HAP rebuild only when FeatureMap advertises AUTO.
+		// disallowed without the AUTO feature, which featureMap never
+		// advertises today — kept feature-gated so a future
+		// dual-setpoint surface lights it up without further changes.
+		// The value space is ThermostatRunningModeEnum, which has no
+		// Auto member — see [runningModeFromHmMode].
 		if fm&matterThermFeatureAuto == 0 {
 			return nil, false
 		}
@@ -540,7 +604,7 @@ func (s climateThermostatServer) MatterRead(attrID uint32) (any, bool) {
 		if !ok {
 			return nil, true
 		}
-		return hmModeToMatter(m), true
+		return s.runningModeFromHmMode(m), true
 	case matterAttrFeatureMap:
 		return fm, true
 	case matterAttrClusterRevision:

@@ -148,6 +148,13 @@ type Cover struct {
 	// here so the value survives cluster-server reconstruction.
 	matterTarget matterTargetState
 
+	// matterGoTo debounces GoTo*Percentage slider gestures into a
+	// single deferred CCU write per axis. Owned here (shared with the
+	// Blind subtype via the embedded Cover) so pending writes survive
+	// cluster-server reconstruction and stop on [Cover.Subscribe]
+	// detach.
+	matterGoTo goToDebouncer
+
 	address      string
 	writer       Writer
 	Capabilities custom.CoverCapabilities
@@ -159,6 +166,13 @@ type Cover struct {
 
 	groupLevel              *generic.Float
 	useGroupChannelForState bool
+
+	// directionDp is the channel's motion parameter — DIRECTION on
+	// wired/RF actuators, ACTIVITY_STATE on HmIP actuators. Held so the
+	// Matter change notifier can fan motion transitions into the
+	// bridge's dirty-marking; the cached [Cover.Direction] state is fed
+	// through [Cover.Subscribe] → [Cover.OnDirection].
+	directionDp *generic.Sensor[int32]
 
 	directionMu sync.RWMutex
 	direction   CoverDirection
@@ -182,6 +196,7 @@ func New(cfg Config) *Cover {
 	}
 	c := &Cover{
 		Float:        custom.FloatField(cfg.Channel, hmenum.ParameterLevel),
+		directionDp:  resolveDirectionDP(cfg.Channel),
 		address:      address,
 		writer:       cfg.Writer,
 		Capabilities: cfg.Capabilities,
@@ -194,7 +209,25 @@ func New(cfg Config) *Cover {
 		// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
 		_ = c.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
 	}
+	if c.directionDp != nil {
+		// A motion transition changes the WindowCovering OperationalStatus
+		// and inferred TargetPosition reads, so it must advance the
+		// cluster DataVersion just like a LEVEL change.
+		_ = c.directionDp.OnConfirmedUpdate(func(_, _ int32) { c.dataVersion.Bump() })
+	}
 	return c
+}
+
+// resolveDirectionDP returns the channel's motion parameter as an
+// index-valued sensor: DIRECTION where present, otherwise the HmIP
+// equivalent ACTIVITY_STATE. Both are read-only ENUMs whose UP/DOWN
+// indices coincide (DIRECTION: NONE;UP;DOWN;UNDEFINED — ACTIVITY_STATE:
+// UNKNOWN;UP;DOWN;STABLE), so [toCoverDirection] handles either.
+func resolveDirectionDP(ch *device.Channel) *generic.Sensor[int32] {
+	if dp := custom.EnumSensorField(ch, hmenum.ParameterDirection); dp != nil {
+		return dp
+	}
+	return custom.EnumSensorField(ch, hmenum.ParameterActivityState)
 }
 
 // Address returns the channel address the Cover writes to.
@@ -406,11 +439,35 @@ func (c *Cover) Close(ctx context.Context, priority hmenum.CommandPriority) erro
 // OnDirection records a CCU-emitted DIRECTION update. Pass [DirectionUnknown]
 // to clear the cached state when the CCU stops reporting (e.g. after a
 // controller restart).
+//
+// A moving→stopped transition additionally snaps the stored Matter
+// targets back to mirroring the current positions — the semantics of
+// matter.js handleStopMovement (WindowCoveringServer.ts:485-493)
+// applied to a stop the CCU reports on its own (wall button, end
+// position reached, obstruction) rather than a Matter StopMotion
+// command. Without the snap a commanded target from an earlier Matter
+// invoke survives the stop and keeps reporting a destination the cover
+// is no longer pursuing.
 func (c *Cover) OnDirection(d CoverDirection) {
 	c.directionMu.Lock()
+	wasMoving := c.movingLocked()
 	c.direction = d
 	c.hasDir = d != DirectionUnknown
+	nowMoving := c.movingLocked()
 	c.directionMu.Unlock()
+	if wasMoving && !nowMoving {
+		c.matterTarget.clear()
+	}
+}
+
+// movingLocked reports whether the cached direction is an active motion
+// state (up or down; inversion does not affect moving-ness). Caller
+// must hold directionMu.
+func (c *Cover) movingLocked() bool {
+	if !c.hasDir {
+		return false
+	}
+	return c.direction == DirectionUp || c.direction == DirectionDown
 }
 
 // Direction returns the last observed CCU motion direction and
@@ -554,11 +611,20 @@ func (c *Cover) Subscribe(ch *device.Channel) func() {
 			c.OnLevel(v)
 		}
 	}
-	if dp := ch.Parameter(hmenum.ParameterDirection); dp != nil {
-		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) {
+	// DIRECTION carries the motion state on wired/RF actuators; HmIP
+	// actuators report the same UP/DOWN indices via ACTIVITY_STATE.
+	// Wire whichever the channel exposes so IsOpening / IsClosing (and
+	// the Matter OperationalStatus + inferred TargetPosition derived
+	// from them) work across both families.
+	dirDP := ch.Parameter(hmenum.ParameterDirection)
+	if dirDP == nil {
+		dirDP = ch.Parameter(hmenum.ParameterActivityState)
+	}
+	if dirDP != nil {
+		unsubs = append(unsubs, dirDP.OnAnyUpdate(func(_, next any) {
 			applyDirection(next)
 		}))
-		custom.ReplayCurrentValue(dp, applyDirection)
+		custom.ReplayCurrentValue(dirDP, applyDirection)
 	}
 	// LEVEL_2 is the slat-tilt axis for Blind subtypes; the plain
 	// Cover has no tilt concept and writing LEVEL_2 into the LEVEL
@@ -568,6 +634,10 @@ func (c *Cover) Subscribe(ch *device.Channel) func() {
 	// subscribes to LEVEL + DIRECTION only.
 	_ = applyLevel
 	return func() {
+		// Detach also stops any pending debounced Matter position
+		// write — teardown must not leave a timer that writes to the
+		// CCU after the data point is unbound.
+		c.matterGoTo.cancelAll()
 		for _, u := range unsubs {
 			if u != nil {
 				u()

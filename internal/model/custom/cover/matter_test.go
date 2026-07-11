@@ -6,6 +6,7 @@ package cover
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -159,7 +160,8 @@ func TestStopMotionCommand(t *testing.T) {
 
 // TestGoToLiftPercentageInversion is the matching inversion test for
 // the write side: Matter 7500 ("75 % closed") must reach the wire as
-// HM domain-level 0.25 ("25 % open").
+// HM domain-level 0.25 ("25 % open"). The CCU write is debounced, so
+// the wire assertion runs after the flush.
 func TestGoToLiftPercentageInversion(t *testing.T) {
 	w := &stubWriter{}
 	c, _, _ := newRig(t, "HmIP-BROLL:3", w, custom.CoverCapabilities{})
@@ -167,6 +169,7 @@ func TestGoToLiftPercentageInversion(t *testing.T) {
 	if _, err := srv.MatterInvoke(context.Background(), 0x05, uint16(7500), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("GoToLift err: %v", err)
 	}
+	flushGoToWrites(&c.matterGoTo)
 	if w.last.(float64) != 0.25 {
 		t.Fatalf("Matter 7500 → HM %v, want 0.25", w.last)
 	}
@@ -182,6 +185,7 @@ func TestBlindGoToTiltPercentage(t *testing.T) {
 	if _, err := srv.MatterInvoke(context.Background(), 0x08, uint16(2500), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("GoToTilt err: %v", err)
 	}
+	flushGoToWrites(&b.matterGoTo)
 	cc := w.combinedCalls()
 	if len(cc) != 1 {
 		t.Fatalf("expected 1 LEVEL_COMBINED SetValue, got %d", len(cc))
@@ -223,17 +227,20 @@ func TestGarageStateMapsToDiscretePositions(t *testing.T) {
 	}
 }
 
-// TestGarageEndProductTypeIsGarageDoor confirms the EndProductType
-// attribute carries the GarageDoor (8) discriminator.
-func TestGarageEndProductTypeIsGarageDoor(t *testing.T) {
+// TestGarageEndProductTypeIsRollerShade confirms the garage projection
+// reports the neutral RollerShade (0) EndProductType — the matter.js
+// EndProductTypeEnum (window-covering-cluster.element.ts:166-192) has
+// no garage value, and Unknown (255) is avoided because some
+// ecosystems' routine pickers drop devices that report it.
+func TestGarageEndProductTypeIsRollerShade(t *testing.T) {
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 	srv := g.MatterClusterServers()[0]
 	v, ok := srv.MatterRead(0x000D) // EndProductType
 	if !ok {
 		t.Fatalf("EndProductType not readable")
 	}
-	if v.(uint8) != matterWCEndProductGarageDoor {
-		t.Fatalf("Garage EndProductType=%d, want %d (GarageDoor)", v.(uint8), matterWCEndProductGarageDoor)
+	if v.(uint8) != matterWCEndProductRollerShade {
+		t.Fatalf("Garage EndProductType=%d, want %d (RollerShade)", v.(uint8), matterWCEndProductRollerShade)
 	}
 }
 
@@ -301,29 +308,54 @@ func TestGoToLiftWrongType(t *testing.T) {
 }
 
 // TestReportableAttributes locks the per-type reportable surface so
-// regressions in cluster-side report-on-change wiring are visible.
+// regressions in cluster-side report-on-change wiring are visible. The
+// Target attributes must be part of every set: controllers that derive
+// the motion arrow from target-vs-current (Apple Home) need the
+// inferred-target change delivered proactively on movement transitions,
+// not only on the next full read.
 func TestReportableAttributes(t *testing.T) {
+	requireAttrs := func(t *testing.T, kind string, got, want []uint32) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Errorf("%s reportable=%v, want %v", kind, got, want)
+			return
+		}
+		for _, attr := range want {
+			if !slices.Contains(got, attr) {
+				t.Errorf("%s reportable=%v missing 0x%04X", kind, got, attr)
+			}
+		}
+	}
+
 	c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
-	if r := c.MatterClusterServers()[0].MatterReportable(); len(r) != 2 {
-		t.Errorf("Cover reportable=%v, want 2 attrs", r)
-	}
+	requireAttrs(t, "Cover", c.MatterClusterServers()[0].MatterReportable(), []uint32{
+		matterAttrOperationalStatus,
+		matterAttrTargetPositionLiftPercent100ths,
+		matterAttrCurrentPositionLiftPercent100ths,
+	})
 	b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
-	if r := b.MatterClusterServers()[0].MatterReportable(); len(r) != 3 {
-		t.Errorf("Blind reportable=%v, want 3 attrs (lift, tilt, opstatus)", r)
-	}
+	requireAttrs(t, "Blind", b.MatterClusterServers()[0].MatterReportable(), []uint32{
+		matterAttrOperationalStatus,
+		matterAttrTargetPositionLiftPercent100ths,
+		matterAttrTargetPositionTiltPercent100ths,
+		matterAttrCurrentPositionLiftPercent100ths,
+		matterAttrCurrentPositionTiltPercent100ths,
+	})
 	g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
-	if r := g.MatterClusterServers()[0].MatterReportable(); len(r) != 2 {
-		t.Errorf("Garage reportable=%v, want 2 attrs", r)
-	}
+	requireAttrs(t, "Garage", g.MatterClusterServers()[0].MatterReportable(), []uint32{
+		matterAttrOperationalStatus,
+		matterAttrTargetPositionLiftPercent100ths,
+		matterAttrCurrentPositionLiftPercent100ths,
+	})
 }
 
 // --- OnMatterValueChanged (MatterChangeNotifier) ---
 //
-// Cover and Blind inherit OnMatterValueChanged from the embedded
-// *generic.Float (LEVEL) — that confirmed-only contract is already
-// locked by the Float tests in internal/model/generic/matter_test.go.
-// Garage carries its own DPs (DOOR_STATE / SECTION) and implements the
-// method explicitly, so it gets dedicated coverage here.
+// Cover and Blind fan the LEVEL Float, the motion parameter (DIRECTION /
+// ACTIVITY_STATE), and (Blind) LEVEL_2 into one notifier; their coverage
+// lives in matter_target_position_test.go next to the inferred-target
+// behaviour. Garage carries its own DPs (DOOR_STATE / SECTION) and gets
+// dedicated coverage here.
 
 // TestGarageOnMatterValueChangedFiresOnConfirmedDoorStateChange verifies
 // that a CCU-confirmed DOOR_STATE change (e.g. the door operated at the

@@ -102,7 +102,7 @@ func TestGenericSwitch_Read_NumberOfPositions_Default2WhenZero(t *testing.T) {
 	}
 }
 
-func TestGenericSwitch_Read_CurrentPosition_AlwaysZero(t *testing.T) {
+func TestGenericSwitch_Read_CurrentPosition_IdleWithoutPositionSource(t *testing.T) {
 	t.Parallel()
 	gs := newSwitch(1, 2, false)
 	v, ok := gs.MatterRead(switchAttrCurrentPos)
@@ -110,7 +110,51 @@ func TestGenericSwitch_Read_CurrentPosition_AlwaysZero(t *testing.T) {
 		t.Fatal("MatterRead(0x0001) returned ok=false")
 	}
 	if n, _ := v.(uint8); n != 0 {
-		t.Errorf("CurrentPosition = %v, want 0 (always idle)", v)
+		t.Errorf("CurrentPosition = %v, want 0 (idle) for sources without press-cycle tracking", v)
+	}
+}
+
+// fakePositionedSwitchSource adds the optional live-position capability
+// on top of the plain source, the way the model-side button group does.
+type fakePositionedSwitchSource struct {
+	fakeGenericSwitchSource
+	position uint8
+}
+
+func (f *fakePositionedSwitchSource) MatterSwitchCurrentPosition() uint8 { return f.position }
+
+// TestGenericSwitch_Read_CurrentPosition_LiveFromPositionSource pins the
+// live read path: a source that tracks its press cycle reports 1 while
+// held and 0 after release, mirroring matter.js SwitchServer.ts's
+// currentPosition moving to the pressed position for the duration of a
+// press and back to momentaryNeutralPosition (0) on release.
+func TestGenericSwitch_Read_CurrentPosition_LiveFromPositionSource(t *testing.T) {
+	t.Parallel()
+	src := &fakePositionedSwitchSource{
+		fakeGenericSwitchSource: fakeGenericSwitchSource{positions: 2, supportsLong: true},
+	}
+	gs := wire.NewGenericSwitch(1, src)
+
+	readPos := func() uint8 {
+		t.Helper()
+		v, ok := gs.MatterRead(switchAttrCurrentPos)
+		if !ok {
+			t.Fatal("MatterRead(0x0001) returned ok=false")
+		}
+		n, _ := v.(uint8)
+		return n
+	}
+
+	if got := readPos(); got != 0 {
+		t.Errorf("idle CurrentPosition = %d, want 0", got)
+	}
+	src.position = 1 // press-cycle open (held)
+	if got := readPos(); got != 1 {
+		t.Errorf("held CurrentPosition = %d, want 1", got)
+	}
+	src.position = 0 // released
+	if got := readPos(); got != 0 {
+		t.Errorf("released CurrentPosition = %d, want 0", got)
 	}
 }
 

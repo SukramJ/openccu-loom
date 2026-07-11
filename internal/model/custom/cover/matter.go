@@ -26,13 +26,47 @@ var (
 	_ interfaces.MatterEndpointSource     = (*Garage)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Cover)(nil)
 	_ interfaces.MatterClusterDataVersion = (*Garage)(nil)
-	// Cover and Blind inherit OnMatterValueChanged from the embedded
-	// *generic.Float (LEVEL / lift position); Garage carries its own DPs
-	// and implements it explicitly below.
+	// All three implement OnMatterValueChanged explicitly below,
+	// fanning every cluster state carrier (position + motion, plus
+	// tilt for Blind) into one notifier.
 	_ interfaces.MatterChangeNotifier = (*Cover)(nil)
 	_ interfaces.MatterChangeNotifier = (*Blind)(nil)
 	_ interfaces.MatterChangeNotifier = (*Garage)(nil)
 )
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
+// Cover. The WindowCovering projection has two independent state
+// carriers: the lift position (the embedded LEVEL *generic.Float) and
+// the motion parameter (DIRECTION / ACTIVITY_STATE) that drives
+// OperationalStatus and the inferred TargetPosition. Fan both into the
+// bridge's dirty-marking — a movement start updates only the motion
+// parameter, so without it the Stopped→Moving transition ships no
+// proactive report at all and a controller learns about the motion only
+// from the eventual position echo. Mirrors the reactor set matter.js
+// installs in WindowCoveringServer.ts initialize() (:147-155), which
+// reacts to position and operational-status sources alike.
+func (c *Cover) OnMatterValueChanged(cb func()) func() {
+	if c == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		c.Float.OnMatterValueChanged(cb),
+		c.directionDp.OnMatterValueChanged(cb),
+	)
+}
+
+// OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
+// Blind: the Cover carriers (LEVEL + motion) plus the slat-tilt axis
+// (LEVEL_2) feeding CurrentPositionTiltPercent100ths.
+func (b *Blind) OnMatterValueChanged(cb func()) func() {
+	if b == nil || cb == nil {
+		return func() {}
+	}
+	return custom.CombineUnsubs(
+		b.Cover.OnMatterValueChanged(cb),
+		b.level2.OnMatterValueChanged(cb),
+	)
+}
 
 // OnMatterValueChanged implements [interfaces.MatterChangeNotifier] for
 // Garage. Unlike Cover/Blind it does not embed a *generic.Float; its
@@ -94,14 +128,26 @@ const (
 	// previously-advertised "ABS" bit 3 was an undefined feature and is gone.
 	matterWCFeaturePositionAwTlt uint32 = 1 << 4 // PA_TL — reports tilt position
 
-	// Type / EndProductType enum values (Matter spec 5.3.6.1 / 5.3.6.4).
-	matterWCTypeRollerShade           uint8 = 0
-	matterWCTypeDrapery               uint8 = 4
-	matterWCTypeAwning                uint8 = 5
-	matterWCTypeShutter               uint8 = 6
-	matterWCTypeTiltBlindLiftAndTilt  uint8 = 8
-	matterWCEndProductGarageDoor      uint8 = 8
-	matterWCEndProductTiltInteriorBld uint8 = 14
+	// Type (0x0000) enum values, verbatim from matter.js TypeEnum
+	// (packages/model/src/standard/elements/window-covering-cluster.element.ts:152-162).
+	matterWCTypeRollerShade   uint8 = 0 // Rollershade
+	matterWCTypeDrapery       uint8 = 4 // Drapery
+	matterWCTypeAwning        uint8 = 5 // Awning
+	matterWCTypeShutter       uint8 = 6 // Shutter
+	matterWCTypeTiltBlindLift uint8 = 8 // TiltBlindLift (lift + tilt)
+
+	// EndProductType (0x000D) enum values, verbatim from matter.js
+	// EndProductTypeEnum
+	// (packages/model/src/standard/elements/window-covering-cluster.element.ts:166-192).
+	// Only the values this package projects are enumerated. The two
+	// enums share a numeric space with UNRELATED meanings — reusing a
+	// TypeEnum code as EndProductType silently reports a different
+	// product (TypeEnum Drapery=4 reads as EndProductType PleatedShade).
+	matterWCEndProductRollerShade        uint8 = 0  // RollerShade
+	matterWCEndProductInteriorBlind      uint8 = 10 // InteriorBlind (0x0A)
+	matterWCEndProductCentralCurtain     uint8 = 16 // CentralCurtain (0x10)
+	matterWCEndProductRollerShutter      uint8 = 17 // RollerShutter (0x11)
+	matterWCEndProductAwningTerracePatio uint8 = 19 // AwningTerracePatio (0x13)
 
 	// OperationalStatus motion codes (2-bit field replicated across
 	// global / lift / tilt nibbles).
@@ -175,7 +221,12 @@ func (t *matterTargetState) setTilt(v uint16) {
 }
 
 // clear drops both axis targets — the attribute reads mirror
-// CurrentPosition again (the StopMotion snap semantics).
+// CurrentPosition again (the StopMotion snap semantics,
+// WindowCoveringServer.ts:490-493). Besides the StopMotion command
+// handler, the ingest side calls this on an externally reported
+// moving→stopped transition ([Cover.OnDirection] / [Garage.OnSection])
+// so a stale commanded target does not outlive the motion it belonged
+// to.
 func (t *matterTargetState) clear() {
 	t.mu.Lock()
 	t.lift, t.tilt = nil, nil
@@ -227,7 +278,7 @@ func matterPct100thsToHMLevel(matterPct uint16) float64 {
 // coverTypeFor maps a [CoverVariant] to the Matter WindowCovering
 // Type attribute (5.3.6.1). VariantBlind never reaches here because
 // blinds project via [Blind.MatterClusterServers] which sets Type
-// directly to TiltBlindLiftAndTilt.
+// directly to TiltBlindLift.
 func coverTypeFor(v CoverVariant) uint8 {
 	switch v {
 	case VariantAwning:
@@ -243,6 +294,33 @@ func coverTypeFor(v CoverVariant) uint8 {
 	}
 }
 
+// coverEndProductTypeFor maps a [CoverVariant] to the Matter
+// WindowCovering EndProductType attribute (0x000D). EndProductType
+// names the finished product the motor drives (matter.js
+// window-covering-cluster.element.ts:166-192), so it does NOT reuse
+// the TypeEnum code from [coverTypeFor]. CentralCurtain is the
+// neutral pick among the three curtain geometries (LateralLeft /
+// LateralRight / Central) — the HM channel does not report which one
+// the actuator drives. VariantBlind normally projects via
+// [Blind.MatterClusterServers]; the mapping here keeps a plain Cover
+// carrying that variant consistent.
+func coverEndProductTypeFor(v CoverVariant) uint8 {
+	switch v {
+	case VariantAwning:
+		return matterWCEndProductAwningTerracePatio
+	case VariantCurtain:
+		return matterWCEndProductCentralCurtain
+	case VariantShutter, VariantWindow:
+		return matterWCEndProductRollerShutter
+	case VariantBlind:
+		return matterWCEndProductInteriorBlind
+	case VariantShade, VariantDamper, VariantGarage:
+		return matterWCEndProductRollerShade
+	default:
+		return matterWCEndProductRollerShade
+	}
+}
+
 // motionForOpeningClosing packs the (opening, closing) booleans into
 // the 2-bit motion code used by [matterAttrOperationalStatus] nibbles.
 func motionForOpeningClosing(opening, closing bool) uint8 {
@@ -253,6 +331,64 @@ func motionForOpeningClosing(opening, closing bool) uint8 {
 		return matterWCMotionClosing
 	default:
 		return matterWCMotionStopped
+	}
+}
+
+// liftTargetRead computes the TargetPositionLiftPercent100ths (0x000B)
+// read for a WindowCovering projection, reconciling the last commanded
+// target with the externally observed motion state.
+//
+// matter.js only ever has to derive in the opposite direction: its
+// WindowCoveringServer computes OperationalStatus FROM target-vs-current
+// (#handleLiftTargetPositionChanging → #computeOperationalState,
+// WindowCoveringServer.ts:215-222, :271-281) because on a native device
+// every movement starts with a Matter command that first sets the
+// target. A bridged HM cover moves the other way round: a wall button
+// or CCU program starts motion that only surfaces as a DIRECTION /
+// ACTIVITY_STATE push, with no Matter command updating the stored
+// target. Reporting the stale commanded target then makes controllers
+// that derive the motion arrow from target-vs-current (Apple Home)
+// render the wrong or no direction, so the target is inferred from the
+// motion instead:
+//
+//   - opening (percent100ths decreasing toward 0): keep the commanded
+//     target only when it lies strictly ahead of the current position
+//     (target < current); otherwise report the direction limit 0.
+//   - closing: mirror image — keep target > current, else 10000.
+//   - stopped: report the commanded target while one is in effect,
+//     otherwise mirror CurrentPosition (the startup initialisation at
+//     WindowCoveringServer.ts:142 and the StopMotion snap at :490).
+//
+// The moving→stopped snap that clears a stale commanded target lives on
+// the ingest side ([Cover.OnDirection] / [Garage.OnSection]) so a
+// commanded-but-not-yet-moving target survives reads.
+//
+// Returns follow the MatterRead contract: (nil, true) when the value is
+// transiently unobservable.
+func liftTargetRead(t *matterTargetState, position func() (custom.Position, bool), opening, closing bool) (any, bool) {
+	commanded, hasCommanded := t.liftTarget()
+	pos, hasPos := position()
+	var current uint16
+	if hasPos {
+		current = hmLevelToMatterPct100ths(pos.Level())
+	}
+	switch {
+	case opening:
+		if hasCommanded && hasPos && commanded < current {
+			return commanded, true
+		}
+		return uint16(0), true
+	case closing:
+		if hasCommanded && hasPos && commanded > current {
+			return commanded, true
+		}
+		return matterCoverPctMax, true
+	case hasCommanded:
+		return commanded, true
+	case !hasPos:
+		return nil, true
+	default:
+		return current, true
 	}
 }
 
@@ -292,7 +428,7 @@ func (b *Blind) MatterClusterServers() []interfaces.MatterClusterServer {
 func (g *Garage) MatterDeviceType() uint16 { return matterDeviceTypeWindowCovering }
 
 // MatterClusterServers for Garage returns the discrete-state lift
-// projection with EndProductType=GarageDoor.
+// projection.
 func (g *Garage) MatterClusterServers() []interfaces.MatterClusterServer {
 	return []interfaces.MatterClusterServer{garageWCServer{g: g}}
 }
@@ -308,7 +444,7 @@ func (s coverWCServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrType:
 		return coverTypeFor(s.c.Variant), true
 	case matterAttrEndProductType:
-		return coverTypeFor(s.c.Variant), true
+		return coverEndProductTypeFor(s.c.Variant), true
 	case matterAttrConfigStatus:
 		// Operational | LiftPositionAware — this projection always
 		// advertises PA_LF in FeatureMap. See matterWCConfigStatusLift.
@@ -330,14 +466,9 @@ func (s coverWCServer) MatterRead(attrID uint32) (any, bool) {
 		// command is in effect (WindowCoveringServer.ts:522/:546/:578);
 		// with none it mirrors CurrentPosition, matching the matter.js
 		// startup initialisation (:142) and the StopMotion snap (:490).
-		if v, ok := s.c.matterTarget.liftTarget(); ok {
-			return v, true
-		}
-		pos, ok := s.c.Position()
-		if !ok {
-			return nil, true
-		}
-		return hmLevelToMatterPct100ths(pos.Level()), true
+		// External movement overrides a stale commanded target — see
+		// [liftTargetRead].
+		return liftTargetRead(&s.c.matterTarget, s.c.Position, s.c.IsOpening(), s.c.IsClosing())
 	case matterAttrMode:
 		return matterWCModeDefault, true
 	case matterAttrFeatureMap:
@@ -369,18 +500,26 @@ func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
+		// A pending debounced GoTo write is stale intent once a
+		// full-open command lands — drop it before the immediate write.
+		s.c.matterGoTo.cancel(goToAxisLift)
 		// Target lift = fully open (0). WindowCoveringServer.ts:522.
 		err = s.c.Open(ctx, priority)
 		if err == nil {
 			s.c.matterTarget.setLift(0)
 		}
 	case matterCmdDownOrClose:
+		s.c.matterGoTo.cancel(goToAxisLift)
 		// Target lift = fully closed (10000). WindowCoveringServer.ts:546.
 		err = s.c.Close(ctx, priority)
 		if err == nil {
 			s.c.matterTarget.setLift(matterCoverPctMax)
 		}
 	case matterCmdStopMotion:
+		// Stop pre-empts queued motion: a debounced GoTo write firing
+		// after the STOP would restart the movement the user just
+		// halted.
+		s.c.matterGoTo.cancelAll()
 		// Snap the target back to the current position.
 		// WindowCoveringServer.ts:490 handleStopMovement.
 		err = s.c.Stop(ctx, priority)
@@ -392,11 +531,14 @@ func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		if e != nil {
 			return nil, e
 		}
-		err = s.c.SetPosition(ctx, matterPct100thsToHMLevel(pct), priority)
-		if err == nil {
-			// Target lift = requested value. WindowCoveringServer.ts:578.
-			s.c.matterTarget.setLift(pct)
-		}
+		// Target lift = requested value, stored immediately
+		// (WindowCoveringServer.ts:578); the CCU write itself is
+		// debounced — see [dispatchGoToPercentage].
+		dispatchGoToPercentage(ctx, &s.c.matterGoTo, goToAxisLift, s.c.Address(), pct,
+			s.c.Position, s.c.matterTarget.setLift,
+			func(ctx context.Context, hmLevel float64) error {
+				return s.c.SetPosition(ctx, hmLevel, priority)
+			})
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -407,8 +549,18 @@ func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 	return nil, nil
 }
 
+// MatterReportable lists the attributes that ship proactive reports on
+// a state-carrier push. TargetPositionLift must be in the set: Apple
+// Home derives the displayed motion arrow from target-vs-current, and
+// the inferred target ([liftTargetRead]) changes on motion transitions
+// without any Matter command touching the stored value — leaving it out
+// keeps the arrow stale or absent during externally started movement.
 func (s coverWCServer) MatterReportable() []uint32 {
-	return []uint32{matterAttrCurrentPositionLiftPercent100ths, matterAttrOperationalStatus}
+	return []uint32{
+		matterAttrOperationalStatus,
+		matterAttrTargetPositionLiftPercent100ths,
+		matterAttrCurrentPositionLiftPercent100ths,
+	}
 }
 
 // MatterAttributes lists every WindowCovering (0x0102) attribute the
@@ -436,13 +588,13 @@ func (s blindWCServer) MatterClusterID() uint32 { return matterClusterWindowCove
 func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case matterAttrType:
-		return matterWCTypeTiltBlindLiftAndTilt, true
+		return matterWCTypeTiltBlindLift, true
 	case matterAttrEndProductType:
-		// EndProductType=14 (TiltOnlyInteriorBlind) when the device
-		// reports no lift capability; otherwise mirror Type. Blind
-		// always carries a lift axis (the position from the embedded
-		// Cover), so report the Type code directly.
-		return matterWCTypeTiltBlindLiftAndTilt, true
+		// InteriorBlind (10) — the lift+tilt interior product in
+		// EndProductTypeEnum (window-covering-cluster.element.ts:177).
+		// TiltOnlyInteriorBlind (9) would drop the lift axis a Blind
+		// always carries via the embedded Cover's LEVEL position.
+		return matterWCEndProductInteriorBlind, true
 	case matterAttrConfigStatus:
 		// Operational | LiftPositionAware | TiltPositionAware — this
 		// projection always advertises PA_LF and PA_TL in FeatureMap.
@@ -464,15 +616,11 @@ func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 		return hmLevelToMatterPct100ths(pos.Level()), true
 	case matterAttrTargetPositionLiftPercent100ths:
 		// Last commanded lift destination; mirrors CurrentPosition when
-		// no command is in effect. See coverWCServer.MatterRead.
-		if v, ok := s.b.matterTarget.liftTarget(); ok {
-			return v, true
-		}
-		pos, ok := s.b.Position()
-		if !ok {
-			return nil, true
-		}
-		return hmLevelToMatterPct100ths(pos.Level()), true
+		// no command is in effect, and external movement overrides a
+		// stale commanded target. See coverWCServer.MatterRead and
+		// [liftTargetRead]. The tilt axis below has no motion signal in
+		// the model, so no inference applies there.
+		return liftTargetRead(&s.b.matterTarget, s.b.Position, s.b.IsOpening(), s.b.IsClosing())
 	case matterAttrCurrentPositionTiltPercent100ths:
 		tilt, ok := s.b.TiltPosition()
 		if !ok {
@@ -522,6 +670,9 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
+		// The HM motor drives both axes in one motion — a full-open
+		// supersedes pending debounced GoTo writes on either axis.
+		s.b.matterGoTo.cancelAll()
 		// Both position-aware axes target fully open (0).
 		// WindowCoveringServer.ts:522-525.
 		err = s.b.Open(ctx, priority)
@@ -530,6 +681,7 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 			s.b.matterTarget.setTilt(0)
 		}
 	case matterCmdDownOrClose:
+		s.b.matterGoTo.cancelAll()
 		// Both position-aware axes target fully closed (10000).
 		// WindowCoveringServer.ts:546-549.
 		err = s.b.Close(ctx, priority)
@@ -538,6 +690,8 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 			s.b.matterTarget.setTilt(matterCoverPctMax)
 		}
 	case matterCmdStopMotion:
+		// Stop pre-empts queued motion — see coverWCServer.MatterInvoke.
+		s.b.matterGoTo.cancelAll()
 		// Snap both targets back to the current positions.
 		// WindowCoveringServer.ts:490-493 handleStopMovement.
 		err = s.b.Stop(ctx, priority)
@@ -549,21 +703,25 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		if e != nil {
 			return nil, e
 		}
-		err = s.b.SetPosition(ctx, matterPct100thsToHMLevel(pct), priority)
-		if err == nil {
-			// WindowCoveringServer.ts:578.
-			s.b.matterTarget.setLift(pct)
-		}
+		// Target stored immediately (WindowCoveringServer.ts:578); the
+		// combined-parameter CCU write is debounced per axis — see
+		// [dispatchGoToPercentage].
+		dispatchGoToPercentage(ctx, &s.b.matterGoTo, goToAxisLift, s.b.Address(), pct,
+			s.b.Position, s.b.matterTarget.setLift,
+			func(ctx context.Context, hmLevel float64) error {
+				return s.b.SetPosition(ctx, hmLevel, priority)
+			})
 	case matterCmdGoToTiltPercentage:
 		pct, e := extractGoToPercentage(fields)
 		if e != nil {
 			return nil, e
 		}
-		err = s.b.SetTilt(ctx, matterPct100thsToHMLevel(pct), priority)
-		if err == nil {
-			// WindowCoveringServer.ts:600.
-			s.b.matterTarget.setTilt(pct)
-		}
+		// Target stored immediately (WindowCoveringServer.ts:600).
+		dispatchGoToPercentage(ctx, &s.b.matterGoTo, goToAxisTilt, s.b.Address(), pct,
+			s.b.TiltPosition, s.b.matterTarget.setTilt,
+			func(ctx context.Context, hmLevel float64) error {
+				return s.b.SetTilt(ctx, hmLevel, priority)
+			})
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -574,11 +732,15 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 	return nil, nil
 }
 
+// MatterReportable includes both axes' Target attributes — see
+// [coverWCServer.MatterReportable] for the target-vs-current rationale.
 func (s blindWCServer) MatterReportable() []uint32 {
 	return []uint32{
+		matterAttrOperationalStatus,
+		matterAttrTargetPositionLiftPercent100ths,
+		matterAttrTargetPositionTiltPercent100ths,
 		matterAttrCurrentPositionLiftPercent100ths,
 		matterAttrCurrentPositionTiltPercent100ths,
-		matterAttrOperationalStatus,
 	}
 }
 
@@ -603,7 +765,7 @@ func (s blindWCServer) MatterAttributes() []uint32 {
 // garageWCServer projects a [Garage] onto the WindowCovering cluster.
 // Position is derived from the discrete door state — Open=1.0,
 // Ventilation=0.5, Closed=0.0 — which the [Garage.Position] method
-// already exposes. EndProductType is GarageDoor.
+// already exposes.
 type garageWCServer struct{ g *Garage }
 
 func (s garageWCServer) MatterClusterID() uint32 { return matterClusterWindowCovering }
@@ -611,9 +773,16 @@ func (s garageWCServer) MatterClusterID() uint32 { return matterClusterWindowCov
 func (s garageWCServer) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case matterAttrType:
-		return matterWCTypeRollerShade, true // No "garage" Type code; EndProductType carries the distinction.
+		// Rollershade (0) — TypeEnum has no garage value
+		// (window-covering-cluster.element.ts:152-162).
+		return matterWCTypeRollerShade, true
 	case matterAttrEndProductType:
-		return matterWCEndProductGarageDoor, true
+		// EndProductTypeEnum has no garage value either
+		// (window-covering-cluster.element.ts:166-192). RollerShade (0)
+		// is the neutral default; Unknown (255) is deliberately avoided
+		// because at least one ecosystem's routine picker drops devices
+		// that report EndProductType=Unknown.
+		return matterWCEndProductRollerShade, true
 	case matterAttrConfigStatus:
 		// Operational | LiftPositionAware — this projection always
 		// advertises PA_LF in FeatureMap. See matterWCConfigStatusLift.
@@ -630,15 +799,10 @@ func (s garageWCServer) MatterRead(attrID uint32) (any, bool) {
 		return hmLevelToMatterPct100ths(pos.Level()), true
 	case matterAttrTargetPositionLiftPercent100ths:
 		// Last commanded destination; mirrors CurrentPosition when no
-		// command is in effect. See coverWCServer.MatterRead.
-		if v, ok := s.g.matterTarget.liftTarget(); ok {
-			return v, true
-		}
-		pos, ok := s.g.Position()
-		if !ok {
-			return nil, true
-		}
-		return hmLevelToMatterPct100ths(pos.Level()), true
+		// command is in effect, and external movement (SECTION-derived)
+		// overrides a stale commanded target. See
+		// coverWCServer.MatterRead and [liftTargetRead].
+		return liftTargetRead(&s.g.matterTarget, s.g.Position, s.g.IsOpening(), s.g.IsClosing())
 	case matterAttrMode:
 		return matterWCModeDefault, true
 	case matterAttrFeatureMap:
@@ -669,18 +833,24 @@ func (s garageWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields a
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
+		// A pending debounced GoTo write is stale intent once a
+		// full-open command lands — drop it before the immediate write.
+		s.g.matterGoTo.cancel(goToAxisLift)
 		// Target lift = fully open (0). WindowCoveringServer.ts:522.
 		err = s.g.Open(ctx, priority)
 		if err == nil {
 			s.g.matterTarget.setLift(0)
 		}
 	case matterCmdDownOrClose:
+		s.g.matterGoTo.cancel(goToAxisLift)
 		// Target lift = fully closed (10000). WindowCoveringServer.ts:546.
 		err = s.g.Close(ctx, priority)
 		if err == nil {
 			s.g.matterTarget.setLift(matterCoverPctMax)
 		}
 	case matterCmdStopMotion:
+		// Stop pre-empts queued motion — see coverWCServer.MatterInvoke.
+		s.g.matterGoTo.cancelAll()
 		// Snap the target back to the current position.
 		// WindowCoveringServer.ts:490 handleStopMovement.
 		err = s.g.Stop(ctx, priority)
@@ -692,11 +862,13 @@ func (s garageWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields a
 		if e != nil {
 			return nil, e
 		}
-		err = s.g.SetPosition(ctx, matterPct100thsToHMLevel(pct), priority)
-		if err == nil {
-			// WindowCoveringServer.ts:578.
-			s.g.matterTarget.setLift(pct)
-		}
+		// Target stored immediately (WindowCoveringServer.ts:578); the
+		// DOOR_COMMAND write is debounced — see [dispatchGoToPercentage].
+		dispatchGoToPercentage(ctx, &s.g.matterGoTo, goToAxisLift, s.g.Address, pct,
+			s.g.Position, s.g.matterTarget.setLift,
+			func(ctx context.Context, hmLevel float64) error {
+				return s.g.SetPosition(ctx, hmLevel, priority)
+			})
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -707,8 +879,14 @@ func (s garageWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields a
 	return nil, nil
 }
 
+// MatterReportable — see [coverWCServer.MatterReportable] for the
+// TargetPositionLift rationale.
 func (s garageWCServer) MatterReportable() []uint32 {
-	return []uint32{matterAttrCurrentPositionLiftPercent100ths, matterAttrOperationalStatus}
+	return []uint32{
+		matterAttrOperationalStatus,
+		matterAttrTargetPositionLiftPercent100ths,
+		matterAttrCurrentPositionLiftPercent100ths,
+	}
 }
 
 // MatterAttributes lists every WindowCovering (0x0102) attribute the

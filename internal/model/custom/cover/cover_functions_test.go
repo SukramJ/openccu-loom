@@ -907,6 +907,32 @@ func TestCoverTypeFor(t *testing.T) {
 	}
 }
 
+// TestCoverEndProductTypeFor pins the variant → EndProductType mapping.
+// EndProductType uses its own enum (matter.js
+// window-covering-cluster.element.ts:166-192) — it must never reuse
+// the TypeEnum code the same variant maps to in coverTypeFor.
+func TestCoverEndProductTypeFor(t *testing.T) {
+	cases := []struct {
+		v    CoverVariant
+		want uint8
+	}{
+		{VariantAwning, matterWCEndProductAwningTerracePatio},
+		{VariantCurtain, matterWCEndProductCentralCurtain},
+		{VariantShutter, matterWCEndProductRollerShutter},
+		{VariantWindow, matterWCEndProductRollerShutter},
+		{VariantShade, matterWCEndProductRollerShade},
+		{VariantDamper, matterWCEndProductRollerShade},
+		{VariantBlind, matterWCEndProductInteriorBlind},
+		{VariantGarage, matterWCEndProductRollerShade},
+		{CoverVariant(99), matterWCEndProductRollerShade}, // default
+	}
+	for _, tc := range cases {
+		if got := coverEndProductTypeFor(tc.v); got != tc.want {
+			t.Errorf("coverEndProductTypeFor(%v) = %d, want %d", tc.v, got, tc.want)
+		}
+	}
+}
+
 func TestHmLevelToMatterPct100thsEdgeCases(t *testing.T) {
 	// Over-clamp.
 	if v := hmLevelToMatterPct100ths(2.0); v != 0 {

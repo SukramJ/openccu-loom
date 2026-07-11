@@ -6,12 +6,15 @@ package endpoint_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -72,6 +75,31 @@ func dpKey(channelAddr, parameter string) hmtypes.DataPointKey {
 		ChannelAddress: channelAddr,
 		Parameter:      parameter,
 	}
+}
+
+// pressButtonDP builds an event-only press DP (a real generic.Button)
+// the way the resolver does for KEY / KEY_TRANSCEIVER channels, so the
+// assembler tests exercise the same shape production channels carry.
+func pressButtonDP(channelAddr string, p hmenum.Parameter) *generic.Button {
+	return generic.NewButton(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "iface",
+			ChannelAddress: channelAddr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(p),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeAction,
+			Operations: hmenum.OperationsEvent,
+		},
+	})
+}
+
+// dpKeyAllowChecker allows exactly the listed dp_key values.
+type dpKeyAllowChecker struct{ allowed map[string]bool }
+
+func (c dpKeyAllowChecker) IsExposed(_ context.Context, key store.EndpointKey) (bool, error) {
+	return c.allowed[key.DPKey], nil
 }
 
 // ─── Config.Validate ─────────────────────────────────────────────────
@@ -437,6 +465,186 @@ func TestAssemble_MeasurementDP_IncludedWhenFlagOn(t *testing.T) {
 	}
 }
 
+// ─── Button consolidation ────────────────────────────────────────────
+
+// TestAssemble_ButtonChannelConsolidatesPressDPs verifies that every
+// press-event DP of one channel lands on ONE GenericSwitch endpoint —
+// a physical button is one Matter switch; the §1.13 press-cycle events
+// only sequence correctly on a single cluster instance.
+func TestAssemble_ButtonChannelConsolidatesPressDPs(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := newDevice("BTN0001", "Taster")
+	ch := addChannel(dev, "BTN0001:1", 1)
+	for _, p := range []hmenum.Parameter{
+		hmenum.ParameterPressShort, hmenum.ParameterPressLong,
+		hmenum.ParameterPressCont, hmenum.ParameterPressLongRelease,
+	} {
+		ch.Put(pressButtonDP("BTN0001:1", p))
+	}
+
+	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
+	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	bridged := top.Bridged()
+	if len(bridged) != 1 {
+		t.Fatalf("expected ONE consolidated button endpoint, got %d", len(bridged))
+	}
+	ep := bridged[0]
+	if ep.SourceKey.DPKey != endpoint.ButtonGroupDPKey {
+		t.Errorf("DPKey = %q, want %q", ep.SourceKey.DPKey, endpoint.ButtonGroupDPKey)
+	}
+	if ep.SourceKey.DPKind != store.DPKindGeneric {
+		t.Errorf("DPKind = %q, want generic", ep.SourceKey.DPKind)
+	}
+	if ep.DeviceType != 0x000F {
+		t.Errorf("DeviceType = 0x%04X, want 0x000F (Generic Switch)", ep.DeviceType)
+	}
+	long, ok := ep.Measurement.(interface{ MatterSwitchSupportsLongPress() bool })
+	if !ok {
+		t.Fatal("Measurement must expose the GenericSwitchSource surface")
+	}
+	if !long.MatterSwitchSupportsLongPress() {
+		t.Error("group with PRESS_LONG members must advertise long press")
+	}
+}
+
+// TestAssemble_MultiButtonRemote_OneEndpointPerChannel verifies that a
+// multi-button remote keeps one endpoint per physical button: buttons
+// are separate channels, and consolidation happens per channel only.
+func TestAssemble_MultiButtonRemote_OneEndpointPerChannel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := newDevice("RC0001", "Fernbedienung")
+	for chNo := 1; chNo <= 2; chNo++ {
+		addr := fmt.Sprintf("RC0001:%d", chNo)
+		ch := addChannel(dev, addr, chNo)
+		ch.Put(pressButtonDP(addr, hmenum.ParameterPressShort))
+		ch.Put(pressButtonDP(addr, hmenum.ParameterPressLong))
+	}
+
+	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
+	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{dev}}})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	bridged := top.Bridged()
+	if len(bridged) != 2 {
+		t.Fatalf("expected one endpoint per button channel (2), got %d", len(bridged))
+	}
+	channels := map[int]bool{}
+	for _, ep := range bridged {
+		if ep.SourceKey.DPKey != endpoint.ButtonGroupDPKey {
+			t.Errorf("DPKey = %q, want %q", ep.SourceKey.DPKey, endpoint.ButtonGroupDPKey)
+		}
+		channels[ep.SourceKey.ChannelNo] = true
+	}
+	if !channels[1] || !channels[2] {
+		t.Errorf("expected endpoints for channels 1 and 2, got %v", channels)
+	}
+}
+
+// TestAssemble_ButtonGroupAllowlistPerMember verifies that the
+// allowlist stays per press parameter: only allowed members join the
+// group (a short-only exposure yields a group without long-press
+// support), and a fully denied channel produces no endpoint.
+func TestAssemble_ButtonGroupAllowlistPerMember(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	build := func() *device.Device {
+		dev := newDevice("BTN0002", "Taster")
+		ch := addChannel(dev, "BTN0002:1", 1)
+		ch.Put(pressButtonDP("BTN0002:1", hmenum.ParameterPressShort))
+		ch.Put(pressButtonDP("BTN0002:1", hmenum.ParameterPressLong))
+		return dev
+	}
+
+	a, _ := endpoint.New(newFakeStore(), validConfig(), nil)
+	a.SetExposureChecker(dpKeyAllowChecker{allowed: map[string]bool{"PRESS_SHORT": true}})
+	top, err := a.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build()}}})
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	bridged := top.Bridged()
+	if len(bridged) != 1 {
+		t.Fatalf("expected 1 endpoint (PRESS_SHORT allowed), got %d", len(bridged))
+	}
+	long, ok := bridged[0].Measurement.(interface{ MatterSwitchSupportsLongPress() bool })
+	if !ok {
+		t.Fatal("Measurement must expose the GenericSwitchSource surface")
+	}
+	if long.MatterSwitchSupportsLongPress() {
+		t.Error("group must not advertise long press when the long member is not allowlisted")
+	}
+
+	denyAll, _ := endpoint.New(newFakeStore(), validConfig(), nil)
+	denyAll.SetExposureChecker(dpKeyAllowChecker{allowed: map[string]bool{}})
+	top2, err := denyAll.Assemble(ctx, []endpoint.Snapshot{{CentralName: "ccu1", Devices: []*device.Device{build()}}})
+	if err != nil {
+		t.Fatalf("Assemble (deny all): %v", err)
+	}
+	if got := len(top2.Bridged()); got != 0 {
+		t.Errorf("expected no endpoint when every press member is denied, got %d", got)
+	}
+}
+
+// TestAssemble_ButtonGroupReplacesLegacyPerPressRows verifies the
+// deterministic store transition: persisted per-parameter endpoint
+// rows from the previous composition vanish from the assembled set and
+// are garbage-collected on a model-complete assembly, replaced by the
+// single consolidated row.
+func TestAssemble_ButtonGroupReplacesLegacyPerPressRows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := newDevice("BTN0003", "Taster")
+	ch := addChannel(dev, "BTN0003:1", 1)
+	ch.Put(pressButtonDP("BTN0003:1", hmenum.ParameterPressShort))
+	ch.Put(pressButtonDP("BTN0003:1", hmenum.ParameterPressLong))
+
+	fs := newFakeStore()
+	legacyKey := func(param string) store.EndpointKey {
+		return store.EndpointKey{
+			CentralName:   "ccu1",
+			DeviceAddress: "BTN0003",
+			ChannelNo:     1,
+			DPKind:        store.DPKindGeneric,
+			DPKey:         param,
+		}
+	}
+	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
+		if _, err := fs.UpsertEndpointAssigning(ctx, store.EndpointRecord{
+			Key:        legacyKey(param),
+			DeviceType: 0x000F,
+		}); err != nil {
+			t.Fatalf("seed legacy row: %v", err)
+		}
+	}
+
+	a, _ := endpoint.New(fs, validConfig(), nil)
+	if _, err := a.Assemble(ctx, []endpoint.Snapshot{
+		{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true},
+	}); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
+		if _, err := fs.GetEndpoint(ctx, legacyKey(param)); !errors.Is(err, store.ErrEndpointNotFound) {
+			t.Errorf("legacy row %s must be garbage-collected, got err=%v", param, err)
+		}
+	}
+	if _, err := fs.GetEndpoint(ctx, legacyKey(endpoint.ButtonGroupDPKey)); err != nil {
+		t.Errorf("consolidated BUTTON row must be persisted, got err=%v", err)
+	}
+}
+
 // ─── Stable IDs ──────────────────────────────────────────────────────
 
 func TestAssemble_StableEndpointIDs(t *testing.T) {
@@ -551,14 +759,15 @@ func TestAssemble_GCRemovesVanishedSources(t *testing.T) {
 	fs := newFakeStore()
 	a, _ := endpoint.New(fs, validConfig(), nil)
 
-	// Run 1: both.
-	snapBoth := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}}
+	// Run 1: both. ModelComplete vouches that the device list is the
+	// full fleet, so the assembler may treat absent rows as vanished.
+	snapBoth := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
 	if _, err := a.Assemble(ctx, []endpoint.Snapshot{snapBoth}); err != nil {
 		t.Fatalf("first Assemble: %v", err)
 	}
 
 	// Run 2: only dev1 (dev2 vanishes).
-	snap1Only := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}}
+	snap1Only := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
 	if _, err := a.Assemble(ctx, []endpoint.Snapshot{snap1Only}); err != nil {
 		t.Fatalf("second Assemble: %v", err)
 	}
@@ -573,6 +782,133 @@ func TestAssemble_GCRemovesVanishedSources(t *testing.T) {
 	}
 	if len(rows) == 1 && rows[0].Key.DeviceAddress != "GC0001" {
 		t.Errorf("remaining row has DeviceAddress=%q, want GC0001", rows[0].Key.DeviceAddress)
+	}
+}
+
+// TestAssemble_GCSkipsCentralWithIncompleteModel is the boot-wipe
+// regression: the daemon assembles the topology at start, before the
+// readiness-gated CCU device load, so a registered central presents an
+// EMPTY device list. That assembly must not delete the central's
+// persisted endpoint-ID rows — otherwise every restart renumbers the
+// bridged fleet and controllers lose their cached accessory mapping.
+func TestAssemble_GCSkipsCentralWithIncompleteModel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := newDevice("BOOT0001", "Dev")
+	ch := addChannel(dev, "BOOT0001:1", 1)
+	src := &stubEndpointSource{key: dpKey("BOOT0001:1", "LIGHT"), deviceType: 0x0100}
+	ch.SetCustomDataPoint(src)
+
+	fs := newFakeStore()
+	a, _ := endpoint.New(fs, validConfig(), nil)
+
+	// Run 1 (previous daemon life): full model — persists the row.
+	full := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
+	top1, err := a.Assemble(ctx, []endpoint.Snapshot{full})
+	if err != nil {
+		t.Fatalf("first Assemble: %v", err)
+	}
+	wantID := top1.Bridged()[0].ID
+
+	// Run 2 (boot of the next daemon life): the central is registered
+	// but its device load has not completed — empty Devices, not
+	// model-complete. The persisted row must survive.
+	boot := endpoint.Snapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
+	top2, err := a.Assemble(ctx, []endpoint.Snapshot{boot})
+	if err != nil {
+		t.Fatalf("boot Assemble: %v", err)
+	}
+	if got := len(top2.Bridged()); got != 0 {
+		t.Fatalf("boot topology has %d bridged endpoints, want 0", got)
+	}
+	rows, err := fs.ListEndpoints(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("ListEndpoints: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("boot assemble deleted persisted rows: store has %d rows for ccu1, want 1", len(rows))
+	}
+
+	// Run 3 (ready reassemble): the device load completed — the source
+	// must reappear under its persisted endpoint ID, not a fresh one.
+	top3, err := a.Assemble(ctx, []endpoint.Snapshot{full})
+	if err != nil {
+		t.Fatalf("ready Assemble: %v", err)
+	}
+	bridged := top3.Bridged()
+	if len(bridged) != 1 {
+		t.Fatalf("ready topology has %d bridged endpoints, want 1", len(bridged))
+	}
+	if bridged[0].ID != wantID {
+		t.Errorf("endpoint ID changed across the boot assemble: was %d, now %d", wantID, bridged[0].ID)
+	}
+}
+
+// TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly locks the
+// second half of the boot-wipe fix: exempting model-incomplete
+// snapshots must not disable GC permanently — once the central signals
+// model-complete again, genuinely vanished devices are still reaped.
+func TestAssemble_GCOfVanishedStillWorksAfterIncompleteAssembly(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev1 := newDevice("RDY0001", "DevA")
+	ch1 := addChannel(dev1, "RDY0001:1", 1)
+	src1 := &stubEndpointSource{key: dpKey("RDY0001:1", "LIGHT"), deviceType: 0x0100}
+	ch1.SetCustomDataPoint(src1)
+
+	dev2 := newDevice("RDY0002", "DevB")
+	ch2 := addChannel(dev2, "RDY0002:1", 1)
+	src2 := &stubEndpointSource{key: dpKey("RDY0002:1", "LIGHT"), deviceType: 0x0100}
+	ch2.SetCustomDataPoint(src2)
+
+	fs := newFakeStore()
+	a, _ := endpoint.New(fs, validConfig(), nil)
+
+	// Run 1 (previous daemon life): both devices persisted.
+	both := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1, dev2}, ModelComplete: true}
+	top1, err := a.Assemble(ctx, []endpoint.Snapshot{both})
+	if err != nil {
+		t.Fatalf("first Assemble: %v", err)
+	}
+	var wantDev1ID uint16
+	for _, ep := range top1.Bridged() {
+		if ep.SourceKey.DeviceAddress == "RDY0001" {
+			wantDev1ID = ep.ID
+		}
+	}
+
+	// Run 2 (boot): model incomplete — both rows survive.
+	boot := endpoint.Snapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
+	if _, err := a.Assemble(ctx, []endpoint.Snapshot{boot}); err != nil {
+		t.Fatalf("boot Assemble: %v", err)
+	}
+	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 2 {
+		t.Fatalf("boot assemble deleted persisted rows: store has %d rows for ccu1, want 2", len(rows))
+	}
+
+	// Run 3 (ready reassemble): dev2 was genuinely removed while the
+	// daemon was down. GC must reap it now that the model is complete,
+	// and dev1 must keep its persisted ID.
+	onlyDev1 := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev1}, ModelComplete: true}
+	top3, err := a.Assemble(ctx, []endpoint.Snapshot{onlyDev1})
+	if err != nil {
+		t.Fatalf("ready Assemble: %v", err)
+	}
+	rows, err := fs.ListEndpoints(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("ListEndpoints: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("store has %d rows for ccu1, want 1 (dev2 should be GC'd after ready)", len(rows))
+	}
+	if rows[0].Key.DeviceAddress != "RDY0001" {
+		t.Errorf("remaining row has DeviceAddress=%q, want RDY0001", rows[0].Key.DeviceAddress)
+	}
+	bridged := top3.Bridged()
+	if len(bridged) != 1 || bridged[0].ID != wantDev1ID {
+		t.Errorf("dev1 endpoint ID changed across the boot assemble: want %d, got %+v", wantDev1ID, bridged)
 	}
 }
 

@@ -30,6 +30,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 )
 
 // TestParityMatterJS_BasicInfoServer_ClusterID pins 0x0028.
@@ -268,25 +269,60 @@ func TestParityMatterJS_BasicInfoServer_HardwareVersionStringFallback(t *testing
 }
 
 // TestParityMatterJS_BasicInfoServer_SoftwareVersionStringFallback asserts
-// that an empty SoftwareVersionStr config field defaults to a non-empty
-// string. Same constraint as HardwareVersionString.
+// that an empty SoftwareVersionStr config field defaults to the decimal
+// rendering of the numeric SoftwareVersion, so the two attributes always
+// describe the same release.
 //
-// Mirrors matter.js packages/model/src/standard/elements/
-// basic-information.element.ts:47 SoftwareVersionString constraint "1 to 64".
+// Mirrors matter.js packages/node/src/behaviors/basic-information/
+// BasicInformationServer.ts:71
+// `setDefault("softwareVersionString", state.softwareVersion.toString())`
+// and the packages/model/src/standard/elements/
+// basic-information.element.ts:47 SoftwareVersionString constraint
+// "1 to 64" (satisfied because even 0 renders as one byte).
 func TestParityMatterJS_BasicInfoServer_SoftwareVersionStringFallback(t *testing.T) {
 	t.Parallel()
-	cfg := validBasicInfoConfig()
-	cfg.SoftwareVersionStr = "" // trigger fallback
-	b, err := core.NewBasicInformation(cfg)
-	if err != nil {
-		t.Fatalf("NewBasicInformation: %v", err)
+	cases := []struct {
+		name     string
+		numeric  uint32
+		wantStr  string
+		wanteNum uint32
+	}{
+		// matter.js dev default: softwareVersion 0 → string "0".
+		{name: "zero numeric", numeric: 0, wantStr: "0", wanteNum: 0},
+		{name: "release numeric", numeric: 42, wantStr: "42", wanteNum: 42},
 	}
-	v, ok := b.MatterRead(0x000A)
-	if !ok {
-		t.Fatal("SoftwareVersionString: ok=false")
-	}
-	if v == nil {
-		t.Error("SoftwareVersionString is nil — constraint min=1 violated (Apple HAP abort)")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := validBasicInfoConfig()
+			cfg.SoftwareVersion = tc.numeric
+			cfg.SoftwareVersionStr = "" // trigger fallback
+			b, err := core.NewBasicInformation(cfg)
+			if err != nil {
+				t.Fatalf("NewBasicInformation: %v", err)
+			}
+			v, ok := b.MatterRead(0x000A)
+			if !ok {
+				t.Fatal("SoftwareVersionString: ok=false")
+			}
+			bs, isBounded := v.(tlv.BoundedString)
+			if !isBounded {
+				t.Fatalf("SoftwareVersionString = %T, want tlv.BoundedString", v)
+			}
+			if bs.Value == "" {
+				t.Error("SoftwareVersionString is empty — constraint min=1 violated (Apple HAP abort)")
+			}
+			if bs.Value != tc.wantStr {
+				t.Errorf("SoftwareVersionString = %q, want %q (matter.js BasicInformationServer.ts:71 toString derivation)", bs.Value, tc.wantStr)
+			}
+			n, ok := b.MatterRead(0x0009)
+			if !ok {
+				t.Fatal("SoftwareVersion: ok=false")
+			}
+			if got := n.(uint32); got != tc.wanteNum {
+				t.Errorf("SoftwareVersion = %d, want %d", got, tc.wanteNum)
+			}
+		})
 	}
 }
 

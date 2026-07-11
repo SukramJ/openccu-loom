@@ -47,13 +47,29 @@ func TestSendReceive_WindowCovering(t *testing.T) {
 		if _, err := b.SharedCtl.Invoke(ctx, t, "windowcovering", "go-to-lift-percentage", ep, "7500"); err != nil {
 			t.Fatalf("invoke go-to-lift-percentage: %v", err)
 		}
-		got, ok := b.CCU.GetDPValue(address, "LEVEL")
+		// GoTo*Percentage commands are slider-gesture debounced: the
+		// bridge acknowledges immediately and defers the radio write
+		// (~400 ms gesture-start delay) so controller slider drags
+		// coalesce into one duty-cycle-friendly write. Poll for the
+		// deferred CCU write instead of a tight readback.
+		// UpOrOpen/DownOrClose/Stop stay immediate writes.
+		deadline := time.Now().Add(2500 * time.Millisecond)
+		var got any
+		var ok bool
+		for {
+			got, ok = b.CCU.GetDPValue(address, "LEVEL")
+			if ok && valueNear(got, 0.25, 0.01) {
+				return
+			}
+			if time.Now().After(deadline) {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 		if !ok {
-			t.Fatalf("LEVEL absent on CCU after go-to-lift-percentage")
+			t.Fatalf("LEVEL absent on CCU after go-to-lift-percentage (waited 2.5s for the debounced write)")
 		}
-		if !valueNear(got, 0.25, 0.01) {
-			t.Fatalf("CCU LEVEL = %v, want ~0.25", got)
-		}
+		t.Fatalf("CCU LEVEL = %v, want ~0.25 (waited 2.5s for the debounced write)", got)
 	})
 
 	// SEND — DownOrClose must drive LEVEL to fully closed (0.0).

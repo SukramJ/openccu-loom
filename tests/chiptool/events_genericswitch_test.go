@@ -86,11 +86,11 @@ func TestSendReceive_GenericSwitch(t *testing.T) {
 		t.Skip("no GenericSwitch (0x003B) endpoint materialised for HmIP-BSM's button channel")
 	}
 
-	// Each PRESS_* DP materialises its OWN GenericSwitch endpoint, so fire the DP
-	// that backs THIS endpoint (no preferDPKeys) — the InitialPress event then
-	// emits on the endpoint we subscribed to. Resolving with a fixed
-	// preferDPKeys would target a sibling endpoint's DP and the report would
-	// land on an endpoint we are not watching.
+	// All PRESS_* DPs of one physical button (channel) consolidate into ONE
+	// GenericSwitch endpoint driven by a shared press-cycle state machine, so
+	// fire the DP the resolver maps to THIS endpoint (no preferDPKeys) — any
+	// press parameter of the group feeds the same cluster, and the
+	// InitialPress event emits on the endpoint we subscribed to.
 	address, dpKey, ok := b.ResolveCCUAddress(ctx, t, ep, 0x003B)
 	if !ok {
 		t.Fatalf("could not resolve CCU address for GenericSwitch endpoint %d", ep)

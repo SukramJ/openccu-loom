@@ -247,6 +247,61 @@ func TestParityMatterJS_AggregatorTopology_PartsListContainsBridgedIDs(t *testin
 	}
 }
 
+// TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval verifies the
+// endpoint-number persistence contract: a persisted endpoint number is only
+// released when the source is known to have been removed, never because the
+// data source has not been populated yet.
+//
+// Mirrors matter.js packages/node/src/storage/server/ServerEndpointStores.ts:
+// load() pre-allocates every persisted number ("Ensure all known numbers are
+// allocated") and assignNumber() reuses the stored number; the only release
+// path is eraseStoreForEndpoint, invoked from
+// packages/node/src/node/server/ServerEndpointInitializer.ts eraseDescendant
+// on explicit endpoint deletion. An assembly run over a central whose model
+// is not yet complete must therefore behave like matter.js's "unknown
+// endpoints initialize before known endpoints" case — numbers stay reserved.
+func TestParityMatterJS_EndpointNumbersReservedUntilExplicitRemoval(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dev := device.New(device.Config{Address: "NUM0001", Name: "Persist Test"})
+	ch := dev.AddChannel("NUM0001:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	ch.SetCustomDataPoint(&stubEndpointSource{
+		key:        dpKey("NUM0001:1", "ON_OFF"),
+		deviceType: 0x010A,
+	})
+
+	fs := newFakeStore()
+	a, _ := endpoint.New(fs, validConfig(), nil)
+
+	full := endpoint.Snapshot{CentralName: "ccu1", Devices: []*device.Device{dev}, ModelComplete: true}
+	top1, err := a.Assemble(ctx, []endpoint.Snapshot{full})
+	if err != nil {
+		t.Fatalf("Assemble(full): %v", err)
+	}
+	assigned := top1.Bridged()[0].ID
+
+	// A model-incomplete assembly (the boot-time shape) keeps the number
+	// reserved even though the source is currently absent.
+	incomplete := endpoint.Snapshot{CentralName: "ccu1", Devices: nil, ModelComplete: false}
+	if _, err := a.Assemble(ctx, []endpoint.Snapshot{incomplete}); err != nil {
+		t.Fatalf("Assemble(incomplete): %v", err)
+	}
+	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 1 || rows[0].EndpointID != assigned {
+		t.Fatalf("persisted endpoint number not reserved across incomplete assembly: rows=%v", rows)
+	}
+
+	// Only a model-complete assembly without the source (the explicit
+	// removal case) releases the number.
+	removed := endpoint.Snapshot{CentralName: "ccu1", Devices: nil, ModelComplete: true}
+	if _, err := a.Assemble(ctx, []endpoint.Snapshot{removed}); err != nil {
+		t.Fatalf("Assemble(removed): %v", err)
+	}
+	if rows, _ := fs.ListEndpoints(ctx, "ccu1"); len(rows) != 0 {
+		t.Fatalf("explicit removal did not release the endpoint number: rows=%v", rows)
+	}
+}
+
 // TestParityMatterJS_BridgedEndpoint_ServerListDerivedFromMountedClusters
 // verifies that a bridged endpoint's Descriptor.ServerList (attribute 0x0001)
 // is derived from the set of cluster IDs actually mounted on that endpoint,

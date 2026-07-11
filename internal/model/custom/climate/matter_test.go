@@ -251,20 +251,25 @@ func TestThermostatSystemModeWriteCoolRejectedHeatOnly(t *testing.T) {
 	}
 }
 
-// TestThermostatCoolCapableDeviceAdvertisesCoolAndAutoAttributes proves
-// the gating keys off the FeatureMap rather than a hardcoded exclusion:
-// a Climate whose Capabilities advertise SupportsCool (and therefore, by
-// [climateThermostatServer.featureMap], HEAT+COOL+AUTO) must list and
-// serve the Cool-setpoint and RunningMode attributes, and must accept a
-// SystemMode=Auto write.
-func TestThermostatCoolCapableDeviceAdvertisesCoolAndAutoAttributes(t *testing.T) {
+// TestThermostatCoolCapableDeviceAdvertisesCoolWithoutAuto proves the
+// COOL gating keys off the FeatureMap while AUTO stays off even on a
+// cooling-capable profile: a Climate whose Capabilities advertise
+// SupportsCool lists and serves the Cool-setpoint attributes, but the
+// FeatureMap must not carry AUTO (HM climates are single-setpoint and
+// the projection implements no MinSetpointDeadBand, which AUTO
+// mandates), so ThermostatRunningMode stays absent and a
+// SystemMode=Auto write is rejected with ConstraintError.
+func TestThermostatCoolCapableDeviceAdvertisesCoolWithoutAuto(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
 	srv := findCluster(t, r.climate, 0x0201)
 
 	fm, ok := srv.MatterRead(matterAttrFeatureMap)
-	if !ok || fm.(uint32)&(matterThermFeatureHeat|matterThermFeatureCool|matterThermFeatureAuto) !=
-		matterThermFeatureHeat|matterThermFeatureCool|matterThermFeatureAuto {
-		t.Fatalf("FeatureMap = (%v, %v), want HEAT|COOL|AUTO", fm, ok)
+	if !ok || fm.(uint32)&(matterThermFeatureHeat|matterThermFeatureCool) !=
+		matterThermFeatureHeat|matterThermFeatureCool {
+		t.Fatalf("FeatureMap = (%v, %v), want HEAT|COOL", fm, ok)
+	}
+	if fm.(uint32)&matterThermFeatureAuto != 0 {
+		t.Fatalf("FeatureMap = 0x%08X advertises AUTO on a single-setpoint device without MinSetpointDeadBand", fm)
 	}
 
 	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
@@ -276,7 +281,6 @@ func TestThermostatCoolCapableDeviceAdvertisesCoolAndAutoAttributes(t *testing.T
 		matterAttrThermOccupiedCoolSp: "OccupiedCoolingSetpoint",
 		matterAttrThermMinCoolSp:      "MinCoolSetpointLimit",
 		matterAttrThermMaxCoolSp:      "MaxCoolSetpointLimit",
-		matterAttrThermRunningMode:    "ThermostatRunningMode",
 	}
 	got := make(map[uint32]bool, len(attrs))
 	for _, id := range attrs {
@@ -290,24 +294,101 @@ func TestThermostatCoolCapableDeviceAdvertisesCoolAndAutoAttributes(t *testing.T
 			t.Errorf("MatterRead(%s / 0x%04X) reports not-present on a heat+cool device", name, id)
 		}
 	}
+	if got[matterAttrThermRunningMode] {
+		t.Error("MatterAttributes() lists ThermostatRunningMode (0x001E) without the AUTO feature")
+	}
+	if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
+		t.Error("MatterRead(ThermostatRunningMode) should report not-present without the AUTO feature")
+	}
 
-	if err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto, hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("SystemMode=Auto write on a heat+cool device should be accepted, got: %v", err)
+	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto, hmenum.CommandPriorityHigh)
+	var sc im.StatusCodeError
+	if !errors.As(err, &sc) || sc.MatterStatusCode() != im.StatusConstraintError {
+		t.Errorf("SystemMode=Auto write without the AUTO feature = %v, want ConstraintError", err)
 	}
 }
 
-// TestThermostatSystemModeReadFromHmModeAuto routes the Climate's Auto
-// mode through to Matter SystemMode=1.
-func TestThermostatSystemModeReadFromHmModeAuto(t *testing.T) {
-	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
-	r.climate.mu.Lock()
-	r.climate.mode = ModeAuto
-	r.climate.hasMode = true
-	r.climate.mu.Unlock()
-	srv := findCluster(t, r.climate, 0x0201)
-	v, ok := srv.MatterRead(0x001C)
-	if !ok || v.(uint8) != matterSysModeAuto {
-		t.Fatalf("SystemMode = (%v, %v), want (1, true)", v, ok)
+// TestThermostatSystemModeReadClampsHmAutoToFeatureMap asserts the
+// SystemMode read never surfaces Auto(1) when the FeatureMap does not
+// advertise the AUTO feature — Auto has conformance "AUTO" per matter.js
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:558.
+// HM's factory-default AUTO (week-program) mode is a single-setpoint
+// schedule and projects onto Heat, or Cool when a hybrid device is
+// currently in its COOLING direction. The clamp keeps reads and the
+// write gate consistent: a controller echoing the read value back on
+// state sync must not receive ConstraintError.
+func TestThermostatSystemModeReadClampsHmAutoToFeatureMap(t *testing.T) {
+	setAutoMode := func(c *Climate) {
+		c.mu.Lock()
+		c.mode = ModeAuto
+		c.hasMode = true
+		c.mu.Unlock()
+	}
+
+	t.Run("heat-only device surfaces Heat", func(t *testing.T) {
+		w := &stubWriter{}
+		r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
+		setAutoMode(r.climate)
+		srv := findCluster(t, r.climate, 0x0201)
+		v, ok := srv.MatterRead(matterAttrThermSystemMode)
+		if !ok || v.(uint8) != matterSysModeHeat {
+			t.Fatalf("SystemMode = (%v, %v), want (4 Heat, true)", v, ok)
+		}
+		// The read value must survive the write gate when echoed back.
+		if err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, v, hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("echoing the read SystemMode back must not error, got: %v", err)
+		}
+	})
+
+	t.Run("cool-capable device in cooling direction surfaces Cool", func(t *testing.T) {
+		r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
+		setAutoMode(r.climate)
+		r.climate.OnHeatingCooling("COOLING")
+		srv := findCluster(t, r.climate, 0x0201)
+		v, ok := srv.MatterRead(matterAttrThermSystemMode)
+		if !ok || v.(uint8) != matterSysModeCool {
+			t.Fatalf("SystemMode = (%v, %v), want (3 Cool, true)", v, ok)
+		}
+	})
+
+	t.Run("cool-capable device in heating direction surfaces Heat", func(t *testing.T) {
+		r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
+		setAutoMode(r.climate)
+		srv := findCluster(t, r.climate, 0x0201)
+		v, ok := srv.MatterRead(matterAttrThermSystemMode)
+		if !ok || v.(uint8) != matterSysModeHeat {
+			t.Fatalf("SystemMode = (%v, %v), want (4 Heat, true)", v, ok)
+		}
+	})
+}
+
+// TestThermostatRunningModeValueNeverAuto pins the value space of the
+// RunningMode projection to ThermostatRunningModeEnum, which has no
+// Auto member — Off(0)/Cool(3)/Heat(4) only, matter.js
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:568-573.
+// HM's AUTO mode maps onto the active HEATING_COOLING direction.
+func TestThermostatRunningModeValueNeverAuto(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
+	srv := climateThermostatServer{c: r.climate}
+
+	if got := srv.runningModeFromHmMode(ModeAuto); got != matterRunningModeHeat {
+		t.Errorf("runningModeFromHmMode(ModeAuto) heating direction = %d, want 4 (Heat)", got)
+	}
+	r.climate.OnHeatingCooling("COOLING")
+	if got := srv.runningModeFromHmMode(ModeAuto); got != matterRunningModeCool {
+		t.Errorf("runningModeFromHmMode(ModeAuto) cooling direction = %d, want 3 (Cool)", got)
+	}
+	for _, c := range []struct {
+		mode Mode
+		want uint8
+	}{
+		{ModeOff, matterRunningModeOff},
+		{ModeHeat, matterRunningModeHeat},
+		{ModeCool, matterRunningModeCool},
+	} {
+		if got := srv.runningModeFromHmMode(c.mode); got != c.want {
+			t.Errorf("runningModeFromHmMode(%s) = %d, want %d", c.mode, got, c.want)
+		}
 	}
 }
 

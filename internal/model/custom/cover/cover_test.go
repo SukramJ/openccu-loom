@@ -42,6 +42,9 @@ func newRig(t *testing.T, address string, w Writer, caps custom.CoverCapabilitie
 	})
 	ch.Put(level)
 	c := New(Config{Channel: ch, Writer: w, Capabilities: caps})
+	// Deferred GoTo*Percentage writes fire only via flushGoToWrites so
+	// tests stay deterministic.
+	neuterGoToTimers(&c.matterGoTo)
 	return c, ch, level
 }
 

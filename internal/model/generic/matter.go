@@ -86,10 +86,13 @@ func matterMeasurementForParameter(p hmenum.Parameter) interfaces.MatterMeasurem
 
 // matterMeasurementForBinaryParameter handles the binary-sensor
 // classification distinct from the analog one because several
-// parameters (MOTION, contact STATE, OPEN, SABOTAGE, leak WATER) only
-// make sense as boolean sources. Battery alerts (LOWBAT / LOW_BAT)
-// also surface here so the bridge can roll them up onto the host
-// endpoint's PowerSource cluster.
+// parameters (MOTION, contact STATE, OPEN, SABOTAGE) only make sense
+// as boolean sources. Leak/moisture parameters are not classified yet;
+// when they are wired they map to the Leak class, which materialises
+// as a ContactSensor endpoint (see
+// interfaces.MatterMeasurementClassDeviceType for the rationale).
+// Battery alerts (LOWBAT / LOW_BAT) also surface here so the bridge
+// can roll them up onto the host endpoint's PowerSource cluster.
 func matterMeasurementForBinaryParameter(p hmenum.Parameter) interfaces.MatterMeasurementClass {
 	switch p {
 	case hmenum.ParameterMotion, hmenum.ParameterMotionDetectionActive:

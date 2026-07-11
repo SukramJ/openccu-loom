@@ -49,7 +49,9 @@ func TestMatterMeasurementClassDeviceType(t *testing.T) {
 		{interfaces.MatterMeasurementPM10, 0x002C},
 		{interfaces.MatterMeasurementOccupancy, 0x0107},
 		{interfaces.MatterMeasurementContact, 0x0015},
-		{interfaces.MatterMeasurementLeak, 0x0043},
+		// Leak → ContactSensor (0x0015), NOT WaterLeakDetector (0x0043);
+		// see TestLeakClassMapsToContactSensorDeviceType.
+		{interfaces.MatterMeasurementLeak, 0x0015},
 		{interfaces.MatterMeasurementMomentarySwitch, 0x000F},
 		// Battery / Power / Energy → 0 (no standalone device type).
 		{interfaces.MatterMeasurementBattery, 0},
@@ -64,6 +66,32 @@ func TestMatterMeasurementClassDeviceType(t *testing.T) {
 			t.Errorf("MatterMeasurementClassDeviceType(%v) = 0x%04X, want 0x%04X",
 				tc.class, got, tc.want)
 		}
+	}
+}
+
+// TestLeakClassMapsToContactSensorDeviceType pins the deliberate
+// device-type divergence for the Leak measurement class: it
+// materialises as ContactSensor (0x0015, matter.js
+// packages/model/src/standard/elements/contact-sensor.element.ts)
+// rather than the dedicated WaterLeakDetector (0x0043, matter.js
+// packages/model/src/standard/elements/water-leak-detector.element.ts).
+// Controllers whose bridge support predates the Matter-1.3 detector
+// device types (Amazon Alexa) drop the ENTIRE bridged node when a
+// single endpoint advertises 0x0043. Recorded in
+// docs/parity/by_design.md.
+func TestLeakClassMapsToContactSensorDeviceType(t *testing.T) {
+	t.Parallel()
+	got := interfaces.MatterMeasurementClassDeviceType(interfaces.MatterMeasurementLeak)
+	if got == 0x0043 {
+		t.Fatalf("MatterMeasurementLeak maps to WaterLeakDetector (0x0043); must stay ContactSensor (0x0015) — one 0x0043 endpoint breaks whole-bridge support on pinned controllers")
+	}
+	if got != 0x0015 {
+		t.Fatalf("MatterMeasurementClassDeviceType(Leak) = 0x%04X, want 0x0015 (ContactSensor)", got)
+	}
+	// The cluster slot stays BooleanState (0x0045) — ContactSensor's
+	// mandatory server cluster per contact-sensor.element.ts.
+	if cl := interfaces.MatterMeasurementClassClusterID(interfaces.MatterMeasurementLeak); cl != 0x0045 {
+		t.Fatalf("MatterMeasurementClassClusterID(Leak) = 0x%04X, want 0x0045 (BooleanState)", cl)
 	}
 }
 

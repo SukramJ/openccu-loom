@@ -24,6 +24,23 @@ type Snapshot struct {
 	// at snapshot time. nil-safe — empty slice produces zero
 	// endpoints.
 	Devices []*device.Device
+	// ModelComplete reports whether this central's initial device load
+	// has finished, i.e. Devices is the authoritative full fleet rather
+	// than a boot-time (still-empty or partially loaded) view. The
+	// assembler only garbage-collects persisted endpoint-ID rows for
+	// model-complete snapshots: the topology is first assembled at
+	// daemon start, before the readiness-gated CCU device load, and a
+	// central that has not loaded yet must keep every persisted
+	// endpoint number so its bridged endpoints reappear under their old
+	// IDs once the load completes. Mirrors matter.js, which reserves
+	// every persisted endpoint number at node initialization
+	// (packages/node/src/storage/server/ServerEndpointStores.ts,
+	// assignNumber + the load() pre-allocation pass) and releases one
+	// only on explicit endpoint deletion
+	// (packages/node/src/node/server/ServerEndpointInitializer.ts,
+	// eraseDescendant) — never because state has not been populated yet.
+	// See BD-Matter-EndpointID-Persistent in docs/parity/by_design.md.
+	ModelComplete bool
 }
 
 // Endpoint describes one Matter endpoint in the assembled topology.

@@ -163,19 +163,21 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			slog.String("hint", "per-boot UniqueID salt active — accessory recognition will fail across restarts; toggle north.matter.dev_rotate_unique_ids=false for production"))
 	}
 
-	snap := func(_ context.Context) []endpoint.Snapshot {
-		var out []endpoint.Snapshot
-		for _, u := range reg.List() {
-			if u == nil || u.ModelRegistry == nil {
-				continue
-			}
-			out = append(out, endpoint.Snapshot{
-				CentralName: u.Name(),
-				Devices:     u.ModelRegistry.List(),
-			})
+	// Latch per-central southbound readiness BEFORE the first assembly
+	// (Bridge.Start below) so the snapshotter can stamp
+	// [endpoint.Snapshot.ModelComplete]. The boot-time assembly runs before
+	// the readiness-gated CCU device load, so every registered central
+	// briefly presents an empty ModelRegistry; without the latch the
+	// assembler's vanished-source GC would read that as "all devices
+	// removed" and wipe the persisted endpoint-ID rows on every boot,
+	// renumbering the bridged fleet for paired controllers.
+	readiness, readinessUnsubs := wireMatterCentralReadiness(reg)
+	unwireReadiness := func() {
+		for _, unsub := range readinessUnsubs {
+			unsub()
 		}
-		return out
 	}
+	snap := matterSnapshotter(reg, readiness)
 
 	advertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; subtype responder uses context.Background() with a nolint inside
 	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
@@ -190,6 +192,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
+		unwireReadiness()
 		return nil
 	}
 
@@ -200,6 +203,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 
 	if err := bridge.Start(ctx); err != nil {
 		logger.Warn("matter.bridge.start", slog.String("err", err.Error()))
+		unwireReadiness()
 		return nil
 	}
 	// mDNS Re-Announce-Loop: grandcat/zeroconf only Probe+Announce on
@@ -516,6 +520,15 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	// packages/protocol/src/session/SessionManager.ts — close
 	// callbacks chain into SubscriptionHandler cleanup.
 	opMgr.SetOnSessionClose(subMgr.CloseSession)
+
+	// Wire the session manager into the Secure-Channel path so the
+	// bridge (a) closes sessions on inbound CloseSession StatusReports,
+	// (b) ships a best-effort outbound CloseSession StatusReport before
+	// zeroising keys on reap/eviction/shutdown, and (c) resumes mDNS
+	// broadcast once a peer's last session is gone. Mirrors matter.js
+	// packages/protocol/src/protocol/ExchangeManager.ts #sendCloseSession
+	// and SecureChannelProtocol.ts inbound-close handling.
+	bridge.AttachSessionRegistry(opMgr)
 
 	// Initial value warm-up REMOVED. A previous per-device LoadAllValues
 	// sweep ran here so Apple Home's HAP-mapper would see observed
@@ -891,6 +904,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	stop := func() { //nolint:contextcheck // shutdown path must not inherit the (potentially cancelled) daemon ctx
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		unwireReadiness()
 		if stopReannounce != nil {
 			stopReannounce()
 		}
@@ -1529,12 +1543,18 @@ func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matter
 		return hex.EncodeToString(h[:8])
 	}()
 	bi, err := mattercore.NewBasicInformation(mattercore.Config{
-		VendorID:        mc.VendorID,
-		ProductID:       mc.ProductID,
-		NodeLabel:       mc.NodeLabel,
-		VendorName:      "openccu-loom",
-		ProductName:     "openccu-loom Matter Bridge",
-		SoftwareVersion: 1,
+		VendorID:    mc.VendorID,
+		ProductID:   mc.ProductID,
+		NodeLabel:   mc.NodeLabel,
+		VendorName:  "openccu-loom",
+		ProductName: "openccu-loom Matter Bridge",
+		// SoftwareVersion is derived from the same build string that feeds
+		// SoftwareVersionStr so the two attributes always describe the
+		// same release — matter.js keeps the pair consistent by deriving
+		// one from the other (BasicInformationServer.ts:71), and a
+		// divergent pair (the previous hard-coded 1 next to "0.32.1")
+		// crashes at least one ecosystem hub during bridge sync.
+		SoftwareVersion: mattercore.SoftwareVersionFromString(build.Version),
 		// SoftwareVersionStr carries the human-readable daemon build so
 		// controllers display a real version. HardwareVersionStr is a
 		// deliberate constant — a software bridge has no hardware revision,
@@ -2768,6 +2788,89 @@ func runMatterReassemble(ctx context.Context, reassemble func(context.Context) e
 	}()
 	if err := reassemble(ctx); err != nil {
 		logger.Warn("matter.reassemble_on_ready.failed", slog.String("err", err.Error()))
+	}
+}
+
+// matterCentralReadiness latches which centrals have completed their initial
+// southbound bring-up (the readiness-gated CCU device load). The Matter
+// snapshotter consults it to stamp [endpoint.Snapshot.ModelComplete] so the
+// assembler's vanished-source GC only trusts centrals whose ModelRegistry is
+// authoritative — a central still waiting on its CCU must keep its persisted
+// endpoint-ID rows (see [endpoint.Snapshot.ModelComplete]).
+//
+// Ready is latched and never cleared: the loaded model survives mid-life CCU
+// reconnects, so the registry view stays authoritative once the initial load
+// has completed. Safe for concurrent use — the snapshotter reads from the
+// bridge's assembly path while the event-bus dispatch writes.
+type matterCentralReadiness struct {
+	mu    sync.RWMutex
+	ready map[string]struct{}
+}
+
+func newMatterCentralReadiness() *matterCentralReadiness {
+	return &matterCentralReadiness{ready: make(map[string]struct{})}
+}
+
+// markReady latches centralName as model-complete.
+func (r *matterCentralReadiness) markReady(centralName string) {
+	r.mu.Lock()
+	r.ready[centralName] = struct{}{}
+	r.mu.Unlock()
+}
+
+// isReady reports whether centralName has completed its initial device load.
+func (r *matterCentralReadiness) isReady(centralName string) bool {
+	r.mu.RLock()
+	_, ok := r.ready[centralName]
+	r.mu.RUnlock()
+	return ok
+}
+
+// wireMatterCentralReadiness subscribes to every registered central's
+// CentralSouthboundReadyEvent and latches per-central readiness into the
+// returned tracker. Returns the tracker plus the subscription closers.
+//
+// Failure direction is deliberate: a central whose ready event is never
+// observed stays "model-incomplete", which only defers the assembler's
+// vanished-source GC for that central — persisted endpoint IDs are never
+// deleted on stale information.
+func wireMatterCentralReadiness(reg *central.Registry) (readiness *matterCentralReadiness, unsubs []func()) {
+	readiness = newMatterCentralReadiness()
+	if reg == nil {
+		return readiness, nil
+	}
+	units := reg.List()
+	unsubs = make([]func(), 0, len(units))
+	for _, u := range units {
+		if u == nil || u.EventBus == nil {
+			continue
+		}
+		unsubs = append(unsubs, events.Subscribe(u.EventBus, func(e hmevent.CentralSouthboundReadyEvent) {
+			readiness.markReady(e.CentralName)
+		}))
+	}
+	return readiness, unsubs
+}
+
+// matterSnapshotter builds the bridge's topology snapshotter: one
+// [endpoint.Snapshot] per registered central, read live from the central
+// registry so runtime-added centrals surface on the next assembly. Each
+// snapshot's ModelComplete flag is stamped from the readiness latch; a nil
+// readiness marks every central model-incomplete (the GC-off fail-safe).
+func matterSnapshotter(reg *central.Registry, readiness *matterCentralReadiness) matterbridge.Snapshotter {
+	return func(_ context.Context) []endpoint.Snapshot {
+		var out []endpoint.Snapshot
+		for _, u := range reg.List() {
+			if u == nil || u.ModelRegistry == nil {
+				continue
+			}
+			out = append(out, endpoint.Snapshot{
+				CentralName:   u.Name(),
+				Devices:       u.ModelRegistry.List(),
+				ModelComplete: readiness != nil && readiness.isReady(u.Name()),
+			})
+		}
+		return out
 	}
 }
 

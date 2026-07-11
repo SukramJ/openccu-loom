@@ -112,7 +112,9 @@ func TestMeasurementDeviceType(t *testing.T) {
 		{interfaces.MatterMeasurementPM10, 0x002C},
 		{interfaces.MatterMeasurementOccupancy, 0x0107},
 		{interfaces.MatterMeasurementContact, 0x0015},
-		{interfaces.MatterMeasurementLeak, 0x0043},
+		// Leak rides on ContactSensor (0x0015), not WaterLeakDetector
+		// (0x0043) — see interfaces.MatterMeasurementClassDeviceType.
+		{interfaces.MatterMeasurementLeak, 0x0015},
 		{interfaces.MatterMeasurementMomentarySwitch, 0x000F},
 		{interfaces.MatterMeasurementBattery, 0x0000},
 		{interfaces.MatterMeasurementPower, 0x0000},

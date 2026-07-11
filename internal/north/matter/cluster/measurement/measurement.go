@@ -614,9 +614,11 @@ func hPaToMatter(hpa float64) int16 {
 // --- BooleanState (0x0045) ---------------------------------------------
 
 // BooleanStateServer projects a [interfaces.MatterBoolMeasurementSource]
-// onto Matter BooleanState. Used for ContactSensor / WaterLeakDetector
-// / generic alarm endpoints. The polarity is set by the model-layer
-// classifier (see `internal/model/generic/matter.go::matterMeasurementForBinaryParameter`).
+// onto Matter BooleanState. Used for ContactSensor and generic alarm
+// endpoints (leak-class sensors also materialise as ContactSensor —
+// see `pkg/interfaces/matter.go::MatterMeasurementClassDeviceType`).
+// The polarity is set by the model-layer classifier (see
+// `internal/model/generic/matter.go::matterMeasurementForBinaryParameter`).
 //
 // BooleanStateServer embeds [cluster.DataVersionTracker] and implements
 // [interfaces.MatterClusterDataVersion]. See TemperatureServer for the

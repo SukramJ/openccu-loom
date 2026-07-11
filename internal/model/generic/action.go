@@ -76,40 +76,12 @@ func (a *Action) MatterSwitchSupportsLongPress() bool {
 }
 
 // WireMatterSwitchHandler mirrors [Button.WireMatterSwitchHandler]
-// for Action DPs. ACTION-typed parameters fire on every Trigger
-// invocation; the value comparison in OnUpdate is therefore against
-// any non-nil change, since Action's underlying type is `any`.
+// for Action DPs. Single-DP convenience wrapper: it wires a
+// [ButtonGroup] of one so a lone Action follows the same Matter §1.13
+// press-cycle state machine (PRESS_CONT suppression, LongPress
+// synthesis before LongRelease) as a fully populated channel group.
+// The Matter endpoint assembler does not use this path — it
+// consolidates every press DP of a channel into one shared ButtonGroup.
 func (a *Action) WireMatterSwitchHandler(h MatterSwitchEventEmitter) func() {
-	if h == nil {
-		return func() {}
-	}
-	param := hmenum.Parameter(a.Key.Parameter)
-	return a.OnUpdate(func(_, next any) {
-		if next == nil {
-			return
-		}
-		// A `false` boolean is also a no-op — Action ACTION wire
-		// type usually carries `true` to indicate "fire", but
-		// defensively skip.
-		if b, ok := next.(bool); ok && !b {
-			return
-		}
-		switch param {
-		case hmenum.ParameterPress, hmenum.ParameterPressShort:
-			h.FireInitialPress(1)
-			h.FireShortRelease(0)
-		case hmenum.ParameterPressLong, hmenum.ParameterPressLongStart:
-			h.FireInitialPress(1)
-			h.FireLongPress(1)
-		case hmenum.ParameterPressLongRelease:
-			h.FireLongRelease(0)
-		case hmenum.ParameterPressCont:
-			h.FireLongPress(1)
-		default:
-			// Action DPs project only the press / long-press parameter
-			// family onto Matter GenericSwitch events. Other Parameter
-			// values reaching this hook (e.g. non-action wire types on
-			// a misconfigured custom DP) are silently ignored.
-		}
-	})
+	return NewButtonGroup(a).WireMatterSwitchHandler(h)
 }
