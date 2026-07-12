@@ -6,6 +6,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-07-12
+
+### Changed
+
+- **MQTT-discovery entity names are now localized through the i18n catalogues
+  instead of being hard-coded.** Every daemon-synthesised HA entity name — the
+  hub entities (system health, connection latency, last-event age, alarm /
+  service messages, inbox, system update, per-interface install-mode and
+  connectivity) and the per-device schedule / firmware / week-profile
+  entities — is resolved from `internal/i18n/catalogs/<locale>.json` in the
+  daemon's configured `locale`. Previously these names were a mix of hard-coded
+  English and German. Adding another language is now purely a new catalogue
+  file; no code change. (Side effect: names follow `locale` now, so e.g. the
+  schedule sensor reads "Zeitplan" only when `locale: de`.)
+- **Auto-generated CCU counter system variables get a friendly, localized name
+  in Home Assistant.** The CCU synthesises per-channel counter variables with
+  machine-token names (`svEnergyCounter_<ise_id>_<addr>:<ch>`,
+  `svHmIPRainCounter…`, `svHmIPSunshineCounter…` and their FeedIn / Today /
+  Yesterday variants); MQTT discovery previously surfaced that raw token as both
+  the entity name and the entity_id (e.g.
+  `sensor.…_svenergycounter_14007_0001dbe9915be4_6`). They now render with the
+  reference integration's friendly name — e.g. "Energiezähler Gesamt" /
+  "Energy Counter Total" — plus the matching HA `device_class`, unit
+  (Wh / mm / min) and a cumulative `total_increasing` state_class so energy
+  counters feed long-term statistics. The stable `unique_id` is unchanged;
+  entities discovered before this release keep their old entity_id until removed
+  and rediscovered.
+
 ## [0.37.0] — 2026-07-12
 
 ### Fixed

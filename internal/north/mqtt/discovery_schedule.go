@@ -77,7 +77,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 	}
 
 	body := map[string]any{
-		"name":                     "Zeitplan",
+		"name":                     d.tr("discovery.schedule"),
 		"unique_id":                objectID,
 		"state_topic":              stateTopic,
 		"json_attributes_topic":    attrsTopic,
@@ -85,7 +85,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName strin
 		"icon":                     "mdi:calendar-clock",
 		"availability":             availability,
 		"availability_mode":        "all",
-		"device":                   scheduleSubDeviceDescriptor(mockEv, d.Hub.URL),
+		"device":                   scheduleSubDeviceDescriptor(mockEv, d.Hub.URL, d.tr("discovery.schedule")),
 		"origin":                   BuildOriginInfo(),
 		"entity_category":          EntityCategoryDiagnostic,
 	}
@@ -245,7 +245,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName strin
 		"icon":              "mdi:calendar-check",
 		"availability":      availability,
 		"availability_mode": "all",
-		"device":            scheduleSubDeviceDescriptor(mockEv, d.Hub.URL),
+		"device":            scheduleSubDeviceDescriptor(mockEv, d.Hub.URL, d.tr("discovery.schedule")),
 		"origin":            BuildOriginInfo(),
 		"entity_category":   EntityCategoryConfig,
 		"optimistic":        false,
@@ -302,7 +302,7 @@ func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, centralName
 // hardware identity as the parent — HA shows them as related units.
 // suggested_area is also inherited so the sub-device falls into the
 // same room.
-func scheduleSubDeviceDescriptor(ev Event, hubURL string) map[string]any {
+func scheduleSubDeviceDescriptor(ev Event, hubURL, scheduleLabel string) map[string]any {
 	parentID := "openccu-loom_" + strings.ToLower(ev.DeviceAddress)
 	subID := parentID + "_schedule"
 	parentName := ev.DeviceName
@@ -311,7 +311,7 @@ func scheduleSubDeviceDescriptor(ev Event, hubURL string) map[string]any {
 	}
 	desc := map[string]any{
 		"identifiers":  []string{subID},
-		"name":         parentName + " Zeitplan",
+		"name":         parentName + " " + scheduleLabel,
 		"manufacturer": "eQ-3",
 		"via_device":   parentID,
 	}

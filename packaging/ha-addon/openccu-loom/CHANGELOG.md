@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.38.0
+
+- **System-variable and hub entities now show a proper, translated name in Home
+  Assistant.** Auto-generated CCU counter variables that used to appear under a
+  raw name like `svEnergyCounter_14007_0001DBE9915BE4:6` now read e.g.
+  "Energiezähler Gesamt" and are typed as energy sensors (with long-term
+  statistics). All daemon-created entity names (system health, messages,
+  install-mode, schedule, firmware, …) are now translated via the add-on's
+  language setting; adding another language only needs a new translation file.
+
 ## 0.37.0
 
 - **CCU devices no longer hang under an "unknown device", and system variables

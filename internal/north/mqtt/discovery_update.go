@@ -128,7 +128,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 	// "update.alarmsirene_fl_alarmsirene_fl_firmware"). Keep the
 	// name relative to the device and let HA prefix.
 	base := map[string]any{
-		"name":              "Firmware",
+		"name":              d.tr("discovery.firmware"),
 		"unique_id":         objectID,
 		"object_id":         objectID,
 		"availability":      availability,

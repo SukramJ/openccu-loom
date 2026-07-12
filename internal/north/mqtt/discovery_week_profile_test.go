@@ -127,8 +127,8 @@ func TestWeekProfileDiscoveryShape(t *testing.T) {
 	}
 
 	// name.
-	if doc["name"] != "Week Profile" {
-		t.Fatalf("name: got %q want %q", doc["name"], "Week Profile")
+	if doc["name"] != "Week profile" {
+		t.Fatalf("name: got %q want %q", doc["name"], "Week profile")
 	}
 
 	// availability carries two entries (bridge/status + device).
@@ -324,7 +324,7 @@ func TestPublishWeekProfileDiscoveryPublishesSelectRetained(t *testing.T) {
 	if err := json.Unmarshal([]byte(found.payload), &doc); err != nil {
 		t.Fatalf("unmarshal discovery: %v", err)
 	}
-	if doc["name"] != "Week Profile" {
+	if doc["name"] != "Week profile" {
 		t.Fatalf("name: got %q", doc["name"])
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -141,11 +142,53 @@ type DefaultDiscoveryBuilder struct {
 	// discovery payload's `device` block stamps a sub-device identifier
 	// with the parent device as `via_device`.
 	SubDevicesEnabled bool
+	// Locale selects the language of the discovery entity names the daemon
+	// synthesises itself (hub entities + CCU-auto-generated system variables).
+	// Resolved against [Translations]; empty falls back to the catalogue's
+	// default locale.
+	Locale string
+	// Translations resolves the localized discovery entity names from the
+	// embedded i18n catalogues. Adding a language is purely a new
+	// `internal/i18n/catalogs/<locale>.json` file — no Go change. Auto-loaded by
+	// [NewDefaultDiscoveryBuilder]; nil makes [DefaultDiscoveryBuilder.tr] return
+	// the raw key.
+	Translations *i18n.Catalogs
 }
 
-// NewDefaultDiscoveryBuilder constructs the default builder.
+// NewDefaultDiscoveryBuilder constructs the default builder. It auto-loads the
+// embedded i18n catalogues so every synthesised entity name is localizable
+// without threading the catalogues through the wiring; the catalogues are
+// immutable embedded data, so a per-builder instance is cheap.
 func NewDefaultDiscoveryBuilder(topics *TopicBuilder, centralName string) *DefaultDiscoveryBuilder {
-	return &DefaultDiscoveryBuilder{TopicBuilder: topics, BridgeBase: topics.Base, Central: centralName}
+	b := &DefaultDiscoveryBuilder{TopicBuilder: topics, BridgeBase: topics.Base, Central: centralName}
+	if cat, err := i18n.NewCatalogs(); err == nil {
+		b.Translations = cat
+	}
+	return b
+}
+
+// tr resolves an i18n catalogue key in the builder's locale. Falls back to the
+// catalogue default locale and finally the raw key (see [i18n.Catalogs.T]);
+// returns the key unchanged when no catalogues are wired.
+func (d *DefaultDiscoveryBuilder) tr(key string) string {
+	if d.Translations == nil {
+		return key
+	}
+	return d.Translations.T(d.Locale, key)
+}
+
+// trIface resolves key and substitutes the interface label into the `{iface}`
+// placeholder — for the per-interface entity names (install-mode, connectivity)
+// whose only variable part is the (untranslated, proper-noun) interface id.
+func (d *DefaultDiscoveryBuilder) trIface(key, iface string) string {
+	return strings.Replace(d.tr(key), "{iface}", iface, 1)
+}
+
+// WithTranslations overrides the auto-loaded i18n catalogues (tests). Returns
+// the receiver for fluent wiring.
+func (d *DefaultDiscoveryBuilder) WithTranslations(cat *i18n.Catalogs) *DefaultDiscoveryBuilder {
+	d.Translations = cat
+	return d
 }
 
 // WithHubInfo stores CCU metadata in the builder. Subsequent hub
@@ -224,6 +267,13 @@ func hubAggregateUniqueID(serial10, kind string) string {
 // HA `device` block.
 func (d *DefaultDiscoveryBuilder) WithSubDevices(on bool) *DefaultDiscoveryBuilder {
 	d.SubDevicesEnabled = on
+	return d
+}
+
+// WithLocale sets the language used for daemon-synthesised discovery names.
+// Returns the receiver for fluent wiring.
+func (d *DefaultDiscoveryBuilder) WithLocale(locale string) *DefaultDiscoveryBuilder {
+	d.Locale = locale
 	return d
 }
 

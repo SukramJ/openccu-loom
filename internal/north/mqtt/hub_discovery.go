@@ -390,6 +390,28 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		component = string(HAComponentSensor)
 	}
 
+	// CCU-auto-generated counter sysvars (svEnergyCounter, svHmIPRainCounter,
+	// svHmIPSunshineCounter and their FeedIn/Today/Yesterday variants) carry a
+	// machine-token name (`svEnergyCounter_<ise_id>_<addr>:<ch>`). Give them the
+	// friendly localized name plus the energy/rain/sunshine sensor semantics HA
+	// needs — a cumulative `total_increasing` counter that feeds long-term
+	// statistics — so the entity reads e.g. "Energiezähler Gesamt" (and its
+	// entity_id follows) instead of the raw token. The stable unique_id is
+	// untouched. Sensor-only: these are read-only numeric counters. Mirrors the
+	// reference HA integration's hub entity-description rules.
+	if component == string(HAComponentSensor) {
+		if cls, ok := classifyAutoSysvar(sv.Name); ok {
+			body["name"] = d.tr(cls.translationKey)
+			body["state_class"] = cls.stateClass
+			if cls.deviceClass != "" {
+				body["device_class"] = cls.deviceClass
+			}
+			if cls.unit != "" {
+				body["unit_of_measurement"] = cls.unit
+			}
+		}
+	}
+
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
@@ -468,7 +490,7 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 	topic := naming.MQTTHubAlarmMessages(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "alarm_messages")
 	body := map[string]any{
-		"name":                     "Alarm Messages",
+		"name":                     d.tr("discovery.alarm_messages"),
 		"unique_id":                uniqueID,
 		"object_id":                uniqueID,
 		"state_topic":              topic,
@@ -500,7 +522,7 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 	topic := naming.MQTTHubServiceMessages(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "service_messages")
 	body := map[string]any{
-		"name":                     "Service Messages",
+		"name":                     d.tr("discovery.service_messages"),
 		"unique_id":                uniqueID,
 		"object_id":                uniqueID,
 		"state_topic":              topic,
@@ -536,7 +558,7 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 	topic := naming.MQTTHubInbox(d.BridgeBase, centralName)
 	uniqueID := hubAggregateUniqueID(serial10, "inbox")
 	body := map[string]any{
-		"name":                     "Inbox",
+		"name":                     d.tr("discovery.inbox"),
 		"unique_id":                uniqueID,
 		"object_id":                uniqueID,
 		"state_topic":              topic,
@@ -605,7 +627,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, i
 	topic := naming.MQTTHubInstallModeForInterface(d.BridgeBase, centralName, iface)
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix, "")
 	body := map[string]any{
-		"name":                "Anlernmodus " + installModeInterfaceLabel(iface) + " Dauer",
+		"name":                d.trIface("discovery.install_mode_duration", installModeInterfaceLabel(iface)),
 		"unique_id":           uniqueID,
 		"object_id":           uniqueID,
 		"translation_key":     "install_mode_" + suffix,
@@ -647,7 +669,7 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, i
 	// lines up with the reference registry (`install_mode_hmip-button`).
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix+"-button", "")
 	body := map[string]any{
-		"name":              "Anlernmodus " + installModeInterfaceLabel(iface) + " aktivieren",
+		"name":              d.trIface("discovery.install_mode_activate", installModeInterfaceLabel(iface)),
 		"unique_id":         uniqueID,
 		"object_id":         uniqueID,
 		"translation_key":   "install_mode_" + suffix + "_button",
@@ -682,7 +704,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 	topic := naming.MQTTHubConnectivity(d.BridgeBase, centralName, iface)
 	uniqueID := hubAggregateUniqueID(serial10, "connectivity_"+safeLower(iface))
 	body := map[string]any{
-		"name":              "Connectivity " + iface,
+		"name":              d.trIface("discovery.connectivity", iface),
 		"unique_id":         uniqueID,
 		"object_id":         uniqueID,
 		"state_topic":       topic,
@@ -724,7 +746,7 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	uniqueID := hubAggregateUniqueID(serial10, "system_health")
 	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/health_score"
 	body := map[string]any{
-		"name":                        "System Health",
+		"name":                        d.tr("discovery.system_health"),
 		"unique_id":                   uniqueID,
 		"object_id":                   uniqueID,
 		"translation_key":             "system_health",
@@ -764,7 +786,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName st
 	uniqueID := hubAggregateUniqueID(serial10, "connection_latency")
 	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/latency"
 	body := map[string]any{
-		"name":                        "Connection Latency",
+		"name":                        d.tr("discovery.connection_latency"),
 		"unique_id":                   uniqueID,
 		"object_id":                   uniqueID,
 		"translation_key":             "connection_latency",
@@ -806,7 +828,7 @@ func (d *DefaultDiscoveryBuilder) BuildLastEventAgeDiscovery(centralName string)
 	uniqueID := hubAggregateUniqueID(serial10, "last_event_age")
 	topic := d.TopicBuilder.HubLastEventAge(centralName)
 	body := map[string]any{
-		"name":                        "Last Event Age",
+		"name":                        d.tr("discovery.last_event_age"),
 		"unique_id":                   uniqueID,
 		"object_id":                   uniqueID,
 		"translation_key":             "last_event_age",
@@ -850,7 +872,7 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 	// uid/object_id to "system_update".
 	uniqueID := hubAggregateUniqueID(serial10, "system_update")
 	body := map[string]any{
-		"name":                    "System Update",
+		"name":                    d.tr("discovery.system_update"),
 		"unique_id":               uniqueID,
 		"object_id":               uniqueID,
 		"state_topic":             topic,
