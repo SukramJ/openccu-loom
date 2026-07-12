@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.18.0
+  version: 2.19.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4959,7 +4959,7 @@ components:
               - auth.oidc.v1
     SystemCCUEntry:
       type: object
-      required: [name, host, available, is_ha_app, configured_interfaces]
+      required: [name, host, available, is_ha_app, configured_interfaces, readiness]
       description: |
         One CCU as known to the daemon. `name` is the daemon-local
         identifier (config-driven, multi-CCU-safe). The other fields
@@ -5000,6 +5000,27 @@ components:
         configured_interfaces:
           type: array
           items: { type: string }
+        readiness:
+          type: object
+          required: [phase, ready, interfaces_loaded, interfaces_total]
+          description: |
+            Where the central is in its readiness-gated southbound
+            bring-up, so the SPA can distinguish "still initializing"
+            from "offline".
+          properties:
+            phase:
+              type: string
+              enum: [unknown, waiting_for_ccu, loading_hub, loading_devices, ready]
+              description: Current bring-up phase of the central.
+            ready:
+              type: boolean
+              description: True once the southbound bring-up has latched complete.
+            interfaces_loaded:
+              type: integer
+              description: Number of interfaces wired so far during device loading.
+            interfaces_total:
+              type: integer
+              description: Total number of configured interfaces to wire.
 
     Health:
       type: object
@@ -6462,6 +6483,25 @@ components:
         central: { type: string }
         old_state: { type: string }
         new_state: { type: string }
+
+    CentralReadinessChangedPayload:
+      type: object
+      description: |
+        Payload of a `central.readiness_changed` broadcast. Topic pattern
+        `central.{name}.readiness`. Reflects a central's readiness-gated
+        southbound bring-up phase (waiting_for_ccu -> loading_hub ->
+        loading_devices -> ready).
+      required: [central, phase, ready, interfaces_loaded, interfaces_total]
+      properties:
+        central: { type: string }
+        phase:
+          type: string
+          enum: [unknown, waiting_for_ccu, loading_hub, loading_devices, ready]
+        ready:
+          type: boolean
+          description: "True only once southbound bring-up has latched complete (phase == ready)."
+        interfaces_loaded: { type: integer, minimum: 0 }
+        interfaces_total: { type: integer, minimum: 0 }
 
     SystemStatusChangedPayload:
       type: object

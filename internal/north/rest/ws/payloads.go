@@ -185,6 +185,33 @@ func (h *Hub) PublishCustomDataPointStateChangedKind(
 	})
 }
 
+// CentralReadinessChangedPayload mirrors `EventTypeCentralReadinessChanged`.
+type CentralReadinessChangedPayload struct {
+	Central          string `json:"central"`
+	Phase            string `json:"phase"`
+	Ready            bool   `json:"ready"`
+	InterfacesLoaded int    `json:"interfaces_loaded"`
+	InterfacesTotal  int    `json:"interfaces_total"`
+}
+
+// PublishCentralReadinessChanged emits a typed central-readiness envelope so
+// north-bound consumers can distinguish a central still in southbound bring-up
+// from one that is offline.
+func (h *Hub) PublishCentralReadinessChanged(centralName, phase string, ready bool, loaded, total int, when time.Time) {
+	h.Publish(Event{
+		Topic: CentralReadinessTopic(centralName),
+		Type:  string(hmevent.EventTypeCentralReadinessChanged),
+		When:  when,
+		Payload: CentralReadinessChangedPayload{
+			Central:          centralName,
+			Phase:            phase,
+			Ready:            ready,
+			InterfacesLoaded: loaded,
+			InterfacesTotal:  total,
+		},
+	})
+}
+
 // PublishCentralStateChanged emits a typed central-state envelope.
 func (h *Hub) PublishCentralStateChanged(centralName, oldState, newState string, when time.Time) {
 	h.Publish(Event{
@@ -215,4 +242,10 @@ func CustomDataPointTopic(deviceAddr, name string) string {
 // event.
 func CentralStateTopic(centralName string) string {
 	return "central." + centralName + ".state"
+}
+
+// CentralReadinessTopic builds the canonical topic for a central-readiness
+// event.
+func CentralReadinessTopic(centralName string) string {
+	return "central." + centralName + ".readiness"
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
   import { qrPlaceholderSvg } from "$lib/qr";
@@ -36,6 +37,14 @@
   const window = $derived(matterStore.commissioning.window);
   const remaining = $derived(matterStore.commissioning.remaining);
   const addedLabel = $derived(matterStore.commissioning.addedFabricLabel);
+
+  // Readiness gate ("erlauben + Hinweis"): pairing is available as soon
+  // as at least one CCU is ready. Only a fleet with no ready CCU blocks
+  // the control; a single not-ready CCU never permanently blocks pairing
+  // of a ready one — its devices join the pairing automatically once it
+  // finishes loading.
+  const noneReady = $derived(!centralStore.anyReady);
+  const notReadyCentrals = $derived(centralStore.notReady);
 
   let hydrateLoading = $state(true);
   let hydrateError = $state<string | null>(null);
@@ -95,6 +104,17 @@
       <h2 class="text-base font-semibold mb-4 text-slate-900 dark:text-slate-100">
         {t("matter.pair.window_open_duration")}
       </h2>
+      {#if noneReady}
+        <p class="mb-4 text-sm font-medium text-slate-500 dark:text-slate-400">
+          {t("matter.readiness.waiting")}
+        </p>
+      {:else if notReadyCentrals.length > 0}
+        {#each notReadyCentrals as c (c.name)}
+          <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">
+            {t("matter.readiness.partial", { name: c.name })}
+          </p>
+        {/each}
+      {/if}
       <div class="flex flex-wrap items-center gap-3 mb-4">
         <select
           class="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 text-base sm:text-sm sm:h-9"
@@ -104,7 +124,7 @@
             <option value={opt.value}>{opt.label}</option>
           {/each}
         </select>
-        <Button class="w-full sm:w-auto" disabled={opening} onclick={() => void openWindow()}>
+        <Button class="w-full sm:w-auto" disabled={opening || noneReady} onclick={() => void openWindow()}>
           {opening ? t("common.saving") : t("matter.pair.window_open")}
         </Button>
       </div>

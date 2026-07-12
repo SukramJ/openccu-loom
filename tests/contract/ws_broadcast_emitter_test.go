@@ -64,6 +64,11 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"func (h *Hub) PublishCentralStateChanged", "h.Publish(Event{", "string(hmevent.EventTypeCentralStateChanged)"},
 		WireValue: string(hmevent.EventTypeCentralStateChanged),
 	},
+	"central.readiness_changed": {
+		Files:     []string{"internal/north/rest/ws/payloads.go"},
+		Tokens:    []string{"func (h *Hub) PublishCentralReadinessChanged", "h.Publish(Event{", "string(hmevent.EventTypeCentralReadinessChanged)"},
+		WireValue: string(hmevent.EventTypeCentralReadinessChanged),
+	},
 	"custom_data_point.state_changed": {
 		Files:     []string{"internal/north/rest/ws/payloads.go"},
 		Tokens:    []string{"func (h *Hub) PublishCustomDataPointStateChangedKind", "h.Publish(Event{", "string(hmevent.EventTypeCustomDataPointStateChanged)"},

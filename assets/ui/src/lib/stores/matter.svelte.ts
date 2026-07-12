@@ -4,6 +4,7 @@
 
 import { api, ApiError } from "$lib/api/client";
 import { subscribe } from "./events.svelte";
+import { centralStore } from "./centrals.svelte";
 import { dirty } from "./dirty.svelte";
 import { toastStore } from "./toast.svelte";
 import { t } from "$lib/i18n";
@@ -34,6 +35,11 @@ function createMatterStore() {
   let status = $state<MatterStatus | null>(null);
   let statusError = $state<string | null>(null);
   let statusLoading = $state(false);
+  // True when a 503/null status is caused by no CCU having finished its
+  // readiness-gated bring-up yet, rather than the bridge being disabled
+  // by config. Lets the view show "waiting for CCU" instead of the
+  // terminal "disabled" state.
+  let waitingForCcu = $state(false);
 
   let exposures = $state<MatterExposure[]>([]);
   let exposuresLoading = $state(false);
@@ -162,13 +168,19 @@ function createMatterStore() {
     statusError = null;
     try {
       status = await api.matterStatus();
+      waitingForCcu = false;
     } catch (err) {
       if (err instanceof ApiError && err.status === 503) {
-        // Bridge disabled — that is a known expected state, not an error.
+        // A 503 has two causes: the bridge is disabled by config, or no
+        // CCU has finished its readiness-gated bring-up yet. Distinguish
+        // them off the fleet so the view can show "waiting for CCU"
+        // instead of the terminal "disabled" state.
         status = null;
         statusError = null;
+        waitingForCcu = !centralStore.anyReady;
       } else {
         statusError = err instanceof Error ? err.message : String(err);
+        waitingForCcu = false;
       }
     } finally {
       statusLoading = false;
@@ -322,6 +334,7 @@ function createMatterStore() {
     get status() { return status; },
     get statusError() { return statusError; },
     get statusLoading() { return statusLoading; },
+    get waitingForCcu() { return waitingForCcu; },
     get exposures() { return exposures; },
     get exposuresLoading() { return exposuresLoading; },
     get exposuresError() { return exposuresError; },

@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
-  import type { DeviceSummary } from "$lib/api/types";
+  import { centralStore } from "$lib/stores/centrals.svelte";
+  import { subscribe } from "$lib/stores/events.svelte";
+  import type { DeviceSummary, EventEnvelope } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import DeviceCard from "$lib/components/DeviceCard.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -23,6 +25,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
 
   // Filter/sort state is seeded from a module store and synced back to
   // it, so the search term and filters survive opening a device and
@@ -182,6 +185,23 @@
     );
   });
 
+  // Readiness lens over the fleet: while a CCU is still in its
+  // readiness-gated southbound bring-up its devices simply have not
+  // landed yet, so an empty (or short) list is "still initializing",
+  // not "offline". Honour an active central filter so a single-CCU
+  // drilldown only reasons about the CCU the operator is looking at.
+  const relevantCentrals = $derived(
+    centralFilter
+      ? centralStore.items.filter((c) => c.name === centralFilter)
+      : centralStore.items,
+  );
+  const notReadyCentrals = $derived(
+    relevantCentrals.filter((c) => !c.readiness.ready),
+  );
+  const anyRelevantReady = $derived(
+    relevantCentrals.some((c) => c.readiness.ready),
+  );
+
   function sortKey(d: { name?: string; address: string; model: string; model_label?: string }) {
     switch (sortColumn) {
       case "address":
@@ -262,6 +282,16 @@
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
+    centralStore.refresh();
+    centralStore.ensureStream();
+    // When a central finishes bring-up its devices become fetchable, so
+    // pull a fresh list the moment one flips to ready — the operator sees
+    // the initializing state resolve into real devices without a reload.
+    return subscribe((ev: EventEnvelope) => {
+      if (ev.type !== "central.readiness_changed") return;
+      const p = ev.payload as { ready?: boolean };
+      if (p.ready) void deviceStore.refresh();
+    });
   });
 </script>
 
@@ -414,6 +444,27 @@
     </div>
   {/if}
 
+  <!-- Mixed-readiness banner: with at least one device already showing,
+       flag any central still initializing so its (yet-missing) devices
+       are explained rather than read as absent. -->
+  {#if notReadyCentrals.length > 0 && filtered.length > 0}
+    <div class="mb-4 flex flex-col gap-2">
+      {#each notReadyCentrals as c (c.name)}
+        <Card class="flex flex-wrap items-center gap-3 p-3 text-sm">
+          <Icon name="mdi:refresh" size={18} class="text-amber-500" />
+          <span class="min-w-0 flex-1 text-slate-700 dark:text-slate-300">
+            {t("devices.initializing_banner", {
+              name: c.name,
+              loaded: c.readiness.interfaces_loaded,
+              total: c.readiness.interfaces_total,
+            })}
+          </span>
+          <CentralStatusBadge available={c.available} readiness={c.readiness} />
+        </Card>
+      {/each}
+    </div>
+  {/if}
+
   <!-- Sort toolbar: in card (grid) mode the buttons drive the order; in
        table mode the DataTable column headers sort, so only the group-by
        toggle remains. -->
@@ -492,7 +543,20 @@
   {#if deviceStore.loading && deviceStore.items.length === 0}
     <LoadingState message={t("devices.loading")} />
   {:else if filtered.length === 0}
-    <EmptyState message={t("devices.empty")} />
+    {#if notReadyCentrals.length > 0 && !anyRelevantReady}
+      <!-- Nothing loaded yet and every relevant CCU is still in bring-up:
+           this is "initializing", not an empty fleet. -->
+      <div class="flex flex-col gap-3">
+        {#each notReadyCentrals as c (c.name)}
+          <Card class="flex flex-wrap items-center gap-3 p-4">
+            <LoadingState message={t("devices.initializing", { name: c.name })} />
+            <CentralStatusBadge available={c.available} readiness={c.readiness} />
+          </Card>
+        {/each}
+      </div>
+    {:else}
+      <EmptyState message={t("devices.empty")} />
+    {/if}
   {:else if prefs.deviceView === "list"}
     <!-- TABLE MODE -->
     {#if groups}

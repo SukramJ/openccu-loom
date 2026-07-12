@@ -198,6 +198,12 @@ func (b *EventBridge) Start(ctx context.Context) {
 			events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
 				b.onCentralState(u.Name(), e)
 			}),
+			// Per-central southbound bring-up phase transitions so the UI can
+			// show "still initializing" vs "offline" while a co-booting CCU
+			// loads names then devices.
+			events.Subscribe(bus, func(e hmevent.CentralReadinessChangedEvent) {
+				b.onCentralReadiness(u.Name(), e)
+			}),
 			// Wire-DP source-token transitions (cache → live, live →
 			// stale, stale → live) republish the same topic even though
 			// the value did not change. Without this consumers that gate
@@ -1829,6 +1835,13 @@ func (b *EventBridge) onCentralState(centralName string, e hmevent.CentralStateC
 		return
 	}
 	b.wsHub.PublishCentralStateChanged(centralName, string(e.From), string(e.To), e.Timestamp())
+}
+
+func (b *EventBridge) onCentralReadiness(centralName string, e hmevent.CentralReadinessChangedEvent) {
+	if b.wsHub == nil {
+		return
+	}
+	b.wsHub.PublishCentralReadinessChanged(centralName, string(e.Phase), e.Phase == hmenum.ReadinessReady, e.InterfacesLoaded, e.InterfacesTotal, e.Timestamp())
 }
 
 // --- helpers ---

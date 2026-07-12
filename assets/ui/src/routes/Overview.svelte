@@ -18,8 +18,14 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
+  import { subscribe } from "$lib/stores/events.svelte";
   import { api } from "$lib/api/client";
-  import type { CustomDPSummary, DeviceDetail } from "$lib/api/types";
+  import type {
+    CustomDPSummary,
+    DeviceDetail,
+    EventEnvelope,
+  } from "$lib/api/types";
   import ChannelTiles from "$lib/cdp/ChannelTiles.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -28,6 +34,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
   import { t } from "$lib/i18n";
   import {
     buildOverviewGroups,
@@ -69,9 +76,34 @@
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
+    centralStore.refresh();
+    centralStore.ensureStream();
+    // A central finishing bring-up makes its devices fetchable; refresh
+    // the moment one flips to ready so the initializing state resolves
+    // into live tiles without an operator reload.
+    return subscribe((ev: EventEnvelope) => {
+      if (ev.type !== "central.readiness_changed") return;
+      const p = ev.payload as { ready?: boolean };
+      if (p.ready) void deviceStore.refresh();
+    });
   });
 
   const centrals = $derived(distinctCentrals(deviceStore.items));
+
+  // Readiness lens: an empty or short device list can simply mean a CCU
+  // is still initializing. Respect an active central filter so a
+  // drilldown only reasons about the CCU in view.
+  const relevantCentrals = $derived(
+    centralFilter
+      ? centralStore.items.filter((c) => c.name === centralFilter)
+      : centralStore.items,
+  );
+  const notReadyCentrals = $derived(
+    relevantCentrals.filter((c) => !c.readiness.ready),
+  );
+  const anyRelevantReady = $derived(
+    relevantCentrals.some((c) => c.readiness.ready),
+  );
   const rooms = $derived(distinctRooms(deviceStore.items, centralFilter || undefined));
   const functions = $derived(distinctFunctions(deviceStore.items, centralFilter || undefined));
 
@@ -260,10 +292,44 @@
     </div>
   {/if}
 
+  <!-- Mixed-readiness banner: with tiles already showing, flag any
+       central still initializing so its (yet-missing) devices are
+       explained rather than read as absent. -->
+  {#if notReadyCentrals.length > 0 && deviceStore.items.length > 0}
+    <div class="mb-4 flex flex-col gap-2">
+      {#each notReadyCentrals as c (c.name)}
+        <Card class="flex flex-wrap items-center gap-3 p-3 text-sm">
+          <Icon name="mdi:refresh" size={18} class="text-amber-500" />
+          <span class="min-w-0 flex-1 text-slate-700 dark:text-slate-300">
+            {t("devices.initializing_banner", {
+              name: c.name,
+              loaded: c.readiness.interfaces_loaded,
+              total: c.readiness.interfaces_total,
+            })}
+          </span>
+          <CentralStatusBadge available={c.available} readiness={c.readiness} />
+        </Card>
+      {/each}
+    </div>
+  {/if}
+
   {#if deviceStore.loading && deviceStore.items.length === 0}
     <LoadingState />
   {:else if deviceStore.items.length === 0}
-    <EmptyState message={t("overview.empty")} />
+    {#if notReadyCentrals.length > 0 && !anyRelevantReady}
+      <!-- Nothing loaded yet and every relevant CCU is still in bring-up:
+           this is "initializing", not an empty fleet. -->
+      <div class="flex flex-col gap-3">
+        {#each notReadyCentrals as c (c.name)}
+          <Card class="flex flex-wrap items-center gap-3 p-4">
+            <LoadingState message={t("devices.initializing", { name: c.name })} />
+            <CentralStatusBadge available={c.available} readiness={c.readiness} />
+          </Card>
+        {/each}
+      </div>
+    {:else}
+      <EmptyState message={t("overview.empty")} />
+    {/if}
   {:else if groups.length === 0}
     <EmptyState message={t("overview.empty_filtered")} />
   {:else}

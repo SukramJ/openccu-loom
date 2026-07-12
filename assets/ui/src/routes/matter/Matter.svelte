@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
+  import { centralStore } from "$lib/stores/centrals.svelte";
   import { t } from "$lib/i18n";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -24,11 +25,17 @@
 
   onMount(async () => {
     matterStore.ensureStream();
+    // The fleet drives the readiness gate: matter status must know
+    // whether at least one CCU is ready before it can tell a 503
+    // "disabled" apart from a 503 "still initializing".
+    centralStore.ensureStream();
+    await centralStore.refresh();
     await matterStore.loadStatus();
   });
 
   onDestroy(() => {
     matterStore.close();
+    centralStore.close();
   });
 
   const statusEnabled = $derived(matterStore.status?.enabled === true);
@@ -43,6 +50,12 @@
     <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
       {t("common.loading")}
     </p>
+  {:else if !statusEnabled && matterStore.waitingForCcu}
+    <Card class="mt-6 p-6">
+      <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
+        {t("matter.readiness.waiting")}
+      </p>
+    </Card>
   {:else if !statusEnabled}
     <Card class="mt-6 p-6">
       <p class="text-sm font-medium text-slate-500 dark:text-slate-400">

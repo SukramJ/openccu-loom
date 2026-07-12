@@ -60,6 +60,13 @@ func (a *systemCCUAdapter) List(ctx context.Context) []handlers.SystemCCUEntry {
 		entry.Serial = si.Serial
 		entry.URL = si.URL
 		entry.IsHaApp = si.IsHaApp
+		r := c.Readiness()
+		entry.Readiness = handlers.CentralReadiness{
+			Phase:            string(r.Phase),
+			Ready:            c.IsSouthboundReady(),
+			InterfacesLoaded: r.InterfacesLoaded,
+			InterfacesTotal:  r.InterfacesTotal,
+		}
 		out = append(out, entry)
 	}
 	return out
