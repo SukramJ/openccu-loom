@@ -6,6 +6,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-07-12
+
+### Added
+
+- **A CCU's operational readiness is now visible in the UI.** Many actions
+  depend on a CCU having finished its readiness-gated southbound bring-up
+  (device list fully loaded, Matter coupling available), but that state was
+  invisible — an initializing CCU looked "offline" and its half-loaded device
+  list looked "empty". Each central now exposes an explicit readiness phase
+  (`waiting_for_ccu` → `loading_hub` → `loading_devices` → `ready`, with a
+  per-interface `x/y` progress count) as a new `readiness` object on
+  `GET /api/v1/system/ccu` and live over the WebSocket topic
+  `central.{name}.readiness`. Readiness is tracked **per central**, so a mixed
+  fleet (one CCU ready, another still initializing) is represented faithfully.
+- **The SPA surfaces readiness everywhere it matters.** A shared
+  `CentralStatusBadge` renders the full state set (Ready / Waiting for CCU /
+  Initializing *names* / Initializing *devices x/y* / Offline), so an
+  initializing CCU is no longer indistinguishable from an offline one on the
+  Fleet view. The device overview shows a "devices are still loading" state
+  (plus a per-CCU banner in a mixed fleet) instead of a bare "no devices", and
+  auto-refreshes the moment a CCU flips to ready. Matter pairing now explains
+  when it is waiting for a CCU (a 503 is no longer collapsed into "disabled")
+  and — per the "allow + hint" policy — stays available as soon as at least one
+  CCU is ready, so a single stuck CCU never blocks pairing of a healthy one.
+
 ## [0.38.0] — 2026-07-12
 
 ### Fixed

@@ -4100,6 +4100,24 @@ export interface components {
             url?: string;
             is_ha_app: boolean;
             configured_interfaces: string[];
+            /**
+             * @description Where the central is in its readiness-gated southbound
+             *     bring-up, so the SPA can distinguish "still initializing"
+             *     from "offline".
+             */
+            readiness: {
+                /**
+                 * @description Current bring-up phase of the central.
+                 * @enum {string}
+                 */
+                phase: "unknown" | "waiting_for_ccu" | "loading_hub" | "loading_devices" | "ready";
+                /** @description True once the southbound bring-up has latched complete. */
+                ready: boolean;
+                /** @description Number of interfaces wired so far during device loading. */
+                interfaces_loaded: number;
+                /** @description Total number of configured interfaces to wire. */
+                interfaces_total: number;
+            };
         };
         Health: {
             /** @enum {string} */

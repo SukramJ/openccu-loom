@@ -41,6 +41,57 @@ func TestUnitSouthboundReadyLatch(t *testing.T) {
 	}
 }
 
+// TestUnitReadiness_ZeroValueNormalizesToUnknown verifies that a fresh unit
+// which has never had SetReadiness called reports [hmenum.ReadinessUnknown]
+// rather than the Go zero value of ReadinessPhase (the empty string), so
+// callers never have to special-case "" alongside the real unknown value.
+func TestUnitReadiness_ZeroValueNormalizesToUnknown(t *testing.T) {
+	c, err := central.New(central.Config{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := c.Readiness()
+	if r.Phase != hmenum.ReadinessUnknown {
+		t.Errorf("Readiness().Phase = %q on a fresh unit, want %q", r.Phase, hmenum.ReadinessUnknown)
+	}
+	if r.InterfacesLoaded != 0 || r.InterfacesTotal != 0 {
+		t.Errorf("Readiness() counts on a fresh unit = (%d, %d), want (0, 0)", r.InterfacesLoaded, r.InterfacesTotal)
+	}
+}
+
+// TestUnitReadiness_SetReadinessRoundTrip verifies that SetReadiness stamps
+// the phase and interface counts atomically and Readiness reads them back
+// unchanged.
+func TestUnitReadiness_SetReadinessRoundTrip(t *testing.T) {
+	c, err := central.New(central.Config{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c.SetReadiness(hmenum.ReadinessLoadingDevices, 2, 5)
+	r := c.Readiness()
+	if r.Phase != hmenum.ReadinessLoadingDevices {
+		t.Errorf("Readiness().Phase = %q, want %q", r.Phase, hmenum.ReadinessLoadingDevices)
+	}
+	if r.InterfacesLoaded != 2 {
+		t.Errorf("Readiness().InterfacesLoaded = %d, want 2", r.InterfacesLoaded)
+	}
+	if r.InterfacesTotal != 5 {
+		t.Errorf("Readiness().InterfacesTotal = %d, want 5", r.InterfacesTotal)
+	}
+
+	// A later SetReadiness call fully replaces the prior snapshot rather than
+	// merging fields.
+	c.SetReadiness(hmenum.ReadinessReady, 5, 5)
+	r = c.Readiness()
+	if r.Phase != hmenum.ReadinessReady {
+		t.Errorf("Readiness().Phase after second SetReadiness = %q, want %q", r.Phase, hmenum.ReadinessReady)
+	}
+	if r.InterfacesLoaded != 5 || r.InterfacesTotal != 5 {
+		t.Errorf("Readiness() counts after second SetReadiness = (%d, %d), want (5, 5)", r.InterfacesLoaded, r.InterfacesTotal)
+	}
+}
+
 // TestUnitAvailable_DegradedHealthIsAvailable verifies that
 // Available returns true when health is DEGRADED.
 func TestUnitAvailable_DegradedHealthIsAvailable(t *testing.T) {

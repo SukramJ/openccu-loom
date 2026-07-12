@@ -159,6 +159,14 @@
     },
     {
       "category": "central",
+      "description": "Server-pushed: a CentralUnit's readiness-gated southbound bring-up advanced a phase (waiting_for_ccu -> loading_hub -> loading_devices -> ready), pushed live so the UI distinguishes a central still initializing from one that is offline.",
+      "kind": "broadcast",
+      "name": "central.readiness_changed",
+      "topic": "central.{name}.readiness",
+      "payload": "CentralReadinessChangedPayload"
+    },
+    {
+      "category": "central",
       "description": "Return a combined system-health snapshot from the CCU's perspective.",
       "name": "central.system_health"
     },

@@ -50,6 +50,18 @@ type SystemCCUEntry struct {
 	// that the daemon manages the same interfaces the operator
 	// expects.
 	ConfiguredInterfaces []string `json:"configured_interfaces"`
+	// Readiness reports where the central is in its readiness-gated
+	// southbound bring-up (see CentralReadiness).
+	Readiness CentralReadiness `json:"readiness"`
+}
+
+// CentralReadiness surfaces where a central is in its readiness-gated southbound
+// bring-up so the SPA can distinguish "still initializing" from "offline".
+type CentralReadiness struct {
+	Phase            string `json:"phase"` // unknown|waiting_for_ccu|loading_hub|loading_devices|ready
+	Ready            bool   `json:"ready"` // southbound bring-up latched complete
+	InterfacesLoaded int    `json:"interfaces_loaded"`
+	InterfacesTotal  int    `json:"interfaces_total"`
 }
 
 // SystemCCU serves the multi-central CCU metadata at

@@ -2613,6 +2613,31 @@
       ]
     },
     {
+      "name": "ReadinessPhase",
+      "values": [
+        {
+          "go_name": "ReadinessLoadingDevices",
+          "wire_value": "loading_devices"
+        },
+        {
+          "go_name": "ReadinessLoadingHub",
+          "wire_value": "loading_hub"
+        },
+        {
+          "go_name": "ReadinessReady",
+          "wire_value": "ready"
+        },
+        {
+          "go_name": "ReadinessUnknown",
+          "wire_value": "unknown"
+        },
+        {
+          "go_name": "ReadinessWaitingForCCU",
+          "wire_value": "waiting_for_ccu"
+        }
+      ]
+    },
+    {
       "name": "RecoveryResult",
       "values": [
         {

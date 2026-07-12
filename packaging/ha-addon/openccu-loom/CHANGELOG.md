@@ -1,5 +1,18 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.39.0
+
+- **You can now see when a CCU is still starting up.** Actions like enabling
+  Matter coupling — or seeing the complete device list — only work once a CCU
+  has finished loading. Until now an initializing CCU looked "offline" and its
+  device list looked empty, with no hint why. Each CCU now shows an explicit
+  status (Waiting for CCU / Initializing, with device-load progress / Ready);
+  the device overview shows a "still loading" state instead of "no devices" and
+  fills in automatically once loading finishes, and the Matter page explains
+  when it is waiting for a CCU and becomes available as soon as at least one CCU
+  is ready. With several CCUs each is tracked separately, so one still starting
+  up never hides the others' devices or blocks Matter pairing.
+
 ## 0.38.0
 
 - **System-variable and hub entities now show a proper, translated name in Home

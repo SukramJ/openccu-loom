@@ -264,6 +264,7 @@ func gatedCentralBringUp(
 				Base:        hmevent.NewBase(),
 				CentralName: cc.Name,
 			})
+			recordCentralReadiness(unit, hmenum.ReadinessReady, len(cc.Interfaces), len(cc.Interfaces))
 			logger.Info("wire.central.ready", slog.String("central", cc.Name))
 			return
 		}
@@ -293,6 +294,7 @@ func recordCentralWaiting(unit *central.Unit) {
 		return
 	}
 	unit.Health.RecordQuality(startupHealthComponent(unit.Name()), "waiting for CCU to become ready")
+	recordCentralReadiness(unit, hmenum.ReadinessWaitingForCCU, 0, 0)
 }
 
 // resolveCentralWaiting removes the transient "waiting for CCU" component once
@@ -305,6 +307,24 @@ func resolveCentralWaiting(unit *central.Unit) {
 		return
 	}
 	unit.Health.Unregister(startupHealthComponent(unit.Name()))
+}
+
+// recordCentralReadiness updates the queryable per-central readiness phase and
+// publishes the change so north-bound adapters (REST/WS) reflect bring-up live.
+func recordCentralReadiness(unit *central.Unit, phase hmenum.ReadinessPhase, loaded, total int) {
+	if unit == nil {
+		return
+	}
+	unit.SetReadiness(phase, loaded, total)
+	if unit.EventBus != nil {
+		events.Publish(unit.EventBus, hmevent.CentralReadinessChangedEvent{
+			Base:             hmevent.NewBase(),
+			CentralName:      unit.Name(),
+			Phase:            phase,
+			InterfacesLoaded: loaded,
+			InterfacesTotal:  total,
+		})
+	}
 }
 
 // bringUpCentral runs a central's full southbound bring-up against a ready CCU.
@@ -330,6 +350,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 
 	// Hub first: a failure here means the CCU is not yet serving JSON-RPC.
 	// Return before any wiring so the gate retries cleanly with no half-state.
+	recordCentralReadiness(unit, hmenum.ReadinessLoadingHub, 0, 0)
 	runner, hubData, hubCloser, err := WireHub(ctx, *cc, unit, logger, deps.Catalogs, cfg.Locale)
 	if err != nil {
 		logger.Warn("wire.hub.failed",
@@ -391,6 +412,9 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		jCaller = &jsonrpcCaller{client: runner.Client()}
 	}
 
+	total := len(cc.Interfaces)
+	loaded := 0
+	recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	for _, ifaceSpec := range cc.Interfaces {
 		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
 		closer, err := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
@@ -405,6 +429,8 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		logger.Info("wire.interface.ok",
 			slog.String("central", cc.Name),
 			slog.String("interface", string(iface)))
+		loaded++
+		recordCentralReadiness(unit, hmenum.ReadinessLoadingDevices, loaded, total)
 	}
 
 	// Homegear has no JSON-RPC layer; wire its XML-RPC sysvar surface now that

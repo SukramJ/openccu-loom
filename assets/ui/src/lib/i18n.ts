@@ -143,6 +143,19 @@ const EN: Catalog = {
   "devices.empty": "No devices found.",
   "devices.loading": "Loading devices…",
   "devices.title": "Devices",
+  "devices.initializing": "Devices are still loading from CCU '{name}'…",
+  "devices.initializing_banner":
+    "CCU '{name}' is still initializing (devices {loaded}/{total}) — its devices appear automatically.",
+  "central.readiness.ready": "Ready",
+  "central.readiness.waiting": "Waiting for CCU",
+  "central.readiness.loading_hub": "Initializing (names)",
+  "central.readiness.loading_devices": "Initializing (devices {loaded}/{total})",
+  "central.readiness.offline": "Offline",
+  "central.readiness.unknown": "Unknown",
+  "matter.readiness.waiting":
+    "Waiting for CCU initialization — pairing becomes available once at least one CCU is ready.",
+  "matter.readiness.partial":
+    "CCU '{name}' is still initializing — its devices appear in the pairing automatically once loaded.",
   "firmware.title": "Firmware",
   "firmware.subtitle": "Device firmware versions and OTA update status.",
   "firmware.updates_available": "{count} device(s) have a firmware update available.",
@@ -2232,6 +2245,19 @@ const DE: Catalog = {
   "devices.empty": "Keine Geräte gefunden.",
   "devices.loading": "Lade Geräte…",
   "devices.title": "Geräte",
+  "devices.initializing": "Geräte werden von CCU '{name}' geladen …",
+  "devices.initializing_banner":
+    "CCU '{name}' initialisiert noch (Geräte {loaded}/{total}) — deren Geräte erscheinen automatisch.",
+  "central.readiness.ready": "Bereit",
+  "central.readiness.waiting": "Wartet auf CCU",
+  "central.readiness.loading_hub": "Initialisiert (Namen)",
+  "central.readiness.loading_devices": "Initialisiert (Geräte {loaded}/{total})",
+  "central.readiness.offline": "Offline",
+  "central.readiness.unknown": "Unbekannt",
+  "matter.readiness.waiting":
+    "Wartet auf CCU-Initialisierung — die Kopplung wird verfügbar, sobald mindestens eine CCU bereit ist.",
+  "matter.readiness.partial":
+    "CCU '{name}' initialisiert noch — deren Geräte erscheinen nach Abschluss automatisch in der Kopplung.",
   "firmware.title": "Firmware",
   "firmware.subtitle": "Firmware-Versionen und OTA-Update-Status.",
   "firmware.updates_available": "{count} Gerät(e) haben ein Firmware-Update verfügbar.",
