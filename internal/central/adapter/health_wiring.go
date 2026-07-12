@@ -13,6 +13,28 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
+// healthNoteKeys maps the stable English health-note sentinel to its i18n
+// catalogue key for localized display. Only the static notes are mapped;
+// interpolated notes (which carry dynamic, un-localized values) resolve to ""
+// and render from the English [health.Sample.Note]. The Note string itself is
+// never localized — the scoring/aggregation logic matches on it.
+var healthNoteKeys = map[string]string{
+	"initial-sync: connected":     "health.note.initial_sync_connected",
+	"initial-sync: not connected": "health.note.initial_sync_not_connected",
+	"client connected":            "health.note.client_connected",
+	"breaker closed":              "health.note.breaker_closed",
+	"breaker half-open":           "health.note.breaker_half_open",
+	"breaker open":                "health.note.breaker_open",
+	"breaker open (escalated)":    "health.note.breaker_open_escalated",
+	"recovery started":            "health.note.recovery_started",
+	"recovery completed":          "health.note.recovery_completed",
+	"recovery failed (escalated)": "health.note.recovery_failed_escalated",
+}
+
+// noteKeyFor returns the i18n key for a static health note, or "" for an
+// interpolated/unknown note (which then renders from the English Note).
+func noteKeyFor(note string) string { return healthNoteKeys[note] }
+
 // WireHealth subscribes the central's [health.Tracker] to the event bus so
 // the per-interface component status updates automatically as the southbound
 // layer reports incidents.
@@ -49,7 +71,7 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 		return interfaceID
 	}
 	record := func(interfaceID string, healthy bool, note string) {
-		tr.Record(component(interfaceID), health.Sample{Healthy: healthy, Note: note})
+		tr.Record(component(interfaceID), health.Sample{Healthy: healthy, Note: note, NoteKey: noteKeyFor(note)})
 		// Publish a ConnectionHealthChangedEvent so north-bound
 		// subscribers observe every health transition without polling.
 		events.Publish(bus, hmevent.ConnectionHealthChangedEvent{

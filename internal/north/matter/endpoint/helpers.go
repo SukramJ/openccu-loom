@@ -34,7 +34,7 @@ func isNotFound(err error) bool {
 // §9.13.6.5). The truncation is byte-based with a defensive rune
 // boundary check; over-long inputs lose the suffix first, then the
 // channel-name, then the device-name.
-func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix string) string {
+func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix, channelLabel string) string {
 	var devName, chName string
 	if dev != nil {
 		devName = dev.Name
@@ -45,7 +45,7 @@ func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix string) st
 	if ch != nil {
 		chName = ch.Name
 		if chName == "" && ch.Number > 0 {
-			chName = fmt.Sprintf("Kanal %d", ch.Number)
+			chName = fmt.Sprintf("%s %d", channelLabel, ch.Number)
 		}
 	}
 	// HmIP single-channel devices (HMIP-PSM, HMIP-SWDM, …) often carry

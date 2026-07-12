@@ -78,7 +78,11 @@
     const status: LightStatus =
       unhealthy > 0 ? "red" : degraded > 0 ? "amber" : "green";
     const detail = rows
-      .map((r) => `${r.name}: ${r.status}${r.note ? " — " + r.note : ""}`)
+      .map((r) => {
+        const status = t(`health.status.${r.status}`);
+        const note = r.note_key ? t(r.note_key) : r.note;
+        return `${r.name}: ${status}${note ? " — " + note : ""}`;
+      })
       .join("\n");
     return { label, status, detail };
   }

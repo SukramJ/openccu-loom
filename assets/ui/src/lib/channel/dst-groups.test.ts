@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// $lib/i18n's `t()` reads `prefs.locale` reactively; mock the
+// preferences store so this pure-logic suite doesn't need a DOM
+// (localStorage / navigator) environment. vi.mock factories are
+// hoisted above top-level const declarations, so the mocked object
+// must be created via vi.hoisted() to be visible inside it — mirrors
+// the pattern in SourceBadge.test.ts.
+const { prefs } = vi.hoisted(() => ({ prefs: { locale: "en" as "en" | "de" } }));
+vi.mock("$lib/stores/preferences.svelte", () => ({ prefs }));
+
 import {
   detectDstGroups,
   dstHeader,
@@ -20,6 +30,10 @@ function param(name: string): UISchemaParameter {
     observed: true,
   };
 }
+
+beforeEach(() => {
+  prefs.locale = "en";
+});
 
 describe("detectDstGroups", () => {
   it("splits DST_START_* and DST_END_* parameters into their own groups", () => {
@@ -46,11 +60,14 @@ describe("detectDstGroups", () => {
 });
 
 describe("dstHeader", () => {
-  it("localises the start/end headers for de and falls back to en", () => {
-    expect(dstHeader("start", "de")).toBe("Beginn der Sommerzeit");
-    expect(dstHeader("end", "de")).toBe("Ende der Sommerzeit");
-    expect(dstHeader("start", "en")).toBe("Start of daylight saving time");
-    expect(dstHeader("end", "en")).toBe("End of daylight saving time");
+  it("resolves the start/end headers from the active prefs.locale", () => {
+    prefs.locale = "de";
+    expect(dstHeader("start")).toBe("Beginn der Sommerzeit");
+    expect(dstHeader("end")).toBe("Ende der Sommerzeit");
+
+    prefs.locale = "en";
+    expect(dstHeader("start")).toBe("Start of daylight saving time");
+    expect(dstHeader("end")).toBe("End of daylight saving time");
   });
 });
 

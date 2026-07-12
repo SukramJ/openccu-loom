@@ -58,7 +58,7 @@
   const selectOptions = $derived([
     ...presets.map((p, i) => ({
       value: String(i),
-      label: presetLabel(p, locale),
+      label: presetLabel(p),
     })),
     {
       value: "__custom__",
@@ -104,7 +104,7 @@
     {@const activePreset = matched >= 0 ? presets[matched] : null}
     <span class="inline-flex w-fit items-center rounded-md bg-slate-100 px-2 py-1 text-sm text-slate-800 dark:bg-slate-800 dark:text-slate-100">
       {#if activePreset}
-        {presetLabel(activePreset, locale)}
+        {presetLabel(activePreset)}
       {:else}
         <span class="font-mono">
           {unitValue ?? "—"} / {valueValue ?? "—"}

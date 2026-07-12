@@ -380,6 +380,22 @@
     return "muted";
   }
 
+  // Localizes a Health snapshot status token via the `health.status.*`
+  // catalogue keys (mirrors HealthResponse.Status / HealthComponent.Status
+  // in internal/north/rest/handlers/health.go). t() falls back to the raw
+  // key on a miss, which reads as the raw status token for values outside
+  // the known healthy/degraded/unhealthy/unknown enum.
+  function healthStatusLabel(status: string): string {
+    return t(`health.status.${status}`);
+  }
+
+  // Localizes a HealthComponent note: prefers the i18n key the backend
+  // resolved (note_key), falls back to the raw interpolated note.
+  function healthNoteLabel(c: { note?: string; note_key?: string }): string | undefined {
+    if (c.note_key) return t(c.note_key);
+    return c.note;
+  }
+
   function severityVariant(
     s: string,
   ): "default" | "warning" | "danger" | "muted" {
@@ -592,7 +608,7 @@
           </span>
         {/if}
         {#if health}
-          <Badge variant={statusVariant(health.status)}>{health.status}</Badge>
+          <Badge variant={statusVariant(health.status)}>{healthStatusLabel(health.status)}</Badge>
         {/if}
       </div>
     </header>
@@ -605,12 +621,12 @@
             <li class="flex flex-wrap items-center justify-between gap-2 py-2">
               <div>
                 <span class="font-medium">{c.name}</span>
-                {#if c.note}
-                  <span class="ml-2 text-xs text-[var(--ha-secondary-text-color)]">{c.note}</span>
+                {#if healthNoteLabel(c)}
+                  <span class="ml-2 text-xs text-[var(--ha-secondary-text-color)]">{healthNoteLabel(c)}</span>
                 {/if}
               </div>
               <div class="flex items-center gap-2">
-                <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+                <Badge variant={statusVariant(c.status)}>{healthStatusLabel(c.status)}</Badge>
                 {#if c.recorded_at}
                   <span class="text-xs text-[var(--ha-secondary-text-color)]">{formatDate(c.recorded_at)}</span>
                 {/if}

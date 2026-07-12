@@ -5,6 +5,8 @@
 import { api, ApiError } from "$lib/api/client";
 import { subscribe } from "./events.svelte";
 import { dirty } from "./dirty.svelte";
+import { toastStore } from "./toast.svelte";
+import { t } from "$lib/i18n";
 import type {
   MatterCommissioningWindow,
   MatterExposure,
@@ -94,6 +96,28 @@ function createMatterStore() {
       }
       case "matter.exposable_changed": {
         void loadExposures();
+        break;
+      }
+      case "matter.commissioning_progress": {
+        // Localize the operator-close notice off the `stage` token rather
+        // than the server-supplied English `message` (mirrors
+        // MatterCommissioningClose in
+        // internal/north/rest/handlers/matter_exposures.go, which fires
+        // {stage: "closed"} after POST /matter/commissioning/window/close).
+        // Only reacts while our own window is open — a stray "closed" for
+        // a window this tab never saw open should not disturb the success
+        // step.
+        const p = ev.payload as { stage?: string };
+        if (p.stage === "closed" && commissioning.phase === "open") {
+          stopCountdown();
+          commissioning = {
+            phase: "idle",
+            window: null,
+            remaining: null,
+            addedFabricLabel: null,
+          };
+          toastStore.info(t("matter.commissioning.closed"));
+        }
         break;
       }
     }

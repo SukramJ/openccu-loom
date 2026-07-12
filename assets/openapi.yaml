@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.17.0
+  version: 2.18.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5015,6 +5015,7 @@ components:
               name: { type: string }
               status: { type: string }
               note: { type: string }
+              note_key: { type: string, description: "i18n catalogue key for the localized display of a static note; absent for interpolated notes (render note verbatim)." }
               recorded_at: { type: string, format: date-time }
     ConfigSnapshot:
       type: object

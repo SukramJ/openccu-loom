@@ -29,6 +29,16 @@ type Deps struct {
 	Catalogs *i18n.Catalogs
 }
 
+// tr resolves an i18n catalogue key in the deps' locale, for page titles set
+// outside the template's `t` func. Falls back to the key when no catalogues
+// are wired.
+func (d Deps) tr(key string) string {
+	if d.Catalogs == nil {
+		return key
+	}
+	return d.Catalogs.T(d.Lang, key)
+}
+
 // NewRouter builds the diagnostic UI router. The server-rendered surface
 // only covers what stays useful when the SPA cannot load:
 //
@@ -66,7 +76,7 @@ func NewRouter(d Deps) *chi.Mux {
 
 func handleAbout(d Deps, tpl *templateSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		render(tpl, w, r, "about.html", pageData{Title: "About", Lang: d.Lang})
+		render(tpl, w, r, "about.html", pageData{Title: d.tr("nav.about"), Lang: d.Lang})
 	}
 }
 
@@ -165,10 +175,10 @@ func handleHealth(d Deps, tpl *templateSet) http.HandlerFunc {
 			data.Status = string(d.Health.Overall())
 			for _, c := range d.Health.Snapshot() {
 				data.Components = append(data.Components, handlers.HealthComponent{
-					Name: c.Name, Status: string(c.Status), Note: c.LastSample.Note, RecordedAt: c.LastSample.Timestamp,
+					Name: c.Name, Status: string(c.Status), Note: c.LastSample.Note, NoteKey: c.LastSample.NoteKey, RecordedAt: c.LastSample.Timestamp,
 				})
 			}
 		}
-		render(tpl, w, r, "health.html", pageData{Title: "Health", Lang: d.Lang, Data: data})
+		render(tpl, w, r, "health.html", pageData{Title: d.tr("nav.health"), Lang: d.Lang, Data: data})
 	}
 }

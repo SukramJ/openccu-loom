@@ -141,7 +141,7 @@
   <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
     {#if dst.start.length > 0}
       <DstSubgroup
-        title={dstHeader("start", locale)}
+        title={dstHeader("start")}
         parameters={dst.start}
         {values}
         {dirty}
@@ -151,7 +151,7 @@
     {/if}
     {#if dst.end.length > 0}
       <DstSubgroup
-        title={dstHeader("end", locale)}
+        title={dstHeader("end")}
         parameters={dst.end}
         {values}
         {dirty}

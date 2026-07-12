@@ -16,9 +16,13 @@ type HealthReader = restapi.HealthReader
 
 // HealthComponent is one entry in the response.
 type HealthComponent struct {
-	Name       string    `json:"name"`
-	Status     string    `json:"status"`
-	Note       string    `json:"note,omitempty"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Note   string `json:"note,omitempty"`
+	// NoteKey is the i18n catalogue key for the localized display of a static
+	// note; empty for interpolated notes (render Note verbatim). Clients that
+	// localize (SPA, /health page) prefer NoteKey and fall back to Note.
+	NoteKey    string    `json:"note_key,omitempty"`
 	RecordedAt time.Time `json:"recorded_at"`
 }
 
@@ -40,6 +44,7 @@ func Health(tracker HealthReader) http.HandlerFunc {
 				Name:       c.Name,
 				Status:     string(c.Status),
 				Note:       c.LastSample.Note,
+				NoteKey:    c.LastSample.NoteKey,
 				RecordedAt: c.LastSample.Timestamp,
 			})
 		}

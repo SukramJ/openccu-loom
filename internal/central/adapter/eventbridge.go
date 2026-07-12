@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
@@ -55,6 +56,14 @@ type EventBridge struct {
 	mqtt     *mqtt.Wiring
 	vis      filter.VisibilitySet
 	labels   mqtt.ParameterLabeler
+
+	// translations + locale localize the discovery entity names the bridge
+	// authors itself (schedule-switch, combined-sensor and combined-timer
+	// labels). Resolved via [EventBridge.tr]; the catalogues are auto-loaded in
+	// [NewEventBridge] (immutable embedded data) and the locale is set by
+	// [EventBridge.WithLocale]. Empty locale falls back to the catalogue default.
+	translations *i18n.Catalogs
+	locale       string
 
 	// startMu guards unsubs and started so Start/Stop are safe to call
 	// concurrently and Start is idempotent. It is only held around the
@@ -101,7 +110,31 @@ func NewEventBridge(r *central.Registry, wsHub *ws.Hub, mq *mqtt.Wiring) *EventB
 	// PublishInitialSnapshot without calling Start first do not hit a nil
 	// lifetimeCtx. Start() replaces this with a cancellable child.
 	eb.lifetimeCtx, eb.stopCancel = context.WithCancel(context.Background()) //nolint:contextcheck // pre-init; replaced by Start()
+	if cat, err := i18n.NewCatalogs(); err == nil {
+		eb.translations = cat
+	}
 	return eb
+}
+
+// WithLocale sets the language used for the discovery entity names the bridge
+// synthesises itself. Returns the receiver for fluent wiring.
+func (b *EventBridge) WithLocale(locale string) *EventBridge {
+	b.locale = locale
+	return b
+}
+
+// tr resolves an i18n catalogue key in the bridge's locale and substitutes any
+// `{placeholder}` occurrences from the alternating placeholder,value pairs in
+// subs. Falls back to the raw key when no catalogues are wired.
+func (b *EventBridge) tr(key string, subs ...string) string {
+	s := key
+	if b.translations != nil {
+		s = b.translations.T(b.locale, key)
+	}
+	for i := 0; i+1 < len(subs); i += 2 {
+		s = strings.ReplaceAll(s, "{"+subs[i]+"}", subs[i+1])
+	}
+	return s
 }
 
 // WithVisibility wires a [filter.VisibilitySet] that gates MQTT publish.
@@ -2381,9 +2414,9 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 	enabled := wp.ScheduleEnabled()
 	for _, key := range orderedTargetKeys(targets) {
 		info := targets[key]
-		label := fmt.Sprintf("Zeitplan Kanal %d", info.ChannelNo)
+		label := b.tr("discovery.schedule_channel", "ch", strconv.Itoa(info.ChannelNo))
 		if info.Name != "" && info.Name != fmt.Sprintf("Channel %d", info.ChannelNo) {
-			label = "Zeitplan " + info.Name
+			label = b.tr("discovery.schedule_named", "name", info.Name)
 		}
 		_ = bridge.PublishScheduleSwitchDiscovery(ctx, centralName, mqtt.ScheduleSwitchEvent{
 			Central:           centralName,
@@ -2642,7 +2675,7 @@ func (b *EventBridge) publishCombinedLevelSensor(
 		Model:         d.Model,
 		Device:        d,
 		Kind:          "level_combined",
-		Label:         "Level Combined",
+		Label:         b.tr("discovery.level_combined"),
 		ValueTemplate: "{{ value_json.level }}",
 	}
 	_ = bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev)
@@ -2685,7 +2718,7 @@ func (b *EventBridge) publishCombinedHSColorSensor(
 		Model:         d.Model,
 		Device:        d,
 		Kind:          "hs_color",
-		Label:         "HS Color",
+		Label:         b.tr("discovery.hs_color"),
 		ValueTemplate: "{{ value_json.hue }}",
 	}
 	_ = bridge.PublishCombinedSensorDiscovery(ctx, centralName, ev)
@@ -2728,7 +2761,7 @@ func (b *EventBridge) combinedTimerLabel(ch *device.Channel, timer *combined.Tim
 			}
 		}
 	}
-	return "Zeitdauer"
+	return b.tr("discovery.duration")
 }
 
 // encodeLevelCompositeJSON renders a LevelComposite as the JSON string that

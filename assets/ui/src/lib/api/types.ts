@@ -282,18 +282,12 @@ export type ServiceMessage = components["schemas"]["ServiceMessage"];
 // InterfaceInfo re-exported from generated InterfaceState — same shape.
 export type InterfaceInfo = components["schemas"]["InterfaceState"];
 
-// HealthComponent derived from generated Health schema (inline component type).
-// Generated makes recorded_at required; SPA only reads optional fields.
-export type HealthComponent = {
-  name: string;
-  status: "healthy" | "degraded" | "unhealthy" | string;
-  note?: string;
-  recorded_at?: string;
-};
-
-// HealthSnapshot re-exported from generated Health schema.
-// Generated uses a stricter status enum but is a superset — safe.
+// Health snapshot + component derived from the generated Health schema.
+// `note_key` is the i18n catalogue key for a static note (see
+// HealthComponent.NoteKey in internal/north/rest/handlers/health.go);
+// absent for interpolated notes, where `note` is rendered verbatim.
 export type HealthSnapshot = components["schemas"]["Health"];
+export type HealthComponent = HealthSnapshot["components"][number];
 
 // Incident re-exported from generated schema.
 export type Incident = components["schemas"]["Incident"];

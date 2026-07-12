@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// $lib/i18n's `t()` reads `prefs.locale` reactively; mock the
+// preferences store so this pure-logic suite doesn't need a DOM
+// (localStorage / navigator) environment. vi.mock factories are
+// hoisted above top-level const declarations, so the mocked object
+// must be created via vi.hoisted() to be visible inside it — mirrors
+// the pattern in SourceBadge.test.ts.
+const { prefs } = vi.hoisted(() => ({ prefs: { locale: "en" as "en" | "de" } }));
+vi.mock("$lib/stores/preferences.svelte", () => ({ prefs }));
+
 import {
   HMIP_TIME_PRESETS,
   HM_TIME_PRESETS,
@@ -15,6 +25,10 @@ import {
 } from "./time-pairs";
 import type { UISchemaParameter } from "$lib/api/types";
 
+beforeEach(() => {
+  prefs.locale = "en";
+});
+
 function param(name: string, extra: Partial<UISchemaParameter> = {}): UISchemaParameter {
   return {
     name,
@@ -27,12 +41,22 @@ function param(name: string, extra: Partial<UISchemaParameter> = {}): UISchemaPa
 }
 
 describe("presetLabel", () => {
-  const preset: TimePreset = { a: 0, b: 0, labelEn: "Not active", labelDe: "Nicht aktiv" };
+  const preset: TimePreset = { a: 0, b: 0, labelKey: "parameter.time_preset.not_active" };
 
-  it("picks the German label for locale=de and English otherwise", () => {
-    expect(presetLabel(preset, "de")).toBe("Nicht aktiv");
-    expect(presetLabel(preset, "en")).toBe("Not active");
-    expect(presetLabel(preset, "fr")).toBe("Not active");
+  it("resolves a catalogue key for the active prefs.locale, falling back to English", () => {
+    prefs.locale = "de";
+    expect(presetLabel(preset)).toBe("Nicht aktiv");
+
+    prefs.locale = "en";
+    expect(presetLabel(preset)).toBe("Not active");
+  });
+
+  it("passes a literal, locale-identical label straight through", () => {
+    const literal: TimePreset = { a: 0, b: 1, labelKey: "100 ms" };
+    prefs.locale = "de";
+    expect(presetLabel(literal)).toBe("100 ms");
+    prefs.locale = "en";
+    expect(presetLabel(literal)).toBe("100 ms");
   });
 });
 
@@ -85,7 +109,7 @@ describe("detectTimePairs", () => {
     const { pairs, paired } = detectTimePairs(params);
     expect(pairs).toHaveLength(1);
     expect(pairs[0].shape).toBe("hmip_unit_value");
-    expect(pairs[0].presets).toEqual([{ a: 0, b: 5, labelEn: "500 ms", labelDe: "500 ms" }]);
+    expect(pairs[0].presets).toEqual([{ a: 0, b: 5, labelKey: "500 ms" }]);
     expect(paired.has("ONDELAY_TIME_UNIT")).toBe(true);
     expect(paired.has("ONDELAY_TIME_VALUE")).toBe(true);
   });
@@ -172,7 +196,7 @@ describe("matchPresetIndex / matchPresetIndexIn", () => {
 
   it("matches against a caller-supplied preset list via matchPresetIndexIn", () => {
     const presets: TimePreset[] = [
-      { a: 0, b: 5, labelEn: "500 ms", labelDe: "500 ms" },
+      { a: 0, b: 5, labelKey: "500 ms" },
     ];
     expect(matchPresetIndexIn(presets, 0, 5)).toBe(0);
     expect(matchPresetIndexIn(presets, 0, 6)).toBe(-1);

@@ -1,15 +1,15 @@
 {{define "body"}}
 <section>
-  <h1>Health</h1>
-  <p>Overall status: <strong class="status-{{.Data.Status}}">{{.Data.Status}}</strong></p>
+  <h1>{{t "health.title"}}</h1>
+  <p>{{t "health.overall_status"}}: <strong class="status-{{.Data.Status}}">{{t (printf "health.status.%s" .Data.Status)}}</strong></p>
   <table>
-    <thead><tr><th>Component</th><th>Status</th><th>Note</th><th>Recorded</th></tr></thead>
+    <thead><tr><th>{{t "health.component"}}</th><th>{{t "health.status"}}</th><th>{{t "health.note"}}</th><th>{{t "health.recorded"}}</th></tr></thead>
     <tbody>
       {{range .Data.Components}}
       <tr>
         <td>{{.Name}}</td>
-        <td class="status-{{.Status}}">{{.Status}}</td>
-        <td>{{.Note}}</td>
+        <td class="status-{{.Status}}">{{t (printf "health.status.%s" .Status)}}</td>
+        <td>{{if .NoteKey}}{{t .NoteKey}}{{else}}{{.Note}}{{end}}</td>
         <td>{{.RecordedAt.Format "2006-01-02 15:04:05"}}</td>
       </tr>
       {{end}}

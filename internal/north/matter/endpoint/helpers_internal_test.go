@@ -152,7 +152,7 @@ func TestFriendlyName_DeviceNameOnly(t *testing.T) {
 	t.Parallel()
 	dev := makeDevice("ABC0001", "Wohnzimmer")
 	ch := makeChannel(dev, "ABC0001:1", 1, "")
-	got := friendlyName(dev, ch, "")
+	got := friendlyName(dev, ch, "", "Kanal")
 	// Channel 1 with no name → "Kanal 1" appended.
 	want := "Wohnzimmer Kanal 1"
 	if got != want {
@@ -164,7 +164,7 @@ func TestFriendlyName_DeviceAndChannelName(t *testing.T) {
 	t.Parallel()
 	dev := makeDevice("ABC0001", "Haus")
 	ch := makeChannel(dev, "ABC0001:2", 2, "Schlafzimmer")
-	got := friendlyName(dev, ch, "")
+	got := friendlyName(dev, ch, "", "Kanal")
 	if got != "Haus Schlafzimmer" {
 		t.Errorf("friendlyName device+channel: got %q, want %q", got, "Haus Schlafzimmer")
 	}
@@ -174,7 +174,7 @@ func TestFriendlyName_WithParamSuffix(t *testing.T) {
 	t.Parallel()
 	dev := makeDevice("ABC0001", "Sensor")
 	ch := makeChannel(dev, "ABC0001:1", 1, "")
-	got := friendlyName(dev, ch, "TEMPERATURE")
+	got := friendlyName(dev, ch, "TEMPERATURE", "Kanal")
 	// "Sensor Kanal 1 (TEMPERATURE)" — must be ≤ 32 bytes
 	if len(got) > 32 {
 		t.Errorf("friendlyName suffix: result %q exceeds 32 bytes (%d)", got, len(got))
@@ -185,7 +185,7 @@ func TestFriendlyName_NoNameFallsBackToAddress(t *testing.T) {
 	t.Parallel()
 	dev := makeDevice("ABC0001", "") // no name
 	ch := makeChannel(dev, "ABC0001:0", 0, "")
-	got := friendlyName(dev, ch, "")
+	got := friendlyName(dev, ch, "", "Kanal")
 	// Device address when Name is empty, channel 0 has no number suffix.
 	if got != "ABC0001" {
 		t.Errorf("friendlyName no name: got %q, want %q", got, "ABC0001")
@@ -196,7 +196,7 @@ func TestFriendlyName_LengthCapping(t *testing.T) {
 	t.Parallel()
 	dev := makeDevice("ABC0001", "VeryLongDeviceNameThatExceedsTheMatterLimit")
 	ch := makeChannel(dev, "ABC0001:1", 1, "AlsoLongChannelName")
-	got := friendlyName(dev, ch, "")
+	got := friendlyName(dev, ch, "", "Kanal")
 	if len(got) > 32 {
 		t.Errorf("friendlyName capping: result %q has %d bytes, want ≤32", got, len(got))
 	}
