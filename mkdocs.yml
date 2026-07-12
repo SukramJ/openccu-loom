@@ -93,6 +93,7 @@ exclude_docs: |
   hooks/
   adr/
   audit/
+  design/
   matter/
   parity/
   plans/
