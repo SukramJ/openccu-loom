@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-07-12
+
 ### Added
 
 - **System variables honour the CCU's explicit channel assignment and expose
