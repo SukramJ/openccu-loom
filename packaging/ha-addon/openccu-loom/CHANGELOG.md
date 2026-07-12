@@ -9,6 +9,12 @@
   statistics). All daemon-created entity names (system health, messages,
   install-mode, schedule, firmware, …) are now translated via the add-on's
   language setting; adding another language only needs a new translation file.
+- **English users no longer see German entity names.** A few names (schedule
+  channel switches, combined-timer sensor) were hardcoded German; they now
+  follow the add-on's language setting.
+- **The built-in /health and /about pages, the Matter device-card channel
+  fallback, and the health/diagnostics notes** (client connected, breaker
+  states, recovery) are now translated too.
 
 ## 0.37.0
 

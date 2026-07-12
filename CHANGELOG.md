@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-07-12
+
 ### Fixed
 
 - **English Home Assistant users saw German MQTT entity names.** Four
@@ -40,11 +42,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   connectivity tooltip and the `/health` page; interpolated notes keep their
   English text. `GET /api/v1/health` components carry a new optional `note_key`
   field. REST API version bumps to **2.18.0** (additive).
-
-## [0.38.0] — 2026-07-12
-
-### Changed
-
 - **MQTT-discovery entity names are now localized through the i18n catalogues
   instead of being hard-coded.** Every daemon-synthesised HA entity name — the
   hub entities (system health, connection latency, last-event age, alarm /
