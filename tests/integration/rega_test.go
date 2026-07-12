@@ -23,8 +23,11 @@ package integration
 
 import (
 	"context"
+	neturl "net/url"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/godevccu/pkg/godevccu"
 
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
@@ -174,8 +177,10 @@ func TestRegaScriptGetProgramDescriptions(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // TestRegaScriptGetSystemVariableDescriptions verifies the sysvar script
-// dispatches correctly. SetupDefaults may pre-seed system variables; the
-// test accepts empty or populated result.
+// dispatches correctly and round-trips the explicit channel assignment
+// (CCU WebUI "Kanalzuordnung") end-to-end through the typed runner DTO:
+// string-framed ids, URL-encoded description, and channel_address for
+// an assigned variable (empty for an unassigned one).
 func TestRegaScriptGetSystemVariableDescriptions(t *testing.T) {
 	srv := startMockCCUOpenCCU(t)
 	url := srv.JSONRPCURL()
@@ -192,9 +197,48 @@ func TestRegaScriptGetSystemVariableDescriptions(t *testing.T) {
 	}
 	defer func() { _ = c.Logout(ctx) }()
 
-	var sysvars []map[string]any
-	if err := runner.RunJSON(ctx, hmenum.RegaScriptGetSystemVariableDescriptions, nil, &sysvars); err != nil {
-		t.Fatalf("RunJSON(get_system_variable_descriptions): %v", err)
+	srv.v.State().AddSystemVariable("svRainCounterToday", "FLOAT", 1.5, godevccu.AddSystemVariableOpts{
+		ID:             52574,
+		Description:    "HAHM",
+		ChannelAddress: "VCU0000123:1",
+	})
+	srv.v.State().AddSystemVariable("svPlain", "BOOL", false, godevccu.AddSystemVariableOpts{
+		ID: 52575,
+	})
+
+	descs, err := runner.GetSystemVariableDescriptions(ctx)
+	if err != nil {
+		t.Fatalf("GetSystemVariableDescriptions: %v", err)
 	}
-	t.Logf("get_system_variable_descriptions: %d system variables", len(sysvars))
+	byID := make(map[string]rega.SystemVariableDescription, len(descs))
+	for _, d := range descs {
+		byID[d.ID] = d
+	}
+
+	assigned, ok := byID["52574"]
+	if !ok {
+		t.Fatalf("seeded sysvar 52574 missing from descriptions (string-id framing broken?): %v", descs)
+	}
+	ch, err := neturl.QueryUnescape(assigned.ChannelAddress)
+	if err != nil {
+		t.Fatalf("channel_address not URL-decodable: %v", err)
+	}
+	if ch != "VCU0000123:1" {
+		t.Fatalf("channel_address = %q, want VCU0000123:1", ch)
+	}
+	desc, err := neturl.QueryUnescape(assigned.Description)
+	if err != nil {
+		t.Fatalf("description not URL-decodable: %v", err)
+	}
+	if desc != "HAHM" {
+		t.Fatalf("description = %q, want HAHM", desc)
+	}
+
+	plain, ok := byID["52575"]
+	if !ok {
+		t.Fatalf("seeded sysvar 52575 missing from descriptions: %v", descs)
+	}
+	if plain.ChannelAddress != "" {
+		t.Fatalf("unassigned sysvar channel_address = %q, want empty", plain.ChannelAddress)
+	}
 }
