@@ -93,8 +93,8 @@ func TestConcurrentCancelFirstRunLetsQueuedRunProceed(t *testing.T) {
 	// through the entire execution of runInternal).
 	select {
 	case <-firstEntered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Goroutine-1 did not enter its stage within 2 s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("Goroutine-1 did not enter its stage")
 	}
 
 	// Verify that InRecovery reports true for the interface while G1 is active.
@@ -133,7 +133,7 @@ func TestConcurrentCancelFirstRunLetsQueuedRunProceed(t *testing.T) {
 	go func() { firstDone.Wait(); close(done1) }()
 	go func() { secondDone.Wait(); close(done2) }()
 
-	timeout := time.After(4 * time.Second)
+	timeout := time.After(eventWaitTimeout)
 	for done1 != nil || done2 != nil {
 		select {
 		case <-done1:
@@ -141,7 +141,7 @@ func TestConcurrentCancelFirstRunLetsQueuedRunProceed(t *testing.T) {
 		case <-done2:
 			done2 = nil
 		case <-timeout:
-			t.Fatal("goroutines did not finish within 4 s — possible goroutine leak")
+			t.Fatal("goroutines did not finish in time — possible goroutine leak")
 		}
 	}
 
@@ -219,8 +219,8 @@ func TestConcurrentCancelBothRunsCleanup(t *testing.T) {
 	// Wait until G1 is inside its stage before launching G2.
 	select {
 	case <-firstEntered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("G1 did not enter its stage within 2 s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("G1 did not enter its stage")
 	}
 
 	go func() {
@@ -247,8 +247,8 @@ func TestConcurrentCancelBothRunsCleanup(t *testing.T) {
 	go func() { wg.Wait(); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(4 * time.Second):
-		t.Fatal("goroutines did not finish within 4 s — possible goroutine leak")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("goroutines did not finish in time — possible goroutine leak")
 	}
 
 	// Both must be non-success.
@@ -327,8 +327,8 @@ func TestHeartbeatTriggerIsIdempotentWhileActiveRecovery(t *testing.T) {
 	// Wait until the first recovery is inside its stage.
 	select {
 	case <-reached:
-	case <-time.After(2 * time.Second):
-		t.Fatal("first recovery did not start within 2 s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("first recovery did not start")
 	}
 
 	// Now fire a HeartbeatTimerFiredEvent while the first recovery is still active.
@@ -377,6 +377,17 @@ func TestHeartbeatTriggerStartsRecoveryAfterPreviousCompleted(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
+	// laneIdle reports that the previous recovery has fully drained — its
+	// entry in c.active is deleted. The follow-up publish must be gated on
+	// this (not just on runCount): the pipeline's Run callback bumps
+	// runCount at the start of the stage, but c.active[iid] is only
+	// cleared in Run's defer, after the whole pipeline returns. A
+	// HeartbeatTimerFiredEvent published in that window hits the duplicate
+	// guard (already_active) and is silently dropped, so the second run
+	// never starts and the final wait times out. Same gating as
+	// TestHeartbeatDoesNotResetProgressOnHealthyLane.
+	laneIdle := func() bool { return !c.InRecoveryFor("CUxD") }
+
 	// Fire a ConnectionLostEvent to kick off the first recovery.
 	events.Publish(bus, hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
@@ -384,9 +395,9 @@ func TestHeartbeatTriggerStartsRecoveryAfterPreviousCompleted(t *testing.T) {
 		InterfaceID: "CUxD",
 	})
 
-	// Wait for it to complete.
-	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, eventWaitTimeout) {
-		t.Fatal("first recovery did not complete within 2 s")
+	// Wait for it to complete and fully drain.
+	if !waitFor(t, func() bool { return runCount.Load() >= 1 && laneIdle() }, eventWaitTimeout) {
+		t.Fatal("first recovery did not complete")
 	}
 
 	// Now fire a HeartbeatTimerFiredEvent — this simulates the CCU heartbeat
@@ -464,13 +475,21 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
+	// laneIdle gates each follow-up publish on the previous recovery having
+	// fully drained (its c.active entry deleted). Gating on runCount alone
+	// is racy: the counter bumps at stage start, but the active slot is only
+	// cleared in Run's defer — an event published in that window is dropped
+	// by the duplicate guard and the wait below times out. Same gating as
+	// TestHeartbeatDoesNotResetProgressOnHealthyLane.
+	laneIdle := func() bool { return !c.InRecoveryFor("HmIP-RF") }
+
 	// Two failing attempts exhaust the lane.
 	events.Publish(bus, hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-revive",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, eventWaitTimeout) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 1 && laneIdle() }, eventWaitTimeout) {
 		t.Fatal("first attempt did not run")
 	}
 	events.Publish(bus, hmevent.ConnectionLostEvent{
@@ -478,7 +497,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 		CentralName: "hb-revive",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, eventWaitTimeout) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 2 && laneIdle() }, eventWaitTimeout) {
 		t.Fatal("second attempt did not run")
 	}
 

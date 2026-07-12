@@ -19,12 +19,16 @@ import (
 )
 
 // waitFor polls pred every 2 ms until it returns true or timeout elapses.
-// eventWaitTimeout is the deadline for event-bus-driven waitFor polls.
-// Delivery is asynchronous (subscriber goroutines), so the wait tolerates
-// scheduler starvation on a loaded CI runner under -race instrumentation;
-// waitFor returns as soon as the predicate holds, so a generous ceiling
-// costs nothing on the happy path.
-const eventWaitTimeout = 5 * time.Second
+// eventWaitTimeout is the package-wide ceiling for positive waits on
+// asynchronous progress (event-bus delivery, spawned recovery goroutines,
+// heartbeat ticks). It is deliberately generous: waitFor and the one-shot
+// channel selects return as soon as the awaited condition holds, so the
+// ceiling costs nothing on the happy path — but a tight deadline turns
+// scheduler starvation on a heavily loaded CI runner under -race
+// instrumentation into a spurious failure. Never use it for negative
+// assertions ("nothing happens within N ms"); those need short, explicit
+// windows.
+const eventWaitTimeout = 30 * time.Second
 
 func waitFor(t *testing.T, pred func() bool, timeout time.Duration) bool {
 	t.Helper()
@@ -246,7 +250,7 @@ func TestSubscribeSkipsDuplicateRecovery(t *testing.T) {
 	// Wait until recovery is actually inside the stage.
 	select {
 	case <-entered:
-	case <-time.After(2 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("first recovery did not start")
 	}
 

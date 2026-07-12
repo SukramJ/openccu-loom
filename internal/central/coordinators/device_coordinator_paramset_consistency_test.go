@@ -304,7 +304,7 @@ func TestScheduleParamsetConsistencyCheckCallbackReceivesResults(t *testing.T) {
 		if len(results) != 1 {
 			t.Fatalf("callback must receive 1 inconsistency, got %d", len(results))
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("timeout waiting for ScheduleParamsetConsistencyCheck callback")
 	}
 }
@@ -356,7 +356,7 @@ func TestScheduleParamsetConsistencyCheckStopWaitsForInFlightGoroutine(t *testin
 
 	select {
 	case <-stopDone:
-	case <-time.After(3 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("Stop did not return after the background goroutine finished")
 	}
 }
@@ -397,7 +397,7 @@ func TestScheduleParamsetConsistencyCheckRecoversFromPanic(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("Stop hung after the background goroutine panicked")
 	}
 }

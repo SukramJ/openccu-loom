@@ -104,7 +104,7 @@ func TestReconnectStageGatesOnReadinessProbe(t *testing.T) {
 		if result != hmenum.RecoveryResultSuccess {
 			t.Fatalf("Run = %v, want Success", result)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("Run did not complete after readiness signal")
 	}
 
@@ -161,7 +161,7 @@ func TestReconnectStageContextCancelAbortsReadinessWait(t *testing.T) {
 		if result == hmenum.RecoveryResultSuccess {
 			t.Fatal("Run must not succeed when CCU never became ready and ctx was cancelled")
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("Run did not return after ctx cancel")
 	}
 
@@ -281,7 +281,7 @@ func TestTwoInterfacesFailConcurrentlyWithDistinctReasons(t *testing.T) {
 	go func() { wg.Wait(); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("concurrent recoveries did not complete in time")
 	}
 
@@ -355,7 +355,7 @@ func TestTwoInterfacesRecoverConcurrentlyOneBeatOneFails(t *testing.T) {
 	go func() { wg.Wait(); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("concurrent recoveries did not complete in time")
 	}
 

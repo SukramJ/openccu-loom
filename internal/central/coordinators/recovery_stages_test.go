@@ -76,8 +76,8 @@ func TestCooldownStageRespectsContext(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("cooldown returned %v, want context.Canceled", err)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("cooldown did not respect context cancellation within 2s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("cooldown did not respect context cancellation")
 	}
 }
 

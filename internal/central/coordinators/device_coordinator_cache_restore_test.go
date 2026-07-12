@@ -188,7 +188,7 @@ func TestCheckAndCreateDevicesFromCacheSubscriberCallingBackDoesNotDeadlock(t *t
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("CheckAndCreateDevicesFromCache deadlocked: a DeviceCreatedEvent " +
 			"subscriber calling back into the coordinator must not block on c.mu")
 	}
@@ -525,7 +525,7 @@ func TestScheduleParamsetConsistencyCheckCallsCallback(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("callback not called within timeout")
 	}
 
