@@ -104,6 +104,20 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 		disco = mqtt.NewDefaultDiscoveryBuilder(b.Topics(), centralName)
 	}
 
+	// Stamp this central's CCU metadata (serial, model, version, URL) onto the
+	// discovery builder from the registry's SystemInformation — the single
+	// source of truth — before building any discovery. The serial gates the
+	// whole hub-discovery plane (hubSerial); it is resolved during the async,
+	// readiness-gated bring-up, so a builder stamped by the composition root
+	// eagerly (before bring-up finished) still carries an empty serial and skips
+	// every hub payload while raw state keeps flowing. Reading it here means
+	// each (re-)wire — including the ready-driven re-Start — publishes with the
+	// central's actual serial. Only stamp once the serial has resolved so we
+	// never clobber a serial another path already stamped with an empty one.
+	if hi := hubInfoFromUnit(u); hi.Serial != "" {
+		disco.SetHubInfoFor(centralName, hi)
+	}
+
 	// --- Programs ---
 	// Subscribe to PutProgram FIRST so programs registered between the
 	// snapshot read and the observer attach are not lost. Observer-fires
@@ -295,6 +309,22 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	p.addUnsub(hubModel.Update.OnUpdate(func(info hub.UpdateInfo) {
 		publishUpdate(info)
 	}))
+}
+
+// hubInfoFromUnit projects a central's resolved CCU metadata onto the MQTT
+// discovery HubInfo. It is read live from the registry unit so it reflects the
+// serial the async readiness-gated bring-up resolved — not a point-in-time
+// snapshot taken by the composition root before bring-up finished. The name
+// falls back to the central name (SystemInfo carries no name of its own).
+func hubInfoFromUnit(u *central.Unit) mqtt.HubInfo {
+	si := u.SystemInformation()
+	return mqtt.HubInfo{
+		Name:    u.Name(),
+		Model:   si.Model,
+		Version: si.Version,
+		Serial:  si.Serial,
+		URL:     si.URL,
+	}
 }
 
 // wireInstallMode seeds per-interface install-mode discovery (one

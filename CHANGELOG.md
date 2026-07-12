@@ -6,6 +6,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-07-12
+
+### Fixed
+
+- **Home Assistant showed every CCU device's parent as an "unknown device" and
+  never surfaced system variables (nor their device assignments).** The entire
+  hub-discovery plane (system variables, programs, the named central "hub"
+  device, alarm/service messages, connectivity, install-mode) is gated on the
+  CCU serial. Because the readiness-gated central bring-up resolves that serial
+  asynchronously — after the composition root had already stamped the discovery
+  builder with a still-empty serial — every hub discovery payload was silently
+  skipped, including the only payloads that give the synthetic central device a
+  name. Raw state topics (`…/hub/sysvars/<name>/state`, …) were unaffected,
+  which is why the plane looked half-alive. The hub publisher now reads the
+  serial live from the central's `SystemInformation` and re-publishes hub
+  discovery on each central's `CentralSouthboundReadyEvent`, so the central
+  device is named (no more "unknown device" parent) and system-variable /
+  program entities — including their device links — appear once the CCU's
+  serial resolves. No API surface change.
+
 ## [0.36.0] — 2026-07-12
 
 ### Added
