@@ -9,7 +9,7 @@
       <tr>
         <td>{{.Name}}</td>
         <td class="status-{{.Status}}">{{t (printf "health.status.%s" .Status)}}</td>
-        <td>{{.Note}}</td>
+        <td>{{if .NoteKey}}{{t .NoteKey}}{{else}}{{.Note}}{{end}}</td>
         <td>{{.RecordedAt.Format "2006-01-02 15:04:05"}}</td>
       </tr>
       {{end}}

@@ -40,8 +40,16 @@ const (
 
 // Sample is one recorded data point for a component.
 type Sample struct {
-	Healthy   bool
-	Note      string
+	Healthy bool
+	// Note is the stable, English machine string. It doubles as a sentinel for
+	// the scoring/aggregation logic (e.g. strings.Contains(Note, "breaker"),
+	// Note == "event-received"), so it MUST stay stable and un-localized.
+	Note string
+	// NoteKey is the optional i18n catalogue key for the localized DISPLAY of a
+	// static note. Renderers show the localized NoteKey when set and fall back
+	// to Note otherwise. Empty for interpolated notes (which carry dynamic,
+	// un-localized values in Note). Never used for sentinel matching.
+	NoteKey   string
 	Timestamp time.Time
 }
 

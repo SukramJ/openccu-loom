@@ -4108,6 +4108,8 @@ export interface components {
                 name: string;
                 status: string;
                 note?: string;
+                /** @description i18n catalogue key for the localized display of a static note; absent for interpolated notes (render note verbatim). */
+                note_key?: string;
                 /** Format: date-time */
                 recorded_at: string;
             }[];

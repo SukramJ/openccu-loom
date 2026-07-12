@@ -175,7 +175,7 @@ func handleHealth(d Deps, tpl *templateSet) http.HandlerFunc {
 			data.Status = string(d.Health.Overall())
 			for _, c := range d.Health.Snapshot() {
 				data.Components = append(data.Components, handlers.HealthComponent{
-					Name: c.Name, Status: string(c.Status), Note: c.LastSample.Note, RecordedAt: c.LastSample.Timestamp,
+					Name: c.Name, Status: string(c.Status), Note: c.LastSample.Note, NoteKey: c.LastSample.NoteKey, RecordedAt: c.LastSample.Timestamp,
 				})
 			}
 		}
