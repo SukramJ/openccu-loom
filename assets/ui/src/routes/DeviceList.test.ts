@@ -30,6 +30,21 @@ vi.mock("$lib/stores/devices.svelte", () => ({
   },
 }));
 
+// DeviceList reads centralStore.items for the per-central filter chips and
+// the "still initializing" banner; the multi-central UI is not under test
+// here, so an empty, inert fleet keeps that code path a no-op.
+vi.mock("$lib/stores/centrals.svelte", () => ({
+  centralStore: {
+    items: [],
+    loading: false,
+    error: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
+    ensureStream: vi.fn(),
+    byName: vi.fn(() => undefined),
+    close: vi.fn(),
+  },
+}));
+
 vi.mock("$lib/api/client", () => ({
   api: {
     refreshDevices: vi.fn().mockResolvedValue(undefined),

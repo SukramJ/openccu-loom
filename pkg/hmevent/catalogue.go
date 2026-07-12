@@ -123,6 +123,13 @@ const (
 	// one-shot boot snapshot, needed because the bring-up is gated behind
 	// CCU readiness and therefore completes asynchronously, per central.
 	EventTypeCentralSouthboundReady EventType = "central.southbound_ready"
+
+	// EventTypeCentralReadinessChanged fires each time a central advances
+	// through its readiness-gated southbound bring-up (waiting_for_ccu →
+	// loading_hub → loading_devices → ready). North-bound adapters subscribe
+	// to reflect bring-up progress live, distinguishing "still initializing"
+	// from "offline".
+	EventTypeCentralReadinessChanged EventType = "central.readiness_changed"
 )
 
 // ---------- Central / clients ----------
@@ -139,6 +146,21 @@ type CentralStateChangedEvent struct {
 
 // Type implements Event.
 func (CentralStateChangedEvent) Type() EventType { return EventTypeCentralStateChanged }
+
+// CentralReadinessChangedEvent fires when a central's readiness-gated
+// southbound bring-up advances to a new phase (or its per-interface device
+// load counts change). North-bound adapters use it to surface bring-up
+// progress live.
+type CentralReadinessChangedEvent struct {
+	Base
+	CentralName      string
+	Phase            hmenum.ReadinessPhase
+	InterfacesLoaded int
+	InterfacesTotal  int
+}
+
+// Type implements Event.
+func (CentralReadinessChangedEvent) Type() EventType { return EventTypeCentralReadinessChanged }
 
 // CentralSouthboundReadyEvent fires once a central's southbound bring-up has
 // completed against a ready CCU (names loaded with devices). North-bound

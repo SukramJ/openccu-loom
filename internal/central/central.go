@@ -166,6 +166,14 @@ type Unit struct {
 	// stays authoritative once the initial load has completed.
 	southboundReady bool
 
+	// readinessMu guards readiness below.
+	readinessMu sync.RWMutex
+	// readiness tracks the central's live readiness-gated bring-up phase and
+	// per-interface device-load counts. It is the queryable twin of
+	// [hmevent.CentralReadinessChangedEvent]; north-bound adapters read it to
+	// distinguish "still initializing" from "offline", per central.
+	readiness Readiness
+
 	// stopHooksMu guards stopHooks.
 	stopHooksMu sync.Mutex
 	// stopHooks holds teardown functions grouped by shutdown tier (see
@@ -417,6 +425,35 @@ func (u *Unit) IsSouthboundReady() bool {
 	u.southboundReadyMu.RLock()
 	defer u.southboundReadyMu.RUnlock()
 	return u.southboundReady
+}
+
+// Readiness is the queryable view of a central's readiness-gated southbound
+// bring-up: the current phase plus the per-interface device-load progress.
+type Readiness struct {
+	Phase            hmenum.ReadinessPhase
+	InterfacesLoaded int
+	InterfacesTotal  int
+}
+
+// SetReadiness records the central's current bring-up phase and per-interface
+// device-load counts. Called by the southbound wiring adapter as it advances
+// through the readiness-gated bring-up.
+func (u *Unit) SetReadiness(phase hmenum.ReadinessPhase, loaded, total int) {
+	u.readinessMu.Lock()
+	u.readiness = Readiness{Phase: phase, InterfacesLoaded: loaded, InterfacesTotal: total}
+	u.readinessMu.Unlock()
+}
+
+// Readiness returns the central's current readiness view. The zero-value
+// phase is normalized to [hmenum.ReadinessUnknown].
+func (u *Unit) Readiness() Readiness {
+	u.readinessMu.RLock()
+	defer u.readinessMu.RUnlock()
+	r := u.readiness
+	if r.Phase == "" {
+		r.Phase = hmenum.ReadinessUnknown
+	}
+	return r
 }
 
 // SetLinkResolver installs the [coordinators.ClientResolver] used by

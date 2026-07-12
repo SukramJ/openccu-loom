@@ -69,6 +69,7 @@ const CCUS = [
     url: "https://172.18.4.10",
     is_ha_app: false,
     configured_interfaces: ["HmIP-RF", "BidCos-RF"],
+    readiness: { phase: "ready", ready: true, interfaces_loaded: 2, interfaces_total: 2 },
   },
   {
     name: "ccu-offline",
@@ -76,6 +77,7 @@ const CCUS = [
     available: false,
     is_ha_app: false,
     configured_interfaces: ["HmIP-RF"],
+    readiness: { phase: "waiting_for_ccu", ready: false, interfaces_loaded: 0, interfaces_total: 0 },
   },
 ];
 
@@ -107,8 +109,8 @@ afterEach(() => {
 // 1. Online/offline badge mapping
 // ---------------------------------------------------------------------------
 
-describe("Fleet — availability badge", () => {
-  it("renders an online badge for an available CCU and an offline badge for an unavailable one", async () => {
+describe("Fleet — readiness badge", () => {
+  it("renders a ready badge for a ready CCU and an offline badge for an unavailable one", async () => {
     mockGetSystemCCUs.mockResolvedValue(CCUS);
     mockListDevices.mockResolvedValue(devicesPage(DEVICES));
 
@@ -120,14 +122,15 @@ describe("Fleet — availability badge", () => {
     });
 
     // Cards are sorted by name ("ccu-offline" < "ccu-online"), rendered as
-    // the direct children of the responsive grid.
+    // the direct children of the responsive grid. Badge text comes from
+    // CentralStatusBadge.svelte, driven by the (available, readiness) pair.
     const cards = container.querySelectorAll(".grid > div");
     expect(cards).toHaveLength(2);
     expect(cards[0].textContent).toContain("ccu-offline");
-    expect(cards[0].textContent).toContain("fleet.status.offline");
-    expect(cards[0].textContent).not.toContain("fleet.status.online");
+    expect(cards[0].textContent).toContain("central.readiness.offline");
+    expect(cards[0].textContent).not.toContain("central.readiness.ready");
     expect(cards[1].textContent).toContain("ccu-online");
-    expect(cards[1].textContent).toContain("fleet.status.online");
+    expect(cards[1].textContent).toContain("central.readiness.ready");
   });
 });
 

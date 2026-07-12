@@ -20,6 +20,7 @@
   import { deviceStore } from "$lib/stores/devices.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import CentralStatusBadge from "$lib/components/ui/CentralStatusBadge.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -88,9 +89,7 @@
             <h2 class="min-w-0 truncate text-base font-semibold text-slate-900 dark:text-white">
               {ccu.name}
             </h2>
-            <Badge variant={ccu.available ? "success" : "danger"}>
-              {ccu.available ? t("fleet.status.online") : t("fleet.status.offline")}
-            </Badge>
+            <CentralStatusBadge available={ccu.available} readiness={ccu.readiness} />
           </div>
 
           <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">

@@ -228,6 +228,7 @@ export async function mockAllApis(page: Page): Promise<void> {
             version: '3.75.7',
             is_ha_app: false,
             configured_interfaces: ['HmIP-RF'],
+            readiness: { phase: 'ready', ready: true, interfaces_loaded: 1, interfaces_total: 1 },
           },
         ],
       },
@@ -564,6 +565,7 @@ export async function mockFleet(page: Page): Promise<void> {
             url: 'https://172.18.4.29',
             is_ha_app: false,
             configured_interfaces: ['HmIP-RF', 'BidCos-RF'],
+            readiness: { phase: 'ready', ready: true, interfaces_loaded: 2, interfaces_total: 2 },
           },
           {
             name: 'ccu2',
@@ -571,6 +573,7 @@ export async function mockFleet(page: Page): Promise<void> {
             available: false,
             is_ha_app: false,
             configured_interfaces: ['HmIP-RF'],
+            readiness: { phase: 'waiting_for_ccu', ready: false, interfaces_loaded: 0, interfaces_total: 0 },
           },
         ],
       },
