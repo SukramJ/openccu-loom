@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: acb0f84f
-HEAD: acb0f84f
+Generated: de93c63
+HEAD: de93c63
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24533 |
-| Reachable | 4201 |
-| Whitelisted | 17787 |
-| **Unreachable** | **2545** |
+| Total Exported | 24594 |
+| Reachable | 4217 |
+| Whitelisted | 17830 |
+| **Unreachable** | **2547** |
 
 ## Top-20 Packages by Dead Code
 
@@ -120,7 +120,7 @@ HEAD: acb0f84f
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
 | internal/ccudata | 0 | 31 | 4 |
-| internal/central | 0 | 20 | 2 |
+| internal/central | 0 | 22 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |
 | internal/central/coordinators | 0 | 119 | 4 |
 | internal/central/registry | 0 | 15 | 0 |
@@ -177,7 +177,7 @@ HEAD: acb0f84f
 | internal/north/mqtt | 0 | 76 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
-| internal/north/ui | 0 | 2 | 0 |
+| internal/north/ui | 0 | 1 | 0 |
 | internal/orderedjson | 0 | 5 | 0 |
 | internal/restapi | 0 | 5 | 0 |
 | internal/scheduler | 0 | 4 | 0 |
@@ -188,6 +188,6 @@ HEAD: acb0f84f
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 60 | 22 |
 | pkg/hmapi | 0 | 77 | 14 |
-| pkg/hmenum | 0 | 91 | 36 |
+| pkg/hmenum | 0 | 92 | 36 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 78 | 0 |
