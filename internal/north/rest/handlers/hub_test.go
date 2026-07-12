@@ -1566,3 +1566,104 @@ func TestToProgramSummary_UniqueID(t *testing.T) {
 		t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
 	}
 }
+
+// TestListSysvars_DeviceLinkExposed verifies that a sysvar associated with a
+// device channel — via the CCU's explicit channel assignment or a
+// device-referencing name, both stored as the resolved channel link — renders
+// channel and device_address in the summary so REST/WS clients can attach the
+// entity to the physical device instead of the hub. Pins the real-world CCU
+// energy-counter name shape as the linked example.
+func TestListSysvars_DeviceLinkExposed(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	linked := hub.NewSysvar("test-ccu", "svEnergyCounter_14884_000858A994D482:7", "", hmenum.HubValueTypeFloat, nil)
+	linked.SetChannel("000858A994D482:7")
+	h.PutSysvar(linked)
+	h.PutSysvar(hub.NewSysvar("test-ccu", "Unlinked", "", hmenum.HubValueTypeLogic, nil))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sysvars", http.NoBody)
+	w := httptest.NewRecorder()
+	ListSysvars(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body []SysvarSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	byName := make(map[string]SysvarSummary, len(body))
+	for _, s := range body {
+		byName[s.Name] = s
+	}
+	got, ok := byName["svEnergyCounter_14884_000858A994D482:7"]
+	if !ok {
+		t.Fatal("linked sysvar missing from summary")
+	}
+	if got.Channel != "000858A994D482:7" {
+		t.Errorf("Channel = %q, want %q", got.Channel, "000858A994D482:7")
+	}
+	if got.DeviceAddress != "000858A994D482" {
+		t.Errorf("DeviceAddress = %q, want %q", got.DeviceAddress, "000858A994D482")
+	}
+	unlinked, ok := byName["Unlinked"]
+	if !ok {
+		t.Fatal("unlinked sysvar missing from summary")
+	}
+	if unlinked.Channel != "" || unlinked.DeviceAddress != "" {
+		t.Errorf("unlinked sysvar must omit channel/device_address, got %q/%q",
+			unlinked.Channel, unlinked.DeviceAddress)
+	}
+	// The wire encoding must omit the fields entirely for the hub-card case.
+	if strings.Contains(w.Body.String(), `"Unlinked","channel"`) {
+		t.Error("unlinked sysvar serialised a channel field")
+	}
+}
+
+// TestListPrograms_DeviceLinkExposed mirrors the sysvar device-link summary
+// test for programs (name-match only — programs have no CCU-side channel
+// assignment).
+func TestListPrograms_DeviceLinkExposed(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	linked := hub.NewProgram("test-ccu", "P1", "Heizung 000858A994D482:7", "", false, nil)
+	linked.SetChannel("000858A994D482:7")
+	h.PutProgram(linked)
+	h.PutProgram(hub.NewProgram("test-ccu", "P2", "Unlinked", "", false, nil))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body []ProgramSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	byID := make(map[string]ProgramSummary, len(body))
+	for _, p := range body {
+		byID[p.ID] = p
+	}
+	got, ok := byID["P1"]
+	if !ok {
+		t.Fatal("linked program missing from summary")
+	}
+	if got.Channel != "000858A994D482:7" {
+		t.Errorf("Channel = %q, want %q", got.Channel, "000858A994D482:7")
+	}
+	if got.DeviceAddress != "000858A994D482" {
+		t.Errorf("DeviceAddress = %q, want %q", got.DeviceAddress, "000858A994D482")
+	}
+	unlinked, ok := byID["P2"]
+	if !ok {
+		t.Fatal("unlinked program missing from summary")
+	}
+	if unlinked.Channel != "" || unlinked.DeviceAddress != "" {
+		t.Errorf("unlinked program must omit channel/device_address, got %q/%q",
+			unlinked.Channel, unlinked.DeviceAddress)
+	}
+}

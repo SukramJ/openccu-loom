@@ -559,7 +559,7 @@
     },
     {
       "category": "programs",
-      "description": "List all CCU programs.",
+      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card.",
       "name": "programs.list"
     },
     {
@@ -678,7 +678,7 @@
     },
     {
       "category": "sysvars",
-      "description": "List all CCU system variables.",
+      "description": "List all CCU system variables. Each entry carries optional `channel` / `device_address` fields when the variable is associated with a device (explicit CCU channel assignment or a device identifier in the name); absent fields mean the entity belongs on the central hub card.",
       "name": "sysvars.list"
     },
     {

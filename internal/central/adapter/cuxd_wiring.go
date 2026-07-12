@@ -195,7 +195,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	// (Re)establish hub-data-point device links now that this interface's
 	// devices are materialised — see assignHubChannels. Idempotent across the
 	// multiple per-interface ingests of one central.
-	assignHubChannels(unit)
+	assignHubChannels(unit, logger)
 
 	for _, d := range unit.ModelRegistry.List() {
 		if d.InterfaceID != wireID {

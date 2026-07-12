@@ -134,6 +134,16 @@ type ProgramSummary struct {
 	// are configured (entry included but disabled by default). Mirrors the
 	// reference stack's marker-driven enabled-by-default resolution.
 	EnabledDefault bool `json:"enabled_default,omitempty"`
+	// Channel is the canonical channel address ("ADDR:idx") of the device
+	// channel this program is associated with (resolved from a device
+	// identifier in the program name). Empty when the program belongs to no
+	// device — clients then attach the entity to the central hub device
+	// instead of a physical device.
+	Channel string `json:"channel,omitempty"`
+	// DeviceAddress is the device part of Channel (before the ":").
+	// Clients use it to group the entity under the owning physical device;
+	// when empty the entity belongs on the hub card.
+	DeviceAddress string `json:"device_address,omitempty"`
 }
 
 // SysvarSummary is one entry in `GET /api/v1/sysvars`.
@@ -177,6 +187,17 @@ type SysvarSummary struct {
 	// are configured (entry included but disabled by default). Mirrors the
 	// reference stack's marker-driven enabled-by-default resolution.
 	EnabledDefault bool `json:"enabled_default,omitempty"`
+	// Channel is the canonical channel address ("ADDR:idx") of the device
+	// channel this system variable is associated with — either the explicit
+	// CCU WebUI channel assignment ("Kanalzuordnung") or, failing that, a
+	// device identifier resolved from the variable name. Empty when the
+	// variable belongs to no device — clients then attach the entity to the
+	// central hub device instead of a physical device.
+	Channel string `json:"channel,omitempty"`
+	// DeviceAddress is the device part of Channel (before the ":").
+	// Clients use it to group the entity under the owning physical device;
+	// when empty the entity belongs on the hub card.
+	DeviceAddress string `json:"device_address,omitempty"`
 }
 
 // SysvarSetRequest is the body of `PUT /sysvars/{name}`.
@@ -315,6 +336,8 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 	// M-4: propagate IsInternal so north-bound can filter Tmp_*-programs.
 	e.IsInternal = p.IsInternal
 	e.EnabledDefault = p.EnabledByDefault()
+	e.Channel = p.Channel()
+	e.DeviceAddress = p.DeviceAddress()
 	return e
 }
 
@@ -649,6 +672,8 @@ func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 		IsExtended:     s.IsExtended,
 		Vid:            s.Vid,
 		EnabledDefault: s.EnabledByDefault(),
+		Channel:        s.Channel(),
+		DeviceAddress:  s.DeviceAddress(),
 	}
 	if ok {
 		sum.Value = v.Unwrap()

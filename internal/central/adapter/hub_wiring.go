@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
@@ -327,14 +328,14 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 				// A refresh may add programs whose name carries a device
 				// identifier; (re)establish the device links so discovery lands
 				// on the right card.
-				assignHubChannels(unit)
+				assignHubChannels(unit, logger)
 				return nil
 			},
 			Sysvars: func(ctx context.Context) error {
 				if err := loadSysvars(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
 					return err
 				}
-				assignHubChannels(unit)
+				assignHubChannels(unit, logger)
 				return nil
 			},
 			Inbox: func(ctx context.Context) error {
@@ -861,14 +862,32 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 	// this call is_extended never fires and extended variables spawn as
 	// read-only sensors instead of switch/select/number/text. Best-effort:
 	// a failed script run degrades to the (empty) getAll description.
+	//
+	// The same script also reports the channel each variable is explicitly
+	// assigned to in the CCU WebUI ("Kanalzuordnung"); that assignment is
+	// the primary input for the device-link resolution in
+	// [assignHubChannels]. haveDescs gates the explicit-channel updates so
+	// a transiently failing script run keeps the last known assignments
+	// instead of clearing them.
 	descByID := make(map[string]string)
+	chanByID := make(map[string]string)
+	haveDescs := false
 	if runner != nil {
 		if descs, err := runner.GetSystemVariableDescriptions(ctx); err == nil {
+			haveDescs = true
 			for _, d := range descs {
 				if decoded, derr := url.QueryUnescape(d.Description); derr == nil {
 					descByID[d.ID] = decoded
 				} else {
 					descByID[d.ID] = d.Description
+				}
+				if d.ChannelAddress == "" {
+					continue
+				}
+				if decoded, derr := url.QueryUnescape(d.ChannelAddress); derr == nil {
+					chanByID[d.ID] = decoded
+				} else {
+					chanByID[d.ID] = d.ChannelAddress
 				}
 			}
 		}
@@ -896,40 +915,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 			continue
 		}
 		freshNames[v.Name] = struct{}{}
-		desc, isExtended := parseSysvarDescription(rawDesc)
-		if existing, ok := h.Sysvar(v.Name); ok {
-			// Update the existing pointer in-place so subscribers wired via
-			// OnUpdate (e.g. MQTT publisher) remain valid across periodic
-			// refreshes. Only allocate a new Sysvar when the name is new.
-			existing.Unit = v.Unit
-			existing.ValueType = valueType
-			existing.ValueList = valueList
-			existing.Writer = writer
-			existing.IsExtended = isExtended
-			existing.IsInternal = v.IsInternal
-			existing.Description = desc
-			existing.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
-			if vid, err := strconv.Atoi(v.ID); err == nil {
-				existing.Vid = vid
-			}
-			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
-				existing.OnValue(pv)
-			}
-		} else {
-			sv := hub.NewSysvar(h.CentralName, v.Name, desc, valueType, writer)
-			sv.Unit = v.Unit
-			sv.ValueList = valueList
-			sv.IsExtended = isExtended
-			sv.IsInternal = v.IsInternal
-			sv.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
-			if vid, err := strconv.Atoi(v.ID); err == nil {
-				sv.Vid = vid
-			}
-			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
-				sv.OnValue(pv)
-			}
-			h.PutSysvar(sv)
-		}
+		upsertSysvar(h, v, writer, opts, rawDesc, valueType, valueList, chanByID[v.ID], haveDescs)
 	}
 	// Remove sysvars that are no longer present on the CCU.
 	for _, existing := range h.Sysvars() {
@@ -940,26 +926,81 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 	return nil
 }
 
-// assignHubChannels associates every system variable and program whose
-// legacy_name carries a device or channel identifier — an address suffix, a
-// channel ise_id, or a device ise_id — with the owning channel, and clears the
-// association for those that no longer match. When any association changes it
-// publishes a [hmevent.HubChannelsAssignedEvent] so north-bound adapters
-// re-publish the affected discovery.
+// upsertSysvar creates or in-place-updates the [hub.Sysvar] for one
+// SysVar.getAll entry. Existing pointers are updated in place so
+// subscribers wired via OnUpdate (e.g. the MQTT publisher) remain valid
+// across periodic refreshes; a new Sysvar is only allocated when the
+// name is new. haveDescs gates the explicit-channel update so a
+// transiently failing description script keeps the last known
+// assignment instead of clearing it (a fresh Sysvar always applies the
+// current value — there is no prior state to preserve).
+func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubScanOptions, rawDesc string, valueType hmenum.HubValueType, valueList []string, explicitChannel string, haveDescs bool) {
+	desc, isExtended := parseSysvarDescription(rawDesc)
+	existing, ok := h.Sysvar(v.Name)
+	if !ok {
+		existing = hub.NewSysvar(h.CentralName, v.Name, desc, valueType, writer)
+	}
+	existing.Unit = v.Unit
+	existing.ValueType = valueType
+	existing.ValueList = valueList
+	existing.Writer = writer
+	existing.IsExtended = isExtended
+	existing.IsInternal = v.IsInternal
+	existing.Description = desc
+	existing.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
+	if haveDescs || !ok {
+		existing.SetExplicitChannel(explicitChannel)
+	}
+	if vid, err := strconv.Atoi(v.ID); err == nil {
+		existing.Vid = vid
+	}
+	if pv, pok := parseSysvarValue(valueType, v.Value); pok {
+		existing.OnValue(pv)
+	}
+	if !ok {
+		h.PutSysvar(existing)
+	}
+}
+
+// assignHubChannels associates every system variable and program with its
+// owning channel and clears the association for those that no longer match.
+// When any association changes it publishes a
+// [hmevent.HubChannelsAssignedEvent] so north-bound adapters re-publish the
+// affected discovery.
 //
-// This is the openccu-loom equivalent of the Python reference's
-// channel_lookup.identify_channel wiring at hub data-point construction
-// (`model/hub/data_point.py:84`). openccu-loom materialises devices
-// AFTER the hub is scanned (WireHub runs before the per-interface
+// Resolution precedence per system variable:
+//
+//  1. The explicit CCU WebUI channel assignment ("Kanalzuordnung",
+//     [hub.Sysvar.ExplicitChannel]) — but only when the address resolves to
+//     a device channel registered on THIS central. An unresolvable explicit
+//     assignment (device filtered out, on another central, or removed) is
+//     logged at debug level and falls through to name matching.
+//  2. Name matching: a legacy_name carrying a device or channel identifier —
+//     an address suffix, a channel ise_id, or a device ise_id — resolves via
+//     [registry.ModelRegistry.IdentifyChannel].
+//  3. Otherwise the variable stays unassigned (hub card).
+//
+// Programs have no CCU-side channel assignment (the WebUI offers no
+// Kanalzuordnung for programs), so they resolve by name matching only.
+//
+// The name-matching half is the openccu-loom equivalent of the Python
+// reference's channel_lookup.identify_channel wiring at hub data-point
+// construction (`model/hub/data_point.py:84`). openccu-loom materialises
+// devices AFTER the hub is scanned (WireHub runs before the per-interface
 // IngestFromBackend), so the link cannot be resolved at construction time; it
 // is re-established here as an idempotent post-pass, invoked after each device
 // ingest and after each periodic sysvar/program refresh. Re-running is cheap
-// and safe: every data point is (re)set to its current best match or cleared.
-func assignHubChannels(unit *central.Unit) {
+// and safe: every data point is (re)set to its current best match or cleared,
+// and the per-entity assignment log fires only when the resolution CHANGED —
+// repeated no-op passes stay silent.
+func assignHubChannels(unit *central.Unit, logger *slog.Logger) {
 	if unit == nil || unit.HubModel == nil || unit.ModelRegistry == nil {
 		return
 	}
-	resolve := func(legacyName string) string {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	resolveByName := func(legacyName string) string {
 		if _, ch, ok := unit.ModelRegistry.IdentifyChannel(legacyName); ok {
 			return ch.Address
 		}
@@ -967,15 +1008,45 @@ func assignHubChannels(unit *central.Unit) {
 	}
 	changed := false
 	for _, sv := range unit.HubModel.Sysvars() {
-		if next := resolve(sv.LegacyName()); next != sv.Channel() {
+		next, source := "", "none"
+		if explicit := sv.ExplicitChannel(); explicit != "" {
+			if channelRegistered(unit.ModelRegistry, explicit) {
+				next, source = explicit, "explicit"
+			} else {
+				logger.Debug("hub.sysvar.explicit_channel_unresolved",
+					slog.String("central", unit.Name()),
+					slog.String("name", sv.Name),
+					slog.String("channel_address", explicit))
+			}
+		}
+		if next == "" {
+			if byName := resolveByName(sv.LegacyName()); byName != "" {
+				next, source = byName, "name"
+			}
+		}
+		if next != sv.Channel() {
 			sv.SetChannel(next)
 			changed = true
+			logger.Info("hub.sysvar.channel_assigned",
+				slog.String("central", unit.Name()),
+				slog.String("name", sv.Name),
+				slog.String("source", source),
+				slog.String("channel", next))
 		}
 	}
 	for _, p := range unit.HubModel.Programs() {
-		if next := resolve(p.LegacyName()); next != p.Channel() {
+		next, source := "", "none"
+		if byName := resolveByName(p.LegacyName()); byName != "" {
+			next, source = byName, "name"
+		}
+		if next != p.Channel() {
 			p.SetChannel(next)
 			changed = true
+			logger.Info("hub.program.channel_assigned",
+				slog.String("central", unit.Name()),
+				slog.String("name", p.Name),
+				slog.String("source", source),
+				slog.String("channel", next))
 		}
 	}
 	if changed && unit.EventBus != nil {
@@ -988,6 +1059,30 @@ func assignHubChannels(unit *central.Unit) {
 			CentralName: unit.Name(),
 		})
 	}
+}
+
+// channelRegistered reports whether address resolves to a device channel
+// registered on this central. The device part (before the ":") selects the
+// device; a device-level address without a ":" counts as registered when the
+// device itself exists. Used by [assignHubChannels] to validate an explicit
+// CCU channel assignment before trusting it — the CCU may reference a device
+// that this central never materialised.
+func channelRegistered(reg *registry.ModelRegistry, address string) bool {
+	if reg == nil || address == "" {
+		return false
+	}
+	deviceAddr := address
+	if i := strings.IndexByte(address, ':'); i >= 0 {
+		deviceAddr = address[:i]
+	}
+	d, ok := reg.Get(deviceAddr)
+	if !ok || d == nil {
+		return false
+	}
+	if deviceAddr == address {
+		return true
+	}
+	return d.Channel(address) != nil
 }
 
 // loadInbox fetches the pending-device inbox via the ReGa script engine and

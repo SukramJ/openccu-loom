@@ -4662,6 +4662,20 @@ export interface components {
              *     recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
              */
             unique_id: string;
+            /**
+             * @description Canonical channel address ("ADDR:idx") of the device channel
+             *     this program is associated with (resolved from a device
+             *     identifier in the program name). Absent when the program
+             *     belongs to no device — clients then attach the entity to the
+             *     central hub device instead of a physical device.
+             */
+            channel?: string;
+            /**
+             * @description Device part of `channel` (before the ":"). Clients use it to
+             *     group the entity under the owning physical device; absent
+             *     together with `channel` (entity belongs on the hub card).
+             */
+            device_address?: string;
         };
         SysvarSummary: {
             /** @description CCU this system variable belongs to. */
@@ -4709,6 +4723,22 @@ export interface components {
              *     recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
              */
             unique_id: string;
+            /**
+             * @description Canonical channel address ("ADDR:idx") of the device channel
+             *     this system variable is associated with — either the explicit
+             *     CCU WebUI channel assignment ("Kanalzuordnung") or, failing
+             *     that, a device identifier resolved from the variable name.
+             *     Absent when the variable belongs to no device — clients then
+             *     attach the entity to the central hub device instead of a
+             *     physical device.
+             */
+            channel?: string;
+            /**
+             * @description Device part of `channel` (before the ":"). Clients use it to
+             *     group the entity under the owning physical device; absent
+             *     together with `channel` (entity belongs on the hub card).
+             */
+            device_address?: string;
         };
         SysvarSetRequest: {
             value: unknown;
@@ -5310,6 +5340,18 @@ export interface components {
             value: unknown;
             /** @description Prior sysvar value; omitted when no prior value was tracked. */
             previous?: unknown;
+            /**
+             * @description Canonical channel address ("ADDR:idx") of the device channel
+             *     this sysvar is associated with (explicit CCU assignment or
+             *     name match — the same value the REST SysvarSummary carries).
+             *     Omitted when the sysvar belongs to no device.
+             */
+            channel?: string;
+            /**
+             * @description Device part of `channel` (before the ":"); omitted together
+             *     with `channel`.
+             */
+            device_address?: string;
         };
         /**
          * @description Payload of a `hub.program_executed` broadcast. Topic pattern
@@ -5329,6 +5371,18 @@ export interface components {
              *     see DataPointValueChangedPayload.unique_id.
              */
             unique_id?: string;
+            /**
+             * @description Canonical channel address ("ADDR:idx") of the device channel
+             *     this program is associated with (name match — the same value
+             *     the REST ProgramSummary carries). Omitted when the program
+             *     belongs to no device or is not yet loaded in the hub model.
+             */
+            channel?: string;
+            /**
+             * @description Device part of `channel` (before the ":"); omitted together
+             *     with `channel`.
+             */
+            device_address?: string;
         };
         /**
          * @description Payload of a `hub.install_mode_changed` broadcast. Topic pattern
