@@ -106,7 +106,7 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, 
 	}
 
 	body := map[string]any{
-		"name":              "Week Profile",
+		"name":              d.tr("discovery.week_profile"),
 		"unique_id":         uniqueID,
 		"object_id":         objectID,
 		"state_topic":       stateTopic,

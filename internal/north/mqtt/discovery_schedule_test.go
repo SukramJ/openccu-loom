@@ -47,7 +47,7 @@ func TestBuildScheduleEntityDiscovery(t *testing.T) {
 				if err := json.Unmarshal(item.Payload, &body); err != nil {
 					t.Fatalf("payload is not valid JSON: %v", err)
 				}
-				if body["name"] != "Zeitplan" {
+				if body["name"] != "Schedule" {
 					t.Errorf("name = %v, want Zeitplan", body["name"])
 				}
 				if _, ok := body["json_attributes_topic"]; !ok {

@@ -360,6 +360,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		RawEnabled:         cfg.North.MQTT.RawEnabled,
 		HADiscoveryEnabled: cfg.North.MQTT.DiscoveryEnabled,
 		SubDevicesEnabled:  cfg.North.MQTT.SubDevicesEnabled,
+		Locale:             cfg.Locale,
 		HealthSupplier:     bridgeHealthSupplier(cfg, startedAt),
 		Collector:          collector,
 	}, pub)

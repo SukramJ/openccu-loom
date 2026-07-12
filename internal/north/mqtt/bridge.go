@@ -74,6 +74,11 @@ type BridgeConfig struct {
 	// entities.
 	SubDevicesEnabled bool
 
+	// Locale selects the language of daemon-synthesised discovery names (e.g.
+	// friendly names for CCU-auto-generated system variables). Passed to the
+	// auto-created default discovery builder. Empty falls back to English.
+	Locale string
+
 	// LegacyAlias mirrors PublishState + PublishAvailability under
 	// The
 	// same data during migration. Disabled by default.
@@ -430,7 +435,8 @@ func NewBridge(cfg BridgeConfig, client Publisher) *Bridge {
 	// never published even though the operator turned discovery on.
 	if cfg.HADiscoveryEnabled && cfg.DiscoveryBuilder == nil {
 		cfg.DiscoveryBuilder = NewDefaultDiscoveryBuilder(topics, cfg.CentralName).
-			WithSubDevices(cfg.SubDevicesEnabled)
+			WithSubDevices(cfg.SubDevicesEnabled).
+			WithLocale(cfg.Locale)
 	}
 	return &Bridge{
 		cfg:         cfg,
