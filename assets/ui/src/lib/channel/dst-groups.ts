@@ -1,4 +1,5 @@
 import type { UISchemaParameter } from "$lib/api/types";
+import { t } from "$lib/i18n";
 
 /**
  * Daylight-saving-time parameters (`DST_START_*` / `DST_END_*`)
@@ -37,13 +38,13 @@ export function detectDstGroups(params: UISchemaParameter[]): DstGroups {
   return { start, end, paired };
 }
 
-export function dstHeader(name: DstGroupName, locale: string): string {
-  if (locale === "de") {
-    return name === "start" ? "Beginn der Sommerzeit" : "Ende der Sommerzeit";
-  }
+// Reads `prefs.locale` reactively via `t()` (Pattern A in
+// $lib/i18n.ts) — no `locale` param needed; callers no longer thread
+// one just to render this header.
+export function dstHeader(name: DstGroupName): string {
   return name === "start"
-    ? "Start of daylight saving time"
-    : "End of daylight saving time";
+    ? t("channel.dst.start_header")
+    : t("channel.dst.end_header");
 }
 
 /**

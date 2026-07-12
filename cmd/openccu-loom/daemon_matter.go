@@ -194,6 +194,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		Discriminator:           mc.Discriminator,
 		ExposeSecondaryChannels: mc.ExposeSecondaryChannels,
 		Labels:                  labels,
+		Locale:                  cfg.Locale,
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))

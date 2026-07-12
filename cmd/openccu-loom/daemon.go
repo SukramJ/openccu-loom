@@ -219,7 +219,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	bridge := adapter.NewEventBridge(reg, wsHub, mqttWiring).
 		WithVisibility(visFilter).
-		WithParameterLabels(adapter.NewMqttParameterLabelAdapter(parameterLabels))
+		WithParameterLabels(adapter.NewMqttParameterLabelAdapter(parameterLabels)).
+		WithLocale(cfg.Locale)
 	// EventBridge starts here (PhaseEarly, before southbound hydration) so the
 	// boot-time initial snapshot publishes onto a live bridge; its ordered
 	// teardown is owned by northBridges via the mqttService registered below.

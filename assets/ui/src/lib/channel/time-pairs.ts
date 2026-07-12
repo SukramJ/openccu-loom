@@ -1,4 +1,5 @@
 import type { UISchemaParameter } from "$lib/api/types";
+import { t } from "$lib/i18n";
 
 /**
  * The CCU models delay/duration config with two companion parameters
@@ -27,13 +28,21 @@ export type TimePreset = {
   a: number;
   /** value / factor component */
   b: number;
-  labelEn: string;
-  labelDe: string;
+  /**
+   * i18n key resolved via $lib/i18n's `t()`. Word-bearing presets
+   * ("Not active", "1 second", …) carry a `parameter.time_preset.*`
+   * catalogue key. Presets whose text is locale-identical
+   * (numeric-with-unit like "100 ms", "1 s", plus LINK presets the
+   * backend already resolved server-side) carry the literal display
+   * string instead — `t()` falls back to returning an unknown key
+   * verbatim, so the literal string round-trips unchanged.
+   */
+  labelKey: string;
 };
 
-/** Pick the active-locale label for a preset. */
-export function presetLabel(p: TimePreset, locale: string): string {
-  return locale === "de" ? p.labelDe : p.labelEn;
+/** Resolve a preset's label for the active locale. */
+export function presetLabel(p: TimePreset): string {
+  return t(p.labelKey);
 }
 
 export type TimePair = {
@@ -59,19 +68,19 @@ export type TimePair = {
  * value} pair when the user picks a preset.
  */
 export const HMIP_TIME_PRESETS: TimePreset[] = [
-  { a: 0, b: 0, labelEn: "Not active", labelDe: "Nicht aktiv" },
-  { a: 0, b: 1, labelEn: "100 ms", labelDe: "100 ms" },
-  { a: 0, b: 3, labelEn: "300 ms", labelDe: "300 ms" },
-  { a: 0, b: 5, labelEn: "500 ms", labelDe: "500 ms" },
-  { a: 0, b: 15, labelEn: "1500 ms", labelDe: "1500 ms" },
-  { a: 1, b: 1, labelEn: "1 second", labelDe: "1 Sekunde" },
-  { a: 1, b: 2, labelEn: "2 seconds", labelDe: "2 Sekunden" },
-  { a: 1, b: 3, labelEn: "3 seconds", labelDe: "3 Sekunden" },
-  { a: 1, b: 30, labelEn: "30 seconds", labelDe: "30 Sekunden" },
-  { a: 2, b: 1, labelEn: "1 minute", labelDe: "1 Minute" },
-  { a: 2, b: 2, labelEn: "2 minutes", labelDe: "2 Minuten" },
-  { a: 2, b: 4, labelEn: "4 minutes", labelDe: "4 Minuten" },
-  { a: 2, b: 15, labelEn: "15 minutes", labelDe: "15 Minuten" },
+  { a: 0, b: 0, labelKey: "parameter.time_preset.not_active" },
+  { a: 0, b: 1, labelKey: "100 ms" },
+  { a: 0, b: 3, labelKey: "300 ms" },
+  { a: 0, b: 5, labelKey: "500 ms" },
+  { a: 0, b: 15, labelKey: "1500 ms" },
+  { a: 1, b: 1, labelKey: "parameter.time_preset.1_second" },
+  { a: 1, b: 2, labelKey: "parameter.time_preset.2_seconds" },
+  { a: 1, b: 3, labelKey: "parameter.time_preset.3_seconds" },
+  { a: 1, b: 30, labelKey: "parameter.time_preset.30_seconds" },
+  { a: 2, b: 1, labelKey: "parameter.time_preset.1_minute" },
+  { a: 2, b: 2, labelKey: "parameter.time_preset.2_minutes" },
+  { a: 2, b: 4, labelKey: "parameter.time_preset.4_minutes" },
+  { a: 2, b: 15, labelKey: "parameter.time_preset.15_minutes" },
 ];
 
 /**
@@ -80,27 +89,27 @@ export const HMIP_TIME_PRESETS: TimePreset[] = [
  * ONDELAY_TIME / RAMP_ON_TIME configurations.
  */
 export const HM_TIME_PRESETS: TimePreset[] = [
-  { a: 0, b: 0, labelEn: "Not active", labelDe: "Nicht aktiv" },
-  { a: 0, b: 1, labelEn: "100 ms", labelDe: "100 ms" },
-  { a: 1, b: 1, labelEn: "1 s", labelDe: "1 s" },
-  { a: 1, b: 2, labelEn: "2 s", labelDe: "2 s" },
-  { a: 1, b: 3, labelEn: "3 s", labelDe: "3 s" },
-  { a: 2, b: 1, labelEn: "5 s", labelDe: "5 s" },
-  { a: 3, b: 1, labelEn: "10 s", labelDe: "10 s" },
-  { a: 3, b: 3, labelEn: "30 s", labelDe: "30 s" },
-  { a: 4, b: 1, labelEn: "1 min", labelDe: "1 min" },
-  { a: 4, b: 2, labelEn: "2 min", labelDe: "2 min" },
-  { a: 5, b: 1, labelEn: "5 min", labelDe: "5 min" },
-  { a: 6, b: 1, labelEn: "10 min", labelDe: "10 min" },
-  { a: 6, b: 3, labelEn: "30 min", labelDe: "30 min" },
-  { a: 7, b: 1, labelEn: "1 h", labelDe: "1 h" },
-  { a: 7, b: 2, labelEn: "2 h", labelDe: "2 h" },
-  { a: 7, b: 3, labelEn: "3 h", labelDe: "3 h" },
-  { a: 7, b: 5, labelEn: "5 h", labelDe: "5 h" },
-  { a: 7, b: 8, labelEn: "8 h", labelDe: "8 h" },
-  { a: 7, b: 12, labelEn: "12 h", labelDe: "12 h" },
-  { a: 7, b: 24, labelEn: "24 h", labelDe: "24 h" },
-  { a: 7, b: 31, labelEn: "Permanent", labelDe: "Permanent" },
+  { a: 0, b: 0, labelKey: "parameter.time_preset.not_active" },
+  { a: 0, b: 1, labelKey: "100 ms" },
+  { a: 1, b: 1, labelKey: "1 s" },
+  { a: 1, b: 2, labelKey: "2 s" },
+  { a: 1, b: 3, labelKey: "3 s" },
+  { a: 2, b: 1, labelKey: "5 s" },
+  { a: 3, b: 1, labelKey: "10 s" },
+  { a: 3, b: 3, labelKey: "30 s" },
+  { a: 4, b: 1, labelKey: "1 min" },
+  { a: 4, b: 2, labelKey: "2 min" },
+  { a: 5, b: 1, labelKey: "5 min" },
+  { a: 6, b: 1, labelKey: "10 min" },
+  { a: 6, b: 3, labelKey: "30 min" },
+  { a: 7, b: 1, labelKey: "1 h" },
+  { a: 7, b: 2, labelKey: "2 h" },
+  { a: 7, b: 3, labelKey: "3 h" },
+  { a: 7, b: 5, labelKey: "5 h" },
+  { a: 7, b: 8, labelKey: "8 h" },
+  { a: 7, b: 12, labelKey: "12 h" },
+  { a: 7, b: 24, labelKey: "24 h" },
+  { a: 7, b: 31, labelKey: "Permanent" },
 ];
 
 export function presetsFor(shape: TimePairShape): TimePreset[] {
@@ -139,11 +148,14 @@ export function detectTimePairs(
     const shape: TimePairShape = slot.base.name.endsWith("_UNIT")
       ? "hmip_unit_value"
       : "hm_base_factor";
+    // The LINK classifier already resolves `tp.label` server-side for
+    // the request locale, so it is literal, locale-identical text —
+    // same fallback-through-`t()` treatment as the numeric-with-unit
+    // presets above.
     const presets = (slot.base.time_presets ?? slot.factor.time_presets)?.map((tp) => ({
       a: tp.base,
       b: tp.factor,
-      labelEn: tp.label,
-      labelDe: tp.label,
+      labelKey: tp.label,
     }));
     pairs.push({
       prefix: pairID,

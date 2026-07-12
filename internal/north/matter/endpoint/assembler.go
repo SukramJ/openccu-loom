@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
@@ -49,6 +50,9 @@ type Config struct {
 	// render the same per-parameter display name. Nil is tolerated —
 	// the suffix then falls back to the title-cased parameter.
 	Labels device.ParameterTranslator
+	// Locale selects the language of the NodeLabel channel-number fallback
+	// ("Channel N" / "Kanal N"). Empty falls back to the catalogue default.
+	Locale string
 }
 
 // Validate returns nil when the config is internally consistent.
@@ -102,6 +106,9 @@ type Assembler struct {
 	exposures ExposureChecker
 	cfg       Config
 	logger    *slog.Logger
+	// translations resolves the localized NodeLabel channel-number fallback in
+	// cfg.Locale. Auto-loaded in [New] (immutable embedded data); nil-tolerant.
+	translations *i18n.Catalogs
 	// versions owns the per-(endpoint, cluster) DataVersion trackers,
 	// keyed by the stable [store.EndpointKey]. It lives across every
 	// [Assembler.Assemble] so a bridged endpoint's DataVersion survives
@@ -123,13 +130,27 @@ func New(s Store, cfg Config, logger *slog.Logger) (*Assembler, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Assembler{
+	a := &Assembler{
 		store:     s,
 		exposures: allowAllExposureChecker{},
 		cfg:       cfg,
 		logger:    logger,
 		versions:  newVersionRegistry(),
-	}, nil
+	}
+	if cat, err := i18n.NewCatalogs(); err == nil {
+		a.translations = cat
+	}
+	return a, nil
+}
+
+// channelLabel returns the localized word for a channel ("Channel" / "Kanal"),
+// used as the NodeLabel channel-number fallback. Falls back to "Channel" when
+// no catalogues are wired.
+func (a *Assembler) channelLabel() string {
+	if a.translations == nil {
+		return "Channel"
+	}
+	return a.translations.T(a.cfg.Locale, "channel.title")
 }
 
 // SetExposureChecker wires the allowlist checker. Pass nil to revert
@@ -511,7 +532,7 @@ func (a *Assembler) makeButtonGroupEndpoint(
 		Reachable:  dev.Available(),
 		// The endpoint stands for the whole physical button (the
 		// channel), not one PRESS_* parameter — no parameter suffix.
-		FriendlyName:  friendlyName(dev, ch, ""),
+		FriendlyName:  friendlyName(dev, ch, "", a.channelLabel()),
 		BridgedDevice: dev,
 		Channel:       ch,
 		Measurement:   group,
@@ -597,7 +618,7 @@ func (a *Assembler) makeEndpoint(
 		ID:            id,
 		DeviceType:    deviceType,
 		Reachable:     dev.Available(),
-		FriendlyName:  friendlyName(dev, ch, ""),
+		FriendlyName:  friendlyName(dev, ch, "", a.channelLabel()),
 		BridgedDevice: dev,
 		Channel:       ch,
 		Source:        src,
@@ -640,7 +661,7 @@ func (a *Assembler) makeMeasurementEndpoint(
 		ID:            id,
 		DeviceType:    deviceType,
 		Reachable:     dev.Available(),
-		FriendlyName:  friendlyName(dev, ch, a.parameterSuffix(ch, key)),
+		FriendlyName:  friendlyName(dev, ch, a.parameterSuffix(ch, key), a.channelLabel()),
 		BridgedDevice: dev,
 		Channel:       ch,
 		Source:        nil,

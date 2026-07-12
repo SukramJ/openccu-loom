@@ -122,6 +122,9 @@ type Config struct {
 	// NodeLabel suffix of measurement sub-endpoints. Nil is tolerated
 	// (title-cased parameter fallback).
 	Labels device.ParameterTranslator
+	// Locale passes [endpoint.Config.Locale] through: the language of the
+	// NodeLabel channel-number fallback ("Channel N" / "Kanal N").
+	Locale string
 }
 
 // validate reports whether the config carries every required field.
@@ -428,6 +431,7 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 		NodeLabel:               cfg.NodeLabel,
 		IncludeMeasurements:     cfg.IncludeMeasurements,
 		Labels:                  cfg.Labels,
+		Locale:                  cfg.Locale,
 	}, logger)
 	if err != nil {
 		return nil, fmt.Errorf("bridge: assembler: %w", err)

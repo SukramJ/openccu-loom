@@ -6,6 +6,41 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **English Home Assistant users saw German MQTT entity names.** Four
+  HA-discovery entity names were authored (hardcoded) in the central event
+  bridge rather than the MQTT layer, two of them German-only
+  (`Zeitplan Kanal N`, `Zeitdauer`), so they leaked German to every locale.
+  They now resolve from the i18n catalogues in the daemon's `locale`
+  (schedule-switch, combined-level, HS-colour and combined-timer labels).
+
+### Changed
+
+- **All remaining daemon-authored translatable strings now go through the i18n
+  catalogues (`internal/i18n/catalogs/<locale>.json`).** Adding a language is a
+  single new catalogue file — no Go change. Migrated in this release:
+  - The server-rendered `/health` and `/about` pages (headings, table headers,
+    overall-status label, version/license/repository labels). The health status
+    token stays the raw value for the CSS class; only the visible text is
+    localized.
+  - The Matter bridged-endpoint NodeLabel channel-number fallback
+    (`Kanal N` → localized "Channel N" / "Kanal N").
+  - The SPA's two inline-bilingual helper tables (daylight-saving headers and
+    time-preset labels) now use the SPA `t()` catalogue instead of hand-rolled
+    EN/DE branching.
+  What is intentionally NOT localized (documented): REST/WS API contract
+  messages (clients localize off the stable code), matter.js-mirrored spec
+  names, and log messages (English by convention).
+- **Health/diagnostics component notes are now localized.** `health.Sample`
+  gains an additive `NoteKey` (i18n key) alongside the existing English `Note` —
+  which stays the stable sentinel the health-scoring logic matches on, so
+  scoring is unaffected. Static notes (client connected, breaker states,
+  recovery, initial-sync) render localized on the SPA diagnostics view, the
+  connectivity tooltip and the `/health` page; interpolated notes keep their
+  English text. `GET /api/v1/health` components carry a new optional `note_key`
+  field. REST API version bumps to **2.18.0** (additive).
+
 ## [0.38.0] — 2026-07-12
 
 ### Changed

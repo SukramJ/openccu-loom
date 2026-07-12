@@ -230,6 +230,22 @@ const EN: Catalog = {
   "diagnostics.healthy": "healthy",
   "diagnostics.unhealthy": "unhealthy",
   "diagnostics.in_recovery": "in recovery",
+  // Health snapshot status enum + component note keys — mirror
+  // `HealthComponent.Status` / `.NoteKey` from `GET /api/v1/health`.
+  "health.status.healthy": "Healthy",
+  "health.status.degraded": "Degraded",
+  "health.status.unhealthy": "Unhealthy",
+  "health.status.unknown": "Unknown",
+  "health.note.initial_sync_connected": "Initial sync: connected",
+  "health.note.initial_sync_not_connected": "Initial sync: not connected",
+  "health.note.client_connected": "Client connected",
+  "health.note.breaker_closed": "Breaker closed",
+  "health.note.breaker_half_open": "Breaker half-open",
+  "health.note.breaker_open": "Breaker open",
+  "health.note.breaker_open_escalated": "Breaker open (escalated)",
+  "health.note.recovery_started": "Recovery started",
+  "health.note.recovery_completed": "Recovery completed",
+  "health.note.recovery_failed_escalated": "Recovery failed (escalated)",
   "diagnostics.last_ok": "Last OK",
   "diagnostics.last_fail": "Last failure",
   "diagnostics.last_event": "Last event",
@@ -1322,6 +1338,9 @@ const EN: Catalog = {
   "channel.save_n": "Save ({count})",
   "channel.unsaved": "Unsaved changes",
   "channel.saved_short": "Saved.",
+  // --- DST sub-group headers (channel/dst-groups.ts) ---
+  "channel.dst.start_header": "Start of daylight saving time",
+  "channel.dst.end_header": "End of daylight saving time",
   "quick.busy": "Busy…",
   "quick.last_action": "Last action: {action}",
   "quick.set": "Set",
@@ -1536,6 +1555,19 @@ const EN: Catalog = {
   // that differ only by an upper/lower threshold suffix in their name.
   "parameter.threshold.upper": "upper threshold",
   "parameter.threshold.lower": "lower threshold",
+  // --- Time-pair presets (channel/time-pairs.ts) — only the
+  // word-bearing presets need a key; numeric-with-unit presets
+  // ("100 ms", "1 s", …) are locale-identical and carry the literal
+  // string as their key, which `t()` returns unchanged as a fallback.
+  "parameter.time_preset.not_active": "Not active",
+  "parameter.time_preset.1_second": "1 second",
+  "parameter.time_preset.2_seconds": "2 seconds",
+  "parameter.time_preset.3_seconds": "3 seconds",
+  "parameter.time_preset.30_seconds": "30 seconds",
+  "parameter.time_preset.1_minute": "1 minute",
+  "parameter.time_preset.2_minutes": "2 minutes",
+  "parameter.time_preset.4_minutes": "4 minutes",
+  "parameter.time_preset.15_minutes": "15 minutes",
   // --- App-level chrome / sidebar ---
   "common.ok": "OK",
   "app.theme.toggle": "Toggle theme",
@@ -1652,6 +1684,10 @@ const EN: Catalog = {
   "matter.pair.loading": "Loading commissioning state…",
   "matter.pair.load_error": "Failed to load commissioning state.",
   "matter.pair.minutes": "min",
+  // Localized rendering of the `matter.commissioning_progress` WS
+  // broadcast's `stage` token — mirrors `MatterCommissioningClose`
+  // in internal/north/rest/handlers/matter_exposures.go.
+  "matter.commissioning.closed": "Commissioning window closed by operator",
   "matter.fabric.unpair_confirm": "Remove this fabric?",
   "matter.fabric.unpaired": "Fabric removed.",
   "matter.fabric.share_bridge": "Share bridge with another controller",
@@ -2283,6 +2319,20 @@ const DE: Catalog = {
   "diagnostics.healthy": "gesund",
   "diagnostics.unhealthy": "ungesund",
   "diagnostics.in_recovery": "in Recovery",
+  "health.status.healthy": "Gesund",
+  "health.status.degraded": "Beeinträchtigt",
+  "health.status.unhealthy": "Fehlerhaft",
+  "health.status.unknown": "Unbekannt",
+  "health.note.initial_sync_connected": "Erst-Sync: verbunden",
+  "health.note.initial_sync_not_connected": "Erst-Sync: nicht verbunden",
+  "health.note.client_connected": "Client verbunden",
+  "health.note.breaker_closed": "Sicherung geschlossen",
+  "health.note.breaker_half_open": "Sicherung halb offen",
+  "health.note.breaker_open": "Sicherung offen",
+  "health.note.breaker_open_escalated": "Sicherung offen (eskaliert)",
+  "health.note.recovery_started": "Wiederherstellung gestartet",
+  "health.note.recovery_completed": "Wiederherstellung abgeschlossen",
+  "health.note.recovery_failed_escalated": "Wiederherstellung fehlgeschlagen (eskaliert)",
   "diagnostics.last_ok": "Zuletzt OK",
   "diagnostics.last_fail": "Letzter Fehler",
   "diagnostics.last_event": "Letztes Event",
@@ -3395,6 +3445,9 @@ const DE: Catalog = {
   "channel.save_n": "Speichern ({count})",
   "channel.unsaved": "Ungespeicherte Änderungen",
   "channel.saved_short": "Gespeichert.",
+  // --- DST sub-group headers (channel/dst-groups.ts) ---
+  "channel.dst.start_header": "Beginn der Sommerzeit",
+  "channel.dst.end_header": "Ende der Sommerzeit",
   "quick.busy": "Beschäftigt…",
   "quick.last_action": "Letzte Aktion: {action}",
   "quick.set": "Setzen",
@@ -3607,6 +3660,19 @@ const DE: Catalog = {
   "parameter.custom": "Benutzerdefiniert",
   "parameter.threshold.upper": "oberer Grenzwert",
   "parameter.threshold.lower": "unterer Grenzwert",
+  // --- Zeitpaar-Presets (channel/time-pairs.ts) — nur die
+  // wortbasierten Presets brauchen einen Key; Presets mit Zahl+Einheit
+  // ("100 ms", "1 s", …) sind sprachunabhängig identisch und tragen den
+  // literalen String als Key, den `t()` unverändert als Fallback liefert.
+  "parameter.time_preset.not_active": "Nicht aktiv",
+  "parameter.time_preset.1_second": "1 Sekunde",
+  "parameter.time_preset.2_seconds": "2 Sekunden",
+  "parameter.time_preset.3_seconds": "3 Sekunden",
+  "parameter.time_preset.30_seconds": "30 Sekunden",
+  "parameter.time_preset.1_minute": "1 Minute",
+  "parameter.time_preset.2_minutes": "2 Minuten",
+  "parameter.time_preset.4_minutes": "4 Minuten",
+  "parameter.time_preset.15_minutes": "15 Minuten",
   // --- App-Chrome / Sidebar ---
   "common.ok": "OK",
   "app.theme.toggle": "Theme wechseln",
@@ -3725,6 +3791,7 @@ const DE: Catalog = {
   "matter.pair.loading": "Koppelstatus wird geladen…",
   "matter.pair.load_error": "Koppelstatus konnte nicht geladen werden.",
   "matter.pair.minutes": "Min",
+  "matter.commissioning.closed": "Kopplungsfenster vom Betreiber geschlossen",
   "matter.fabric.unpair_confirm": "Dieses Fabric entfernen?",
   "matter.fabric.unpaired": "Fabric entfernt.",
   "matter.fabric.share_bridge": "Bridge mit weiterem Controller teilen",
