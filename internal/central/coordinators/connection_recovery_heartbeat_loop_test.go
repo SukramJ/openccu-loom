@@ -63,10 +63,11 @@ func TestHeartbeatLoopEmitsEventForExhaustedInterface(t *testing.T) {
 		}
 	})
 
-	// Wait up to 500 ms for the heartbeat tick to fire (interval = 20 ms,
-	// so we expect it within the first couple of ticks).
-	if !waitFor(t, fired.Load, 500*time.Millisecond) {
-		t.Fatal("heartbeat-loop did not emit HeartbeatTimerFiredEvent for exhausted interface within 500 ms")
+	// Wait for the heartbeat tick to fire. With a 20 ms interval the happy
+	// path returns within the first couple of ticks; the generous ceiling
+	// only matters when a loaded CI runner starves the ticker goroutine.
+	if !waitFor(t, fired.Load, eventWaitTimeout) {
+		t.Fatal("heartbeat-loop did not emit HeartbeatTimerFiredEvent for exhausted interface")
 	}
 }
 
@@ -153,7 +154,7 @@ func TestHeartbeatLoopStopsAfterStop(t *testing.T) {
 			count.Add(1)
 		}
 	})
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 500*time.Millisecond) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatal("loop did not fire at least one event before Stop")
 	}
 

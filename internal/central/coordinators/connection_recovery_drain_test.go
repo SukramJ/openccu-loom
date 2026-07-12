@@ -56,7 +56,7 @@ func TestConnectionRecoveryStopDrainsInFlightRecovery(t *testing.T) {
 	// Wait until the step is executing before calling Stop.
 	select {
 	case <-started:
-	case <-time.After(5 * time.Second):
+	case <-time.After(eventWaitTimeout):
 		t.Fatal("recovery step did not start within deadline")
 	}
 
@@ -71,8 +71,8 @@ func TestConnectionRecoveryStopDrainsInFlightRecovery(t *testing.T) {
 	select {
 	case <-stopDone:
 		// Good — Stop returned promptly.
-	case <-time.After(5 * time.Second):
-		t.Fatal("Stop did not return within 5 s; recoveryWG.Wait likely hung")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("Stop did not return; recoveryWG.Wait likely hung")
 	}
 
 	// The step must have observed cancellation.
@@ -108,7 +108,7 @@ func TestConnectionRecoveryStopIdempotent(t *testing.T) {
 	}()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("second Stop did not return within 2 s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("second Stop did not return")
 	}
 }

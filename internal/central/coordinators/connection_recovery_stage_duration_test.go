@@ -129,8 +129,8 @@ func TestCurrentStageTrackedDuringRun(t *testing.T) {
 	// Wait until the step is executing.
 	select {
 	case <-reached:
-	case <-time.After(2 * time.Second):
-		t.Fatal("pipeline step not reached within 2 s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("pipeline step not reached")
 	}
 
 	got := coord.CurrentStage(iface)

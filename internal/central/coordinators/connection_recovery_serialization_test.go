@@ -82,8 +82,8 @@ func TestRunSerializesConcurrentInvocationsPerInterface(t *testing.T) {
 	go func() { wg.Wait(); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(10 * time.Second):
-		t.Fatal("goroutines did not finish within 10s — possible goroutine leak or deadlock")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("goroutines did not finish in time — possible goroutine leak or deadlock")
 	}
 
 	if got := atomic.LoadInt32(&maxObserved); got != 1 {

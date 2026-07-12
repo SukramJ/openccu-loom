@@ -198,8 +198,8 @@ func TestInRecoveryTrueWhileRunning(t *testing.T) {
 	// Wait until the stage is entered.
 	select {
 	case <-reached:
-	case <-time.After(2 * time.Second):
-		t.Fatal("pipeline did not enter stage within 2 s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("pipeline did not enter stage")
 	}
 
 	if !c.InRecoveryFor("HmIP-RF") {
@@ -217,8 +217,8 @@ func TestInRecoveryTrueWhileRunning(t *testing.T) {
 		if res != hmenum.RecoveryResultSuccess {
 			t.Fatalf("Run = %v, want success", res)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Run did not complete within 2 s")
+	case <-time.After(eventWaitTimeout):
+		t.Fatal("Run did not complete")
 	}
 
 	// After completion, must be false again.

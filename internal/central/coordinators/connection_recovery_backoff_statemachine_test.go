@@ -300,7 +300,7 @@ func TestParityCBStateChangedOpenTriggers(t *testing.T) {
 		To:          hmenum.CircuitStateOpen,
 	})
 	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
-		t.Fatalf("recovery not triggered by CB→Open within 2s (count=%d)", count.Load())
+		t.Fatalf("recovery not triggered by CB→Open (count=%d)", count.Load())
 	}
 }
 
@@ -383,7 +383,7 @@ func TestParityHeartbeatTimerFiresPerInterfaceRecovery(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		return len(started) >= 3
-	}, 3*time.Second) {
+	}, eventWaitTimeout) {
 		mu.Lock()
 		defer mu.Unlock()
 		t.Fatalf("not all 3 interfaces recovered; got %v", started)
