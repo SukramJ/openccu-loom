@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -49,10 +50,10 @@ type southboundWiringDeps struct {
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
 	mqttWiring              *mqtt.Wiring
 	bridge                  *adapter.EventBridge
-	// hubMQTT is re-started after the per-central HubInfo stamping so
-	// hub discovery payloads — skipped while the CCU serial that feeds
-	// their unique_ids is unknown — are published with the correct
-	// per-central serial discriminator. Nil when MQTT is not configured.
+	// hubMQTT is re-started on each central's CentralSouthboundReadyEvent so
+	// hub discovery payloads — skipped while the CCU serial that gates them is
+	// still unresolved during the async bring-up — are published once the serial
+	// lands. Nil when MQTT is not configured.
 	hubMQTT *adapter.HubMQTTPublisher
 }
 
@@ -66,6 +67,11 @@ type southboundWiring struct {
 	// bringUpManager exposes per-central re-initialization (clear caches +
 	// readiness-gated re-pull) to the cache-reset service. ADR 0042.
 	bringUpManager *adapter.BringUpManager
+	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
+	// southbound bring-up (and thus its serial) is ready. The live-adopt path
+	// subscribes runtime-added centrals onto the same pipeline. Nil when MQTT is
+	// not configured.
+	hubReadyTrigger func()
 }
 
 // serialBackfiller returns the WireDeps.PersistSerial callback: it records a
@@ -131,10 +137,13 @@ func wireCentralNorthbound(d southboundWiringDeps, u *central.Unit) (availCloser
 	// changes.
 	climateCloser = adapter.WireClimateLinkPeerRefresh(u)
 
-	// Stamp HubInfo onto the MQTT-Discovery builder now that SystemInformation
-	// is populated so per-device configuration_url and the synthetic hub
-	// device's metadata are filled. Multi-CCU: each central contributes its own
-	// entry, looked up per `central`.
+	// Best-effort early HubInfo stamp onto the MQTT-Discovery builder. WireCentrals
+	// only LAUNCHES the async readiness-gated bring-up, so SystemInformation is
+	// usually still empty here — the serial (and model/URL) resolve later. The
+	// authoritative stamp therefore happens inside the hub publisher, which reads
+	// the serial live from the registry on its ready-driven re-Start (see
+	// [adapter.HubMQTTPublisher] / hubInfoFromUnit); this stamp only fills what is
+	// already known and never gates anything. Multi-CCU: one entry per central.
 	if d.mqttWiring != nil {
 		si := u.SystemInformation()
 		d.mqttWiring.Bridge().SetHubInfoFor(u.Name(), mqtt.HubInfo{
@@ -184,6 +193,10 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 			teardowns[i]()
 		}
 	}
+
+	// hubReadyTriggerFn is set when MQTT is configured so the live-adopt path can
+	// subscribe runtime-added centrals onto the hub-discovery ready pipeline.
+	var hubReadyTriggerFn func()
 
 	// Build the XML-RPC client per (central, interface), wrap it into
 	// a backend, register it with the ValueWriter, then pull the device
@@ -325,14 +338,34 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// and visibility_wiring.go.
 	applyVisibilityUnIgnore(ctx, cfg, reg, d.visibilityUnIgnoreStore, d.visReg, logger)
 
-	// Re-run the hub publisher now that every central's serial is registered
-	// (wireCentralNorthbound stamped each central's HubInfo above): hub
-	// discovery payloads embed the serial in their unique_ids and are skipped
-	// while it is unknown (the boot-time Start ran before WireCentrals
-	// populated SystemInformation). Start is idempotent (Stop + rewire) and
-	// re-publishes the retained hub discovery + state for every central.
+	// Re-run the hub publisher once each central's serial resolves. WireCentrals
+	// only LAUNCHES the readiness-gated bring-up goroutines and returns before
+	// they finish, so at this point SystemInformation (and the serial that gates
+	// the whole hub-discovery plane) is still empty for every central — an eager
+	// Start here would skip all hub discovery, leaving HA with an "unknown
+	// device" parent and no sysvar entities. Drive the (idempotent) re-Start off
+	// CentralSouthboundReadyEvent instead; the debounce coalesces a staggered
+	// multi-CCU boot into a single re-wire. The seed below covers a central that
+	// became ready between the subscribe and this loop.
 	if d.mqttWiring != nil && d.hubMQTT != nil {
-		d.hubMQTT.Start(ctx)
+		var readyBuses []*events.Bus
+		for _, u := range reg.List() {
+			if u.EventBus != nil {
+				readyBuses = append(readyBuses, u.EventBus)
+			}
+		}
+		hubReadyClosers, hubReadyTrigger := wireHubDiscoveryOnReady(
+			ctx, readyBuses, func(rctx context.Context) { d.hubMQTT.Start(rctx) },
+			hubDiscoveryReadyDebounce, logger,
+		)
+		teardowns = append(teardowns, hubReadyClosers...)
+		hubReadyTriggerFn = hubReadyTrigger
+		for _, u := range reg.List() {
+			if u.IsSouthboundReady() {
+				hubReadyTrigger()
+				break
+			}
+		}
 	}
 
 	// Boot-time stale cleanup — clear retained channel-aggregate
@@ -414,8 +447,9 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	teardowns = append(teardowns, stopSweep)
 
 	result = southboundWiring{
-		backupAdapter:  backupAdapter,
-		bringUpManager: bringUpMgr,
+		backupAdapter:   backupAdapter,
+		bringUpManager:  bringUpMgr,
+		hubReadyTrigger: hubReadyTriggerFn,
 	}
 	return result, teardown
 }

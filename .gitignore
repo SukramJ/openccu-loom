@@ -149,3 +149,4 @@ tests/integration/testdata/discovery_snapshot_aiohomematic2mqtt.json
 # MkDocs build output
 site/
 __pycache__/
+*-read-only.env

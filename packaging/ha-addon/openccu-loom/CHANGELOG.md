@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.37.0
+
+- **CCU devices no longer hang under an "unknown device", and system variables
+  reappear in Home Assistant.** On startup the CCU's serial number is read
+  slightly after the devices load; a timing bug meant the hub layer (system
+  variables, programs, the central "hub" device, service/alarm messages) was
+  published before the serial was known and then never re-published — so every
+  device showed a nameless "unknown device" as its parent and no system
+  variables appeared. The hub layer is now (re-)published once the serial is
+  available, so the central device is named and system variables — including
+  the device they are assigned to — show up correctly.
+
 ## 0.36.0
 
 - **System variables now appear under their device in Home Assistant.**

@@ -68,6 +68,12 @@ type centralOrchestrator struct {
 	// is stood up (the orchestrator is constructed first); nil while the
 	// bridge is disabled or never came up.
 	matterHook matterCentralHook
+	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
+	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
+	// southbound wiring result so a runtime-adopted central publishes its
+	// serial-gated hub discovery the same way a boot-time central does. Nil when
+	// MQTT is not configured.
+	hubReadyTrigger func()
 }
 
 // setMatterCentralHook installs the per-central Matter wiring hook. Nil-safe
@@ -79,6 +85,18 @@ func (o *centralOrchestrator) setMatterCentralHook(hook matterCentralHook) {
 	}
 	o.mu.Lock()
 	o.matterHook = hook
+	o.mu.Unlock()
+}
+
+// setHubReadyTrigger installs the hub-discovery ready trigger produced by the
+// southbound wiring so an adopted central's serial-gated hub discovery is
+// (re-)published once its bring-up completes. Nil-safe on both sides.
+func (o *centralOrchestrator) setHubReadyTrigger(trigger func()) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.hubReadyTrigger = trigger
 	o.mu.Unlock()
 }
 
@@ -194,12 +212,23 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// bridge is disabled.
 	o.mu.Lock()
 	matterHook := o.matterHook
+	hubReadyTrigger := o.hubReadyTrigger
 	o.mu.Unlock()
 	var matterUnwire func()
 	if matterHook != nil {
 		matterUnwire = matterHook(unit)
 		if matterUnwire != nil {
 			undo = append(undo, matterUnwire)
+		}
+	}
+	// Subscribe the adopted central onto the hub-discovery ready pipeline so its
+	// serial-gated hub discovery (named central device + sysvars) publishes once
+	// its readiness-gated bring-up resolves the serial — the same path a
+	// boot-time central takes. Subscribing BEFORE AddCentral launches the
+	// bring-up makes the ready event a non-race.
+	if hubReadyTrigger != nil {
+		if unsub := subscribeHubReadyTrigger(unit.EventBus, hubReadyTrigger); unsub != nil {
+			undo = append(undo, unsub)
 		}
 	}
 
