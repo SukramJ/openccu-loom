@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.36.0
+
+- **System variables now appear under their device in Home Assistant.**
+  Variables assigned to a channel in the CCU WebUI ("Kanalzuordnung") and
+  variables whose name references a device (e.g. the CCU's automatic
+  `svEnergyCounter_…` counters) are linked to that device instead of the
+  hub — in MQTT discovery and through the REST/WS API.
+
 ## 0.35.0
 
 Device-icon fixes and device-linked system variables.
