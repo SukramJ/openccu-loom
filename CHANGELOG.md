@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The HA-native visual skin (0.39.0) now covers the whole Config UI, not
+  just the primitives and highest-traffic views.** `html[data-skin="ha"]`
+  remaps Tailwind's `--color-*` palette scale (the CSS variables every plain
+  `bg-slate-500`-style utility resolves through), so every remaining view
+  follows the active skin automatically — no per-file sweep needed. Opacity-
+  modified utilities (`bg-slate-900/50`) were rewritten to `color-mix()`
+  against the same variables since Tailwind inlines those as literals. The
+  HA-skin default values were also refreshed to the latest
+  `home-assistant/frontend` design tokens (primary `#009ac7`, flat
+  shadow-less cards, Roboto body font, refreshed neutral/semantic ramps).
+  `data-skin="loom"` (the standalone default) is unaffected. See
+  [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) §
+  "Complete theme coverage via palette remap".
+
 ## [0.39.0] — 2026-07-12
 
 ### Added

@@ -156,7 +156,7 @@
           class="h-2 w-2 rounded-full transition-colors {n === step
             ? 'bg-brand-500'
             : n < step
-              ? 'bg-brand-500/50'
+              ? 'bg-[color-mix(in_srgb,var(--color-brand-500)_50%,transparent)]'
               : 'bg-slate-300 dark:bg-slate-700'}"
         ></span>
       {/each}

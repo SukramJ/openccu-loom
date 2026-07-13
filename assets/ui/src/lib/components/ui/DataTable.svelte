@@ -183,7 +183,7 @@
       <tbody>
         {#each processed as row (rowKey(row))}
           <tr
-            class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40 {rowClass?.(
+            class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)] dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] {rowClass?.(
               row,
             ) ?? ''}"
           >

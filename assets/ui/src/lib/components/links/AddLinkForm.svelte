@@ -219,7 +219,7 @@
 </script>
 
 <div
-  class="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40"
+  class="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[color-mix(in_srgb,var(--color-slate-900)_40%,transparent)]"
 >
   <header class="mb-4 flex items-center justify-between gap-3">
     <h3 class="text-sm font-semibold">{t("links.add.title2")}</h3>
@@ -271,7 +271,7 @@
               <button
                 type="button"
                 class="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition {selected
-                  ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/30'
+                  ? 'border-brand-500 bg-brand-50 dark:bg-[color-mix(in_srgb,var(--color-brand-950)_30%,transparent)]'
                   : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'}"
                 onclick={() => (selectedChannel = ch.address)}
               >
@@ -359,7 +359,7 @@
               <button
                 type="button"
                 class="flex w-full items-start gap-3 rounded-md border px-3 py-2 text-left text-sm transition {selected
-                  ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/30'
+                  ? 'border-brand-500 bg-brand-50 dark:bg-[color-mix(in_srgb,var(--color-brand-950)_30%,transparent)]'
                   : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'}"
                 onclick={() => (selectedPeer = peer.address)}
               >

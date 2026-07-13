@@ -152,11 +152,11 @@
 
 <div class="space-y-4">
   {#if changedFields.length === 0}
-    <p class="rounded border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-[var(--ha-secondary-text-color)] dark:border-slate-700 dark:bg-slate-800/40">
+    <p class="rounded border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-[var(--ha-secondary-text-color)] dark:border-slate-700 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)]">
       {t("changes.empty")}
     </p>
   {:else}
-    <p class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300">
+    <p class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] dark:text-slate-300">
       {t("changes.intro")}
     </p>
 

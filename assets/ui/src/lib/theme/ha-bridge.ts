@@ -29,6 +29,21 @@ const HA_THEME_VARS = [
   "--sidebar-background-color",
   "--rgb-primary-color",
   "--text-primary-color",
+  // Higher-fidelity mirrors. The static per-skin palette remap in app.css
+  // (--color-* scale) is intentionally NOT bridged — the bridge covers the
+  // --ha-* semantic tokens for live custom-theme fidelity; the palette
+  // remap stays static per skin.
+  "--ha-font-family-body",
+  "--header-height",
+  "--rgb-accent-color",
+  "--rgb-primary-text-color",
+  "--rgb-error-color",
+  "--rgb-success-color",
+  "--rgb-info-color",
+  "--shadow-color",
+  "--ha-color-text-primary",
+  "--ha-color-text-secondary",
+  "--ha-color-surface-default",
 ];
 
 // True when the SPA is rendered inside an iframe (HA Ingress). A
