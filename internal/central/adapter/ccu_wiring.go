@@ -714,11 +714,14 @@ func wireInterface(
 			sessionIDFn = jc.Client().SessionID
 			// The backup download (cp_security.cgi) authenticates by session
 			// id and serves a login page under HTTP 200 for a stale one, so
-			// force a fresh login first — mirrors the reference stack's
-			// login-or-renew before the backup download.
+			// make sure the session is usable first. EnsureSession renews the
+			// live session rather than displacing it: a forced login here
+			// would abandon the session the whole central is working with and
+			// burn a slot in the CCU's small, WebUI-shared session pool on
+			// every backup or firmware download.
 			rpcClient := jc.Client()
 			ccuBackend.SetSessionRenewer(func(ctx context.Context) (string, error) {
-				if err := rpcClient.Login(ctx); err != nil {
+				if err := rpcClient.EnsureSession(ctx); err != nil {
 					return "", err
 				}
 				return rpcClient.SessionID(), nil

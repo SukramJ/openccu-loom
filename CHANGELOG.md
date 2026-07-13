@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-07-13
+
 ### Changed
 
 - **The HA-native visual skin (0.39.0) now covers the whole Config UI, not
@@ -21,6 +23,39 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `data-skin="loom"` (the standalone default) is unaffected. See
   [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) §
   "Complete theme coverage via palette remap".
+
+### Fixed
+
+- **OpenCCU-Loom no longer exhausts the CCU's login-session pool.** The daemon
+  discarded its CCU session roughly every 90 seconds and opened a fresh one,
+  without releasing the old one — on the order of 40 abandoned sessions per
+  hour per CCU. Because the CCU's session pool is shared with its WebUI, the
+  leak eventually locked operators out of their own CCU with "invalid
+  credentials or too many sessions". The cause was a wire-contract mismatch:
+  the CCU answers `Session.renew` with the boolean `true` (it extends the
+  session in place and does *not* issue a new ID), but the client decoded the
+  reply as a session-ID string. Every renewal therefore failed to parse, was
+  treated as a dead session, and triggered a re-login. A long-running daemon
+  now holds exactly **one** CCU session for its entire life, pinned by a
+  contract test.
+
+- **Backup and firmware downloads no longer displace the CCU session.** Both
+  authenticate against `cp_security.cgi` by session ID and asked the shared
+  JSON-RPC client for a *forced fresh login* first, abandoning the session the
+  rest of the central was working with — one burned CCU session slot per
+  download. They now renew the existing session instead, which is what the
+  code's own comment always said it did.
+
+- **A session the daemon abandons is now handed back to the CCU.** When a
+  session really does have to be replaced (CCU reboot, expired session,
+  privilege error), the client issues `Session.logout` for the old one instead
+  of leaving it to idle out of the pool.
+
+- **A rejected login now engages the existing backoff.** The CCU reports both
+  wrong credentials and an exhausted session pool as a JSON-RPC error rather
+  than an empty result, which slipped past the backoff and made the daemon
+  retry at full speed — turning an exhausted pool into a self-sustaining retry
+  storm exactly when it needed to back off.
 
 ## [0.39.0] — 2026-07-12
 

@@ -93,8 +93,9 @@ func TestJSONRPCLogoutWithoutLoginIsNoop(t *testing.T) {
 	}
 }
 
-// TestJSONRPCRenewExtendsSession verifies that Renew updates SessionID()
-// when the server returns a new session token.
+// TestJSONRPCRenewExtendsSession verifies that Renew keeps SessionID()
+// unchanged when the CCU answers with the boolean true — Session.renew
+// extends the session in place, it never mints a new id.
 func TestJSONRPCRenewExtendsSession(t *testing.T) {
 	t.Parallel()
 	srv := newTestServer(t, map[string]func(envelope) any{
@@ -102,7 +103,7 @@ func TestJSONRPCRenewExtendsSession(t *testing.T) {
 			return okResult("initial-session")
 		},
 		"Session.renew": func(env envelope) any {
-			return okResult("renewed-session")
+			return okResult(true)
 		},
 	})
 	defer srv.Close()
@@ -118,8 +119,8 @@ func TestJSONRPCRenewExtendsSession(t *testing.T) {
 	if err := c.Renew(context.Background()); err != nil {
 		t.Fatalf("Renew: %v", err)
 	}
-	if got := c.SessionID(); got != "renewed-session" {
-		t.Fatalf("SessionID() after renew = %q, want %q", got, "renewed-session")
+	if got := c.SessionID(); got != "initial-session" {
+		t.Fatalf("SessionID() after renew = %q, want unchanged %q", got, "initial-session")
 	}
 }
 
@@ -906,7 +907,7 @@ func TestRenewSkipsWhenRecentlyRefreshed(t *testing.T) {
 		},
 		"Session.renew": func(_ envelope) any {
 			renewCalls.Add(1)
-			return okResult("sess-fresh")
+			return okResult(true)
 		},
 	})
 	defer srv.Close()
@@ -949,7 +950,7 @@ func TestRenewIssuedAfterSessionAgeExpiry(t *testing.T) {
 		},
 		"Session.renew": func(_ envelope) any {
 			renewCalls.Add(1)
-			return okResult("sess-abc")
+			return okResult(true)
 		},
 	})
 	defer srv.Close()
