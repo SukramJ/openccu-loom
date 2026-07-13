@@ -52,14 +52,15 @@ depending on skin and context:
    standalone default look is pixel-for-pixel unchanged.
 2. **`data-skin="ha"`, standalone** — a static HA-default token set
    (`html[data-skin="ha"]` / `html[data-skin="ha"].dark` blocks in
-   `app.css`), literal fallback values matching Home Assistant's
-   default Material-ish palette (e.g. `--ha-primary-color: var(--primary-color,
-   #03a9f4)`).
+   `app.css`), literal fallback values matched to the latest
+   `home-assistant/frontend` design tokens (e.g.
+   `--ha-primary-color: var(--primary-color, #009ac7)`, flat
+   shadow-less cards, Roboto as the body font).
 3. **`data-skin="ha"`, embedded** — the same declarations, but the HA
    theme bridge (below) writes HA's *real* CSS variables
    (`--primary-color`, `--card-background-color`, …) onto the SPA's
    own `:root` before the tokens resolve, so `var(--primary-color,
-   #03a9f4)` picks up the live value and the static literal is only
+   #009ac7)` picks up the live value and the static literal is only
    ever a fallback of last resort.
 
 ## The HA theme bridge
@@ -145,6 +146,55 @@ inline hint that Home Assistant drives the theme automatically — the
 operator's stored choice is not consulted while embedded, so exposing
 an editable control there would be misleading.
 
+## Complete theme coverage via palette remap
+
+The scope boundary above described the state right after the
+two-axis skin landed: only the primitives and highest-traffic views
+had been hand-migrated to the `--ha-*` consumption tokens, and the
+long tail of plain Tailwind `slate-*`/`red-*`/`amber-*`/`green-*`/
+`emerald-*`/`brand-*` utilities elsewhere in the SPA stayed
+slate-neutral under the HA skin. That gap is now closed **without a
+per-file sweep**.
+
+Tailwind v4 compiles a class like `bg-slate-500` to
+`background-color: var(--color-slate-500)` rather than inlining the
+literal color — the palette is itself a set of CSS custom properties
+(`--color-slate-50` … `--color-brand-950`, defined once in the
+`@theme` block of `app.css`). `html[data-skin="ha"]` in `app.css`
+overrides that entire `--color-*` scale (neutral/slate, error/red,
+warning/amber, success/green + emerald, and the brand/violet ramps)
+with values derived from the same HA tokens the `--ha-*` layer
+consumes. The remap is a single selector block, has no `.dark`
+variant of its own, and does not touch `--color-white` /
+`--color-black` (kept literal for on-primary text). Because every
+plain palette utility resolves through these variables, the whole
+SPA — including views that were never touched by the original
+migration — now follows the active skin automatically. `data-skin=
+"loom"` is untouched: the remap block only exists under
+`html[data-skin="ha"]`, so the standalone default look is unaffected.
+
+One class of utility does **not** follow the remap automatically:
+Tailwind inlines opacity-modified palette utilities (`bg-slate-900/50`
+compiles to a literal `#1c1c1c80`-style hex, not a `var()` reference),
+so those bypassed the override. Each of the SPA's opacity-modified
+palette utilities was rewritten to reference the (now remapped)
+`--color-*` variable through `color-mix()` instead, e.g.
+`bg-slate-900/50` → `bg-[color-mix(in_srgb,var(--color-slate-900)_50%,transparent)]`.
+This preserves the original opacity while making the underlying color
+skin-aware.
+
+**Boundary:** the palette remap is intentionally **static per skin**,
+not bridged. `ha-bridge.ts` continues to mirror only the `--ha-*`
+semantic tokens from HA's live (including custom) theme for
+first-class fidelity on the primitives and primary views; the
+`--color-*` palette scale under `data-skin="ha"` always uses the
+refreshed HA-default literals (or their `var(--primary-color, …)`-style
+fallback chain for the handful that also read an HA variable), even
+when embedded inside a customized HA theme. This keeps the remap cheap
+and predictable — it never needs a `MutationObserver` re-run — at the
+cost of the deep-tail utilities not tracking a live custom HA theme as
+precisely as the `--ha-*`-consuming primitives do.
+
 ## Scope boundary
 
 This work retthemes the shared UI primitives
@@ -152,9 +202,8 @@ This work retthemes the shared UI primitives
 the surfaces an HA-embedded operator sees most: navigation shell,
 cards, buttons, inputs, badges, and focus rings, all migrated from
 hard-coded Tailwind slate/brand utilities to the `--ha-*` consumption
-tokens. The deep long tail of inline `slate-*` utilities on
-less-visited views is **not** migrated yet; under the HA skin those
-surfaces intentionally stay slate-neutral rather than half-matching
-HA's palette. Sweeping the remainder is tracked as a follow-up and is
-not a blocker for HA-skin availability — the primitives, navigation,
-and primary views already carry the full HA look.
+tokens. Beyond that hand-migrated set, the palette-remap block
+described above now recolors every other plain Tailwind palette
+utility in the SPA automatically, so there is no remaining
+slate-neutral long tail under the HA skin — see "Complete theme
+coverage via palette remap".

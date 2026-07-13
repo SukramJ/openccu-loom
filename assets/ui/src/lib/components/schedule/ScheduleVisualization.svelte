@@ -97,7 +97,7 @@
   }
 </script>
 
-<div class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-900/40">
+<div class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-[color-mix(in_srgb,var(--color-slate-900)_40%,transparent)]">
   <!-- Fluid: fills the container up to its natural width, then scales
        down to fit a phone so the whole 24h day stays visible at a glance
        (slots remain tappable for detail) instead of forcing a sideways

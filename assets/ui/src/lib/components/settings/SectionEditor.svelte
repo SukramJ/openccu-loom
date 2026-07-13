@@ -765,12 +765,12 @@
     <p class="text-sm text-red-600 dark:text-red-400">{t("common.error")} {loadError}</p>
   {:else}
     {#if sectionIntro}
-      <p class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300">
+      <p class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] dark:text-slate-300">
         {sectionIntro}
       </p>
     {/if}
     {#if usingDefaults}
-      <p class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+      <p class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-[color-mix(in_srgb,var(--color-amber-900)_20%,transparent)] dark:text-amber-300">
         {t("settings.section_unset")}
       </p>
     {/if}

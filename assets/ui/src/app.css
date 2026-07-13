@@ -60,6 +60,9 @@
   /* Primary tracks brand-500/600. */
   --ha-primary-color: oklch(54.5% 0.11 184.7);
   --ha-primary-color-hover: oklch(51.1% 0.096 186.391);
+  /* Page ground for the base document paint. Under loom the body equals
+   * the card bg, so this matches --ha-card-background-color below. */
+  --ha-primary-background-color: #ffffff;
   --ha-card-background-color: #ffffff;
   --ha-secondary-background-color: #fafafa;
   --ha-divider-color: #e0e0e0;
@@ -83,6 +86,8 @@ html.dark {
    * primary := teal-400, hover := teal-300. */
   --ha-primary-color: oklch(77.7% 0.152 181.912);
   --ha-primary-color-hover: oklch(85.5% 0.138 181.071);
+  /* Loom keeps body == card bg in dark too. */
+  --ha-primary-background-color: #0f172a;
   --ha-card-background-color: #0f172a;
   --ha-secondary-background-color: #111827;
   --ha-divider-color: #1f2937;
@@ -104,37 +109,36 @@ html.dark {
  * theme wins, and the literals below are the standalone HA-default
  * fallback. Loom values in :root / html.dark above are untouched. */
 html[data-skin="ha"] {
-  --ha-primary-color: var(--primary-color, #03a9f4);
+  --ha-primary-color: var(--primary-color, #009ac7);
   --ha-primary-color-hover: color-mix(in srgb, var(--ha-primary-color) 88%, #000);
+  --ha-primary-background-color: var(--primary-background-color, #fafafa);
   --ha-card-background-color: var(--card-background-color, #ffffff);
-  --ha-secondary-background-color: var(--secondary-background-color, #f4f5f7);
-  --ha-divider-color: var(--divider-color, #e4e6ea);
-  --ha-primary-text-color: var(--primary-text-color, #212121);
+  --ha-secondary-background-color: var(--secondary-background-color, #e5e5e5);
+  --ha-divider-color: var(--divider-color, rgba(0, 0, 0, 0.12));
+  --ha-primary-text-color: var(--primary-text-color, #141414);
   --ha-secondary-text-color: var(--secondary-text-color, #727272);
   --ha-disabled-text-color: var(--disabled-text-color, #bdbdbd);
-  --ha-error-color: var(--error-color, #f44336);
-  --ha-warning-color: var(--warning-color, #ff9800);
-  --ha-success-color: var(--success-color, #4caf50);
+  --ha-error-color: var(--error-color, #db4437);
+  --ha-warning-color: var(--warning-color, #ffa600);
+  --ha-success-color: var(--success-color, #43a047);
   --ha-info-color: var(--info-color, #039be5);
   --ha-radius-card: var(--ha-card-border-radius, 12px);
-  --ha-elevation-card: var(--ha-card-box-shadow, 0 2px 4px rgba(0, 0, 0, 0.08));
+  --ha-elevation-card: var(--ha-card-box-shadow, none); /* HA cards are flat */
   --ha-elevation-modal: var(--ha-card-box-shadow, 0 8px 24px rgba(0, 0, 0, 0.18));
+  --font-sans: var(--ha-font-family-body, "Roboto", "Noto", "Helvetica Neue", Arial, sans-serif);
 }
 
 html[data-skin="ha"].dark {
   /* --ha-primary-color keeps inheriting HA's --primary-color — HA holds
    * its accent across light/dark, so only the neutrals/hover flip here. */
   --ha-primary-color-hover: color-mix(in srgb, var(--ha-primary-color) 88%, #fff);
-  --ha-card-background-color: var(--card-background-color, #1c1f24);
-  --ha-secondary-background-color: var(--secondary-background-color, #14171b);
-  --ha-divider-color: var(--divider-color, #2b3037);
-  --ha-primary-text-color: var(--primary-text-color, #e6e8ea);
-  --ha-secondary-text-color: var(--secondary-text-color, #9aa0a6);
-  --ha-disabled-text-color: var(--disabled-text-color, #6b7075);
-  --ha-error-color: var(--error-color, #f28b82);
-  --ha-warning-color: var(--warning-color, #fdd663);
-  --ha-success-color: var(--success-color, #81c995);
-  --ha-elevation-card: var(--ha-card-box-shadow, 0 2px 6px rgba(0, 0, 0, 0.4));
+  --ha-primary-background-color: var(--primary-background-color, #111111);
+  --ha-card-background-color: var(--card-background-color, #1c1c1c);
+  --ha-secondary-background-color: var(--secondary-background-color, #282828);
+  --ha-divider-color: var(--divider-color, rgba(225, 225, 225, 0.12));
+  --ha-primary-text-color: var(--primary-text-color, #e1e1e1);
+  --ha-secondary-text-color: var(--secondary-text-color, #9b9b9b);
+  --ha-disabled-text-color: var(--disabled-text-color, #6f6f6f);
 }
 
 /* Base document colours track the theme tokens so the boot paint and any
@@ -143,8 +147,96 @@ html[data-skin="ha"].dark {
  * these already resolve to the dark values on the very first frame. */
 html,
 body {
-  background-color: var(--ha-card-background-color);
+  background-color: var(--ha-primary-background-color);
   color: var(--ha-primary-text-color);
+}
+
+/* Tailwind v4 compiles palette utilities (bg-slate-500, text-red-600, …)
+ * to color: var(--color-slate-500) etc. Overriding the --color-* scale
+ * under the HA skin therefore recolours every plain palette utility to
+ * HA's neutrals/error/warning/success/primary without a per-file sweep.
+ * The ramps are monotonic so `dark:` variants pick the right step; no
+ * .dark variant of this block is needed. Loom keeps Tailwind's defaults
+ * (plus the brand ramp above). Opacity-modified utilities are inlined by
+ * Tailwind and do NOT follow this — those are rewritten to color-mix(). */
+html[data-skin="ha"] {
+  /* neutral ramp -> HA neutral greys (light steps light, dark steps dark;
+     anchors: 900=#1c1c1c dark card, 950=#141414 HA neutral-05,
+     500=#727272 HA secondary-text, 200=#e5e5e5 HA secondary-bg) */
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f2f2f2;
+  --color-slate-200: #e5e5e5;
+  --color-slate-300: #d6d6d6;
+  --color-slate-400: #b3b3b3;
+  --color-slate-500: #727272;
+  --color-slate-600: #565656;
+  --color-slate-700: #3d3d3d;
+  --color-slate-800: #282828;
+  --color-slate-900: #1c1c1c;
+  --color-slate-950: #141414;
+  /* error ramp -> HA #db4437 at 500 */
+  --color-red-50: #fdeceb;
+  --color-red-100: #f9d3d0;
+  --color-red-200: #f2aaa4;
+  --color-red-300: #ea8078;
+  --color-red-400: #e15d53;
+  --color-red-500: #db4437;
+  --color-red-600: #c33a2e;
+  --color-red-700: #a12f25;
+  --color-red-800: #7e251d;
+  --color-red-900: #5c1a15;
+  --color-red-950: #3a100d;
+  /* warning ramp -> HA #ffa600 at 500 */
+  --color-amber-50: #fff6e5;
+  --color-amber-100: #ffe9bf;
+  --color-amber-200: #ffd480;
+  --color-amber-300: #ffc040;
+  --color-amber-400: #ffb01a;
+  --color-amber-500: #ffa600;
+  --color-amber-600: #e69500;
+  --color-amber-700: #b87700;
+  --color-amber-800: #8a5900;
+  --color-amber-900: #5c3b00;
+  --color-amber-950: #3d2700;
+  /* success ramp -> HA #43a047 at 500 (apply to BOTH green and emerald) */
+  --color-green-50: #ecf5ec;
+  --color-green-100: #cfe6d0;
+  --color-green-200: #a3d0a5;
+  --color-green-300: #77ba7a;
+  --color-green-400: #57ac5b;
+  --color-green-500: #43a047;
+  --color-green-600: #3a8c3e;
+  --color-green-700: #2f7132;
+  --color-green-800: #245726;
+  --color-green-900: #193d1b;
+  --color-green-950: #0f2611;
+  --color-emerald-50: #ecf5ec;
+  --color-emerald-100: #cfe6d0;
+  --color-emerald-200: #a3d0a5;
+  --color-emerald-300: #77ba7a;
+  --color-emerald-400: #57ac5b;
+  --color-emerald-500: #43a047;
+  --color-emerald-600: #3a8c3e;
+  --color-emerald-700: #2f7132;
+  --color-emerald-800: #245726;
+  --color-emerald-900: #193d1b;
+  --color-emerald-950: #0f2611;
+  /* brand ramp -> HA primary #009ac7 at 500 (anchors: 50=#dff3fc primary-90,
+     400=#18bcf2 primary-50) */
+  --color-brand-50: #dff3fc;
+  --color-brand-100: #bfe7f8;
+  --color-brand-200: #80cff1;
+  --color-brand-300: #40b7ea;
+  --color-brand-400: #18bcf2;
+  --color-brand-500: #009ac7;
+  --color-brand-600: #0089b2;
+  --color-brand-700: #006e8f;
+  --color-brand-800: #00536c;
+  --color-brand-900: #003849;
+  --color-brand-950: #002733;
+  /* violet has a single decorative use -> fold onto brand so it is not an
+     off-theme purple */
+  --color-violet-500: #009ac7;
 }
 
 /* Reusable utility classes that bind the semantic tokens to elements

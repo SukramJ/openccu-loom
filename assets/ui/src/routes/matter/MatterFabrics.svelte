@@ -117,7 +117,7 @@
   {/if}
 
   <!-- Share bridge section -->
-  <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4">
+  <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_50%,transparent)] p-4">
     <h3 class="font-medium mb-2 text-slate-900 dark:text-slate-100">
       {t("matter.fabric.share_bridge")}
     </h3>

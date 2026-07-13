@@ -604,7 +604,7 @@
     <span class="flex-1">{t("channel.session_lock_other")}</span>
     <button
       type="button"
-      class="rounded border border-amber-400 px-2 py-0.5 text-xs hover:bg-amber-100 dark:border-amber-600 dark:hover:bg-amber-900/40"
+      class="rounded border border-amber-400 px-2 py-0.5 text-xs hover:bg-amber-100 dark:border-amber-600 dark:hover:bg-[color-mix(in_srgb,var(--color-amber-900)_40%,transparent)]"
       onclick={async () => {
         // Recovery flow: force the foreign lock to release, then
         // acquire it ourselves. Mirrors aiohomematic-config's

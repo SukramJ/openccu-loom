@@ -232,7 +232,7 @@
 </script>
 
 {#if variants.length > 0}
-  <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+  <div class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-[color-mix(in_srgb,var(--color-slate-900)_50%,transparent)]">
     <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
       {t("profile.header")} · {profile.sender_type
         ? `${profile.sender_type} → ${profile.receiver_type}`

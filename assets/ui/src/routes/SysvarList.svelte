@@ -410,7 +410,7 @@
 
 {#if editing}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--color-slate-900)_50%,transparent)] p-4"
     role="dialog"
     aria-modal="true"
     aria-label={t("sysvars.edit.title")}
