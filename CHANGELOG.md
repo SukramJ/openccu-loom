@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-07-12
+
 ### Added
 
 - **The Config UI has a Home-Assistant-native visual skin.** Settings →
@@ -22,10 +24,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) for the
   design. The shared UI primitives and the highest-traffic views carry the
   new skin now; a handful of less-visited views are a documented follow-up.
-
-## [0.39.0] — 2026-07-12
-
-### Added
 
 - **A CCU's operational readiness is now visible in the UI.** Many actions
   depend on a CCU having finished its readiness-gated southbound bring-up
