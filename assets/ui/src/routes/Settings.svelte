@@ -308,7 +308,7 @@
         ? 'w-full'
         : ''}
         {activeTab === tab.id
-          ? 'bg-brand-50 font-medium text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
+          ? 'bg-brand-50 font-medium text-brand-900 dark:bg-[color-mix(in_srgb,var(--color-brand-900)_20%,transparent)] dark:text-brand-100'
           : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
       aria-current={activeTab === tab.id ? "page" : undefined}
       onclick={() => (activeTab = tab.id)}

@@ -91,7 +91,7 @@
     <div class="mt-2 flex justify-end gap-2">
       <button
         type="button"
-        class="inline-flex min-h-[36px] items-center rounded border border-amber-400 px-3 text-xs text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-100 dark:hover:bg-amber-900/40"
+        class="inline-flex min-h-[36px] items-center rounded border border-amber-400 px-3 text-xs text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-100 dark:hover:bg-[color-mix(in_srgb,var(--color-amber-900)_40%,transparent)]"
         onclick={() => {
           dismissed = true;
           touch();
