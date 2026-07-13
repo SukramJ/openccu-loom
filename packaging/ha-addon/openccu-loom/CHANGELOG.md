@@ -1,5 +1,25 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.40.0
+
+- **Fixed: OpenCCU-Loom no longer uses up your CCU's login slots.** If you ever
+  found yourself unable to log into the CCU's own web interface — with the CCU
+  complaining about too many logged-in users — this was why. The add-on threw
+  its CCU login away roughly every 90 seconds and logged in again without
+  logging the old one out, so the abandoned logins piled up until the CCU ran
+  out. Your CCU only allows a handful of logins at once (3 on stock firmware,
+  10 on RaspberryMatic/OpenCCU) and that pool is shared with its web interface,
+  so this could lock you out of your own CCU. OpenCCU-Loom now holds exactly
+  one CCU login for as long as it runs, and hands it back when it no longer
+  needs it. Backups and firmware downloads no longer consume an extra login
+  either. **If you have been hitting this, no action is needed beyond updating
+  — but a CCU reboot clears out any logins the old version left behind.**
+
+- **The Home-Assistant look now covers the entire Config UI.** The HA visual
+  skin introduced in 0.39.0 applied to the most-used screens; it now applies
+  everywhere, and its default colors were refreshed to match current Home
+  Assistant. The standalone OpenCCU-Loom look is unchanged.
+
 ## 0.39.0
 
 - **You can now see when a CCU is still starting up.** Actions like enabling

@@ -103,6 +103,10 @@ const loginMaxBackoff = 60 * time.Second
 // was renewed within this many seconds, Renew skips the HTTP round-trip.
 const jsonSessionAge = 90 * time.Second
 
+// staleLogoutTimeout bounds the best-effort Session.logout the client issues
+// for a session it is about to abandon.
+const staleLogoutTimeout = 5 * time.Second
+
 // ccuAccessDeniedCode is the JSON-RPC error code the CCU returns (under
 // HTTP 200) both for an invalid/expired session and for a privilege
 // mismatch, e.g. `access denied ("ADMIN" needed 0)`.
@@ -347,6 +351,16 @@ func (c *Client) Login(ctx context.Context) error {
 		return nil
 	}
 
+	// A login that displaces a live session must hand the old slot back: the
+	// CCU's session pool is small and shared with its WebUI. The ladder's own
+	// callers (loginOrRenew, reloginLocked) have already released and cleared
+	// the session they abandoned, so this is a no-op for them — it exists to
+	// catch callers that reach for Login directly.
+	c.mu.Lock()
+	displaced := c.sessionID
+	c.mu.Unlock()
+	c.logoutStale(ctx, displaced)
+
 	// Enforce backoff when too many consecutive failures have occurred.
 	c.mu.Lock()
 	failCount := c.failedLoginAttempts
@@ -370,24 +384,30 @@ func (c *Client) Login(ctx context.Context) error {
 	}
 	var session string
 	if err := c.callOnce(ctx, "Session.login", params, &session, false); err != nil {
-		// Not an auth failure per se — network/server error; reset the
-		// auth-failure counter so we don't penalise a transient outage.
+		// The CCU signals BOTH wrong credentials and an exhausted session
+		// pool as a JSON-RPC application error ("invalid credentials or too
+		// many sessions"), never as an empty result. Both must engage the
+		// backoff: retrying at full speed against a CCU whose pool is full
+		// is what keeps it full.
+		var jerr *hmerr.JSONRPCError
+		if errors.As(err, &jerr) {
+			attempt := c.noteLoginFailure()
+			c.logger.Warn("jsonrpc login rejected by CCU",
+				slog.String("host", c.host),
+				slog.Int("code", jerr.Code),
+				slog.String("message", jerr.Message),
+				slog.Int("attempt", attempt))
+			return c.wrap("Session.login", fmt.Errorf("%w: %s", hmerr.ErrAuthFailure, jerr.Message))
+		}
+		// Transport/server error — not the credentials' fault; leave the
+		// auth-failure counter alone so a transient outage is not penalised.
 		return err
 	}
 	if session == "" {
-		// Auth failure: bump the counter and double the backoff, capped at loginMaxBackoff.
-		c.mu.Lock()
-		c.failedLoginAttempts++
-		if c.currentBackoff == 0 {
-			c.currentBackoff = loginBaseBackoff
-		} else {
-			next := min(time.Duration(float64(c.currentBackoff)*loginBackoffMultiplier), loginMaxBackoff)
-			c.currentBackoff = next
-		}
-		c.mu.Unlock()
+		attempt := c.noteLoginFailure()
 		c.logger.Warn("jsonrpc login failed (wrong credentials?)",
 			slog.String("host", c.host),
-			slog.Int("attempt", c.failedLoginAttempts))
+			slog.Int("attempt", attempt))
 		return c.wrap("Session.login", hmerr.ErrAuthFailure)
 	}
 
@@ -401,6 +421,21 @@ func (c *Client) Login(ctx context.Context) error {
 	c.mu.Unlock()
 	c.logger.Debug("jsonrpc session established", slog.String("host", c.host))
 	return nil
+}
+
+// noteLoginFailure records one rejected login and advances the exponential
+// backoff, returning the new consecutive-failure count. Both counters reset
+// on the next successful login.
+func (c *Client) noteLoginFailure() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.failedLoginAttempts++
+	if c.currentBackoff == 0 {
+		c.currentBackoff = loginBaseBackoff
+	} else {
+		c.currentBackoff = min(time.Duration(float64(c.currentBackoff)*loginBackoffMultiplier), loginMaxBackoff)
+	}
+	return c.failedLoginAttempts
 }
 
 // Logout releases the session on the CCU and clears local state.
@@ -423,9 +458,14 @@ func (c *Client) Logout(ctx context.Context) error {
 // Freshness guard: if the session was renewed within [jsonSessionAge] (90 s),
 // the HTTP round-trip is skipped and the call returns nil immediately.
 //
-// CCU response: a non-empty session ID confirming the renewal. The returned
-// ID may match the current one (CCU reuses) or differ (CCU rotated) — both
-// cases are folded into the local cache.
+// CCU response: the JSON boolean `true`. Session.renew extends the session
+// in place and does NOT mint a new ID — the handler touches the session and
+// answers with a literal `true` (CCU firmware
+// WebUI/www/api/methods/session/renew.tcl). Decoding the reply as anything
+// else turns every successful renewal into a decode error, and the caller
+// then abandons a perfectly healthy session and opens a fresh one — one
+// leaked CCU session per freshness window, until the CCU's session pool is
+// exhausted and no one (including the WebUI) can log in any more.
 func (c *Client) Renew(ctx context.Context) error {
 	c.mu.Lock()
 	session := c.sessionID
@@ -438,22 +478,64 @@ func (c *Client) Renew(ctx context.Context) error {
 	if recentlyRefreshed {
 		return nil
 	}
-	var renewed string
+	var renewed bool
 	if err := c.callOnce(ctx, "Session.renew", map[string]any{sessionParamKey: session}, &renewed, false); err != nil {
 		return err
 	}
-	if renewed == "" {
-		// CCU rejected the renewal; force a fresh Login on the next
-		// callOnce by invalidating the cached ID.
+	if !renewed {
+		// CCU rejected the renewal; the session is gone. Force a fresh Login
+		// on the next callOnce by invalidating the cached ID.
 		c.invalidateSession()
 		return c.wrap("Session.renew", hmerr.ErrAuthFailure)
 	}
+	// Keep the session ID: the CCU renewed the one we sent.
 	c.mu.Lock()
-	c.sessionID = renewed
 	c.lastSessionRefresh = time.Now()
 	c.mu.Unlock()
 	c.logger.Debug("jsonrpc session renewed", slog.String("host", c.host))
 	return nil
+}
+
+// logoutStale releases a session the client is about to abandon so the CCU
+// frees the slot immediately instead of holding it until the session idles
+// out. The CCU's session pool is small, and a login that finds it full fails
+// with "invalid credentials or too many sessions" — which locks the operator
+// out of the WebUI as well, not just this daemon.
+//
+// Best-effort by design: a session the CCU has already dropped (reboot, idle
+// timeout) makes the logout fail, which is expected and must never block the
+// fresh login that follows. The call is detached from ctx so a cancelled
+// request still frees the slot.
+func (c *Client) logoutStale(ctx context.Context, session string) {
+	if session == "" || c.cfg.Username == "" {
+		return
+	}
+	// Drop the cached ID first: paramsWithSession injects the *current*
+	// session over any explicit one, which would otherwise send the fresh
+	// session ID to a logout meant for the stale one.
+	c.invalidateSession()
+
+	logoutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), staleLogoutTimeout)
+	defer cancel()
+	if err := c.callOnce(logoutCtx, "Session.logout", map[string]any{sessionParamKey: session}, nil, false); err != nil {
+		c.logger.Debug("jsonrpc stale session logout failed",
+			slog.String("host", c.host),
+			slog.String("err", err.Error()))
+		return
+	}
+	c.logger.Debug("jsonrpc stale session released", slog.String("host", c.host))
+}
+
+// EnsureSession guarantees the client holds a usable CCU session, renewing
+// the current one or logging in when there is none. It is the session ladder
+// every caller should reach for; [Client.Login] unconditionally opens a NEW
+// session and is only correct when the old one is known to be unusable.
+//
+// Callers outside the transport need this when they authenticate against a
+// CCU endpoint by session ID instead of going through [Client.Call] — the
+// backup and firmware downloads (cp_security.cgi) do exactly that.
+func (c *Client) EnsureSession(ctx context.Context) error {
+	return c.loginOrRenew(ctx)
 }
 
 // loginOrRenew keeps the CCU session usable ahead of a call: with no
@@ -490,7 +572,10 @@ func (c *Client) loginOrRenew(ctx context.Context) error {
 	if err := c.Renew(ctx); err != nil {
 		// The CCU dropped the session (reboot, inactivity timeout) or the
 		// renewal round-trip failed — a fresh login either recovers the
-		// auth plane or surfaces the real connectivity problem.
+		// auth plane or surfaces the real connectivity problem. Release the
+		// old slot first so a session the CCU still holds does not linger
+		// until its idle timeout.
+		c.logoutStale(ctx, session)
 		return c.Login(ctx)
 	}
 	return nil
@@ -522,6 +607,11 @@ func (c *Client) reloginLocked(ctx context.Context, staleSession string) error {
 		// Another goroutine already replaced the stale session; reuse it.
 		return nil
 	}
+	// Hand the slot back before taking a new one. The session is usually
+	// already dead here (that is why the call failed), but a 400 raised by a
+	// privilege mismatch leaves it very much alive — and abandoning it would
+	// burn a slot for nothing.
+	c.logoutStale(ctx, staleSession)
 	return c.Login(ctx)
 }
 
