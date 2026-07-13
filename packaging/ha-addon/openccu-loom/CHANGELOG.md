@@ -12,6 +12,11 @@
   when it is waiting for a CCU and becomes available as soon as at least one CCU
   is ready. With several CCUs each is tracked separately, so one still starting
   up never hides the others' devices or blocks Matter pairing.
+- **The interface now matches Home Assistant.** Opened inside Home Assistant,
+  the OpenCCU-Loom panel automatically adopts your active HA theme — colors and
+  light/dark, including custom themes — so it no longer looks like a separate
+  app. Opened on its own in a browser, you can choose the Home Assistant look or
+  the default OpenCCU-Loom style under Settings → Appearance.
 
 ## 0.38.0
 

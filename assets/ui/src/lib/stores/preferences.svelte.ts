@@ -4,14 +4,21 @@
 // object so callers can read e.g. `prefs.locale` / `prefs.theme` and
 // the UI re-renders on change.
 
+import { isEmbedded, resolveSkin } from "$lib/theme/ha-bridge";
+
 const KEY = "openccu-loom.prefs.v1";
 // LEGACY_KEY removed: clean break on rebrand to OpenCCU-Loom
 
 export type Theme = "light" | "dark" | "system";
+export type Skin = "loom" | "ha";
 
 type Prefs = {
   locale: "de" | "en";
   theme: Theme;
+  // skin selects the visual style: "loom" (default) keeps the Loom
+  // teal/slate look; "ha" applies the Home-Assistant skin. When embedded
+  // in HA (Ingress iframe) resolveSkin forces "ha" regardless of this.
+  skin: Skin;
   navCollapsed: boolean;
   // expertMode reveals expert-tier configuration fields in the
   // Settings UI (analog to the existing channel-paramset expert
@@ -40,15 +47,16 @@ function load(): Prefs {
         parsed.theme === "light" || parsed.theme === "dark" || parsed.theme === "system"
           ? parsed.theme
           : "system";
+      const skin: Skin = parsed.skin === "ha" ? "ha" : "loom";
       const navCollapsed = parsed.navCollapsed === true;
       const expertMode = parsed.expertMode === true;
       const deviceView: "grid" | "list" = parsed.deviceView === "list" ? "list" : "grid";
-      return { locale, theme, navCollapsed, expertMode, deviceView };
+      return { locale, theme, skin, navCollapsed, expertMode, deviceView };
     }
   } catch {
     // ignore
   }
-  return { locale: detectLocale(), theme: "system", navCollapsed: false, expertMode: false, deviceView: "grid" };
+  return { locale: detectLocale(), theme: "system", skin: "loom", navCollapsed: false, expertMode: false, deviceView: "grid" };
 }
 
 function persist(p: Prefs): void {
@@ -64,6 +72,7 @@ const initial = load();
 export const prefs = $state<Prefs>({
   locale: initial.locale,
   theme: initial.theme,
+  skin: initial.skin,
   navCollapsed: initial.navCollapsed,
   expertMode: initial.expertMode,
   deviceView: initial.deviceView,
@@ -73,6 +82,12 @@ export const prefs = $state<Prefs>({
 // system-preference changes so "system" mode tracks the OS toggle.
 export function applyTheme(): void {
   const root = document.documentElement;
+  // Axis 1: the resolved skin. Embedded in HA, resolveSkin forces "ha".
+  const skin = resolveSkin(prefs.skin);
+  root.dataset.skin = skin;
+  // Axis 2: light/dark. When embedded, startHaBridge owns .dark (it tracks
+  // HA's own light/dark), so applyTheme must NOT fight it here.
+  if (isEmbedded()) return;
   const dark =
     prefs.theme === "dark" ||
     (prefs.theme === "system" &&
@@ -88,6 +103,12 @@ export function setLocale(loc: "de" | "en"): void {
 
 export function setTheme(theme: Theme): void {
   prefs.theme = theme;
+  persist({ ...prefs });
+  applyTheme();
+}
+
+export function setSkin(skin: Skin): void {
+  prefs.skin = skin;
   persist({ ...prefs });
   applyTheme();
 }

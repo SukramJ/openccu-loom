@@ -37,10 +37,9 @@
 >
   <BitsSelect.Trigger
     class={cn(
-      "flex h-10 w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-1 text-base text-slate-900 shadow-sm sm:text-sm",
-      "focus-visible:border-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+      "flex h-10 w-full items-center justify-between rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-1 text-base text-[var(--ha-primary-text-color)] shadow-sm sm:text-sm",
+      "focus-visible:border-[var(--ha-primary-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ha-primary-color)]",
       "disabled:cursor-not-allowed disabled:opacity-50",
-      "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100",
       className,
     )}
   >
@@ -52,14 +51,14 @@
 
   <BitsSelect.Portal>
     <BitsSelect.Content
-      class="z-50 max-h-[60vh] min-w-[8rem] overflow-y-auto rounded-md border border-slate-200 bg-white p-1 text-sm text-slate-900 shadow-md dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+      class="z-50 max-h-[60vh] min-w-[8rem] overflow-y-auto rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] p-1 text-sm text-[var(--ha-primary-text-color)] shadow-md"
       sideOffset={4}
     >
       {#each options as option (option.value)}
         <BitsSelect.Item
           value={option.value}
           label={option.label}
-          class="relative flex min-h-[40px] cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-base outline-none data-[highlighted]:bg-slate-100 data-[disabled]:opacity-50 sm:min-h-0 sm:text-sm dark:data-[highlighted]:bg-slate-800"
+          class="relative flex min-h-[40px] cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-base outline-none data-[highlighted]:bg-[var(--ha-secondary-background-color)] data-[disabled]:opacity-50 sm:min-h-0 sm:text-sm"
         >
           {#snippet children({ selected }: { selected: boolean })}
             <span

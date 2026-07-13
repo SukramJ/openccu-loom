@@ -32,20 +32,21 @@
     "disabled:opacity-50 disabled:text-slate-400 dark:disabled:text-slate-500";
   const variants: Record<Variant, string> = {
     default:
-      `bg-brand-500 text-white hover:bg-brand-700 shadow-sm ${disabledFill}`,
+      `bg-[var(--ha-primary-color)] text-white hover:bg-[var(--ha-primary-color-hover)] shadow-sm ${disabledFill}`,
     outline:
-      `border border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 ${disabledMuted}`,
+      `border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] text-[var(--ha-primary-text-color)] hover:bg-[var(--ha-secondary-background-color)] ${disabledMuted}`,
     ghost:
-      `text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 ${disabledMuted}`,
+      `text-[var(--ha-primary-text-color)] hover:bg-[var(--ha-secondary-background-color)] ${disabledMuted}`,
     destructive:
-      `bg-red-600 text-white hover:bg-red-700 shadow-sm ${disabledFill}`,
+      `bg-[var(--ha-error-color)] text-white hover:brightness-95 shadow-sm ${disabledFill}`,
     // Outline-weight danger: same footprint as `outline`, but a red
     // border/text signals "destructive" without the loud filled-red
     // block competing with everyday header actions for attention.
     // Hover fills solid red so the destructive intent is still explicit
-    // at the point of commitment.
+    // at the point of commitment. Border is a translucent tint of the
+    // error token so it stays subtle; the token flips with skin + dark.
     "outline-destructive":
-      `border border-red-300 bg-white text-red-600 hover:border-red-600 hover:bg-red-600 hover:text-white dark:border-red-900/60 dark:bg-slate-900 dark:text-red-400 dark:hover:border-red-600 dark:hover:bg-red-600 dark:hover:text-white ${disabledMuted}`,
+      `border border-[color-mix(in_srgb,var(--ha-error-color)_40%,transparent)] bg-[var(--ha-card-background-color)] text-[var(--ha-error-color)] hover:border-[var(--ha-error-color)] hover:bg-[var(--ha-error-color)] hover:text-white ${disabledMuted}`,
   };
   // Touch-first heights: even the `sm` variant clears ~36px, `md` is a
   // comfortable 40px, and the icon button is a 40px square so single-tap
@@ -60,7 +61,7 @@
 
 <button
   class={cn(
-    "inline-flex items-center justify-center gap-2 rounded-md font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed",
+    "inline-flex items-center justify-center gap-2 rounded-md font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ha-primary-color)] disabled:cursor-not-allowed",
     variants[variant],
     sizes[size],
     className,

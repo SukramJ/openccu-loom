@@ -11,17 +11,20 @@
     children,
   }: Props = $props();
 
+  // Semantic pills: a 15% tint of the matching token as the fill and the
+  // full token as the text colour, so the badge follows the active skin
+  // (and flips with .dark) instead of carrying a fixed slate/emerald ramp.
   const variants: Record<Variant, string> = {
     default:
-      "bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-50",
+      "bg-[color-mix(in_srgb,var(--ha-primary-color)_15%,transparent)] text-[var(--ha-primary-color)]",
     success:
-      "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200",
+      "bg-[color-mix(in_srgb,var(--ha-success-color)_15%,transparent)] text-[var(--ha-success-color)]",
     warning:
-      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200",
+      "bg-[color-mix(in_srgb,var(--ha-warning-color)_15%,transparent)] text-[var(--ha-warning-color)]",
     danger:
-      "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200",
+      "bg-[color-mix(in_srgb,var(--ha-error-color)_15%,transparent)] text-[var(--ha-error-color)]",
     muted:
-      "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+      "bg-[var(--ha-secondary-background-color)] text-[var(--ha-secondary-text-color)]",
   };
 </script>
 

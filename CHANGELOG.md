@@ -10,6 +10,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Config UI has a Home-Assistant-native visual skin.** Settings →
+  Appearance gains a "Design" control offering the default OpenCCU-Loom
+  teal/slate look or a Home Assistant look. Opened standalone (browser tab,
+  not inside HA), the operator's choice is remembered and applied on every
+  load. Opened inside Home Assistant via Ingress, the HA skin is applied
+  automatically and mirrors the operator's real, live HA theme — including
+  any custom theme, not just the built-in ones — via a same-origin bridge
+  that reads Home Assistant's own color and light/dark settings and re-syncs
+  whenever they change. The sidebar, header, and navigation are identical in
+  every context; only the color palette adapts, and the browser tab title is
+  left to Home Assistant while embedded. See
+  [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) for the
+  design. The shared UI primitives and the highest-traffic views carry the
+  new skin now; a handful of less-visited views are a documented follow-up.
+
 - **A CCU's operational readiness is now visible in the UI.** Many actions
   depend on a CCU having finished its readiness-gated southbound bring-up
   (device list fully loaded, Matter coupling available), but that state was
