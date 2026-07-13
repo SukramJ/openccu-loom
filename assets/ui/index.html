@@ -41,8 +41,19 @@
           var root = document.documentElement;
           root.classList.toggle("dark", dark);
           root.style.colorScheme = dark ? "dark" : "light";
+          // Set data-skin before first paint too, so the app shell never
+          // flashes Loom-teal before the store/bridge run. Embedded in an
+          // iframe (HA Ingress) always forces "ha"; else the persisted skin.
+          var skin = "loom";
+          if (window.self !== window.top) {
+            skin = "ha";
+          } else if (raw) {
+            var pp = JSON.parse(raw);
+            if (pp && pp.skin === "ha") skin = "ha";
+          }
+          root.setAttribute("data-skin", skin);
         } catch (e) {
-          /* localStorage / JSON unavailable — fall back to light. */
+          /* localStorage / JSON / cross-origin — fall back to Loom light. */
         }
       })();
     </script>

@@ -29,7 +29,7 @@
   <div>
     <h1 class="text-balance text-2xl font-bold tracking-tight">{title}</h1>
     {#if subtitle}
-      <p class="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+      <p class="text-sm text-[var(--ha-secondary-text-color)]">{subtitle}</p>
     {/if}
   </div>
   {#if actions}

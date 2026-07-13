@@ -219,12 +219,12 @@
           type="search"
           placeholder={t("overview.search_placeholder")}
           bind:value={search}
-          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:w-64 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
+          class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-base text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none focus:ring-1 focus:ring-[var(--ha-primary-color)] sm:w-64 sm:text-sm"
         />
         {#if centrals.length > 1}
           <select
             bind:value={centralFilter}
-            class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
             title={t("overview.filter.central_title")}
           >
             <option value="">{t("common.all_ccus")}</option>
@@ -236,7 +236,7 @@
         {#if rooms.length > 0}
           <select
             bind:value={roomFilter}
-            class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
             title={t("overview.filter.room_title")}
           >
             <option value="">{t("devicelist.all_rooms")}</option>
@@ -248,7 +248,7 @@
         {#if functions.length > 0}
           <select
             bind:value={functionFilter}
-            class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
             title={t("overview.filter.function_title")}
           >
             <option value="">{t("overview.filter.all_functions")}</option>
@@ -258,7 +258,7 @@
           </select>
         {/if}
         <div
-          class="ml-auto inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-slate-700"
+          class="ml-auto inline-flex overflow-hidden rounded-md border border-[var(--ha-divider-color)]"
           role="group"
           aria-label={t("overview.group_by")}
         >
@@ -270,8 +270,8 @@
             <button
               type="button"
               class="px-3 py-2 text-sm transition {groupMode === mode.key
-                ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
-                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
+                ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_15%,transparent)] text-[var(--ha-primary-color)]'
+                : 'text-[var(--ha-secondary-text-color)] hover:bg-black/5 dark:hover:bg-white/5'}"
               aria-pressed={groupMode === mode.key}
               onclick={() => (groupMode = mode.key as OverviewGroupMode)}
             >
@@ -299,8 +299,8 @@
     <div class="mb-4 flex flex-col gap-2">
       {#each notReadyCentrals as c (c.name)}
         <Card class="flex flex-wrap items-center gap-3 p-3 text-sm">
-          <Icon name="mdi:refresh" size={18} class="text-amber-500" />
-          <span class="min-w-0 flex-1 text-slate-700 dark:text-slate-300">
+          <Icon name="mdi:refresh" size={18} class="text-[var(--ha-warning-color)]" />
+          <span class="min-w-0 flex-1 text-[var(--ha-primary-text-color)]">
             {t("devices.initializing_banner", {
               name: c.name,
               loaded: c.readiness.interfaces_loaded,
@@ -346,14 +346,14 @@
           onclick={() => toggleGroup(group)}
         >
           <Icon name={isExpanded ? "mdi:chevron-down" : "mdi:chevron-right"} size={18} />
-          <h2 class="flex-1 text-sm font-semibold text-slate-900 dark:text-white">
+          <h2 class="flex-1 text-sm font-semibold text-[var(--ha-primary-text-color)]">
             {groupLabel(group)}
           </h2>
           <Badge variant="muted">{t("overview.group.count", { count: group.devices.length })}</Badge>
         </button>
 
         {#if isExpanded}
-          <div class="border-t border-slate-200 p-4 dark:border-slate-800">
+          <div class="border-t border-[var(--ha-divider-color)] p-4">
             {#if isLoading}
               <LoadingState message={t("overview.group.loading")} />
             {:else if groupError}

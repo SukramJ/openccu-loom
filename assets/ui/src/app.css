@@ -98,6 +98,45 @@ html.dark {
   --ha-elevation-modal: 0 10px 25px -5px rgb(0 0 0 / 0.50);
 }
 
+/* Home-Assistant skin. When data-skin="ha" the --ha-* consumption tokens
+ * resolve from HA's own CSS variables (var(--primary-color, …)); the
+ * ha-bridge copies HA's real values onto :root when embedded so the live
+ * theme wins, and the literals below are the standalone HA-default
+ * fallback. Loom values in :root / html.dark above are untouched. */
+html[data-skin="ha"] {
+  --ha-primary-color: var(--primary-color, #03a9f4);
+  --ha-primary-color-hover: color-mix(in srgb, var(--ha-primary-color) 88%, #000);
+  --ha-card-background-color: var(--card-background-color, #ffffff);
+  --ha-secondary-background-color: var(--secondary-background-color, #f4f5f7);
+  --ha-divider-color: var(--divider-color, #e4e6ea);
+  --ha-primary-text-color: var(--primary-text-color, #212121);
+  --ha-secondary-text-color: var(--secondary-text-color, #727272);
+  --ha-disabled-text-color: var(--disabled-text-color, #bdbdbd);
+  --ha-error-color: var(--error-color, #f44336);
+  --ha-warning-color: var(--warning-color, #ff9800);
+  --ha-success-color: var(--success-color, #4caf50);
+  --ha-info-color: var(--info-color, #039be5);
+  --ha-radius-card: var(--ha-card-border-radius, 12px);
+  --ha-elevation-card: var(--ha-card-box-shadow, 0 2px 4px rgba(0, 0, 0, 0.08));
+  --ha-elevation-modal: var(--ha-card-box-shadow, 0 8px 24px rgba(0, 0, 0, 0.18));
+}
+
+html[data-skin="ha"].dark {
+  /* --ha-primary-color keeps inheriting HA's --primary-color — HA holds
+   * its accent across light/dark, so only the neutrals/hover flip here. */
+  --ha-primary-color-hover: color-mix(in srgb, var(--ha-primary-color) 88%, #fff);
+  --ha-card-background-color: var(--card-background-color, #1c1f24);
+  --ha-secondary-background-color: var(--secondary-background-color, #14171b);
+  --ha-divider-color: var(--divider-color, #2b3037);
+  --ha-primary-text-color: var(--primary-text-color, #e6e8ea);
+  --ha-secondary-text-color: var(--secondary-text-color, #9aa0a6);
+  --ha-disabled-text-color: var(--disabled-text-color, #6b7075);
+  --ha-error-color: var(--error-color, #f28b82);
+  --ha-warning-color: var(--warning-color, #fdd663);
+  --ha-success-color: var(--success-color, #81c995);
+  --ha-elevation-card: var(--ha-card-box-shadow, 0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
 /* Base document colours track the theme tokens so the boot paint and any
  * overscroll / rubber-band area never flash white in dark mode. The inline
  * pre-paint script in index.html sets `.dark` before the first paint, so

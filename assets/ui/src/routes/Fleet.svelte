@@ -86,44 +86,44 @@
       {#each sortedCcus as ccu (ccu.name)}
         <Card class="flex flex-col gap-3 p-4">
           <div class="flex items-start justify-between gap-2">
-            <h2 class="min-w-0 truncate text-base font-semibold text-slate-900 dark:text-white">
+            <h2 class="min-w-0 truncate text-base font-semibold text-[var(--ha-primary-text-color)]">
               {ccu.name}
             </h2>
             <CentralStatusBadge available={ccu.available} readiness={ccu.readiness} />
           </div>
 
           <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-            <dt class="text-slate-500 dark:text-slate-400">{t("fleet.field.host")}</dt>
-            <dd class="min-w-0 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
+            <dt class="text-[var(--ha-secondary-text-color)]">{t("fleet.field.host")}</dt>
+            <dd class="min-w-0 truncate font-mono text-xs text-[var(--ha-primary-text-color)]">
               {ccu.host}{ccu.hostname && ccu.hostname !== ccu.host ? ` (${ccu.hostname})` : ""}
             </dd>
 
             {#if ccu.model}
-              <dt class="text-slate-500 dark:text-slate-400">{t("fleet.field.model")}</dt>
-              <dd class="min-w-0 truncate text-slate-700 dark:text-slate-300">
+              <dt class="text-[var(--ha-secondary-text-color)]">{t("fleet.field.model")}</dt>
+              <dd class="min-w-0 truncate text-[var(--ha-primary-text-color)]">
                 {ccu.model}{ccu.version ? ` (${ccu.version})` : ""}
               </dd>
             {:else if ccu.version}
-              <dt class="text-slate-500 dark:text-slate-400">{t("fleet.field.version")}</dt>
-              <dd class="text-slate-700 dark:text-slate-300">{ccu.version}</dd>
+              <dt class="text-[var(--ha-secondary-text-color)]">{t("fleet.field.version")}</dt>
+              <dd class="text-[var(--ha-primary-text-color)]">{ccu.version}</dd>
             {/if}
 
             {#if ccu.serial}
-              <dt class="text-slate-500 dark:text-slate-400">{t("fleet.field.serial")}</dt>
-              <dd class="min-w-0 truncate font-mono text-xs text-slate-700 dark:text-slate-300">
+              <dt class="text-[var(--ha-secondary-text-color)]">{t("fleet.field.serial")}</dt>
+              <dd class="min-w-0 truncate font-mono text-xs text-[var(--ha-primary-text-color)]">
                 {ccu.serial}
               </dd>
             {/if}
 
-            <dt class="text-slate-500 dark:text-slate-400">{t("fleet.field.devices")}</dt>
-            <dd class="tabular-nums text-slate-700 dark:text-slate-300">
+            <dt class="text-[var(--ha-secondary-text-color)]">{t("fleet.field.devices")}</dt>
+            <dd class="tabular-nums text-[var(--ha-primary-text-color)]">
               {deviceCount(ccu.name)}
             </dd>
           </dl>
 
           {#if ccu.configured_interfaces.length > 0}
             <div class="flex flex-col gap-1">
-              <span class="text-xs text-slate-500 dark:text-slate-400">
+              <span class="text-xs text-[var(--ha-secondary-text-color)]">
                 {t("fleet.field.interfaces")}
               </span>
               <div class="flex flex-wrap gap-1">

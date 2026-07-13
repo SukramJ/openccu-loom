@@ -8,6 +8,7 @@
     applyTheme,
     bindSystemTheme,
   } from "$lib/stores/preferences.svelte";
+  import { isEmbedded, startHaBridge } from "$lib/theme/ha-bridge";
   import DeviceList from "./routes/DeviceList.svelte";
   import Overview from "./routes/Overview.svelte";
   import DeviceDetail from "./routes/DeviceDetail.svelte";
@@ -113,6 +114,10 @@
     // preference changes for "system" mode.
     applyTheme();
     const unbindTheme = bindSystemTheme();
+    // When embedded in HA (Ingress iframe) mirror the live HA theme:
+    // copy HA's CSS vars onto our root and track HA's light/dark. Inert
+    // and cleanup is a no-op when standalone or cross-origin.
+    const stopHaBridge = startHaBridge();
     // Browser-level guard against losing unsaved edits. Any editor
     // that touches `dirty.set(id, true)` will participate.
     const beforeUnload = (e: BeforeUnloadEvent) => {
@@ -138,6 +143,7 @@
       window.removeEventListener("beforeunload", beforeUnload);
       window.removeEventListener("keydown", onKey);
       unbindTheme();
+      stopHaBridge();
     };
   });
 
@@ -223,6 +229,8 @@
 </script>
 
 <svelte:head>
+  <!-- Embedded in HA, let HA own the browser-tab title: render none. -->
+  {#if !isEmbedded()}
   <title>{
     route.kind === "diagnostics" ? t("page.title.diagnostics") :
     route.kind === "energy" ? t("page.title.energy") :
@@ -235,6 +243,7 @@
     route.kind === "about" ? t("page.title.about") :
     t("page.title.default")
   }</title>
+  {/if}
 </svelte:head>
 
 <a
