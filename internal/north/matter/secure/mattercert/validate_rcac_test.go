@@ -4,6 +4,7 @@
 package mattercert_test
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -43,20 +44,37 @@ type rcacBuildOpts struct {
 	foreignKey *ecdsa.PrivateKey
 }
 
-// buildRCACTLV returns a fully-signed RCAC TLV byte slice.
+// buildRCACTLV returns a fully-signed RCAC TLV byte slice, timestamped
+// with the current wall clock.
+//
+// A single nowEpoch() read is threaded through both the probe (signed)
+// and the final (returned) cert so they share an identical NotBefore —
+// see buildRCACFull for why a second nowEpoch() read here would flake
+// the signature.
 func buildRCACTLV(t *testing.T, selfPriv *ecdsa.PrivateKey, o rcacBuildOpts) []byte {
+	t.Helper()
+	return buildRCACTLVAt(t, selfPriv, o, nowEpoch())
+}
+
+// buildRCACTLVAt returns a fully-signed RCAC TLV byte slice using the
+// caller-supplied timestamp for both the signed probe and the returned
+// cert. Exposed (rather than folded into buildRCACTLV) so tests can pin
+// a deterministic NotBefore, or deliberately drive the probe and the
+// final cert with different timestamps to reproduce the historical
+// clock-tick fixture bug.
+func buildRCACTLVAt(t *testing.T, selfPriv *ecdsa.PrivateKey, o rcacBuildOpts, now uint64) []byte {
 	t.Helper()
 	pub := marshalPub(selfPriv)
 
 	// Build a probe cert (zero signature) to compute TBS-DER.
-	probeRaw := buildRCACProbe(t, pub, o)
+	probeRaw := buildRCACProbe(t, pub, o, now)
 	probeCert, err := mattercert.Decode(probeRaw)
 	if err != nil {
-		t.Fatalf("buildRCACTLV: decode probe: %v", err)
+		t.Fatalf("buildRCACTLVAt: decode probe: %v", err)
 	}
 	tbsDER, err := mattercert.TBSToDER(probeCert)
 	if err != nil {
-		t.Fatalf("buildRCACTLV: TBSToDER: %v", err)
+		t.Fatalf("buildRCACTLVAt: TBSToDER: %v", err)
 	}
 	hash := sha256.Sum256(tbsDER)
 
@@ -66,26 +84,37 @@ func buildRCACTLV(t *testing.T, selfPriv *ecdsa.PrivateKey, o rcacBuildOpts) []b
 	}
 	r, s, err := ecdsa.Sign(rand.Reader, signingKey, hash[:])
 	if err != nil {
-		t.Fatalf("buildRCACTLV: sign: %v", err)
+		t.Fatalf("buildRCACTLVAt: sign: %v", err)
 	}
 	sig := make([]byte, 64)
 	rb, sb := r.Bytes(), s.Bytes()
 	copy(sig[32-len(rb):32], rb)
 	copy(sig[64-len(sb):64], sb)
 
-	return buildRCACFull(t, pub, o, sig)
+	return buildRCACFull(t, pub, o, sig, now)
 }
 
 // buildRCACProbe builds a raw RCAC TLV with a 64-zero-byte signature
 // placeholder — needed only to derive the TBS-DER bytes for signing.
-func buildRCACProbe(t *testing.T, pubKey []byte, o rcacBuildOpts) []byte {
+// now must be the exact timestamp the caller will also use for the
+// final signed cert (see buildRCACTLV).
+func buildRCACProbe(t *testing.T, pubKey []byte, o rcacBuildOpts, now uint64) []byte {
 	t.Helper()
-	return buildRCACFull(t, pubKey, o, make([]byte, 64))
+	return buildRCACFull(t, pubKey, o, make([]byte, 64), now)
 }
 
-func buildRCACFull(t *testing.T, pubKey []byte, o rcacBuildOpts, sig []byte) []byte {
+// buildRCACFull builds the raw RCAC TLV for the given signature and
+// timestamp. now is caller-supplied rather than read internally: the
+// TBS bytes that get signed and the cert bytes that get returned must
+// carry an identical NotBefore, or the self-signature computed over
+// one NotBefore will not verify against a cert re-serialised with a
+// different one. matter.js keeps this invariant by signing and
+// returning the same in-memory object (Certificate.ts:101
+// signEcdsa(key, this.asUnsignedDer()); Rcac.ts:140 verifies
+// verifyEcdsa(..., this.asUnsignedDer(), this.signature) over that
+// same object) instead of re-deriving NotBefore per call.
+func buildRCACFull(t *testing.T, pubKey []byte, o rcacBuildOpts, sig []byte, now uint64) []byte {
 	t.Helper()
-	now := nowEpoch()
 	e := tlv.NewEncoder()
 	e.StartStruct(tlv.AnonymousTag())
 
@@ -308,5 +337,107 @@ func TestValidateRCAC_SelfSigFail(t *testing.T) {
 	err = mattercert.ValidateRCAC(cert)
 	if !errors.Is(err, mattercert.ErrInvalidRCAC) {
 		t.Errorf("expected ErrInvalidRCAC for foreign-signed RCAC, got %v", err)
+	}
+}
+
+// TestValidateRCAC_RejectsWhenSignedNotBeforeDiffersFromCert pins the
+// invariant that made TestValidateRCAC_PathLenAbsent flake ~0.04% of
+// runs before the fixture was fixed: a cert must be verified against
+// the exact bytes that were signed. It reproduces the failure
+// deterministically by signing the TBS at one timestamp and then
+// emitting the returned cert at a later one — the same skew that used
+// to occur when a 1-second wall-clock boundary fell between the two
+// separate nowEpoch() reads inside the old buildRCACFull.
+//
+// ValidateRCAC recomputes the TBS-DER from the certificate it was
+// actually handed (mattercert.TBSToDER, called from verifySignature),
+// so a NotBefore mismatch between the signed bytes and the returned
+// cert must always surface as a signature failure — never an
+// intermittent pass.
+func TestValidateRCAC_RejectsWhenSignedNotBeforeDiffersFromCert(t *testing.T) {
+	t.Parallel()
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	pub := marshalPub(priv)
+	opts := validRCACOpts(priv)
+
+	const signedAt = uint64(1_000_000)
+	const emittedAt = signedAt + 1 // simulates a one-second clock tick
+
+	// Sign the TBS-DER for the cert as it looks at signedAt ...
+	probeRaw := buildRCACProbe(t, pub, opts, signedAt)
+	probeCert, err := mattercert.Decode(probeRaw)
+	if err != nil {
+		t.Fatalf("decode probe: %v", err)
+	}
+	tbsDER, err := mattercert.TBSToDER(probeCert)
+	if err != nil {
+		t.Fatalf("TBSToDER: %v", err)
+	}
+	hash := sha256.Sum256(tbsDER)
+	r, s, err := ecdsa.Sign(rand.Reader, priv, hash[:])
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	sig := make([]byte, 64)
+	rb, sb := r.Bytes(), s.Bytes()
+	copy(sig[32-len(rb):32], rb)
+	copy(sig[64-len(sb):64], sb)
+
+	// ... but emit the cert that ValidateRCAC actually receives at
+	// emittedAt, so its NotBefore no longer matches what was signed.
+	finalRaw := buildRCACFull(t, pub, opts, sig, emittedAt)
+	cert, err := mattercert.Decode(finalRaw)
+	if err != nil {
+		t.Fatalf("decode final: %v", err)
+	}
+
+	err = mattercert.ValidateRCAC(cert)
+	if !errors.Is(err, mattercert.ErrSignatureInvalid) {
+		t.Fatalf("expected ErrSignatureInvalid for a cert whose NotBefore drifted between signing and emission, got %v", err)
+	}
+}
+
+// fixedP256RCACKey returns a deterministic (non-random) P-256 key derived
+// from a fixed seed reader, so the whole fixture — key, timestamp, and
+// signature inputs — is reproducible across runs without crypto/rand. It
+// uses ecdsa.GenerateKey rather than assigning the raw PublicKey
+// coordinates, which is deprecated since Go 1.26.
+func fixedP256RCACKey(t *testing.T) *ecdsa.PrivateKey {
+	t.Helper()
+	seed := bytes.Repeat([]byte{
+		0x6c, 0x7d, 0x78, 0x5b, 0x2a, 0x14, 0x9e, 0x3f,
+		0x01, 0x88, 0x4c, 0x5b, 0x22, 0x77, 0x9d, 0x6e,
+	}, 8)
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), bytes.NewReader(seed))
+	if err != nil {
+		t.Fatalf("fixedP256RCACKey: %v", err)
+	}
+	return priv
+}
+
+// TestValidateRCAC_FixedVectorSelfSignatureVerifies locks the "sign
+// and verify the identical DER" invariant with a fully deterministic
+// key and timestamp (no ecdsa.GenerateKey, no wall clock): the RCAC's
+// self-signature must verify when the TBS-DER that gets hashed is the
+// TBS-DER that was actually signed.
+//
+// Mirrors matter.js packages/.../Rcac.ts:140
+// verifyEcdsa(PublicKey(...), this.asUnsignedDer(), this.signature),
+// which checks the self-signature against the same in-memory
+// certificate object that Certificate.ts:101 signEcdsa(key,
+// this.asUnsignedDer()) signed — never a re-derived copy.
+func TestValidateRCAC_FixedVectorSelfSignatureVerifies(t *testing.T) {
+	t.Parallel()
+	priv := fixedP256RCACKey(t)
+	opts := validRCACOpts(priv)
+	const fixedNow = uint64(500_000_000)
+
+	raw := buildRCACTLVAt(t, priv, opts, fixedNow)
+	cert, err := mattercert.Decode(raw)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if err := mattercert.ValidateRCAC(cert); err != nil {
+		t.Fatalf("ValidateRCAC rejected fixed-vector self-signed RCAC: %v", err)
 	}
 }
