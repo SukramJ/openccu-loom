@@ -105,6 +105,7 @@ exclude_docs: |
   e2e-testplan.md
   testplan.md
   roadmap.md
+  alarm-concept.md
   matter-conformance.md
   matter-ui-concept.md
   TODO.md
