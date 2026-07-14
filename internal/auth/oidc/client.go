@@ -154,19 +154,26 @@ func (c *Client) Exchange(ctx context.Context, code, verifier string) (*TokenRes
 // iss / aud / exp) alongside the profile claims the role mapping
 // consumes.
 type IDClaims struct {
-	Issuer        string   `json:"iss,omitempty"`
-	Subject       string   `json:"sub"`
-	Audience      Audience `json:"aud,omitempty"`
-	Expiry        int64    `json:"exp,omitempty"`
-	IssuedAt      int64    `json:"iat,omitempty"`
-	NotBefore     int64    `json:"nbf,omitempty"`
-	Email         string   `json:"email,omitempty"`
-	EmailVerified bool     `json:"email_verified,omitempty"`
-	Name          string   `json:"name,omitempty"`
-	PreferredUser string   `json:"preferred_username,omitempty"`
-	Role          string   `json:"role,omitempty"`
-	Roles         []any    `json:"roles,omitempty"`
-	Nonce         string   `json:"nonce,omitempty"`
+	Issuer          string   `json:"iss,omitempty"`
+	Subject         string   `json:"sub"`
+	Audience        Audience `json:"aud,omitempty"`
+	AuthorizedParty string   `json:"azp,omitempty"`
+	Expiry          int64    `json:"exp,omitempty"`
+	IssuedAt        int64    `json:"iat,omitempty"`
+	NotBefore       int64    `json:"nbf,omitempty"`
+	Email           string   `json:"email,omitempty"`
+	EmailVerified   bool     `json:"email_verified,omitempty"`
+	Name            string   `json:"name,omitempty"`
+	PreferredUser   string   `json:"preferred_username,omitempty"`
+	Role            string   `json:"role,omitempty"`
+	Roles           []any    `json:"roles,omitempty"`
+	Nonce           string   `json:"nonce,omitempty"`
+	// Raw is the full decoded claim set. It backs role resolution against a
+	// configurable — and possibly nested, e.g. Keycloak's
+	// "realm_access.roles" — RoleClaim. [Verify] populates it; it is nil
+	// when a caller constructs IDClaims directly (the typed Role / Roles
+	// fields are the fallback in that case).
+	Raw map[string]any `json:"-"`
 }
 
 // Audience models the OIDC "aud" claim. The spec allows it to be
@@ -234,6 +241,15 @@ func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string, expectedN
 	if !claims.Audience.contains(c.cfg.ClientID) {
 		return nil, fmt.Errorf("oidc: audience %v does not include client %q", []string(claims.Audience), c.cfg.ClientID)
 	}
+	// OIDC Core §3.1.3.7: an "azp" claim, when present, must be this client;
+	// and a multi-audience token must carry azp so a token minted for another
+	// party (that merely also lists this client in aud) cannot be replayed.
+	if claims.AuthorizedParty != "" && claims.AuthorizedParty != c.cfg.ClientID {
+		return nil, fmt.Errorf("oidc: azp %q is not client %q", claims.AuthorizedParty, c.cfg.ClientID)
+	}
+	if len(claims.Audience) > 1 && claims.AuthorizedParty == "" {
+		return nil, errors.New("oidc: multi-audience ID token without azp")
+	}
 	if claims.Expiry == 0 {
 		return nil, errors.New("oidc: ID token missing exp")
 	}
@@ -250,19 +266,98 @@ func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string, expectedN
 	return claims, nil
 }
 
-// IdentityFrom builds an [auth.Identity] from ID-token claims. The
-// role falls back to Viewer when nothing maps.
+// IdentityFrom builds an [auth.Identity] from ID-token claims. The role is
+// read from the configured RoleClaim (default "role"), resolved against the
+// raw claim set so it supports a plain string, a string array, and a dotted
+// path into nested objects (e.g. Keycloak's "realm_access.roles"). When the
+// claim yields several role names the highest-privilege match wins
+// (admin > operator > viewer); an unmapped or absent claim yields Viewer.
 func (c *Client) IdentityFrom(claims *IDClaims) auth.Identity {
 	subject := claims.PreferredUser
 	if subject == "" {
 		subject = claims.Subject
 	}
-	role := auth.RoleViewer
-	switch strings.ToLower(claims.Role) {
-	case "admin", "administrator":
-		role = auth.RoleAdmin
-	case "operator":
-		role = auth.RoleOperator
+	return auth.Identity{
+		Subject: subject,
+		Scheme:  auth.SchemeSession,
+		Role:    c.roleFromClaims(claims),
 	}
-	return auth.Identity{Subject: subject, Scheme: auth.SchemeSession, Role: role}
+}
+
+// roleFromClaims resolves the auth.Role from the configured RoleClaim. It
+// reads the raw claim set first; when that yields nothing (a caller built
+// IDClaims without the raw map, or a provider populated only the typed
+// fields) it falls back to the well-known top-level "role" string and
+// "roles" array so pre-existing behaviour is preserved.
+func (c *Client) roleFromClaims(claims *IDClaims) auth.Role {
+	claim := c.cfg.RoleClaim
+	if claim == "" {
+		claim = "role"
+	}
+	names := claimStrings(claims.Raw, claim)
+	if len(names) == 0 {
+		if claims.Role != "" {
+			names = append(names, claims.Role)
+		}
+		for _, r := range claims.Roles {
+			if s, ok := r.(string); ok {
+				names = append(names, s)
+			}
+		}
+	}
+	return highestRole(names)
+}
+
+// highestRole maps role names to the most-privileged [auth.Role] they denote,
+// so a user carrying several roles is granted the strongest one.
+func highestRole(names []string) auth.Role {
+	best := auth.RoleViewer
+	for _, n := range names {
+		switch strings.ToLower(strings.TrimSpace(n)) {
+		case "admin", "administrator":
+			return auth.RoleAdmin // highest — nothing can beat it
+		case "operator":
+			best = auth.RoleOperator
+		}
+	}
+	return best
+}
+
+// claimStrings returns the string value(s) at a dotted path in the raw claim
+// set. Each path segment descends one nested JSON object; the leaf may be a
+// string or an array of strings (anything else yields nothing). This lets a
+// RoleClaim address a top-level string ("role"), a top-level array
+// ("groups"), or a nested array ("realm_access.roles").
+func claimStrings(raw map[string]any, path string) []string {
+	if raw == nil {
+		return nil
+	}
+	var cur any = raw
+	for _, p := range strings.Split(path, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		if cur, ok = m[p]; !ok {
+			return nil
+		}
+	}
+	switch v := cur.(type) {
+	case string:
+		if v == "" {
+			return nil
+		}
+		return []string{v}
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, ok := e.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return v
+	}
+	return nil
 }

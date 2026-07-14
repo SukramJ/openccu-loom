@@ -69,12 +69,74 @@ func TestVerifyIDTokenHappyPath(t *testing.T) {
 func TestVerifyIDTokenAudienceArray(t *testing.T) {
 	client, priv, kid, issuer := newVerifyClient(t)
 	now := time.Now().Unix()
+	// A multi-audience ID token must carry azp = this client (OIDC Core
+	// §3.1.3.7); a real Keycloak token always does.
 	tok := signJWT(t, priv, kid, map[string]any{
 		"iss": issuer, "sub": "alice", "aud": []string{"other", "openccu-loom"},
-		"exp": now + 3600,
+		"azp": "openccu-loom", "exp": now + 3600,
 	})
 	if _, err := client.VerifyIDToken(context.Background(), tok); err != nil {
 		t.Fatalf("audience array must be accepted: %v", err)
+	}
+}
+
+// TestVerifyIDTokenRejectsAzpMismatch proves that an "azp" claim present but
+// naming a different client is rejected even when aud already includes this
+// client — azp pins which party the token was actually issued to (OIDC Core
+// §3.1.3.7).
+func TestVerifyIDTokenRejectsAzpMismatch(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": []string{"openccu-loom"},
+		"azp": "someoneelse", "exp": now + 3600,
+	})
+	_, err := client.VerifyIDToken(context.Background(), tok)
+	if err == nil || !strings.Contains(err.Error(), "azp") {
+		t.Fatalf("expected azp mismatch rejection, got %v", err)
+	}
+}
+
+// TestVerifyIDTokenAcceptsSingleAudienceWithoutAzp proves azp is optional
+// when the token carries a single audience that already names this client.
+func TestVerifyIDTokenAcceptsSingleAudienceWithoutAzp(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": []string{"openccu-loom"}, "exp": now + 3600,
+	})
+	if _, err := client.VerifyIDToken(context.Background(), tok); err != nil {
+		t.Fatalf("single-audience token without azp must be accepted: %v", err)
+	}
+}
+
+// TestVerifyIDTokenRejectsMultiAudienceWithoutAzp proves a multi-audience
+// token that omits azp is rejected — without azp there is no way to tell
+// which party the token was actually minted for.
+func TestVerifyIDTokenRejectsMultiAudienceWithoutAzp(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": []string{"other", "openccu-loom"}, "exp": now + 3600,
+	})
+	_, err := client.VerifyIDToken(context.Background(), tok)
+	if err == nil || !strings.Contains(err.Error(), "azp") {
+		t.Fatalf("expected multi-audience-without-azp rejection, got %v", err)
+	}
+}
+
+// TestVerifyIDTokenAcceptsMultiAudienceWithAzp proves a multi-audience token
+// is accepted once azp names this client, matching the existing
+// TestVerifyIDTokenAudienceArray happy path.
+func TestVerifyIDTokenAcceptsMultiAudienceWithAzp(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": []string{"other", "openccu-loom"},
+		"azp": "openccu-loom", "exp": now + 3600,
+	})
+	if _, err := client.VerifyIDToken(context.Background(), tok); err != nil {
+		t.Fatalf("multi-audience token with matching azp must be accepted: %v", err)
 	}
 }
 

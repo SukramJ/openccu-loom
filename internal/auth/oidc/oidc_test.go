@@ -76,8 +76,12 @@ func TestPKCEPair(t *testing.T) {
 func TestDiscoverParsesWellKnown(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
-			_, _ = fmt.Fprintf(w, `{"issuer":"%s","authorization_endpoint":"%s/auth","token_endpoint":"%s/token","jwks_uri":"%s/jwks","scopes_supported":["openid","email"]}`,
-				"https://example.com", "https://example.com", "https://example.com", "https://example.com")
+			// The metadata issuer must equal the configured issuer (the
+			// httptest host, a loopback URL), and endpoints must be https or
+			// loopback — otherwise Discover rejects them.
+			issuer := "http://" + r.Host
+			_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q,"scopes_supported":["openid","email"]}`,
+				issuer, issuer+"/auth", issuer+"/token", issuer+"/jwks")
 			return
 		}
 		http.NotFound(w, r)
@@ -88,8 +92,70 @@ func TestDiscoverParsesWellKnown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
-	if p.AuthorizationEndpoint != "https://example.com/auth" {
+	if p.AuthorizationEndpoint != srv.URL+"/auth" {
 		t.Fatalf("auth endpoint: %s", p.AuthorizationEndpoint)
+	}
+}
+
+// TestDiscoverRejectsNonHTTPSIssuer proves a plain-http, non-loopback issuer
+// is rejected before any network call is made — a forged or downgraded
+// discovery URL must never be dereferenced.
+func TestDiscoverRejectsNonHTTPSIssuer(t *testing.T) {
+	_, err := Discover(context.Background(), http.DefaultClient, "http://idp.example.com")
+	if err == nil {
+		t.Fatal("expected error for non-https, non-loopback issuer")
+	}
+	if !strings.Contains(err.Error(), "https") {
+		t.Fatalf("error should mention https, got %v", err)
+	}
+}
+
+// TestDiscoverRejectsIssuerMismatch proves the metadata's own "issuer" must
+// equal the configured issuer (RFC 8414 §3.3) — otherwise a compromised or
+// misconfigured endpoint could redirect token/JWKS traffic elsewhere.
+func TestDiscoverRejectsIssuerMismatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			issuer := "http://" + r.Host
+			_, _ = fmt.Fprintf(w, `{"issuer":"https://evil.example","authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
+				issuer+"/auth", issuer+"/token", issuer+"/jwks")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	_, err := Discover(context.Background(), srv.Client(), srv.URL)
+	if err == nil {
+		t.Fatal("expected error for issuer mismatch")
+	}
+	if !strings.Contains(err.Error(), "issuer") {
+		t.Fatalf("error should mention issuer mismatch, got %v", err)
+	}
+}
+
+// TestDiscoverRejectsNonHTTPSEndpoint proves that even with a matching
+// issuer, an advertised endpoint that is neither https nor loopback is
+// rejected — every hop of the flow (auth, token, JWKS) must stay off
+// cleartext outside local development.
+func TestDiscoverRejectsNonHTTPSEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			issuer := "http://" + r.Host
+			_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":"http://plain.example/token","jwks_uri":%q}`,
+				issuer, issuer+"/auth", issuer+"/jwks")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	_, err := Discover(context.Background(), srv.Client(), srv.URL)
+	if err == nil {
+		t.Fatal("expected error for non-https, non-loopback token endpoint")
+	}
+	if !strings.Contains(err.Error(), "https") {
+		t.Fatalf("error should mention https, got %v", err)
 	}
 }
 
