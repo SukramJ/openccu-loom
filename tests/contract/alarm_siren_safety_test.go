@@ -67,16 +67,20 @@ func TestAlarmS6SilenceAndDisarmNeverStateGated(t *testing.T) {
 	}{
 		{"disarmed", func(*testing.T, *alarmEngineFixture) {}},
 		{"arming", func(t *testing.T, h *alarmEngineFixture) {
+			t.Helper()
 			h.arm(t, engine.ArmRequest{Mode: hmenum.AlarmModeFull})
 		}},
 		{"armed", func(t *testing.T, h *alarmEngineFixture) {
+			t.Helper()
 			h.arm(t, engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true})
 		}},
 		{"pending", func(t *testing.T, h *alarmEngineFixture) {
+			t.Helper()
 			h.arm(t, engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true})
 			h.eng.HandleSensorEvent(context.Background(), "door", true)
 		}},
 		{"triggered", func(t *testing.T, h *alarmEngineFixture) {
+			t.Helper()
 			h.arm(t, engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true})
 			h.eng.HandleSensorEvent(context.Background(), "window", true)
 		}},
