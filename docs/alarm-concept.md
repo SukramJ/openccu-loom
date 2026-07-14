@@ -95,10 +95,14 @@ screaming and nothing can stop it."*
   engine **sends or provisions** carries a **finite duration**.
   Engine-sent commands: default 180 s, hard ceiling 600 s, configurable per
   output but never unbounded; the engine never writes an acoustic tone with
-  `DURATION_VALUE = 0` or an effectively infinite duration. Provisioned
-  direct links (§9, Tiers B/C): the LINK profile **must encode a bounded
-  on-time**, verified by read-back after provisioning; link profiles that
-  cannot express a bound (permanent-ON) are refused. The bound is also
+  `DURATION_VALUE = 0` or an effectively infinite duration. Acoustic
+  outputs backed by generic switch actuators (plug-in sirens, §7) are
+  activated with a device-side auto-off (`ON_TIME`) written atomically
+  with the switch-on; an actuator that cannot express one is refused as an
+  acoustic output. Provisioned direct links (§9, Tiers B/C): the LINK
+  profile **must encode a bounded on-time**, verified by read-back after
+  provisioning; link profiles that cannot express a bound (permanent-ON)
+  are refused. The bound is also
   **cumulative**: each incident carries a persisted acoustic-seconds ledger
   and re-trigger cycle counter (§10.2), so crash/restart loops cannot sum
   bounded activations into an unbounded one.
@@ -483,11 +487,23 @@ configuration:
 | Output class | Backing | Notes |
 |---|---|---|
 | **Acoustic siren** | siren CDP (`HmIP-ASIR*`, `HM-Sec-Sir-WM`, `HmIP-SWSD` intrusion mode, MP3 players) | tone + duration per policy; bounded per S1. |
+| **Switched siren (plug-in)** | any switch actuator (Schaltsteckdose, e.g. HmIP-PS/PSM, wall/DIN switch actuators) driving a mains plug-in siren | mirrors the HmIP app, where pluggable switches serve as alarm actuators. Declared acoustic-class by the user; activated as `ON_TIME` + `STATE` in one write so the device auto-offs (S1); actuators without `ON_TIME` are refused for this class. UI labels it convenience-grade: no sabotage contact, no battery backup, trivially unpluggable. |
 | **Optical siren** | ASIR optical channel | may run longer than acoustic (still bounded); useful after the 3-min acoustic cap. |
 | **Alarm light** | any switch/dimmer actuator | "Alarm-Licht": on at trigger, off at silence/disarm; optionally flashing. |
 | **Chirps & chimes** | ASIR confirmation tones (`EXTERNALLY_ARMED`, `DISARMED`, `EVENT`, …), MP3 player, actuator pulse | arm/disarm squawk (1×/2× DSC-style), exit-delay countdown ticks (accelerating), entry-delay warning tone, optional door chime while disarmed. Chirps yield first under duty-cycle pressure (S5). |
 | **Notifications** | MQTT event topic, webhook adapter, WS broadcast | push delivery is delegated to HA companion / ntfy / user tooling; loom guarantees the event, not the phone. Never cancelled by silence. |
 | **Sysvar mirror** | CCU ALARM/value-list sysvars | optional interop with existing CCU programs (§13.5). |
+
+**Generic actuator outputs (expert).** Beyond the built-in classes, *any*
+actuator loom models (switch, dimmer, relay, …) can be enrolled as an
+alarm output. The user declares the class, and the class — not the device
+type — decides which invariants apply: **acoustic** enrollments get the
+full siren treatment (device-side `ON_TIME` bound written atomically with
+the switch-on, for dimmers together with `LEVEL`; silence coverage; stop
+verification per S2), while **visual/other** enrollments follow the
+alarm-light lifecycle (on at trigger, off at silence/disarm — an alarm
+light staying on is annoying, not dangerous, so no hard bound is forced).
+This keeps the model generic without weakening the safety story.
 
 **Silent alarm** = an output policy without acoustic outputs: notifications,
 optical signal and alarm light only (HmIP's "Stiller Alarm"). **Loud** adds
@@ -526,6 +542,14 @@ This section makes the S-invariants concrete for Homematic hardware.
 - Stops write the disable-defaults (`DISABLE_ACOUSTIC_SIGNAL` +
   `DISABLE_OPTICAL_SIGNAL` + default duration) — the only stop mechanism
   the hardware offers.
+- **Switch-backed acoustic outputs** (plug-in sirens, generic actuators
+  declared acoustic, §7): activation writes `ON_TIME` + `STATE` (dimmers:
+  `ON_TIME` + `LEVEL`) atomically via the collector — never a bare
+  `STATE = true`, which would leave the device latched on if the engine
+  dies before the stop. Stop writes `STATE = false` (`LEVEL = 0`) and is
+  verified by reading the state back (S2). Actuator channels without a
+  usable `ON_TIME` are rejected for the acoustic class at enrolment time,
+  not at alarm time.
 
 ### 8.2 The silence path, end to end
 
@@ -850,9 +874,15 @@ excellent UX and visual clarity. Design:
   keyboard navigation — the fastest way to audit 60 sensors.
 - **Actor/output picker** mirrors the pattern: siren cards (with tier
   badge per §9.2 including its silencing caveat, test-fire button,
-  tone/duration preview), light actuators, chirp outputs, notification
-  targets — each assigned to output policies with a
-  loud/silent/indoor/outdoor toggle group.
+  tone/duration preview), switch actuators for plug-in sirens (declared
+  acoustic, with a convenience-grade badge: unpluggable, no sabotage
+  contact), light actuators, chirp outputs, notification targets — each
+  assigned to output policies with a loud/silent/indoor/outdoor toggle
+  group. An **expert toggle** widens the list from the curated
+  siren/light candidates to *every* modelled actuator (switch, dimmer,
+  relay, …); enrolling one asks for the class declaration (§7), and
+  acoustic-class candidates without `ON_TIME` are shown greyed-out with
+  the reason instead of failing later.
 
 ### 12.3 Setup wizard
 
@@ -1010,7 +1040,7 @@ internal/alarm/
 | # | Feature | Phase | Notes |
 |---|---|---|---|
 | 1 | Areas with perimeter/full modes, exit/entry delays, ready-to-arm, force/bypass | **MVP** | core |
-| 2 | Loud/silent output policies, indoor/outdoor split, alarm light | **MVP** | §7 |
+| 2 | Loud/silent output policies, indoor/outdoor split, alarm light, plug-in sirens via `ON_TIME`-bounded switch actuators | **MVP** | §7 |
 | 3 | Siren safety invariants S1–S7, incident ledger, reconciliation | **MVP** | non-negotiable |
 | 4 | Sensor picker UI + presets + matrix + live badges | **MVP** | §12.2 |
 | 5 | Journal + audit + WS/MQTT/REST surface + HA discovery panel | **MVP** | §13 |
@@ -1022,18 +1052,19 @@ internal/alarm/
 | 11 | Cross-zoning groups + swinger shutdown + sensor hold time | P2 | false-alarm reduction |
 | 12 | Walk test + alarm-health panel + siren self-test scheduler | P2 | §12.4/12.5 |
 | 13 | Maintenance mode, auto-bypass unavailable | P2 | Ajax-style |
-| 14 | Tier B classic-hardware ARMSTATE mirroring + static links | P2 | §9.2, needs classic sirens |
-| 15 | Guest codes with validity windows, duress code | P2 | §11 |
-| 16 | Sysvar mirror (outbound; inbound arm-only intents) | P2 | §13.5 |
-| 17 | Schedules & auto-arm reminders (presence hints via API) | P3 | reminders, not silent auto-arm |
-| 18 | Escalation chains with acknowledgement | P3 | webhook/notify ordering |
-| 19 | Pre-alarm stage (internal chime before sirens) | P3 | Bosch-style |
-| 20 | Auto-rearm after quiet period | P3 | retail/ABUS pattern |
-| 21 | Door chime while disarmed | P3 | ASIR `EVENT` tone / MP3P; Ring-style |
-| 22 | Tier C always-armed direct links (panic/sabotage) | P3 | pending live verification §18 |
-| 23 | Camera snapshot hook into journal | P3 | webhook-based, no pipeline in loom |
-| 24 | Per-token `alarm-control` scope (auth-model extension) | P3 | own ADR, §11 |
-| 25 | Matter security-panel exposure | future | blocked on Matter/matter.js device type |
+| 14 | Generic actuator outputs (any switch/dimmer/relay, expert, user-declared class) | P2 | §7 |
+| 15 | Tier B classic-hardware ARMSTATE mirroring + static links | P2 | §9.2, needs classic sirens |
+| 16 | Guest codes with validity windows, duress code | P2 | §11 |
+| 17 | Sysvar mirror (outbound; inbound arm-only intents) | P2 | §13.5 |
+| 18 | Schedules & auto-arm reminders (presence hints via API) | P3 | reminders, not silent auto-arm |
+| 19 | Escalation chains with acknowledgement | P3 | webhook/notify ordering |
+| 20 | Pre-alarm stage (internal chime before sirens) | P3 | Bosch-style |
+| 21 | Auto-rearm after quiet period | P3 | retail/ABUS pattern |
+| 22 | Door chime while disarmed | P3 | ASIR `EVENT` tone / MP3P; Ring-style |
+| 23 | Tier C always-armed direct links (panic/sabotage) | P3 | pending live verification §18 |
+| 24 | Camera snapshot hook into journal | P3 | webhook-based, no pipeline in loom |
+| 25 | Per-token `alarm-control` scope (auth-model extension) | P3 | own ADR, §11 |
+| 26 | Matter security-panel exposure | future | blocked on Matter/matter.js device type |
 
 ---
 
@@ -1068,9 +1099,11 @@ internal/alarm/
 ## 17. Testing strategy
 
 - **Contract tests** (`tests/contract/`):
-  - every engine-issued siren activation carries a bounded duration, and
-    every provisioned LINK profile encodes a bounded on-time (S1) — walks
-    the output driver and link provisioner, rejects any unbounded path;
+  - every engine-issued siren activation carries a bounded duration,
+    every switch-backed acoustic activation writes `ON_TIME` atomically
+    with the switch-on, and every provisioned LINK profile encodes a
+    bounded on-time (S1) — walks the output driver and link provisioner,
+    rejects any unbounded path;
   - no engine-issued acoustic activation after silence within the same
     incident — including across a simulated restart (S3 persistence);
   - reconciliation adopts a sounding siren of an armed area instead of
