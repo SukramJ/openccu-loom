@@ -176,6 +176,35 @@ func (s *Service) Start(ctx context.Context) error {
 	s.started = true
 	s.mu.Unlock()
 
+	// Load failures are fail-visible, not fail-fatal: the daemon's
+	// other surfaces (MQTT/REST/UI) must not die because the alarm
+	// tier cannot come up — the health tracker and log carry the
+	// degradation loudly instead (S7), and the SPA alarm surface
+	// shows the unavailable state.
+	if err := s.startInner(ctx); err != nil {
+		s.mu.Lock()
+		s.started = false
+		s.mu.Unlock()
+		if errors.Is(err, context.Canceled) {
+			return nil // shutdown race during boot — not a failure
+		}
+		s.log.Error("alarm service failed to start", "error", err)
+		if s.health != nil {
+			s.health(false, "alarm start failed")
+		}
+		return nil
+	}
+	for _, u := range s.reg.List() {
+		s.attachUnit(u)
+	}
+	s.reconcile(ctx)
+	s.scheduleRetention()
+	s.log.Info("alarm service started")
+	return nil
+}
+
+// startInner performs the fallible part of Start.
+func (s *Service) startInner(ctx context.Context) error {
 	if err := s.manager.Reload(ctx); err != nil {
 		return fmt.Errorf("alarm: %w", err)
 	}
@@ -185,12 +214,6 @@ func (s *Service) Start(ctx context.Context) error {
 	if err := s.engine.Start(ctx); err != nil {
 		return fmt.Errorf("alarm: engine start: %w", err)
 	}
-	for _, u := range s.reg.List() {
-		s.attachUnit(u)
-	}
-	s.reconcile(ctx)
-	s.scheduleRetention()
-	s.log.Info("alarm service started")
 	return nil
 }
 
