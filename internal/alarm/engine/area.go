@@ -69,6 +69,10 @@ type area struct {
 	debounceCancel func()
 	debounceSeq    uint64
 
+	// countdown tick chain (1 Hz while arming/pending).
+	tickCancel func()
+	tickSeq    uint64
+
 	// readiness is the last published per-mode verdict.
 	readiness map[hmenum.AlarmMode]hmevent.AlarmModeReadiness
 }
@@ -83,7 +87,8 @@ type areaContext struct {
 	SilencedIncidentID int64 `json:"silenced_incident_id,omitempty"`
 }
 
-// cancelTimers stops the state timer and the debounce timer.
+// cancelTimers stops the state timer, the debounce timer, and the
+// countdown tick chain.
 func (a *area) cancelTimers() {
 	if a.timerCancel != nil {
 		a.timerCancel()
@@ -92,6 +97,16 @@ func (a *area) cancelTimers() {
 	a.timerKind = ""
 	a.timerSeq++
 	a.cancelDebounce()
+	a.cancelTicks()
+}
+
+// cancelTicks stops only the countdown tick chain.
+func (a *area) cancelTicks() {
+	if a.tickCancel != nil {
+		a.tickCancel()
+		a.tickCancel = nil
+	}
+	a.tickSeq++
 }
 
 // cancelDebounce stops only the arm-after-closing debounce timer.

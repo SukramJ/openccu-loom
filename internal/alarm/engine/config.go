@@ -58,6 +58,31 @@ type ModeConfig struct {
 	// MaxRetriggerCycles is the number of additional output cycles
 	// per incident after the initial one (0 = fire once).
 	MaxRetriggerCycles int `json:"max_retrigger_cycles,omitempty"`
+	// Outputs is the mode's output policy (docs/alarm-concept.md §7):
+	// loud/silent, indoor/outdoor split, smoke sounders, chirps.
+	Outputs OutputPolicy `json:"outputs,omitempty"`
+}
+
+// OutputPolicy selects which output classes a mode drives
+// (docs/alarm-concept.md §7). The zero value is the loud default:
+// every enrolled output fires, no chirps.
+type OutputPolicy struct {
+	// Silent suppresses every acoustic output class — notifications,
+	// optical signal, and alarm light only.
+	Silent bool `json:"silent,omitempty"`
+	// ExcludeOutdoor keeps outdoor-flagged sirens out of this mode
+	// (the HmIP indoor/outdoor split).
+	ExcludeOutdoor bool `json:"exclude_outdoor,omitempty"`
+	// SmokeSounders enrolls the smoke-detector sounder class for this
+	// mode (HmIP "Rauchwarnmelder-Alarm" parity — typically full
+	// protection only).
+	SmokeSounders bool `json:"smoke_sounders,omitempty"`
+	// ArmDisarmChirps plays the confirmation squawk on arm and
+	// disarm.
+	ArmDisarmChirps bool `json:"arm_disarm_chirps,omitempty"`
+	// CountdownTicks plays exit/entry countdown ticks on chirp
+	// outputs; ticks thin out first under duty-cycle pressure (S5).
+	CountdownTicks bool `json:"countdown_ticks,omitempty"`
 }
 
 // BlockerPolicies maps each sensor-health class onto an arming policy

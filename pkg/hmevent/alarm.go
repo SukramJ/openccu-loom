@@ -16,7 +16,26 @@ const (
 	EventTypeAlarmTriggered        EventType = "alarm_panel.triggered"
 	EventTypeAlarmReadinessChanged EventType = "alarm_panel.readiness_changed"
 	EventTypeAlarmJournalAppended  EventType = "alarm_panel.journal_appended"
+	EventTypeAlarmCountdown        EventType = "alarm_panel.countdown"
 )
+
+// AlarmCountdownEvent ticks once per second while an exit or entry
+// delay runs, so surfaces can render live countdowns and chirp
+// drivers can pace their ticks.
+type AlarmCountdownEvent struct {
+	Base
+	// AreaID identifies the alarm area.
+	AreaID string
+	// Kind is the running countdown: "exit_delay" or "entry_delay"
+	// (the persisted timer-kind tokens).
+	Kind string
+	// RemainingMS and TotalMS describe the countdown position.
+	RemainingMS int64
+	TotalMS     int64
+}
+
+// Type implements Event.
+func (AlarmCountdownEvent) Type() EventType { return EventTypeAlarmCountdown }
 
 // AlarmStateChangedEvent fires on every arm-state-machine transition
 // of an alarm area (docs/alarm-concept.md §5). Silence is not a state

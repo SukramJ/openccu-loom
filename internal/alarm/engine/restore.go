@@ -417,6 +417,7 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *area, timers []persist
 	}
 	if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{
 		Cycle: inc.RetriggerCycles, Degraded: degraded, Restored: true,
+		Policy: mcfg.Outputs,
 	}); err != nil {
 		e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
 	}
