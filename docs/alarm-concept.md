@@ -29,7 +29,8 @@ with a first-class SPA surface, REST/WS API, and MQTT (Home Assistant
 16. [Security considerations](#16-security-considerations)
 17. [Testing strategy](#17-testing-strategy)
 18. [Open questions](#18-open-questions)
-19. [References](#19-references)
+19. [Implementation kickoff](#19-implementation-kickoff)
+20. [References](#20-references)
 
 ---
 
@@ -1184,7 +1185,85 @@ internal/alarm/
 
 ---
 
-## 19. References
+## 19. Implementation kickoff
+
+Written for a fresh agent starting the implementation in a clean
+environment — everything needed is in the repo; no prior session context
+is assumed.
+
+### 19.1 Reading order
+
+1. `CLAUDE.md` — process rules that bind this work: the live-CCU write
+   rule (explicit user approval **and** user-named target device), the
+   three test pillars, spec-first REST changes, the interaction protocol
+   (describe approach before coding).
+2. This document end-to-end. §2 (invariants) and §17 (testing strategy)
+   define the acceptance bar; §15 fixes the MVP scope.
+3. The touch-point code, in this order: `internal/central/events` (bus)
+   and `pkg/hmevent`, `internal/model/custom/siren/`, `internal/clock`,
+   `internal/store/sqlite/incidents.go` + `migrations/` (store pattern),
+   `internal/north/rest/handlers/incidents.go` + `router.go` (handler
+   pattern), `internal/north/rest/ws/` (commands + broadcasts),
+   `internal/north/mqtt/discovery.go` + `category_component.go`,
+   `internal/audit`, `internal/configstore`.
+
+### 19.2 Repo guards this work will trip — and their remedies
+
+- **Reachability ratchet.** Every new `hmevent.Alarm*Event` type is
+  unreachable for the dead-code analyzer (events dispatch through the
+  generic bus), so the CI ratchet fails. Remedy: run
+  `make reachability` and commit the refreshed
+  `docs/parity/dead-code-*` baseline. Do **not** wire artificial callers
+  or annotate the types.
+- **API contract guard.** Any edit to `assets/openapi.yaml` /
+  `assets/wsapi.json` needs **both** `make export-schemas` (schema
+  digest) and an APIVersion bump (`internal/north/rest/handlers/
+  info.go`); the PR-only guard rejects either half alone.
+- **Generated SPA types.** After OpenAPI changes, run `make ui-types` to
+  regenerate `assets/ui/src/lib/api/types.generated.ts`.
+- **Config field labels.** Every new `cfg:` leaf needs
+  `config.field.<path>` + `config.help.<path>` in both locales of
+  `assets/ui/src/lib/i18n.ts` (`TestConfigFieldsHaveLabelsAndHelp`
+  fails the build otherwise).
+- **SPA visual baselines** are committed per platform; Linux baselines
+  regenerate only inside the Playwright container (see CLAUDE.md,
+  Testing Guidelines).
+
+### 19.3 Suggested MVP slicing (one reviewable PR each)
+
+1. **Store + engine core** — goose migration, area/sensor/output/
+   incident stores, per-area state machine on `clock.Clock`, the full
+   §10.2 restore table as unit tests. No north surface yet.
+2. **Output drivers + siren safety** — siren/switch/smoke drivers, the
+   S1/S2/S4/S5 behaviours, and the §17 contract tests. Gate: every
+   S-invariant test green before anything user-facing exists.
+3. **REST + WS surface** — openapi/wsapi specs, handlers, broadcasts,
+   audit actions (plus the guards from §19.2).
+4. **SPA** — panel, sensor/actor picker, triggered view; vitest + e2e +
+   visual baselines.
+5. **MQTT** — `alarm_control_panel` discovery, event/command topics,
+   `docs/mqtt-topic-schema.md` amendment (§13.3).
+6. **Codes, keypad intents, hazard/panic classes** — rounds out the
+   remaining MVP rows of §15.
+
+Each slice lands green on `make test` + `make lint`; integration tests
+join from slice 2 on (the godevccu simulator fleet already contains
+HmIP-ASIR/SWSD/WKP devices).
+
+### 19.4 What not to decide alone
+
+- The §18 live tests (siren stop semantics, direct-link acceptance)
+  involve writes to real devices — user approval and a user-named
+  target device are mandatory (CLAUDE.md critical rule).
+- The `alarm-control` token scope (§11) is a cross-cutting auth-model
+  extension: own ADR + user sign-off before building it.
+- Deviations from the §5/§10.2 state-machine semantics or the §2
+  invariants are design changes, not implementation details — surface
+  them instead of silently adapting.
+
+---
+
+## 20. References
 
 - Homematic IP Anwenderhandbuch §8.4–8.5 (security modes, Alarmkonfiguration):
   <https://homematic-ip.com/sites/default/files/downloads/homematic-ip-anwenderhandbuch.pdf>
