@@ -197,6 +197,10 @@ Further characteristics worth mirroring or consciously rejecting:
   acoustics at 3 min in firmware (unconfirmed — §18).
 - **Silent alarm** ("Stiller Alarm"): suppress sirens and alarm light, push
   notification only — adopted as a per-mode output policy (§7).
+- **Rauchwarnmelder-Alarm** option: enrolls all HmIP smoke detectors as
+  additional sounders during an intrusion alarm (the manual carries a
+  battery-life caveat). Adopted as the smoke-sounder output class,
+  assignable per mode — e.g. Vollschutz only (§7).
 - **Acknowledgement**: the app's alarm message offers "Abbrechen" and
   "Bestätigen", where "Bestätigen" dismisses the alarm **and disarms** the
   active protection mode (per the manual; the exact current-app semantics
@@ -486,8 +490,9 @@ configuration:
 
 | Output class | Backing | Notes |
 |---|---|---|
-| **Acoustic siren** | siren CDP (`HmIP-ASIR*`, `HM-Sec-Sir-WM`, `HmIP-SWSD` intrusion mode, MP3 players) | tone + duration per policy; bounded per S1. |
+| **Acoustic siren** | siren CDP (`HmIP-ASIR*`, `HM-Sec-Sir-WM`, MP3 players) | tone + duration per policy; bounded per S1. |
 | **Switched siren (plug-in)** | any switch actuator (Schaltsteckdose, e.g. HmIP-PS/PSM, wall/DIN switch actuators) driving a mains plug-in siren | mirrors the HmIP app, where pluggable switches serve as alarm actuators. Declared acoustic-class by the user; activated as `ON_TIME` + `STATE` in one write so the device auto-offs (S1); actuators without `ON_TIME` are refused for this class. UI labels it convenience-grade: no sabotage contact, no battery backup, trivially unpluggable. |
+| **Smoke-detector sounders** | smoke-siren CDP (`HmIP-SWSD`: `SMOKE_DETECTOR_COMMAND` = `INTRUSION_ALARM` / `INTRUSION_ALARM_OFF`) | HmIP "Rauchwarnmelder-Alarm" parity: enrolled smoke detectors double as intrusion sounders, assignable per mode — typically `full` only. The SWSD exposes no duration parameter, so the device-side bound S1 relies on is unverified (§18); until confirmed they are engine-watchdogged only (S2) and the UI states that plus the battery-life caveat. Feedback-loop safe: the derived smoke hazard sensor maps only `PRIMARY/SECONDARY_ALARM`, never the commanded `INTRUSION_ALARM`. |
 | **Optical siren** | ASIR optical channel | may run longer than acoustic (still bounded); useful after the 3-min acoustic cap. |
 | **Alarm light** | any switch/dimmer actuator | "Alarm-Licht": on at trigger, off at silence/disarm; optionally flashing. |
 | **Chirps & chimes** | ASIR confirmation tones (`EXTERNALLY_ARMED`, `DISARMED`, `EVENT`, …), MP3 player, actuator pulse | arm/disarm squawk (1×/2× DSC-style), exit-delay countdown ticks (accelerating), entry-delay warning tone, optional door chime while disarmed. Chirps yield first under duty-cycle pressure (S5). |
@@ -550,6 +555,13 @@ This section makes the S-invariants concrete for Homematic hardware.
   verified by reading the state back (S2). Actuator channels without a
   usable `ON_TIME` are rejected for the acoustic class at enrolment time,
   not at alarm time.
+- **Smoke-detector sounders** (§7): on = `SMOKE_DETECTOR_COMMAND`
+  `INTRUSION_ALARM`, stop = `INTRUSION_ALARM_OFF`, verified via
+  `SMOKE_DETECTOR_ALARM_STATUS` read-back. No duration parameter exists,
+  so until the §18 live test confirms a device-side self-termination,
+  the S2 stop watchdog is their only bound — the enrolment UI says so
+  explicitly, and a failed stop escalates like any unverified siren
+  stop.
 
 ### 8.2 The silence path, end to end
 
@@ -570,6 +582,9 @@ least convenient:
    on-time the engine wrote into the LINK profile at provisioning time —
    this is why S1 refuses unboundable link profiles. The ASIR-O
    reportedly also hard-stops acoustics at 3 min in firmware (§18).
+   Exception: smoke-detector sounders have no known device-side bound
+   (§7) — their stop depends on the engine watchdog, which is why they
+   carry an explicit UI caveat until §18 resolves.
 6. **Last resort** (documented in the user guide): siren battery/power
    removal — never required by design, listed for completeness.
 
@@ -1046,25 +1061,26 @@ internal/alarm/
 | 5 | Journal + audit + WS/MQTT/REST surface + HA discovery panel | **MVP** | §13 |
 | 6 | Codes (PIN arm/disarm), `changed_by`, keypad/remote intents | **MVP** | §11 |
 | 7 | Always-on hazard & panic classes (24/7) | **MVP** | HmIP Gefahrenalarm parity |
-| 8 | State restore across restarts (incl. loop breaker, clock plausibility) | **MVP** | §10.2 |
-| 9 | Night/vacation/custom modes | P2 | trivial on top of the matrix |
-| 10 | Chirp orchestration (countdown, squawk) | P2 | ASIR confirmation tones |
-| 11 | Cross-zoning groups + swinger shutdown + sensor hold time | P2 | false-alarm reduction |
-| 12 | Walk test + alarm-health panel + siren self-test scheduler | P2 | §12.4/12.5 |
-| 13 | Maintenance mode, auto-bypass unavailable | P2 | Ajax-style |
-| 14 | Generic actuator outputs (any switch/dimmer/relay, expert, user-declared class) | P2 | §7 |
-| 15 | Tier B classic-hardware ARMSTATE mirroring + static links | P2 | §9.2, needs classic sirens |
-| 16 | Guest codes with validity windows, duress code | P2 | §11 |
-| 17 | Sysvar mirror (outbound; inbound arm-only intents) | P2 | §13.5 |
-| 18 | Schedules & auto-arm reminders (presence hints via API) | P3 | reminders, not silent auto-arm |
-| 19 | Escalation chains with acknowledgement | P3 | webhook/notify ordering |
-| 20 | Pre-alarm stage (internal chime before sirens) | P3 | Bosch-style |
-| 21 | Auto-rearm after quiet period | P3 | retail/ABUS pattern |
-| 22 | Door chime while disarmed | P3 | ASIR `EVENT` tone / MP3P; Ring-style |
-| 23 | Tier C always-armed direct links (panic/sabotage) | P3 | pending live verification §18 |
-| 24 | Camera snapshot hook into journal | P3 | webhook-based, no pipeline in loom |
-| 25 | Per-token `alarm-control` scope (auth-model extension) | P3 | own ADR, §11 |
-| 26 | Matter security-panel exposure | future | blocked on Matter/matter.js device type |
+| 8 | Smoke-detector sounders (Rauchwarnmelder-Alarm parity, per-mode e.g. Vollschutz) | **MVP** | §7; gated on the §18 stop-semantics live test |
+| 9 | State restore across restarts (incl. loop breaker, clock plausibility) | **MVP** | §10.2 |
+| 10 | Night/vacation/custom modes | P2 | trivial on top of the matrix |
+| 11 | Chirp orchestration (countdown, squawk) | P2 | ASIR confirmation tones |
+| 12 | Cross-zoning groups + swinger shutdown + sensor hold time | P2 | false-alarm reduction |
+| 13 | Walk test + alarm-health panel + siren self-test scheduler | P2 | §12.4/12.5 |
+| 14 | Maintenance mode, auto-bypass unavailable | P2 | Ajax-style |
+| 15 | Generic actuator outputs (any switch/dimmer/relay, expert, user-declared class) | P2 | §7 |
+| 16 | Tier B classic-hardware ARMSTATE mirroring + static links | P2 | §9.2, needs classic sirens |
+| 17 | Guest codes with validity windows, duress code | P2 | §11 |
+| 18 | Sysvar mirror (outbound; inbound arm-only intents) | P2 | §13.5 |
+| 19 | Schedules & auto-arm reminders (presence hints via API) | P3 | reminders, not silent auto-arm |
+| 20 | Escalation chains with acknowledgement | P3 | webhook/notify ordering |
+| 21 | Pre-alarm stage (internal chime before sirens) | P3 | Bosch-style |
+| 22 | Auto-rearm after quiet period | P3 | retail/ABUS pattern |
+| 23 | Door chime while disarmed | P3 | ASIR `EVENT` tone / MP3P; Ring-style |
+| 24 | Tier C always-armed direct links (panic/sabotage) | P3 | pending live verification §18 |
+| 25 | Camera snapshot hook into journal | P3 | webhook-based, no pipeline in loom |
+| 26 | Per-token `alarm-control` scope (auth-model extension) | P3 | own ADR, §11 |
+| 27 | Matter security-panel exposure | future | blocked on Matter/matter.js device type |
 
 ---
 
@@ -1159,6 +1175,12 @@ internal/alarm/
    (pre-HCU) manual: "Abbrechen" semantics on the alarm message, whether
    "Scharfschalten pro" checks battery state and names the blocking
    sensor, and whether the basic/pro toggle is unchanged on the HCU1.
+8. SWSD smoke-detector sounders: does a commanded `INTRUSION_ALARM`
+   self-terminate after a device-side time, or does it sound until
+   `INTRUSION_ALARM_OFF`? And does it propagate to grouped detectors
+   (`SECONDARY_ALARM`) or stay local? Decides whether smoke sounders can
+   ship on by default or stay an engine-watchdog-only opt-in.
+   → supervised live test.
 
 ---
 
