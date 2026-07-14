@@ -41,6 +41,12 @@ func TestFireCycle_AcousticSirenActivatesWithConfiguredDuration(t *testing.T) {
 	if call.Cfg.AcousticTone != "FREQ_HIGH" {
 		t.Fatalf("sirA tone = %q, want FREQ_HIGH", call.Cfg.AcousticTone)
 	}
+	// The selection pointer is the value that reaches the wire — the
+	// tone field alone is validation-only and would leave the device
+	// on its previous tone.
+	if call.Cfg.AcousticSelection == nil || *call.Cfg.AcousticSelection != "FREQ_HIGH" {
+		t.Fatalf("sirA AcousticSelection = %v, want FREQ_HIGH pointer", call.Cfg.AcousticSelection)
+	}
 
 	ledgerCall, ok := h.ledger.callWithDelta(120_000)
 	if !ok {

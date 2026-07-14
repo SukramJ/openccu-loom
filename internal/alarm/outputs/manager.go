@@ -275,7 +275,13 @@ func (m *Manager) fireSiren(ctx context.Context, inst *instance, incidentID int6
 			return nil
 		}
 		on.Duration = d
-		on.AcousticTone = inst.cfg.AcousticTone
+		if inst.cfg.AcousticTone != "" {
+			// The selection pointer is what reaches the wire; the tone
+			// field only opts into value-list validation.
+			tone := inst.cfg.AcousticTone
+			on.AcousticSelection = &tone
+			on.AcousticTone = tone
+		}
 		if inst.cfg.OpticalPattern != "" {
 			p := inst.cfg.OpticalPattern
 			on.OpticalSelection = &p
