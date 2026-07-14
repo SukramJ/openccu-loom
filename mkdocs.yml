@@ -62,6 +62,7 @@ nav:
       - Installation & First Steps: user-guide.md
       - Configuration Reference: admin/configuration.md
       - Authentication & Users: admin/auth.md
+      - Keycloak (OIDC): admin/keycloak-oidc.md
       - Multi-CCU Operations: user/multi-ccu.md
       - Security: SECURITY.md
       - Backup & Restore: admin/backup.md
