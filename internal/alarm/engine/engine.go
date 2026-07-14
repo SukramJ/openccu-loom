@@ -256,14 +256,13 @@ func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmRes
 			bypass[id] = true
 		}
 	}
-	rd := a.computeReadiness(req.Mode)
+	rd, autoBypass := a.readinessDetail(req.Mode)
+	for _, id := range autoBypass {
+		bypass[id] = true
+	}
 	var remaining []string
 	for _, id := range rd.Blockers {
-		switch {
-		case bypass[id]:
-		case a.sensors[id] != nil && a.sensors[id].cfg.BypassAuto:
-			bypass[id] = true
-		default:
+		if !bypass[id] {
 			remaining = append(remaining, id)
 		}
 	}

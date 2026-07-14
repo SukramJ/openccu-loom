@@ -16,13 +16,27 @@ import (
 // sensors that are already bypassed appear as warnings, not blockers —
 // they cannot fail an arm. The caller holds the engine lock.
 func (a *area) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadiness {
+	rd, _ := a.readinessDetail(mode)
+	return rd
+}
+
+// readinessDetail additionally returns the sensors that would block
+// the arm but are flagged bypass_auto: an arm excludes them until the
+// next disarm instead of failing (§6.2) — the exclusion is recorded,
+// never silent. The caller holds the engine lock.
+func (a *area) readinessDetail(mode hmenum.AlarmMode) (hmevent.AlarmModeReadiness, []string) {
 	pol := a.cfg.Blockers
-	var blockers, warnings []string
+	var blockers, warnings, autoBypass []string
 	classify := func(id string, p hmenum.AlarmBlockerPolicy, auto bool) {
 		switch {
 		case p == hmenum.AlarmBlockerPolicyIgnore:
-		case auto || p == hmenum.AlarmBlockerPolicyWarn:
+		case p == hmenum.AlarmBlockerPolicyWarn:
 			warnings = append(warnings, id)
+		case auto:
+			// Would block, but the flag converts the failure into a
+			// recorded exclusion.
+			warnings = append(warnings, id)
+			autoBypass = append(autoBypass, id)
 		default:
 			blockers = append(blockers, id)
 		}
@@ -51,11 +65,12 @@ func (a *area) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadines
 	}
 	sort.Strings(blockers)
 	sort.Strings(warnings)
+	sort.Strings(autoBypass)
 	return hmevent.AlarmModeReadiness{
 		Ready:    len(blockers) == 0,
 		Blockers: dedupe(blockers),
 		Warnings: dedupe(warnings),
-	}
+	}, dedupe(autoBypass)
 }
 
 // refreshReadiness recomputes all configured modes of a and publishes

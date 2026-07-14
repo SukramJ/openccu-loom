@@ -191,8 +191,19 @@ func (e *Engine) restoreArming(ctx context.Context, a *area, timers []persistedT
 		// journal entry — the failed-arm edge of the state machine.
 		// Fresh values are pulled first; without them the re-check
 		// would run against unknown sensor states and pass vacuously.
+		// bypass_auto sensors convert their blocking condition into a
+		// recorded exclusion here too.
 		e.refreshSensorValues(ctx, a)
-		rd := a.computeReadiness(a.mode)
+		rd, autoBypass := a.readinessDetail(a.mode)
+		for _, id := range autoBypass {
+			if !a.bypassed[id] {
+				a.bypassed[id] = true
+				e.journalEntry(ctx, a, JournalEntry{
+					Class: hmenum.AlarmJournalClassBypass, Event: "sensor_bypassed",
+					Actor: "engine:restore", Details: map[string]any{"sensor_id": id},
+				})
+			}
+		}
 		var blocking []string
 		for _, id := range rd.Blockers {
 			if !a.bypassed[id] {
