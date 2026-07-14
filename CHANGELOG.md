@@ -6,6 +6,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-07-14
+
+### Added
+
+- **OIDC role mapping now works with your identity provider's real roles.** The
+  `role_claim` setting is finally honored: it reads the configured claim from
+  the ID token — a plain string, a string array, or a dotted path into a nested
+  object such as Keycloak's `realm_access.roles` — and grants the highest of
+  `admin` / `operator` / `viewer` it finds. Previously the field was ignored and
+  only a single hardcoded top-level `role` string mapped, so Keycloak realm-role
+  and group users all fell back to `viewer`. A new
+  [Keycloak setup guide](docs/admin/keycloak-oidc.md) walks through the client,
+  redirect URI, and role mapping.
+
+### Security
+
+- **OIDC no longer runs over cleartext.** The identity-provider issuer and every
+  endpoint discovered from it must use https (plain http is allowed only on
+  localhost). A misconfigured `http://` issuer used to run the whole login —
+  including the code exchange and ID-token retrieval — in the clear; such a
+  deployment is now refused. Move the issuer to https.
+- **Stricter ID-token validation.** The discovery document's own `issuer` must
+  equal the configured issuer (RFC 8414 §3.3), and the `azp` (authorized-party)
+  claim is now checked — a present `azp` must name this client, and a
+  multi-audience token must carry it (OIDC Core §3.1.3.7).
+
 ## [0.40.0] — 2026-07-13
 
 ### Changed

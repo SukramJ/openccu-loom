@@ -166,6 +166,11 @@ func Verify(ctx context.Context, jwt string, cache *JWKSCache) (*IDClaims, error
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		return nil, err
 	}
+	// Keep the full claim set alongside the typed fields so role resolution
+	// can address a configurable / nested RoleClaim (see IdentityFrom).
+	if err := json.Unmarshal(payload, &claims.Raw); err != nil {
+		return nil, err
+	}
 	return &claims, nil
 }
 
