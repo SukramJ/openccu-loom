@@ -185,10 +185,16 @@ Step by step:
    are `openid profile email`.
 3. The SPA login page offers a "Login with OIDC" entry that drives
    `GET /api/v1/auth/oidc/start` → IdP → `…/auth/oidc/callback`.
-4. Role mapping reads the `role_claim` claim: `admin` /
+4. Role mapping reads the top-level `role` claim: `admin` /
    `administrator` → `admin`, `operator` → `operator`, everything else
    → `viewer`. The session subject is `preferred_username` when present,
    otherwise the `sub` claim.
+
+    !!! note
+        The role is read from the `role` claim; the `role_claim` config field
+        is not yet consumed, so keep it at its `role` default. For a
+        provider-specific walkthrough — client, redirect URI, and the required
+        `role`-claim mapper — see [Keycloak (OIDC)](keycloak-oidc.md).
 
 !!! note "How the ID token is validated"
     The callback verifies the ID token's RS256 signature against the
