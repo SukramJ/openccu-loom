@@ -277,7 +277,9 @@ func (f sinkFunc) Publish(e hmevent.Event) { f(e) }
 // armed areas are adopted as incidents; sounding sirens of disarmed,
 // unshared areas are stopped.
 func (s *Service) reconcile(ctx context.Context) {
-	for _, snap := range s.engine.Areas() {
+	areas := s.engine.Areas()
+	for i := range areas {
+		snap := &areas[i]
 		sounding := s.manager.Sounding(ctx, snap.ID)
 		if len(sounding) == 0 {
 			continue
@@ -301,7 +303,11 @@ func (s *Service) reconcile(ctx context.Context) {
 	}
 }
 
-// scheduleRetention starts the daily journal-retention chain.
+// scheduleRetention starts the daily journal-retention chain. The
+// chain runs on scheduler callbacks, detached from any caller context
+// by design.
+//
+//nolint:contextcheck // periodic retention has no caller ctx; runs on the service lifetime
 func (s *Service) scheduleRetention() {
 	if s.settings.JournalRetentionDays <= 0 {
 		return

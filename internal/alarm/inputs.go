@@ -27,7 +27,8 @@ func (s *Service) rebuildIndexes(ctx context.Context) error {
 	}
 	dpIndex := map[string]string{}
 	devIndex := map[string][]string{}
-	for _, row := range rows {
+	for i := range rows {
+		row := &rows[i]
 		dpIndex[dpKey(row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter)] = row.ID
 		dev := devKey(row.CentralName, deviceAddress(row.ChannelAddress))
 		devIndex[dev] = append(devIndex[dev], row.ID)
@@ -39,7 +40,10 @@ func (s *Service) rebuildIndexes(ctx context.Context) error {
 	return nil
 }
 
-// attachUnit subscribes the service to one central's event bus.
+// attachUnit subscribes the service to one central's event bus. Bus
+// handlers run detached from any request context by design.
+//
+//nolint:contextcheck // bus dispatch has no caller ctx; handlers run on the engine lifetime
 func (s *Service) attachUnit(u *central.Unit) {
 	if u == nil || u.EventBus == nil {
 		return
@@ -94,6 +98,9 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 		if low, ok := paramValueBool(e.NewValue); ok {
 			s.updateDeviceHealth(ctx, centralName, e.Key, devSensors, func(h *engine.SensorHealth) { h.LowBattery = low })
 		}
+	default:
+		// Every other parameter is either an enrolled sensor value
+		// (handled above) or irrelevant to the alarm engine.
 	}
 }
 

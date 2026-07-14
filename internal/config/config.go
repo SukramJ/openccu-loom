@@ -130,6 +130,7 @@ type Config struct {
 	Reliability ReliabilityConfig `yaml:"reliability,omitempty" json:"reliability,omitzero" cfg:"expert"`
 	Persistence PersistenceConfig `yaml:"persistence,omitempty" json:"persistence,omitzero" cfg:"expert"`
 	Backup      BackupConfig      `yaml:"backup,omitempty" json:"backup,omitzero" cfg:"expert"`
+	Alarm       AlarmConfig       `yaml:"alarm,omitempty" json:"alarm,omitzero" cfg:"expert"`
 }
 
 // BackupConfig configures automatic, scheduled CCU backups. Off by default
@@ -144,6 +145,37 @@ type BackupConfig struct {
 	// after a successful backup the oldest beyond this count are pruned. Zero
 	// keeps all.
 	KeepLast int `yaml:"keep_last,omitempty" json:"keep_last,omitzero" cfg:"expert"`
+}
+
+// AlarmConfig configures the alarm engine (docs/alarm-concept.md §14).
+// Relational alarm data (areas, sensors, outputs) is first-class
+// domain data managed via REST/UI, not config material — this section
+// carries only the global engine settings.
+type AlarmConfig struct {
+	// Enabled starts the alarm service; nil defaults to true (the
+	// engine is inert without configured areas, so "on" is safe).
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
+	// DefaultSirenSeconds bounds one acoustic activation when an
+	// output does not configure its own duration.
+	DefaultSirenSeconds int `yaml:"default_siren_seconds" json:"default_siren_seconds" cfg:"basic"`
+	// MaxAcousticPerIncidentSeconds is the cumulative acoustic budget
+	// of one incident across all re-triggers and restarts.
+	MaxAcousticPerIncidentSeconds int `yaml:"max_acoustic_per_incident_seconds" json:"max_acoustic_per_incident_seconds" cfg:"expert"`
+	// StopVerifySeconds bounds how long an unverified siren stop is
+	// retried before it becomes a health incident.
+	StopVerifySeconds int `yaml:"stop_verify_seconds" json:"stop_verify_seconds" cfg:"expert"`
+	// JournalRetentionDays prunes alarm-journal entries; 0 disables
+	// retention.
+	JournalRetentionDays int `yaml:"journal_retention_days" json:"journal_retention_days" cfg:"basic"`
+	// RestartLoopBreaker caps restore-driven output re-fires per
+	// incident before degradation to optical and notifications.
+	RestartLoopBreaker int `yaml:"restart_loop_breaker" json:"restart_loop_breaker" cfg:"expert"`
+}
+
+// AlarmEnabled reports the tri-state Enabled flag with its nil→true
+// default.
+func (c AlarmConfig) AlarmEnabled() bool {
+	return c.Enabled == nil || *c.Enabled
 }
 
 // PersistenceConfig groups the cross-cutting persistence-tuning knobs
@@ -1456,6 +1488,25 @@ func (c *Config) applyDefaults() {
 	if c.North.REST.CSRFEnabled == nil {
 		t := true
 		c.North.REST.CSRFEnabled = &t
+	}
+	if c.Alarm.Enabled == nil {
+		t := true
+		c.Alarm.Enabled = &t
+	}
+	if c.Alarm.DefaultSirenSeconds == 0 {
+		c.Alarm.DefaultSirenSeconds = 180
+	}
+	if c.Alarm.MaxAcousticPerIncidentSeconds == 0 {
+		c.Alarm.MaxAcousticPerIncidentSeconds = 900
+	}
+	if c.Alarm.StopVerifySeconds == 0 {
+		c.Alarm.StopVerifySeconds = 120
+	}
+	if c.Alarm.JournalRetentionDays == 0 {
+		c.Alarm.JournalRetentionDays = 90
+	}
+	if c.Alarm.RestartLoopBreaker == 0 {
+		c.Alarm.RestartLoopBreaker = 3
 	}
 }
 

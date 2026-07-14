@@ -108,7 +108,7 @@ func (a switchActuator) TurnOff(ctx context.Context, priority hmenum.CommandPrio
 	return a.dev.TurnOff(ctx, priority)
 }
 
-func (a switchActuator) IsOn() (bool, bool) { return a.dev.IsOn() }
+func (a switchActuator) IsOn() (on, observed bool) { return a.dev.IsOn() }
 
 // lightActuator adapts the dimmer/light CDP onto the actuator port:
 // the auto-off travels in the same atomic bundle as the level.
@@ -128,7 +128,7 @@ func (a lightActuator) TurnOff(ctx context.Context, priority hmenum.CommandPrior
 	return a.dev.TurnOff(ctx, priority)
 }
 
-func (a lightActuator) IsOn() (bool, bool) { return a.dev.IsOn() }
+func (a lightActuator) IsOn() (on, observed bool) { return a.dev.IsOn() }
 
 // soundAdapter adapts the MP3 player CDP onto the chirp port.
 type soundAdapter struct {
@@ -154,7 +154,7 @@ type sensorReader struct {
 }
 
 // CurrentActive implements engine.SensorReader.
-func (r *sensorReader) CurrentActive(_ context.Context, row sqlitestore.AlarmSensorRow) (bool, bool) {
+func (r *sensorReader) CurrentActive(_ context.Context, row sqlitestore.AlarmSensorRow) (active, known bool) {
 	u, ok := r.reg.Get(row.CentralName)
 	if !ok {
 		return false, false

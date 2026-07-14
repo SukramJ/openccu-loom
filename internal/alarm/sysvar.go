@@ -65,7 +65,8 @@ func (m *sysvarMirror) mirrorTargets(areaID string) []mirrorTarget {
 		return nil
 	}
 	var out []mirrorTarget
-	for _, row := range rows {
+	for i := range rows {
+		row := &rows[i]
 		if row.Class != hmenum.AlarmOutputClassSysvarMirror {
 			continue
 		}
@@ -140,7 +141,8 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 	}
 	// Match the sysvar to a mirror target across areas.
 	areas := m.svc.engine.Areas()
-	for _, snap := range areas {
+	for i := range areas {
+		snap := areas[i]
 		for _, t := range m.mirrorTargets(snap.ID) {
 			if t.central != centralName || t.name != e.Name {
 				continue
@@ -224,6 +226,7 @@ func sysvarValueIndex(v hmtypes.ParamValue) (int, bool) {
 				return i, true
 			}
 		}
+	default:
 	}
 	return 0, false
 }

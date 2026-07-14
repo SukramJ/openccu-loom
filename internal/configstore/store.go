@@ -429,6 +429,8 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		return json.Unmarshal(raw, &cfg.Reliability)
 	case SectionPersistence:
 		return json.Unmarshal(raw, &cfg.Persistence)
+	case SectionAlarm:
+		return json.Unmarshal(raw, &cfg.Alarm)
 	case SectionLocale:
 		var v LocaleConfig
 		if err := json.Unmarshal(raw, &v); err != nil {
@@ -484,6 +486,8 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 		raw, err = json.Marshal(cfg.Reliability)
 	case SectionPersistence:
 		raw, err = json.Marshal(cfg.Persistence)
+	case SectionAlarm:
+		raw, err = json.Marshal(cfg.Alarm)
 	case SectionLocale:
 		raw, err = json.Marshal(LocaleConfig{Locale: cfg.Locale})
 	case SectionSecurity:

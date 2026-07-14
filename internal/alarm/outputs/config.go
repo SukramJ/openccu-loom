@@ -106,8 +106,8 @@ func (c OutputConfig) acousticDuration(engineDefault time.Duration) time.Duratio
 	if d <= 0 {
 		d = 180 * time.Second
 	}
-	if max := MaxAcousticSeconds * time.Second; d > max {
-		d = max
+	if ceil := MaxAcousticSeconds * time.Second; d > ceil {
+		d = ceil
 	}
 	return d
 }
@@ -118,8 +118,8 @@ func (c OutputConfig) opticalDuration() time.Duration {
 	if d <= 0 {
 		d = DefaultOpticalSeconds * time.Second
 	}
-	if max := MaxOpticalSeconds * time.Second; d > max {
-		d = max
+	if ceil := MaxOpticalSeconds * time.Second; d > ceil {
+		d = ceil
 	}
 	return d
 }

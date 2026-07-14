@@ -61,7 +61,10 @@ func (m *Manager) cancelWatchdog(outputID string) {
 
 // runStop is one stop + verify pass; it reschedules itself until
 // verified or the verify window closes. Runs on scheduler callbacks —
-// never on the engine lock.
+// never on the engine lock and deliberately detached from the
+// activation's caller context (a stop must not die with a request).
+//
+//nolint:contextcheck // watchdog stops deliberately detach from the scheduling caller's ctx
 func (m *Manager) runStop(inst *instance, act *activation, s stopper, verifyUntil time.Time) {
 	ctx := context.Background()
 	if err := s.stop(ctx); err != nil {
@@ -82,6 +85,8 @@ func (m *Manager) runStop(inst *instance, act *activation, s stopper, verifyUnti
 // verifyStop reads the device back; still-active outputs retry the
 // stop until the window closes, then the failure escalates (S2: a
 // siren smashed off the wall must not burn radio budget forever).
+//
+//nolint:contextcheck // watchdog verification deliberately detaches from the scheduling caller's ctx
 func (m *Manager) verifyStop(inst *instance, act *activation, s stopper, verifyUntil time.Time) {
 	ctx := context.Background()
 	if s.verify() {
@@ -115,6 +120,8 @@ func (m *Manager) clearActivation(act *activation) {
 // stopAndVerify performs an immediate stop with verification for
 // StopAll: any pending fire-watchdog is replaced by the immediate
 // stop pass.
+//
+//nolint:contextcheck // the deferred verify chain detaches from the stop caller's ctx by design
 func (m *Manager) stopAndVerify(ctx context.Context, inst *instance, incidentID int64) error {
 	s, ok := m.stopperFor(inst)
 	if !ok {

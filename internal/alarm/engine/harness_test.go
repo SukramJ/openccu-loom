@@ -135,12 +135,6 @@ func (f *fakeOutputs) Chirp(_ context.Context, areaID string, req engine.ChirpRe
 	return nil
 }
 
-func (f *fakeOutputs) chirpCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.chirps)
-}
-
 func (f *fakeOutputs) fireCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
