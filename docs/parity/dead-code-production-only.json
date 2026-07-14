@@ -1,6 +1,6 @@
 {
-  "generated": "de93c63",
-  "head": "de93c63",
+  "generated": "29e6638",
+  "head": "29e6638",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,12 +8,18 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24594,
-    "reachable": 4069,
-    "whitelisted": 17830,
-    "unreachable": 2695
+    "total_exported": 24862,
+    "reachable": 4164,
+    "whitelisted": 17905,
+    "unreachable": 2793
   },
   "by_package": [
+    {
+      "package": "internal/store/sqlite",
+      "unreachable_funcs": 14,
+      "unreachable_types": 92,
+      "unreachable_other": 22
+    },
     {
       "package": "internal/central/events",
       "unreachable_funcs": 10,
@@ -49,6 +55,12 @@
       "unreachable_funcs": 6,
       "unreachable_types": 5,
       "unreachable_other": 24
+    },
+    {
+      "package": "internal/alarm/engine",
+      "unreachable_funcs": 4,
+      "unreachable_types": 23,
+      "unreachable_other": 4
     },
     {
       "package": "internal/central/adapter",
@@ -179,7 +191,13 @@
     {
       "package": "pkg/hmevent",
       "unreachable_funcs": 2,
-      "unreachable_types": 46,
+      "unreachable_types": 52,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/alarm/journal",
+      "unreachable_funcs": 1,
+      "unreachable_types": 2,
       "unreachable_other": 0
     },
     {
@@ -573,15 +591,9 @@
       "unreachable_other": 0
     },
     {
-      "package": "internal/store/sqlite",
-      "unreachable_funcs": 0,
-      "unreachable_types": 64,
-      "unreachable_other": 22
-    },
-    {
       "package": "pkg/hmenum",
       "unreachable_funcs": 0,
-      "unreachable_types": 97,
+      "unreachable_types": 113,
       "unreachable_other": 36
     },
     {
@@ -610,6 +622,244 @@
       "identifier": "SubscriberBuilder",
       "file": "cmd/openccu-loom/mqtt_supervisor.go",
       "line": 71,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "AreaConfig",
+      "file": "internal/alarm/engine/config.go",
+      "line": 35,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "AreaSnapshot",
+      "file": "internal/alarm/engine/area.go",
+      "line": 159,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "AreaStore",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 17,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ArmRequest",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 210,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ArmResult",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 225,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "BlockerPolicies",
+      "file": "internal/alarm/engine/config.go",
+      "line": 66,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "Deps",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 73,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "Engine",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 95,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ErrInvalidState",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 31,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ErrNoIncident",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 33,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ErrUnknownArea",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 25,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ErrUnknownMode",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 27,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "EventSink",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 80,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "FireOptions",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 55,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "IncidentStore",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 37,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "Journal",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 100,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "JournalEntry",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 85,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ModeConfig",
+      "file": "internal/alarm/engine/config.go",
+      "line": 49,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "New",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 119,
+      "kind": "func"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "NewClockScheduler",
+      "file": "internal/alarm/engine/timers.go",
+      "line": 101,
+      "kind": "func"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "NotReadyError",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 38,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "OutputPort",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 74,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ParseAreaConfig",
+      "file": "internal/alarm/engine/config.go",
+      "line": 132,
+      "kind": "func"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ParseSensorConfig",
+      "file": "internal/alarm/engine/config.go",
+      "line": 154,
+      "kind": "func"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "RuntimeStore",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 50,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "SensorConfig",
+      "file": "internal/alarm/engine/config.go",
+      "line": 91,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "SensorHealth",
+      "file": "internal/alarm/engine/engine.go",
+      "line": 563,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "SensorReader",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 108,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "SensorStore",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 23,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "StateStore",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 29,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "TimerScheduler",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 117,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/journal",
+      "identifier": "Journal",
+      "file": "internal/alarm/journal/journal.go",
+      "line": 32,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/journal",
+      "identifier": "New",
+      "file": "internal/alarm/journal/journal.go",
+      "line": 41,
+      "kind": "func"
+    },
+    {
+      "package": "internal/alarm/journal",
+      "identifier": "Store",
+      "file": "internal/alarm/journal/journal.go",
+      "line": 25,
       "kind": "type"
     },
     {
@@ -1022,7 +1272,7 @@
       "package": "internal/auth/oidc",
       "identifier": "Audience",
       "file": "internal/auth/oidc/client.go",
-      "line": 175,
+      "line": 182,
       "kind": "type"
     },
     {
@@ -1127,14 +1377,14 @@
       "package": "internal/auth/oidc",
       "identifier": "Providers",
       "file": "internal/auth/oidc/discovery.go",
-      "line": 17,
+      "line": 19,
       "kind": "type"
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "Providers",
       "file": "internal/auth/oidc/discovery.go",
-      "line": 17,
+      "line": 19,
       "kind": "type"
     },
     {
@@ -4704,7 +4954,7 @@
       "package": "internal/client/transport/jsonrpc",
       "identifier": "Client",
       "file": "internal/client/transport/jsonrpc/client.go",
-      "line": 112,
+      "line": 116,
       "kind": "type"
     },
     {
@@ -15902,6 +16152,202 @@
     },
     {
       "package": "internal/store/sqlite",
+      "identifier": "AlarmAreaRow",
+      "file": "internal/store/sqlite/alarm_areas.go",
+      "line": 18,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmAreaRow",
+      "file": "internal/store/sqlite/alarm_areas.go",
+      "line": 18,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmAreaStore",
+      "file": "internal/store/sqlite/alarm_areas.go",
+      "line": 28,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmAreaStore",
+      "file": "internal/store/sqlite/alarm_areas.go",
+      "line": 28,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmIncident",
+      "file": "internal/store/sqlite/alarm_incidents.go",
+      "line": 21,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmIncident",
+      "file": "internal/store/sqlite/alarm_incidents.go",
+      "line": 21,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmIncidentStore",
+      "file": "internal/store/sqlite/alarm_incidents.go",
+      "line": 43,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmIncidentStore",
+      "file": "internal/store/sqlite/alarm_incidents.go",
+      "line": 43,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmJournalEntry",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 21,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmJournalEntry",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 21,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmJournalFilter",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 39,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmJournalFilter",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 39,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmJournalStore",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 50,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmJournalStore",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 50,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmOutputRow",
+      "file": "internal/store/sqlite/alarm_outputs.go",
+      "line": 23,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmOutputRow",
+      "file": "internal/store/sqlite/alarm_outputs.go",
+      "line": 23,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmOutputStore",
+      "file": "internal/store/sqlite/alarm_outputs.go",
+      "line": 37,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmOutputStore",
+      "file": "internal/store/sqlite/alarm_outputs.go",
+      "line": 37,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmRuntimeStore",
+      "file": "internal/store/sqlite/alarm_runtime.go",
+      "line": 15,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmRuntimeStore",
+      "file": "internal/store/sqlite/alarm_runtime.go",
+      "line": 15,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmSensorRow",
+      "file": "internal/store/sqlite/alarm_sensors.go",
+      "line": 20,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmSensorRow",
+      "file": "internal/store/sqlite/alarm_sensors.go",
+      "line": 20,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmSensorStore",
+      "file": "internal/store/sqlite/alarm_sensors.go",
+      "line": 35,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmSensorStore",
+      "file": "internal/store/sqlite/alarm_sensors.go",
+      "line": 35,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmStateRow",
+      "file": "internal/store/sqlite/alarm_state.go",
+      "line": 22,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmStateRow",
+      "file": "internal/store/sqlite/alarm_state.go",
+      "line": 22,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmStateStore",
+      "file": "internal/store/sqlite/alarm_state.go",
+      "line": 35,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "AlarmStateStore",
+      "file": "internal/store/sqlite/alarm_state.go",
+      "line": 35,
+      "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
       "identifier": "AuditStore",
       "file": "internal/store/sqlite/audit.go",
       "line": 22,
@@ -16326,6 +16772,104 @@
       "file": "internal/store/sqlite/values_cache.go",
       "line": 123,
       "kind": "type"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmAreaStore",
+      "file": "internal/store/sqlite/alarm_areas.go",
+      "line": 33,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmAreaStore",
+      "file": "internal/store/sqlite/alarm_areas.go",
+      "line": 33,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmIncidentStore",
+      "file": "internal/store/sqlite/alarm_incidents.go",
+      "line": 48,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmIncidentStore",
+      "file": "internal/store/sqlite/alarm_incidents.go",
+      "line": 48,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmJournalStore",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 55,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmJournalStore",
+      "file": "internal/store/sqlite/alarm_journal.go",
+      "line": 55,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmOutputStore",
+      "file": "internal/store/sqlite/alarm_outputs.go",
+      "line": 42,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmOutputStore",
+      "file": "internal/store/sqlite/alarm_outputs.go",
+      "line": 42,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmRuntimeStore",
+      "file": "internal/store/sqlite/alarm_runtime.go",
+      "line": 20,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmRuntimeStore",
+      "file": "internal/store/sqlite/alarm_runtime.go",
+      "line": 20,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmSensorStore",
+      "file": "internal/store/sqlite/alarm_sensors.go",
+      "line": 40,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmSensorStore",
+      "file": "internal/store/sqlite/alarm_sensors.go",
+      "line": 40,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmStateStore",
+      "file": "internal/store/sqlite/alarm_state.go",
+      "line": 40,
+      "kind": "func"
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "NewAlarmStateStore",
+      "file": "internal/store/sqlite/alarm_state.go",
+      "line": 40,
+      "kind": "func"
     },
     {
       "package": "internal/store/sqlite",
@@ -17173,6 +17717,118 @@
       "file": "pkg/hmenum/datapoint.go",
       "line": 112,
       "kind": "var"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmAreaState",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 52,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmAreaState",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 52,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmBlockerPolicy",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 188,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmBlockerPolicy",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 188,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmCentralLossPolicy",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 283,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmCentralLossPolicy",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 283,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmJournalClass",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 215,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmJournalClass",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 215,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmMode",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 12,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmMode",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 12,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmOutputClass",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 126,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmOutputClass",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 126,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmPostTriggerPolicy",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 255,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmPostTriggerPolicy",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 255,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmSensorType",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 86,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmenum",
+      "identifier": "AlarmSensorType",
+      "file": "pkg/hmenum/alarm.go",
+      "line": 86,
+      "kind": "type"
     },
     {
       "package": "pkg/hmenum",
@@ -18334,6 +18990,48 @@
       "identifier": "XMLRPCFaultCode",
       "file": "pkg/hmerr/errors.go",
       "line": 174,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmJournalAppendedEvent",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 102,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmModeReadiness",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 76,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmModeReadiness",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 76,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmReadinessChangedEvent",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 88,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmStateChangedEvent",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 24,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmTriggeredEvent",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 51,
       "kind": "type"
     },
     {
@@ -26393,7 +27091,7 @@
       "identifier": "TestClientAuthURLAndExchange",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_test.go",
-      "line": 96
+      "line": 162
     },
     {
       "package": "internal/auth/oidc",
@@ -26446,6 +27144,27 @@
     },
     {
       "package": "internal/auth/oidc",
+      "identifier": "TestDiscoverRejectsIssuerMismatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/oidc_test.go",
+      "line": 116
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestDiscoverRejectsNonHTTPSEndpoint",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/oidc_test.go",
+      "line": 141
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestDiscoverRejectsNonHTTPSIssuer",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/oidc_test.go",
+      "line": 103
+    },
+    {
+      "package": "internal/auth/oidc",
       "identifier": "TestExchangeInvalidJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
@@ -26464,6 +27183,48 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
       "line": 250
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestIdentityFromAdministratorAlias",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/role_claim_test.go",
+      "line": 106
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestIdentityFromArrayClaimPrecedence",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/role_claim_test.go",
+      "line": 57
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestIdentityFromDefaultRoleClaim",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/role_claim_test.go",
+      "line": 14
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestIdentityFromNestedClaimPath",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/role_claim_test.go",
+      "line": 82
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestIdentityFromSubjectPreference",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/role_claim_test.go",
+      "line": 116
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestIdentityFromTypedFieldFallback",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/role_claim_test.go",
+      "line": 40
     },
     {
       "package": "internal/auth/oidc",
@@ -26610,7 +27371,21 @@
       "identifier": "TestVerifyIDTokenAcceptsMatchingNonce",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 149
+      "line": 211
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestVerifyIDTokenAcceptsMultiAudienceWithAzp",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/verify_idtoken_test.go",
+      "line": 131
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestVerifyIDTokenAcceptsSingleAudienceWithoutAzp",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/verify_idtoken_test.go",
+      "line": 102
     },
     {
       "package": "internal/auth/oidc",
@@ -26628,52 +27403,66 @@
     },
     {
       "package": "internal/auth/oidc",
+      "identifier": "TestVerifyIDTokenRejectsAzpMismatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/verify_idtoken_test.go",
+      "line": 87
+    },
+    {
+      "package": "internal/auth/oidc",
       "identifier": "TestVerifyIDTokenRejectsExpired",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 81
+      "line": 143
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestVerifyIDTokenRejectsForeignSignature",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 131
+      "line": 193
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestVerifyIDTokenRejectsMissingExp",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 93
+      "line": 155
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestVerifyIDTokenRejectsMissingNonceClaim",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 182
+      "line": 244
+    },
+    {
+      "package": "internal/auth/oidc",
+      "identifier": "TestVerifyIDTokenRejectsMultiAudienceWithoutAzp",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/auth/oidc/verify_idtoken_test.go",
+      "line": 116
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestVerifyIDTokenRejectsNonceMismatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 165
+      "line": 227
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestVerifyIDTokenRejectsWrongAudience",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 104
+      "line": 166
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestVerifyIDTokenRejectsWrongIssuer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/verify_idtoken_test.go",
-      "line": 116
+      "line": 178
     },
     {
       "package": "internal/auth/oidc",
@@ -57071,6 +57860,13 @@
     },
     {
       "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestAccessDeniedReleasesStaleSessionBeforeRelogin",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 216
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
       "identifier": "TestAcknowledgeMessage",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/methods_test.go",
@@ -57123,28 +57919,28 @@
       "identifier": "TestCallOnceClientErrorStatus",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 1017
+      "line": 1018
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestCallOnceDecodeResultError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 1037
+      "line": 1038
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestCallOnceReadBodyError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 1058
+      "line": 1059
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestCheckSupportedMethodsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 834
+      "line": 835
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57179,7 +57975,7 @@
       "identifier": "TestClientCallFallsBackToLoginWhenRenewRejected",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 362
+      "line": 365
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57193,42 +57989,42 @@
       "identifier": "TestClientCallSkipsRenewRightAfterLogin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 390
+      "line": 393
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientCheckSupportedMethodsCachesResult",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 808
+      "line": 809
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientCheckSupportedMethodsObjectShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 758
+      "line": 759
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientCheckSupportedMethodsStringShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 786
+      "line": 787
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientConcurrencyCap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 447
+      "line": 450
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientConnectionFailureMapsToNoConnection",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 414
+      "line": 417
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57267,31 +58063,31 @@
     },
     {
       "package": "internal/client/transport/jsonrpc",
-      "identifier": "TestClientRenewEmptyResponseInvalidatesSession",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 542
-    },
-    {
-      "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientRenewExtendsSession",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 488
+      "line": 491
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestClientRenewFalseInvalidatesSession",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/client_test.go",
+      "line": 549
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientRenewNoOpWhenLoggedOut",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 523
+      "line": 526
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientRespectsContextCancellation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 425
+      "line": 428
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57299,6 +58095,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
       "line": 179
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestConcurrentColdStartOpensSingleSession",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 386
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57495,6 +58298,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/methods_test.go",
       "line": 2095
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestEnsureSessionRenewsInsteadOfReplacing",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 348
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57802,14 +58612,14 @@
       "identifier": "TestIsActivatedFalseWhenNoSession",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 716
+      "line": 717
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestIsActivatedTrueAfterSuccessfulLogin",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 726
+      "line": 727
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57830,14 +58640,14 @@
       "identifier": "TestIsMethodSupportedFalseWhenAbsent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 873
+      "line": 874
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestIsMethodSupportedOptimisticBeforeProbe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 862
+      "line": 863
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57858,119 +58668,119 @@
       "identifier": "TestJSONRPCCallContextCancelAborts",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 278
+      "line": 279
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallDecodeResultIntoOut",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 611
+      "line": 612
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallForbiddenTriggersAuthFailure",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 639
+      "line": 640
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallInjectsSessionParam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 128
+      "line": 129
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallMalformedJSONReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 308
+      "line": 309
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallNon2xxStatusReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 256
+      "line": 257
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallOutNilWorks",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 454
+      "line": 455
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallParamsPassedThrough",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 584
+      "line": 585
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallReauthOnAuthFailure",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 182
+      "line": 183
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallSecondAuthFailureDoesNotLoopForever",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 225
+      "line": 226
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallServerErrorObjectIsReturned",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 327
+      "line": 328
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCallWithoutLoginOmitsSession",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 157
+      "line": 158
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCCustomHostAppearsInErrorContext",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 686
+      "line": 687
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCHostDefaultsToEndpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 660
+      "line": 661
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCInvalidateSessionForcesReloginOnNextCall",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 392
+      "line": 393
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCLoginEmptySessionIDFromServerFails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 563
+      "line": 564
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCLoginEmptyUsernameIsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 538
+      "line": 539
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -57998,49 +58808,49 @@
       "identifier": "TestJSONRPCRenewExtendsSession",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 98
+      "line": 99
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCRequestBodyIsValidJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 505
+      "line": 506
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCSemaphoreSerializesConcurrentCalls",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 348
+      "line": 349
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestJSONRPCWrapsErrorWithMethodContext",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 472
+      "line": 473
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestLoginBackoffContextCancelledDuringWait",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 1091
+      "line": 1092
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestLoginBackoffDoublesOnRepeatedFailure",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 1148
+      "line": 1149
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestLoginNetworkErrorResetsBackoff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 1125
+      "line": 1126
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -58051,10 +58861,31 @@
     },
     {
       "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestLoginRejectionEngagesBackoff",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 265
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestLoginReleasesDisplacedSession",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 314
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestLoginTransportErrorDoesNotEngageBackoff",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 290
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
       "identifier": "TestNewRejectsMissingEndpoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
-      "line": 482
+      "line": 485
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -58103,21 +58934,42 @@
       "identifier": "TestRenewCallOnceError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 988
+      "line": 989
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestRenewIssuedAfterSessionAgeExpiry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 943
+      "line": 944
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestRenewKeepsSingleSessionAcrossFreshnessWindows",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 126
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestRenewRejectedReleasesStaleSessionBeforeRelogin",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 181
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestRenewSkippedWithinFreshnessWindow",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/session_renew_test.go",
+      "line": 160
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "TestRenewSkipsWhenRecentlyRefreshed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
-      "line": 900
+      "line": 901
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -133742,6 +134594,363 @@
     },
     {
       "package": "internal/store/sqlite",
+      "identifier": "TestAlarmAreaStoreDelete",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_areas_test.go",
+      "line": 147
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmAreaStoreGetAllOrdering",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_areas_test.go",
+      "line": 116
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmAreaStoreGetMissingReturnsFalse",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_areas_test.go",
+      "line": 52
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmAreaStoreUpsertInsertRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_areas_test.go",
+      "line": 29
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmAreaStoreUpsertUpdatePreservesCreatedAt",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_areas_test.go",
+      "line": 71
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreAddAcousticMSAccumulates",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 252
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreCloseFirstCallWins",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 377
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreCreateGetRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 38
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreGetMissingReturnsFalse",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 66
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreGetOpenByAreaClosedOnlyReturnsFalse",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 122
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreGetOpenByAreaNoneOpen",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 84
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreGetOpenByAreaOneOpen",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 99
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreGetOpenByAreaTwoOpenNewestWins",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 146
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreIncrementRestoreRefires",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 310
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreIncrementRetriggerCycles",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 281
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreListByArea",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 173
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreMarkSilencedFirstCallWins",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 216
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStorePurgeClosedBefore",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 411
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmIncidentStoreSetTriggerDeadline",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_incidents_test.go",
+      "line": 339
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreAppendReturnsIncreasingIDs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 34
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStorePurgeBefore",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 299
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreQueryFilterByArea",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 88
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreQueryFilterByClass",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 118
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreQueryFilterByIncidentID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 148
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreQueryFromToRangeInclusive",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 180
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreQueryHiddenExcludedByDefault",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 248
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreQueryLimitHonored",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 215
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmJournalStoreQueryNewestFirst",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_journal_test.go",
+      "line": 58
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreDelete",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 223
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreDeleteByArea",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 257
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreGetAllOrdering",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 191
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreGetMissingReturnsFalse",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 94
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreListByAreaOrdering",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 158
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreUpsertInsertRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 36
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreUpsertNotificationEmptyDataPointFields",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 60
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmOutputStoreUpsertUpdatePreservesCreatedAt",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_outputs_test.go",
+      "line": 113
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmRuntimeStoreBootCountStartsAtZero",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_runtime_test.go",
+      "line": 18
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmRuntimeStoreIncrementBootCountBumpsUpdatedAt",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_runtime_test.go",
+      "line": 65
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmRuntimeStoreIncrementBootCountSequence",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_runtime_test.go",
+      "line": 34
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmSensorStoreDelete",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_sensors_test.go",
+      "line": 189
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmSensorStoreDeleteByArea",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_sensors_test.go",
+      "line": 223
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmSensorStoreGetAllOrdering",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_sensors_test.go",
+      "line": 157
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmSensorStoreGetMissingReturnsFalse",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_sensors_test.go",
+      "line": 60
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmSensorStoreListByAreaOrdering",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_sensors_test.go",
+      "line": 124
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmSensorStoreUpsertInsertRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_sensors_test.go",
+      "line": 37
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmSensorStoreUpsertUpdatePreservesCreatedAt",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_sensors_test.go",
+      "line": 79
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmStateStoreDelete",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_state_test.go",
+      "line": 140
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmStateStoreGetAllOrderedByAreaID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_state_test.go",
+      "line": 113
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmStateStoreGetMissingReturnsFalse",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_state_test.go",
+      "line": 95
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmStateStoreUpsertInsertRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_state_test.go",
+      "line": 34
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestAlarmStateStoreUpsertUpdateRoundTrip",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/alarm_state_test.go",
+      "line": 58
+    },
+    {
+      "package": "internal/store/sqlite",
       "identifier": "TestAuditList_CapAppliedWhenLimitZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/audit_purge_counter_test.go",
@@ -142467,7 +143676,7 @@
       "identifier": "TestCentralRegistryLookupRequiresName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/multi_ccu_scope_test.go",
-      "line": 616
+      "line": 640
     },
     {
       "package": "tests/contract",
@@ -142853,6 +144062,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/hmenum_constants_test.go",
       "line": 15
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestJSONRPCClientHoldsExactlyOneCCUSession",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/jsonrpc_session_contract_test.go",
+      "line": 100
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestJSONRPCClientReleasesSessionOnLogout",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/jsonrpc_session_contract_test.go",
+      "line": 148
     },
     {
       "package": "tests/contract",

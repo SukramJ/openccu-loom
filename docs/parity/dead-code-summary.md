@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: de93c63
-HEAD: de93c63
+Generated: 29e6638
+HEAD: 29e6638
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24594 |
-| Reachable | 4217 |
-| Whitelisted | 17830 |
-| **Unreachable** | **2547** |
+| Total Exported | 24862 |
+| Reachable | 4351 |
+| Whitelisted | 17905 |
+| **Unreachable** | **2606** |
 
 ## Top-20 Packages by Dead Code
 
@@ -23,6 +23,7 @@ HEAD: de93c63
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
+| internal/store/sqlite | 4 | 83 | 22 |
 | pkg/hmerr | 4 | 5 | 24 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -34,7 +35,6 @@ HEAD: de93c63
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
-| pkg/hmevent | 2 | 5 | 0 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
@@ -103,6 +103,7 @@ HEAD: de93c63
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
+| internal/store/sqlite | 4 | 83 | 22 |
 | pkg/hmerr | 4 | 5 | 24 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -114,8 +115,9 @@ HEAD: de93c63
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
-| pkg/hmevent | 2 | 5 | 0 |
 | cmd/openccu-loom | 0 | 2 | 0 |
+| internal/alarm/engine | 0 | 18 | 4 |
+| internal/alarm/journal | 0 | 1 | 0 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
@@ -186,8 +188,8 @@ HEAD: de93c63
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 60 | 22 |
 | pkg/hmapi | 0 | 77 | 14 |
-| pkg/hmenum | 0 | 92 | 36 |
+| pkg/hmenum | 0 | 101 | 36 |
+| pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 78 | 0 |

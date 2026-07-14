@@ -534,6 +534,30 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		// per-central operation. See ADR 0040.
 		"MeasurementStore:DeleteHourlyOlderThan": "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
 		"MeasurementStore:DeleteDailyOlderThan":  "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
+		// Alarm areas are daemon-level partitions that may span
+		// multiple centrals (docs/alarm-concept.md §13.1, §14): the
+		// area/incident/journal keys are area-scoped by design, and the
+		// central reference lives inside each sensor/output row
+		// (CentralName column) instead of on the store surface. Scoping
+		// these methods by central would be incorrect.
+		"AlarmAreaStore:Upsert":            "reason: alarm areas are daemon-level and may span centrals; area id is the natural key",
+		"AlarmAreaStore:Get":               "reason: alarm areas are daemon-level and may span centrals; area id is the natural key",
+		"AlarmAreaStore:Delete":            "reason: alarm areas are daemon-level and may span centrals; area id is the natural key",
+		"AlarmSensorStore:Get":             "reason: alarm sensors are keyed by daemon-level sensor/area ids; the row carries CentralName as data",
+		"AlarmSensorStore:ListByArea":      "reason: alarm sensors are keyed by daemon-level sensor/area ids; the row carries CentralName as data",
+		"AlarmSensorStore:Delete":          "reason: alarm sensors are keyed by daemon-level sensor/area ids; the row carries CentralName as data",
+		"AlarmSensorStore:DeleteByArea":    "reason: alarm sensors are keyed by daemon-level sensor/area ids; the row carries CentralName as data",
+		"AlarmOutputStore:Get":             "reason: alarm outputs are keyed by daemon-level output/area ids; the row carries CentralName as data",
+		"AlarmOutputStore:ListByArea":      "reason: alarm outputs are keyed by daemon-level output/area ids; the row carries CentralName as data",
+		"AlarmOutputStore:Delete":          "reason: alarm outputs are keyed by daemon-level output/area ids; the row carries CentralName as data",
+		"AlarmOutputStore:DeleteByArea":    "reason: alarm outputs are keyed by daemon-level output/area ids; the row carries CentralName as data",
+		"AlarmStateStore:Upsert":           "reason: alarm state rows are keyed by daemon-level area id; areas may span centrals",
+		"AlarmStateStore:Get":              "reason: alarm state rows are keyed by daemon-level area id; areas may span centrals",
+		"AlarmStateStore:Delete":           "reason: alarm state rows are keyed by daemon-level area id; areas may span centrals",
+		"AlarmIncidentStore:Get":           "reason: alarm incidents belong to daemon-level areas; incident id is the natural key",
+		"AlarmIncidentStore:GetOpenByArea": "reason: alarm incidents belong to daemon-level areas; incident id is the natural key",
+		"AlarmIncidentStore:ListByArea":    "reason: alarm incidents belong to daemon-level areas; incident id is the natural key",
+		"AlarmJournalStore:Append":         "reason: the alarm journal is daemon-global like the audit log; entries reference areas, not centrals",
 	}
 
 	dir := filepath.Join(repoRoot(t), "internal", "store", "sqlite")
