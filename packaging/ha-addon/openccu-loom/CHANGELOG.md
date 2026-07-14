@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.41.0
+
+- **Single sign-on (OIDC) maps your provider's roles correctly, and is
+  hardened.** Roles from Keycloak (realm roles or groups) — or any OIDC provider
+  — now map to OpenCCU-Loom's admin / operator / viewer through the `role_claim`
+  setting; previously only a single hardcoded `role` claim worked, so most users
+  ended up read-only. OIDC now also requires an https identity provider and
+  validates the sign-in token more strictly. If you use OIDC, see the new
+  Keycloak setup guide in the documentation.
+
 ## 0.40.0
 
 - **Fixed: OpenCCU-Loom no longer uses up your CCU's login slots.** If you ever
