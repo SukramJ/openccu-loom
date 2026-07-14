@@ -36,10 +36,13 @@ func (m methodAwareCaller) Call(_ context.Context, method string, _ []any) (any,
 }
 
 // TestOpenCircuitShedsWithoutAcquiringThrottle verifies that when the circuit
-// breaker is OPEN, Call returns ErrCircuitBreakerOpen immediately WITHOUT
-// waiting on a fully-held throttle. Before the fix the throttle permit was
-// acquired before the circuit was consulted, so a shed call would block behind
-// the held permit and time out instead of failing fast.
+// breaker is OPEN, a non-critical Call returns ErrCircuitBreakerOpen
+// immediately WITHOUT waiting on a fully-held throttle. Before the fix the
+// throttle permit was acquired before the circuit was consulted, so a shed
+// call would block behind the held permit and time out instead of failing
+// fast. Critical-priority calls are the deliberate exception: they probe an
+// OPEN circuit once (alarm stop path, S5) — covered by the breaker's own
+// tests and the siren-safety contract suite.
 func TestOpenCircuitShedsWithoutAcquiringThrottle(t *testing.T) {
 	t.Parallel()
 
@@ -76,7 +79,7 @@ func TestOpenCircuitShedsWithoutAcquiringThrottle(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, callErr := ic.Call(ctx, "getValue", nil, hmenum.CommandPriorityCritical, "")
+	_, callErr := ic.Call(ctx, "getValue", nil, hmenum.CommandPriorityHigh, "")
 	elapsed := time.Since(start)
 
 	if !errors.Is(callErr, hmerr.ErrCircuitBreakerOpen) {
