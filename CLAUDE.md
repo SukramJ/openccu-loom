@@ -725,6 +725,25 @@ hand-rolling them:
   uses the theme-aware `--ha-*` CSS tokens, which already invert).
 - Strings stay localized via `t(...)` (de + en in `lib/i18n.ts`).
 
+**Full i18n and full theme support are mandatory for every SPA change
+— no exceptions for new feature areas.**
+
+- **i18n**: every user-visible string goes through `t(...)` with BOTH
+  locales (`DE` + `EN`) filled in `assets/ui/src/lib/i18n.ts` — that
+  includes button labels, toasts, confirm dialogs, empty/error states,
+  badges, tooltips, `aria-label`s, document titles, and placeholder
+  text. No hard-coded literals in markup or scripts. Config-schema
+  fields additionally follow the `config.field.*`/`config.help.*` rule
+  (see Critical Rules); everything else is reviewed, not guard-enforced
+  — treat a missing locale entry like a failing test.
+- **Themes**: every view must render correctly in **all four**
+  combinations — skin `loom` and `ha` (`data-skin`) × light and dark
+  mode. Use the theme-aware CSS tokens (which invert per mode and
+  restyle per skin) or Tailwind `dark:` variants; never a raw colour
+  that only works in one combination. New views add Playwright visual
+  baselines for at least light + dark (see Testing Guidelines); skin
+  parity is part of review.
+
 UI patterns (session-based MASTER editing, undo/redo, dirty tracking,
 preset selection) mirror `homematicip-local-frontend`; the operating
 concept above is locked in by the Playwright e2e + visual suite
