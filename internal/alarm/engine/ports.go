@@ -71,6 +71,11 @@ type FireOptions struct {
 // write the incident's acoustic ledger, and verify stops. StopAll
 // silences every sounding output of the incident and never touches
 // notification outputs.
+//
+// Both methods run with the engine lock held: an implementation must
+// never call back into an engine verb synchronously (self-deadlock on
+// the non-reentrant mutex) — long-running device I/O belongs on the
+// driver's own goroutines.
 type OutputPort interface {
 	FireCycle(ctx context.Context, areaID string, incident sqlitestore.AlarmIncident, opts FireOptions) error
 	StopAll(ctx context.Context, areaID string, incidentID int64) error

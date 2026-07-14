@@ -45,6 +45,10 @@ func (e *Engine) Start(ctx context.Context) error {
 		a := e.areas[id]
 		row, ok, err := e.stateStore.Get(ctx, id)
 		if err != nil {
+			// A partial start must not leave live countdowns behind:
+			// earlier areas may already have scheduled timers that
+			// would fire on an engine nobody owns.
+			e.teardownLocked()
 			return fmt.Errorf("engine: load persisted state for %q: %w", id, err)
 		}
 		if ok {
@@ -56,6 +60,16 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 	e.started = true
 	return nil
+}
+
+// teardownLocked cancels every scheduled timer and drops the runtime
+// areas after a failed Start. The caller holds the lock.
+func (e *Engine) teardownLocked() {
+	for _, a := range e.areas {
+		a.cancelTimers()
+	}
+	e.areas = map[string]*area{}
+	e.sensorIndex = map[string]string{}
 }
 
 // loadConfig builds the runtime areas from the stores. The caller
@@ -128,12 +142,50 @@ func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.Alarm
 		a.openAtArm[id] = true
 	}
 	a.pendingCause = restoredCtx.PendingCause
+	a.silencedIncidentID = restoredCtx.SilencedIncidentID
 	if row.IncidentID != 0 {
 		if inc, ok, err := e.incidents.Get(ctx, row.IncidentID); err == nil && ok && inc.ClosedAtMS == 0 {
 			a.incident = &inc
 		} else if err != nil {
 			e.journalFault(ctx, a, "incident_load_failed", err, row.IncidentID)
 		}
+	}
+	// An open incident the state row does not reference is a crash
+	// leftover (created before the state persist landed): adopt it
+	// when the row says triggered, close it otherwise — orphans must
+	// not accumulate.
+	if a.incident == nil {
+		if orphan, ok, err := e.incidents.GetOpenByArea(ctx, a.id); err != nil {
+			e.journalFault(ctx, a, "incident_load_failed", err, 0)
+		} else if ok {
+			if row.State == hmenum.AlarmAreaStateTriggered {
+				a.incident = &orphan
+				e.journalEntry(ctx, a, JournalEntry{
+					Class: hmenum.AlarmJournalClassFault, Event: "orphan_incident_adopted",
+					IncidentID: orphan.ID,
+				})
+			} else {
+				if err := e.incidents.Close(ctx, orphan.ID, unixMS(now), closeReasonLost); err != nil {
+					e.journalFault(ctx, a, "incident_persist_failed", err, orphan.ID)
+				}
+				e.journalEntry(ctx, a, JournalEntry{
+					Class: hmenum.AlarmJournalClassFault, Event: "orphan_incident_closed",
+					IncidentID: orphan.ID,
+				})
+			}
+		}
+	}
+	// S3 durability: the state-row marker and the incident flag are
+	// two independent records of a silence — honor either, and heal
+	// the incident row when only the marker survived.
+	if a.incident != nil && !a.incident.Silenced && a.silencedIncidentID == a.incident.ID {
+		a.incident.Silenced = true
+		if err := e.incidents.MarkSilenced(ctx, a.incident.ID, unixMS(now), "engine:restore"); err != nil {
+			e.journalFault(ctx, a, "silence_persist_failed", err, a.incident.ID)
+		}
+	}
+	if a.incident == nil || a.silencedIncidentID != a.incident.ID {
+		a.silencedIncidentID = 0
 	}
 	timers := decodeTimers(row.TimersJSON)
 
@@ -336,7 +388,12 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *area, timers []persist
 	e.persist(ctx, a)
 
 	if inc.Silenced {
-		// S3 persistence: a silenced incident never sounds again.
+		// S3 persistence: a silenced incident never sounds again. The
+		// counter-stop covers a crash that landed between the silence
+		// persist and the output stop — stopping again is free.
+		if err := e.outputs.StopAll(ctx, a.id, inc.ID); err != nil {
+			e.journalFault(ctx, a, "output_stop_failed", err, inc.ID)
+		}
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassSilence, Event: "silenced_incident_restored",
 			IncidentID: inc.ID,

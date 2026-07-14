@@ -51,6 +51,11 @@ type area struct {
 	openAtArm map[string]bool
 	// pendingCause is the sensor that routed the area into pending.
 	pendingCause string
+	// silencedIncidentID mirrors the silenced flag of the open
+	// incident into the state row (context_json): a second,
+	// independent persistence path so a failed incident write cannot
+	// cost the silence across a restart (S3 durability).
+	silencedIncidentID int64
 
 	// The single active state timer (exit delay, entry delay, or
 	// trigger time). seq guards against stale fires after cancel.
@@ -73,6 +78,9 @@ type area struct {
 type areaContext struct {
 	OpenAtArm    []string `json:"open_at_arm,omitempty"`
 	PendingCause string   `json:"pending_cause,omitempty"`
+	// SilencedIncidentID is the redundant silence marker (S3): the
+	// open incident this area has silenced, 0 when none.
+	SilencedIncidentID int64 `json:"silenced_incident_id,omitempty"`
 }
 
 // cancelTimers stops the state timer and the debounce timer.
@@ -130,7 +138,10 @@ func decodeBypass(raw string) map[string]bool {
 // encodeContext serializes the runtime context for
 // alarm_state.context_json.
 func (a *area) encodeContext() string {
-	doc := areaContext{PendingCause: a.pendingCause}
+	doc := areaContext{
+		PendingCause:       a.pendingCause,
+		SilencedIncidentID: a.silencedIncidentID,
+	}
 	for id := range a.openAtArm {
 		doc.OpenAtArm = append(doc.OpenAtArm, id)
 	}

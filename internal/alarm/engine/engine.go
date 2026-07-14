@@ -241,6 +241,11 @@ type ArmResult struct {
 func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmResult, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// Arm is refused on an engine that is not running; silence and
+	// disarm stay deliberately ungated (S3/S6).
+	if !e.started {
+		return ArmResult{}, ErrInvalidState
+	}
 	a, ok := e.areas[areaID]
 	if !ok {
 		return ArmResult{}, ErrUnknownArea
@@ -404,6 +409,8 @@ func (e *Engine) SilenceAll(ctx context.Context, by, source string) {
 func (e *Engine) silenceLocked(ctx context.Context, a *area, by, source string) {
 	if a.incident != nil {
 		e.silenceIncident(ctx, a, by, source)
+		// The state row carries the redundant silence marker, so this
+		// persist is the second durability path for S3.
 		e.persist(ctx, a)
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassSilence, Event: "silenced",
@@ -441,8 +448,12 @@ func (e *Engine) silenceIncident(ctx context.Context, a *area, by, source string
 	if source != "" && by == "" {
 		inc.SilencedBy = source
 	}
+	a.silencedIncidentID = inc.ID
 	if inc.ID != 0 {
 		if err := e.incidents.MarkSilenced(ctx, inc.ID, nowMS, inc.SilencedBy); err != nil {
+			// Not fatal for S3: the state-row marker
+			// (silencedIncidentID) is persisted independently and a
+			// restore honors either record.
 			e.journalFault(ctx, a, "silence_persist_failed", err, inc.ID)
 		}
 	}
@@ -476,6 +487,9 @@ func (e *Engine) Acknowledge(ctx context.Context, areaID, by, source string) err
 func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
 	a, s := e.lookupSensor(sensorID)
 	if a == nil {
 		return
@@ -578,6 +592,9 @@ type SensorHealth struct {
 func (e *Engine) SetSensorAvailability(ctx context.Context, sensorID string, available bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
 	a, s := e.lookupSensor(sensorID)
 	if a == nil || s.available == available {
 		return
@@ -587,7 +604,10 @@ func (e *Engine) SetSensorAvailability(ctx context.Context, sensorID string, ava
 	if available || !e.isArmedState(a.state) || !s.cfg.InMode(a.mode) || a.bypassed[sensorID] {
 		return
 	}
-	if s.cfg.TriggerWhenUnavailable {
+	// The activation route (pending/instant) only applies from armed:
+	// during arming or pending it would replace the running countdown
+	// (§5 documents no such edge), so those states warn instead.
+	if s.cfg.TriggerWhenUnavailable && a.state == hmenum.AlarmAreaStateArmed {
 		e.routeActivation(ctx, a, s, incidentCause{
 			Kind: causeKindUnavailable, SensorID: sensorID, SensorName: s.row.Name,
 		})
@@ -601,6 +621,9 @@ func (e *Engine) SetSensorAvailability(ctx context.Context, sensorID string, ava
 func (e *Engine) SetSensorHealth(ctx context.Context, sensorID string, h SensorHealth) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
 	a, s := e.lookupSensor(sensorID)
 	if a == nil {
 		return
@@ -620,6 +643,9 @@ func (e *Engine) SetSensorHealth(ctx context.Context, sensorID string, h SensorH
 func (e *Engine) HandleCentralConnectivity(ctx context.Context, centralName string, connected bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
 	for _, id := range e.sortedAreaIDs() {
 		a := e.areas[id]
 		affected := false
@@ -795,7 +821,8 @@ func (e *Engine) finishTriggered(ctx context.Context, a *area, journalEvent stri
 }
 
 // closeIncident closes the open incident (idempotent) and detaches it
-// from the area. The caller holds the lock.
+// from the area, including the redundant silence marker. The caller
+// holds the lock.
 func (e *Engine) closeIncident(ctx context.Context, a *area, reason string) {
 	inc := a.incident
 	if inc == nil {
@@ -807,6 +834,7 @@ func (e *Engine) closeIncident(ctx context.Context, a *area, reason string) {
 		}
 	}
 	a.incident = nil
+	a.silencedIncidentID = 0
 }
 
 // scheduleStateTimer replaces the area's state timer. The caller
