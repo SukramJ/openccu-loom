@@ -62,53 +62,49 @@ On the **Advanced** tab:
 If you chose a confidential client, copy the secret from the **Credentials**
 tab — it becomes `client_secret` below.
 
-## 2. Emit the `role` claim (most important step)
+## 2. Map Keycloak roles to OpenCCU-Loom roles (most important step)
 
-OpenCCU-Loom maps the operator to one of three roles — `viewer`, `operator`,
-`admin` — from a **single-valued, top-level ID-token claim named exactly
-`role`**:
+OpenCCU-Loom grants one of three roles — `viewer`, `operator`, `admin` — from
+the ID-token claim named by `role_claim` (default `role`). The claim may be a
+plain **string**, a **string array**, or a **dotted path into a nested object**,
+so Keycloak's standard role and group claims work directly. When the claim
+carries several names, the **highest** role wins:
 
-| `role` claim value | OpenCCU-Loom role |
+| claim value(s) contain | OpenCCU-Loom role |
 |---|---|
 | `admin` or `administrator` | `admin` |
-| `operator` | `operator` |
+| `operator` (and no admin) | `operator` |
 | anything else / absent | `viewer` |
 
-!!! danger "Keycloak's built-in role mappers do NOT work here"
-    The standard *User Realm Role* / *User Client Role* mappers emit a
-    **multivalued array** (`roles` / `realm_access.roles`). OpenCCU-Loom
-    **ignores** those — it reads only a single string claim called `role`.
-    You must add a mapper that produces exactly that.
+### Recommended: Keycloak realm roles (`realm_access.roles`)
 
-The simplest per-user approach is a **User Attribute** mapper backed by a user
-attribute:
+1. **Realm roles → Create role** for the roles you use (`admin`, `operator`,
+   `viewer`) and assign them to users or groups.
+2. Put them in the **ID token**: **Clients → openccu-loom → Client scopes →**
+   the dedicated scope `openccu-loom-dedicated` **→ Add mapper → By
+   configuration → User Realm Role**, with **Token Claim Name**
+   `realm_access.roles`, **Add to ID token** On, **Multivalued** On. (Keycloak
+   already exposes realm roles at `realm_access.roles`, but by default only on
+   the *access* token; OpenCCU-Loom reads the *ID* token, so this mapper adds
+   them there.)
+3. Set `role_claim: "realm_access.roles"` in the OpenCCU-Loom config (§4).
 
-1. **Clients → openccu-loom → Client scopes →** the dedicated scope
-   `openccu-loom-dedicated` **→ Add mapper → By configuration → User Attribute**.
-2. Configure it:
+Groups work the same way: map a group claim (e.g. `groups`) into the ID token,
+name the groups `admin` / `operator` / `viewer`, and point `role_claim` at that
+claim.
 
-    | Mapper field | Value |
-    |---|---|
-    | Name | `loom-role` |
-    | User Attribute | `loom_role` |
-    | Token Claim Name | `role` |
-    | Claim JSON Type | `String` |
-    | Add to ID token | **On** |
-    | Add to userinfo | On |
-    | Multivalued | **Off** |
+### Alternative: a single `role` string (default)
 
-3. For each user, set the attribute under **Users → _user_ → Attributes**:
-   `loom_role = admin` (or `operator` / `viewer`).
+For a simple per-user setup, leave `role_claim` at its default `role` and emit a
+single-valued `role` claim with a **User Attribute** mapper — User Attribute
+`loom_role` → **Token Claim Name** `role`, **Claim JSON Type** String, **Add to
+ID token** On, **Multivalued** Off — then set each user's `loom_role` attribute
+to `admin` / `operator` / `viewer` under **Users → _user_ → Attributes**.
 
-!!! note "Group-based assignment"
-    To assign roles by group instead of per user, add the same `loom_role`
-    attribute at the **group** level (Groups → _group_ → Attributes) and enable
-    *"Aggregate attribute values"* is not required for a single value — group
-    membership makes the attribute resolve for the member. Keep the mapper
-    single-valued and named `role`.
-
-**Add to ID token** must stay **On**: OpenCCU-Loom reads claims from the ID
-token it verifies, not from the userinfo endpoint.
+!!! note "Read from the ID token"
+    Whichever mapper you choose, **Add to ID token** must be **On** —
+    OpenCCU-Loom reads claims from the ID token it verifies, not from the
+    userinfo endpoint.
 
 ## 3. Scopes
 
@@ -128,17 +124,21 @@ north:
     auth:
       oidc:
         enabled: true
-        # Realm issuer URL exactly as Keycloak advertises it. OpenCCU-Loom
-        # discovers the endpoints from <issuer>/.well-known/openid-configuration
-        # at startup and checks the token's `iss` against it.
+        # Realm issuer URL exactly as Keycloak advertises it. Must be https
+        # (plain http is allowed only on localhost). OpenCCU-Loom discovers the
+        # endpoints from <issuer>/.well-known/openid-configuration at startup,
+        # checks the metadata issuer equals this value, and pins the token iss.
         issuer: "https://keycloak.example.com/realms/home"
         client_id: "openccu-loom"
         # From the Keycloak Credentials tab. Leave empty for a public client.
         client_secret: "…"
         # Must equal the Keycloak Valid Redirect URI character for character.
         redirect_url: "https://loom.example/api/v1/auth/oidc/callback"
-        # Leave at the default "role" — see the note at the end.
-        role_claim: "role"
+        # ID-token claim carrying the role(s) — see step 2. "realm_access.roles"
+        # for Keycloak realm roles (recommended), a group claim like "groups",
+        # or "role" for a single-valued string claim. Nested dotted paths and
+        # string arrays are both supported.
+        role_claim: "realm_access.roles"
 ```
 
 `client_secret` is a masked secret: `GET /api/v1/config` returns it as `***`,
@@ -172,14 +172,7 @@ validation details.
 | Symptom | Cause / fix |
 |---|---|
 | Keycloak shows *"Invalid parameter: redirect_uri"* | The **Valid redirect URI** does not match `redirect_url` exactly. Compare scheme, host, and the full `/api/v1/auth/oidc/callback` path. |
-| Login succeeds but the user is always **viewer** | The `role` claim is missing from the **ID token**. Verify the mapper (Token Claim Name `role`, *Add to ID token* On, *Multivalued* Off) and that the user's `loom_role` attribute is set. The built-in `roles` array is ignored. |
-| Login refused after the Keycloak redirect | `issuer` mismatch — it must equal the realm issuer exactly (no extra/missing trailing slash). Compare against `https://keycloak.example.com/realms/home/.well-known/openid-configuration`'s `issuer` field. |
+| Login succeeds but the user is always **viewer** | The claim named by `role_claim` is missing from the **ID token**, or the role name does not match. Confirm the mapper has **Add to ID token** On, that `role_claim` points at the claim you actually emit (`realm_access.roles` / `groups` / `role`), and that the value is `admin` / `operator` / `viewer`. |
+| OIDC does not start / a discovery warning is logged | The issuer or a discovered endpoint is plain `http` on a non-loopback host. OpenCCU-Loom requires https (loopback excepted) so the flow never runs in cleartext — use an https issuer. |
+| Login refused after the Keycloak redirect | `issuer` mismatch — the configured `issuer` must equal the realm issuer exactly (no extra/missing trailing slash) and the discovery document's own `issuer`. Compare against `https://keycloak.example.com/realms/home/.well-known/openid-configuration`'s `issuer` field. |
 | Works locally, fails through HA | The static `redirect_url` cannot match the ephemeral Ingress path. Expose OpenCCU-Loom via a reverse proxy at a stable URL and register that callback. |
-
-!!! warning "`role_claim` is currently inert"
-    The `role_claim` config field is stored but **not yet consumed** by the
-    daemon — the role is always read from the top-level `role` claim regardless
-    of this value. Keep it at `role` and name your Keycloak claim `role`. (The
-    generic [auth doc](auth.md#oidc-single-sign-on) and
-    `example.config.full.yaml` mention `role_claim` mapping; treat that as
-    aspirational until the field is wired up.)
