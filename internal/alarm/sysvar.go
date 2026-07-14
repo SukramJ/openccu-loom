@@ -139,26 +139,47 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 	if !ok {
 		return
 	}
-	// Match the sysvar to a mirror target across areas.
+	// Match the sysvar to a mirror target across areas. Two areas
+	// mirroring the same sysvar name would make an inbound intent
+	// ambiguous (and stomp each other's echo guard) — refuse loudly
+	// instead of guessing.
+	type match struct {
+		target mirrorTarget
+		snap   engine.AreaSnapshot
+	}
+	var matches []match
 	areas := m.svc.engine.Areas()
 	for i := range areas {
 		snap := areas[i]
 		for _, t := range m.mirrorTargets(snap.ID) {
-			if t.central != centralName || t.name != e.Name {
-				continue
+			if t.central == centralName && t.name == e.Name {
+				matches = append(matches, match{target: t, snap: snap})
 			}
-			key := t.central + "|" + t.name
-			m.mu.Lock()
-			last, hasLast := m.lastWritten[key]
-			m.mu.Unlock()
-			if hasLast && last == idx {
-				// Echo of our own export.
-				return
-			}
-			m.applyIntent(t, snap, idx)
-			return
 		}
 	}
+	if len(matches) == 0 {
+		return
+	}
+	if len(matches) > 1 {
+		if _, err := m.svc.journal.Append(context.Background(), engine.JournalEntry{
+			Class: hmenum.AlarmJournalClassFault, Event: "sysvar_intent_ambiguous",
+			Source:  "sysvar",
+			Details: map[string]any{"sysvar": e.Name, "areas": len(matches)},
+		}); err != nil {
+			m.svc.log.Error("alarm sysvar journal append failed", "error", err)
+		}
+		return
+	}
+	t := matches[0].target
+	key := t.central + "|" + t.name
+	m.mu.Lock()
+	last, hasLast := m.lastWritten[key]
+	m.mu.Unlock()
+	if hasLast && last == idx {
+		// Echo of our own export.
+		return
+	}
+	m.applyIntent(t, matches[0].snap, idx)
 }
 
 // applyIntent executes one inbound sysvar intent against the engine.

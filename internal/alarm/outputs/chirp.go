@@ -84,7 +84,12 @@ func (m *Manager) emitChirp(ctx context.Context, inst *instance, kind engine.Chi
 	if err != nil {
 		return err
 	}
-	return dev.TurnOn(ctx, sirencdp.OnConfig{Duration: chirpDuration, AcousticTone: tone}, hmenum.CommandPriorityLow)
+	// The selection pointer is what reaches the wire; without it the
+	// device replays its last-observed selection — after a full alarm
+	// that would be a slice of the alarm tone instead of the chirp.
+	return dev.TurnOn(ctx, sirencdp.OnConfig{
+		Duration: chirpDuration, AcousticSelection: &tone, AcousticTone: tone,
+	}, hmenum.CommandPriorityLow)
 }
 
 // chirpTone resolves the configured tone label for a chirp kind.

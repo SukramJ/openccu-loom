@@ -239,6 +239,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	if retention != nil {
 		retention()
 	}
+	s.manager.StopWatchdogs()
 	s.engine.Stop(ctx)
 	return nil
 }
@@ -254,6 +255,11 @@ func (s *Service) AttachCentral(name string) {
 	}
 	if u, ok := s.reg.Get(name); ok {
 		s.attachUnit(u)
+		// A runtime-adopted central is a blind window ending: adopt or
+		// stop its sounding sirens and refresh sensor values (§10.1).
+		ctx := context.Background()
+		s.reconcile(ctx)
+		s.engine.ReevaluateSensors(ctx)
 	}
 }
 
@@ -313,12 +319,16 @@ func (s *Service) reconcile(ctx context.Context) {
 			for _, so := range sounding {
 				ids = append(ids, so.OutputID)
 			}
-			if err := s.engine.AdoptSounding(ctx, snap.ID, ids); err != nil {
+			adopted, err := s.engine.AdoptSounding(ctx, snap.ID, ids)
+			if err != nil {
 				s.log.Error("alarm reconcile adoption failed", "area", snap.ID, "error", err)
 				continue
 			}
-			if adopted, ok := s.engine.Area(snap.ID); ok && adopted.IncidentID != 0 {
-				s.manager.AdoptBounded(ctx, snap.ID, adopted.IncidentID, ids)
+			if !adopted {
+				continue // already alarming — no re-accounting
+			}
+			if snap2, ok := s.engine.Area(snap.ID); ok && snap2.IncidentID != 0 {
+				s.manager.AdoptBounded(ctx, snap.ID, snap2.IncidentID, ids)
 			}
 		} else {
 			s.manager.StopUnowned(ctx, snap.ID)

@@ -145,6 +145,14 @@ func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChang
 		// Whole-central transition: the engine applies the area
 		// central-loss policy (alert or trigger) — never silently.
 		s.engine.HandleCentralConnectivity(ctx, centralName, !nowAllDown)
+		if !nowAllDown {
+			// Reconnect ends a blind window (§10.1): adopt or stop
+			// sounding sirens (S4) and re-evaluate sensor values — a
+			// window opened during the gap must surface now, not at
+			// the next daemon restart.
+			s.reconcile(ctx)
+			s.engine.ReevaluateSensors(ctx)
+		}
 		return
 	}
 	for _, id := range affected {

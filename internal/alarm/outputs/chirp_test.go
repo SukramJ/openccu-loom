@@ -34,6 +34,11 @@ func TestChirp_ArmSquawkPlaysToneOnChirpOutputOnly(t *testing.T) {
 	if call.Cfg.AcousticTone != "EXTERNALLY_ARMED" {
 		t.Fatalf("chirp tone = %q, want EXTERNALLY_ARMED", call.Cfg.AcousticTone)
 	}
+	// The selection pointer is the field that reaches the wire; the
+	// tone field alone is validation-only.
+	if call.Cfg.AcousticSelection == nil || *call.Cfg.AcousticSelection != "EXTERNALLY_ARMED" {
+		t.Fatalf("chirp AcousticSelection = %v, want EXTERNALLY_ARMED pointer", call.Cfg.AcousticSelection)
+	}
 	if call.Priority != hmenum.CommandPriorityLow {
 		t.Fatalf("chirp priority = %v, want Low", call.Priority)
 	}

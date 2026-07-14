@@ -994,17 +994,17 @@ func (e *Engine) startTicks(a *area, timerKind string) {
 // area enters triggered without an engine-side output cycle — the
 // hardware is already sounding; the driver layer arms the bounded
 // stop watchdog instead.
-func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []string) error {
+func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []string) (adopted bool, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	a, ok := e.areas[areaID]
 	if !ok {
-		return ErrUnknownArea
+		return false, ErrUnknownArea
 	}
 	if a.state == hmenum.AlarmAreaStateTriggered && a.incident != nil {
 		// Already alarming: the sounding outputs belong to the open
-		// incident; nothing to adopt.
-		return nil
+		// incident; nothing to adopt (and nothing to re-account).
+		return false, nil
 	}
 	from := a.state
 	mcfg := a.cfg.Modes[a.mode]
@@ -1046,7 +1046,28 @@ func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []s
 		Cause:      causeKindAdopted, Mode: a.mode,
 	})
 	e.publishState(a, from, "engine:reconcile", "engine")
-	return nil
+	return true, nil
+}
+
+// ReevaluateSensors refreshes every armed area's sensor values from
+// the SensorReader and routes activations that happened during a
+// blind window (docs/alarm-concept.md §10.1, CCU-reconnect row) —
+// the same comparison against the open-at-arm baseline a restore
+// runs. Safe to call repeatedly; disarmed areas are untouched.
+func (e *Engine) ReevaluateSensors(ctx context.Context) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
+	for _, id := range e.sortedAreaIDs() {
+		a := e.areas[id]
+		if a.state != hmenum.AlarmAreaStateArmed {
+			continue
+		}
+		e.reEvaluateAfterRestore(ctx, a)
+		e.refreshReadiness(a)
+	}
 }
 
 // persist writes the area's full state row. A failure is journaled

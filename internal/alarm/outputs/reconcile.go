@@ -87,7 +87,9 @@ func (m *Manager) AdoptBounded(ctx context.Context, areaID string, incidentID in
 			continue
 		}
 		d := inst.cfg.acousticDuration(m.defaultSiren)
-		if incidentID != 0 {
+		// Only acoustic classes consume the acoustic ledger; adopted
+		// optical/light activations are bounded but not budgeted.
+		if incidentID != 0 && inst.row.Class.Acoustic() {
 			if err := m.ledger.AddAcousticMS(ctx, incidentID, d.Milliseconds()); err != nil {
 				m.journalFault(ctx, areaID, "acoustic_ledger_failed", inst.row.ID, incidentID, err)
 			}

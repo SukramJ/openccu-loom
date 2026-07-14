@@ -46,6 +46,20 @@ func (m *Manager) armStopWatchdog(inst *instance, incidentID int64, d time.Durat
 	m.mu.Unlock()
 }
 
+// StopWatchdogs cancels every pending watchdog timer (bridge-level
+// service stop without process exit — running stops-in-flight finish,
+// scheduled ones are dropped).
+func (m *Manager) StopWatchdogs() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, act := range m.active {
+		if act.cancel != nil {
+			act.cancel()
+		}
+		delete(m.active, id)
+	}
+}
+
 // cancelWatchdog drops the pending watchdog of an output (activation
 // write failed after scheduling).
 func (m *Manager) cancelWatchdog(outputID string) {
