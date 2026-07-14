@@ -1,6 +1,6 @@
 {
-  "generated": "29e6638",
-  "head": "29e6638",
+  "generated": "a8888a8",
+  "head": "a8888a8",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,18 +8,12 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24862,
-    "reachable": 4164,
-    "whitelisted": 17905,
-    "unreachable": 2793
+    "total_exported": 24951,
+    "reachable": 4231,
+    "whitelisted": 17940,
+    "unreachable": 2780
   },
   "by_package": [
-    {
-      "package": "internal/store/sqlite",
-      "unreachable_funcs": 14,
-      "unreachable_types": 92,
-      "unreachable_other": 22
-    },
     {
       "package": "internal/central/events",
       "unreachable_funcs": 10,
@@ -55,12 +49,6 @@
       "unreachable_funcs": 6,
       "unreachable_types": 5,
       "unreachable_other": 24
-    },
-    {
-      "package": "internal/alarm/engine",
-      "unreachable_funcs": 4,
-      "unreachable_types": 23,
-      "unreachable_other": 4
     },
     {
       "package": "internal/central/adapter",
@@ -189,18 +177,6 @@
       "unreachable_other": 14
     },
     {
-      "package": "pkg/hmevent",
-      "unreachable_funcs": 2,
-      "unreachable_types": 52,
-      "unreachable_other": 0
-    },
-    {
-      "package": "internal/alarm/journal",
-      "unreachable_funcs": 1,
-      "unreachable_types": 2,
-      "unreachable_other": 0
-    },
-    {
       "package": "internal/north/matter/parity",
       "unreachable_funcs": 1,
       "unreachable_types": 0,
@@ -210,6 +186,30 @@
       "package": "cmd/openccu-loom",
       "unreachable_funcs": 0,
       "unreachable_types": 2,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/alarm",
+      "unreachable_funcs": 0,
+      "unreachable_types": 3,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/alarm/engine",
+      "unreachable_funcs": 0,
+      "unreachable_types": 21,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/alarm/journal",
+      "unreachable_funcs": 0,
+      "unreachable_types": 1,
+      "unreachable_other": 0
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "unreachable_funcs": 0,
+      "unreachable_types": 22,
       "unreachable_other": 0
     },
     {
@@ -591,10 +591,22 @@
       "unreachable_other": 0
     },
     {
+      "package": "internal/store/sqlite",
+      "unreachable_funcs": 0,
+      "unreachable_types": 85,
+      "unreachable_other": 22
+    },
+    {
       "package": "pkg/hmenum",
       "unreachable_funcs": 0,
-      "unreachable_types": 113,
+      "unreachable_types": 105,
       "unreachable_other": 36
+    },
+    {
+      "package": "pkg/hmevent",
+      "unreachable_funcs": 0,
+      "unreachable_types": 53,
+      "unreachable_other": 0
     },
     {
       "package": "pkg/hmui",
@@ -625,6 +637,27 @@
       "kind": "type"
     },
     {
+      "package": "internal/alarm",
+      "identifier": "Deps",
+      "file": "internal/alarm/service.go",
+      "line": 42,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm",
+      "identifier": "Settings",
+      "file": "internal/alarm/service.go",
+      "line": 32,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm",
+      "identifier": "Stores",
+      "file": "internal/alarm/stores.go",
+      "line": 14,
+      "kind": "type"
+    },
+    {
       "package": "internal/alarm/engine",
       "identifier": "AreaConfig",
       "file": "internal/alarm/engine/config.go",
@@ -635,7 +668,7 @@
       "package": "internal/alarm/engine",
       "identifier": "AreaSnapshot",
       "file": "internal/alarm/engine/area.go",
-      "line": 159,
+      "line": 185,
       "kind": "type"
     },
     {
@@ -649,35 +682,35 @@
       "package": "internal/alarm/engine",
       "identifier": "ArmRequest",
       "file": "internal/alarm/engine/engine.go",
-      "line": 210,
+      "line": 218,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
       "identifier": "ArmResult",
       "file": "internal/alarm/engine/engine.go",
-      "line": 225,
+      "line": 233,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
-      "identifier": "BlockerPolicies",
-      "file": "internal/alarm/engine/config.go",
-      "line": 66,
+      "identifier": "ChirpKind",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 74,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "ChirpRequest",
+      "file": "internal/alarm/engine/ports.go",
+      "line": 91,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
       "identifier": "Deps",
       "file": "internal/alarm/engine/engine.go",
-      "line": 73,
-      "kind": "type"
-    },
-    {
-      "package": "internal/alarm/engine",
-      "identifier": "Engine",
-      "file": "internal/alarm/engine/engine.go",
-      "line": 95,
+      "line": 74,
       "kind": "type"
     },
     {
@@ -712,7 +745,7 @@
       "package": "internal/alarm/engine",
       "identifier": "EventSink",
       "file": "internal/alarm/engine/ports.go",
-      "line": 80,
+      "line": 119,
       "kind": "type"
     },
     {
@@ -733,64 +766,29 @@
       "package": "internal/alarm/engine",
       "identifier": "Journal",
       "file": "internal/alarm/engine/ports.go",
-      "line": 100,
+      "line": 139,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
       "identifier": "JournalEntry",
       "file": "internal/alarm/engine/ports.go",
-      "line": 85,
+      "line": 124,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
-      "identifier": "ModeConfig",
+      "identifier": "OutputPolicy",
       "file": "internal/alarm/engine/config.go",
-      "line": 49,
-      "kind": "type"
-    },
-    {
-      "package": "internal/alarm/engine",
-      "identifier": "New",
-      "file": "internal/alarm/engine/engine.go",
-      "line": 119,
-      "kind": "func"
-    },
-    {
-      "package": "internal/alarm/engine",
-      "identifier": "NewClockScheduler",
-      "file": "internal/alarm/engine/timers.go",
-      "line": 101,
-      "kind": "func"
-    },
-    {
-      "package": "internal/alarm/engine",
-      "identifier": "NotReadyError",
-      "file": "internal/alarm/engine/engine.go",
-      "line": 38,
+      "line": 69,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
       "identifier": "OutputPort",
       "file": "internal/alarm/engine/ports.go",
-      "line": 74,
+      "line": 112,
       "kind": "type"
-    },
-    {
-      "package": "internal/alarm/engine",
-      "identifier": "ParseAreaConfig",
-      "file": "internal/alarm/engine/config.go",
-      "line": 132,
-      "kind": "func"
-    },
-    {
-      "package": "internal/alarm/engine",
-      "identifier": "ParseSensorConfig",
-      "file": "internal/alarm/engine/config.go",
-      "line": 154,
-      "kind": "func"
     },
     {
       "package": "internal/alarm/engine",
@@ -801,23 +799,16 @@
     },
     {
       "package": "internal/alarm/engine",
-      "identifier": "SensorConfig",
-      "file": "internal/alarm/engine/config.go",
-      "line": 91,
-      "kind": "type"
-    },
-    {
-      "package": "internal/alarm/engine",
       "identifier": "SensorHealth",
       "file": "internal/alarm/engine/engine.go",
-      "line": 563,
+      "line": 594,
       "kind": "type"
     },
     {
       "package": "internal/alarm/engine",
       "identifier": "SensorReader",
       "file": "internal/alarm/engine/ports.go",
-      "line": 108,
+      "line": 147,
       "kind": "type"
     },
     {
@@ -838,28 +829,168 @@
       "package": "internal/alarm/engine",
       "identifier": "TimerScheduler",
       "file": "internal/alarm/engine/ports.go",
-      "line": 117,
+      "line": 156,
       "kind": "type"
-    },
-    {
-      "package": "internal/alarm/journal",
-      "identifier": "Journal",
-      "file": "internal/alarm/journal/journal.go",
-      "line": 32,
-      "kind": "type"
-    },
-    {
-      "package": "internal/alarm/journal",
-      "identifier": "New",
-      "file": "internal/alarm/journal/journal.go",
-      "line": 41,
-      "kind": "func"
     },
     {
       "package": "internal/alarm/journal",
       "identifier": "Store",
       "file": "internal/alarm/journal/journal.go",
       "line": 25,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "ActuatorDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 42,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "ActuatorDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 42,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "Config",
+      "file": "internal/alarm/outputs/manager.go",
+      "line": 23,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "Config",
+      "file": "internal/alarm/outputs/manager.go",
+      "line": 23,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "DeviceResolver",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 60,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "DeviceResolver",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 60,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "HealthFunc",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 84,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "HealthFunc",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 84,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "IncidentLedger",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 70,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "IncidentLedger",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 70,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "Manager",
+      "file": "internal/alarm/outputs/manager.go",
+      "line": 55,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "OutputConfig",
+      "file": "internal/alarm/outputs/config.go",
+      "line": 36,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "OutputRowSource",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 77,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "OutputRowSource",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 77,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SirenDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 18,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SirenDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 18,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SmokeSounderDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 30,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SmokeSounderDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 30,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SoundDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 51,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SoundDevice",
+      "file": "internal/alarm/outputs/ports.go",
+      "line": 51,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SoundingOutput",
+      "file": "internal/alarm/outputs/reconcile.go",
+      "line": 14,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "SoundingOutput",
+      "file": "internal/alarm/outputs/reconcile.go",
+      "line": 14,
       "kind": "type"
     },
     {
@@ -5283,14 +5414,14 @@
       "package": "internal/configstore",
       "identifier": "LocaleConfig",
       "file": "internal/configstore/sections.go",
-      "line": 93,
+      "line": 97,
       "kind": "type"
     },
     {
       "package": "internal/configstore",
       "identifier": "LocaleConfig",
       "file": "internal/configstore/sections.go",
-      "line": 93,
+      "line": 97,
       "kind": "type"
     },
     {
@@ -5339,14 +5470,14 @@
       "package": "internal/configstore",
       "identifier": "SecurityConfig",
       "file": "internal/configstore/sections.go",
-      "line": 83,
+      "line": 87,
       "kind": "type"
     },
     {
       "package": "internal/configstore",
       "identifier": "SecurityConfig",
       "file": "internal/configstore/sections.go",
-      "line": 83,
+      "line": 87,
       "kind": "type"
     },
     {
@@ -16173,13 +16304,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "AlarmAreaStore",
-      "file": "internal/store/sqlite/alarm_areas.go",
-      "line": 28,
-      "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "AlarmIncident",
       "file": "internal/store/sqlite/alarm_incidents.go",
       "line": 21,
@@ -16190,13 +16314,6 @@
       "identifier": "AlarmIncident",
       "file": "internal/store/sqlite/alarm_incidents.go",
       "line": 21,
-      "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "AlarmIncidentStore",
-      "file": "internal/store/sqlite/alarm_incidents.go",
-      "line": 43,
       "kind": "type"
     },
     {
@@ -16243,13 +16360,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "AlarmJournalStore",
-      "file": "internal/store/sqlite/alarm_journal.go",
-      "line": 50,
-      "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "AlarmOutputRow",
       "file": "internal/store/sqlite/alarm_outputs.go",
       "line": 23,
@@ -16267,20 +16377,6 @@
       "identifier": "AlarmOutputStore",
       "file": "internal/store/sqlite/alarm_outputs.go",
       "line": 37,
-      "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "AlarmOutputStore",
-      "file": "internal/store/sqlite/alarm_outputs.go",
-      "line": 37,
-      "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "AlarmRuntimeStore",
-      "file": "internal/store/sqlite/alarm_runtime.go",
-      "line": 15,
       "kind": "type"
     },
     {
@@ -16313,13 +16409,6 @@
     },
     {
       "package": "internal/store/sqlite",
-      "identifier": "AlarmSensorStore",
-      "file": "internal/store/sqlite/alarm_sensors.go",
-      "line": 35,
-      "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
       "identifier": "AlarmStateRow",
       "file": "internal/store/sqlite/alarm_state.go",
       "line": 22,
@@ -16330,13 +16419,6 @@
       "identifier": "AlarmStateRow",
       "file": "internal/store/sqlite/alarm_state.go",
       "line": 22,
-      "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "AlarmStateStore",
-      "file": "internal/store/sqlite/alarm_state.go",
-      "line": 35,
       "kind": "type"
     },
     {
@@ -16772,104 +16854,6 @@
       "file": "internal/store/sqlite/values_cache.go",
       "line": 123,
       "kind": "type"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmAreaStore",
-      "file": "internal/store/sqlite/alarm_areas.go",
-      "line": 33,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmAreaStore",
-      "file": "internal/store/sqlite/alarm_areas.go",
-      "line": 33,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmIncidentStore",
-      "file": "internal/store/sqlite/alarm_incidents.go",
-      "line": 48,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmIncidentStore",
-      "file": "internal/store/sqlite/alarm_incidents.go",
-      "line": 48,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmJournalStore",
-      "file": "internal/store/sqlite/alarm_journal.go",
-      "line": 55,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmJournalStore",
-      "file": "internal/store/sqlite/alarm_journal.go",
-      "line": 55,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmOutputStore",
-      "file": "internal/store/sqlite/alarm_outputs.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmOutputStore",
-      "file": "internal/store/sqlite/alarm_outputs.go",
-      "line": 42,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmRuntimeStore",
-      "file": "internal/store/sqlite/alarm_runtime.go",
-      "line": 20,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmRuntimeStore",
-      "file": "internal/store/sqlite/alarm_runtime.go",
-      "line": 20,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmSensorStore",
-      "file": "internal/store/sqlite/alarm_sensors.go",
-      "line": 40,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmSensorStore",
-      "file": "internal/store/sqlite/alarm_sensors.go",
-      "line": 40,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmStateStore",
-      "file": "internal/store/sqlite/alarm_state.go",
-      "line": 40,
-      "kind": "func"
-    },
-    {
-      "package": "internal/store/sqlite",
-      "identifier": "NewAlarmStateStore",
-      "file": "internal/store/sqlite/alarm_state.go",
-      "line": 40,
-      "kind": "func"
     },
     {
       "package": "internal/store/sqlite",
@@ -17727,30 +17711,9 @@
     },
     {
       "package": "pkg/hmenum",
-      "identifier": "AlarmAreaState",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 52,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
       "identifier": "AlarmBlockerPolicy",
       "file": "pkg/hmenum/alarm.go",
       "line": 188,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
-      "identifier": "AlarmBlockerPolicy",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 188,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
-      "identifier": "AlarmCentralLossPolicy",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 283,
       "kind": "type"
     },
     {
@@ -17769,20 +17732,6 @@
     },
     {
       "package": "pkg/hmenum",
-      "identifier": "AlarmJournalClass",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 215,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
-      "identifier": "AlarmMode",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 12,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
       "identifier": "AlarmMode",
       "file": "pkg/hmenum/alarm.go",
       "line": 12,
@@ -17797,30 +17746,9 @@
     },
     {
       "package": "pkg/hmenum",
-      "identifier": "AlarmOutputClass",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 126,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
       "identifier": "AlarmPostTriggerPolicy",
       "file": "pkg/hmenum/alarm.go",
       "line": 255,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
-      "identifier": "AlarmPostTriggerPolicy",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 255,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmenum",
-      "identifier": "AlarmSensorType",
-      "file": "pkg/hmenum/alarm.go",
-      "line": 86,
       "kind": "type"
     },
     {
@@ -18994,44 +18922,51 @@
     },
     {
       "package": "pkg/hmevent",
+      "identifier": "AlarmCountdownEvent",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 25,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
       "identifier": "AlarmJournalAppendedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 102,
+      "line": 121,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 76,
+      "line": 95,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 76,
+      "line": 95,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmReadinessChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 88,
+      "line": 107,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmStateChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 24,
+      "line": 43,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmTriggeredEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 51,
+      "line": 70,
       "kind": "type"
     },
     {
@@ -19271,20 +19206,6 @@
       "file": "pkg/hmevent/catalogue.go",
       "line": 352,
       "kind": "type"
-    },
-    {
-      "package": "pkg/hmevent",
-      "identifier": "NewBaseAt",
-      "file": "pkg/hmevent/event.go",
-      "line": 45,
-      "kind": "func"
-    },
-    {
-      "package": "pkg/hmevent",
-      "identifier": "NewBaseAt",
-      "file": "pkg/hmevent/event.go",
-      "line": 45,
-      "kind": "func"
     },
     {
       "package": "pkg/hmevent",
@@ -26112,6 +26033,181 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/ws_session_backend_test.go",
       "line": 76
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestChirp_ArmSquawkPlaysToneOnChirpOutputOnly",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/chirp_test.go",
+      "line": 18
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestChirp_CountdownTickPatternThinsAsRemainingShrinks",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/chirp_test.go",
+      "line": 69
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestChirp_MP3OutputPlaysSoundfileInsteadOfSiren",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/chirp_test.go",
+      "line": 126
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestChirp_RateLimitDropsSecondEmissionWithinGap",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/chirp_test.go",
+      "line": 48
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestChirp_SuppressedWhileAreaActivationInFlight",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/chirp_test.go",
+      "line": 106
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_AcousticDurationClampsToHardCeiling",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 79
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_AcousticDurationDefaultsToManagerDefault",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 57
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_AcousticSirenActivatesWithConfiguredDuration",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 19
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_CumulativeAcousticBudgetClampsAndExhausts",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 101
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_DegradedRestrictsToOpticalAndLight",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 194
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_ExcludeOutdoorSkipsOutdoorSiren",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 223
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_LedgerWriteFailureBlocksActivation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 145
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_ModeFilterSkipsOutputsOutsideMode",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 274
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_PerOutputFailureIsolatesRemainingOutputs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 358
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_SilentPolicySuppressesAcousticOutputsOnly",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 165
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_SmokeSounderCancelsWatchdogOnActivationError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 334
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_SmokeSoundersGatedByPolicy",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 249
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_SwitchedSirenActivatesBoundedWithLedgerBeforeWrite",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 298
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestReconcile_AdoptBoundedArmsWatchdogAndAccountsFullDuration",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/reconcile_test.go",
+      "line": 87
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestReconcile_SoundingReportsOnlyObservedActiveOutputs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/reconcile_test.go",
+      "line": 28
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestReconcile_StopUnownedStopsNonSharedButSparesSharedWithCCU",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/reconcile_test.go",
+      "line": 113
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestStopAll_CancelsPendingWatchdogAndStopsEveryClass",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/watchdog_test.go",
+      "line": 138
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestWatchdog_StopRetriesUntilVerifyWindowThenEscalates",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/watchdog_test.go",
+      "line": 59
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestWatchdog_StopVerifiesAndClearsActivation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/watchdog_test.go",
+      "line": 19
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestWatchdog_UnobservedStateCountsAsNotVerified",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/watchdog_test.go",
+      "line": 106
     },
     {
       "package": "internal/audit",
@@ -50163,7 +50259,7 @@
       "identifier": "TestBackingOffWriteReleasesThrottlePermit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/interface_client_reliability_test.go",
-      "line": 99
+      "line": 102
     },
     {
       "package": "internal/client",
@@ -50800,7 +50896,7 @@
       "identifier": "TestOpenCircuitShedsWithoutAcquiringThrottle",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/interface_client_reliability_test.go",
-      "line": 43
+      "line": 46
     },
     {
       "package": "internal/client",
@@ -55603,6 +55699,34 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/reliability/throttle_priority_test.go",
       "line": 192
+    },
+    {
+      "package": "internal/client/reliability",
+      "identifier": "TestDoWithPriority_CriticalProbesOpenCircuitOnce",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/reliability/circuit_critical_probe_test.go",
+      "line": 28
+    },
+    {
+      "package": "internal/client/reliability",
+      "identifier": "TestDoWithPriority_FailedProbeKeepsCircuitOpen",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/reliability/circuit_critical_probe_test.go",
+      "line": 97
+    },
+    {
+      "package": "internal/client/reliability",
+      "identifier": "TestDoWithPriority_NonCriticalStaysRejectedWhileOpen",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/reliability/circuit_critical_probe_test.go",
+      "line": 48
+    },
+    {
+      "package": "internal/client/reliability",
+      "identifier": "TestDoWithPriority_SingleConcurrentCriticalProbe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/reliability/circuit_critical_probe_test.go",
+      "line": 61
     },
     {
       "package": "internal/client/reliability",
@@ -60597,31 +60721,45 @@
     },
     {
       "package": "internal/config",
-      "identifier": "AuthConfig",
+      "identifier": "AlarmConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1117
+      "line": 154
+    },
+    {
+      "package": "internal/config",
+      "identifier": "AlarmConfig",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 154
     },
     {
       "package": "internal/config",
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1117
+      "line": 1149
+    },
+    {
+      "package": "internal/config",
+      "identifier": "AuthConfig",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 1149
     },
     {
       "package": "internal/config",
       "identifier": "BackupConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 138
+      "line": 139
     },
     {
       "package": "internal/config",
       "identifier": "BackupConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 138
+      "line": 139
     },
     {
       "package": "internal/config",
@@ -60670,70 +60808,70 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1176
+      "line": 1208
     },
     {
       "package": "internal/config",
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1176
+      "line": 1208
     },
     {
       "package": "internal/config",
       "identifier": "CCUDataConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 359
+      "line": 391
     },
     {
       "package": "internal/config",
       "identifier": "CCUDataConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 359
+      "line": 391
     },
     {
       "package": "internal/config",
       "identifier": "CallbackConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 379
+      "line": 411
     },
     {
       "package": "internal/config",
       "identifier": "CallbackConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 379
+      "line": 411
     },
     {
       "package": "internal/config",
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1273
+      "line": 1305
     },
     {
       "package": "internal/config",
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1273
+      "line": 1305
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1224
+      "line": 1256
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1224
+      "line": 1256
     },
     {
       "package": "internal/config",
@@ -60810,14 +60948,14 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1416
+      "line": 1448
     },
     {
       "package": "internal/config",
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1416
+      "line": 1448
     },
     {
       "package": "internal/config",
@@ -60964,14 +61102,14 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1387
+      "line": 1419
     },
     {
       "package": "internal/config",
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1387
+      "line": 1419
     },
     {
       "package": "internal/config",
@@ -61062,56 +61200,56 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1154
+      "line": 1186
     },
     {
       "package": "internal/config",
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1154
+      "line": 1186
     },
     {
       "package": "internal/config",
       "identifier": "HistoryConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 170
+      "line": 202
     },
     {
       "package": "internal/config",
       "identifier": "HistoryConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 170
+      "line": 202
     },
     {
       "package": "internal/config",
       "identifier": "HistoryExportConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 224
+      "line": 256
     },
     {
       "package": "internal/config",
       "identifier": "HistoryExportConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 224
+      "line": 256
     },
     {
       "package": "internal/config",
       "identifier": "HistoryRetentionFloor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 278
+      "line": 310
     },
     {
       "package": "internal/config",
       "identifier": "HistoryRetentionFloor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 278
+      "line": 310
     },
     {
       "package": "internal/config",
@@ -61132,14 +61270,14 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1391
+      "line": 1423
     },
     {
       "package": "internal/config",
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1391
+      "line": 1423
     },
     {
       "package": "internal/config",
@@ -61188,14 +61326,14 @@
       "identifier": "LoggingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 372
+      "line": 404
     },
     {
       "package": "internal/config",
       "identifier": "LoggingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 372
+      "line": 404
     },
     {
       "package": "internal/config",
@@ -61216,252 +61354,252 @@
       "identifier": "NorthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 390
+      "line": 422
     },
     {
       "package": "internal/config",
       "identifier": "NorthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 390
+      "line": 422
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscovery",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 505
+      "line": 537
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscovery",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 505
+      "line": 537
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoveryMDNS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 548
+      "line": 580
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoveryMDNS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 548
+      "line": 580
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoverySSDP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 518
+      "line": 550
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoverySSDP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 518
+      "line": 550
     },
     {
       "package": "internal/config",
       "identifier": "NorthMCP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 478
+      "line": 510
     },
     {
       "package": "internal/config",
       "identifier": "NorthMCP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 478
+      "line": 510
     },
     {
       "package": "internal/config",
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1041
+      "line": 1073
     },
     {
       "package": "internal/config",
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1041
+      "line": 1073
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 581
+      "line": 613
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 581
+      "line": 613
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterAttestation",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 750
+      "line": 782
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterAttestation",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 750
+      "line": 782
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCASE",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 875
+      "line": 907
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCASE",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 875
+      "line": 907
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCommissioning",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 771
+      "line": 803
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCommissioning",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 771
+      "line": 803
     },
     {
       "package": "internal/config",
       "identifier": "NorthREST",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 894
+      "line": 926
     },
     {
       "package": "internal/config",
       "identifier": "NorthREST",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 894
+      "line": 926
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTRateLimit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 984
+      "line": 1016
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTRateLimit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 984
+      "line": 1016
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTWS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 968
+      "line": 1000
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTWS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 968
+      "line": 1000
     },
     {
       "package": "internal/config",
       "identifier": "NorthUI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1025
+      "line": 1057
     },
     {
       "package": "internal/config",
       "identifier": "NorthUI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1025
+      "line": 1057
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhook",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 408
+      "line": 440
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhook",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 408
+      "line": 440
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhookInbound",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 462
+      "line": 494
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhookInbound",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 462
+      "line": 494
     },
     {
       "package": "internal/config",
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1204
+      "line": 1236
     },
     {
       "package": "internal/config",
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1204
+      "line": 1236
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1403
+      "line": 1435
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1403
+      "line": 1435
     },
     {
       "package": "internal/config",
@@ -61496,28 +61634,28 @@
       "identifier": "PersistenceConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 156
+      "line": 188
     },
     {
       "package": "internal/config",
       "identifier": "PersistenceConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 156
+      "line": 188
     },
     {
       "package": "internal/config",
       "identifier": "ReliabilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 341
+      "line": 373
     },
     {
       "package": "internal/config",
       "identifier": "ReliabilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 341
+      "line": 373
     },
     {
       "package": "internal/config",
@@ -61552,14 +61690,14 @@
       "identifier": "RetentionHourlyDefault",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 270
+      "line": 302
     },
     {
       "package": "internal/config",
       "identifier": "RetentionHourlyDefault",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 270
+      "line": 302
     },
     {
       "package": "internal/config",
@@ -62413,14 +62551,14 @@
       "identifier": "TracingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 887
+      "line": 919
     },
     {
       "package": "internal/config",
       "identifier": "TracingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 887
+      "line": 919
     },
     {
       "package": "internal/config",
@@ -62441,28 +62579,28 @@
       "identifier": "ValuesCacheConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 305
+      "line": 337
     },
     {
       "package": "internal/config",
       "identifier": "ValuesCacheConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 305
+      "line": 337
     },
     {
       "package": "internal/config",
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1377
+      "line": 1409
     },
     {
       "package": "internal/config",
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1377
+      "line": 1409
     },
     {
       "package": "internal/config",
@@ -114227,14 +114365,14 @@
       "identifier": "ConfigSnapshotResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 223
+      "line": 237
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ConfigSnapshotResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 223
+      "line": 237
     },
     {
       "package": "internal/north/rest/handlers",
@@ -114591,14 +114729,14 @@
       "identifier": "DeleteConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 569
+      "line": 583
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DeleteConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 569
+      "line": 583
     },
     {
       "package": "internal/north/rest/handlers",
@@ -115599,28 +115737,28 @@
       "identifier": "GetConfigSchema",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 187
+      "line": 201
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetConfigSchema",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 187
+      "line": 201
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 429
+      "line": 443
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 429
+      "line": 443
     },
     {
       "package": "internal/north/rest/handlers",
@@ -115697,14 +115835,14 @@
       "identifier": "GetEffectiveConfig",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 231
+      "line": 245
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetEffectiveConfig",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 231
+      "line": 245
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118091,14 +118229,14 @@
       "identifier": "PutConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 462
+      "line": 476
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 462
+      "line": 476
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118637,14 +118775,14 @@
       "identifier": "SchemaResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 122
+      "line": 128
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SchemaResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
-      "line": 122
+      "line": 128
     },
     {
       "package": "internal/north/rest/handlers",
@@ -143617,6 +143755,20 @@
     },
     {
       "package": "tests/contract",
+      "identifier": "TestAlarmS5CriticalCommandProbesOpenCircuit",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/alarm_siren_safety_test.go",
+      "line": 32
+    },
+    {
+      "package": "tests/contract",
+      "identifier": "TestAlarmS6SilenceAndDisarmNeverStateGated",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/alarm_siren_safety_test.go",
+      "line": 61
+    },
+    {
+      "package": "tests/contract",
       "identifier": "TestAllInterfacesPush",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/hmenum_constants_test.go",
@@ -145063,6 +145215,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wiring_pins/daemon_wiring_test.go",
       "line": 16
+    },
+    {
+      "package": "tests/contract/wiring_pins",
+      "identifier": "TestPin_AlarmCentralHook_Installed",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_pins/alarm_wiring_test.go",
+      "line": 27
+    },
+    {
+      "package": "tests/contract/wiring_pins",
+      "identifier": "TestPin_AlarmService_ConstructedInDaemon",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "tests/contract/wiring_pins/alarm_wiring_test.go",
+      "line": 18
     },
     {
       "package": "tests/contract/wiring_pins",
