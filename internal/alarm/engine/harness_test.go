@@ -221,7 +221,7 @@ type fakeReader struct {
 	active map[string]bool
 }
 
-func (r *fakeReader) CurrentActive(_ context.Context, s sqlitestore.AlarmSensorRow) (bool, bool) {
+func (r *fakeReader) CurrentActive(_ context.Context, s sqlitestore.AlarmSensorRow) (active, known bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	v, ok := r.active[s.ID]

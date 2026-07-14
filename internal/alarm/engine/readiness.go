@@ -24,7 +24,7 @@ func (a *area) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadines
 // the arm but are flagged bypass_auto: an arm excludes them until the
 // next disarm instead of failing (§6.2) — the exclusion is recorded,
 // never silent. The caller holds the engine lock.
-func (a *area) readinessDetail(mode hmenum.AlarmMode) (hmevent.AlarmModeReadiness, []string) {
+func (a *area) readinessDetail(mode hmenum.AlarmMode) (verdict hmevent.AlarmModeReadiness, autoBypassed []string) {
 	pol := a.cfg.Blockers
 	var blockers, warnings, autoBypass []string
 	classify := func(id string, p hmenum.AlarmBlockerPolicy, auto bool) {

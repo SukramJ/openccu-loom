@@ -59,7 +59,7 @@ func TestAlarmJournalStoreQueryNewestFirst(t *testing.T) {
 	s := freshAlarmJournalStore(t)
 	ctx := context.Background()
 
-	var ids []int64
+	ids := make([]int64, 0, 5)
 	for i := range 5 {
 		id, err := s.Append(ctx, baseAlarmJournalEntry("area-1", int64(1000+i), hmenum.AlarmJournalClassArm))
 		if err != nil {

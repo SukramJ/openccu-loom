@@ -112,6 +112,12 @@ type Engine struct {
 	bootCount   int64
 	areas       map[string]*area
 	sensorIndex map[string]string // sensor ID → area ID
+
+	// lifeCtx bounds timer-driven work. Timer fires outlive the
+	// request that scheduled them, so they deliberately detach from
+	// the caller's context and run on the engine lifetime instead
+	// (set by Start; one of the sanctioned ctx-in-struct seams).
+	lifeCtx context.Context
 }
 
 // New constructs an engine. Call Start to load configuration and
@@ -164,6 +170,7 @@ func New(deps Deps) (*Engine, error) {
 		loopBreakerK: k,
 		areas:        map[string]*area{},
 		sensorIndex:  map[string]string{},
+		lifeCtx:      context.Background(),
 	}, nil
 }
 
@@ -820,7 +827,11 @@ func (e *Engine) scheduleStateTimer(a *area, kind string, d time.Duration) {
 }
 
 // onStateTimerFired dispatches a state-timer expiry, discarding stale
-// fires from cancelled or replaced timers.
+// fires from cancelled or replaced timers. It runs on the engine
+// lifetime context — a countdown must not die with the request that
+// scheduled it.
+//
+//nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
 func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -831,7 +842,7 @@ func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
 	kind := a.timerKind
 	a.timerCancel = nil
 	a.timerKind = ""
-	ctx := context.Background()
+	ctx := e.lifeCtx
 	switch kind {
 	case timerKindExit:
 		if a.state == hmenum.AlarmAreaStateArming {
@@ -854,7 +865,10 @@ func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
 
 // scheduleArmCloseDebounce arms the 5 s settle timer that completes
 // the exit delay early after an arm_after_closing sensor closes. The
-// caller holds the lock.
+// caller holds the lock. The callback runs on the engine lifetime
+// context like every timer fire.
+//
+//nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
 func (e *Engine) scheduleArmCloseDebounce(a *area, sensorID string) {
 	a.cancelDebounce()
 	a.debounceSeq++
@@ -872,11 +886,11 @@ func (e *Engine) scheduleArmCloseDebounce(a *area, sensorID string) {
 			return
 		}
 		aa.debounceCancel = nil
-		e.journalEntry(context.Background(), aa, JournalEntry{
+		e.journalEntry(e.lifeCtx, aa, JournalEntry{
 			Class: hmenum.AlarmJournalClassArm, Event: "armed_after_closing",
 			Details: map[string]any{"sensor_id": sensorID},
 		})
-		e.completeArm(context.Background(), aa, aa.state, "engine", "engine")
+		e.completeArm(e.lifeCtx, aa, aa.state, "engine", "engine")
 	})
 }
 

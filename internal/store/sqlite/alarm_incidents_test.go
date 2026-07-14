@@ -174,7 +174,7 @@ func TestAlarmIncidentStoreListByArea(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	var ids []int64
+	ids := make([]int64, 0, 3)
 	for i := range 3 {
 		id, err := s.Create(ctx, baseAlarmIncident("area-1", int64(1000+i)))
 		if err != nil {

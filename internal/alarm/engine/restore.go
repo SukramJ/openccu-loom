@@ -5,6 +5,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -21,8 +22,12 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.started {
-		return fmt.Errorf("engine: already started")
+		return errors.New("engine: already started")
 	}
+	// ctx bounds the engine lifetime: timer-driven work (countdown
+	// expiries, debounce completions) derives from it, never from the
+	// request that scheduled the countdown.
+	e.lifeCtx = ctx
 
 	nowMS := unixMS(e.clk.Now())
 	boot, err := e.runtime.IncrementBootCount(ctx, nowMS)
@@ -66,7 +71,8 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 	}
 	e.areas = map[string]*area{}
 	e.sensorIndex = map[string]string{}
-	for _, row := range areaRows {
+	for i := range areaRows {
+		row := &areaRows[i]
 		cfg, err := ParseAreaConfig(row.ConfigJSON)
 		if err != nil {
 			return fmt.Errorf("engine: area %q: %w", row.ID, err)
@@ -82,7 +88,8 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 			openAtArm: map[string]bool{},
 		}
 	}
-	for _, row := range sensorRows {
+	for i := range sensorRows {
+		row := &sensorRows[i]
 		a, ok := e.areas[row.AreaID]
 		if !ok {
 			// A sensor of a deleted area is a configuration leftover;
@@ -94,7 +101,7 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("engine: sensor %q: %w", row.ID, err)
 		}
-		a.sensors[row.ID] = &sensorState{row: row, cfg: cfg, available: true}
+		a.sensors[row.ID] = &sensorState{row: *row, cfg: cfg, available: true}
 		e.sensorIndex[row.ID] = row.AreaID
 	}
 	return nil
