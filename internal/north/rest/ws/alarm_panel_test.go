@@ -14,6 +14,7 @@ import (
 
 	alarmpkg "github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -70,6 +71,10 @@ func newAlarmPanelHarness(t *testing.T) *alarmPanelHarness {
 // be passed directly as AlarmPanelCommandsConfig.Panel.
 func (h *alarmPanelHarness) Engine() *engine.Engine   { return h.eng }
 func (h *alarmPanelHarness) Stores() *alarmpkg.Stores { return h.stores }
+
+// Panels serves an empty projection — the entity view is exercised by
+// the service-level tests; the command handler only needs the method.
+func (h *alarmPanelHarness) Panels() []alarmpanel.Panel { return nil }
 
 // seedArea persists one area config row.
 func (h *alarmPanelHarness) seedArea(id, name string, cfg engine.AreaConfig) {

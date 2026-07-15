@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+
 	alarmpkg "github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -22,6 +24,8 @@ type stubAlarmPanel struct{}
 
 func (stubAlarmPanel) Engine() *engine.Engine   { return nil }
 func (stubAlarmPanel) Stores() *alarmpkg.Stores { return nil }
+
+func (stubAlarmPanel) Panels() []alarmpanel.Panel { return nil }
 
 // roleGateWriteCommands is a representative slice of writeCommandRoles
 // spanning both gated tiers: three operator-tier commands sourced from

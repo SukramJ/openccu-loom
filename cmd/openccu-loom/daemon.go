@@ -295,7 +295,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Alarm engine: a PhaseLate service so it subscribes and reconciles
 	// only once the daemon is fully up (its stores ride the shared
 	// daemon DB; see wireAlarmService).
-	alarmSvc := wireAlarmService(cfg, reg, auditDB, healthTracker, logger)
+	alarmSvc := wireAlarmService(cfg, reg, auditDB, healthTracker, catalogs, logger)
+	// The MQTT alarm command sink is built once here (nil when the alarm
+	// service is disabled) and shared by the command subscriber and the
+	// MQTT alarm publisher, which wires its FAILED_TO_ARM hook — see
+	// wireSystemStatusSubscribers.
+	alarmMQTTSink := newAlarmMQTTSink(alarmSvc)
 	if alarmSvc != nil {
 		northBridges.Register(alarmSvc)
 		// The alarm collector subscribes to the service's own event bus
@@ -498,7 +503,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// once for the initial stack, and re-invoked automatically on
 	// every Swap (hot-reload) so birth sync + command subscriber
 	// follow the new broker without manual re-attachment.
-	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, logger))
+	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, alarmMQTTSink, logger))
 	if err := mqttSup.AttachSubscribers(ctx); err != nil {
 		logger.Warn("mqtt.subscribers.attach", slog.String("err", err.Error()))
 	}
@@ -605,7 +610,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, alarmSvc, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
 
 	// --- REST --------------------------------------------------

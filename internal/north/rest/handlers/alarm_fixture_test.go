@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	alarmjournal "github.com/SukramJ/openccu-loom/internal/alarm/journal"
@@ -51,6 +53,8 @@ var _ AlarmPanel = (*alarmPanelFixture)(nil)
 func (f *alarmPanelFixture) Engine() *engine.Engine    { return f.eng }
 func (f *alarmPanelFixture) Manager() *outputs.Manager { return f.mgr }
 func (f *alarmPanelFixture) Stores() *alarm.Stores     { return f.stores }
+
+func (f *alarmPanelFixture) Panels() []alarmpanel.Panel { return nil }
 
 // Reload mirrors the driver + engine half of alarm.Service.Reload; the
 // REST surface never touches the sensor-event routing indexes that

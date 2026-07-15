@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 5564057
-HEAD: 5564057
+Generated: c98621c
+HEAD: c98621c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25157 |
-| Reachable | 4408 |
-| Whitelisted | 18087 |
-| **Unreachable** | **2662** |
+| Total Exported | 25257 |
+| Reachable | 4476 |
+| Whitelisted | 18113 |
+| **Unreachable** | **2668** |
 
 ## Top-20 Packages by Dead Code
 
@@ -140,6 +140,7 @@ HEAD: 5564057
 | internal/i18n | 0 | 2 | 0 |
 | internal/metrics | 0 | 62 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
+| internal/model/alarmpanel | 0 | 1 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
 | internal/model/combined | 0 | 8 | 0 |
 | internal/model/custom | 0 | 49 | 10 |
@@ -177,7 +178,7 @@ HEAD: 5564057
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 8 | 0 |
-| internal/north/mqtt | 0 | 76 | 4 |
+| internal/north/mqtt | 0 | 79 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |
@@ -190,7 +191,7 @@ HEAD: 5564057
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 81 | 22 |
-| pkg/hmapi | 0 | 103 | 14 |
+| pkg/hmapi | 0 | 105 | 14 |
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

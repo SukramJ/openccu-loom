@@ -19,7 +19,33 @@ const (
 	EventTypeAlarmCountdown        EventType = "alarm_panel.countdown"
 	EventTypeAlarmWalkTest         EventType = "alarm_panel.walktest_progress"
 	EventTypeAlarmHealthChanged    EventType = "alarm_panel.health_changed"
+	EventTypeAlarmPanelChanged     EventType = "alarm_panel.panel_changed"
 )
+
+// AlarmPanelChangedEvent fires when the alarm-control-panel entity
+// projection of an area (or of the aggregate master panel) changes:
+// its HA state token, availability, or identity. REST, WebSocket, and
+// MQTT surfaces render this one projection.
+type AlarmPanelChangedEvent struct {
+	Base
+	// UniqueID is the stable entity identifier.
+	UniqueID string
+	// AreaID is the alarm area, or "master" for the aggregate panel.
+	AreaID string
+	// Name is the display name at publish time.
+	Name string
+	// State is the HA state token (disarmed, arming, pending,
+	// triggered, armed_home, armed_away, armed_night, armed_vacation,
+	// armed_custom_bypass).
+	State string
+	// Available reports the alarm-health verdict.
+	Available bool
+	// Removed marks a panel whose area was deleted.
+	Removed bool
+}
+
+// Type implements Event.
+func (AlarmPanelChangedEvent) Type() EventType { return EventTypeAlarmPanelChanged }
 
 // AlarmHealthChangedEvent mirrors alarm-health transitions (siren
 // stop verified/unverified, service degradations) onto the alarm bus

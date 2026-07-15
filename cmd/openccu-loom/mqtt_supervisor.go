@@ -464,6 +464,7 @@ func makeMQTTSubscriberBuilder(
 	valueWriter *clientpkg.ValueWriter,
 	schedulesDomain *adapter.SchedulesDomain,
 	collector *metrics.MqttCollector,
+	alarmSink *alarmMQTTSink,
 	logger *slog.Logger,
 ) SubscriberBuilder {
 	return func(ctx context.Context, client mqtt.Client, bridge *mqtt.Bridge) (func(), error) {
@@ -493,6 +494,12 @@ func makeMQTTSubscriberBuilder(
 			// which on a reload-triggered swap is request-scoped) so command
 			// handlers cancel on shutdown but survive a broker swap.
 			WithLifecycleContext(lifecycleCtx)
+		// The alarm sink is a concrete pointer so the nil case is a clean
+		// pointer check — passing a typed-nil through the interface would
+		// make the subscriber treat the alarm plane as wired.
+		if alarmSink != nil {
+			cmdSub = cmdSub.WithAlarmSink(alarmSink)
+		}
 		if err := cmdSub.Start(ctx); err != nil {
 			return nil, fmt.Errorf("command_subscriber.Start: %w", err)
 		}

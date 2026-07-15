@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -36,6 +37,7 @@ type AlarmPanel interface {
 	Manager() *outputs.Manager
 	Stores() *alarm.Stores
 	Reload(ctx context.Context) error
+	Panels() []alarmpanel.Panel
 }
 
 // Compile-time proof the daemon-level alarm service satisfies the
@@ -535,4 +537,32 @@ func durationSeconds(d time.Duration) int {
 		return 0
 	}
 	return int(d.Round(time.Second) / time.Second)
+}
+
+// ListAlarmPanels serves the alarm-control-panel entity projection:
+// the same HA-state view MQTT discovery and the WebSocket broadcast
+// carry, including the aggregate master panel.
+func ListAlarmPanels(p AlarmPanel) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		panels := p.Panels()
+		out := make([]hmapi.AlarmPanelEntity, 0, len(panels))
+		for i := range panels {
+			pan := &panels[i]
+			modes := make([]string, 0, len(pan.Modes))
+			for _, m := range pan.Modes {
+				modes = append(modes, string(m))
+			}
+			out = append(out, hmapi.AlarmPanelEntity{
+				UniqueID:       pan.UniqueID,
+				AreaID:         pan.AreaID,
+				Name:           pan.Name,
+				Category:       string(pan.Category()),
+				State:          pan.State,
+				SupportedModes: modes,
+				Available:      pan.Available,
+				Master:         pan.Master,
+			})
+		}
+		JSON(w, http.StatusOK, out)
+	}
 }

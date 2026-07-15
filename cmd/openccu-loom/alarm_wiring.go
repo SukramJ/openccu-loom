@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 )
 
 // wireAlarmService constructs the alarm service on the shared daemon
@@ -18,7 +19,7 @@ import (
 // the alarm engine without its stores would violate every restore
 // guarantee, so it stays off rather than degrading silently (the
 // condition is logged and the health tracker records it).
-func wireAlarmService(cfg *config.Config, reg *central.Registry, db *gosql.DB, tracker *health.Tracker, logger *slog.Logger) *alarm.Service {
+func wireAlarmService(cfg *config.Config, reg *central.Registry, db *gosql.DB, tracker *health.Tracker, catalogs *i18n.Catalogs, logger *slog.Logger) *alarm.Service {
 	if db == nil {
 		logger.Warn("alarm service unavailable: persistence tier missing")
 		if tracker != nil {
@@ -40,6 +41,7 @@ func wireAlarmService(cfg *config.Config, reg *central.Registry, db *gosql.DB, t
 			StopVerifySeconds:             cfg.Alarm.StopVerifySeconds,
 			JournalRetentionDays:          cfg.Alarm.JournalRetentionDays,
 			RestartLoopBreaker:            cfg.Alarm.RestartLoopBreaker,
+			MasterPanelName:               masterPanelName(catalogs, cfg.Locale),
 		},
 		Registry: reg,
 		Stores:   alarm.NewStores(db),
@@ -72,4 +74,13 @@ func alarmCentralHook(svc *alarm.Service) func(u *central.Unit) (unwire func()) 
 		svc.AttachCentral(name)
 		return func() { svc.DetachCentral(name) }
 	}
+}
+
+// masterPanelName resolves the aggregate panel's localized display
+// name once at wiring time so every surface renders the same string.
+func masterPanelName(catalogs *i18n.Catalogs, locale string) string {
+	if catalogs == nil {
+		return ""
+	}
+	return catalogs.T(locale, "discovery.alarm_system")
 }
