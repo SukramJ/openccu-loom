@@ -60,7 +60,7 @@ func TestAlarmPanelSubscriberStateChanged(t *testing.T) {
 	if p.AreaID != "eg" || p.AreaName != "Erdgeschoss" {
 		t.Fatalf("area fields = %+v", p)
 	}
-	if p.From != "disarmed" || p.To != "armed" || p.Mode != "full" {
+	if p.OldState != "disarmed" || p.NewState != "armed" || p.Mode != "full" {
 		t.Fatalf("transition fields = %+v", p)
 	}
 	if p.ChangedBy != "operator" || p.Source != "rest" {

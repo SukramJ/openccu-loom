@@ -5830,6 +5830,10 @@ export interface components {
             kind: "exit_delay" | "entry_delay";
             remaining_s: number;
             total_s: number;
+            /** @description Remaining time in milliseconds (source fidelity). */
+            remaining_ms: number;
+            /** @description Total countdown length in milliseconds. */
+            total_ms: number;
         };
         /**
          * @description Payload of an `alarm.readiness_changed` broadcast. Topic

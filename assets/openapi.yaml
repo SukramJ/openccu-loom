@@ -7161,7 +7161,7 @@ components:
         Payload of an `alarm.countdown` broadcast. Topic `alarm.panel`.
         Ticks once per second while an exit or entry delay runs on an
         alarm area.
-      required: [area_id, kind, remaining_s, total_s]
+      required: [area_id, kind, remaining_s, total_s, remaining_ms, total_ms]
       properties:
         area_id: { type: string }
         kind:
@@ -7169,6 +7169,12 @@ components:
           enum: [exit_delay, entry_delay]
         remaining_s: { type: integer }
         total_s: { type: integer }
+        remaining_ms:
+          type: integer
+          description: Remaining time in milliseconds (source fidelity).
+        total_ms:
+          type: integer
+          description: Total countdown length in milliseconds.
 
     AlarmReadinessChangedPayload:
       type: object

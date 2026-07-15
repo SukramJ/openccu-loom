@@ -781,7 +781,7 @@
       },
       "result": {
         "state": "string",
-        "bypassed": "array",
+        "bypassed": "array?",
         "exit_delay_s": "integer?"
       }
     },

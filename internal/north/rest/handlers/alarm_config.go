@@ -232,18 +232,15 @@ func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
-		if _, err := p.Stores().Sensors.DeleteByArea(r.Context(), id); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm sensors failed", err)
-			return
-		}
 		now := time.Now().UnixMilli()
+		rows := make([]sqlitestore.AlarmSensorRow, 0, len(in))
 		for i := range in {
 			s := &in[i]
 			sid := s.ID
 			if sid == "" {
 				sid = uuid.NewString()
 			}
-			row := sqlitestore.AlarmSensorRow{
+			rows = append(rows, sqlitestore.AlarmSensorRow{
 				ID:             sid,
 				AreaID:         id,
 				CentralName:    s.Central,
@@ -255,11 +252,13 @@ func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				ConfigJSON:     string(s.Config),
 				CreatedAtMS:    now,
 				UpdatedAtMS:    now,
-			}
-			if err := p.Stores().Sensors.Upsert(r.Context(), row); err != nil {
-				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm sensors failed", err)
-				return
-			}
+			})
+		}
+		// One transaction: a mid-write failure must never persist a
+		// truncated sensor set the next reload would silently adopt.
+		if err := p.Stores().Sensors.ReplaceByArea(r.Context(), id, rows); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm sensors failed", err)
+			return
 		}
 		if err := p.Reload(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Alarm reload failed", err)
@@ -323,18 +322,15 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
-		if _, err := p.Stores().Outputs.DeleteByArea(r.Context(), id); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm outputs failed", err)
-			return
-		}
 		now := time.Now().UnixMilli()
+		rows := make([]sqlitestore.AlarmOutputRow, 0, len(in))
 		for i := range in {
 			o := &in[i]
 			oid := o.ID
 			if oid == "" {
 				oid = uuid.NewString()
 			}
-			row := sqlitestore.AlarmOutputRow{
+			rows = append(rows, sqlitestore.AlarmOutputRow{
 				ID:             oid,
 				AreaID:         id,
 				Class:          hmenum.AlarmOutputClass(o.Class),
@@ -344,11 +340,12 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				ConfigJSON:     string(o.Config),
 				CreatedAtMS:    now,
 				UpdatedAtMS:    now,
-			}
-			if err := p.Stores().Outputs.Upsert(r.Context(), row); err != nil {
-				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm outputs failed", err)
-				return
-			}
+			})
+		}
+		// One transaction — no partial output sets (mirrors sensors).
+		if err := p.Stores().Outputs.ReplaceByArea(r.Context(), id, rows); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm outputs failed", err)
+			return
 		}
 		if err := p.Reload(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Alarm reload failed", err)

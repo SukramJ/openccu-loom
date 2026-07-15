@@ -153,3 +153,36 @@ func scanAlarmSensorRow(sc scannable) (AlarmSensorRow, error) {
 	row.SensorType = hmenum.AlarmSensorType(sensorType)
 	return row, nil
 }
+
+// ReplaceByArea atomically replaces the sensor set of an area: the
+// delete and every insert run in one transaction, so a mid-write
+// failure can never persist a partial set (the alarm engine would
+// otherwise silently reload a truncated configuration).
+func (s *AlarmSensorStore) ReplaceByArea(ctx context.Context, areaID string, rows []AlarmSensorRow) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite: replace alarm sensors: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM alarm_sensors WHERE area_id = ?`, areaID); err != nil {
+		return fmt.Errorf("sqlite: replace alarm sensors: %w", err)
+	}
+	const q = `
+INSERT INTO alarm_sensors (id, area_id, central_name, interface_id, channel_address, parameter,
+    sensor_type, name, config_json, created_at_ms, updated_at_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	for i := range rows {
+		row := &rows[i]
+		if _, err := tx.ExecContext(
+			ctx, q,
+			row.ID, areaID, row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter,
+			string(row.SensorType), row.Name, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
+		); err != nil {
+			return fmt.Errorf("sqlite: replace alarm sensors: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: replace alarm sensors: %w", err)
+	}
+	return nil
+}

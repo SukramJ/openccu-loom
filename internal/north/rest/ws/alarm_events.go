@@ -34,9 +34,9 @@ const (
 // transition (alarm.state_changed).
 type AlarmStateChangedPayload struct {
 	AreaID     string `json:"area_id"`
-	AreaName   string `json:"area_name,omitempty"`
-	From       string `json:"from"`
-	To         string `json:"to"`
+	AreaName   string `json:"area_name"`
+	OldState   string `json:"old_state"`
+	NewState   string `json:"new_state"`
 	Mode       string `json:"mode,omitempty"`
 	ChangedBy  string `json:"changed_by,omitempty"`
 	Source     string `json:"source,omitempty"`
@@ -68,11 +68,11 @@ type AlarmReadinessChangedPayload struct {
 // triggered (alarm.triggered).
 type AlarmTriggeredPayload struct {
 	AreaID     string `json:"area_id"`
-	AreaName   string `json:"area_name,omitempty"`
+	AreaName   string `json:"area_name"`
 	IncidentID int64  `json:"incident_id"`
 	SensorID   string `json:"sensor_id,omitempty"`
 	SensorName string `json:"sensor_name,omitempty"`
-	Cause      string `json:"cause,omitempty"`
+	Cause      string `json:"cause"`
 	Mode       string `json:"mode,omitempty"`
 }
 
@@ -92,7 +92,7 @@ type AlarmJournalAppendedPayload struct {
 // sensor activation (alarm.walktest_progress).
 type AlarmWalkTestProgressPayload struct {
 	AreaID     string `json:"area_id"`
-	SensorID   string `json:"sensor_id,omitempty"`
+	SensorID   string `json:"sensor_id"`
 	SensorName string `json:"sensor_name,omitempty"`
 	Seen       int    `json:"seen"`
 	Total      int    `json:"total"`
@@ -103,7 +103,7 @@ type AlarmWalkTestProgressPayload struct {
 // service-global, so it carries no area_id.
 type AlarmHealthChangedPayload struct {
 	Healthy bool   `json:"healthy"`
-	Note    string `json:"note,omitempty"`
+	Note    string `json:"note"`
 }
 
 // AlarmPanelSubscriber bridges the daemon-level alarm event bus onto the
@@ -155,8 +155,8 @@ func (s *AlarmPanelSubscriber) onStateChanged(e hmevent.AlarmStateChangedEvent) 
 		Payload: AlarmStateChangedPayload{
 			AreaID:     e.AreaID,
 			AreaName:   e.AreaName,
-			From:       string(e.From),
-			To:         string(e.To),
+			OldState:   string(e.From),
+			NewState:   string(e.To),
 			Mode:       string(e.Mode),
 			ChangedBy:  e.ChangedBy,
 			Source:     e.Source,

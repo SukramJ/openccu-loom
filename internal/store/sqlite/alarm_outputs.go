@@ -154,3 +154,34 @@ func scanAlarmOutputRow(sc scannable) (AlarmOutputRow, error) {
 	row.Class = hmenum.AlarmOutputClass(class)
 	return row, nil
 }
+
+// ReplaceByArea atomically replaces the output set of an area — one
+// transaction, no partial sets on failure (mirrors the sensor store).
+func (s *AlarmOutputStore) ReplaceByArea(ctx context.Context, areaID string, rows []AlarmOutputRow) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite: replace alarm outputs: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM alarm_outputs WHERE area_id = ?`, areaID); err != nil {
+		return fmt.Errorf("sqlite: replace alarm outputs: %w", err)
+	}
+	const q = `
+INSERT INTO alarm_outputs (id, area_id, class, central_name, interface_id, channel_address,
+    name, config_json, created_at_ms, updated_at_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	for i := range rows {
+		row := &rows[i]
+		if _, err := tx.ExecContext(
+			ctx, q,
+			row.ID, areaID, string(row.Class), row.CentralName, row.InterfaceID, row.ChannelAddress,
+			row.Name, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
+		); err != nil {
+			return fmt.Errorf("sqlite: replace alarm outputs: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: replace alarm outputs: %w", err)
+	}
+	return nil
+}

@@ -240,10 +240,24 @@ func alarmJournalHandler(q AlarmPanelQuery) CommandHandler {
 		if stores == nil || stores.Journal == nil {
 			return nil, NewCommandError(CommandErrorInternal, "alarm journal not available")
 		}
+		// Limits and semantics mirror the REST journal endpoint: an
+		// omitted limit defaults to 500, the cap is 5000, `to` is
+		// exclusive, and an unknown class is a client error instead of
+		// a silently empty result.
+		limit := args.Limit
+		if limit <= 0 {
+			limit = 500
+		}
+		if limit > 5000 {
+			limit = 5000
+		}
+		if args.Class != "" && !hmenum.AlarmJournalClass(args.Class).Valid() {
+			return nil, NewCommandError(CommandErrorBadRequest, "class: unknown journal class")
+		}
 		filter := sqlitestore.AlarmJournalFilter{
 			AreaID: args.AreaID,
 			Class:  hmenum.AlarmJournalClass(args.Class),
-			Limit:  args.Limit,
+			Limit:  limit,
 		}
 		if args.From != "" {
 			t, err := time.Parse(time.RFC3339, args.From)
@@ -257,7 +271,7 @@ func alarmJournalHandler(q AlarmPanelQuery) CommandHandler {
 			if err != nil {
 				return nil, NewCommandError(CommandErrorBadRequest, "to: "+err.Error())
 			}
-			filter.ToMS = t.UnixMilli()
+			filter.ToMS = t.UnixMilli() - 1
 		}
 		rows, err := stores.Journal.Query(ctx, filter)
 		if err != nil {
@@ -375,7 +389,7 @@ func alarmJournalDTO(r sqlitestore.AlarmJournalEntry) hmapi.AlarmJournalEntry {
 		Source:     r.Source,
 		IncidentID: r.IncidentID,
 	}
-	if r.DetailsJSON != "" {
+	if r.DetailsJSON != "" && r.DetailsJSON != "{}" {
 		e.Details = json.RawMessage(r.DetailsJSON)
 	}
 	return e

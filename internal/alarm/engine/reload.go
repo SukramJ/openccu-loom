@@ -43,7 +43,19 @@ func (e *Engine) Reload(ctx context.Context) error {
 		row := &areaRows[i]
 		cfg, err := ParseAreaConfig(row.ConfigJSON)
 		if err != nil {
-			return fmt.Errorf("engine: area %q: %w", row.ID, err)
+			// Keep the previously loaded configuration of this area
+			// rather than dropping it mid-flight; skip loudly (S7).
+			e.log.Error("alarm area config unparseable — keeping previous config", "area", row.ID, "error", err)
+			if _, jerr := e.journal.Append(ctx, JournalEntry{
+				AreaID: row.ID, Class: hmenum.AlarmJournalClassFault,
+				Event: "area_config_unparseable", Details: map[string]any{"error": err.Error()},
+			}); jerr != nil {
+				e.log.Error("alarm journal append failed", "error", jerr)
+			}
+			if prev, ok := e.areas[row.ID]; ok {
+				desired[row.ID] = desiredArea{name: prev.name, cfg: prev.cfg}
+			}
+			continue
 		}
 		desired[row.ID] = desiredArea{name: row.Name, cfg: cfg}
 	}
@@ -102,14 +114,15 @@ func (e *Engine) Reload(ctx context.Context) error {
 		}
 	}
 
-	return e.reloadSensorsLocked(ctx, sensorRows)
+	e.reloadSensorsLocked(ctx, sensorRows)
+	return nil
 }
 
 // reloadSensorsLocked rebuilds the sensor sets from fresh rows,
 // preserving runtime sensor state (activation, availability, health)
 // of surviving sensors and pruning references to removed ones. The
 // caller holds the lock.
-func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitestore.AlarmSensorRow) error {
+func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitestore.AlarmSensorRow) {
 	newSensorsByArea := map[string]map[string]*sensorState{}
 	newIndex := map[string]string{}
 	for i := range sensorRows {
@@ -121,7 +134,14 @@ func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitesto
 		}
 		cfg, err := ParseSensorConfig(row.ConfigJSON)
 		if err != nil {
-			return fmt.Errorf("engine: sensor %q: %w", row.ID, err)
+			e.log.Error("alarm sensor config unparseable — sensor skipped", "sensor", row.ID, "error", err)
+			if _, jerr := e.journal.Append(ctx, JournalEntry{
+				AreaID: row.AreaID, Class: hmenum.AlarmJournalClassFault,
+				Event: "sensor_config_unparseable", Details: map[string]any{"sensor_id": row.ID, "error": err.Error()},
+			}); jerr != nil {
+				e.log.Error("alarm journal append failed", "error", jerr)
+			}
+			continue
 		}
 		set := newSensorsByArea[row.AreaID]
 		if set == nil {
@@ -163,7 +183,6 @@ func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitesto
 		e.refreshReadiness(a)
 	}
 	e.sensorIndex = newIndex
-	return nil
 }
 
 // disarmLocked is the internal disarm transition for engine-initiated

@@ -89,7 +89,17 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 		row := &areaRows[i]
 		cfg, err := ParseAreaConfig(row.ConfigJSON)
 		if err != nil {
-			return fmt.Errorf("engine: area %q: %w", row.ID, err)
+			// One poisoned row must not brick every other area: skip
+			// it loudly (S7) — the area simply does not exist until
+			// its configuration is repaired.
+			e.log.Error("alarm area config unparseable — area skipped", "area", row.ID, "error", err)
+			if _, jerr := e.journal.Append(ctx, JournalEntry{
+				AreaID: row.ID, Class: hmenum.AlarmJournalClassFault,
+				Event: "area_config_unparseable", Details: map[string]any{"error": err.Error()},
+			}); jerr != nil {
+				e.log.Error("alarm journal append failed", "error", jerr)
+			}
+			continue
 		}
 		e.areas[row.ID] = &area{
 			id:        row.ID,
@@ -113,7 +123,14 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 		}
 		cfg, err := ParseSensorConfig(row.ConfigJSON)
 		if err != nil {
-			return fmt.Errorf("engine: sensor %q: %w", row.ID, err)
+			e.log.Error("alarm sensor config unparseable — sensor skipped", "sensor", row.ID, "error", err)
+			if _, jerr := e.journal.Append(ctx, JournalEntry{
+				AreaID: row.AreaID, Class: hmenum.AlarmJournalClassFault,
+				Event: "sensor_config_unparseable", Details: map[string]any{"sensor_id": row.ID, "error": err.Error()},
+			}); jerr != nil {
+				e.log.Error("alarm journal append failed", "error", jerr)
+			}
+			continue
 		}
 		a.sensors[row.ID] = &sensorState{row: *row, cfg: cfg, available: true}
 		e.sensorIndex[row.ID] = row.AreaID
