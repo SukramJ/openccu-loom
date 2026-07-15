@@ -92,7 +92,7 @@ test.describe('Alarm', () => {
 
     await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
     await expect(page.locator('table tbody tr')).toHaveCount(5);
-    await expect(page.getByText('Markus')).toBeVisible();
+    await expect(page.getByText('Markus').first()).toBeVisible();
   });
 
   test('silence acts on the first tap for a triggered area, with no confirm dialog', async ({ page }) => {
