@@ -64,7 +64,7 @@ func TestNorthBridgeRegistrationCompleteAndOrdered(t *testing.T) {
 		done <- daemonServeWithDeps(ctx, cfg, &bytes.Buffer{}, &bytes.Buffer{}, deps)
 	}()
 
-	want := []string{"mqtt", "webhook-outbound", "rest"}
+	want := []string{"mqtt", "webhook-outbound", "alarm", "rest"}
 
 	var got []string
 	select {
@@ -134,7 +134,7 @@ func TestNorthBridgeRegistrationIncludesMatterWhenEnabled(t *testing.T) {
 	// With REST disabled, the onNorthBridges hook is still called after all
 	// registration is complete. Matter registers after webhook-outbound; REST
 	// is absent because it is disabled.
-	want := []string{"mqtt", "webhook-outbound", "matter"}
+	want := []string{"mqtt", "webhook-outbound", "alarm", "matter"}
 
 	var got []string
 	select {

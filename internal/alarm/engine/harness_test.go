@@ -98,11 +98,18 @@ type stopCall struct {
 	IncidentID int64
 }
 
+// chirpCall records one OutputPort.Chirp invocation.
+type chirpCall struct {
+	AreaID string
+	Req    engine.ChirpRequest
+}
+
 // fakeOutputs records output-port calls and optionally fails them.
 type fakeOutputs struct {
 	mu      sync.Mutex
 	fires   []fireCall
 	stops   []stopCall
+	chirps  []chirpCall
 	fireErr error
 	stopErr error
 }
@@ -119,6 +126,13 @@ func (f *fakeOutputs) StopAll(_ context.Context, areaID string, incidentID int64
 	defer f.mu.Unlock()
 	f.stops = append(f.stops, stopCall{AreaID: areaID, IncidentID: incidentID})
 	return f.stopErr
+}
+
+func (f *fakeOutputs) Chirp(_ context.Context, areaID string, req engine.ChirpRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.chirps = append(f.chirps, chirpCall{AreaID: areaID, Req: req})
+	return nil
 }
 
 func (f *fakeOutputs) fireCount() int {

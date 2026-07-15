@@ -51,6 +51,7 @@ const (
 	causeKindCentralLost    = "central_lost"
 	causeKindUnavailable    = "sensor_unavailable"
 	causeKindDowntime       = "activation_during_downtime"
+	causeKindAdopted        = "adopted"
 )
 
 // Incident close reasons persisted in alarm_incidents.close_reason.
@@ -312,6 +313,7 @@ func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmRes
 	if exit > 0 {
 		a.state = hmenum.AlarmAreaStateArming
 		e.scheduleStateTimer(a, timerKindExit, exit)
+		e.startTicks(a, timerKindExit)
 		e.persist(ctx, a)
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassArm, Event: "arming_started",
@@ -343,6 +345,9 @@ func (e *Engine) completeArm(ctx context.Context, a *area, from hmenum.AlarmArea
 		Actor: by, Source: source, Details: map[string]any{"mode": string(a.mode)},
 	})
 	e.publishState(a, from, by, source)
+	if a.cfg.Modes[a.mode].Outputs.ArmDisarmChirps {
+		e.chirp(ctx, a, ChirpRequest{Kind: ChirpArmSquawk})
+	}
 }
 
 // Disarm ends any alarm and returns the area to disarmed. It is never
@@ -359,6 +364,7 @@ func (e *Engine) Disarm(ctx context.Context, areaID, by, source string) error {
 		return nil
 	}
 	from := a.state
+	prevPolicy := a.cfg.Modes[a.mode].Outputs
 	a.cancelTimers()
 	if a.incident != nil {
 		e.silenceIncident(ctx, a, by, source)
@@ -375,6 +381,9 @@ func (e *Engine) Disarm(ctx context.Context, areaID, by, source string) error {
 	})
 	e.publishState(a, from, by, source)
 	e.refreshReadiness(a)
+	if prevPolicy.ArmDisarmChirps {
+		e.chirp(ctx, a, ChirpRequest{Kind: ChirpDisarmSquawk})
+	}
 	return nil
 }
 
@@ -568,6 +577,7 @@ func (e *Engine) routeActivation(ctx context.Context, a *area, s *sensorState, c
 			a.state = hmenum.AlarmAreaStatePending
 			a.pendingCause = cause.SensorID
 			e.scheduleStateTimer(a, timerKindEntry, d)
+			e.startTicks(a, timerKindEntry)
 			e.persist(ctx, a)
 			e.journalEntry(ctx, a, JournalEntry{
 				Class: hmenum.AlarmJournalClassTrigger, Event: "pending_started",
@@ -696,6 +706,7 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 	}
 	from := a.state
 	mcfg := a.cfg.Modes[a.mode]
+	opts.Policy = mcfg.Outputs
 	now := e.clk.Now()
 	dur := mcfg.triggerDuration()
 
@@ -772,7 +783,7 @@ func (e *Engine) onTriggerElapsed(ctx context.Context, a *area) {
 			}
 			e.scheduleStateTimer(a, timerKindTrigger, dur)
 			e.persist(ctx, a)
-			if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{Cycle: inc.RetriggerCycles}); err != nil {
+			if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{Cycle: inc.RetriggerCycles, Policy: mcfg.Outputs}); err != nil {
 				e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
 			}
 			e.journalEntry(ctx, a, JournalEntry{
@@ -922,6 +933,143 @@ func (e *Engine) scheduleArmCloseDebounce(a *area, sensorID string) {
 	})
 }
 
+// chirp forwards a chirp request to the driver layer; errors are
+// logged only — feedback tones are best-effort by design (S5).
+func (e *Engine) chirp(ctx context.Context, a *area, req ChirpRequest) {
+	if err := e.outputs.Chirp(ctx, a.id, req); err != nil {
+		e.log.Debug("alarm chirp failed", "area", a.id, "kind", string(req.Kind), "error", err)
+	}
+}
+
+// startTicks starts the 1 Hz countdown tick chain for the running
+// exit or entry delay: every tick publishes an AlarmCountdownEvent
+// for live UI countdowns, and — when the mode's policy enables
+// countdown ticks — forwards a chirp request. The chain follows the
+// state timer and dies with it. The caller holds the lock.
+//
+//nolint:contextcheck // tick fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
+func (e *Engine) startTicks(a *area, timerKind string) {
+	a.cancelTicks()
+	total := a.timerRemaining
+	if total <= 0 {
+		return
+	}
+	a.tickSeq++
+	seq := a.tickSeq
+	areaID := a.id
+	var schedule func()
+	schedule = func() {
+		a.tickCancel = e.sched.Schedule(time.Second, func() {
+			e.mu.Lock()
+			defer e.mu.Unlock()
+			aa, ok := e.areas[areaID]
+			if !ok || aa.tickSeq != seq || aa.timerKind != timerKind || aa.timerCancel == nil {
+				return
+			}
+			remaining := aa.timerDeadline.Sub(e.clk.Now())
+			if remaining <= 0 {
+				return
+			}
+			e.sink.Publish(hmevent.AlarmCountdownEvent{
+				Base:   hmevent.NewBaseAt(e.clk.Now()),
+				AreaID: areaID, Kind: timerKind,
+				RemainingMS: remaining.Milliseconds(), TotalMS: total.Milliseconds(),
+			})
+			if aa.cfg.Modes[aa.mode].Outputs.CountdownTicks {
+				kind := ChirpCountdownTick
+				if timerKind == timerKindEntry {
+					kind = ChirpEntryWarning
+				}
+				e.chirp(e.lifeCtx, aa, ChirpRequest{Kind: kind, Remaining: remaining, Total: total})
+			}
+			schedule()
+		})
+	}
+	schedule()
+}
+
+// AdoptSounding turns an already-sounding siren discovered by
+// reconciliation into a triggered incident (S4 adopt-before-stop): it
+// is evidence of a trigger during the blind window, not an error. The
+// area enters triggered without an engine-side output cycle — the
+// hardware is already sounding; the driver layer arms the bounded
+// stop watchdog instead.
+func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []string) (adopted bool, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	a, ok := e.areas[areaID]
+	if !ok {
+		return false, ErrUnknownArea
+	}
+	if a.state == hmenum.AlarmAreaStateTriggered && a.incident != nil {
+		// Already alarming: the sounding outputs belong to the open
+		// incident; nothing to adopt (and nothing to re-account).
+		return false, nil
+	}
+	from := a.state
+	mcfg := a.cfg.Modes[a.mode]
+	now := e.clk.Now()
+	dur := mcfg.triggerDuration()
+	if a.incident == nil {
+		cause := incidentCause{Kind: causeKindAdopted}
+		causeJSON, err := json.Marshal(cause)
+		if err != nil {
+			causeJSON = []byte("{}")
+		}
+		inc := sqlitestore.AlarmIncident{
+			AreaID:            a.id,
+			Mode:              a.mode,
+			CauseJSON:         string(causeJSON),
+			StartedAtMS:       unixMS(now),
+			TriggerDeadlineMS: unixMS(now.Add(dur)),
+		}
+		id, err := e.incidents.Create(ctx, inc)
+		if err != nil {
+			e.journalFault(ctx, a, "incident_persist_failed", err, 0)
+		} else {
+			inc.ID = id
+		}
+		a.incident = &inc
+	}
+	a.state = hmenum.AlarmAreaStateTriggered
+	e.scheduleStateTimer(a, timerKindTrigger, dur)
+	e.persist(ctx, a)
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassTrigger, Event: "sounding_siren_adopted",
+		IncidentID: a.incident.ID,
+		Details:    map[string]any{"outputs": outputIDs},
+	})
+	e.sink.Publish(hmevent.AlarmTriggeredEvent{
+		Base:   hmevent.NewBaseAt(now),
+		AreaID: a.id, AreaName: a.name,
+		IncidentID: a.incident.ID,
+		Cause:      causeKindAdopted, Mode: a.mode,
+	})
+	e.publishState(a, from, "engine:reconcile", "engine")
+	return true, nil
+}
+
+// ReevaluateSensors refreshes every armed area's sensor values from
+// the SensorReader and routes activations that happened during a
+// blind window (docs/alarm-concept.md §10.1, CCU-reconnect row) —
+// the same comparison against the open-at-arm baseline a restore
+// runs. Safe to call repeatedly; disarmed areas are untouched.
+func (e *Engine) ReevaluateSensors(ctx context.Context) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
+	for _, id := range e.sortedAreaIDs() {
+		a := e.areas[id]
+		if a.state != hmenum.AlarmAreaStateArmed {
+			continue
+		}
+		e.reEvaluateAfterRestore(ctx, a)
+		e.refreshReadiness(a)
+	}
+}
+
 // persist writes the area's full state row. A failure is journaled
 // and logged, never silently swallowed, and does not abort the
 // transition — the machine keeps operating from memory (S7).
@@ -1049,6 +1197,8 @@ func (noopOutputs) FireCycle(context.Context, string, sqlitestore.AlarmIncident,
 	return nil
 }
 func (noopOutputs) StopAll(context.Context, string, int64) error { return nil }
+
+func (noopOutputs) Chirp(context.Context, string, ChirpRequest) error { return nil }
 
 // noopSink drops events (unwired engine).
 type noopSink struct{}

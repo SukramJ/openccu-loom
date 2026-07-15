@@ -527,6 +527,12 @@ const EN: Catalog = {
   "config.field.persistence.values_cache.disabled_centrals": "Excluded CCUs",
   "config.field.backup.schedule": "Automatic backup interval",
   "config.field.backup.keep_last": "Keep last N backups",
+  "config.field.alarm.enabled": "Alarm engine enabled",
+  "config.field.alarm.default_siren_seconds": "Default siren duration (s)",
+  "config.field.alarm.max_acoustic_per_incident_seconds": "Acoustic budget per incident (s)",
+  "config.field.alarm.stop_verify_seconds": "Siren stop verification window (s)",
+  "config.field.alarm.journal_retention_days": "Journal retention (days)",
+  "config.field.alarm.restart_loop_breaker": "Restart loop breaker (re-fires)",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
   "config.field.persistence.history.retention_hourly": "Hourly rollup retention",
@@ -736,6 +742,18 @@ const EN: Catalog = {
     "How often each configured CCU is backed up automatically (e.g. 24h). Zero disables scheduled backups; manual backups via the Backups view still work. The first automatic backup runs one interval after start, not immediately.",
   "config.help.backup.keep_last":
     "Bounds how many scheduled backups are retained per CCU: after each successful backup the oldest beyond this count are deleted. Zero keeps all.",
+  "config.help.alarm.enabled":
+    "Master switch for the alarm engine. With no areas configured yet the engine stays inert either way. Takes effect after a daemon restart.",
+  "config.help.alarm.default_siren_seconds":
+    "Default acoustic activation duration in seconds, used when an alarm output does not configure its own siren duration.",
+  "config.help.alarm.max_acoustic_per_incident_seconds":
+    "Cumulative acoustic budget in seconds for one incident across all re-triggers and restarts, so a stuck sensor cannot sound a siren indefinitely.",
+  "config.help.alarm.stop_verify_seconds":
+    "How long, in seconds, an unverified siren-stop command is retried before it is escalated to a health incident.",
+  "config.help.alarm.journal_retention_days":
+    "How many days alarm-journal entries are kept before being pruned. Zero disables retention (entries are kept forever).",
+  "config.help.alarm.restart_loop_breaker":
+    "Caps how many times a restore-driven output may re-fire within one incident before the engine degrades to optical signalling and notifications only.",
   "config.help.persistence.history.enabled":
     "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
   "config.help.persistence.history.retention":
@@ -2655,6 +2673,12 @@ const DE: Catalog = {
   "config.field.persistence.values_cache.disabled_centrals": "Ausgeschlossene CCUs",
   "config.field.backup.schedule": "Intervall für automatische Backups",
   "config.field.backup.keep_last": "Letzte N Backups behalten",
+  "config.field.alarm.enabled": "Alarmanlage aktiviert",
+  "config.field.alarm.default_siren_seconds": "Standard-Sirenendauer (s)",
+  "config.field.alarm.max_acoustic_per_incident_seconds": "Akustik-Budget pro Vorfall (s)",
+  "config.field.alarm.stop_verify_seconds": "Prüffenster Sirenenstopp (s)",
+  "config.field.alarm.journal_retention_days": "Journal-Aufbewahrung (Tage)",
+  "config.field.alarm.restart_loop_breaker": "Neustart-Schleifenbegrenzer (Reaktivierungen)",
   "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
   "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
   "config.field.persistence.history.retention_hourly": "Aufbewahrung Stunden-Rollup",
@@ -2864,6 +2888,18 @@ const DE: Catalog = {
     "Wie oft jede konfigurierte CCU automatisch gesichert wird (z. B. 24h). Null deaktiviert geplante Backups; manuelle Backups über die Backups-Ansicht funktionieren weiter. Das erste automatische Backup läuft ein Intervall nach dem Start, nicht sofort.",
   "config.help.backup.keep_last":
     "Begrenzt, wie viele geplante Backups pro CCU aufbewahrt werden: nach jedem erfolgreichen Backup werden die ältesten darüber hinaus gelöscht. Null behält alle.",
+  "config.help.alarm.enabled":
+    "Hauptschalter für die Alarmanlage. Solange keine Bereiche konfiguriert sind, bleibt die Anlage in jedem Fall inaktiv. Wirksam nach einem Neustart des Daemons.",
+  "config.help.alarm.default_siren_seconds":
+    "Standarddauer der akustischen Aktivierung in Sekunden, verwendet wenn ein Alarmausgang keine eigene Sirenendauer festlegt.",
+  "config.help.alarm.max_acoustic_per_incident_seconds":
+    "Kumuliertes akustisches Budget in Sekunden pro Vorfall über alle Reaktivierungen und Neustarts hinweg, damit ein hängender Sensor eine Sirene nicht dauerhaft auslösen kann.",
+  "config.help.alarm.stop_verify_seconds":
+    "Wie lange, in Sekunden, ein unbestätigter Sirenenstopp-Befehl wiederholt wird, bevor er zu einem Health-Incident eskaliert.",
+  "config.help.alarm.journal_retention_days":
+    "Wie viele Tage Alarm-Journal-Einträge aufbewahrt werden, bevor sie bereinigt werden. Null deaktiviert die Aufbewahrungsbegrenzung (Einträge bleiben dauerhaft erhalten).",
+  "config.help.alarm.restart_loop_breaker":
+    "Begrenzt, wie oft ein wiederherstellungsgetriebener Ausgang innerhalb eines Vorfalls erneut auslösen darf, bevor die Anlage auf reine optische Signalisierung und Benachrichtigungen zurückstuft.",
   "config.help.persistence.history.enabled":
     "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
   "config.help.persistence.history.retention":

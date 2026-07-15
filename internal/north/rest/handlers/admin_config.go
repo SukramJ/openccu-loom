@@ -115,6 +115,12 @@ var consumerDefaults = map[string]any{
 	// to when the FS-side bundle is absent.
 	"ccu_data.translations_path": "./var/ccu_data/translation_extract.json.gz",
 	"ccu_data.easymode_path":     "./var/ccu_data/easymode_extract.json.gz",
+	// Alarm — see internal/config/config.go AlarmConfig / applyDefaults.
+	"alarm.default_siren_seconds":             180,
+	"alarm.max_acoustic_per_incident_seconds": 900,
+	"alarm.stop_verify_seconds":               120,
+	"alarm.journal_retention_days":            90,
+	"alarm.restart_loop_breaker":              3,
 }
 
 // SchemaResponse bundles the field descriptors + the list of known
@@ -178,6 +184,14 @@ var restartRequiredPaths = map[string]struct{}{
 	"north.rest.auth.ha_ingress.enabled":            {},
 	"north.rest.auth.ha_ingress.trusted_proxy_cidr": {},
 	"north.rest.auth.ha_ingress.role":               {},
+	// The alarm engine is wired once at boot, so every field in the
+	// section is restart-required.
+	"alarm.enabled":                           {},
+	"alarm.default_siren_seconds":             {},
+	"alarm.max_acoustic_per_incident_seconds": {},
+	"alarm.stop_verify_seconds":               {},
+	"alarm.journal_retention_days":            {},
+	"alarm.restart_loop_breaker":              {},
 }
 
 // GetConfigSchema renders the typed schema for the SPA editor. No
@@ -653,6 +667,9 @@ func validateSection(section configstore.Section, raw json.RawMessage) error {
 		return strictUnmarshal(raw, &v)
 	case configstore.SectionPersistence:
 		var v config.PersistenceConfig
+		return strictUnmarshal(raw, &v)
+	case configstore.SectionAlarm:
+		var v config.AlarmConfig
 		return strictUnmarshal(raw, &v)
 	case configstore.SectionLocale:
 		var v configstore.LocaleConfig

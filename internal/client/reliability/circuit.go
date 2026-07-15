@@ -224,6 +224,20 @@ func (c *CircuitBreaker) TotalRequests() int64 {
 // once and subsequent concurrent callers get blocked until the probe
 // settles).
 func (c *CircuitBreaker) Do(ctx context.Context, operationID string, fn func(ctx context.Context) error) error {
+	return c.DoWithPriority(ctx, operationID, hmenum.CommandPriorityLow, fn)
+}
+
+// DoWithPriority behaves like [Do], with one deliberate exception:
+// a [hmenum.CommandPriorityCritical] call may attempt a single probe
+// through an OPEN circuit. Stop/silence commands of the alarm engine
+// must be attempted even when the interface breaker is open
+// (docs/alarm-concept.md §2, S5) — a siren stop that is rejected
+// unsent is worse than one wasted probe on a dead wire. The probe
+// shares the single-concurrent-probe slot with HALF_OPEN (concurrent
+// critical callers get [hmerr.ErrCircuitBreakerOpen]), its outcome is
+// recorded, and a success does NOT close the circuit — recovery stays
+// driven by the connection checker.
+func (c *CircuitBreaker) DoWithPriority(ctx context.Context, operationID string, priority hmenum.CommandPriority, fn func(ctx context.Context) error) error {
 	if isBypassOp(operationID) {
 		// Bypass path: execute without touching state or counters.
 		return fn(ctx)
@@ -232,6 +246,19 @@ func (c *CircuitBreaker) Do(ctx context.Context, operationID string, fn func(ctx
 	c.mu.Lock()
 	state := c.refreshLocked()
 	if state == hmenum.CircuitStateOpen {
+		if priority == hmenum.CommandPriorityCritical {
+			if !c.halfOpenInFlight.CompareAndSwap(0, 1) {
+				c.totalRequests++
+				c.mu.Unlock()
+				return hmerr.ErrCircuitBreakerOpen
+			}
+			defer c.halfOpenInFlight.Store(0)
+			c.totalRequests++
+			c.mu.Unlock()
+			err := fn(ctx)
+			c.record(err)
+			return err
+		}
 		c.totalRequests++
 		c.mu.Unlock()
 		return hmerr.ErrCircuitBreakerOpen

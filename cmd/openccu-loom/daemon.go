@@ -291,6 +291,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// on every restart. Matter and REST register later (also PhaseLate).
 	northBridges.RegisterPhase(newMQTTService(bridge, hubMQTT), northbridge.PhaseEarly)
 	northBridges.Register(webhook.NewOutbound(reg, cfg.North.Webhook, logger))
+	// Alarm engine: a PhaseLate service so it subscribes and reconciles
+	// only once the daemon is fully up (its stores ride the shared
+	// daemon DB; see wireAlarmService).
+	alarmSvc := wireAlarmService(cfg, reg, auditDB, healthTracker, logger)
+	if alarmSvc != nil {
+		northBridges.Register(alarmSvc)
+	}
 	if err := northBridges.StartPhase(ctx, northbridge.PhaseEarly); err != nil {
 		logger.Warn("north.bridge.start_early", slog.String("err", err.Error()))
 	}
@@ -503,6 +510,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// central. Nil-safe on both sides (bridge disabled / orchestrator
 	// unavailable).
 	centralOrch.setMatterCentralHook(matter.centralHook)
+	centralOrch.setAlarmCentralHook(alarmCentralHook(alarmSvc))
 	// Matter's ordered teardown is owned by the north-bound registry (it
 	// stops after REST, before the webhook). Only registered when enabled —
 	// a disabled bridge yields a no-op matterStop and is not a surface. The

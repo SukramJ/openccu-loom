@@ -62,6 +62,38 @@ type FireOptions struct {
 	Degraded bool
 	// Restored marks a restore-driven re-fire after a restart.
 	Restored bool
+	// Policy is the resolved output policy of the mode that was armed
+	// at trigger time. The engine owns the configuration; the driver
+	// layer only filters by it.
+	Policy OutputPolicy
+}
+
+// ChirpKind names the confirmation/feedback chirp classes
+// (docs/alarm-concept.md §7). Chirps are best-effort and degrade
+// first under duty-cycle pressure (S5).
+type ChirpKind string
+
+// ChirpKind values.
+const (
+	// ChirpArmSquawk confirms a completed arm (1× squawk).
+	ChirpArmSquawk ChirpKind = "arm_squawk"
+	// ChirpDisarmSquawk confirms a disarm (2× squawk convention).
+	ChirpDisarmSquawk ChirpKind = "disarm_squawk"
+	// ChirpCountdownTick is one exit-delay countdown tick.
+	ChirpCountdownTick ChirpKind = "countdown_tick"
+	// ChirpEntryWarning is one entry-delay warning tick.
+	ChirpEntryWarning ChirpKind = "entry_warning"
+	// ChirpChime is the door-chime-while-disarmed tone.
+	ChirpChime ChirpKind = "chime"
+)
+
+// ChirpRequest carries one chirp emission to the driver layer.
+type ChirpRequest struct {
+	Kind ChirpKind
+	// Remaining and Total describe the countdown for tick kinds;
+	// zero otherwise.
+	Remaining time.Duration
+	Total     time.Duration
 }
 
 // OutputPort is the engine's hand-off to the output-driver layer. The
@@ -72,13 +104,15 @@ type FireOptions struct {
 // silences every sounding output of the incident and never touches
 // notification outputs.
 //
-// Both methods run with the engine lock held: an implementation must
+// All methods run with the engine lock held: an implementation must
 // never call back into an engine verb synchronously (self-deadlock on
 // the non-reentrant mutex) — long-running device I/O belongs on the
-// driver's own goroutines.
+// driver's own goroutines. Chirp is best-effort feedback: the driver
+// may thin or drop requests (S5) and the engine only logs errors.
 type OutputPort interface {
 	FireCycle(ctx context.Context, areaID string, incident sqlitestore.AlarmIncident, opts FireOptions) error
 	StopAll(ctx context.Context, areaID string, incidentID int64) error
+	Chirp(ctx context.Context, areaID string, req ChirpRequest) error
 }
 
 // EventSink receives the engine's domain events for bus publishing.

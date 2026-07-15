@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 29e6638
-HEAD: 29e6638
+Generated: a8888a8
+HEAD: a8888a8
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24862 |
-| Reachable | 4351 |
-| Whitelisted | 17905 |
-| **Unreachable** | **2606** |
+| Total Exported | 24951 |
+| Reachable | 4384 |
+| Whitelisted | 17940 |
+| **Unreachable** | **2627** |
 
 ## Top-20 Packages by Dead Code
 
@@ -23,7 +23,6 @@ HEAD: 29e6638
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| internal/store/sqlite | 4 | 83 | 22 |
 | pkg/hmerr | 4 | 5 | 24 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -36,6 +35,7 @@ HEAD: 29e6638
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
+| internal/alarm | 0 | 3 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -103,7 +103,6 @@ HEAD: 29e6638
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| internal/store/sqlite | 4 | 83 | 22 |
 | pkg/hmerr | 4 | 5 | 24 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
@@ -116,8 +115,10 @@ HEAD: 29e6638
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
-| internal/alarm/engine | 0 | 18 | 4 |
+| internal/alarm | 0 | 3 | 0 |
+| internal/alarm/engine | 0 | 21 | 4 |
 | internal/alarm/journal | 0 | 1 | 0 |
+| internal/alarm/outputs | 0 | 22 | 0 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
@@ -188,8 +189,9 @@ HEAD: 29e6638
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
+| internal/store/sqlite | 0 | 81 | 22 |
 | pkg/hmapi | 0 | 77 | 14 |
-| pkg/hmenum | 0 | 101 | 36 |
+| pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 78 | 0 |
