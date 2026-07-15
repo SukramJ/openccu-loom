@@ -363,23 +363,8 @@ func (e *Engine) Disarm(ctx context.Context, areaID, by, source string) error {
 	if a.state == hmenum.AlarmAreaStateDisarmed {
 		return nil
 	}
-	from := a.state
 	prevPolicy := a.cfg.Modes[a.mode].Outputs
-	a.cancelTimers()
-	if a.incident != nil {
-		e.silenceIncident(ctx, a, by, source)
-		e.closeIncident(ctx, a, closeReasonDisarm)
-	}
-	a.state = hmenum.AlarmAreaStateDisarmed
-	a.mode = hmenum.AlarmModeDisarmed
-	a.bypassed = map[string]bool{}
-	a.openAtArm = map[string]bool{}
-	a.pendingCause = ""
-	e.persist(ctx, a)
-	e.journalEntry(ctx, a, JournalEntry{
-		Class: hmenum.AlarmJournalClassDisarm, Event: "disarmed", Actor: by, Source: source,
-	})
-	e.publishState(a, from, by, source)
+	e.disarmLocked(ctx, a, by, source)
 	e.refreshReadiness(a)
 	if prevPolicy.ArmDisarmChirps {
 		e.chirp(ctx, a, ChirpRequest{Kind: ChirpDisarmSquawk})
@@ -511,6 +496,10 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 	if s.row.SensorType == hmenum.AlarmSensorTypeTamper && active &&
 		a.state == hmenum.AlarmAreaStateDisarmed {
 		e.journalFault(ctx, a, "tamper_while_disarmed", nil, 0)
+	}
+	// A running walk test consumes activations of the disarmed area.
+	if e.walkTestObserve(ctx, a, sensorID, active) && a.state == hmenum.AlarmAreaStateDisarmed {
+		return
 	}
 
 	if !active {
