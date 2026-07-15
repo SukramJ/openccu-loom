@@ -58,7 +58,11 @@ func wireAlarmService(cfg *config.Config, reg *central.Registry, db *gosql.DB, t
 
 // alarmCentralHook adapts the alarm service onto the orchestrator's
 // central-added hook so runtime-adopted centrals feed the engine like
-// boot-time ones.
+// boot-time ones. The hook fires from the adoption flow and the
+// service's reconcile pass runs on its own lifetime — deliberately
+// detached from the adopting request's context.
+//
+//nolint:contextcheck // central-adoption hooks detach from the request ctx by design (see Service lifecycle)
 func alarmCentralHook(svc *alarm.Service) func(u *central.Unit) (unwire func()) {
 	if svc == nil {
 		return nil
