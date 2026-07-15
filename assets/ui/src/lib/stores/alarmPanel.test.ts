@@ -191,7 +191,10 @@ describe("alarmPanelStore.applyEvent — alarm.triggered", () => {
     });
     expect(alarmPanelStore.areas[0].state).toBe("triggered");
     expect(alarmPanelStore.areas[0].mode).toBe("full");
-    expect(alarmPanelStore.areas[0].incident).toEqual({ id: "42", silenced: false });
+    expect(alarmPanelStore.areas[0].incident).toMatchObject({ id: "42", silenced: false });
+    // The live broadcast's cause survives into the incident so the
+    // triggered surface can name the sensor without a refresh.
+    expect(alarmPanelStore.areas[0].incident?.cause).toBe("sensor");
   });
 });
 
