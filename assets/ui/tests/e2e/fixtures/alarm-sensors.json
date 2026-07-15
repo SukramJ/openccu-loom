@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sensor-1",
+    "central": "ccu1",
+    "interface_id": "ccu1-HmIP-RF",
+    "channel_address": "VEQ0000001:1",
+    "parameter": "STATE",
+    "type": "door",
+    "name": "Haustür",
+    "config": { "modes": ["perimeter", "full", "night"], "use_entry_delay": true }
+  },
+  {
+    "id": "sensor-2",
+    "central": "ccu1",
+    "interface_id": "ccu1-HmIP-RF",
+    "channel_address": "VEQ0000002:1",
+    "parameter": "STATE",
+    "type": "window",
+    "name": "Fenster Küche West",
+    "config": { "modes": ["perimeter", "full"] }
+  },
+  {
+    "id": "sensor-3",
+    "central": "ccu1",
+    "interface_id": "ccu1-HmIP-RF",
+    "channel_address": "VEQ0000003:1",
+    "parameter": "MOTION",
+    "type": "motion",
+    "name": "Bewegungsmelder Flur",
+    "config": { "modes": ["full", "night"] }
+  }
+]

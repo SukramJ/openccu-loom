@@ -187,6 +187,69 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
+  // Alarm panel (native intrusion-alarm engine, docs/alarm-concept.md §13) —
+  // distinct from the legacy CCU alarm-messages/service-messages surface
+  // above. Defaults: two areas — "Erdgeschoss" (armed, full protection,
+  // steady state with no running countdown) and "Dachgeschoss" (disarmed) —
+  // three sensors, two outputs (one acoustic siren, one smoke-detector
+  // sounder) and a five-entry journal. alarm.spec.ts overrides individual
+  // routes (e.g. a triggered area) where a test needs a different state.
+  await page.route('**/api/v1/alarm/state', (route) =>
+    route.fulfill({ json: fixture('alarm-state.json') }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/sensors', (route) => {
+    if (route.request().method() === 'PUT') return route.fulfill({ status: 200 });
+    return route.fulfill({ json: fixture('alarm-sensors.json') });
+  });
+  await page.route('**/api/v1/alarm/areas/*/outputs', (route) => {
+    if (route.request().method() === 'PUT') return route.fulfill({ status: 200 });
+    return route.fulfill({ json: fixture('alarm-outputs.json') });
+  });
+  await page.route('**/api/v1/alarm/areas/*/readiness', (route) =>
+    route.fulfill({ json: fixture('alarm-readiness.json') }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/walktest/start', (route) =>
+    route.fulfill({ status: 200 }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/walktest/stop', (route) =>
+    route.fulfill({ status: 200 }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/walktest', (route) =>
+    route.fulfill({ json: fixture('alarm-walktest.json') }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/arm', (route) =>
+    route.fulfill({ json: { state: 'armed', bypassed: [], exit_delay_s: 0 } }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/disarm', (route) =>
+    route.fulfill({ status: 200 }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/silence', (route) =>
+    route.fulfill({ status: 200 }),
+  );
+  await page.route('**/api/v1/alarm/areas/*/acknowledge', (route) =>
+    route.fulfill({ status: 200 }),
+  );
+  await page.route('**/api/v1/alarm/areas/*', (route) => {
+    if (route.request().method() === 'DELETE') return route.fulfill({ status: 200 });
+    if (route.request().method() === 'PUT') return route.fulfill({ status: 200 });
+    return route.fulfill({ json: { id: 'area-eg', name: 'Erdgeschoss', position: 1, config: {} } });
+  });
+  await page.route('**/api/v1/alarm/areas', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ json: { id: 'area-eg', name: 'Erdgeschoss', position: 1, config: {} } });
+    }
+    return route.fulfill({ json: fixture('alarm-areas.json') });
+  });
+  await page.route('**/api/v1/alarm/silence-all', (route) =>
+    route.fulfill({ status: 200 }),
+  );
+  await page.route('**/api/v1/alarm/journal**', (route) =>
+    route.fulfill({ json: fixture('alarm-journal.json') }),
+  );
+  await page.route('**/api/v1/alarm/outputs/*/test', (route) =>
+    route.fulfill({ status: 200 }),
+  );
+
   // Auth users and tokens
   await page.route('**/api/v1/auth/users', (route) =>
     route.fulfill({ json: fixture('users.json') }),
@@ -667,6 +730,19 @@ export async function mockEnergyDisabled(page: Page): Promise<void> {
 export async function mockEmptySysvars(page: Page): Promise<void> {
   await page.route('**/api/v1/sysvars', (route) =>
     route.fulfill({ json: [] }),
+  );
+}
+
+/**
+ * Overrides GET /api/v1/alarm/state with a variant where "Erdgeschoss" is
+ * `triggered` (open incident, unsilenced) while "Dachgeschoss" stays
+ * disarmed — for exercising the Overview's high-contrast triggered card
+ * (giant SILENCE/DISARM, single tap, no confirm — safety invariants S3/S6)
+ * without disturbing the steady-state default used elsewhere.
+ */
+export async function mockAlarmTriggered(page: Page): Promise<void> {
+  await page.route('**/api/v1/alarm/state', (route) =>
+    route.fulfill({ json: fixture('alarm-state-triggered.json') }),
   );
 }
 

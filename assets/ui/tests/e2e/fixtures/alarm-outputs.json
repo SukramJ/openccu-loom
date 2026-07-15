@@ -1,0 +1,18 @@
+[
+  {
+    "id": "output-1",
+    "class": "acoustic_siren",
+    "central": "ccu1",
+    "channel_address": "VEQ0000010:1",
+    "name": "Außensirene",
+    "config": { "modes": ["perimeter", "full", "night"], "policy": "loud", "outdoor": true, "duration_s": 180 }
+  },
+  {
+    "id": "output-2",
+    "class": "smoke_sounder",
+    "central": "ccu1",
+    "channel_address": "VEQ0000011:1",
+    "name": "Rauchmelder Flur",
+    "config": { "modes": ["full"], "policy": "loud" }
+  }
+]
