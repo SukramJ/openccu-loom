@@ -336,6 +336,68 @@ func TestAlarmMQTTPublisher_RetractsRemovedArea(t *testing.T) {
 	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "" })
 }
 
+// TestAlarmMQTTPublisher_RetractsDeletedDisarmedArea pins the
+// lifecycle fix from the slice review: deleting a DISARMED area (the
+// only deletion the management API permits) fires no state transition
+// — only the panel entity event. Without the publisher's panel-event
+// subscription the retained discovery, state, and availability of the
+// deleted area (and a stale master panel) would ghost in the broker
+// forever.
+func TestAlarmMQTTPublisher_RetractsDeletedDisarmedArea(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.seedArea("og", "Obergeschoss", zeroDelayFullMode())
+	f.start()
+
+	stateTopic := f.base + "/alarm/og/state"
+	masterState := f.base + "/alarm/master/state"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+
+	// Delete while disarmed — no arm, no state event.
+	f.removeArea("og")
+
+	f.waitForPublish("homeassistant/alarm_control_panel/alarm/og/config", func(r publishRecord) bool { return r.payload == "" })
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == "" })
+	f.waitForPublish(f.base+"/alarm/og/availability", func(r publishRecord) bool { return r.payload == "" })
+	// The master panel retracts with the area count back below two.
+	f.waitForPublish("homeassistant/alarm_control_panel/alarm/master/config", func(r publishRecord) bool { return r.payload == "" })
+}
+
+// TestAlarmMQTTPublisher_BrokerConnectReseeds pins the reconnect fix:
+// a broker restart wipes the retained store; OnBrokerConnect must
+// republish discovery, state, and availability for every panel even
+// when no alarm event ever fires again.
+func TestAlarmMQTTPublisher_BrokerConnectReseeds(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+	stateTopic := f.base + "/alarm/eg/state"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+
+	f.mp.mu.Lock()
+	before := len(f.mp.sent)
+	f.mp.mu.Unlock()
+	f.pub.OnBrokerConnect()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		f.mp.mu.Lock()
+		after := len(f.mp.sent)
+		f.mp.mu.Unlock()
+		if after > before {
+			// The re-seed republished the retained plane.
+			f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("OnBrokerConnect produced no republish")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // TestAlarmMQTTPublisher_MasterAggregationAcrossTwoAreas covers the
 // aggregate master panel: it appears only once a second area exists,
 // tracks the union of both areas' state via [Masteralarmpanel.StateToken],

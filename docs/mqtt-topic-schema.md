@@ -113,6 +113,12 @@ precedented only by the read-only `<base>/bridge/status` /
 [ADR 0052 — Daemon-Level Alarm MQTT Topics](./adr/0052-daemon-level-alarm-mqtt-topics.md)
 for the rationale.
 
+> **Interim security note:** until the alarm-codes feature ships, the
+> `code` field of the JSON command form is accepted but not validated —
+> broker authentication and topic ACLs are the only gate on
+> `ARM_*`/`DISARM`/`SILENCE`. Restrict write access to `<base>/alarm/#`
+> if the broker is not fully trusted.
+
 `<area>` is either a configured alarm-area id or the reserved
 pseudo-area id `master`. The `master` topics are published only when
 2 or more areas are configured and aggregate every real area: any

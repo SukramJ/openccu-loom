@@ -610,7 +610,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, alarmSvc, alarmMQTTSink, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
 
 	// --- REST --------------------------------------------------

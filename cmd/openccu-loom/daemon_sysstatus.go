@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
@@ -28,6 +29,7 @@ func wireSystemStatusSubscribers(
 	reg *central.Registry,
 	wsHub *ws.Hub,
 	mqttWiring *mqtt.Wiring,
+	mqttSup *mqttSupervisor,
 	alarmSvc *alarm.Service,
 	alarmSink *alarmMQTTSink,
 	logger *slog.Logger,
@@ -76,6 +78,12 @@ func wireSystemStatusSubscribers(
 		mqttAlarm.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
 		if alarmSink != nil {
 			alarmSink.setArmFailureHook(mqttAlarm.PublishFailedToArm)
+		}
+		if mqttSup != nil {
+			// Re-seed the retained alarm plane after every broker
+			// (re)connect — a broker restart wipes the retained store
+			// and a quiescent alarm system would never repopulate it.
+			mqttSup.OnConnect(func(context.Context) { mqttAlarm.OnBrokerConnect() })
 		}
 	}
 

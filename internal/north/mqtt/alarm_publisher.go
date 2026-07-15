@@ -145,6 +145,7 @@ func (p *AlarmMQTTPublisher) Start() {
 		events.Subscribe(bus, p.onJournalAppended),
 		events.Subscribe(bus, p.onReadinessChanged),
 		events.Subscribe(bus, p.onHealthChanged),
+		events.Subscribe(bus, p.onPanelChanged),
 	)
 	go p.run()
 	p.signalReconcile()
@@ -234,6 +235,25 @@ func (p *AlarmMQTTPublisher) onJournalAppended(e hmevent.AlarmJournalAppendedEve
 }
 
 func (p *AlarmMQTTPublisher) onReadinessChanged(_ hmevent.AlarmReadinessChangedEvent) {
+	p.signalReconcile()
+}
+
+// onPanelChanged reconciles on every entity-projection change. This is
+// the lifecycle trigger the state events cannot provide: a disarmed
+// area's deletion and the master panel's 2-to-1 retraction emit no
+// state transition, only a panel event — without this subscription the
+// retained discovery/state/availability of a deleted area would ghost
+// in the broker forever.
+func (p *AlarmMQTTPublisher) onPanelChanged(_ hmevent.AlarmPanelChangedEvent) {
+	p.signalReconcile()
+}
+
+// OnBrokerConnect re-seeds the retained alarm plane after a broker
+// (re)connect: a broker restart wipes the retained store, and the
+// initial connect may land after Start's one-shot reconcile — either
+// way every panel would render unavailable in HA until the next alarm
+// event, which a quiescent disarmed system might never produce.
+func (p *AlarmMQTTPublisher) OnBrokerConnect() {
 	p.signalReconcile()
 }
 

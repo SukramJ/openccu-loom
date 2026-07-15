@@ -52,6 +52,16 @@ per area (plus master) the normal way — this ADR fixes the topic
 
 ## Consequences
 
+- **Interim security posture:** until the alarm-codes feature ships,
+  `code_arm_required` / `code_disarm_required` are `false` and the
+  JSON `code` field is accepted but not validated — broker
+  authentication and topic ACLs are the **only** gate on
+  `ARM_*`/`DISARM`/`SILENCE` for MQTT publishers. Operators who treat
+  the broker as untrusted should restrict write access to
+  `<base>/alarm/#` until codes land (the concept's §16 "cannot disarm
+  a code-protected area" reassurance applies only from that point
+  on).
+
 - `docs/mqtt-topic-schema.md` documents `<base>/alarm/<area>/*` as a
   second explicit exception to the "every topic carries `<central>`"
   rule, alongside `bridge/*`.
