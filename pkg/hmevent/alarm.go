@@ -18,7 +18,22 @@ const (
 	EventTypeAlarmJournalAppended  EventType = "alarm_panel.journal_appended"
 	EventTypeAlarmCountdown        EventType = "alarm_panel.countdown"
 	EventTypeAlarmWalkTest         EventType = "alarm_panel.walktest_progress"
+	EventTypeAlarmHealthChanged    EventType = "alarm_panel.health_changed"
 )
+
+// AlarmHealthChangedEvent mirrors alarm-health transitions (siren
+// stop verified/unverified, service degradations) onto the alarm bus
+// so surfaces can render the health state live.
+type AlarmHealthChangedEvent struct {
+	Base
+	// Healthy is the new health verdict.
+	Healthy bool
+	// Note is the stable, English machine string of the transition.
+	Note string
+}
+
+// Type implements Event.
+func (AlarmHealthChangedEvent) Type() EventType { return EventTypeAlarmHealthChanged }
 
 // AlarmWalkTestEvent ticks when a walk-test session records a sensor
 // activation, so the checklist view updates live.
