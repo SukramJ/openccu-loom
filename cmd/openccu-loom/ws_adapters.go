@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
@@ -62,6 +63,9 @@ type wsCommandWiring struct {
 	backups *adapter.BackupAdapter
 	// cacheResetSvc backs ccu.cache_clear — scope-aware cache clear + re-pull.
 	cacheResetSvc *cachereset.Service
+	// alarm backs the alarm_panel.* command family. Nil when the alarm
+	// service is disabled — the family is then left unregistered.
+	alarm *alarm.Service
 	// editSessions is the shared edit-lock registry (also wired into the
 	// REST router). Backs the strict MASTER/LINK enforcement on
 	// `paramset.put` so REST and WS share one lock namespace.
@@ -188,6 +192,13 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// L04: paramset.determine — ParameterDeterminerAdapter resolves via registry.
 		ParameterDeterminer: adapter.NewParameterDeterminerAdapter(w.registry, w.valueWriter),
 	})
+
+	// alarm_panel.* — the daemon-level alarm engine + journal. Registered
+	// only when the alarm service is present (nil-safe): *alarm.Service
+	// satisfies ws.AlarmPanelQuery via its Engine()/Stores() accessors.
+	if w.alarm != nil {
+		ws.RegisterAlarmPanelCommands(router, ws.AlarmPanelCommandsConfig{Panel: w.alarm})
+	}
 }
 
 // ── wsAllDevices ─────────────────────────────────────────────────────────────
@@ -224,8 +235,8 @@ func (w *wsHubMessageCounts) HubMessageCounts() (serviceMessages, alarmMessages 
 		return nil, nil
 	}
 	svc := h.ServiceMessages.Count()
-	alarm := h.Messages.Count()
-	return &svc, &alarm
+	alarmCount := h.Messages.Count()
+	return &svc, &alarmCount
 }
 
 // ── wsLinkQuery ─────────────────────────────────────────────────────────────

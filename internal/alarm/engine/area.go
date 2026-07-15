@@ -75,6 +75,9 @@ type area struct {
 
 	// readiness is the last published per-mode verdict.
 	readiness map[hmenum.AlarmMode]hmevent.AlarmModeReadiness
+
+	// walk is the running walk-test session, nil when none.
+	walk *walkSession
 }
 
 // areaContext is the persisted runtime-context document stored in

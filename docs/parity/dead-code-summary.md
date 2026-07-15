@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: a8888a8
-HEAD: a8888a8
+Generated: 5564057
+HEAD: 5564057
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24951 |
-| Reachable | 4384 |
-| Whitelisted | 17940 |
-| **Unreachable** | **2627** |
+| Total Exported | 25157 |
+| Reachable | 4408 |
+| Whitelisted | 18087 |
+| **Unreachable** | **2662** |
 
 ## Top-20 Packages by Dead Code
 
@@ -116,9 +116,9 @@ HEAD: a8888a8
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 | internal/alarm | 0 | 3 | 0 |
-| internal/alarm/engine | 0 | 21 | 4 |
+| internal/alarm/engine | 0 | 23 | 5 |
 | internal/alarm/journal | 0 | 1 | 0 |
-| internal/alarm/outputs | 0 | 22 | 0 |
+| internal/alarm/outputs | 0 | 22 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
@@ -138,7 +138,7 @@ HEAD: a8888a8
 | internal/health | 0 | 16 | 0 |
 | internal/history | 0 | 12 | 0 |
 | internal/i18n | 0 | 2 | 0 |
-| internal/metrics | 0 | 60 | 2 |
+| internal/metrics | 0 | 62 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
 | internal/model/combined | 0 | 8 | 0 |
@@ -190,7 +190,7 @@ HEAD: a8888a8
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 81 | 22 |
-| pkg/hmapi | 0 | 77 | 14 |
+| pkg/hmapi | 0 | 103 | 14 |
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

@@ -6,6 +6,7 @@ package main
 import (
 	"log/slog"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -27,6 +28,7 @@ func wireSystemStatusSubscribers(
 	reg *central.Registry,
 	wsHub *ws.Hub,
 	mqttWiring *mqtt.Wiring,
+	alarmSvc *alarm.Service,
 	logger *slog.Logger,
 ) (sysStatusBuf *handlers.SystemStatusBuffer, teardown func()) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
@@ -47,6 +49,16 @@ func wireSystemStatusSubscribers(
 	wsOptimisticRollback := ws.NewOptimisticRollbackSubscriber(reg, wsHub)
 	wsOptimisticRollback.Start()
 
+	// The alarm_panel.* broadcast subscriber rides the daemon-level alarm
+	// event bus (areas are daemon-level, not per-central), so it binds to
+	// alarmSvc.Bus() rather than fanning across the registry. Nil when the
+	// alarm service is disabled.
+	var wsAlarm *ws.AlarmPanelSubscriber
+	if alarmSvc != nil {
+		wsAlarm = ws.NewAlarmPanelSubscriber(alarmSvc.Bus(), wsHub)
+		wsAlarm.Start()
+	}
+
 	var mqttSysStatus *mqtt.SystemStatusPublisher
 	if mqttWiring != nil {
 		mqttSysStatus = mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
@@ -57,6 +69,9 @@ func wireSystemStatusSubscribers(
 		// LIFO: mirror the order the original inline defers would have run.
 		if mqttSysStatus != nil {
 			mqttSysStatus.Stop()
+		}
+		if wsAlarm != nil {
+			wsAlarm.Stop()
 		}
 		wsOptimisticRollback.Stop()
 		wsDeviceTrigger.Stop()

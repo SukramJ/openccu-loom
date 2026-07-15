@@ -8,10 +8,20 @@ import (
 	"encoding/json"
 	"testing"
 
+	alarmpkg "github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 )
+
+// stubAlarmPanel satisfies AlarmPanelQuery for registration-only tests.
+// The accessors return nil — the role-gate test asserts the commands are
+// registered, not that they resolve against a live engine.
+type stubAlarmPanel struct{}
+
+func (stubAlarmPanel) Engine() *engine.Engine   { return nil }
+func (stubAlarmPanel) Stores() *alarmpkg.Stores { return nil }
 
 // roleGateWriteCommands is a representative slice of writeCommandRoles
 // spanning both gated tiers: three operator-tier commands sourced from
@@ -173,6 +183,8 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		Index:   &stubCustomDPIndex{},
 		Invoker: &stubCustomDPInvoker{},
 	})
+
+	RegisterAlarmPanelCommands(r, AlarmPanelCommandsConfig{Panel: stubAlarmPanel{}})
 
 	for cmd := range writeCommandRoles {
 		if !r.Has(cmd) {

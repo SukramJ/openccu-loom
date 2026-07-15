@@ -96,13 +96,24 @@ func NewService(deps Deps) (*Service, error) {
 		stores:    deps.Stores,
 		clk:       clk,
 		log:       logger,
-		health:    deps.Health,
 		bus:       events.NewBus(),
 		unsubs:    map[string][]func(){},
 		dpIndex:   map[string]string{},
 		devIndex:  map[string][]string{},
 		devHealth: map[string]engine.SensorHealth{},
 		ifaceDown: map[string]map[string]bool{},
+	}
+	// The health callback fans out twice: to the daemon health tracker
+	// and onto the alarm bus, so surfaces render the alarm-health state
+	// live (the anti-silent-failure surface, S7).
+	inner := deps.Health
+	s.health = func(healthy bool, note string) {
+		if inner != nil {
+			inner(healthy, note)
+		}
+		s.publish(hmevent.AlarmHealthChangedEvent{
+			Base: hmevent.NewBaseAt(s.clk.Now()), Healthy: healthy, Note: note,
+		})
 	}
 	s.journal = alarmjournal.New(deps.Stores.Journal, clk, s.publish, logger)
 
@@ -159,6 +170,21 @@ func (s *Service) Engine() *engine.Engine { return s.engine }
 
 // Manager exposes the output-driver layer (test fire, reconcile).
 func (s *Service) Manager() *outputs.Manager { return s.manager }
+
+// Stores exposes the alarm store bundle for the management surface.
+func (s *Service) Stores() *Stores { return s.stores }
+
+// Reload re-reads the alarm configuration after a management write:
+// output rows, event-routing indexes, and the engine's areas/sensors.
+func (s *Service) Reload(ctx context.Context) error {
+	if err := s.manager.Reload(ctx); err != nil {
+		return err
+	}
+	if err := s.rebuildIndexes(ctx); err != nil {
+		return err
+	}
+	return s.engine.Reload(ctx)
+}
 
 // Start loads configuration and persisted state, subscribes to every
 // known central, runs the reconciliation pass (S4), and starts the
@@ -290,6 +316,10 @@ func (s *Service) publish(e hmevent.Event) {
 	case hmevent.AlarmJournalAppendedEvent:
 		events.Publish(s.bus, ev)
 	case hmevent.AlarmCountdownEvent:
+		events.Publish(s.bus, ev)
+	case hmevent.AlarmWalkTestEvent:
+		events.Publish(s.bus, ev)
+	case hmevent.AlarmHealthChangedEvent:
 		events.Publish(s.bus, ev)
 	default:
 		s.log.Warn("alarm sink dropped unknown event type", "type", string(e.Type()))

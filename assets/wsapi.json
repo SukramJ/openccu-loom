@@ -767,6 +767,141 @@
       "name": "matter.endpoint_assembled",
       "topic": "matter.endpoint_assembled",
       "payload": "MatterEndpointAssembledPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Arm an alarm area. May return synchronously as `armed`, or `arming` while counting down the mode's exit delay.",
+      "name": "alarm_panel.arm",
+      "args": {
+        "area_id": "string",
+        "mode": "string",
+        "force": "boolean?",
+        "skip_delay": "boolean?",
+        "bypass": "array?"
+      },
+      "result": {
+        "state": "string",
+        "bypassed": "array?",
+        "exit_delay_s": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Disarm an alarm area.",
+      "name": "alarm_panel.disarm",
+      "args": {
+        "area_id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Silence the active incident on an alarm area without disarming.",
+      "name": "alarm_panel.silence",
+      "args": {
+        "area_id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Silence the active incident on every alarm area at once.",
+      "name": "alarm_panel.silence_all"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Acknowledge (clear) a finished incident on an alarm area.",
+      "name": "alarm_panel.acknowledge",
+      "args": {
+        "area_id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Return the live status of every alarm area: state, mode, bypassed sensors, active incident, running countdown, per-mode readiness, and walk-test-active flag.",
+      "name": "alarm_panel.state"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Return the per-mode arm-readiness of an alarm area.",
+      "name": "alarm_panel.readiness",
+      "args": {
+        "area_id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Query the alarm engine's event journal, newest first.",
+      "name": "alarm_panel.journal",
+      "args": {
+        "area_id": "string?",
+        "class": "string?",
+        "from": "string?",
+        "to": "string?",
+        "limit": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Return the live status of a walk-test session on an alarm area.",
+      "name": "alarm_panel.walktest_status",
+      "args": {
+        "area_id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an alarm area's arm-state-machine transitioned (docs/alarm-concept.md §5).",
+      "kind": "broadcast",
+      "name": "alarm.state_changed",
+      "topic": "alarm.panel",
+      "payload": "AlarmStateChangedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: a running exit/entry delay on an alarm area ticked (once per second).",
+      "kind": "broadcast",
+      "name": "alarm.countdown",
+      "topic": "alarm.panel",
+      "payload": "AlarmCountdownPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an alarm area's per-mode arm-readiness was recomputed (docs/alarm-concept.md §6.3). Carries the full per-mode map, not a delta.",
+      "kind": "broadcast",
+      "name": "alarm.readiness_changed",
+      "topic": "alarm.panel",
+      "payload": "AlarmReadinessChangedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an alarm area entered `triggered` and an incident was opened (or re-adopted after a restart / reconnect).",
+      "kind": "broadcast",
+      "name": "alarm.triggered",
+      "topic": "alarm.panel",
+      "payload": "AlarmTriggeredPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: a new entry was appended to the alarm engine's event journal. Payload carries the entry head; clients needing full detail call GET /alarm/journal.",
+      "kind": "broadcast",
+      "name": "alarm.journal_appended",
+      "topic": "alarm.panel",
+      "payload": "AlarmJournalAppendedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: a walk-test session on an alarm area recorded a sensor activation.",
+      "kind": "broadcast",
+      "name": "alarm.walktest_progress",
+      "topic": "alarm.panel",
+      "payload": "AlarmWalkTestProgressPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: the alarm subsystem's health verdict changed (siren stop-verification, service degradations).",
+      "kind": "broadcast",
+      "name": "alarm.health_changed",
+      "topic": "alarm.panel",
+      "payload": "AlarmHealthChangedPayload"
     }
   ]
 }

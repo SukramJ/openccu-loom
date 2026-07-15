@@ -86,6 +86,7 @@ type wsSchema struct {
 // known categories.
 var knownWSCategories = map[string]bool{
 	"alarms":          true,
+	"alarm_panel":     true,
 	"backup":          true,
 	"calc_dp":         true,
 	"ccu":             true,
@@ -148,6 +149,7 @@ func extractRegisteredWSCommands(t *testing.T) []string {
 		filepath.Join(wsDir, "commands_extended.go"),
 		filepath.Join(wsDir, "commands_missing.go"),
 		filepath.Join(wsDir, "custom_data_points.go"),
+		filepath.Join(wsDir, "alarm_panel.go"),
 	}
 
 	seen := map[string]bool{}

@@ -1,0 +1,538 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+)
+
+// AlarmPanel is the narrow facade the /alarm handlers drive: the arm
+// engine, the output-driver layer, the alarm store bundle, and the
+// post-write reload. *alarm.Service satisfies it — the router wires the
+// concrete service on startup, or leaves the field nil to unmount the
+// alarm surface entirely.
+type AlarmPanel interface {
+	Engine() *engine.Engine
+	Manager() *outputs.Manager
+	Stores() *alarm.Stores
+	Reload(ctx context.Context) error
+}
+
+// Compile-time proof the daemon-level alarm service satisfies the
+// handler facade.
+var _ AlarmPanel = (*alarm.Service)(nil)
+
+// alarmSourceREST tags every alarm-journal entry and audit record this
+// surface produces with the originating surface.
+const alarmSourceREST = "rest"
+
+const (
+	// Journal query limits mirror the ?limit bounds documented for
+	// GET /alarm/journal in assets/openapi.yaml.
+	alarmJournalDefaultLimit = 500
+	alarmJournalMaxLimit     = 5000
+)
+
+// Countdown kinds echoed on GET /alarm/state. The values are wire-stable
+// and match the engine's exit/entry timer kinds; the trigger-time timer
+// is never surfaced as a countdown.
+const (
+	alarmCountdownExit  = "exit_delay"
+	alarmCountdownEntry = "entry_delay"
+)
+
+// alarmStateResponse is the envelope of GET /alarm/state.
+type alarmStateResponse struct {
+	Areas []hmapi.AlarmAreaStatus `json:"areas"`
+}
+
+// AlarmState renders the live status of every alarm area.
+func AlarmState(p AlarmPanel) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		snaps := p.Engine().Areas()
+		areas := make([]hmapi.AlarmAreaStatus, 0, len(snaps))
+		for i := range snaps {
+			areas = append(areas, alarmAreaStatus(r.Context(), p, snaps[i]))
+		}
+		JSON(w, http.StatusOK, alarmStateResponse{Areas: areas})
+	}
+}
+
+// GetAlarmAreaReadiness renders the per-mode arm-readiness of one area,
+// keyed by mode name.
+func GetAlarmAreaReadiness(p AlarmPanel) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		snap, ok := p.Engine().Area(id)
+		if !ok {
+			writeAlarmNotFound(w, r)
+			return
+		}
+		out := make(map[string]hmapi.AlarmModeReadiness, len(snap.Readiness))
+		for mode, rd := range snap.Readiness {
+			out[string(mode)] = apiReadiness(rd)
+		}
+		JSON(w, http.StatusOK, out)
+	}
+}
+
+// ArmAlarmArea arms an area into the requested mode, mapping a
+// not-ready refusal to a 409 whose problem detail carries the blocking
+// sensor ids.
+func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var req hmapi.AlarmArmRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
+			return
+		}
+		mode := hmenum.AlarmMode(req.Mode)
+		if !mode.Armed() {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid arm mode",
+					"mode must be one of perimeter, full, night, vacation, custom"))
+			return
+		}
+		res, err := p.Engine().Arm(r.Context(), id, engine.ArmRequest{
+			Mode:      mode,
+			Force:     req.Force,
+			SkipDelay: req.SkipDelay,
+			Bypass:    req.Bypass,
+			By:        identityFromCtx(r.Context()),
+			Source:    alarmSourceREST,
+		})
+		if err != nil {
+			var notReady *engine.NotReadyError
+			switch {
+			case errors.Is(err, engine.ErrUnknownArea):
+				writeAlarmNotFound(w, r)
+			case errors.As(err, &notReady):
+				writeArmNotReady(w, r, notReady.Blockers)
+			case errors.Is(err, engine.ErrUnknownMode):
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeBadRequest, r, "Mode not configured for area", ""))
+			case errors.Is(err, engine.ErrInvalidState):
+				problem.Write(w, http.StatusConflict,
+					problem.New(problem.TypeConflict, r, "Area cannot be armed in its current state", ""))
+			default:
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Arm failed", err)
+			}
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmArm, "area="+id+" mode="+req.Mode)
+		JSON(w, http.StatusOK, hmapi.AlarmArmAccepted{
+			State:      string(res.State),
+			Bypassed:   res.Bypassed,
+			ExitDelayS: durationSeconds(res.ExitDelay),
+		})
+	}
+}
+
+// DisarmAlarmArea returns an area to disarmed.
+func DisarmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := p.Engine().Disarm(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST); err != nil {
+			writeAlarmVerbError(w, r, err, "Disarm failed")
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmDisarm, "area="+id)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// SilenceAlarmArea silences the active incident of one area without
+// disarming it.
+func SilenceAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := p.Engine().Silence(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST); err != nil {
+			writeAlarmVerbError(w, r, err, "Silence failed")
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmSilence, "area="+id)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// AcknowledgeAlarmArea marks the area's open incident as seen.
+func AcknowledgeAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		err := p.Engine().Acknowledge(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST)
+		switch {
+		case err == nil:
+		case errors.Is(err, engine.ErrUnknownArea):
+			writeAlarmNotFound(w, r)
+			return
+		case errors.Is(err, engine.ErrNoIncident):
+			problem.Write(w, http.StatusConflict,
+				problem.New(problem.TypeConflict, r, "No open incident to acknowledge", ""))
+			return
+		default:
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Acknowledge failed", err)
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmAcknowledge, "area="+id)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// SilenceAllAlarmAreas silences every area's active incident at once.
+func SilenceAllAlarmAreas(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p.Engine().SilenceAll(r.Context(), identityFromCtx(r.Context()), alarmSourceREST)
+		recordAlarm(rec, r, audit.ActionAlarmSilence, "area=all")
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// ListAlarmJournal queries the append-only alarm event journal.
+func ListAlarmJournal(p AlarmPanel) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		f, errMsg := parseAlarmJournalFilter(r)
+		if errMsg != "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid query parameter", errMsg))
+			return
+		}
+		rows, err := p.Stores().Journal.Query(r.Context(), f)
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Journal query failed", err)
+			return
+		}
+		out := make([]hmapi.AlarmJournalEntry, 0, len(rows))
+		for i := range rows {
+			out = append(out, apiJournalEntry(rows[i]))
+		}
+		JSON(w, http.StatusOK, out)
+	}
+}
+
+// StartAlarmWalkTest begins a walk-test session on a disarmed area.
+func StartAlarmWalkTest(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		err := p.Engine().WalkTestStart(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST)
+		switch {
+		case err == nil:
+		case errors.Is(err, engine.ErrUnknownArea):
+			writeAlarmNotFound(w, r)
+			return
+		case errors.Is(err, engine.ErrWalkTestActive):
+			problem.Write(w, http.StatusConflict,
+				problem.New(problem.TypeConflict, r, "Walk test already active", ""))
+			return
+		case errors.Is(err, engine.ErrInvalidState):
+			problem.Write(w, http.StatusConflict,
+				problem.New(problem.TypeConflict, r, "Area must be disarmed to start a walk test", ""))
+			return
+		default:
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Walk test start failed", err)
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmWalkTest, "area="+id+" op=start")
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// StopAlarmWalkTest ends the running walk-test session of an area.
+func StopAlarmWalkTest(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		_, err := p.Engine().WalkTestStop(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST)
+		switch {
+		case err == nil:
+		case errors.Is(err, engine.ErrUnknownArea):
+			writeAlarmNotFound(w, r)
+			return
+		case errors.Is(err, engine.ErrInvalidState):
+			problem.Write(w, http.StatusConflict,
+				problem.New(problem.TypeConflict, r, "No active walk test", ""))
+			return
+		default:
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Walk test stop failed", err)
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmWalkTest, "area="+id+" op=stop")
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// GetAlarmWalkTestStatus renders the live status of an area's walk-test
+// session.
+func GetAlarmWalkTestStatus(p AlarmPanel) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		st, err := p.Engine().WalkTestStatus(id)
+		if err != nil {
+			writeAlarmVerbError(w, r, err, "Walk test status failed")
+			return
+		}
+		JSON(w, http.StatusOK, apiWalkTestStatus(st))
+	}
+}
+
+// TestAlarmOutput fires a single output briefly for a walk test.
+func TestAlarmOutput(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var req hmapi.AlarmOutputTestRequest
+		// The request body is optional (default: full test fire); an
+		// empty body decodes as the zero request.
+		if err := DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
+			return
+		}
+		err := p.Manager().TestFire(r.Context(), id, req.OpticalOnly)
+		switch {
+		case err == nil:
+		case errors.Is(err, outputs.ErrUnknownOutput):
+			writeAlarmNotFound(w, r)
+			return
+		case errors.Is(err, outputs.ErrTestFireUnsupported):
+			problem.Write(w, http.StatusConflict,
+				problem.New(problem.TypeConflict, r, "Output class cannot be live-tested", ""))
+			return
+		default:
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Alarm output test failed", err)
+			return
+		}
+		recordAlarm(rec, r, audit.ActionAlarmOutputTest, "output="+id)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// --- mapping + shared helpers ---
+
+// alarmAreaStatus maps an engine area snapshot onto the wire status DTO.
+func alarmAreaStatus(ctx context.Context, p AlarmPanel, snap engine.AreaSnapshot) hmapi.AlarmAreaStatus {
+	st := hmapi.AlarmAreaStatus{
+		ID:       snap.ID,
+		Name:     snap.Name,
+		State:    string(snap.State),
+		Bypassed: snap.Bypassed,
+	}
+	// The engine keeps a disarmed area's mode at "disarmed"; the wire
+	// leaves it empty so surfaces render mode without a nullable field.
+	if snap.Mode != hmenum.AlarmModeDisarmed {
+		st.Mode = string(snap.Mode)
+	}
+	if snap.IncidentID != 0 {
+		st.Incident = &hmapi.AlarmIncidentRef{
+			ID:       strconv.FormatInt(snap.IncidentID, 10),
+			Silenced: snap.IncidentSilenced,
+		}
+	}
+	st.Countdown = alarmCountdown(ctx, p, snap)
+	if len(snap.Readiness) > 0 {
+		st.Readiness = make(map[string]hmapi.AlarmModeReadiness, len(snap.Readiness))
+		for mode, rd := range snap.Readiness {
+			st.Readiness[string(mode)] = apiReadiness(rd)
+		}
+	}
+	if wt, err := p.Engine().WalkTestStatus(snap.ID); err == nil {
+		st.WalkTestActive = wt.Active
+	}
+	return st
+}
+
+// alarmCountdown surfaces a running exit/entry countdown. The engine
+// snapshot carries only the remaining duration, so the total is sourced
+// from the area's mode configuration; when it is unavailable the total
+// degrades to the remaining value rather than a misleading zero.
+func alarmCountdown(ctx context.Context, p AlarmPanel, snap engine.AreaSnapshot) *hmapi.AlarmCountdown {
+	kind := snap.TimerKind
+	if kind != alarmCountdownExit && kind != alarmCountdownEntry {
+		return nil
+	}
+	remaining := durationSeconds(snap.TimerRemaining)
+	total := remaining
+	if row, ok, err := p.Stores().Areas.Get(ctx, snap.ID); err == nil && ok {
+		if cfg, cerr := engine.ParseAreaConfig(row.ConfigJSON); cerr == nil {
+			if mc, present := cfg.Modes[snap.Mode]; present {
+				switch {
+				case kind == alarmCountdownExit && mc.ExitDelaySeconds > 0:
+					total = mc.ExitDelaySeconds
+				case kind == alarmCountdownEntry && mc.EntryDelaySeconds > 0:
+					total = mc.EntryDelaySeconds
+				}
+			}
+		}
+	}
+	if total < remaining {
+		total = remaining
+	}
+	return &hmapi.AlarmCountdown{Kind: kind, RemainingS: remaining, TotalS: total}
+}
+
+// apiReadiness maps an engine readiness verdict onto the wire DTO.
+func apiReadiness(rd hmevent.AlarmModeReadiness) hmapi.AlarmModeReadiness {
+	return hmapi.AlarmModeReadiness{
+		Ready:    rd.Ready,
+		Blockers: rd.Blockers,
+		Warnings: rd.Warnings,
+	}
+}
+
+// apiJournalEntry maps a persisted journal row onto the wire DTO.
+func apiJournalEntry(e sqlitestore.AlarmJournalEntry) hmapi.AlarmJournalEntry {
+	out := hmapi.AlarmJournalEntry{
+		ID:         e.ID,
+		When:       time.UnixMilli(e.TsMS).UTC(),
+		AreaID:     e.AreaID,
+		Class:      string(e.Class),
+		Event:      e.Event,
+		Actor:      e.Actor,
+		Source:     e.Source,
+		IncidentID: e.IncidentID,
+	}
+	if e.DetailsJSON != "" && e.DetailsJSON != "{}" {
+		out.Details = json.RawMessage(e.DetailsJSON)
+	}
+	return out
+}
+
+// apiWalkTestStatus maps an engine walk-test status onto the wire DTO.
+// The sensors slice is always a non-nil array so the response matches
+// the required-field contract.
+func apiWalkTestStatus(st engine.WalkTestStatus) hmapi.AlarmWalkTestStatus {
+	out := hmapi.AlarmWalkTestStatus{
+		Active:  st.Active,
+		Sensors: make([]hmapi.AlarmWalkTestSensor, 0, len(st.Sensors)),
+	}
+	if !st.StartedAt.IsZero() {
+		started := st.StartedAt.UTC()
+		out.StartedAt = &started
+	}
+	for _, s := range st.Sensors {
+		row := hmapi.AlarmWalkTestSensor{ID: s.SensorID, Name: s.Name, Tested: !s.SeenAt.IsZero()}
+		if !s.SeenAt.IsZero() {
+			seen := s.SeenAt.UTC()
+			row.LastTriggeredAt = &seen
+		}
+		out.Sensors = append(out.Sensors, row)
+	}
+	return out
+}
+
+// parseAlarmJournalFilter extracts the GET /alarm/journal query
+// parameters. It returns a non-empty errMsg for a malformed class or
+// RFC3339 timestamp so the handler can answer 400.
+func parseAlarmJournalFilter(r *http.Request) (f sqlitestore.AlarmJournalFilter, errMsg string) { //nolint:gocritic // named returns clarify the dual-return semantics
+	q := r.URL.Query()
+	f = sqlitestore.AlarmJournalFilter{
+		AreaID: q.Get("area"),
+		Limit:  alarmJournalDefaultLimit,
+	}
+	if cl := q.Get("class"); cl != "" {
+		class := hmenum.AlarmJournalClass(cl)
+		if !class.Valid() {
+			return sqlitestore.AlarmJournalFilter{}, "class: unknown journal class: " + cl
+		}
+		f.Class = class
+	}
+	if fq := q.Get("from"); fq != "" {
+		t, err := time.Parse(time.RFC3339, fq)
+		if err != nil {
+			return sqlitestore.AlarmJournalFilter{}, "from: invalid RFC3339 timestamp: " + fq
+		}
+		f.FromMS = t.UnixMilli()
+	}
+	if tq := q.Get("to"); tq != "" {
+		t, err := time.Parse(time.RFC3339, tq)
+		if err != nil {
+			return sqlitestore.AlarmJournalFilter{}, "to: invalid RFC3339 timestamp: " + tq
+		}
+		// The store bound is inclusive (ts_ms <= ToMS); `to` is
+		// documented exclusive, so drop it by one millisecond.
+		f.ToMS = t.UnixMilli() - 1
+	}
+	if lq := q.Get("limit"); lq != "" {
+		if n, err := strconv.Atoi(lq); err == nil {
+			switch {
+			case n <= 0:
+				f.Limit = alarmJournalDefaultLimit
+			case n > alarmJournalMaxLimit:
+				f.Limit = alarmJournalMaxLimit
+			default:
+				f.Limit = n
+			}
+		}
+	}
+	return f, ""
+}
+
+// writeArmNotReady writes the 409 arm refusal, echoing the blocking
+// sensor ids both in the detail line and the problem `errors` array
+// (mirrors AlarmModeReadiness.blockers).
+func writeArmNotReady(w http.ResponseWriter, r *http.Request, blockers []string) {
+	d := problem.New(problem.TypeConflict, r, "Not ready to arm",
+		"readiness blockers present: "+strings.Join(blockers, ", "))
+	d.Errors = make([]problem.FieldError, 0, len(blockers))
+	for _, id := range blockers {
+		d.Errors = append(d.Errors, problem.FieldError{Field: id, Reason: "blocker"})
+	}
+	problem.Write(w, http.StatusConflict, d)
+}
+
+// writeAlarmVerbError maps a bare engine verb error onto a problem
+// response: an unknown area is a 404, everything else a masked 500.
+func writeAlarmVerbError(w http.ResponseWriter, r *http.Request, err error, title string) {
+	if errors.Is(err, engine.ErrUnknownArea) {
+		writeAlarmNotFound(w, r)
+		return
+	}
+	writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, title, err)
+}
+
+// writeAlarmNotFound writes the shared 404 for an unknown alarm area or
+// output id.
+func writeAlarmNotFound(w http.ResponseWriter, r *http.Request) {
+	problem.Write(w, http.StatusNotFound,
+		problem.New(problem.TypeNotFound, r, "Unknown alarm resource", ""))
+}
+
+// recordAlarm appends an audit row for an alarm mutation when a recorder
+// is wired.
+func recordAlarm(rec audit.Recorder, r *http.Request, action audit.Action, note string) {
+	if rec == nil {
+		return
+	}
+	rec.Record(audit.Entry{
+		User:   identityFromCtx(r.Context()),
+		Action: action,
+		Note:   note,
+	})
+}
+
+// durationSeconds rounds a countdown duration to whole seconds.
+func durationSeconds(d time.Duration) int {
+	if d <= 0 {
+		return 0
+	}
+	return int(d.Round(time.Second) / time.Second)
+}
