@@ -36,6 +36,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -262,7 +264,7 @@ func TestAlarmMqttArmDisarmRoundtrip(t *testing.T) {
 	areaID := rig.areaID
 	stateTopic := alarmMqttBase + "/alarm/" + areaID + "/state"
 
-	rig.publishAlarmCommand(t, areaID, mqtt.HAAlarmCommandArmAway)
+	rig.publishAlarmCommand(t, areaID, alarmpanel.HAAlarmCommandArmAway)
 
 	armed := rig.ah.waitAreaState(areaID, hmenum.AlarmAreaStateArmed, 5*time.Second)
 	if armed != hmenum.AlarmAreaStateArmed {
@@ -273,18 +275,18 @@ func TestAlarmMqttArmDisarmRoundtrip(t *testing.T) {
 		t.Fatalf("after ARM_AWAY: engine mode = %q ok=%v, want full", snap.Mode, ok)
 	}
 
-	if got, ok := rig.waitStateTopic(stateTopic, mqtt.HAAlarmStateArmedAway, 5*time.Second); !ok {
-		t.Fatalf("retained state topic %s never carried %q; last payload = %q", stateTopic, mqtt.HAAlarmStateArmedAway, got)
+	if got, ok := rig.waitStateTopic(stateTopic, alarmpanel.HAAlarmStateArmedAway, 5*time.Second); !ok {
+		t.Fatalf("retained state topic %s never carried %q; last payload = %q", stateTopic, alarmpanel.HAAlarmStateArmedAway, got)
 	}
 
-	rig.publishAlarmCommand(t, areaID, mqtt.HAAlarmCommandDisarm)
+	rig.publishAlarmCommand(t, areaID, alarmpanel.HAAlarmCommandDisarm)
 
 	disarmed := rig.ah.waitAreaState(areaID, hmenum.AlarmAreaStateDisarmed, 5*time.Second)
 	if disarmed != hmenum.AlarmAreaStateDisarmed {
 		t.Fatalf("after DISARM: engine state = %q, want disarmed", disarmed)
 	}
 
-	if got, ok := rig.waitStateTopic(stateTopic, mqtt.HAAlarmStateDisarmed, 5*time.Second); !ok {
-		t.Fatalf("retained state topic %s never carried %q; last payload = %q", stateTopic, mqtt.HAAlarmStateDisarmed, got)
+	if got, ok := rig.waitStateTopic(stateTopic, alarmpanel.HAAlarmStateDisarmed, 5*time.Second); !ok {
+		t.Fatalf("retained state topic %s never carried %q; last payload = %q", stateTopic, alarmpanel.HAAlarmStateDisarmed, got)
 	}
 }
