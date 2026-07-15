@@ -407,7 +407,7 @@ func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {
 	if s == nil || s.Stores() == nil || s.Stores().Codes == nil {
 		return nil
 	}
-	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes)
+	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes).OnChange(s.NotifyCodesChanged)
 }
 
 // mountMCP wraps the REST router so the configured MCP path serves the

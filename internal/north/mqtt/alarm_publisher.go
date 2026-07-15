@@ -147,6 +147,7 @@ func (p *AlarmMQTTPublisher) Start() {
 		events.Subscribe(bus, p.onReadinessChanged),
 		events.Subscribe(bus, p.onHealthChanged),
 		events.Subscribe(bus, p.onPanelChanged),
+		events.Subscribe(bus, p.onCodesChanged),
 	)
 	go p.run()
 	p.signalReconcile()
@@ -246,6 +247,14 @@ func (p *AlarmMQTTPublisher) onReadinessChanged(_ hmevent.AlarmReadinessChangedE
 // retained discovery/state/availability of a deleted area would ghost
 // in the broker forever.
 func (p *AlarmMQTTPublisher) onPanelChanged(_ hmevent.AlarmPanelChangedEvent) {
+	p.signalReconcile()
+}
+
+// onCodesChanged re-derives the retained discovery configs after a code
+// mutation: the effective code_arm_required / code_disarm_required flags
+// depend on whether an applicable enabled pin code exists, so creating,
+// deleting, or toggling a code can flip them.
+func (p *AlarmMQTTPublisher) onCodesChanged(hmevent.AlarmCodesChangedEvent) {
 	p.signalReconcile()
 }
 
@@ -460,12 +469,18 @@ func (p *AlarmMQTTPublisher) masterName() string {
 }
 
 // areaCodePolicy resolves the per-area arm/disarm code requirement for
-// the discovery flags. It reflects the operator-set policy conservatively:
-// disarm is advertised as code-required only when the operator set it
-// explicitly, never off the default-when-codes-exist rule the engine
-// resolves internally (docs/alarm-concept.md §11) — advertising a code
-// requirement HA cannot satisfy when no code exists would trap disarm.
-// A missing area, parse error, or absent store degrades to no requirement.
+// the discovery flags, mirroring the requirement the engine will
+// actually enforce (docs/alarm-concept.md §11/§13.3): the policy half
+// comes from the area config (RequireDisarm defaults to required when
+// nil), and the "codes exist" half from the codes facade — an area
+// without an applicable enabled pin code advertises no requirement
+// (the engine passes an empty code through), while an area with one
+// advertises it even off the nil default, so HA prompts for the code
+// the engine is going to demand. Advertising either half alone would
+// trap disarm: requirement-without-codes leaves HA prompting for a
+// code that cannot exist, codes-without-requirement makes HA send a
+// bare DISARM the engine refuses. A missing area, parse error, or
+// absent store degrades to no requirement.
 func (p *AlarmMQTTPublisher) areaCodePolicy(ctx context.Context, areaID string) (armReq, disarmReq bool) {
 	stores := p.svc.Stores()
 	if stores == nil || stores.Areas == nil {
@@ -480,7 +495,13 @@ func (p *AlarmMQTTPublisher) areaCodePolicy(ctx context.Context, areaID string) 
 		return false, false
 	}
 	armReq = cfg.CodePolicy.RequireArm
-	disarmReq = cfg.CodePolicy.RequireDisarm != nil && *cfg.CodePolicy.RequireDisarm
+	disarmReq = cfg.CodePolicy.RequireDisarm == nil || *cfg.CodePolicy.RequireDisarm
+	if armReq || disarmReq {
+		facade := p.svc.Codes()
+		hasPIN := facade != nil && facade.HasPINCodes(ctx, areaID)
+		armReq = armReq && hasPIN
+		disarmReq = disarmReq && hasPIN
+	}
 	return armReq, disarmReq
 }
 

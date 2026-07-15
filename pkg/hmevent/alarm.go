@@ -22,6 +22,7 @@ const (
 	EventTypeAlarmPanelChanged     EventType = "alarm_panel.panel_changed"
 	EventTypeAlarmDuress           EventType = "alarm_panel.duress"
 	EventTypeAlarmReminder         EventType = "alarm_panel.reminder"
+	EventTypeAlarmCodesChanged     EventType = "alarm_panel.codes_changed"
 )
 
 // AlarmDuressEvent is the silent fan-out of a duress-code use
@@ -70,6 +71,18 @@ type AlarmReminderEvent struct {
 
 // Type implements Event.
 func (AlarmReminderEvent) Type() EventType { return EventTypeAlarmReminder }
+
+// AlarmCodesChangedEvent fires after any alarm-code create / update /
+// delete. It carries no code data — it is a reconcile poke: the
+// effective code_arm_required / code_disarm_required discovery flags
+// depend on whether applicable pin codes exist, so the MQTT plane
+// re-derives discovery when the code set changes.
+type AlarmCodesChangedEvent struct {
+	Base
+}
+
+// Type implements Event.
+func (AlarmCodesChangedEvent) Type() EventType { return EventTypeAlarmCodesChanged }
 
 // AlarmPanelChangedEvent fires when the alarm-control-panel entity
 // projection of an area (or of the aggregate master panel) changes:

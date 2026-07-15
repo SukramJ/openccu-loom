@@ -48,22 +48,48 @@ const (
 // Strongly-authenticated sources that bypass a code requirement
 // (docs/alarm-concept.md §11 degradation). They still surface duress
 // when a code is supplied. These tokens are the operator-session /
-// break-glass surfaces; anonymous MQTT / sysvar / keypad paths are not
-// listed and stay code-gated.
+// break-glass surfaces; anonymous MQTT / sysvar paths are not listed
+// and stay code-gated.
 const (
 	codeSourceRESTOperator = "rest-operator"
 	codeSourceWSOperator   = "ws-operator"
 	codeSourceHmcli        = "hmcli"
 )
 
-// isOperatorSource reports whether source bypasses code requirements.
-func isOperatorSource(source string) bool {
+// Hardware-intent sources. A keypad or remote press is already
+// authenticated by its slot / binding match in the intent router
+// (which also enforces the code row's verb permissions), and the
+// hardware carries no PIN that could be re-typed — so these sources
+// bypass the engine-side code requirement like operator sources do.
+// They never carry a code, so no duress detection applies here (WKP
+// on-device slots are independent of engine codes by design).
+const (
+	codeSourceKeypad = "keypad"
+	codeSourceRemote = "remote"
+)
+
+// IsOperatorSource reports whether source is an operator-session /
+// break-glass surface that bypasses code requirements. Exported so the
+// codes facade can exempt the same sources from rate limiting — a
+// lockout on an already-authenticated surface protects nothing and
+// would suppress duress detection (docs/alarm-concept.md §11).
+func IsOperatorSource(source string) bool {
 	switch source {
 	case codeSourceRESTOperator, codeSourceWSOperator, codeSourceHmcli:
 		return true
 	default:
 		return false
 	}
+}
+
+// isOperatorSource keeps the package-internal call sites terse.
+func isOperatorSource(source string) bool { return IsOperatorSource(source) }
+
+// isPreAuthenticatedSource reports whether source arrives already
+// authenticated (operator session or hardware binding) and therefore
+// bypasses the code requirement in authorize.
+func isPreAuthenticatedSource(source string) bool {
+	return isOperatorSource(source) || source == codeSourceKeypad || source == codeSourceRemote
 }
 
 // NotReadyError reports a refused arm together with the blocking
@@ -426,14 +452,15 @@ func (e *Engine) recaptureOpenBaseline(a *area) {
 // resolved code identity (for changed-by attribution), whether the code
 // is a duress code, and a refusal error (ErrInvalidCode) when a required
 // code is missing or wrong. A nil CodeValidator disables codes entirely.
-// Operator sources bypass the requirement but still get duress detection
-// on a supplied code. The caller holds the lock.
+// Pre-authenticated sources (operator sessions, hardware keypad/remote
+// bindings) bypass the requirement; operator sources still get duress
+// detection on a supplied code. The caller holds the lock.
 func (e *Engine) authorize(ctx context.Context, a *area, verb, code, source string) (identity string, duress bool, refuse error) {
 	if e.validator == nil {
 		return "", false, nil
 	}
 	required := a.cfg.CodePolicy.requires(verb, source)
-	if isOperatorSource(source) {
+	if isPreAuthenticatedSource(source) {
 		required = false
 	}
 	if !required && code == "" {

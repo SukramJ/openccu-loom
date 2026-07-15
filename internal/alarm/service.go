@@ -228,6 +228,14 @@ func (s *Service) armFailureHookRef() ArmFailureHook {
 // code CRUD, hmcli).
 func (s *Service) Codes() *codes.Facade { return s.codes }
 
+// NotifyCodesChanged publishes the codes-changed reconcile poke on the
+// alarm bus. The composition root wires it into the code CRUD adapter;
+// the MQTT publisher re-derives its discovery flags (effective
+// code_arm_required / code_disarm_required) on it.
+func (s *Service) NotifyCodesChanged() {
+	events.Publish(s.bus, hmevent.AlarmCodesChangedEvent{Base: hmevent.NewBaseAt(s.clk.Now())})
+}
+
 // codeSourceAdapter maps the codes facade's Row projection onto the
 // CodeRow shape the intent router consumes. It lives in this package
 // (not internal/alarm/codes) so the codes package never has to import

@@ -11730,6 +11730,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["AlarmInvalidCode"];
             404: components["responses"]["NotFound"];
         };
@@ -11757,6 +11758,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["AlarmInvalidCode"];
             404: components["responses"]["NotFound"];
         };
@@ -11784,6 +11786,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
         };
     };

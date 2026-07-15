@@ -4,8 +4,10 @@
 package mqtt
 
 import (
+	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -82,5 +84,119 @@ func TestBuildAlarmPanelDiscovery_MasterPanelHonorsCodePolicyToo(t *testing.T) {
 	}
 	if got := body["command_template"]; got != alarmCommandTemplate {
 		t.Errorf("command_template = %v, want %q", got, alarmCommandTemplate)
+	}
+}
+
+// boolPtr returns a pointer to b, for building an explicit
+// engine.CodePolicy.RequireDisarm value (as opposed to the nil
+// default).
+func boolPtr(b bool) *bool { return &b }
+
+// TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement covers the
+// review-fix regression in [AlarmMQTTPublisher.areaCodePolicy]: the
+// discovery flags advertised for an area must reflect BOTH halves of
+// the effective requirement — the area's engine.CodePolicy AND
+// whether an applicable enabled pin code actually exists
+// (internal/alarm/codes.Facade.HasPINCodes) — never the policy alone.
+// Advertising the policy half without an existing code would leave HA
+// prompting for a code the engine can never demand; the reverse
+// leaves an existing code unadvertised and HA sends a bare,
+// code-less command the engine refuses (docs/alarm-concept.md
+// §11/§13.3).
+func TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement(t *testing.T) {
+	t.Parallel()
+
+	type seedCode struct {
+		id      string
+		enabled bool
+		areas   []string
+	}
+	cases := []struct {
+		name          string
+		requireArm    bool
+		requireDisarm *bool
+		codes         []seedCode
+		wantArmReq    bool
+		wantDisarmReq bool
+	}{
+		{
+			name:          "nil_require_disarm_with_enabled_pin_requires_disarm_code",
+			requireDisarm: nil,
+			codes:         []seedCode{{id: "c1", enabled: true}},
+			wantDisarmReq: true,
+		},
+		{
+			name:          "nil_require_disarm_without_any_pin_requires_nothing",
+			requireDisarm: nil,
+			codes:         nil,
+			wantDisarmReq: false,
+		},
+		{
+			name:          "explicit_require_disarm_false_with_pin_stays_false",
+			requireDisarm: boolPtr(false),
+			codes:         []seedCode{{id: "c1", enabled: true}},
+			wantDisarmReq: false,
+		},
+		{
+			name:          "require_arm_with_pin_requires_arm_code",
+			requireArm:    true,
+			requireDisarm: boolPtr(false),
+			codes:         []seedCode{{id: "c1", enabled: true}},
+			wantArmReq:    true,
+		},
+		{
+			name:          "require_arm_without_pin_stays_false",
+			requireArm:    true,
+			requireDisarm: boolPtr(false),
+			codes:         nil,
+			wantArmReq:    false,
+		},
+		{
+			name:          "disabled_pin_does_not_count",
+			requireDisarm: nil,
+			codes:         []seedCode{{id: "c1", enabled: false}},
+			wantDisarmReq: false,
+		},
+		{
+			name:          "pin_scoped_to_a_different_area_does_not_count",
+			requireDisarm: nil,
+			codes:         []seedCode{{id: "c1", enabled: true, areas: []string{"og"}}},
+			wantDisarmReq: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newAlarmPublisherFixture(t)
+			cfg := zeroDelayFullMode()
+			cfg.CodePolicy = engine.CodePolicy{RequireArm: tc.requireArm, RequireDisarm: tc.requireDisarm}
+			f.seedArea("eg", "Erdgeschoss", cfg)
+			for _, c := range tc.codes {
+				f.seedPINCode(c.id, "PIN "+c.id, "1234", c.enabled, c.areas)
+			}
+
+			armReq, disarmReq := f.pub.areaCodePolicy(context.Background(), "eg")
+			if armReq != tc.wantArmReq {
+				t.Errorf("armReq = %v, want %v", armReq, tc.wantArmReq)
+			}
+			if disarmReq != tc.wantDisarmReq {
+				t.Errorf("disarmReq = %v, want %v", disarmReq, tc.wantDisarmReq)
+			}
+
+			item := BuildAlarmPanelDiscovery("gh", "eg", "Erdgeschoss",
+				[]hmenum.AlarmMode{hmenum.AlarmModeFull}, false, armReq, disarmReq)
+			body := alarmDiscoveryBody(t, item)
+			wantCodeFields := armReq || disarmReq
+			_, hasCode := body["code"]
+			_, hasTemplate := body["command_template"]
+			if hasCode != wantCodeFields || hasTemplate != wantCodeFields {
+				t.Fatalf("code field present=%v command_template present=%v, want present=%v",
+					hasCode, hasTemplate, wantCodeFields)
+			}
+			if wantCodeFields && body["code"] != alarmRemoteCode {
+				t.Errorf("code = %v, want %q", body["code"], alarmRemoteCode)
+			}
+		})
 	}
 }

@@ -74,6 +74,11 @@ func (e *Engine) Reload(ctx context.Context) error {
 			e.disarmLocked(ctx, a, "engine:reload", "engine")
 		}
 		a.cancelTimers()
+		// A post-trigger-disarmed area may still hold a pending
+		// auto-rearm; cancelTimers deliberately leaves it alone, so an
+		// area drop must cancel it explicitly or the scheduler goroutine
+		// outlives the area until its deadline.
+		a.cancelAutoRearm()
 		if err := e.stateStore.Delete(ctx, id); err != nil {
 			e.log.Error("alarm state delete failed", "area", id, "error", err)
 		}

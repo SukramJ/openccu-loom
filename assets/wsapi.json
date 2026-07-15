@@ -935,7 +935,18 @@
         "code": "object"
       },
       "result": {
-        "id": "string"
+        "id": "string",
+        "name": "string",
+        "kind": "string",
+        "duress": "boolean?",
+        "perms": "object",
+        "areas": "array?",
+        "binding": "object?",
+        "valid_from_ms": "integer?",
+        "valid_until_ms": "integer?",
+        "enabled": "boolean",
+        "created_ms": "integer?",
+        "updated_ms": "integer?"
       }
     },
     {
@@ -947,7 +958,18 @@
         "code": "object"
       },
       "result": {
-        "id": "string"
+        "id": "string",
+        "name": "string",
+        "kind": "string",
+        "duress": "boolean?",
+        "perms": "object",
+        "areas": "array?",
+        "binding": "object?",
+        "valid_from_ms": "integer?",
+        "valid_until_ms": "integer?",
+        "enabled": "boolean",
+        "created_ms": "integer?",
+        "updated_ms": "integer?"
       }
     },
     {

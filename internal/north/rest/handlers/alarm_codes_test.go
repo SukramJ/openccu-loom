@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -403,6 +404,375 @@ func TestDeleteAlarmCode_HappyPath_Returns204AndRemovesRow(t *testing.T) {
 
 // TestListAlarmCodes_ReturnsSeeded covers the list surface end to end
 // through the real store, ordered by name (AlarmCodeStore.GetAll).
+// --- Write-time validation (S7 fail-visible: docs/alarm-concept.md §11) ---
+
+// TestAlarmCodeRowFromReq_Validation is a table of every accepted and
+// rejected shape validateAlarmCodeWrite enforces: a pin code must carry
+// a PIN on creation (an update may omit it and keep the existing hash),
+// and a hardware binding must decode strictly (no unknown fields, no
+// malformed/missing JSON, no trailing data) into the fields and edges
+// the intent router (internal/alarm/intents.go) and codes facade
+// (internal/alarm/codes) actually consume.
+func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		req          hmapi.AlarmCodeRequest
+		existingHash string
+		wantErr      bool
+	}{
+		{
+			name: "pin create with PIN is valid",
+			req:  hmapi.AlarmCodeRequest{Name: "x", Kind: "pin", PIN: "1234"},
+		},
+		{
+			name:    "pin create without PIN is rejected",
+			req:     hmapi.AlarmCodeRequest{Name: "x", Kind: "pin"},
+			wantErr: true,
+		},
+		{
+			name:         "pin update with empty PIN keeps existing hash",
+			req:          hmapi.AlarmCodeRequest{Name: "x", Kind: "pin"},
+			existingHash: "argon2id$stub",
+		},
+		{
+			name: "pin kind ignores an arbitrary/garbage binding",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "pin", PIN: "1234",
+				Binding: json.RawMessage(`{"anything":"goes","not-even":123}`),
+			},
+		},
+		{
+			name: "keypad_slot valid binding",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"area_id":"eg","arm_mode":"full"}`),
+			},
+		},
+		{
+			name:    "keypad_slot missing binding entirely is rejected",
+			req:     hmapi.AlarmCodeRequest{Name: "x", Kind: "keypad_slot"},
+			wantErr: true,
+		},
+		{
+			name: "keypad_slot malformed JSON is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{not-json`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "keypad_slot unknown binding field is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"area_id":"eg","typo_field":"x"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "keypad_slot missing device_address is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{"slot":1,"area_id":"eg"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "keypad_slot slot 0 is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":0,"area_id":"eg"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "keypad_slot slot 9 is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":9,"area_id":"eg"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "keypad_slot missing area_id is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "remote_key valid binding with disarm action",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","area_id":"eg"}`),
+			},
+		},
+		{
+			name: "remote_key valid binding with arm:<mode> action",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_LONG","action":"arm:full","area_id":"eg"}`),
+			},
+		},
+		{
+			name: "remote_key valid binding with bare arm: action",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"arm:","area_id":"eg"}`),
+			},
+		},
+		{
+			name: "remote_key unsupported parameter PRESS is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS","action":"disarm","area_id":"eg"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "remote_key missing channel_address is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"parameter":"PRESS_SHORT","action":"disarm","area_id":"eg"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "remote_key missing area_id is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "remote_key unknown action is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"bogus","area_id":"eg"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "remote_key unknown binding field is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","area_id":"eg","typo":"x"}`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "remote_key malformed JSON is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{not-json`),
+			},
+			wantErr: true,
+		},
+		{
+			name: "remote_key trailing data after binding document is rejected",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","area_id":"eg"}{}`),
+			},
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := alarmCodeRowFromReq("id1", tc.req, tc.existingHash, 1, 1)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("want a validation error, got nil")
+				}
+				if !errors.Is(err, ErrInvalidAlarmCode) {
+					t.Errorf("err = %v, want it to wrap ErrInvalidAlarmCode", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("want no error, got %v", err)
+			}
+		})
+	}
+}
+
+// TestCreateAlarmCode_InvalidBinding_Returns422 exercises the REST 422
+// mapping end to end: a create whose binding is malformed / carries an
+// unknown field / targets an unsupported remote parameter must never
+// reach the store — it answers 422 with a problem+json body naming the
+// specific defect, mirroring decodeAlarmCodeRequest's existing 422s.
+func TestCreateAlarmCode_InvalidBinding_Returns422(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		req         hmapi.AlarmCodeRequest
+		errContains string
+	}{
+		{
+			name:        "pin without PIN",
+			req:         hmapi.AlarmCodeRequest{Name: "x", Kind: "pin"},
+			errContains: "pin is required",
+		},
+		{
+			name: "remote_key unsupported parameter",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "remote_key",
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS","action":"disarm","area_id":"eg"}`),
+			},
+			errContains: "PRESS_SHORT or PRESS_LONG",
+		},
+		{
+			name: "keypad_slot unknown field",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"area_id":"eg","typo_field":"x"}`),
+			},
+			errContains: "keypad_slot binding",
+		},
+		{
+			// Syntactically valid JSON (a bare string), so it survives
+			// the outer DecodeJSON step, but the wrong shape for
+			// codes.Binding — the decode-time failure our stricter
+			// decoder (not just the outer envelope decode) must catch.
+			name: "keypad_slot binding is not a JSON object",
+			req: hmapi.AlarmCodeRequest{
+				Name: "x", Kind: "keypad_slot",
+				Binding: json.RawMessage(`"not-an-object"`),
+			},
+			errContains: "keypad_slot binding",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, admin := newAlarmCodesFixture(t)
+
+			body := alarmCodeRequestBody(t, tc.req)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/codes", body)
+			w := httptest.NewRecorder()
+			CreateAlarmCode(admin, nil).ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
+			}
+			var problemBody map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &problemBody); err != nil {
+				t.Fatalf("unmarshal problem: %v", err)
+			}
+			if problemBody["code"] != "validation" {
+				t.Errorf("code = %v, want validation", problemBody["code"])
+			}
+			detail, _ := problemBody["detail"].(string)
+			if !strings.Contains(detail, tc.errContains) {
+				t.Errorf("detail = %q, want it to contain %q", detail, tc.errContains)
+			}
+		})
+	}
+}
+
+// TestPutAlarmCode_InvalidBinding_Returns422 covers the same 422
+// mapping through the update path, where an existing pin hash is
+// present but the new binding is still validated against the kind
+// actually submitted.
+func TestPutAlarmCode_InvalidBinding_Returns422(t *testing.T) {
+	t.Parallel()
+	_, admin := newAlarmCodesFixture(t)
+	ctx := context.Background()
+
+	created, err := admin.CreateCode(ctx, hmapi.AlarmCodeRequest{Name: "Front Door", Kind: "pin", PIN: "1234", Enabled: true})
+	if err != nil {
+		t.Fatalf("seed CreateCode: %v", err)
+	}
+
+	body := alarmCodeRequestBody(t, hmapi.AlarmCodeRequest{
+		Name: "Front Door", Kind: "keypad_slot",
+		Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":11,"area_id":"eg"}`),
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/codes/"+created.ID, body)
+	req = withChiParam(req, "id", created.ID)
+	w := httptest.NewRecorder()
+	PutAlarmCode(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
+	}
+}
+
+// --- OnChange hook ---
+
+// TestAlarmCodeStoreAdmin_OnChangeHook_FiresOnceOnSuccessNotOnValidationFailure
+// pins the mutation-notification contract: the hook installed via
+// OnChange fires exactly once per successful create/update/delete (so
+// dependent surfaces like MQTT discovery's code-requirement flags
+// re-derive), and does NOT fire when a write is rejected by write-time
+// validation before it ever reaches the store.
+func TestAlarmCodeStoreAdmin_OnChangeHook_FiresOnceOnSuccessNotOnValidationFailure(t *testing.T) {
+	t.Parallel()
+	_, admin := newAlarmCodesFixture(t)
+	ctx := context.Background()
+
+	var fired int
+	admin.OnChange(func() { fired++ })
+
+	// Rejected create: no hook fire.
+	_, err := admin.CreateCode(ctx, hmapi.AlarmCodeRequest{Name: "x", Kind: "pin"})
+	if err == nil || !errors.Is(err, ErrInvalidAlarmCode) {
+		t.Fatalf("CreateCode err = %v, want ErrInvalidAlarmCode", err)
+	}
+	if fired != 0 {
+		t.Fatalf("fired = %d after a rejected create, want 0", fired)
+	}
+
+	// Successful create: hook fires once.
+	created, err := admin.CreateCode(ctx, hmapi.AlarmCodeRequest{Name: "x", Kind: "pin", PIN: "1234", Enabled: true})
+	if err != nil {
+		t.Fatalf("CreateCode: %v", err)
+	}
+	if fired != 1 {
+		t.Fatalf("fired = %d after a successful create, want 1", fired)
+	}
+
+	// Rejected update: no additional hook fire.
+	_, _, err = admin.UpdateCode(ctx, created.ID, hmapi.AlarmCodeRequest{
+		Name: "x", Kind: "keypad_slot",
+		Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":99,"area_id":"eg"}`),
+	})
+	if err == nil || !errors.Is(err, ErrInvalidAlarmCode) {
+		t.Fatalf("UpdateCode err = %v, want ErrInvalidAlarmCode", err)
+	}
+	if fired != 1 {
+		t.Fatalf("fired = %d after a rejected update, want unchanged 1", fired)
+	}
+
+	// Successful update: hook fires again.
+	if _, _, err := admin.UpdateCode(ctx, created.ID, hmapi.AlarmCodeRequest{Name: "x renamed", Kind: "pin", Enabled: true}); err != nil {
+		t.Fatalf("UpdateCode: %v", err)
+	}
+	if fired != 2 {
+		t.Fatalf("fired = %d after a successful update, want 2", fired)
+	}
+
+	// Successful delete: hook fires again.
+	if ok, err := admin.DeleteCode(ctx, created.ID); err != nil || !ok {
+		t.Fatalf("DeleteCode: ok=%v err=%v", ok, err)
+	}
+	if fired != 3 {
+		t.Fatalf("fired = %d after a successful delete, want 3", fired)
+	}
+
+	// Delete of an already-gone id: no additional hook fire.
+	if ok, err := admin.DeleteCode(ctx, created.ID); err != nil || ok {
+		t.Fatalf("DeleteCode (already gone): ok=%v err=%v", ok, err)
+	}
+	if fired != 3 {
+		t.Fatalf("fired = %d after a no-op delete, want unchanged 3", fired)
+	}
+}
+
 func TestListAlarmCodes_ReturnsSeeded(t *testing.T) {
 	t.Parallel()
 	_, admin := newAlarmCodesFixture(t)

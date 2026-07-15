@@ -307,6 +307,92 @@ func TestFacadeValidateLockoutAfterRepeatedFailures(t *testing.T) {
 	}
 }
 
+// TestFacadeValidateOperatorSourceExemptFromLockoutPreservesDuressDetection
+// verifies the rate-limiter exemption for operator sources: a run of
+// wrong attempts from an operator source never engages a lockout, so a
+// valid duress code entered right after still authenticates and
+// reports duress=true instead of being masked by a lockout's
+// ErrInvalidCode.
+func TestFacadeValidateOperatorSourceExemptFromLockoutPreservesDuressDetection(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Under Duress", "9999", true, Perms{Disarm: true}, nil),
+	}}
+	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	const attempts = rateLimitMaxAttempts + 1
+	for i := range attempts {
+		if _, _, err := f.Validate(ctx, "area-1", "disarm", "0000", "rest-operator"); !errors.Is(err, engine.ErrInvalidCode) {
+			t.Fatalf("attempt %d: err=%v want engine.ErrInvalidCode", i, err)
+		}
+	}
+
+	identity, duress, err := f.Validate(ctx, "area-1", "disarm", "9999", "rest-operator")
+	if err != nil {
+		t.Fatalf("duress code after repeated operator failures: %v", err)
+	}
+	if identity != "Under Duress" {
+		t.Errorf("identity=%q want %q", identity, "Under Duress")
+	}
+	if !duress {
+		t.Error("duress=false want true")
+	}
+}
+
+// TestFacadeValidateNonOperatorSourceStillLocksOutAfterRepeatedFailures
+// contrasts the operator exemption above: a non-operator source (mqtt)
+// still engages the rate limiter after the same run of failures, and a
+// correct (even duress) code offered within the lockout window is
+// refused — existing lockout behavior is unchanged for sources that
+// are not pre-authenticated.
+func TestFacadeValidateNonOperatorSourceStillLocksOutAfterRepeatedFailures(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Under Duress", "9999", true, Perms{Disarm: true}, nil),
+	}}
+	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	for i := range rateLimitMaxAttempts {
+		if _, _, err := f.Validate(ctx, "area-1", "disarm", "0000", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+			t.Fatalf("attempt %d: err=%v want engine.ErrInvalidCode", i, err)
+		}
+	}
+
+	if _, _, err := f.Validate(ctx, "area-1", "disarm", "9999", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+		t.Errorf("valid duress code while locked out: err=%v want engine.ErrInvalidCode", err)
+	}
+}
+
+// TestFacadeValidateOperatorSourceFailuresNeverJournalLockout verifies
+// repeated wrong operator attempts still journal each failed attempt
+// (audit value) but never engage — or journal — a lockout, since
+// operator sources bypass the rate limiter entirely.
+func TestFacadeValidateOperatorSourceFailuresNeverJournalLockout(t *testing.T) {
+	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
+		pinRow(t, "c1", "Markus", "1234", false, Perms{Disarm: true}, nil),
+	}}
+	j := &fakeJournal{}
+	f := New(Deps{Store: store, Journal: j, Clock: clock.NewFake(time.Unix(0, 0))})
+	ctx := context.Background()
+
+	const attempts = rateLimitMaxAttempts + 2
+	for i := range attempts {
+		if _, _, err := f.Validate(ctx, "area-1", "disarm", "0000", "rest-operator"); !errors.Is(err, engine.ErrInvalidCode) {
+			t.Fatalf("attempt %d: err=%v want engine.ErrInvalidCode", i, err)
+		}
+	}
+
+	events := j.events()
+	if len(events) != attempts {
+		t.Fatalf("journal events=%v want %d invalid_code faults, one per attempt", events, attempts)
+	}
+	for _, e := range events {
+		if e != "invalid_code" {
+			t.Fatalf("journal events=%v want only invalid_code faults, never code_lockout", events)
+		}
+	}
+}
+
 // TestFacadeRowsProjectsHardwareBindings verifies Rows parses a
 // keypad_slot row's binding and omits the hash field entirely (there
 // is none to omit — Row carries no Hash field at all).

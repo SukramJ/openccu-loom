@@ -214,7 +214,7 @@ func wsAlarmCodeAdminFrom(s *alarm.Service) ws.AlarmCodeAdmin {
 	if s == nil || s.Stores() == nil || s.Stores().Codes == nil {
 		return nil
 	}
-	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes)
+	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes).OnChange(s.NotifyCodesChanged)
 }
 
 // ── wsAllDevices ─────────────────────────────────────────────────────────────

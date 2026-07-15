@@ -99,20 +99,17 @@ test.describe('Alarm', () => {
     await page.goto('http://localhost:5173/app/#/alarm');
     await page.waitForSelector('#main');
 
-    // The alarm.tab.codes / alarm.codes.* catalogue entries have not been
-    // added yet (docs/alarm-concept.md §11/§12 i18n lands with the daemon
-    // integration pass), so `t()` falls back to the raw key — assert
-    // against that fallback text rather than invented copy; these
-    // assertions will need updating once the catalogue entries exist.
-    await page.getByRole('tab', { name: 'alarm.tab.codes' }).click();
+    await page.getByRole('tab', { name: 'Codes' }).click();
     await expect(page).toHaveURL(/#\/alarm\/codes$/);
-    await expect(page.getByRole('button', { name: 'alarm.codes.add' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add code' })).toBeVisible();
 
     await expect(page.getByText('Markus')).toBeVisible();
     await expect(page.getByText('Gast-Code')).toBeVisible();
     await expect(page.getByText('Haustür-Keypad Slot 1')).toBeVisible();
     await expect(page.getByText('Notfall')).toBeVisible();
-    await expect(page.getByText('alarm.codes.duress.badge')).toBeVisible();
+    // The fixture carries exactly one duress-marked code ("Notfall"), so the
+    // "Duress" badge renders exactly once on the list view.
+    await expect(page.getByText('Duress', { exact: true })).toBeVisible();
 
     // Hash/PIN never round-trip onto this surface (docs/alarm-concept.md
     // §11/§16) — the fixture does not carry one, so this also guards
@@ -136,16 +133,24 @@ test.describe('Alarm', () => {
     await page.goto('http://localhost:5173/app/#/alarm/codes');
     await page.waitForSelector('#main');
 
-    await page.getByRole('button', { name: 'alarm.codes.add' }).click();
-    await expect(page.getByText('alarm.codes.duress.warning')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Add code' }).click();
+    const dialog = page.getByRole('dialog');
+    // Match on a distinguishing substring of the (long) duress-warning
+    // copy rather than the full catalogue string, mirroring the
+    // exact:false style used elsewhere in this spec for long strings.
+    await expect(dialog.getByText('nothing changes on the panel', { exact: false })).toHaveCount(0);
 
-    await page.getByLabel('alarm.codes.field.name').fill('Notfall-Test');
+    // Scoped to the dialog: "Name" is a common accessible name reused by
+    // several other fields across the SPA (area name, sensor name, …), so
+    // an unscoped getByLabel would be a strict-mode trap the moment any of
+    // those mount alongside this drawer.
+    await dialog.getByLabel('Name', { exact: true }).fill('Notfall-Test');
     await page.locator('input[type="password"]').fill('4321');
     // The duress toggle is the first switch in the pin-kind drawer (PIN
     // field + duress row, ahead of the arm/disarm/silence permission
     // switches and the trailing enabled switch).
     await page.getByRole('switch').first().click();
-    await expect(page.getByText('alarm.codes.duress.warning')).toBeVisible();
+    await expect(dialog.getByText('nothing changes on the panel', { exact: false })).toBeVisible();
 
     await page.getByRole('button', { name: 'Save' }).click();
 
@@ -170,10 +175,10 @@ test.describe('Alarm', () => {
     await page.goto('http://localhost:5173/app/#/alarm/policies');
     await page.waitForSelector('#main');
 
-    await expect(page.getByText('alarm.policies.schedules.empty')).toBeVisible();
+    await expect(page.getByText('No schedules yet')).toBeVisible();
 
-    await page.getByRole('button', { name: 'alarm.policies.schedules.add' }).click();
-    await expect(page.getByText('alarm.policies.schedules.empty')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Add schedule' }).click();
+    await expect(page.getByText('No schedules yet')).toHaveCount(0);
     await expect(page.locator('input[type="time"]')).toHaveCount(1);
 
     await page.getByRole('button', { name: 'Save' }).click();

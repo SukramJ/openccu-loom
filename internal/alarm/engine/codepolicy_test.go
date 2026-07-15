@@ -303,6 +303,71 @@ func TestCodePolicy_OperatorSourceDuressCodeStillFiresDuress(t *testing.T) {
 	}
 }
 
+func TestCodePolicy_KeypadAndRemoteSourcesBypassDisarmCodeRequirement(t *testing.T) {
+	h := newHarness(t)
+	h.seedStandardArea() // zero-value CodePolicy: RequireDisarm defaults "true when codes exist"
+	v := newFakeCodeValidator(nil)
+	h.startWithValidator(v)
+
+	h.armFull()
+	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "keypad", ""); err != nil {
+		t.Fatalf("keypad disarm without a code: %v", err)
+	}
+	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	if n := v.callCount(); n != 0 {
+		t.Fatalf("validator calls = %d, want 0 (keypad is pre-authenticated)", n)
+	}
+
+	h.armFull()
+	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "remote", ""); err != nil {
+		t.Fatalf("remote disarm without a code: %v", err)
+	}
+	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	if n := v.callCount(); n != 0 {
+		t.Fatalf("validator calls = %d, want 0 (remote is pre-authenticated)", n)
+	}
+
+	// Contrast: mqtt carries no hardware binding, so it stays code-gated
+	// and does consult the validator.
+	h.armFull()
+	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", ""); !errors.Is(err, engine.ErrInvalidCode) {
+		t.Fatalf("mqtt disarm without a code: err = %v, want ErrInvalidCode", err)
+	}
+	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	if n := v.callCount(); n != 1 {
+		t.Fatalf("validator calls = %d, want 1 (mqtt is not pre-authenticated)", n)
+	}
+}
+
+func TestCodePolicy_KeypadSourceBypassesArmCodeRequirement(t *testing.T) {
+	v := newFakeCodeValidator(nil)
+
+	t.Run("keypad arm without a code succeeds without consulting the validator", func(t *testing.T) {
+		h := newHarness(t)
+		h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(false), nil))
+		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
+		h.startWithValidator(v)
+
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester", Source: "keypad"}); err != nil {
+			t.Fatalf("keypad arm without a code: %v", err)
+		}
+		if n := v.callCount(); n != 0 {
+			t.Fatalf("validator calls = %d, want 0 (keypad is pre-authenticated)", n)
+		}
+	})
+
+	t.Run("mqtt arm without a code is refused", func(t *testing.T) {
+		h := newHarness(t)
+		h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(false), nil))
+		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
+		h.startWithValidator(v)
+
+		if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester", Source: "mqtt"}); !errors.Is(err, engine.ErrInvalidCode) {
+			t.Fatalf("err = %v, want ErrInvalidCode", err)
+		}
+	})
+}
+
 func TestCodePolicy_NilValidatorDisablesEveryPolicy(t *testing.T) {
 	h := newHarness(t)
 	h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(true), map[string]bool{"mqtt": true}))

@@ -46,6 +46,8 @@ const EN: Catalog = {
   "alarm.tab.overview": "Overview",
   "alarm.tab.sensors": "Sensors",
   "alarm.tab.outputs": "Outputs",
+  "alarm.tab.policies": "Policies",
+  "alarm.tab.codes": "Codes",
   "alarm.tab.journal": "Journal",
   "alarm.tab.walktest": "Walk test",
   // Arm modes (§4).
@@ -2524,6 +2526,8 @@ const DE: Catalog = {
   "alarm.tab.overview": "Übersicht",
   "alarm.tab.sensors": "Sensoren",
   "alarm.tab.outputs": "Ausgänge",
+  "alarm.tab.policies": "Richtlinien",
+  "alarm.tab.codes": "Codes",
   "alarm.tab.journal": "Journal",
   "alarm.tab.walktest": "Begehungstest",
   // Scharfschalt-Modi (§4).

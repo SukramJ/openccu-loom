@@ -4,11 +4,14 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,7 +22,20 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
+
+// ErrInvalidAlarmCode is the sentinel every alarm-code write-time
+// validation failure wraps (docs/alarm-concept.md §11, S7
+// fail-visible): a binding or PIN that could never authenticate or
+// never fire must be rejected at write time rather than stored and
+// silently inert. Both the REST handlers and the WS codes_* commands
+// share AlarmCodeStoreAdmin, so a check here covers both surfaces.
+var ErrInvalidAlarmCode = errors.New("handlers: invalid alarm code request")
+
+// errUnexpectedBindingTrailer reports extra content after the decoded
+// binding document (e.g. a second concatenated JSON value).
+var errUnexpectedBindingTrailer = errors.New("unexpected trailing data after binding document")
 
 // AlarmCodeAdmin is the narrow facade the /alarm/codes handlers drive: a
 // CRUD surface over the alarm-code store that owns the argon2id hashing
@@ -103,7 +119,7 @@ func CreateAlarmCode(admin AlarmCodeAdmin, rec audit.Recorder) http.HandlerFunc 
 		}
 		created, err := admin.CreateCode(r.Context(), req)
 		if err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Create alarm code failed", err)
+			writeAlarmCodeAdminError(w, r, "Create alarm code failed", err)
 			return
 		}
 		recordAlarm(rec, r, audit.ActionAlarmCodeChange, "code_create="+created.ID)
@@ -127,7 +143,7 @@ func PutAlarmCode(admin AlarmCodeAdmin, rec audit.Recorder) http.HandlerFunc {
 		}
 		_, found, err := admin.UpdateCode(r.Context(), id, req)
 		if err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Update alarm code failed", err)
+			writeAlarmCodeAdminError(w, r, "Update alarm code failed", err)
 			return
 		}
 		if !found {
@@ -193,6 +209,20 @@ func writeAlarmCodesUnavailable(w http.ResponseWriter, r *http.Request) {
 		problem.New(problem.TypeServiceUnready, r, "Alarm code subsystem unavailable", ""))
 }
 
+// writeAlarmCodeAdminError maps a CreateCode/UpdateCode failure onto its
+// wire status: a write-time validation failure (ErrInvalidAlarmCode)
+// answers 422 with the human-readable detail, mirroring
+// decodeAlarmCodeRequest's 422 style; every other failure (store I/O,
+// hashing) stays a 500.
+func writeAlarmCodeAdminError(w http.ResponseWriter, r *http.Request, title string, err error) {
+	if errors.Is(err, ErrInvalidAlarmCode) {
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Invalid alarm code", err.Error()))
+		return
+	}
+	writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, title, err)
+}
+
 // AlarmCodeStoreAdmin implements AlarmCodeAdmin (and the identical WS
 // facade) over the alarm-code store, mapping the wire DTOs onto stored
 // rows and hashing the write-only PIN through the codes domain helper
@@ -200,7 +230,8 @@ func writeAlarmCodesUnavailable(w http.ResponseWriter, r *http.Request) {
 // adapter — it is read from the store to preserve on a PIN-less update,
 // and written on hash, but never surfaced onto an [hmapi.AlarmCode].
 type AlarmCodeStoreAdmin struct {
-	store *sqlitestore.AlarmCodeStore
+	store    *sqlitestore.AlarmCodeStore
+	onChange func()
 }
 
 // Compile-time proof the store adapter satisfies the handler port.
@@ -211,6 +242,22 @@ var _ AlarmCodeAdmin = (*AlarmCodeStoreAdmin)(nil)
 // interface at the composition root instead.
 func NewAlarmCodeStoreAdmin(store *sqlitestore.AlarmCodeStore) *AlarmCodeStoreAdmin {
 	return &AlarmCodeStoreAdmin{store: store}
+}
+
+// OnChange installs a hook fired after every successful code mutation.
+// The composition root wires it to the alarm service's codes-changed
+// notification so dependent surfaces (MQTT discovery's effective
+// code-requirement flags) re-derive their projections.
+func (a *AlarmCodeStoreAdmin) OnChange(fn func()) *AlarmCodeStoreAdmin {
+	a.onChange = fn
+	return a
+}
+
+// notifyChanged fires the mutation hook, if any.
+func (a *AlarmCodeStoreAdmin) notifyChanged() {
+	if a.onChange != nil {
+		a.onChange()
+	}
 }
 
 // ListCodes returns every code as a hash-free projection.
@@ -246,6 +293,7 @@ func (a *AlarmCodeStoreAdmin) CreateCode(ctx context.Context, req hmapi.AlarmCod
 	if err := a.store.Upsert(ctx, row); err != nil {
 		return hmapi.AlarmCode{}, err
 	}
+	a.notifyChanged()
 	return alarmCodeFromRow(row), nil
 }
 
@@ -263,6 +311,7 @@ func (a *AlarmCodeStoreAdmin) UpdateCode(ctx context.Context, id string, req hma
 	if err := a.store.Upsert(ctx, row); err != nil {
 		return hmapi.AlarmCode{}, false, err
 	}
+	a.notifyChanged()
 	return alarmCodeFromRow(row), true, nil
 }
 
@@ -275,6 +324,7 @@ func (a *AlarmCodeStoreAdmin) DeleteCode(ctx context.Context, id string) (bool, 
 	if err := a.store.Delete(ctx, id); err != nil {
 		return false, err
 	}
+	a.notifyChanged()
 	return true, nil
 }
 
@@ -284,6 +334,9 @@ func (a *AlarmCodeStoreAdmin) DeleteCode(ctx context.Context, id string) (bool, 
 // perms/areas/binding are stored as the whole JSON documents the codes
 // facade reads back.
 func alarmCodeRowFromReq(id string, req hmapi.AlarmCodeRequest, existingHash string, createdMS, updatedMS int64) (sqlitestore.AlarmCodeRow, error) {
+	if err := validateAlarmCodeWrite(req, existingHash); err != nil {
+		return sqlitestore.AlarmCodeRow{}, err
+	}
 	hash := existingHash
 	switch {
 	case req.Kind != string(codes.KindPIN):
@@ -326,6 +379,98 @@ func alarmCodeRowFromReq(id string, req hmapi.AlarmCodeRequest, existingHash str
 		CreatedAtMS:  createdMS,
 		UpdatedAtMS:  updatedMS,
 	}, nil
+}
+
+// validRemoteKeyParameters is the set of remote-binding parameters the
+// intent router actually routes: internal/alarm/intents.go onEvent
+// dispatches handleRemotePress only for hmenum.ParameterPressShort /
+// hmenum.ParameterPressLong. A binding on any other parameter (e.g. a
+// typo'd "PRESS") is accepted by the wire schema but can never fire,
+// so it is rejected here rather than stored inert (S7 fail-visible).
+var validRemoteKeyParameters = map[string]struct{}{
+	string(hmenum.ParameterPressShort): {},
+	string(hmenum.ParameterPressLong):  {},
+}
+
+// validateAlarmCodeWrite enforces the write-time invariants a stored
+// code needs to ever authenticate or fire (docs/alarm-concept.md §11,
+// S7 fail-visible): a pin code must carry a PIN on creation, and a
+// hardware binding must be well-formed JSON targeting only the fields
+// and edges the intent router (internal/alarm/intents.go) and codes
+// facade (internal/alarm/codes) consume. A rejected write never
+// reaches the store, so a typo'd or unsupported binding cannot be
+// saved and silently never fire.
+func validateAlarmCodeWrite(req hmapi.AlarmCodeRequest, existingHash string) error {
+	switch req.Kind {
+	case string(codes.KindPIN):
+		if existingHash == "" && req.PIN == "" {
+			return fmt.Errorf("pin is required for a new pin code: %w", ErrInvalidAlarmCode)
+		}
+	case string(codes.KindKeypadSlot):
+		b, err := decodeStrictBinding(req.Binding)
+		if err != nil {
+			return fmt.Errorf("keypad_slot binding: %w: %w", err, ErrInvalidAlarmCode)
+		}
+		if b.DeviceAddress == "" {
+			return fmt.Errorf("keypad_slot binding requires device_address: %w", ErrInvalidAlarmCode)
+		}
+		if b.Slot < 1 || b.Slot > 8 {
+			return fmt.Errorf("keypad_slot binding slot must be 1..8: %w", ErrInvalidAlarmCode)
+		}
+		if b.AreaID == "" {
+			return fmt.Errorf("keypad_slot binding requires area_id: %w", ErrInvalidAlarmCode)
+		}
+	case string(codes.KindRemoteKey):
+		b, err := decodeStrictBinding(req.Binding)
+		if err != nil {
+			return fmt.Errorf("remote_key binding: %w: %w", err, ErrInvalidAlarmCode)
+		}
+		if b.ChannelAddress == "" {
+			return fmt.Errorf("remote_key binding requires channel_address: %w", ErrInvalidAlarmCode)
+		}
+		if b.AreaID == "" {
+			return fmt.Errorf("remote_key binding requires area_id: %w", ErrInvalidAlarmCode)
+		}
+		if _, ok := validRemoteKeyParameters[b.Parameter]; !ok {
+			return fmt.Errorf("remote_key binding parameter must be PRESS_SHORT or PRESS_LONG: %w", ErrInvalidAlarmCode)
+		}
+		if !validRemoteKeyAction(b.Action) {
+			return fmt.Errorf("remote_key binding action must be disarm, silence, panic, or arm:<mode>: %w", ErrInvalidAlarmCode)
+		}
+	}
+	return nil
+}
+
+// validRemoteKeyAction reports whether action is one of the verbs
+// dispatchRemoteAction (internal/alarm/intents.go) actually executes:
+// the fixed strings disarm/silence/panic, or an "arm:<mode>" prefix
+// (a bare "arm:" is valid too — dispatchArm defaults an empty mode to
+// full protection).
+func validRemoteKeyAction(action string) bool {
+	switch action {
+	case "disarm", "silence", "panic":
+		return true
+	default:
+		return strings.HasPrefix(action, "arm:")
+	}
+}
+
+// decodeStrictBinding decodes raw into a codes.Binding, rejecting a
+// malformed document, unknown fields, and any trailing data — the
+// three shapes review found being silently accepted and stored inert.
+// An empty/missing binding is reported as io.EOF via the decoder so
+// its caller's error message stays uniform.
+func decodeStrictBinding(raw json.RawMessage) (codes.Binding, error) {
+	var b codes.Binding
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&b); err != nil {
+		return codes.Binding{}, err
+	}
+	if dec.More() {
+		return codes.Binding{}, errUnexpectedBindingTrailer
+	}
+	return b, nil
 }
 
 // alarmCodeFromRow maps a stored row onto the hash-free wire projection.

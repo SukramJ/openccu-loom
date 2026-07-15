@@ -4813,6 +4813,7 @@ paths:
             schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
       responses:
         "204": { description: Disarmed }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/AlarmInvalidCode" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -4840,6 +4841,7 @@ paths:
             schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
       responses:
         "204": { description: Silenced }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/AlarmInvalidCode" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -4868,6 +4870,7 @@ paths:
             schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
       responses:
         "204": { description: Acknowledged }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /alarm/silence-all:

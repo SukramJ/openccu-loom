@@ -142,11 +142,19 @@ type pinCandidate struct {
 // codes exist.
 func (f *Facade) Validate(ctx context.Context, areaID, verb, code, source string) (identity string, duress bool, err error) {
 	now := f.clk.Now()
-	if allowed, remaining := f.limiter.allow(source, now); !allowed {
-		f.journalFault(ctx, areaID, source, "code_locked_out", map[string]any{
-			"remaining_s": int(remaining.Seconds()),
-		})
-		return "", false, engine.ErrInvalidCode
+	// Operator (break-glass) sources are exempt from rate limiting: the
+	// session is already the authenticated factor, so a lockout protects
+	// nothing — and short-circuiting here would silently suppress duress
+	// detection on a valid duress code entered under coercion, exactly
+	// when it matters most (docs/alarm-concept.md §11/§16).
+	opSource := engine.IsOperatorSource(source)
+	if !opSource {
+		if allowed, remaining := f.limiter.allow(source, now); !allowed {
+			f.journalFault(ctx, areaID, source, "code_locked_out", map[string]any{
+				"remaining_s": int(remaining.Seconds()),
+			})
+			return "", false, engine.ErrInvalidCode
+		}
 	}
 
 	candidates, err := f.pinCandidates(ctx, areaID, now.UnixMilli())
@@ -161,7 +169,7 @@ func (f *Facade) Validate(ctx context.Context, areaID, verb, code, source string
 			// policy resolves to inert.
 			return "", false, nil
 		}
-		f.recordInvalid(ctx, areaID, source, "code_missing")
+		f.recordInvalid(ctx, areaID, source, "code_missing", opSource)
 		return "", false, engine.ErrInvalidCode
 	}
 
@@ -179,8 +187,19 @@ func (f *Facade) Validate(ctx context.Context, areaID, verb, code, source string
 		return c.name, c.duress, nil
 	}
 
-	f.recordInvalid(ctx, areaID, source, "invalid_code")
+	f.recordInvalid(ctx, areaID, source, "invalid_code", opSource)
 	return "", false, engine.ErrInvalidCode
+}
+
+// HasPINCodes reports whether any enabled, in-validity pin code applies
+// to areaID — the "codes exist" half of the effective code requirement
+// (docs/alarm-concept.md §11). MQTT discovery uses it to advertise
+// code_arm_required / code_disarm_required exactly as the engine will
+// enforce them: a policy default resolves to required only while such a
+// code exists, so HA prompts for a code precisely when one is needed.
+func (f *Facade) HasPINCodes(ctx context.Context, areaID string) bool {
+	cands, err := f.pinCandidates(ctx, areaID, f.clk.Now().UnixMilli())
+	return err == nil && len(cands) > 0
 }
 
 // Rows returns every parsed alarm-code row for hardware-intent routing
@@ -250,9 +269,14 @@ func (f *Facade) pinCandidates(ctx context.Context, areaID string, nowMS int64) 
 // recordInvalid registers a wrong or missing-but-required attempt: it
 // journals the fault, feeds the rate limiter, and journals a second
 // entry plus a warning log ("health note") if that attempt just
-// engaged a new lockout.
-func (f *Facade) recordInvalid(ctx context.Context, areaID, source, event string) {
+// engaged a new lockout. Operator sources journal only — their wrong
+// attempts must never accumulate toward a lockout that would later
+// suppress duress detection.
+func (f *Facade) recordInvalid(ctx context.Context, areaID, source, event string, operatorSource bool) {
 	f.journalFault(ctx, areaID, source, event, nil)
+	if operatorSource {
+		return
+	}
 	lockout := f.limiter.recordFailure(source, f.clk.Now())
 	if lockout <= 0 {
 		return
