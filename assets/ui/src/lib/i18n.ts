@@ -2463,7 +2463,7 @@ const DE: Catalog = {
   "alarm.bypass.force_arm": "Erzwingen",
   "alarm.bypass.empty": "Keine blockierenden Sensoren.",
   // Countdown (§12.1).
-  "alarm.countdown.exit": "Ausgangsverzögerung",
+  "alarm.countdown.exit": "Austrittsverzögerung",
   "alarm.countdown.entry": "Eintrittsverzögerung",
   "alarm.countdown.seconds": "{s} s",
   // Ausgelöst-Ansicht (§12.1).
@@ -2542,7 +2542,7 @@ const DE: Catalog = {
   "alarm.sensor_type.panic": "Panik",
   // Sensor-Flags (§6.2).
   "alarm.flags.title": "Flags",
-  "alarm.flag.use_exit_delay": "Ausgangsverzögerung",
+  "alarm.flag.use_exit_delay": "Austrittsverzögerung",
   "alarm.flag.use_entry_delay": "Eintrittsverzögerung",
   "alarm.flag.entry_delay_override": "Eintrittsverzögerung überschreiben (s)",
   "alarm.flag.always_on": "Immer aktiv",

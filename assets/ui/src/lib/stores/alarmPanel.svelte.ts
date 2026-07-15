@@ -52,7 +52,15 @@ const JOURNAL_MAX = 200;
  */
 function createAlarmPanelStore() {
   // Live per-area status (state machine + incident + countdown snapshot).
-  let areas = $state<AlarmAreaStatus[]>([]);
+  // LiveAreaStatus widens the REST DTO: the live triggered broadcast
+  // carries the cause and sensor name, which the snapshot endpoint
+  // reconstructs from the journal instead — keep them when we have them.
+  type LiveIncident = NonNullable<AlarmAreaStatus["incident"]> & {
+    cause?: string;
+    sensor_name?: string;
+  };
+  type LiveAreaStatus = Omit<AlarmAreaStatus, "incident"> & { incident?: LiveIncident };
+  let areas = $state<LiveAreaStatus[]>([]);
   // Config-level area list (identity + ordering) — drives "no areas yet"
   // empty state + the wizard entry point.
   let areasConfig = $state<AlarmArea[]>([]);
@@ -198,13 +206,28 @@ function createAlarmPanelStore() {
             ...areas[i],
             state: "triggered",
             mode: p.mode ?? areas[i].mode,
-            incident: { id: String(p.incident_id), silenced: false },
+            incident: {
+              id: String(p.incident_id),
+              silenced: false,
+              cause: p.cause,
+              sensor_name: p.sensor_name,
+            },
           };
         }
         break;
       }
       case "alarm.journal_appended": {
         const p = ev.payload as AlarmJournalAppendedPayload;
+        if (p.event === "silenced" && p.area_id) {
+          const i = areaIndex(p.area_id);
+          const inc = i >= 0 ? areas[i].incident : undefined;
+          if (i >= 0 && inc) {
+            areas[i] = {
+              ...areas[i],
+              incident: { ...inc, silenced: true },
+            };
+          }
+        }
         // The broadcast carries only the entry head; synthesize a
         // display row (the Journal view re-fetches for authoritative
         // detail). `when` is approximated with the receive time.

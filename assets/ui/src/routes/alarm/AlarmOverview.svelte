@@ -144,6 +144,12 @@
   // Cause + time line for a triggered card, drawn from the trigger-class
   // journal entry linked to the open incident.
   function causeLine(area: AlarmAreaStatus): string {
+    // The live triggered broadcast carries the sensor name directly;
+    // the journal lookup below covers snapshot-loaded incidents.
+    const live = area.incident as (typeof area.incident & { sensor_name?: string }) | undefined;
+    if (live?.sensor_name) {
+      return t("alarm.triggered.cause_short", { sensor: live.sensor_name });
+    }
     const iid = area.incident?.id;
     const e = iid
       ? store.journal.find(
