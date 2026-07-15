@@ -571,6 +571,10 @@
           "wire_value": "action_select"
         },
         {
+          "go_name": "DataPointCategoryAlarmControlPanel",
+          "wire_value": "alarm_control_panel"
+        },
+        {
           "go_name": "DataPointCategoryBinarySensor",
           "wire_value": "binary_sensor"
         },
@@ -687,6 +691,10 @@
     {
       "name": "DataPointType",
       "values": [
+        {
+          "go_name": "DataPointTypeAlarmControlPanel",
+          "wire_value": "alarm_control_panel"
+        },
         {
           "go_name": "DataPointTypeBinarySensor",
           "wire_value": "binary_sensor"

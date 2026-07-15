@@ -14,6 +14,7 @@ import (
 	alarmpkg "github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -35,6 +36,8 @@ type AlarmPanelQuery interface {
 	// Stores exposes the alarm store bundle so the journal read can
 	// query the persistent event log.
 	Stores() *alarmpkg.Stores
+	// Panels exposes the alarm-control-panel entity projections.
+	Panels() []alarmpanel.Panel
 }
 
 // AlarmPanelCommandsConfig bundles the alarm-panel facade consumed by
@@ -58,6 +61,7 @@ func RegisterAlarmPanelCommands(router *Router, cfg AlarmPanelCommandsConfig) {
 	router.Register("alarm_panel.silence_all", alarmSilenceAllHandler(cfg.Panel))
 	router.Register("alarm_panel.acknowledge", alarmAcknowledgeHandler(cfg.Panel))
 	router.Register("alarm_panel.state", alarmStateHandler(cfg.Panel))
+	router.Register("alarm_panel.panels", alarmPanelPanelsHandler(cfg.Panel))
 	router.Register("alarm_panel.readiness", alarmReadinessHandler(cfg.Panel))
 	router.Register("alarm_panel.journal", alarmJournalHandler(cfg.Panel))
 	router.Register("alarm_panel.walktest_status", alarmWalkTestStatusHandler(cfg.Panel))
@@ -442,5 +446,32 @@ func alarmEngineError(err error) *CommandError {
 		return NewCommandError("conflict", err.Error())
 	default:
 		return NewCommandError(CommandErrorInternal, err.Error())
+	}
+}
+
+// alarmPanelPanelsHandler serves the entity projection (same view as
+// GET /api/v1/alarm/panels and the MQTT discovery entities).
+func alarmPanelPanelsHandler(svc AlarmPanelQuery) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		panels := svc.Panels()
+		out := make([]hmapi.AlarmPanelEntity, 0, len(panels))
+		for i := range panels {
+			p := &panels[i]
+			modes := make([]string, 0, len(p.Modes))
+			for _, m := range p.Modes {
+				modes = append(modes, string(m))
+			}
+			out = append(out, hmapi.AlarmPanelEntity{
+				UniqueID:       p.UniqueID,
+				AreaID:         p.AreaID,
+				Name:           p.Name,
+				Category:       string(p.Category()),
+				State:          p.State,
+				SupportedModes: modes,
+				Available:      p.Available,
+				Master:         p.Master,
+			})
+		}
+		return map[string]any{"panels": out}, nil
 	}
 }

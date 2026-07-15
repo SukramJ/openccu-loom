@@ -29,6 +29,7 @@ func wireSystemStatusSubscribers(
 	wsHub *ws.Hub,
 	mqttWiring *mqtt.Wiring,
 	alarmSvc *alarm.Service,
+	alarmSink *alarmMQTTSink,
 	logger *slog.Logger,
 ) (sysStatusBuf *handlers.SystemStatusBuffer, teardown func()) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
@@ -65,8 +66,24 @@ func wireSystemStatusSubscribers(
 		mqttSysStatus.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
 	}
 
+	// The MQTT alarm publisher mirrors the daemon-level alarm engine onto
+	// the HA alarm_control_panel plane. Nil-safe: only wired when both the
+	// alarm service and MQTT wiring are present. It owns the FAILED_TO_ARM
+	// event, so the command sink's master-arm failure hook points at it.
+	var mqttAlarm *mqtt.AlarmMQTTPublisher
+	if mqttWiring != nil && alarmSvc != nil {
+		mqttAlarm = mqtt.NewAlarmMQTTPublisher(alarmSvc, mqttWiring, logger)
+		mqttAlarm.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
+		if alarmSink != nil {
+			alarmSink.setArmFailureHook(mqttAlarm.PublishFailedToArm)
+		}
+	}
+
 	teardown = func() {
 		// LIFO: mirror the order the original inline defers would have run.
+		if mqttAlarm != nil {
+			mqttAlarm.Stop()
+		}
 		if mqttSysStatus != nil {
 			mqttSysStatus.Stop()
 		}

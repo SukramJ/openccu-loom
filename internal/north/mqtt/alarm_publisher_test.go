@@ -1,0 +1,443 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package mqtt
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+
+	"github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/clock"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+)
+
+// alarmPublisherFixtureStart is the fixture wall-clock origin, kept
+// after the engine's clock-plausibility epoch (see
+// internal/north/rest/handlers/alarm_fixture_test.go's identical
+// convention) so persisted state behaves the way it would in
+// production.
+var alarmPublisherFixtureStart = time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+
+// alarmPublisherFixtureCentral is the fixed central name fixture
+// sensors resolve under. No central is ever registered, so sensor
+// reads always come back "unknown" — irrelevant here, the tests drive
+// state through direct engine calls.
+const alarmPublisherFixtureCentral = "c1"
+
+// alarmPublisherFixture wires a real [alarm.Service] (engine + output
+// manager + bus) over a migrated temporary SQLite database — the same
+// component shape production assembles, minus any registered central
+// — plus a real [Bridge]/[Wiring] pair over a [mockPublisher] so
+// publishes can be asserted directly. It is deliberately not a fake:
+// [AlarmMQTTPublisher] depends on the concrete *alarm.Service and
+// *Bridge types, so exercising the real engine's state machine is both
+// the simplest and the most faithful way to drive it.
+type alarmPublisherFixture struct {
+	t    *testing.T
+	svc  *alarm.Service
+	eng  *engine.Engine
+	pub  *AlarmMQTTPublisher
+	mp   *mockPublisher
+	base string
+}
+
+// newAlarmPublisherFixture builds and starts an empty alarm service (no
+// areas) plus a bound [AlarmMQTTPublisher] that has NOT been started
+// yet — tests seed areas first, then call start() so the publisher's
+// initial reconcile observes the pre-seeded areas, mirroring
+// [AlarmMQTTPublisher.Start]'s documented "catch areas that already
+// exist" behavior.
+func newAlarmPublisherFixture(t *testing.T) *alarmPublisherFixture {
+	t.Helper()
+	ctx := context.Background()
+	db, err := sqlitestore.Open(ctx, sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm.db")))
+	if err != nil {
+		t.Fatalf("open alarm fixture db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	stores := alarm.NewStores(db)
+	clk := clock.NewFake(alarmPublisherFixtureStart)
+	svc, err := alarm.NewService(alarm.Deps{
+		Settings: alarm.Settings{Enabled: true},
+		Registry: central.NewRegistry(),
+		Stores:   stores,
+		Clock:    clk,
+		Logger:   slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("alarm.NewService: %v", err)
+	}
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("svc.Start: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Stop(context.Background()) })
+
+	bridge, mp := newTestBridge(t)
+	wiring := NewWiring(bridge, slog.Default())
+	pub := NewAlarmMQTTPublisher(svc, wiring, slog.Default())
+
+	return &alarmPublisherFixture{t: t, svc: svc, eng: svc.Engine(), pub: pub, mp: mp, base: "openccu-loom"}
+}
+
+// seedArea persists an area row (full-mode, zero delays so Arm
+// completes synchronously) and reloads the service.
+func (f *alarmPublisherFixture) seedArea(id, name string, cfg engine.AreaConfig) {
+	f.t.Helper()
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		f.t.Fatalf("marshal area config: %v", err)
+	}
+	now := time.Now().UnixMilli()
+	stores := f.svc.Stores()
+	if err := stores.Areas.Upsert(context.Background(), sqlitestore.AlarmAreaRow{
+		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		f.t.Fatalf("seed area %s: %v", id, err)
+	}
+	if err := f.svc.Reload(context.Background()); err != nil {
+		f.t.Fatalf("reload after seeding area %s: %v", id, err)
+	}
+}
+
+// seedSensor persists an instant (no entry delay) sensor under areaID
+// and reloads.
+func (f *alarmPublisherFixture) seedSensor(id, areaID, name string, modes []hmenum.AlarmMode) {
+	f.t.Helper()
+	cfg := engine.SensorConfig{Modes: modes}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		f.t.Fatalf("marshal sensor config: %v", err)
+	}
+	now := time.Now().UnixMilli()
+	stores := f.svc.Stores()
+	if err := stores.Sensors.Upsert(context.Background(), sqlitestore.AlarmSensorRow{
+		ID: id, AreaID: areaID, CentralName: alarmPublisherFixtureCentral, InterfaceID: "HmIP-RF",
+		ChannelAddress: id + ":1", Parameter: "STATE", SensorType: hmenum.AlarmSensorTypeDoor,
+		Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		f.t.Fatalf("seed sensor %s: %v", id, err)
+	}
+	if err := f.svc.Reload(context.Background()); err != nil {
+		f.t.Fatalf("reload after seeding sensor %s: %v", id, err)
+	}
+}
+
+// removeArea deletes an area row and reloads.
+func (f *alarmPublisherFixture) removeArea(id string) {
+	f.t.Helper()
+	if err := f.svc.Stores().Areas.Delete(context.Background(), id); err != nil {
+		f.t.Fatalf("delete area %s: %v", id, err)
+	}
+	if err := f.svc.Reload(context.Background()); err != nil {
+		f.t.Fatalf("reload after removing area %s: %v", id, err)
+	}
+}
+
+// start starts the publisher and stops it on test cleanup, marking
+// every published panel offline.
+func (f *alarmPublisherFixture) start() {
+	f.t.Helper()
+	f.pub.Start()
+	f.t.Cleanup(f.pub.Stop)
+}
+
+// zeroDelayFullMode is a single-mode area configuration with no exit
+// or entry delay, so Arm/trigger transitions complete synchronously —
+// the tests need no fake-clock advancement to observe the resulting
+// state.
+func zeroDelayFullMode() engine.AreaConfig {
+	return engine.AreaConfig{
+		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
+			hmenum.AlarmModeFull: {},
+		},
+	}
+}
+
+// --- publication lookup helpers ---
+
+// findPublish returns the most recent recorded publish to topic, or
+// (zero, false) when none exists yet.
+func (f *alarmPublisherFixture) findPublish(topic string) (publishRecord, bool) {
+	f.t.Helper()
+	f.mp.mu.Lock()
+	defer f.mp.mu.Unlock()
+	var found publishRecord
+	ok := false
+	for _, rec := range f.mp.sent {
+		if rec.topic == topic {
+			found = rec
+			ok = true
+		}
+	}
+	return found, ok
+}
+
+// waitForPublish polls until a publish to topic satisfies want, or
+// fails the test after a bounded timeout. The publisher's reconcile
+// worker runs on its own goroutine, so assertions after a bus event
+// cannot rely on synchronous delivery.
+func (f *alarmPublisherFixture) waitForPublish(topic string, want func(publishRecord) bool) publishRecord {
+	f.t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	var last publishRecord
+	var lastOK bool
+	for time.Now().Before(deadline) {
+		if rec, ok := f.findPublish(topic); ok {
+			last, lastOK = rec, true
+			if want(rec) {
+				return rec
+			}
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if lastOK {
+		f.t.Fatalf("publish to %s never matched; last seen payload=%q retain=%v", topic, last.payload, last.retain)
+	} else {
+		f.t.Fatalf("no publish to %s observed within timeout", topic)
+	}
+	return publishRecord{}
+}
+
+// --- tests ---
+
+// TestAlarmMQTTPublisher_RetainedDiscoveryAndStateOnStart covers the
+// pre-existing-area case: an area configured before the publisher
+// starts still gets its retained discovery config, state, and
+// availability published once Start runs its catch-up reconcile.
+func TestAlarmMQTTPublisher_RetainedDiscoveryAndStateOnStart(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+
+	discTopic := "homeassistant/alarm_control_panel/alarm/eg/config"
+	rec := f.waitForPublish(discTopic, func(publishRecord) bool { return true })
+	if !rec.retain {
+		t.Errorf("discovery publish for eg must be retained")
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(rec.payload), &body); err != nil {
+		t.Fatalf("unmarshal discovery payload: %v", err)
+	}
+	if body["name"] != "Erdgeschoss" {
+		t.Errorf("discovery name = %v, want Erdgeschoss", body["name"])
+	}
+
+	stateTopic := f.base + "/alarm/eg/state"
+	stRec := f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	if !stRec.retain {
+		t.Errorf("state publish for eg must be retained")
+	}
+
+	availTopic := f.base + "/alarm/eg/availability"
+	avRec := f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
+	if !avRec.retain {
+		t.Errorf("availability publish for eg must be retained")
+	}
+}
+
+// TestAlarmMQTTPublisher_StateTokenUpdatesOnStateChanged drives a real
+// arm transition through the engine and confirms the retained state
+// topic republishes with the new HA token.
+func TestAlarmMQTTPublisher_StateTokenUpdatesOnStateChanged(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+
+	stateTopic := f.base + "/alarm/eg/state"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+
+	if _, err := f.eng.Arm(context.Background(), "eg", engine.ArmRequest{
+		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
+	}); err != nil {
+		t.Fatalf("Arm: %v", err)
+	}
+
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+}
+
+// TestAlarmMQTTPublisher_AvailabilityFlipsOnHealthChanged publishes an
+// AlarmHealthChangedEvent directly on the service bus (the same event
+// [alarm.Service] emits on a real health transition) and confirms every
+// known panel's availability topic flips offline, then back online.
+func TestAlarmMQTTPublisher_AvailabilityFlipsOnHealthChanged(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+
+	availTopic := f.base + "/alarm/eg/availability"
+	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
+
+	events.Publish(f.svc.Bus(), hmevent.AlarmHealthChangedEvent{
+		Base: hmevent.NewBaseAt(time.Now()), Healthy: false, Note: "test degradation",
+	})
+	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "offline" })
+
+	events.Publish(f.svc.Bus(), hmevent.AlarmHealthChangedEvent{
+		Base: hmevent.NewBaseAt(time.Now()), Healthy: true, Note: "",
+	})
+	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "online" })
+}
+
+// TestAlarmMQTTPublisher_RetractsRemovedArea covers area deletion: once
+// an area drops out of the engine's snapshot, the publisher must clear
+// (empty, retained) its discovery/state/availability topics instead of
+// leaving stale retained messages on the broker.
+//
+// The area under test is armed before removal rather than left
+// disarmed: engine.Reload (docs: "removed areas are disarmed ...
+// before they vanish") forces an armed area through a disarm
+// transition first, and that transition is what actually publishes an
+// AlarmStateChangedEvent the publisher's reconcile worker reacts to.
+// Removing an already-disarmed area publishes no bus event at all —
+// [Engine.refreshReadiness] only republishes when a surviving area's
+// own readiness verdict changes, which an unrelated area's removal
+// never does — so a reconcile is not guaranteed to run promptly for
+// that case. That gap sits in the reconcile-trigger wiring, not in the
+// diff/retract logic this test exercises.
+func TestAlarmMQTTPublisher_RetractsRemovedArea(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.seedArea("og", "Obergeschoss", zeroDelayFullMode())
+	f.start()
+
+	discTopic := "homeassistant/alarm_control_panel/alarm/og/config"
+	stateTopic := f.base + "/alarm/og/state"
+	availTopic := f.base + "/alarm/og/availability"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+
+	if _, err := f.eng.Arm(context.Background(), "og", engine.ArmRequest{
+		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
+	}); err != nil {
+		t.Fatalf("Arm og: %v", err)
+	}
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+
+	f.removeArea("og")
+
+	f.waitForPublish(discTopic, func(r publishRecord) bool { return r.payload == "" })
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == "" })
+	f.waitForPublish(availTopic, func(r publishRecord) bool { return r.payload == "" })
+}
+
+// TestAlarmMQTTPublisher_MasterAggregationAcrossTwoAreas covers the
+// aggregate master panel: it appears only once a second area exists,
+// tracks the union of both areas' state via [Masteralarmpanel.StateToken],
+// and disappears again once the area count drops back below two.
+func TestAlarmMQTTPublisher_MasterAggregationAcrossTwoAreas(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+
+	masterState := f.base + "/alarm/master/state"
+	masterDisc := "homeassistant/alarm_control_panel/alarm/master/config"
+
+	// A single area never gets a master panel.
+	f.waitForPublish(f.base+"/alarm/eg/state", func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	time.Sleep(20 * time.Millisecond)
+	if _, ok := f.findPublish(masterState); ok {
+		t.Fatalf("master panel published with only one area configured")
+	}
+
+	f.seedArea("og", "Obergeschoss", zeroDelayFullMode())
+	// Both areas disarmed -> the uniform token collapses to disarmed.
+	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+	discRec := f.waitForPublish(masterDisc, func(r publishRecord) bool { return r.retain })
+	var discBody map[string]any
+	if err := json.Unmarshal([]byte(discRec.payload), &discBody); err != nil {
+		t.Fatalf("unmarshal master discovery: %v", err)
+	}
+	if discBody["name"] != "Alarm system" {
+		t.Errorf("master discovery name = %v, want localized fallback %q", discBody["name"], "Alarm system")
+	}
+
+	// Arm one area only -> mixed set -> away (docs/alarm-concept.md §13.3).
+	if _, err := f.eng.Arm(context.Background(), "eg", engine.ArmRequest{
+		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
+	}); err != nil {
+		t.Fatalf("Arm eg: %v", err)
+	}
+	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+
+	// Arm the second area the same way -> uniform set -> exact token.
+	if _, err := f.eng.Arm(context.Background(), "og", engine.ArmRequest{
+		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
+	}); err != nil {
+		t.Fatalf("Arm og: %v", err)
+	}
+	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+
+	// Dropping back to one area retracts the master panel.
+	f.removeArea("og")
+	f.waitForPublish(masterState, func(r publishRecord) bool { return r.payload == "" })
+	f.waitForPublish(masterDisc, func(r publishRecord) bool { return r.payload == "" })
+}
+
+// TestAlarmMQTTPublisher_EventTopicJSONOnTriggered drives a real
+// instant sensor activation against an armed area and asserts the
+// non-retained event-topic JSON body for the resulting TRIGGER event.
+func TestAlarmMQTTPublisher_EventTopicJSONOnTriggered(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.seedSensor("door1", "eg", "Front Door", []hmenum.AlarmMode{hmenum.AlarmModeFull})
+	f.start()
+
+	stateTopic := f.base + "/alarm/eg/state"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+
+	if _, err := f.eng.Arm(context.Background(), "eg", engine.ArmRequest{
+		Mode: hmenum.AlarmModeFull, By: "tester", Source: "test",
+	}); err != nil {
+		t.Fatalf("Arm: %v", err)
+	}
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateArmedAway })
+
+	f.eng.HandleSensorEvent(context.Background(), "door1", true)
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateTriggered })
+
+	eventTopic := f.base + "/alarm/eg/event"
+	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
+		var pay alarmEventPayload
+		if err := json.Unmarshal([]byte(r.payload), &pay); err != nil {
+			return false
+		}
+		return pay.Type == alarmEventTypeTrigger
+	})
+	if rec.retain {
+		t.Errorf("event-topic publish must not be retained")
+	}
+	var pay alarmEventPayload
+	if err := json.Unmarshal([]byte(rec.payload), &pay); err != nil {
+		t.Fatalf("unmarshal event payload: %v", err)
+	}
+	if pay.AreaID != "eg" {
+		t.Errorf("event area_id = %q, want eg", pay.AreaID)
+	}
+	if pay.AreaName != "Erdgeschoss" {
+		t.Errorf("event area_name = %q, want Erdgeschoss", pay.AreaName)
+	}
+	if pay.Mode != string(hmenum.AlarmModeFull) {
+		t.Errorf("event mode = %q, want full", pay.Mode)
+	}
+	if len(pay.OpenSensors) != 1 || pay.OpenSensors[0] != "Front Door" {
+		t.Errorf("event open_sensors = %v, want [Front Door]", pay.OpenSensors)
+	}
+}

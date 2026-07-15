@@ -4055,6 +4055,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm/panels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the alarm-control-panel entity projections
+         * @description The HA-facing entity view of every alarm area (plus the
+         *     aggregate master panel when two or more areas exist) — the
+         *     same projection the MQTT discovery entities and the
+         *     `alarm.panel_changed` WebSocket broadcast carry.
+         */
+        get: operations["listAlarmPanels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alarm/journal": {
         parameters: {
             query?: never;
@@ -5868,6 +5891,35 @@ export interface components {
              * @enum {string}
              */
             mode?: "perimeter" | "full" | "night" | "vacation" | "custom";
+        };
+        /**
+         * @description Alarm-control-panel entity projection (model category
+         *     `alarm_control_panel`), identical across REST, WebSocket, and
+         *     MQTT. `area_id` is `master` for the aggregate panel.
+         */
+        AlarmPanelEntity: {
+            unique_id: string;
+            area_id: string;
+            name: string;
+            category: string;
+            /** @enum {string} */
+            state: "disarmed" | "arming" | "pending" | "triggered" | "armed_home" | "armed_away" | "armed_night" | "armed_vacation" | "armed_custom_bypass";
+            supported_modes?: string[];
+            available: boolean;
+            master?: boolean;
+        };
+        /**
+         * @description Payload of an `alarm.panel_changed` broadcast. Topic
+         *     `alarm.panel`. Fires whenever a panel entity's projection
+         *     changes; `removed` marks a deleted area's panel.
+         */
+        AlarmPanelChangedPayload: {
+            unique_id: string;
+            area_id: string;
+            name: string;
+            state: string;
+            available: boolean;
+            removed?: boolean;
         };
         /**
          * @description Payload of an `alarm.journal_appended` broadcast. Topic
@@ -11621,6 +11673,27 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    listAlarmPanels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Panel entities. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmPanelEntity"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     listAlarmJournal: {

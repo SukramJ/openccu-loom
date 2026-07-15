@@ -28,6 +28,7 @@ const (
 	broadcastAlarmJournalAppended  = "alarm.journal_appended"
 	broadcastAlarmWalkTestProgress = "alarm.walktest_progress"
 	broadcastAlarmHealthChanged    = "alarm.health_changed"
+	broadcastAlarmPanelChanged     = "alarm.panel_changed"
 )
 
 // AlarmStateChangedPayload is the broadcast payload for an arm-state
@@ -136,6 +137,7 @@ func (s *AlarmPanelSubscriber) Start() {
 		events.Subscribe(s.bus, s.onJournalAppended),
 		events.Subscribe(s.bus, s.onWalkTest),
 		events.Subscribe(s.bus, s.onHealthChanged),
+		events.Subscribe(s.bus, s.onPanelChanged),
 	)
 }
 
@@ -249,6 +251,36 @@ func (s *AlarmPanelSubscriber) onHealthChanged(e hmevent.AlarmHealthChangedEvent
 		Payload: AlarmHealthChangedPayload{
 			Healthy: e.Healthy,
 			Note:    e.Note,
+		},
+	})
+}
+
+// AlarmPanelChangedPayload is the broadcast payload for an entity
+// projection change (alarm.panel_changed).
+type AlarmPanelChangedPayload struct {
+	UniqueID  string `json:"unique_id"`
+	AreaID    string `json:"area_id"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	Available bool   `json:"available"`
+	Removed   bool   `json:"removed,omitempty"`
+}
+
+// onPanelChanged republishes the alarm-control-panel entity
+// projection (the same view REST /alarm/panels and MQTT discovery
+// serve).
+func (s *AlarmPanelSubscriber) onPanelChanged(e hmevent.AlarmPanelChangedEvent) {
+	s.hub.Publish(Event{
+		Topic: alarmPanelTopic,
+		Type:  broadcastAlarmPanelChanged,
+		When:  e.Timestamp(),
+		Payload: AlarmPanelChangedPayload{
+			UniqueID:  e.UniqueID,
+			AreaID:    e.AreaID,
+			Name:      e.Name,
+			State:     e.State,
+			Available: e.Available,
+			Removed:   e.Removed,
 		},
 	})
 }

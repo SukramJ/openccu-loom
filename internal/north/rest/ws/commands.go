@@ -114,6 +114,7 @@ var readOnlyCommands = map[string]struct{}{
 	"alarm_panel.readiness":       {},
 	"alarm_panel.state":           {},
 	"alarm_panel.walktest_status": {},
+	"alarm_panel.panels":          {},
 	"backup.status":               {},
 	"calc_dp.get":                 {},
 	"calc_dp.list":                {},

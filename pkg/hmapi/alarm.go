@@ -189,3 +189,17 @@ type AlarmOutputTestRequest struct {
 	// suppressing sound. Ignored for outputs with no audible element.
 	OpticalOnly bool `json:"optical_only,omitempty"`
 }
+
+// AlarmPanelEntity is the alarm-control-panel entity projection: the
+// HA-facing view of one alarm area (or the aggregate master panel),
+// identical across REST, WebSocket, and MQTT.
+type AlarmPanelEntity struct {
+	UniqueID       string   `json:"unique_id"`
+	AreaID         string   `json:"area_id"`
+	Name           string   `json:"name"`
+	Category       string   `json:"category"`
+	State          string   `json:"state"`
+	SupportedModes []string `json:"supported_modes,omitempty"`
+	Available      bool     `json:"available"`
+	Master         bool     `json:"master,omitempty"`
+}

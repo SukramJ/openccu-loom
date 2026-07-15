@@ -9,37 +9,38 @@ type DataPointCategory string
 
 // DataPointCategory values.
 const (
-	DataPointCategoryAction          DataPointCategory = "action"
-	DataPointCategoryActionNumber    DataPointCategory = "action_number"
-	DataPointCategoryActionSelect    DataPointCategory = "action_select"
-	DataPointCategoryBinarySensor    DataPointCategory = "binary_sensor"
-	DataPointCategoryButton          DataPointCategory = "button"
-	DataPointCategoryClimate         DataPointCategory = "climate"
-	DataPointCategoryCover           DataPointCategory = "cover"
-	DataPointCategoryEvent           DataPointCategory = "event"
-	DataPointCategoryEventGroup      DataPointCategory = "event_group"
-	DataPointCategoryHubBinarySensor DataPointCategory = "hub_binary_sensor"
-	DataPointCategoryHubButton       DataPointCategory = "hub_button"
-	DataPointCategoryHubNumber       DataPointCategory = "hub_number"
-	DataPointCategoryHubSelect       DataPointCategory = "hub_select"
-	DataPointCategoryHubSensor       DataPointCategory = "hub_sensor"
-	DataPointCategoryHubSwitch       DataPointCategory = "hub_switch"
-	DataPointCategoryHubText         DataPointCategory = "hub_text"
-	DataPointCategoryHubUpdate       DataPointCategory = "hub_update"
-	DataPointCategoryLight           DataPointCategory = "light"
-	DataPointCategoryLock            DataPointCategory = "lock"
-	DataPointCategoryNumber          DataPointCategory = "number"
-	DataPointCategoryScheduleSwitch  DataPointCategory = "schedule_switch"
-	DataPointCategorySelect          DataPointCategory = "select"
-	DataPointCategorySensor          DataPointCategory = "sensor"
-	DataPointCategorySiren           DataPointCategory = "siren"
-	DataPointCategorySwitch          DataPointCategory = "switch"
-	DataPointCategoryText            DataPointCategory = "text"
-	DataPointCategoryTextDisplay     DataPointCategory = "text_display"
-	DataPointCategoryUndefined       DataPointCategory = "undefined"
-	DataPointCategoryUpdate          DataPointCategory = "update"
-	DataPointCategoryValve           DataPointCategory = "valve"
-	DataPointCategoryWeekProfile     DataPointCategory = "week_profile"
+	DataPointCategoryAlarmControlPanel DataPointCategory = "alarm_control_panel"
+	DataPointCategoryAction            DataPointCategory = "action"
+	DataPointCategoryActionNumber      DataPointCategory = "action_number"
+	DataPointCategoryActionSelect      DataPointCategory = "action_select"
+	DataPointCategoryBinarySensor      DataPointCategory = "binary_sensor"
+	DataPointCategoryButton            DataPointCategory = "button"
+	DataPointCategoryClimate           DataPointCategory = "climate"
+	DataPointCategoryCover             DataPointCategory = "cover"
+	DataPointCategoryEvent             DataPointCategory = "event"
+	DataPointCategoryEventGroup        DataPointCategory = "event_group"
+	DataPointCategoryHubBinarySensor   DataPointCategory = "hub_binary_sensor"
+	DataPointCategoryHubButton         DataPointCategory = "hub_button"
+	DataPointCategoryHubNumber         DataPointCategory = "hub_number"
+	DataPointCategoryHubSelect         DataPointCategory = "hub_select"
+	DataPointCategoryHubSensor         DataPointCategory = "hub_sensor"
+	DataPointCategoryHubSwitch         DataPointCategory = "hub_switch"
+	DataPointCategoryHubText           DataPointCategory = "hub_text"
+	DataPointCategoryHubUpdate         DataPointCategory = "hub_update"
+	DataPointCategoryLight             DataPointCategory = "light"
+	DataPointCategoryLock              DataPointCategory = "lock"
+	DataPointCategoryNumber            DataPointCategory = "number"
+	DataPointCategoryScheduleSwitch    DataPointCategory = "schedule_switch"
+	DataPointCategorySelect            DataPointCategory = "select"
+	DataPointCategorySensor            DataPointCategory = "sensor"
+	DataPointCategorySiren             DataPointCategory = "siren"
+	DataPointCategorySwitch            DataPointCategory = "switch"
+	DataPointCategoryText              DataPointCategory = "text"
+	DataPointCategoryTextDisplay       DataPointCategory = "text_display"
+	DataPointCategoryUndefined         DataPointCategory = "undefined"
+	DataPointCategoryUpdate            DataPointCategory = "update"
+	DataPointCategoryValve             DataPointCategory = "valve"
+	DataPointCategoryWeekProfile       DataPointCategory = "week_profile"
 )
 
 // String returns the wire representation.
@@ -51,21 +52,22 @@ type DataPointType string
 
 // DataPointType values.
 const (
-	DataPointTypeBinarySensor DataPointType = "binary_sensor"
-	DataPointTypeButton       DataPointType = "button"
-	DataPointTypeClimate      DataPointType = "climate"
-	DataPointTypeCover        DataPointType = "cover"
-	DataPointTypeEvent        DataPointType = "event"
-	DataPointTypeLight        DataPointType = "light"
-	DataPointTypeLock         DataPointType = "lock"
-	DataPointTypeNumber       DataPointType = "number"
-	DataPointTypeSelect       DataPointType = "select"
-	DataPointTypeSensor       DataPointType = "sensor"
-	DataPointTypeSiren        DataPointType = "siren"
-	DataPointTypeSwitch       DataPointType = "switch"
-	DataPointTypeText         DataPointType = "text"
-	DataPointTypeUpdate       DataPointType = "update"
-	DataPointTypeValve        DataPointType = "valve"
+	DataPointTypeBinarySensor      DataPointType = "binary_sensor"
+	DataPointTypeButton            DataPointType = "button"
+	DataPointTypeClimate           DataPointType = "climate"
+	DataPointTypeCover             DataPointType = "cover"
+	DataPointTypeEvent             DataPointType = "event"
+	DataPointTypeLight             DataPointType = "light"
+	DataPointTypeLock              DataPointType = "lock"
+	DataPointTypeNumber            DataPointType = "number"
+	DataPointTypeSelect            DataPointType = "select"
+	DataPointTypeSensor            DataPointType = "sensor"
+	DataPointTypeAlarmControlPanel DataPointType = "alarm_control_panel"
+	DataPointTypeSiren             DataPointType = "siren"
+	DataPointTypeSwitch            DataPointType = "switch"
+	DataPointTypeText              DataPointType = "text"
+	DataPointTypeUpdate            DataPointType = "update"
+	DataPointTypeValve             DataPointType = "valve"
 )
 
 // String returns the wire representation.
@@ -74,36 +76,37 @@ func (t DataPointType) String() string { return string(t) }
 // CategoryToType is the authoritative mapping from fine-grained category
 // to consumer-facing functional type.
 var CategoryToType = map[DataPointCategory]DataPointType{
-	DataPointCategoryAction:          DataPointTypeButton,
-	DataPointCategoryActionNumber:    DataPointTypeNumber,
-	DataPointCategoryActionSelect:    DataPointTypeSelect,
-	DataPointCategoryBinarySensor:    DataPointTypeBinarySensor,
-	DataPointCategoryButton:          DataPointTypeButton,
-	DataPointCategoryClimate:         DataPointTypeClimate,
-	DataPointCategoryCover:           DataPointTypeCover,
-	DataPointCategoryEvent:           DataPointTypeEvent,
-	DataPointCategoryEventGroup:      DataPointTypeEvent,
-	DataPointCategoryHubBinarySensor: DataPointTypeBinarySensor,
-	DataPointCategoryHubButton:       DataPointTypeButton,
-	DataPointCategoryHubNumber:       DataPointTypeNumber,
-	DataPointCategoryHubSelect:       DataPointTypeSelect,
-	DataPointCategoryHubSensor:       DataPointTypeSensor,
-	DataPointCategoryHubSwitch:       DataPointTypeSwitch,
-	DataPointCategoryHubText:         DataPointTypeText,
-	DataPointCategoryHubUpdate:       DataPointTypeUpdate,
-	DataPointCategoryLight:           DataPointTypeLight,
-	DataPointCategoryLock:            DataPointTypeLock,
-	DataPointCategoryNumber:          DataPointTypeNumber,
-	DataPointCategoryScheduleSwitch:  DataPointTypeSwitch,
-	DataPointCategorySelect:          DataPointTypeSelect,
-	DataPointCategorySensor:          DataPointTypeSensor,
-	DataPointCategorySiren:           DataPointTypeSiren,
-	DataPointCategorySwitch:          DataPointTypeSwitch,
-	DataPointCategoryText:            DataPointTypeText,
-	DataPointCategoryTextDisplay:     DataPointTypeText,
-	DataPointCategoryUpdate:          DataPointTypeUpdate,
-	DataPointCategoryValve:           DataPointTypeValve,
-	DataPointCategoryWeekProfile:     DataPointTypeSensor,
+	DataPointCategoryAction:            DataPointTypeButton,
+	DataPointCategoryActionNumber:      DataPointTypeNumber,
+	DataPointCategoryActionSelect:      DataPointTypeSelect,
+	DataPointCategoryBinarySensor:      DataPointTypeBinarySensor,
+	DataPointCategoryButton:            DataPointTypeButton,
+	DataPointCategoryClimate:           DataPointTypeClimate,
+	DataPointCategoryCover:             DataPointTypeCover,
+	DataPointCategoryEvent:             DataPointTypeEvent,
+	DataPointCategoryEventGroup:        DataPointTypeEvent,
+	DataPointCategoryHubBinarySensor:   DataPointTypeBinarySensor,
+	DataPointCategoryHubButton:         DataPointTypeButton,
+	DataPointCategoryHubNumber:         DataPointTypeNumber,
+	DataPointCategoryHubSelect:         DataPointTypeSelect,
+	DataPointCategoryHubSensor:         DataPointTypeSensor,
+	DataPointCategoryHubSwitch:         DataPointTypeSwitch,
+	DataPointCategoryHubText:           DataPointTypeText,
+	DataPointCategoryHubUpdate:         DataPointTypeUpdate,
+	DataPointCategoryLight:             DataPointTypeLight,
+	DataPointCategoryLock:              DataPointTypeLock,
+	DataPointCategoryNumber:            DataPointTypeNumber,
+	DataPointCategoryScheduleSwitch:    DataPointTypeSwitch,
+	DataPointCategorySelect:            DataPointTypeSelect,
+	DataPointCategorySensor:            DataPointTypeSensor,
+	DataPointCategoryAlarmControlPanel: DataPointTypeAlarmControlPanel,
+	DataPointCategorySiren:             DataPointTypeSiren,
+	DataPointCategorySwitch:            DataPointTypeSwitch,
+	DataPointCategoryText:              DataPointTypeText,
+	DataPointCategoryTextDisplay:       DataPointTypeText,
+	DataPointCategoryUpdate:            DataPointTypeUpdate,
+	DataPointCategoryValve:             DataPointTypeValve,
+	DataPointCategoryWeekProfile:       DataPointTypeSensor,
 }
 
 // ActionDataPointCategories enumerates the categories whose data points

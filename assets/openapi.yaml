@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.20.0
+  version: 2.21.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4865,6 +4865,26 @@ paths:
                 additionalProperties: { $ref: "#/components/schemas/AlarmModeReadiness" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /alarm/panels:
+    get:
+      operationId: listAlarmPanels
+      summary: List the alarm-control-panel entity projections
+      description: |
+        The HA-facing entity view of every alarm area (plus the
+        aggregate master panel when two or more areas exist) — the
+        same projection the MQTT discovery entities and the
+        `alarm.panel_changed` WebSocket broadcast carry.
+      tags: [alarm]
+      responses:
+        "200":
+          description: Panel entities.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmPanelEntity" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /alarm/journal:
     get:
       operationId: listAlarmJournal
@@ -7213,6 +7233,42 @@ components:
           type: string
           enum: [perimeter, full, night, vacation, custom]
           description: Protection mode that was active at trigger time.
+
+    AlarmPanelEntity:
+      type: object
+      description: |
+        Alarm-control-panel entity projection (model category
+        `alarm_control_panel`), identical across REST, WebSocket, and
+        MQTT. `area_id` is `master` for the aggregate panel.
+      required: [unique_id, area_id, name, category, state, available]
+      properties:
+        unique_id: { type: string }
+        area_id: { type: string }
+        name: { type: string }
+        category: { type: string }
+        state:
+          type: string
+          enum: [disarmed, arming, pending, triggered, armed_home, armed_away, armed_night, armed_vacation, armed_custom_bypass]
+        supported_modes:
+          type: array
+          items: { type: string }
+        available: { type: boolean }
+        master: { type: boolean }
+
+    AlarmPanelChangedPayload:
+      type: object
+      description: |
+        Payload of an `alarm.panel_changed` broadcast. Topic
+        `alarm.panel`. Fires whenever a panel entity's projection
+        changes; `removed` marks a deleted area's panel.
+      required: [unique_id, area_id, name, state, available]
+      properties:
+        unique_id: { type: string }
+        area_id: { type: string }
+        name: { type: string }
+        state: { type: string }
+        available: { type: boolean }
+        removed: { type: boolean }
 
     AlarmJournalAppendedPayload:
       type: object

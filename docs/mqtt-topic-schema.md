@@ -9,7 +9,8 @@ subscribe to Homematic MQTT topics.
 function signatures are cited below.
 
 **Related decisions:** [ADR 0002 — Multi-CCU First Class](./adr/0002-multi-ccu-first-class.md),
-[ADR 0011 — MQTT Topic & Payload Architecture](./adr/0011-mqtt-topic-and-payload-architecture.md).
+[ADR 0011 — MQTT Topic & Payload Architecture](./adr/0011-mqtt-topic-and-payload-architecture.md),
+[ADR 0052 — Daemon-Level Alarm MQTT Topics](./adr/0052-daemon-level-alarm-mqtt-topics.md).
 
 ---
 
@@ -29,7 +30,8 @@ degenerate case with one entry under that segment.
 > `openccu-loom`). `<central>` is the CCU name from the daemon config
 > (e.g. `GoOtto`). `<iface>` is the interface ID (e.g. `HmIP-RF`).
 > `<addr>` is the device address (e.g. `000C9709AEF157`). `<ch>` is
-> the channel number. `<param>` is the wire-parameter name.
+> the channel number. `<param>` is the wire-parameter name. `<area>`
+> is an alarm-area id, or the reserved pseudo-area id `master`.
 
 ### State topics
 
@@ -42,10 +44,16 @@ degenerate case with one entry under that segment.
 | Device availability | `<base>/<central>/<iface>/<addr>/availability` |
 | Device info snapshot | `<base>/<central>/<iface>/<addr>/info` |
 | Device diagnostics | `<base>/<central>/<iface>/<addr>/diagnostics` |
+| Alarm area state † | `<base>/alarm/<area>/state` |
+| Alarm area availability † | `<base>/alarm/<area>/availability` |
+| Alarm area event † (not retained) | `<base>/alarm/<area>/event` |
 
 Go builder methods: `TopicBuilder.ParameterState`, `TopicBuilder.SlotState`,
 `TopicBuilder.DeviceAvailability`, `TopicBuilder.DeviceInfo`,
 `TopicBuilder.DeviceDiagnostics`.
+
+† No `<central>` segment — see [Alarm topics](#alarm-topics-daemon-level-no-central)
+below.
 
 ### Command (set) topics
 
@@ -54,9 +62,13 @@ Go builder methods: `TopicBuilder.ParameterState`, `TopicBuilder.SlotState`,
 | Write single parameter (VALUES) | `<base>/<central>/<iface>/<addr>/<ch>/values/<param>/set` |
 | Write MASTER parameter | `<base>/<central>/<iface>/<addr>/<ch>/master/<param>/set` |
 | Custom-DP service method | `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/set/<method>` |
+| Alarm area command † | `<base>/alarm/<area>/set` |
 
 Go builder methods: `TopicBuilder.ParameterCommand`, `TopicBuilder.SlotCommand`,
 `TopicBuilder.CustomDPServiceMethod`.
+
+† No `<central>` segment — see [Alarm topics](#alarm-topics-daemon-level-no-central)
+below.
 
 ### HA Discovery
 
@@ -86,6 +98,88 @@ The sysvar/program/connectivity topics are built by `internal/model/naming`
 free functions rather than `TopicBuilder` methods: `naming.MQTTHubSysvarState`,
 `naming.MQTTHubSysvarCommand`, `naming.MQTTHubProgramTrigger`,
 `naming.MQTTHubConnectivity`.
+
+### Alarm topics (daemon-level, no `<central>`)
+
+Alarm areas (`docs/alarm-concept.md` §14) are daemon-level objects: an
+area's sensors and outputs are `(central_name, DataPointKey)` pairs and
+routinely span more than one configured CCU, so an area has no single
+owning central to place in the `<central>` segment. The alarm subtree
+therefore omits it — a **deliberate extension** of the "every topic
+carries `<central>`" rule from
+[ADR 0011](./adr/0011-mqtt-topic-and-payload-architecture.md),
+precedented only by the read-only `<base>/bridge/status` /
+`<base>/bridge/health` pair above. See
+[ADR 0052 — Daemon-Level Alarm MQTT Topics](./adr/0052-daemon-level-alarm-mqtt-topics.md)
+for the rationale.
+
+`<area>` is either a configured alarm-area id or the reserved
+pseudo-area id `master`. The `master` topics are published only when
+2 or more areas are configured and aggregate every real area: any
+`triggered` wins, else any `pending`, else any `arming`, else
+all-`disarmed`, else the shared mode token when every armed area
+agrees, otherwise `armed_away` for a mixed set. Master **arm** is
+best-effort — each area arms independently and a failure surfaces as
+a per-area `FAILED_TO_ARM` detail rather than failing the whole
+request (`docs/alarm-concept.md` §18 item 5, "matches G5"); master
+**disarm** disarms every area unconditionally.
+
+#### `<base>/alarm/<area>/state` (retained)
+
+A bare HA `alarm_control_panel` state token, not JSON:
+`disarmed`, `arming`, `pending`, `triggered`, `armed_home`,
+`armed_away`, `armed_night`, `armed_vacation`, `armed_custom_bypass`.
+Mapped from the engine's `(AlarmAreaState, AlarmMode)` pair: bare
+`disarmed`/`arming`/`pending`/`triggered` states map to the
+like-named token regardless of mode; an `armed` state maps by mode —
+`perimeter`→`armed_home`, `full`→`armed_away`, `night`→`armed_night`,
+`vacation`→`armed_vacation`, `custom`→`armed_custom_bypass`.
+
+#### `<base>/alarm/<area>/availability` (retained)
+
+`online` / `offline`, driven by `AlarmHealthChangedEvent` and the
+alarm-service lifecycle (offline while the engine is stopped or the
+daemon is shutting down).
+
+#### `<base>/alarm/<area>/event` (JSON, not retained, QoS 0)
+
+Follows the general event-topic policy below. Payload shape:
+
+```json
+{
+  "type": "TRIGGER",
+  "area_id": "eg",
+  "area_name": "Erdgeschoss",
+  "changed_by": "",
+  "mode": "full",
+  "open_sensors": ["..."],
+  "delay_s": 30
+}
+```
+
+`type` vocabulary for this slice: `TRIGGER`, `SILENCED`,
+`FAILED_TO_ARM`, `DISARMED`, `ARMED`. `open_sensors` and `delay_s` are
+present only where meaningful (e.g. `FAILED_TO_ARM` carries
+`open_sensors`; a `pending`→`triggered` transition may carry
+`delay_s`). `INVALID_CODE` and `DURESS` extend this vocabulary once
+per-area codes ship (`docs/alarm-concept.md` §13.3, §15 item 6).
+
+#### `<base>/alarm/<area>/set` (command, not retained, QoS 1)
+
+Two accepted payload forms:
+
+1. **Bare HA token** (plain string): `ARM_HOME`, `ARM_AWAY`,
+   `ARM_NIGHT`, `ARM_VACATION`, `ARM_CUSTOM_BYPASS`, `DISARM` —
+   mapped through the inverse of the state table above.
+2. **JSON form**: `{"action": "ARM_HOME", "code": "1234"}` — `action`
+   accepts the same HA tokens; `code` is accepted but ignored until
+   per-area PIN policy ships.
+
+**Loom extension**: `{"action": "SILENCE"}` mutes an active
+siren/output on a `triggered` area without disarming it. This is not
+part of HA's own `alarm_control_panel` command vocabulary — it is
+documented here as a raw-plane-only extension
+(`docs/alarm-concept.md` §13.3).
 
 ---
 

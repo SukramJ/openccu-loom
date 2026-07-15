@@ -186,6 +186,11 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmHealthChanged = "alarm.health_changed"`},
 		WireValue: "alarm.health_changed",
 	},
+	"alarm.panel_changed": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmPanelChanged     = "alarm.panel_changed"`},
+		WireValue: "alarm.panel_changed",
+	},
 	"matter.exposable_changed": {
 		Files: []string{
 			"internal/north/rest/handlers/matter_events.go",

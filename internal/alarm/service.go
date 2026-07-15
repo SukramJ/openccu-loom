@@ -36,6 +36,10 @@ type Settings struct {
 	StopVerifySeconds             int
 	JournalRetentionDays          int
 	RestartLoopBreaker            int
+	// MasterPanelName is the localized display name of the aggregate
+	// master panel (resolved by the composition root via the i18n
+	// catalogs so REST/WS/MQTT agree).
+	MasterPanelName string
 }
 
 // Deps wires a Service.
@@ -73,6 +77,7 @@ type Service struct {
 	devHealth    map[string]engine.SensorHealth
 	ifaceDown    map[string]map[string]bool // central → interface → unreachable
 	sysvarMirror *sysvarMirror
+	panels       *panelRegistry
 	retention    func() // retention chain cancel
 }
 
@@ -154,6 +159,7 @@ func NewService(deps Deps) (*Service, error) {
 	}
 	s.engine = eng
 	s.sysvarMirror = newSysvarMirror(s)
+	s.panels = newPanelRegistry(deps.Settings.MasterPanelName)
 	return s, nil
 }
 
@@ -183,7 +189,11 @@ func (s *Service) Reload(ctx context.Context) error {
 	if err := s.rebuildIndexes(ctx); err != nil {
 		return err
 	}
-	return s.engine.Reload(ctx)
+	if err := s.engine.Reload(ctx); err != nil {
+		return err
+	}
+	s.seedPanels(ctx)
+	return nil
 }
 
 // Start loads configuration and persisted state, subscribes to every
@@ -224,6 +234,7 @@ func (s *Service) Start(ctx context.Context) error {
 		s.attachUnit(u)
 	}
 	s.reconcile(ctx)
+	s.seedPanels(ctx)
 	s.scheduleRetention()
 	s.log.Info("alarm service started")
 	return nil
@@ -309,6 +320,9 @@ func (s *Service) publish(e hmevent.Event) {
 		if s.sysvarMirror != nil {
 			s.sysvarMirror.onStateChanged(ev)
 		}
+		if s.panels != nil {
+			s.onPanelStateEvent(ev)
+		}
 	case hmevent.AlarmTriggeredEvent:
 		events.Publish(s.bus, ev)
 	case hmevent.AlarmReadinessChangedEvent:
@@ -320,6 +334,11 @@ func (s *Service) publish(e hmevent.Event) {
 	case hmevent.AlarmWalkTestEvent:
 		events.Publish(s.bus, ev)
 	case hmevent.AlarmHealthChangedEvent:
+		events.Publish(s.bus, ev)
+		if s.panels != nil {
+			s.onPanelHealthEvent(ev)
+		}
+	case hmevent.AlarmPanelChangedEvent:
 		events.Publish(s.bus, ev)
 	default:
 		s.log.Warn("alarm sink dropped unknown event type", "type", string(e.Type()))
