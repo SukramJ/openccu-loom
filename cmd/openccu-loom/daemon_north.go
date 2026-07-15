@@ -301,17 +301,23 @@ func (s *alarmMQTTSink) setArmFailureHook(fn func(areaID, areaName string, mode 
 	s.mu.Unlock()
 }
 
-func (s *alarmMQTTSink) Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode) error {
-	_, err := s.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{Mode: mode, Source: alarmSourceMQTT})
+func (s *alarmMQTTSink) Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error {
+	_, err := s.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{Mode: mode, Code: code, Source: alarmSourceMQTT})
 	return err
 }
 
-func (s *alarmMQTTSink) Disarm(ctx context.Context, areaID string) error {
-	return s.svc.Engine().Disarm(ctx, areaID, "", alarmSourceMQTT)
+func (s *alarmMQTTSink) Disarm(ctx context.Context, areaID, code string) error {
+	return s.svc.Engine().DisarmWithCode(ctx, areaID, "", alarmSourceMQTT, code)
 }
 
-func (s *alarmMQTTSink) Silence(ctx context.Context, areaID string) error {
-	return s.svc.Engine().Silence(ctx, areaID, "", alarmSourceMQTT)
+func (s *alarmMQTTSink) Silence(ctx context.Context, areaID, code string) error {
+	return s.svc.Engine().SilenceWithCode(ctx, areaID, "", alarmSourceMQTT, code)
+}
+
+// Panic fires the engine's loud panic path (silent=false) for the area —
+// the HA TRIGGER command routes here (docs/alarm-concept.md §7).
+func (s *alarmMQTTSink) Panic(ctx context.Context, areaID string) error {
+	return s.svc.Engine().PanicTrigger(ctx, areaID, false, "", alarmSourceMQTT)
 }
 
 // MasterArm arms every area best-effort. An area that does not configure

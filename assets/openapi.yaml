@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.21.0
+  version: 2.22.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4769,6 +4769,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AlarmArmAccepted" }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: >
+            The area's code policy requires an arm code and the supplied
+            `code` is missing or wrong. The detail stays opaque
+            (`invalid_code`) so a prober learns nothing about which codes
+            exist.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: >
@@ -4793,8 +4802,18 @@ paths:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [operator]
+      requestBody:
+        required: false
+        description: >
+          Optional disarm code. An absent body disarms code-free; an
+          operator-session surface is permitted to do so even when a
+          code policy is set (break-glass, docs/alarm-concept.md §11 S6).
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
       responses:
         "204": { description: Disarmed }
+        "403": { $ref: "#/components/responses/AlarmInvalidCode" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /alarm/areas/{id}/silence:
@@ -4811,8 +4830,17 @@ paths:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [operator]
+      requestBody:
+        required: false
+        description: >
+          Optional silence code, for surfaces whose per-surface policy
+          requires one (silence is code-free by default, S3).
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
       responses:
         "204": { description: Silenced }
+        "403": { $ref: "#/components/responses/AlarmInvalidCode" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /alarm/areas/{id}/acknowledge:
@@ -4829,6 +4857,15 @@ paths:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [operator]
+      requestBody:
+        required: false
+        description: >
+          Accepts the shared optional code body for surface symmetry, but
+          acknowledge is journal-only with no code gate — a supplied code
+          is inert here.
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
       responses:
         "204": { description: Acknowledged }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -5015,6 +5052,107 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /alarm/codes:
+    get:
+      operationId: listAlarmCodes
+      summary: List alarm codes (operator)
+      description: >
+        Codes are security material, so even the list is operator-gated,
+        never viewer-open (docs/alarm-concept.md §11/§16). The argon2id
+        hash and cleartext PIN are never returned. 503 when the alarm-code
+        subsystem is not wired.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: Every configured alarm code (hash-free).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmCode" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createAlarmCode
+      summary: Create an alarm code (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmCodeRequest" }
+      responses:
+        "201":
+          description: The created code (hash-free).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmCode" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /alarm/codes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAlarmCode
+      summary: Get one alarm code (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: The alarm code (hash-free).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmCode" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putAlarmCode
+      summary: Replace an alarm code (operator)
+      description: An empty `pin` keeps the stored hash.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmCodeRequest" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteAlarmCode
+      summary: Delete an alarm code (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
 components:
   securitySchemes:
     basicAuth:
@@ -5106,6 +5244,15 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
     NotFound:
       description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    AlarmInvalidCode:
+      description: >
+        The area's code policy requires a code and the supplied `code` is
+        missing or wrong. The detail stays opaque (`invalid_code`) so a
+        prober learns nothing about which codes exist
+        (docs/alarm-concept.md §16).
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -7270,6 +7417,21 @@ components:
         available: { type: boolean }
         removed: { type: boolean }
 
+    AlarmReminderPayload:
+      type: object
+      description: |
+        Payload of an `alarm.reminder` broadcast. Topic `alarm.panel`.
+        Fires when an arm schedule elapses with auto-arm off while the
+        area is not in the scheduled mode — the engine notifies rather
+        than arming (docs/alarm-concept.md §15 row 19).
+      required: [area_id, mode]
+      properties:
+        area_id: { type: string }
+        area_name: { type: string }
+        mode:
+          type: string
+          description: The protection mode the schedule expected the area to be in.
+
     AlarmJournalAppendedPayload:
       type: object
       description: |
@@ -8396,6 +8558,100 @@ components:
           type: array
           items: { type: string }
           description: Sensor ids to bypass for this arm attempt.
+        code:
+          type: string
+          description: >
+            Alarm code supplied with the arm, when the area's code policy
+            requires one (or to surface a duress code). Never logged or
+            persisted in cleartext.
+
+    AlarmVerbRequest:
+      type: object
+      description: >
+        Optional body of the code-carrying verbs (disarm / silence /
+        acknowledge). An absent body acts without a code.
+      properties:
+        code:
+          type: string
+          description: >
+            Alarm code for the verb, when the area's code policy requires
+            one. Never logged or persisted in cleartext.
+
+    AlarmCodePerms:
+      type: object
+      description: Per-code verb permissions.
+      required: [arm, disarm, silence]
+      properties:
+        arm: { type: boolean }
+        disarm: { type: boolean }
+        silence: { type: boolean }
+
+    AlarmCode:
+      type: object
+      description: >
+        One alarm code. The argon2id hash and the cleartext PIN are NEVER
+        serialized onto this surface (docs/alarm-concept.md §11, §16).
+      required: [id, name, kind, perms, enabled]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind:
+          type: string
+          enum: [pin, keypad_slot, remote_key]
+          description: Code class.
+        duress:
+          type: boolean
+          description: >
+            A PIN that disarms normally but fires a silent duress alarm.
+            Only meaningful for the pin kind.
+        perms: { $ref: "#/components/schemas/AlarmCodePerms" }
+        areas:
+          type: array
+          items: { type: string }
+          description: Restrict to these area ids; empty means every area.
+        binding:
+          description: >
+            Engine-owned hardware-binding document for the keypad_slot /
+            remote_key kinds; absent for pin codes.
+        valid_from_ms:
+          type: integer
+          format: int64
+          description: Optional validity-window start (Unix ms); 0 leaves it open.
+        valid_until_ms:
+          type: integer
+          format: int64
+          description: Optional validity-window end (Unix ms); 0 leaves it open.
+        enabled: { type: boolean }
+        created_ms: { type: integer, format: int64 }
+        updated_ms: { type: integer, format: int64 }
+
+    AlarmCodeRequest:
+      type: object
+      description: >
+        Create/update body for an alarm code. The cleartext PIN is
+        write-only — hashed to argon2id before persistence and never
+        echoed back. An empty PIN on update keeps the stored hash.
+      required: [name, kind, perms, enabled]
+      properties:
+        name: { type: string }
+        kind:
+          type: string
+          enum: [pin, keypad_slot, remote_key]
+        pin:
+          type: string
+          description: >
+            Cleartext code, write-only, for the pin kind. Omitted on
+            update to keep the existing hash.
+        duress: { type: boolean }
+        perms: { $ref: "#/components/schemas/AlarmCodePerms" }
+        areas:
+          type: array
+          items: { type: string }
+        binding:
+          description: Engine-owned hardware-binding document (keypad_slot / remote_key).
+        valid_from_ms: { type: integer, format: int64 }
+        valid_until_ms: { type: integer, format: int64 }
+        enabled: { type: boolean }
 
     AlarmArmAccepted:
       type: object

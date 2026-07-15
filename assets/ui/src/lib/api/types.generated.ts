@@ -4174,6 +4174,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List alarm codes (operator)
+         * @description Codes are security material, so even the list is operator-gated, never viewer-open (docs/alarm-concept.md §11/§16). The argon2id hash and cleartext PIN are never returned. 503 when the alarm-code subsystem is not wired.
+         */
+        get: operations["listAlarmCodes"];
+        put?: never;
+        /** Create an alarm code (operator) */
+        post: operations["createAlarmCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/codes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Get one alarm code (operator) */
+        get: operations["getAlarmCode"];
+        /**
+         * Replace an alarm code (operator)
+         * @description An empty `pin` keeps the stored hash.
+         */
+        put: operations["putAlarmCode"];
+        post?: never;
+        /** Delete an alarm code (operator) */
+        delete: operations["deleteAlarmCode"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5922,6 +5967,18 @@ export interface components {
             removed?: boolean;
         };
         /**
+         * @description Payload of an `alarm.reminder` broadcast. Topic `alarm.panel`.
+         *     Fires when an arm schedule elapses with auto-arm off while the
+         *     area is not in the scheduled mode — the engine notifies rather
+         *     than arming (docs/alarm-concept.md §15 row 19).
+         */
+        AlarmReminderPayload: {
+            area_id: string;
+            area_name?: string;
+            /** @description The protection mode the schedule expected the area to be in. */
+            mode: string;
+        };
+        /**
          * @description Payload of an `alarm.journal_appended` broadcast. Topic
          *     `alarm.panel`. Fires after an alarm-journal entry has been
          *     persisted; carries the entry head, not the full detail
@@ -6761,6 +6818,69 @@ export interface components {
             skip_delay?: boolean;
             /** @description Sensor ids to bypass for this arm attempt. */
             bypass?: string[];
+            /** @description Alarm code supplied with the arm, when the area's code policy requires one (or to surface a duress code). Never logged or persisted in cleartext. */
+            code?: string;
+        };
+        /** @description Optional body of the code-carrying verbs (disarm / silence / acknowledge). An absent body acts without a code. */
+        AlarmVerbRequest: {
+            /** @description Alarm code for the verb, when the area's code policy requires one. Never logged or persisted in cleartext. */
+            code?: string;
+        };
+        /** @description Per-code verb permissions. */
+        AlarmCodePerms: {
+            arm: boolean;
+            disarm: boolean;
+            silence: boolean;
+        };
+        /** @description One alarm code. The argon2id hash and the cleartext PIN are NEVER serialized onto this surface (docs/alarm-concept.md §11, §16). */
+        AlarmCode: {
+            id: string;
+            name: string;
+            /**
+             * @description Code class.
+             * @enum {string}
+             */
+            kind: "pin" | "keypad_slot" | "remote_key";
+            /** @description A PIN that disarms normally but fires a silent duress alarm. Only meaningful for the pin kind. */
+            duress?: boolean;
+            perms: components["schemas"]["AlarmCodePerms"];
+            /** @description Restrict to these area ids; empty means every area. */
+            areas?: string[];
+            /** @description Engine-owned hardware-binding document for the keypad_slot / remote_key kinds; absent for pin codes. */
+            binding?: unknown;
+            /**
+             * Format: int64
+             * @description Optional validity-window start (Unix ms); 0 leaves it open.
+             */
+            valid_from_ms?: number;
+            /**
+             * Format: int64
+             * @description Optional validity-window end (Unix ms); 0 leaves it open.
+             */
+            valid_until_ms?: number;
+            enabled: boolean;
+            /** Format: int64 */
+            created_ms?: number;
+            /** Format: int64 */
+            updated_ms?: number;
+        };
+        /** @description Create/update body for an alarm code. The cleartext PIN is write-only — hashed to argon2id before persistence and never echoed back. An empty PIN on update keeps the stored hash. */
+        AlarmCodeRequest: {
+            name: string;
+            /** @enum {string} */
+            kind: "pin" | "keypad_slot" | "remote_key";
+            /** @description Cleartext code, write-only, for the pin kind. Omitted on update to keep the existing hash. */
+            pin?: string;
+            duress?: boolean;
+            perms: components["schemas"]["AlarmCodePerms"];
+            areas?: string[];
+            /** @description Engine-owned hardware-binding document (keypad_slot / remote_key). */
+            binding?: unknown;
+            /** Format: int64 */
+            valid_from_ms?: number;
+            /** Format: int64 */
+            valid_until_ms?: number;
+            enabled: boolean;
         };
         AlarmArmAccepted: {
             /**
@@ -6851,6 +6971,15 @@ export interface components {
         };
         /** @description Resource not found */
         NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The area's code policy requires a code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist (docs/alarm-concept.md §16). */
+        AlarmInvalidCode: {
             headers: {
                 [name: string]: unknown;
             };
@@ -11557,6 +11686,15 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            /** @description The area's code policy requires an arm code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             404: components["responses"]["NotFound"];
             /** @description Arming refused — readiness blockers are present for the requested mode. The problem detail's `errors` array carries the blocker list (mirrors AlarmModeReadiness.blockers). */
             409: {
@@ -11578,7 +11716,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Optional disarm code. An absent body disarms code-free; an operator-session surface is permitted to do so even when a code policy is set (break-glass, docs/alarm-concept.md §11 S6). */
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AlarmVerbRequest"];
+            };
+        };
         responses: {
             /** @description Disarmed */
             204: {
@@ -11587,6 +11730,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["AlarmInvalidCode"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -11599,7 +11743,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Optional silence code, for surfaces whose per-surface policy requires one (silence is code-free by default, S3). */
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AlarmVerbRequest"];
+            };
+        };
         responses: {
             /** @description Silenced */
             204: {
@@ -11608,6 +11757,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["AlarmInvalidCode"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -11620,7 +11770,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Accepts the shared optional code body for surface symmetry, but acknowledge is journal-only with no code gate — a supplied code is inert here. */
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AlarmVerbRequest"];
+            };
+        };
         responses: {
             /** @description Acknowledged */
             204: {
@@ -11826,6 +11981,128 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    listAlarmCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every configured alarm code (hash-free). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmCode"][];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createAlarmCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlarmCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description The created code (hash-free). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmCode"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getAlarmCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The alarm code (hash-free). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmCode"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    putAlarmCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlarmCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteAlarmCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
 }

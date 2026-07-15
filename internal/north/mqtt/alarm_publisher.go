@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -327,7 +328,8 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		for _, m := range modes {
 			union[m] = true
 		}
-		item := BuildAlarmPanelDiscovery(base, s.ID, s.Name, modes, false)
+		armReq, disarmReq := p.areaCodePolicy(ctx, s.ID)
+		item := BuildAlarmPanelDiscovery(base, s.ID, s.Name, modes, false, armReq, disarmReq)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
 			p.logger.Warn("mqtt.alarm.discovery", slog.String("area", s.ID), slog.String("err", err.Error()))
 		}
@@ -352,7 +354,10 @@ func (p *AlarmMQTTPublisher) reconcile() {
 
 	if len(snaps) >= 2 {
 		modes := modesFromSet(union)
-		item := BuildAlarmPanelDiscovery(base, alarmMasterArea, p.masterName(), modes, true)
+		// The master panel arms/disarms every area at once; a single code
+		// gate cannot express the union of per-area policies, so it stays
+		// code-free (code entry happens on the individual area panels).
+		item := BuildAlarmPanelDiscovery(base, alarmMasterArea, p.masterName(), modes, true, false, false)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
 			p.logger.Warn("mqtt.alarm.discovery", slog.String("area", alarmMasterArea), slog.String("err", err.Error()))
 		}
@@ -452,6 +457,31 @@ func (p *AlarmMQTTPublisher) masterName() string {
 		}
 	}
 	return alarmMasterNameFallback
+}
+
+// areaCodePolicy resolves the per-area arm/disarm code requirement for
+// the discovery flags. It reflects the operator-set policy conservatively:
+// disarm is advertised as code-required only when the operator set it
+// explicitly, never off the default-when-codes-exist rule the engine
+// resolves internally (docs/alarm-concept.md §11) — advertising a code
+// requirement HA cannot satisfy when no code exists would trap disarm.
+// A missing area, parse error, or absent store degrades to no requirement.
+func (p *AlarmMQTTPublisher) areaCodePolicy(ctx context.Context, areaID string) (armReq, disarmReq bool) {
+	stores := p.svc.Stores()
+	if stores == nil || stores.Areas == nil {
+		return false, false
+	}
+	row, ok, err := stores.Areas.Get(ctx, areaID)
+	if err != nil || !ok {
+		return false, false
+	}
+	cfg, err := engine.ParseAreaConfig(row.ConfigJSON)
+	if err != nil {
+		return false, false
+	}
+	armReq = cfg.CodePolicy.RequireArm
+	disarmReq = cfg.CodePolicy.RequireDisarm != nil && *cfg.CodePolicy.RequireDisarm
+	return armReq, disarmReq
 }
 
 // modesFromReadiness extracts the configured protection modes of an area

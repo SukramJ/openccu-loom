@@ -75,6 +75,11 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 	devSensors := append([]string(nil), s.devIndex[devKey(centralName, deviceAddress(e.Key.ChannelAddress))]...)
 	s.mu.Unlock()
 
+	// Keypad/remote intent routing sees every data point unconditionally:
+	// CODE_ID/CODE_STATE and the press edges arrive on channels that are
+	// not themselves enrolled sensors.
+	s.intents.onEvent(ctx, centralName, e)
+
 	if isSensorDP {
 		if active, known := paramValueActive(e.NewValue); known {
 			s.engine.HandleSensorEvent(ctx, sensorID, active)
@@ -98,9 +103,35 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 		if low, ok := paramValueBool(e.NewValue); ok {
 			s.updateDeviceHealth(ctx, centralName, e.Key, devSensors, func(h *engine.SensorHealth) { h.LowBattery = low })
 		}
+	case hmenum.ParameterBlockedTemporary, hmenum.ParameterBlockedPermanent:
+		// Keypad lockout after repeated wrong on-device codes. The device
+		// self-locks; loom surfaces the onset as a fault so the operator
+		// sees the tamper-adjacent signal (docs/alarm-concept.md §11).
+		if blocked, ok := paramValueBool(e.NewValue); ok && blocked {
+			s.journalDeviceBlocked(ctx, centralName, e.Key)
+		}
 	default:
 		// Every other parameter is either an enrolled sensor value
 		// (handled above) or irrelevant to the alarm engine.
+	}
+}
+
+// journalDeviceBlocked records a keypad temporary/permanent lockout as a
+// fault-class journal entry (fail-visible, S7). The lockout is a
+// device-level signal, so the entry carries the device address rather
+// than an area — clearing it stays operator/WebUI-owned per Q4.
+func (s *Service) journalDeviceBlocked(ctx context.Context, centralName string, key hmtypes.DataPointKey) {
+	if _, err := s.journal.Append(ctx, engine.JournalEntry{
+		Class:  hmenum.AlarmJournalClassFault,
+		Event:  "keypad_blocked",
+		Source: "keypad",
+		Details: map[string]any{
+			"central":   centralName,
+			"device":    deviceAddress(key.ChannelAddress),
+			"parameter": key.Parameter,
+		},
+	}); err != nil {
+		s.log.Error("alarm keypad-blocked journal append failed", "device", deviceAddress(key.ChannelAddress), "error", err)
 	}
 }
 

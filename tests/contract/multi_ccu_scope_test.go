@@ -558,6 +558,9 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"AlarmIncidentStore:GetOpenByArea": "reason: alarm incidents belong to daemon-level areas; incident id is the natural key",
 		"AlarmIncidentStore:ListByArea":    "reason: alarm incidents belong to daemon-level areas; incident id is the natural key",
 		"AlarmJournalStore:Append":         "reason: the alarm journal is daemon-global like the audit log; entries reference areas, not centrals",
+		"AlarmCodeStore:Upsert":            "reason: alarm codes are daemon-level user/hardware identities keyed by code id; areas may span centrals",
+		"AlarmCodeStore:Get":               "reason: alarm codes are daemon-level user/hardware identities keyed by code id; areas may span centrals",
+		"AlarmCodeStore:Delete":            "reason: alarm codes are daemon-level user/hardware identities keyed by code id; areas may span centrals",
 	}
 
 	dir := filepath.Join(repoRoot(t), "internal", "store", "sqlite")

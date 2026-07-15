@@ -23,6 +23,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import CountdownRing from "./CountdownRing.svelte";
+  import PinPad from "./PinPad.svelte";
 
   const store = alarmPanelStore;
 
@@ -41,7 +42,36 @@
     checked: Record<string, boolean>;
   } | null>(null);
 
+  // PIN-pad transaction: open for exactly one (area, verb) at a time. The
+  // area is snapshotted so a live status update mid-entry doesn't retarget
+  // the pad. Silence is deliberately never routed here (S3).
+  let pinPad = $state<{
+    area: AlarmAreaStatus;
+    verb: "arm" | "disarm";
+    mode?: ArmMode;
+    busy: boolean;
+  } | null>(null);
+
   const anyTriggered = $derived(store.areas.some((a) => a.state === "triggered"));
+
+  // codeRequired reads the area's engine-owned code policy from the config
+  // document (docs/alarm-concept.md §11). The live status snapshot carries
+  // no policy, so this falls back to the area config as the task specifies.
+  // The SPA prompts only when the operator has EXPLICITLY opted a verb in
+  // (require_arm / require_disarm === true): the null-default "require a
+  // disarm code only when codes exist" cannot be resolved client-side
+  // without the operator-only code list, and the REST verb runs as an
+  // operator source the engine exempts anyway — so an over-prompt would
+  // gate a surface the backend never gates. An explicit true is the clear
+  // signal to collect the PIN here (for duress detection + attribution).
+  function codeRequired(areaId: string, verb: "arm" | "disarm"): boolean {
+    const cfg = (store.areasConfig ?? []).find((a) => a.id === areaId)?.config;
+    if (!cfg || typeof cfg !== "object") return false;
+    const policy = (cfg as Record<string, unknown>).code_policy;
+    if (!policy || typeof policy !== "object") return false;
+    const key = verb === "arm" ? "require_arm" : "require_disarm";
+    return (policy as Record<string, unknown>)[key] === true;
+  }
 
   function fmtTime(iso: string): string {
     return new Date(iso).toLocaleTimeString(
@@ -195,6 +225,10 @@
   }
 
   async function armDirect(area: AlarmAreaStatus, mode: ArmMode) {
+    if (codeRequired(area.id, "arm")) {
+      pinPad = { area, verb: "arm", mode, busy: false };
+      return;
+    }
     const accepted = await store.arm(area.id, { mode });
     if (accepted) armToast(area, mode, accepted.state);
   }
@@ -214,8 +248,37 @@
   // confirmStore — a screaming siren must be a single tap away, and disarm
   // must never be trapped behind a modal.
   async function disarm(area: AlarmAreaStatus) {
+    if (codeRequired(area.id, "disarm")) {
+      // Route through the PIN pad — this covers both the mode-row disarm
+      // button and the triggered-surface DISARM (same handler), so the pad
+      // works on the high-contrast alarm surface too.
+      pinPad = { area, verb: "disarm", busy: false };
+      return;
+    }
     const ok = await store.disarm(area.id);
     if (ok) toastStore.success(t("alarm.toast.disarmed", { area: area.name }));
+  }
+
+  // PIN-pad submit: run the pending verb WITH the entered code. The store
+  // verbs already toast success/failure and never throw, so on failure the
+  // pad simply closes and the toast explains. Because REST verbs run as an
+  // operator source (§11 break-glass), the code here authenticates duress
+  // and populates changed-by rather than gating the action.
+  async function submitPin(code: string) {
+    if (!pinPad || pinPad.busy) return;
+    const { area, verb, mode } = pinPad;
+    pinPad = { ...pinPad, busy: true };
+    try {
+      if (verb === "arm" && mode) {
+        const accepted = await store.arm(area.id, { mode, code });
+        if (accepted) armToast(area, mode, accepted.state);
+      } else {
+        const ok = await store.disarm(area.id, code);
+        if (ok) toastStore.success(t("alarm.toast.disarmed", { area: area.name }));
+      }
+    } finally {
+      pinPad = null;
+    }
   }
 
   async function silence(area: AlarmAreaStatus) {
@@ -457,4 +520,18 @@
       </Card>
     {/each}
   </div>
+{/if}
+
+{#if pinPad}
+  <PinPad
+    title={pinPad.verb === "disarm"
+      ? t("alarm.pinpad.disarm_title", { area: pinPad.area.name })
+      : t("alarm.pinpad.arm_title", { mode: t(`alarm.mode.${pinPad.mode}`) })}
+    submitLabel={pinPad.verb === "disarm"
+      ? t("alarm.action.disarm")
+      : t(`alarm.mode.${pinPad.mode}`)}
+    busy={pinPad.busy}
+    onSubmit={(code) => void submitPin(code)}
+    onCancel={() => (pinPad = null)}
+  />
 {/if}

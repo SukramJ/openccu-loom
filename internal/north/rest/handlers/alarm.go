@@ -45,8 +45,13 @@ type AlarmPanel interface {
 var _ AlarmPanel = (*alarm.Service)(nil)
 
 // alarmSourceREST tags every alarm-journal entry and audit record this
-// surface produces with the originating surface.
-const alarmSourceREST = "rest"
+// surface produces with the originating surface. The `-operator` suffix
+// marks it as a strongly-authenticated operator session, which the
+// engine's code policy recognises as a break-glass surface that bypasses
+// a required arm/disarm/silence code while still surfacing duress
+// (docs/alarm-concept.md §11, S6). Every /alarm write route is
+// operator-gated, so a reaching call is always an operator session.
+const alarmSourceREST = "rest-operator"
 
 const (
 	// Journal query limits mirror the ?limit bounds documented for
@@ -122,6 +127,7 @@ func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			Force:     req.Force,
 			SkipDelay: req.SkipDelay,
 			Bypass:    req.Bypass,
+			Code:      req.Code,
 			By:        identityFromCtx(r.Context()),
 			Source:    alarmSourceREST,
 		})
@@ -130,6 +136,8 @@ func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			switch {
 			case errors.Is(err, engine.ErrUnknownArea):
 				writeAlarmNotFound(w, r)
+			case errors.Is(err, engine.ErrInvalidCode):
+				writeAlarmInvalidCode(w, r)
 			case errors.As(err, &notReady):
 				writeArmNotReady(w, r, notReady.Blockers)
 			case errors.Is(err, engine.ErrUnknownMode):
@@ -152,11 +160,17 @@ func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
-// DisarmAlarmArea returns an area to disarmed.
+// DisarmAlarmArea returns an area to disarmed. The optional body carries
+// a disarm code (docs/alarm-concept.md §11); an absent body disarms
+// code-free, which the operator-session source is permitted to do (S6).
 func DisarmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		if err := p.Engine().Disarm(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST); err != nil {
+		code, ok := decodeAlarmVerbCode(w, r)
+		if !ok {
+			return
+		}
+		if err := p.Engine().DisarmWithCode(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST, code); err != nil {
 			writeAlarmVerbError(w, r, err, "Disarm failed")
 			return
 		}
@@ -166,11 +180,17 @@ func DisarmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 }
 
 // SilenceAlarmArea silences the active incident of one area without
-// disarming it.
+// disarming it. The optional body carries a silence code for surfaces
+// whose per-surface policy requires one (silence is code-free by default
+// per S3).
 func SilenceAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		if err := p.Engine().Silence(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST); err != nil {
+		code, ok := decodeAlarmVerbCode(w, r)
+		if !ok {
+			return
+		}
+		if err := p.Engine().SilenceWithCode(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST, code); err != nil {
 			writeAlarmVerbError(w, r, err, "Silence failed")
 			return
 		}
@@ -179,10 +199,15 @@ func SilenceAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
-// AcknowledgeAlarmArea marks the area's open incident as seen.
+// AcknowledgeAlarmArea marks the area's open incident as seen. It accepts
+// the shared optional code body for surface symmetry, but acknowledge is
+// journal-only with no code gate, so a supplied code is inert here.
 func AcknowledgeAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
+		if _, ok := decodeAlarmVerbCode(w, r); !ok {
+			return
+		}
 		err := p.Engine().Acknowledge(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST)
 		switch {
 		case err == nil:
@@ -502,13 +527,40 @@ func writeArmNotReady(w http.ResponseWriter, r *http.Request, blockers []string)
 }
 
 // writeAlarmVerbError maps a bare engine verb error onto a problem
-// response: an unknown area is a 404, everything else a masked 500.
+// response: an unknown area is a 404, a refused code a 403, everything
+// else a masked 500.
 func writeAlarmVerbError(w http.ResponseWriter, r *http.Request, err error, title string) {
-	if errors.Is(err, engine.ErrUnknownArea) {
+	switch {
+	case errors.Is(err, engine.ErrUnknownArea):
 		writeAlarmNotFound(w, r)
-		return
+	case errors.Is(err, engine.ErrInvalidCode):
+		writeAlarmInvalidCode(w, r)
+	default:
+		writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, title, err)
 	}
-	writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, title, err)
+}
+
+// writeAlarmInvalidCode writes the 403 for a missing or wrong alarm code.
+// The detail stays deliberately opaque ("invalid_code") so a probing
+// caller learns nothing about which codes exist (docs/alarm-concept.md
+// §16).
+func writeAlarmInvalidCode(w http.ResponseWriter, r *http.Request) {
+	problem.Write(w, http.StatusForbidden,
+		problem.New(problem.TypeForbidden, r, "Invalid alarm code", "invalid_code"))
+}
+
+// decodeAlarmVerbCode decodes the shared optional {code} body of the
+// disarm / silence / acknowledge verbs. The body is optional: an absent
+// (EOF) body yields an empty code. A malformed body answers 400 and
+// reports ok=false so the caller returns without acting.
+func decodeAlarmVerbCode(w http.ResponseWriter, r *http.Request) (code string, ok bool) {
+	var req hmapi.AlarmVerbRequest
+	if err := DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
+		problem.Write(w, DecodeJSONStatus(err),
+			problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
+		return "", false
+	}
+	return req.Code, true
 }
 
 // writeAlarmNotFound writes the shared 404 for an unknown alarm area or

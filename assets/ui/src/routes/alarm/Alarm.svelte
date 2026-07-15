@@ -13,7 +13,14 @@
   // it is reached from the header action and from the Overview empty
   // state (§12.3, re-runnable per area).
 
-  type Tab = "overview" | "sensors" | "outputs" | "journal" | "walktest";
+  type Tab =
+    | "overview"
+    | "sensors"
+    | "outputs"
+    | "policies"
+    | "codes"
+    | "journal"
+    | "walktest";
 
   type Props = {
     subpath?: string;
@@ -26,6 +33,8 @@
   const activeTab = $derived.by<Tab>(() => {
     if (subpath === "/picker") return "sensors";
     if (subpath === "/outputs") return "outputs";
+    if (subpath === "/policies") return "policies";
+    if (subpath === "/codes") return "codes";
     if (subpath === "/journal") return "journal";
     if (subpath === "/walktest") return "walktest";
     return "overview";
@@ -36,6 +45,8 @@
   const loadOverview = () => import("./AlarmOverview.svelte");
   const loadSensors = () => import("./AlarmSensors.svelte");
   const loadOutputs = () => import("./AlarmOutputs.svelte");
+  const loadPolicies = () => import("./AlarmPolicies.svelte");
+  const loadCodes = () => import("./AlarmCodes.svelte");
   const loadJournal = () => import("./AlarmJournal.svelte");
   const loadWalkTest = () => import("./AlarmWalkTest.svelte");
   const loadWizard = () => import("./AlarmWizard.svelte");
@@ -44,6 +55,8 @@
     { tab: "overview", href: "#/alarm" },
     { tab: "sensors", href: "#/alarm/picker" },
     { tab: "outputs", href: "#/alarm/outputs" },
+    { tab: "policies", href: "#/alarm/policies" },
+    { tab: "codes", href: "#/alarm/codes" },
     { tab: "journal", href: "#/alarm/journal" },
     { tab: "walktest", href: "#/alarm/walktest" },
   ];
@@ -116,6 +129,18 @@
           <LoadingState />
         {:then { default: AlarmOutputs }}
           <AlarmOutputs />
+        {/await}
+      {:else if activeTab === "policies"}
+        {#await loadPolicies()}
+          <LoadingState />
+        {:then { default: AlarmPolicies }}
+          <AlarmPolicies />
+        {/await}
+      {:else if activeTab === "codes"}
+        {#await loadCodes()}
+          <LoadingState />
+        {:then { default: AlarmCodes }}
+          <AlarmCodes />
         {/await}
       {:else if activeTab === "journal"}
         {#await loadJournal()}

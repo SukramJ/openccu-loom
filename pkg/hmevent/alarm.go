@@ -20,7 +20,56 @@ const (
 	EventTypeAlarmWalkTest         EventType = "alarm_panel.walktest_progress"
 	EventTypeAlarmHealthChanged    EventType = "alarm_panel.health_changed"
 	EventTypeAlarmPanelChanged     EventType = "alarm_panel.panel_changed"
+	EventTypeAlarmDuress           EventType = "alarm_panel.duress"
+	EventTypeAlarmReminder         EventType = "alarm_panel.reminder"
 )
+
+// AlarmDuressEvent is the silent fan-out of a duress-code use
+// (docs/alarm-concept.md §11). A duress code disarms (or arms /
+// silences) normally with no visible UI difference; this event carries
+// the alarm to notification targets (MQTT event topic + webhook) out of
+// band. The WebSocket surface deliberately does NOT broadcast it — a
+// watcher on the panel screen must not learn that duress fired — and the
+// SPA never renders it. The visible journal entry is written Hidden.
+type AlarmDuressEvent struct {
+	Base
+	// AreaID identifies the alarm area.
+	AreaID string
+	// AreaName is the display name at publish time.
+	AreaName string
+	// Verb is the action the duress code accompanied (arm, disarm,
+	// silence).
+	Verb string
+	// By is the resolved code identity (the duress code's display
+	// name), when known.
+	By string
+	// Source names the surface the action came from.
+	Source string
+	// IncidentID references the active incident, 0 when none.
+	IncidentID int64
+}
+
+// Type implements Event.
+func (AlarmDuressEvent) Type() EventType { return EventTypeAlarmDuress }
+
+// AlarmReminderEvent fires when an arm schedule elapses and the area is
+// not in the scheduled mode while the schedule is a reminder (AutoArm
+// off): the engine notifies rather than arming (docs/alarm-concept.md
+// §15 row 19). The actual reminder emission is wired by the schedule
+// service; this type defines the bus contract.
+type AlarmReminderEvent struct {
+	Base
+	// AreaID identifies the alarm area.
+	AreaID string
+	// AreaName is the display name at publish time.
+	AreaName string
+	// Mode is the protection mode the schedule expected the area to be
+	// in.
+	Mode hmenum.AlarmMode
+}
+
+// Type implements Event.
+func (AlarmReminderEvent) Type() EventType { return EventTypeAlarmReminder }
 
 // AlarmPanelChangedEvent fires when the alarm-control-panel entity
 // projection of an area (or of the aggregate master panel) changes:
@@ -140,7 +189,7 @@ type AlarmTriggeredEvent struct {
 	// SensorName is the triggering sensor's display name.
 	SensorName string
 	// Cause is a stable machine-readable cause token (sensor,
-	// adopted, central_lost, restored).
+	// adopted, central_lost, restored, hazard, panic).
 	Cause string
 	// Mode is the protection mode that was active at trigger time.
 	Mode hmenum.AlarmMode

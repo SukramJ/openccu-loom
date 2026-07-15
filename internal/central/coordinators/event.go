@@ -161,8 +161,13 @@ func (c *EventCoordinator) HandleRawEvent(
 
 	old, hadOld := c.cache.Get(key)
 	c.cache.Set(key, newVal, "ccu_event")
-	if hadOld && old.Value.Equal(newVal) {
-		// Unchanged — skip the event to avoid downstream spam.
+	if hadOld && old.Value.Equal(newVal) && !hmenum.IsEdgeTriggerParameter(hmenum.Parameter(parameter)) {
+		// Unchanged — skip the event to avoid downstream spam. Edge-trigger
+		// parameters (PRESS_*, CODE_ID, CODE_STATE) are exempt: their every
+		// emission is a discrete edge, so a repeated identical value (a
+		// second identical keypad press) must still publish — otherwise the
+		// alarm intent router never sees the second intent. The cache is
+		// updated above either way.
 		return
 	}
 

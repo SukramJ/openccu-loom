@@ -1,0 +1,463 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package alarm
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/clock"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+)
+
+// This file drives the intent router (intents.go) through a real
+// alarm.Service — a real engine, a real journal, real SQLite stores —
+// with only the CodeSource faked, so the tests exercise the same
+// wiring intents_test's sibling production code runs on (WKP
+// CODE_ID/CODE_STATE correlation and remote-key bindings,
+// docs/alarm-concept.md §11 and docs/alarm-assumptions.md Q4).
+
+// intentsTestStart is the harness wall-clock origin (after the engine's
+// plausibility epoch).
+var intentsTestStart = time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
+
+// fakeCodeSource returns a fixed set of parsed code rows, wired via
+// Service.SetCodeSource. Only identity + binding matter to keypad/
+// remote intent routing, never the secret, so bypassing the real codes
+// facade (argon2 hashing, DB rows) keeps these tests focused.
+type fakeCodeSource struct {
+	rows []CodeRow
+	err  error
+}
+
+func (f *fakeCodeSource) Rows(context.Context) ([]CodeRow, error) { return f.rows, f.err }
+
+// intentsHarness bundles a real SQLite-backed alarm.Service around an
+// empty central registry (the router is fed synthetic wire events
+// directly — no godevccu needed) and a fake CodeSource.
+type intentsHarness struct {
+	t   *testing.T
+	ctx context.Context
+	clk *clock.Fake
+	svc *Service
+}
+
+// newIntentsHarness opens a fresh temp-file SQLite database, builds the
+// alarm.Service on it, and wires src as the code source (nil keeps
+// hardware-code routing inert).
+func newIntentsHarness(t *testing.T, src CodeSource) *intentsHarness {
+	t.Helper()
+	dsn := sqlitestore.FileDSN(filepath.Join(t.TempDir(), "alarm-intents.db"))
+	db, err := sqlitestore.Open(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	clk := clock.NewFake(intentsTestStart)
+	svc, err := NewService(Deps{
+		Settings: Settings{Enabled: true},
+		Registry: central.NewRegistry(),
+		Stores:   NewStores(db),
+		Clock:    clk,
+		Logger:   slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	svc.SetCodeSource(src)
+	return &intentsHarness{t: t, ctx: context.Background(), clk: clk, svc: svc}
+}
+
+// seedArea persists a minimal armable area: mode "full" with no exit
+// delay, so Arm completes synchronously and dispatchArm's default mode
+// resolves.
+func (h *intentsHarness) seedArea(id, name string) {
+	h.t.Helper()
+	cfg := engine.AreaConfig{Modes: map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}}}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		h.t.Fatalf("marshal area config: %v", err)
+	}
+	now := intentsTestStart.UnixMilli()
+	if err := h.svc.Stores().Areas.Upsert(h.ctx, sqlitestore.AlarmAreaRow{
+		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
+	}); err != nil {
+		h.t.Fatalf("seed area: %v", err)
+	}
+}
+
+// start starts the service (loads config, subscribes — a no-op here
+// since the registry is empty — and runs the S4 reconciliation pass
+// over the empty output set) and registers cleanup.
+func (h *intentsHarness) start() {
+	h.t.Helper()
+	if err := h.svc.Start(h.ctx); err != nil {
+		h.t.Fatalf("service start: %v", err)
+	}
+	h.t.Cleanup(func() { _ = h.svc.Stop(context.Background()) })
+}
+
+// areaState reads the engine's current state for id, failing if unknown.
+func (h *intentsHarness) areaState(id string) hmenum.AlarmAreaState {
+	h.t.Helper()
+	snap, ok := h.svc.Engine().Area(id)
+	if !ok {
+		h.t.Fatalf("unknown area %q", id)
+	}
+	return snap.State
+}
+
+// journalEvents returns every journal event name recorded so far
+// (hidden entries included, since duress tests need to see them).
+func (h *intentsHarness) journalEvents() []string {
+	h.t.Helper()
+	entries, err := h.svc.Stores().Journal.Query(h.ctx, sqlitestore.AlarmJournalFilter{IncludeHidden: true})
+	if err != nil {
+		h.t.Fatalf("query journal: %v", err)
+	}
+	out := make([]string, len(entries))
+	for i := range entries {
+		e := &entries[i]
+		out[i] = e.Event
+	}
+	return out
+}
+
+func (h *intentsHarness) wantJournalEvent(event string) {
+	h.t.Helper()
+	for _, e := range h.journalEvents() {
+		if e == event {
+			return
+		}
+	}
+	h.t.Fatalf("missing %q journal entry; got %v", event, h.journalEvents())
+}
+
+func (h *intentsHarness) wantNoJournalEvent(event string) {
+	h.t.Helper()
+	for _, e := range h.journalEvents() {
+		if e == event {
+			h.t.Fatalf("unexpected %q journal entry; got %v", event, h.journalEvents())
+		}
+	}
+}
+
+// wkpEvent builds a synthetic data-point value-changed event addressed
+// at channelAddress/parameter, the shape the intent router consumes
+// (intents.go's onEvent).
+func wkpEvent(channelAddress string, param hmenum.Parameter, val hmtypes.ParamValue) hmevent.DataPointValueChangedEvent {
+	return hmevent.DataPointValueChangedEvent{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: channelAddress,
+			Parameter:      string(param),
+		},
+		NewValue: val,
+	}
+}
+
+const intentsTestCentral = "ccu1"
+
+// --- WKP keypad correlation ---
+
+func TestIntentsWKP_MatchedLockArmsTheBoundArea(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "c1", Name: "Alice", Kind: CodeKindKeypadSlot, Enabled: true,
+		Perms:   CodePerms{Arm: true, Disarm: true},
+		Binding: CodeBinding{Central: intentsTestCentral, DeviceAddress: "WKP0001", Slot: 1, ArmMode: "full", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+	// Pair 1's lock channel is the odd member of the pair: channel 1.
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateArmed {
+		t.Fatalf("area state = %s, want armed", got)
+	}
+	entries, err := h.svc.Stores().Journal.Query(h.ctx, sqlitestore.AlarmJournalFilter{})
+	if err != nil {
+		t.Fatalf("query journal: %v", err)
+	}
+	var found bool
+	for _, e := range entries {
+		if e.Event == "armed" {
+			found = true
+			if e.Actor != "Alice" {
+				t.Fatalf("armed entry actor = %q, want Alice", e.Actor)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing armed journal entry")
+	}
+}
+
+func TestIntentsWKP_MatchedUnlockDisarmsTheBoundArea(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "c1", Name: "Alice", Kind: CodeKindKeypadSlot, Enabled: true,
+		Perms:   CodePerms{Arm: true, Disarm: true},
+		Binding: CodeBinding{Central: intentsTestCentral, DeviceAddress: "WKP0001", Slot: 1, ArmMode: "full", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	if _, err := h.svc.Engine().Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+		t.Fatalf("arm: %v", err)
+	}
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+	// Pair 1's unlock channel is the even member of the pair: channel 2.
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:2", hmenum.ParameterPressUnlock, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+}
+
+func TestIntentsWKP_PressOutsideTheCorrelationWindowIsUnmatched(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "c1", Name: "Alice", Kind: CodeKindKeypadSlot, Enabled: true,
+		Perms:   CodePerms{Arm: true, Disarm: true},
+		Binding: CodeBinding{Central: intentsTestCentral, DeviceAddress: "WKP0001", Slot: 1, ArmMode: "full", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+
+	h.clk.Advance(3 * time.Second) // beyond the 2s correlation window
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed (a stale scan must not correlate)", got)
+	}
+	h.wantJournalEvent("keypad_press_unmatched")
+}
+
+func TestIntentsWKP_OutOfRangeCodeIDNeverCorrelates(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "c1", Name: "Alice", Kind: CodeKindKeypadSlot, Enabled: true,
+		Perms:   CodePerms{Arm: true, Disarm: true},
+		Binding: CodeBinding{Central: intentsTestCentral, DeviceAddress: "WKP0001", Slot: 1, ArmMode: "full", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	// The documented idle-sentinel CODE_ID value (docs/alarm-assumptions.md
+	// Q4): a "known" scan reporting a slot outside the declared 1..8
+	// range must never correlate, however coincidental the timing.
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(32)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+	h.wantJournalEvent("keypad_press_unmatched")
+}
+
+func TestIntentsWKP_MatchedButUnboundSlotIsUnmatched(t *testing.T) {
+	h := newIntentsHarness(t, &fakeCodeSource{}) // no code rows at all
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+	h.wantJournalEvent("keypad_press_unmatched")
+}
+
+func TestIntentsWKP_LockWithoutArmPermissionIsDenied(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "c1", Name: "Guest", Kind: CodeKindKeypadSlot, Enabled: true,
+		Perms:   CodePerms{Arm: false, Disarm: true},
+		Binding: CodeBinding{Central: intentsTestCentral, DeviceAddress: "WKP0001", Slot: 1, ArmMode: "full", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+	h.wantJournalEvent("code_permission_denied")
+}
+
+func TestIntents_NoCodeSourceWiredIsInert(t *testing.T) {
+	h := newIntentsHarness(t, nil) // overrides the default facade adapter
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeID, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:0", hmenum.ParameterCodeState, hmtypes.IntValue(1)))
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("WKP0001:1", hmenum.ParameterPressLock, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+	if entries := h.journalEvents(); len(entries) != 0 {
+		t.Fatalf("expected no journal entries with no code source wired, got %v", entries)
+	}
+}
+
+// --- remote-key bindings ---
+
+func TestIntentsRemote_ArmBindingArmsTheBoundArea(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "r1", Name: "Living Room Remote", Kind: CodeKindRemoteKey, Enabled: true,
+		Perms:   CodePerms{Arm: true},
+		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_SHORT", Action: "arm:full", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressShort, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateArmed {
+		t.Fatalf("area state = %s, want armed", got)
+	}
+}
+
+func TestIntentsRemote_DisarmBindingDisarmsTheBoundArea(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
+		Perms:   CodePerms{Disarm: true},
+		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_LONG", Action: "disarm", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+	if _, err := h.svc.Engine().Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
+		t.Fatalf("arm: %v", err)
+	}
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressLong, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+}
+
+func TestIntentsRemote_SilenceBindingDispatchesWithoutAFault(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
+		Perms:   CodePerms{Silence: true},
+		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_SHORT", Action: "silence", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressShort, hmtypes.BoolValue(true)))
+
+	// Silence never fails on state; with no configured outputs there is
+	// nothing else to observe, so the assertion is that dispatch did not
+	// fault.
+	h.wantNoJournalEvent("code_action_failed")
+	h.wantNoJournalEvent("code_permission_denied")
+}
+
+// TestIntentsRemote_PanicBindingCurrentlyNeverReachesTheEngine pins a
+// real interface-signature mismatch: *engine.Engine.PanicTrigger takes
+// five parameters (ctx, areaID, silent, by, source) but the intent
+// router's panicTriggerer interface declares only three (ctx, areaID,
+// silent). Go interface satisfaction requires an exact method
+// signature, so the type assertion in dispatchPanic always fails and a
+// remote panic key never reaches the engine's always-on panic path — it
+// always journals errPanicUnsupported instead. This test documents the
+// CURRENT behavior; once the signatures are reconciled it should be
+// rewritten to assert the area actually enters triggered.
+func TestIntentsRemote_PanicBindingCurrentlyNeverReachesTheEngine(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
+		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_LONG", Action: "panic", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressLong, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed — the panic action is currently a no-op on the engine", got)
+	}
+	h.wantJournalEvent("code_action_failed")
+}
+
+func TestIntentsRemote_UnboundPressIsSilentNotAFault(t *testing.T) {
+	h := newIntentsHarness(t, &fakeCodeSource{}) // no bindings at all
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE99:1", hmenum.ParameterPressShort, hmtypes.BoolValue(true)))
+
+	if entries := h.journalEvents(); len(entries) != 0 {
+		t.Fatalf("expected no journal entries for an unbound remote press, got %v", entries)
+	}
+}
+
+func TestIntentsRemote_ActionWithoutPermissionIsDenied(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
+		Perms:   CodePerms{Arm: false},
+		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_SHORT", Action: "arm:full", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressShort, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+	h.wantJournalEvent("code_permission_denied")
+}
+
+func TestIntentsRemote_UnknownActionJournalsAFault(t *testing.T) {
+	src := &fakeCodeSource{rows: []CodeRow{{
+		ID: "r1", Name: "Remote", Kind: CodeKindRemoteKey, Enabled: true,
+		Perms:   CodePerms{Arm: true, Disarm: true, Silence: true},
+		Binding: CodeBinding{Central: intentsTestCentral, ChannelAddress: "REMOTE01:1", Parameter: "PRESS_SHORT", Action: "flashlights", AreaID: "eg"},
+	}}}
+	h := newIntentsHarness(t, src)
+	h.seedArea("eg", "Erdgeschoss")
+	h.start()
+
+	h.svc.intents.onEvent(h.ctx, intentsTestCentral, wkpEvent("REMOTE01:1", hmenum.ParameterPressShort, hmtypes.BoolValue(true)))
+
+	if got := h.areaState("eg"); got != hmenum.AlarmAreaStateDisarmed {
+		t.Fatalf("area state = %s, want disarmed", got)
+	}
+	h.wantJournalEvent("code_action_failed")
+}

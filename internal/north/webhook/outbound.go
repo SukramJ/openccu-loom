@@ -58,6 +58,11 @@ type Outbound struct {
 	eventAllow   map[string]struct{} // empty => all event types
 	centralAllow map[string]struct{} // empty => all centrals
 
+	// alarmBus is the daemon-level alarm event bus (nil until wired via
+	// SetAlarmBus). It is separate from the per-central buses because
+	// alarm areas are daemon-level, not central-scoped.
+	alarmBus *events.Bus
+
 	mu      sync.Mutex
 	started bool
 	unsubs  []func()
@@ -111,6 +116,17 @@ func NewOutbound(reg *central.Registry, cfg config.NorthWebhook, logger *slog.Lo
 	return o
 }
 
+// SetAlarmBus wires the daemon-level alarm event bus so the bridge also
+// forwards alarm-panel events (state, trigger, journal, health,
+// reminder, duress) under their EventType strings through the existing
+// allow-list (docs/alarm-concept.md §13.4). Must be called before Start;
+// a nil bus leaves the alarm plane unwired.
+func (o *Outbound) SetAlarmBus(bus *events.Bus) {
+	o.mu.Lock()
+	o.alarmBus = bus
+	o.mu.Unlock()
+}
+
 // Name implements bridge.Service.
 func (o *Outbound) Name() string { return "webhook-outbound" }
 
@@ -141,10 +157,15 @@ func (o *Outbound) Start(_ context.Context) error {
 		}
 		o.subscribeCentral(u.EventBus, name)
 	}
+	centralSubs := len(o.unsubs)
+	if o.alarmBus != nil {
+		o.subscribeAlarm(o.alarmBus)
+	}
 	o.started = true
 	o.logger.Info("webhook.outbound.started",
 		slog.String("url", o.cfg.URL),
-		slog.Int("centrals", len(o.unsubs)/3))
+		slog.Int("centrals", centralSubs/3),
+		slog.Bool("alarm", o.alarmBus != nil))
 	return nil
 }
 
@@ -162,6 +183,24 @@ func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
 		events.Subscribe(bus, func(e hmevent.IncidentRecordedEvent) {
 			o.onIncident(name, e)
 		}),
+	)
+}
+
+// subscribeAlarm attaches the alarm-plane handlers to the daemon-level
+// alarm bus. Areas are daemon-level, so there is one shared bus (no
+// per-central fan-out). Hidden journal entries (duress) never emit an
+// AlarmJournalAppendedEvent — the journal facade suppresses it — so the
+// journal handler forwards only visible entries; the silent duress
+// alarm rides its own AlarmDuressEvent (docs/alarm-concept.md §11, §13.4).
+func (o *Outbound) subscribeAlarm(bus *events.Bus) {
+	o.unsubs = append(
+		o.unsubs,
+		events.Subscribe(bus, o.onAlarmStateChanged),
+		events.Subscribe(bus, o.onAlarmTriggered),
+		events.Subscribe(bus, o.onAlarmJournalAppended),
+		events.Subscribe(bus, o.onAlarmHealthChanged),
+		events.Subscribe(bus, o.onAlarmReminder),
+		events.Subscribe(bus, o.onAlarmDuress),
 	)
 }
 
@@ -268,6 +307,81 @@ func (o *Outbound) onIncident(centralName string, e hmevent.IncidentRecordedEven
 		TS:           o.now().UTC().Format(time.RFC3339),
 	}
 	o.enqueue(env)
+}
+
+// ---- alarm-plane handlers (run on the alarm bus goroutine) ----
+//
+// Alarm areas are daemon-level, so these carry no `central`. Each event
+// forwards under its hmevent EventType string and threads the existing
+// event allow-list; the alarm-specific detail rides the nested `alarm`
+// object so the flat envelope stays stable for datapoint/system/incident
+// receivers.
+
+func (o *Outbound) onAlarmStateChanged(e hmevent.AlarmStateChangedEvent) {
+	o.enqueueAlarm(string(hmevent.EventTypeAlarmStateChanged), alarmPayload{
+		AreaID: e.AreaID, AreaName: e.AreaName,
+		FromState: string(e.From), ToState: string(e.To),
+		Mode: string(e.Mode), ChangedBy: e.ChangedBy, Source: e.Source,
+		IncidentID: e.IncidentID,
+	})
+}
+
+func (o *Outbound) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
+	o.enqueueAlarm(string(hmevent.EventTypeAlarmTriggered), alarmPayload{
+		AreaID: e.AreaID, AreaName: e.AreaName, IncidentID: e.IncidentID,
+		SensorID: e.SensorID, SensorName: e.SensorName,
+		Cause: e.Cause, Mode: string(e.Mode),
+	})
+}
+
+func (o *Outbound) onAlarmJournalAppended(e hmevent.AlarmJournalAppendedEvent) {
+	o.enqueueAlarm(string(hmevent.EventTypeAlarmJournalAppended), alarmPayload{
+		AreaID: e.AreaID, EntryID: e.EntryID, Class: string(e.Class),
+		JournalEvent: e.Event, ChangedBy: e.Actor, IncidentID: e.IncidentID,
+	})
+}
+
+func (o *Outbound) onAlarmHealthChanged(e hmevent.AlarmHealthChangedEvent) {
+	healthy := e.Healthy
+	o.enqueueAlarm(string(hmevent.EventTypeAlarmHealthChanged), alarmPayload{
+		Healthy: &healthy, Note: e.Note,
+	})
+}
+
+func (o *Outbound) onAlarmReminder(e hmevent.AlarmReminderEvent) {
+	o.enqueueAlarm(string(hmevent.EventTypeAlarmReminder), alarmPayload{
+		AreaID: e.AreaID, AreaName: e.AreaName, Mode: string(e.Mode),
+	})
+}
+
+// onAlarmDuress forwards the silent duress fan-out to notification
+// targets (webhook is an explicit duress sink per §11). It never touches
+// the WebSocket surface, so a screen watcher cannot learn duress fired.
+func (o *Outbound) onAlarmDuress(e hmevent.AlarmDuressEvent) {
+	o.enqueueAlarm(string(hmevent.EventTypeAlarmDuress), alarmPayload{
+		AreaID: e.AreaID, AreaName: e.AreaName, Verb: e.Verb,
+		ChangedBy: e.By, Source: e.Source, IncidentID: e.IncidentID,
+	})
+}
+
+// enqueueAlarm marshals the alarm detail, wraps it in the versioned
+// envelope under the given event type, and enqueues it — subject to the
+// same event allow-list as every other event type.
+func (o *Outbound) enqueueAlarm(eventType string, pay alarmPayload) {
+	if !o.eventAllowed(eventType) {
+		return
+	}
+	detail, err := json.Marshal(pay)
+	if err != nil {
+		o.logger.Warn("webhook.outbound.alarm_marshal", slog.String("err", err.Error()))
+		return
+	}
+	o.enqueue(envelope{
+		Schema: schemaVersion,
+		Event:  eventType,
+		Alarm:  detail,
+		TS:     o.now().UTC().Format(time.RFC3339),
+	})
 }
 
 // enqueue marshals env and pushes it onto the queue without blocking. On a
@@ -446,7 +560,35 @@ type envelope struct {
 	Message      string `json:"message,omitempty"`
 	Details      string `json:"details,omitempty"`
 
+	// Alarm carries the alarm-plane detail for the alarm_panel.* event
+	// types; absent for every other event.
+	Alarm json.RawMessage `json:"alarm,omitempty"`
+
 	TS string `json:"ts"`
+}
+
+// alarmPayload is the nested detail of an alarm-plane webhook event. Each
+// alarm event populates the subset it carries; omitempty keeps the object
+// tight. A duress code's secret is never present — only its identity and
+// the verb it accompanied (docs/alarm-concept.md §16).
+type alarmPayload struct {
+	AreaID       string `json:"area_id,omitempty"`
+	AreaName     string `json:"area_name,omitempty"`
+	FromState    string `json:"from_state,omitempty"`
+	ToState      string `json:"to_state,omitempty"`
+	Mode         string `json:"mode,omitempty"`
+	ChangedBy    string `json:"changed_by,omitempty"`
+	Source       string `json:"source,omitempty"`
+	IncidentID   int64  `json:"incident_id,omitempty"`
+	SensorID     string `json:"sensor_id,omitempty"`
+	SensorName   string `json:"sensor_name,omitempty"`
+	Cause        string `json:"cause,omitempty"`
+	EntryID      int64  `json:"entry_id,omitempty"`
+	Class        string `json:"class,omitempty"`
+	JournalEvent string `json:"journal_event,omitempty"`
+	Verb         string `json:"verb,omitempty"`
+	Healthy      *bool  `json:"healthy,omitempty"`
+	Note         string `json:"note,omitempty"`
 }
 
 // marshalValue JSON-encodes a datapoint value. A marshal error (should not

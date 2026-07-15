@@ -1777,6 +1777,14 @@
           "wire_value": "BATTERY_STATE"
         },
         {
+          "go_name": "ParameterBlockedPermanent",
+          "wire_value": "BLOCKED_PERMANENT"
+        },
+        {
+          "go_name": "ParameterBlockedTemporary",
+          "wire_value": "BLOCKED_TEMPORARY"
+        },
+        {
           "go_name": "ParameterBoostMode",
           "wire_value": "BOOST_MODE"
         },
@@ -1803,6 +1811,10 @@
         {
           "go_name": "ParameterCodeID",
           "wire_value": "CODE_ID"
+        },
+        {
+          "go_name": "ParameterCodeState",
+          "wire_value": "CODE_STATE"
         },
         {
           "go_name": "ParameterColor",

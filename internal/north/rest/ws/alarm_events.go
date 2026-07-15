@@ -29,6 +29,7 @@ const (
 	broadcastAlarmWalkTestProgress = "alarm.walktest_progress"
 	broadcastAlarmHealthChanged    = "alarm.health_changed"
 	broadcastAlarmPanelChanged     = "alarm.panel_changed"
+	broadcastAlarmReminder         = "alarm.reminder"
 )
 
 // AlarmStateChangedPayload is the broadcast payload for an arm-state
@@ -138,6 +139,7 @@ func (s *AlarmPanelSubscriber) Start() {
 		events.Subscribe(s.bus, s.onWalkTest),
 		events.Subscribe(s.bus, s.onHealthChanged),
 		events.Subscribe(s.bus, s.onPanelChanged),
+		events.Subscribe(s.bus, s.onReminder),
 	)
 }
 
@@ -264,6 +266,32 @@ type AlarmPanelChangedPayload struct {
 	State     string `json:"state"`
 	Available bool   `json:"available"`
 	Removed   bool   `json:"removed,omitempty"`
+}
+
+// AlarmReminderPayload is the broadcast payload for an arm-schedule
+// reminder (alarm.reminder): a schedule elapsed with AutoArm off while
+// the area was not in the scheduled mode, so the engine notifies rather
+// than arming (docs/alarm-concept.md §15 row 19).
+type AlarmReminderPayload struct {
+	AreaID   string `json:"area_id"`
+	AreaName string `json:"area_name,omitempty"`
+	Mode     string `json:"mode"`
+}
+
+// onReminder republishes an arm-schedule reminder onto the WebSocket
+// hub. Unlike the duress fan-out (deliberately never broadcast), a
+// reminder is benign and surfaces on every panel.
+func (s *AlarmPanelSubscriber) onReminder(e hmevent.AlarmReminderEvent) {
+	s.hub.Publish(Event{
+		Topic: alarmPanelTopic,
+		Type:  broadcastAlarmReminder,
+		When:  e.Timestamp(),
+		Payload: AlarmReminderPayload{
+			AreaID:   e.AreaID,
+			AreaName: e.AreaName,
+			Mode:     string(e.Mode),
+		},
+	})
 }
 
 // onPanelChanged republishes the alarm-control-panel entity

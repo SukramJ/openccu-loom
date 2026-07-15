@@ -1,0 +1,45 @@
+[
+  {
+    "id": "code-markus",
+    "name": "Markus",
+    "kind": "pin",
+    "perms": { "arm": true, "disarm": true, "silence": false },
+    "areas": [],
+    "enabled": true,
+    "created_ms": 1752480000000,
+    "updated_ms": 1752480000000
+  },
+  {
+    "id": "code-gast",
+    "name": "Gast-Code",
+    "kind": "pin",
+    "perms": { "arm": false, "disarm": true, "silence": false },
+    "areas": ["area-eg"],
+    "enabled": true,
+    "valid_from_ms": 1752192000000,
+    "valid_until_ms": 1752796800000,
+    "created_ms": 1752192000000,
+    "updated_ms": 1752192000000
+  },
+  {
+    "id": "code-wkp-haustuer",
+    "name": "Haustür-Keypad Slot 1",
+    "kind": "keypad_slot",
+    "perms": { "arm": true, "disarm": true, "silence": false },
+    "areas": ["area-eg"],
+    "enabled": true,
+    "created_ms": 1751500000000,
+    "updated_ms": 1751500000000
+  },
+  {
+    "id": "code-notfall",
+    "name": "Notfall",
+    "kind": "pin",
+    "duress": true,
+    "perms": { "arm": false, "disarm": true, "silence": false },
+    "areas": [],
+    "enabled": true,
+    "created_ms": 1751000000000,
+    "updated_ms": 1751000000000
+  }
+]

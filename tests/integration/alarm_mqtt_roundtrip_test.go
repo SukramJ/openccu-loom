@@ -60,17 +60,24 @@ type testAlarmSink struct {
 	ah *alarmHarness
 }
 
-func (s testAlarmSink) Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode) error {
-	_, err := s.ah.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{Mode: mode, Source: alarmMqttSource})
+func (s testAlarmSink) Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error {
+	_, err := s.ah.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{Mode: mode, Code: code, Source: alarmMqttSource})
 	return err
 }
 
-func (s testAlarmSink) Disarm(ctx context.Context, areaID string) error {
-	return s.ah.svc.Engine().Disarm(ctx, areaID, "", alarmMqttSource)
+func (s testAlarmSink) Disarm(ctx context.Context, areaID, code string) error {
+	return s.ah.svc.Engine().DisarmWithCode(ctx, areaID, "", alarmMqttSource, code)
 }
 
-func (s testAlarmSink) Silence(ctx context.Context, areaID string) error {
-	return s.ah.svc.Engine().Silence(ctx, areaID, "", alarmMqttSource)
+func (s testAlarmSink) Silence(ctx context.Context, areaID, code string) error {
+	return s.ah.svc.Engine().SilenceWithCode(ctx, areaID, "", alarmMqttSource, code)
+}
+
+// Panic implements mqtt.AlarmSink, mirroring daemon_north.go's
+// alarmMQTTSink.Panic: the HA TRIGGER command routes onto the engine's
+// loud (non-silent) panic path (docs/alarm-concept.md §7).
+func (s testAlarmSink) Panic(ctx context.Context, areaID string) error {
+	return s.ah.svc.Engine().PanicTrigger(ctx, areaID, false, "", alarmMqttSource)
 }
 
 func (s testAlarmSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) error {

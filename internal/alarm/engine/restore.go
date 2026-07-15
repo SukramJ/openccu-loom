@@ -160,6 +160,10 @@ func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.Alarm
 	}
 	a.pendingCause = restoredCtx.PendingCause
 	a.silencedIncidentID = restoredCtx.SilencedIncidentID
+	a.preTriggerState = restoredCtx.PreTriggerState
+	a.preTriggerMode = restoredCtx.PreTriggerMode
+	a.preAlarm = restoredCtx.PreAlarm
+	a.autoRearmMode = restoredCtx.AutoRearmMode
 	if row.IncidentID != 0 {
 		if inc, ok, err := e.incidents.Get(ctx, row.IncidentID); err == nil && ok && inc.ClosedAtMS == 0 {
 			a.incident = &inc
@@ -210,6 +214,10 @@ func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.Alarm
 	case hmenum.AlarmAreaStateDisarmed, "":
 		a.state = hmenum.AlarmAreaStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
+		a.preTriggerState = ""
+		a.preTriggerMode = ""
+		a.preAlarm = false
+		e.restoreAutoRearm(ctx, a, timers, plausible, now)
 		e.persist(ctx, a)
 
 	case hmenum.AlarmAreaStateArmed:
@@ -371,9 +379,31 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *area, timers []persist
 	}
 
 	mcfg := a.cfg.Modes[a.mode]
+	// An always-on (hazard/panic) incident re-fires with its class
+	// policy and returns to the state it interrupted, not into armed.
+	alwaysOn := a.preTriggerState != ""
+	policy := mcfg.Outputs
+	if alwaysOn {
+		policy = alwaysOnPolicyForIncident(a, inc)
+	}
+	// A persisted pre-alarm phase is restored conservatively as a full
+	// trigger: a fresh full window with full outputs, never re-entering
+	// the pre-alarm phase.
+	wasPreAlarm := a.preAlarm
+	if wasPreAlarm {
+		a.preAlarm = false
+		e.journalEntry(ctx, a, JournalEntry{
+			Class: hmenum.AlarmJournalClassTrigger, Event: "pre_alarm_restored_as_full",
+			IncidentID: inc.ID,
+		})
+	}
+
 	deadline := time.UnixMilli(inc.TriggerDeadlineMS)
 	if t := findTimer(timers, timerKindTrigger); t != nil && inc.TriggerDeadlineMS == 0 {
 		deadline = time.UnixMilli(t.DeadlineMS)
+	}
+	if wasPreAlarm {
+		deadline = now.Add(mcfg.triggerDuration())
 	}
 
 	if !plausible {
@@ -396,6 +426,10 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *area, timers []persist
 			Class: hmenum.AlarmJournalClassTrigger, Event: "trigger_window_elapsed_while_down",
 			IncidentID: inc.ID,
 		})
+		if alwaysOn {
+			e.finishAlwaysOn(ctx, a, "always_on_elapsed", "engine:restore")
+			return
+		}
 		e.finishTriggeredOnRestore(ctx, a, closeReasonPostTrigger)
 		return
 	}
@@ -434,7 +468,7 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *area, timers []persist
 	}
 	if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{
 		Cycle: inc.RetriggerCycles, Degraded: degraded, Restored: true,
-		Policy: mcfg.Outputs,
+		Policy: policy,
 	}); err != nil {
 		e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
 	}
@@ -468,6 +502,46 @@ func (e *Engine) finishTriggeredOnRestore(ctx context.Context, a *area, closeRea
 	}
 	e.completeArm(ctx, a, from, "engine:restore", "engine")
 	e.reEvaluateAfterRestore(ctx, a)
+}
+
+// restoreAutoRearm resumes an interrupted auto-rearm quiet period on a
+// disarmed area: reschedule the remaining wait, or attempt the rearm
+// when the quiet period elapsed while the daemon was down. Under an
+// implausible clock it never fires off wall math and resumes the
+// persisted remaining duration. The caller holds the lock.
+func (e *Engine) restoreAutoRearm(ctx context.Context, a *area, timers []persistedTimer, plausible bool, now time.Time) {
+	if !a.autoRearmMode.Armed() {
+		a.autoRearmMode = ""
+		return
+	}
+	if _, ok := a.cfg.Modes[a.autoRearmMode]; !ok {
+		a.autoRearmMode = ""
+		return
+	}
+	t := findTimer(timers, timerKindAutoRearm)
+	var remaining time.Duration
+	switch {
+	case t == nil:
+		remaining = time.Duration(a.cfg.AutoRearmSeconds) * time.Second
+	case plausible:
+		if d := time.UnixMilli(t.DeadlineMS).Sub(now); d > 0 {
+			remaining = d
+		} else {
+			// The quiet period elapsed while down: attempt the rearm now.
+			e.onAutoRearmElapsed(ctx, a)
+			return
+		}
+	default:
+		remaining = time.Duration(t.RemainingMS) * time.Millisecond
+	}
+	if remaining <= 0 {
+		remaining = time.Second
+	}
+	e.scheduleAutoRearm(a, a.autoRearmMode, remaining)
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_resumed",
+		Details: map[string]any{"remaining_ms": remaining.Milliseconds(), "clock_plausible": plausible},
+	})
 }
 
 // refreshSensorValues pulls fresh activation values into the sensor

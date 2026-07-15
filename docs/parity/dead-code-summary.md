@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: c98621c
-HEAD: c98621c
+Generated: 06ead19
+HEAD: 06ead19
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25257 |
-| Reachable | 4476 |
-| Whitelisted | 18113 |
-| **Unreachable** | **2668** |
+| Total Exported | 25459 |
+| Reachable | 4519 |
+| Whitelisted | 18229 |
+| **Unreachable** | **2711** |
 
 ## Top-20 Packages by Dead Code
 
@@ -35,7 +35,7 @@ HEAD: c98621c
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
-| internal/alarm | 0 | 3 | 0 |
+| internal/alarm | 0 | 19 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -85,10 +85,10 @@ HEAD: c98621c
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 87 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 87 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 84 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 84 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
 | internal/payload | For | internal/payload/payload.go | 39 |
 | internal/payload | For | internal/payload/payload.go | 39 |
 
@@ -115,8 +115,9 @@ HEAD: c98621c
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
-| internal/alarm | 0 | 3 | 0 |
-| internal/alarm/engine | 0 | 23 | 5 |
+| internal/alarm | 0 | 19 | 0 |
+| internal/alarm/codes | 0 | 13 | 0 |
+| internal/alarm/engine | 0 | 25 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
 | internal/alarm/outputs | 0 | 22 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
@@ -190,8 +191,8 @@ HEAD: c98621c
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 81 | 22 |
-| pkg/hmapi | 0 | 105 | 14 |
+| internal/store/sqlite | 0 | 84 | 22 |
+| pkg/hmapi | 0 | 113 | 14 |
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

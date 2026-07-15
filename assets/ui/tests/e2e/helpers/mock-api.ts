@@ -250,6 +250,37 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
+  // Alarm codes (docs/alarm-concept.md §11) — operator-gated, hash/PIN
+  // never round-tripped. Default fixture: three enabled pin/keypad_slot
+  // codes plus one duress-marked pin. Single-code route (GET/PUT/DELETE)
+  // is registered before the bare collection route, mirroring the
+  // areas/*-before-areas ordering above.
+  await page.route('**/api/v1/alarm/codes/*', (route) => {
+    if (route.request().method() === 'DELETE') return route.fulfill({ status: 200 });
+    if (route.request().method() === 'PUT') return route.fulfill({ status: 200 });
+    const codes = fixture('alarm-codes.json') as Record<string, unknown>[];
+    return route.fulfill({ json: codes[0] });
+  });
+  await page.route('**/api/v1/alarm/codes', (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      return route.fulfill({
+        json: {
+          id: 'code-new',
+          name: body.name,
+          kind: body.kind,
+          duress: body.duress,
+          perms: body.perms,
+          areas: body.areas ?? [],
+          valid_from_ms: body.valid_from_ms,
+          valid_until_ms: body.valid_until_ms,
+          enabled: body.enabled,
+        },
+      });
+    }
+    return route.fulfill({ json: fixture('alarm-codes.json') });
+  });
+
   // Auth users and tokens
   await page.route('**/api/v1/auth/users', (route) =>
     route.fulfill({ json: fixture('users.json') }),

@@ -22,9 +22,13 @@ import (
 )
 
 // alarmSourceWS is the surface token attributed to every alarm-engine
-// verb invoked over the WebSocket transport (mirrors the "ws" source
-// the REST layer records).
-const alarmSourceWS = "ws"
+// verb invoked over the WebSocket transport. The `-operator` suffix marks
+// it as a strongly-authenticated operator session — the alarm_panel write
+// commands are operator-gated in Dispatch — which the engine's code
+// policy recognises as a break-glass surface that bypasses a required
+// arm/disarm/silence code while still surfacing duress
+// (docs/alarm-concept.md §11, S6).
+const alarmSourceWS = "ws-operator"
 
 // AlarmPanelQuery is the narrow facade the alarm_panel.* command family
 // consumes. *alarm.Service satisfies it directly via its Engine() and
@@ -40,11 +44,27 @@ type AlarmPanelQuery interface {
 	Panels() []alarmpanel.Panel
 }
 
+// AlarmCodeAdmin is the alarm-code CRUD facade the codes_* commands
+// drive (docs/alarm-concept.md §11). It mirrors the REST handler facade
+// and is satisfied structurally by the codes facade; a nil value serves
+// the codes_* commands as an "unavailable" command error. The hash and
+// cleartext PIN are never returned on the [hmapi.AlarmCode] projection.
+type AlarmCodeAdmin interface {
+	ListCodes(ctx context.Context) ([]hmapi.AlarmCode, error)
+	GetCode(ctx context.Context, id string) (code hmapi.AlarmCode, ok bool, err error)
+	CreateCode(ctx context.Context, req hmapi.AlarmCodeRequest) (hmapi.AlarmCode, error)
+	UpdateCode(ctx context.Context, id string, req hmapi.AlarmCodeRequest) (code hmapi.AlarmCode, ok bool, err error)
+	DeleteCode(ctx context.Context, id string) (ok bool, err error)
+}
+
 // AlarmPanelCommandsConfig bundles the alarm-panel facade consumed by
 // [RegisterAlarmPanelCommands]. A nil Panel skips the whole family —
-// the daemon leaves it nil when the alarm service is disabled.
+// the daemon leaves it nil when the alarm service is disabled. A nil
+// Codes leaves the codes_* commands registered but serving "unavailable"
+// until the codes facade is wired.
 type AlarmPanelCommandsConfig struct {
 	Panel AlarmPanelQuery
+	Codes AlarmCodeAdmin
 }
 
 // RegisterAlarmPanelCommands wires the alarm_panel.* command family onto
@@ -65,6 +85,10 @@ func RegisterAlarmPanelCommands(router *Router, cfg AlarmPanelCommandsConfig) {
 	router.Register("alarm_panel.readiness", alarmReadinessHandler(cfg.Panel))
 	router.Register("alarm_panel.journal", alarmJournalHandler(cfg.Panel))
 	router.Register("alarm_panel.walktest_status", alarmWalkTestStatusHandler(cfg.Panel))
+	router.Register("alarm_panel.codes_list", alarmCodesListHandler(cfg.Codes))
+	router.Register("alarm_panel.codes_create", alarmCodesCreateHandler(cfg.Codes))
+	router.Register("alarm_panel.codes_update", alarmCodesUpdateHandler(cfg.Codes))
+	router.Register("alarm_panel.codes_delete", alarmCodesDeleteHandler(cfg.Codes))
 }
 
 // alarmActor resolves the acting identity for the engine's `by`
@@ -82,9 +106,12 @@ func alarmActor(ctx context.Context) string {
 
 // --- argument shapes ---
 
-// alarmAreaArgs is the shared shape for the per-area verbs and reads.
+// alarmAreaArgs is the shared shape for the per-area verbs and reads. The
+// optional code carries an alarm code for the code-gated verbs
+// (docs/alarm-concept.md §11); it is ignored by the reads.
 type alarmAreaArgs struct {
 	AreaID string `json:"area_id"`
+	Code   string `json:"code,omitempty"`
 }
 
 // alarmArmArgs is the shape for alarm_panel.arm.
@@ -94,6 +121,7 @@ type alarmArmArgs struct {
 	Force     bool     `json:"force,omitempty"`
 	SkipDelay bool     `json:"skip_delay,omitempty"`
 	Bypass    []string `json:"bypass,omitempty"`
+	Code      string   `json:"code,omitempty"`
 }
 
 // alarmJournalArgs is the shape for alarm_panel.journal. From/To are
@@ -129,6 +157,7 @@ func alarmArmHandler(q AlarmPanelQuery) CommandHandler {
 			Force:     args.Force,
 			SkipDelay: args.SkipDelay,
 			Bypass:    args.Bypass,
+			Code:      args.Code,
 			By:        alarmActor(ctx),
 			Source:    alarmSourceWS,
 		})
@@ -145,27 +174,27 @@ func alarmArmHandler(q AlarmPanelQuery) CommandHandler {
 
 func alarmDisarmHandler(q AlarmPanelQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		areaID, eng, err := alarmAreaTarget(q, raw)
+		args, eng, err := alarmAreaTarget(q, raw)
 		if err != nil {
 			return nil, err
 		}
-		if err := eng.Disarm(ctx, areaID, alarmActor(ctx), alarmSourceWS); err != nil {
+		if err := eng.DisarmWithCode(ctx, args.AreaID, alarmActor(ctx), alarmSourceWS, args.Code); err != nil {
 			return nil, alarmEngineError(err)
 		}
-		return map[string]any{"disarmed": true, "area_id": areaID}, nil
+		return map[string]any{"disarmed": true, "area_id": args.AreaID}, nil
 	}
 }
 
 func alarmSilenceHandler(q AlarmPanelQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		areaID, eng, err := alarmAreaTarget(q, raw)
+		args, eng, err := alarmAreaTarget(q, raw)
 		if err != nil {
 			return nil, err
 		}
-		if err := eng.Silence(ctx, areaID, alarmActor(ctx), alarmSourceWS); err != nil {
+		if err := eng.SilenceWithCode(ctx, args.AreaID, alarmActor(ctx), alarmSourceWS, args.Code); err != nil {
 			return nil, alarmEngineError(err)
 		}
-		return map[string]any{"silenced": true, "area_id": areaID}, nil
+		return map[string]any{"silenced": true, "area_id": args.AreaID}, nil
 	}
 }
 
@@ -182,14 +211,17 @@ func alarmSilenceAllHandler(q AlarmPanelQuery) CommandHandler {
 
 func alarmAcknowledgeHandler(q AlarmPanelQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		areaID, eng, err := alarmAreaTarget(q, raw)
+		// Acknowledge accepts the shared {area_id, code} shape for symmetry
+		// but is journal-only with no code gate, so a supplied code is
+		// inert here.
+		args, eng, err := alarmAreaTarget(q, raw)
 		if err != nil {
 			return nil, err
 		}
-		if err := eng.Acknowledge(ctx, areaID, alarmActor(ctx), alarmSourceWS); err != nil {
+		if err := eng.Acknowledge(ctx, args.AreaID, alarmActor(ctx), alarmSourceWS); err != nil {
 			return nil, alarmEngineError(err)
 		}
-		return map[string]any{"acknowledged": true, "area_id": areaID}, nil
+		return map[string]any{"acknowledged": true, "area_id": args.AreaID}, nil
 	}
 }
 
@@ -312,22 +344,22 @@ func alarmWalkTestStatusHandler(q AlarmPanelQuery) CommandHandler {
 
 // --- shared helpers ---
 
-// alarmAreaTarget decodes the shared {area_id} body and resolves the
-// engine, returning the bad_request / internal command errors the
+// alarmAreaTarget decodes the shared {area_id, code} body and resolves
+// the engine, returning the bad_request / internal command errors the
 // per-area verbs share.
-func alarmAreaTarget(q AlarmPanelQuery, raw json.RawMessage) (string, *engine.Engine, error) {
+func alarmAreaTarget(q AlarmPanelQuery, raw json.RawMessage) (alarmAreaArgs, *engine.Engine, error) {
 	var args alarmAreaArgs
 	if err := decodeOrEmpty(raw, &args); err != nil {
-		return "", nil, err
+		return alarmAreaArgs{}, nil, err
 	}
 	if args.AreaID == "" {
-		return "", nil, NewCommandError(CommandErrorBadRequest, "area_id required")
+		return alarmAreaArgs{}, nil, NewCommandError(CommandErrorBadRequest, "area_id required")
 	}
 	eng := q.Engine()
 	if eng == nil {
-		return "", nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
+		return alarmAreaArgs{}, nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
 	}
-	return args.AreaID, eng, nil
+	return args, eng, nil
 }
 
 // alarmAreaStatus renders one engine snapshot as the REST-shaped status
@@ -440,12 +472,135 @@ func alarmEngineError(err error) *CommandError {
 	switch {
 	case errors.Is(err, engine.ErrUnknownArea):
 		return NewCommandError("not_found", err.Error())
+	case errors.Is(err, engine.ErrInvalidCode):
+		// A missing/wrong code is a forbidden action; the message stays
+		// opaque so a prober learns nothing about which codes exist.
+		return NewCommandError(CommandErrorForbidden, "invalid_code")
 	case errors.Is(err, engine.ErrUnknownMode):
 		return NewCommandError(CommandErrorBadRequest, err.Error())
 	case errors.Is(err, engine.ErrInvalidState), errors.Is(err, engine.ErrNoIncident):
 		return NewCommandError("conflict", err.Error())
 	default:
 		return NewCommandError(CommandErrorInternal, err.Error())
+	}
+}
+
+// --- code CRUD commands ---
+//
+// These are operator-gated writes (see writeCommandRoles): codes are
+// security material, so even the list is not viewer-open. A nil admin
+// (codes facade not yet wired) answers "unavailable" rather than
+// panicking.
+
+// alarmCodeUpsertArgs is the shared create/update body. For update the
+// id names the target; for create it is ignored (server-generated).
+type alarmCodeUpsertArgs struct {
+	ID   string                 `json:"id,omitempty"`
+	Code hmapi.AlarmCodeRequest `json:"code"`
+}
+
+func alarmCodesUnavailable() *CommandError {
+	return NewCommandError("unavailable", "alarm code subsystem not available")
+}
+
+func alarmCodesListHandler(admin AlarmCodeAdmin) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		if admin == nil {
+			return nil, alarmCodesUnavailable()
+		}
+		codes, err := admin.ListCodes(ctx)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, err.Error())
+		}
+		if codes == nil {
+			codes = []hmapi.AlarmCode{}
+		}
+		return map[string]any{"codes": codes}, nil
+	}
+}
+
+func alarmCodesCreateHandler(admin AlarmCodeAdmin) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		if admin == nil {
+			return nil, alarmCodesUnavailable()
+		}
+		var args alarmCodeUpsertArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if err := validateAlarmCodeReq(args.Code); err != nil {
+			return nil, err
+		}
+		created, err := admin.CreateCode(ctx, args.Code)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, err.Error())
+		}
+		return created, nil
+	}
+}
+
+func alarmCodesUpdateHandler(admin AlarmCodeAdmin) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		if admin == nil {
+			return nil, alarmCodesUnavailable()
+		}
+		var args alarmCodeUpsertArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.ID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "id required")
+		}
+		if err := validateAlarmCodeReq(args.Code); err != nil {
+			return nil, err
+		}
+		updated, ok, err := admin.UpdateCode(ctx, args.ID, args.Code)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, err.Error())
+		}
+		if !ok {
+			return nil, NewCommandError("not_found", "no alarm code "+args.ID)
+		}
+		return updated, nil
+	}
+}
+
+func alarmCodesDeleteHandler(admin AlarmCodeAdmin) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		if admin == nil {
+			return nil, alarmCodesUnavailable()
+		}
+		var args struct {
+			ID string `json:"id"`
+		}
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.ID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "id required")
+		}
+		ok, err := admin.DeleteCode(ctx, args.ID)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, err.Error())
+		}
+		if !ok {
+			return nil, NewCommandError("not_found", "no alarm code "+args.ID)
+		}
+		return map[string]any{"deleted": true, "id": args.ID}, nil
+	}
+}
+
+// validateAlarmCodeReq mirrors the REST create/update validation: a name
+// and a known kind are required before the write reaches the facade.
+func validateAlarmCodeReq(req hmapi.AlarmCodeRequest) error {
+	if req.Name == "" {
+		return NewCommandError(CommandErrorBadRequest, "name is required")
+	}
+	switch req.Kind {
+	case "pin", "keypad_slot", "remote_key":
+		return nil
+	default:
+		return NewCommandError(CommandErrorBadRequest, "kind must be one of pin, keypad_slot, remote_key")
 	}
 }
 

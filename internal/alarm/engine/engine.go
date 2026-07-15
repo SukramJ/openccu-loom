@@ -31,7 +31,40 @@ var (
 	ErrInvalidState = errors.New("engine: action not allowed in current state")
 	// ErrNoIncident reports an acknowledge without an open incident.
 	ErrNoIncident = errors.New("engine: no open incident")
+	// ErrInvalidCode reports a verb refused because a required alarm
+	// code was missing or did not authenticate (docs/alarm-concept.md
+	// §11). The CodeValidator returns it; the engine surfaces it.
+	ErrInvalidCode = errors.New("engine: invalid alarm code")
 )
+
+// Code verbs passed to the CodeValidator. The strings are part of the
+// port contract — keep them stable.
+const (
+	codeVerbArm     = "arm"
+	codeVerbDisarm  = "disarm"
+	codeVerbSilence = "silence"
+)
+
+// Strongly-authenticated sources that bypass a code requirement
+// (docs/alarm-concept.md §11 degradation). They still surface duress
+// when a code is supplied. These tokens are the operator-session /
+// break-glass surfaces; anonymous MQTT / sysvar / keypad paths are not
+// listed and stay code-gated.
+const (
+	codeSourceRESTOperator = "rest-operator"
+	codeSourceWSOperator   = "ws-operator"
+	codeSourceHmcli        = "hmcli"
+)
+
+// isOperatorSource reports whether source bypasses code requirements.
+func isOperatorSource(source string) bool {
+	switch source {
+	case codeSourceRESTOperator, codeSourceWSOperator, codeSourceHmcli:
+		return true
+	default:
+		return false
+	}
+}
 
 // NotReadyError reports a refused arm together with the blocking
 // sensors, so surfaces can render the bypass sheet.
@@ -52,6 +85,8 @@ const (
 	causeKindUnavailable    = "sensor_unavailable"
 	causeKindDowntime       = "activation_during_downtime"
 	causeKindAdopted        = "adopted"
+	causeKindHazard         = "hazard"
+	causeKindPanic          = "panic"
 )
 
 // Incident close reasons persisted in alarm_incidents.close_reason.
@@ -83,7 +118,10 @@ type Deps struct {
 	Sink         EventSink
 	Journal      Journal
 	SensorReader SensorReader
-	Logger       *slog.Logger
+	// Validator resolves alarm codes for the code-policy checks. A nil
+	// validator disables codes entirely: every CodePolicy is inert.
+	Validator CodeValidator
+	Logger    *slog.Logger
 	// RestartLoopBreakerK caps restore-driven re-fires per incident
 	// before output degradation; 0 selects the default.
 	RestartLoopBreakerK int
@@ -105,6 +143,7 @@ type Engine struct {
 	sink         EventSink
 	journal      Journal
 	reader       SensorReader
+	validator    CodeValidator
 	log          *slog.Logger
 	loopBreakerK int
 
@@ -167,6 +206,7 @@ func New(deps Deps) (*Engine, error) {
 		sink:         sink,
 		journal:      journal,
 		reader:       deps.SensorReader,
+		validator:    deps.Validator,
 		log:          logger,
 		loopBreakerK: k,
 		areas:        map[string]*area{},
@@ -225,8 +265,12 @@ type ArmRequest struct {
 	Bypass []string
 	// SkipDelay arms without the exit delay.
 	SkipDelay bool
-	By        string
-	Source    string
+	// Code is the alarm code supplied with the arm, when the area's
+	// CodePolicy requires one (or to surface a duress code). Empty when
+	// none was supplied.
+	Code   string
+	By     string
+	Source string
 }
 
 // ArmResult reports the outcome of an accepted arm.
@@ -261,6 +305,27 @@ func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmRes
 	if a.state == hmenum.AlarmAreaStatePending || a.state == hmenum.AlarmAreaStateTriggered {
 		return ArmResult{}, ErrInvalidState
 	}
+
+	identity, duress, cerr := e.authorize(ctx, a, codeVerbArm, req.Code, req.Source)
+	if cerr != nil {
+		return ArmResult{}, cerr
+	}
+	if identity != "" && req.By == "" {
+		req.By = identity
+	}
+	if duress {
+		e.fireDuress(ctx, a, codeVerbArm, req.By, req.Source)
+	}
+	return e.beginArm(ctx, a, req, mcfg)
+}
+
+// beginArm resolves blockers and drives the disarmed→arming/armed
+// transition; the caller holds the lock and has validated the mode and
+// any code. It is shared by the public Arm verb and the auto-rearm
+// timer, and honors Force / Bypass exactly as Arm documents.
+func (e *Engine) beginArm(ctx context.Context, a *area, req ArmRequest, mcfg ModeConfig) (ArmResult, error) {
+	// A fresh arm supersedes any pending auto-rearm.
+	a.cancelAutoRearm()
 
 	// Resolve blockers against the requested + automatic bypasses.
 	bypass := map[string]bool{}
@@ -333,12 +398,7 @@ func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmRes
 func (e *Engine) completeArm(ctx context.Context, a *area, from hmenum.AlarmAreaState, by, source string) {
 	a.cancelTimers()
 	a.state = hmenum.AlarmAreaStateArmed
-	a.openAtArm = map[string]bool{}
-	for id, s := range a.sensors {
-		if s.cfg.InMode(a.mode) && !a.bypassed[id] && s.activeKnown && s.active {
-			a.openAtArm[id] = true
-		}
-	}
+	e.recaptureOpenBaseline(a)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassArm, Event: "armed",
@@ -350,10 +410,95 @@ func (e *Engine) completeArm(ctx context.Context, a *area, from hmenum.AlarmArea
 	}
 }
 
+// recaptureOpenBaseline records the member sensors that are active for
+// the current mode as the open-at-arm baseline, so a door still standing
+// open does not instantly (re-)trigger. The caller holds the lock.
+func (e *Engine) recaptureOpenBaseline(a *area) {
+	a.openAtArm = map[string]bool{}
+	for id, s := range a.sensors {
+		if s.cfg.InMode(a.mode) && !a.bypassed[id] && s.activeKnown && s.active {
+			a.openAtArm[id] = true
+		}
+	}
+}
+
+// authorize applies the area's CodePolicy to one verb. It returns the
+// resolved code identity (for changed-by attribution), whether the code
+// is a duress code, and a refusal error (ErrInvalidCode) when a required
+// code is missing or wrong. A nil CodeValidator disables codes entirely.
+// Operator sources bypass the requirement but still get duress detection
+// on a supplied code. The caller holds the lock.
+func (e *Engine) authorize(ctx context.Context, a *area, verb, code, source string) (identity string, duress bool, refuse error) {
+	if e.validator == nil {
+		return "", false, nil
+	}
+	required := a.cfg.CodePolicy.requires(verb, source)
+	if isOperatorSource(source) {
+		required = false
+	}
+	if !required && code == "" {
+		return "", false, nil
+	}
+	identity, duress, err := e.validator.Validate(ctx, a.id, verb, code, source)
+	if err != nil {
+		if isOperatorSource(source) {
+			// The operator session is the second factor: a bad or absent
+			// code never blocks it (§11 break-glass). No duress on a code
+			// that did not authenticate.
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return identity, duress, nil
+}
+
+// fireDuress emits the silent duress fan-out: a Hidden journal entry
+// (the journal facade suppresses the append event for hidden rows) plus
+// a dedicated AlarmDuressEvent on the bus for the MQTT/webhook
+// consumers. The verb itself proceeds normally. The caller holds the
+// lock.
+func (e *Engine) fireDuress(ctx context.Context, a *area, verb, by, source string) {
+	incID := int64(0)
+	if a.incident != nil {
+		incID = a.incident.ID
+	}
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: duressJournalClass(verb), Event: "duress",
+		Actor: by, Source: source, IncidentID: incID, Hidden: true,
+	})
+	e.sink.Publish(hmevent.AlarmDuressEvent{
+		Base:   hmevent.NewBaseAt(e.clk.Now()),
+		AreaID: a.id, AreaName: a.name,
+		Verb: verb, By: by, Source: source, IncidentID: incID,
+	})
+}
+
+// duressJournalClass buckets a duress entry under the verb it
+// accompanied.
+func duressJournalClass(verb string) hmenum.AlarmJournalClass {
+	switch verb {
+	case codeVerbArm:
+		return hmenum.AlarmJournalClassArm
+	case codeVerbSilence:
+		return hmenum.AlarmJournalClassSilence
+	default:
+		return hmenum.AlarmJournalClassDisarm
+	}
+}
+
 // Disarm ends any alarm and returns the area to disarmed. It is never
 // state-gated (S6) and implies silence: the open incident is marked
-// silenced and closed, and all outputs stop.
+// silenced and closed, and all outputs stop. It is a code-free wrapper
+// over DisarmWithCode for the many call sites that never carry a code.
 func (e *Engine) Disarm(ctx context.Context, areaID, by, source string) error {
+	return e.DisarmWithCode(ctx, areaID, by, source, "")
+}
+
+// DisarmWithCode is Disarm with an alarm code, honoring the area's
+// CodePolicy (docs/alarm-concept.md §11). An already-disarmed area
+// short-circuits before the code check: disarming a disarmed area is an
+// idempotent no-op and needs no security decision.
+func (e *Engine) DisarmWithCode(ctx context.Context, areaID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	a, ok := e.areas[areaID]
@@ -361,7 +506,28 @@ func (e *Engine) Disarm(ctx context.Context, areaID, by, source string) error {
 		return ErrUnknownArea
 	}
 	if a.state == hmenum.AlarmAreaStateDisarmed {
+		// An explicit disarm of an already-disarmed area is a no-op, but
+		// it cancels any pending auto-rearm — the operator wants it to
+		// stay off.
+		if a.autoRearmCancel != nil {
+			a.cancelAutoRearm()
+			e.persist(ctx, a)
+			e.journalEntry(ctx, a, JournalEntry{
+				Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_cancelled",
+				Actor: by, Source: source,
+			})
+		}
 		return nil
+	}
+	identity, duress, cerr := e.authorize(ctx, a, codeVerbDisarm, code, source)
+	if cerr != nil {
+		return cerr
+	}
+	if identity != "" && by == "" {
+		by = identity
+	}
+	if duress {
+		e.fireDuress(ctx, a, codeVerbDisarm, by, source)
 	}
 	prevPolicy := a.cfg.Modes[a.mode].Outputs
 	e.disarmLocked(ctx, a, by, source)
@@ -376,13 +542,31 @@ func (e *Engine) Disarm(ctx context.Context, areaID, by, source string) error {
 // and persists the silenced flag so no engine path — including a
 // restore — re-fires acoustic outputs for it (S3). State is
 // unaffected; notification outputs are never cancelled. Silence never
-// fails on state and is deliberately not gated.
+// fails on state and is deliberately not gated. It is a code-free
+// wrapper over SilenceWithCode.
 func (e *Engine) Silence(ctx context.Context, areaID, by, source string) error {
+	return e.SilenceWithCode(ctx, areaID, by, source, "")
+}
+
+// SilenceWithCode is Silence with an alarm code. Silence defaults to
+// code-free (S3); a per-source RequireSilence policy or a supplied code
+// engages the CodeValidator (docs/alarm-concept.md §11).
+func (e *Engine) SilenceWithCode(ctx context.Context, areaID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	a, ok := e.areas[areaID]
 	if !ok {
 		return ErrUnknownArea
+	}
+	identity, duress, cerr := e.authorize(ctx, a, codeVerbSilence, code, source)
+	if cerr != nil {
+		return cerr
+	}
+	if identity != "" && by == "" {
+		by = identity
+	}
+	if duress {
+		e.fireDuress(ctx, a, codeVerbSilence, by, source)
 	}
 	e.silenceLocked(ctx, a, by, source)
 	return nil
@@ -497,6 +681,16 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 		a.state == hmenum.AlarmAreaStateDisarmed {
 		e.journalFault(ctx, a, "tamper_while_disarmed", nil, 0)
 	}
+
+	// Always-on hazard/panic sensors bypass the arm-state machine: a
+	// fresh activation fires the class output policy 24/7, independent
+	// of area state. Placed before the walk-test consumer so a real
+	// hazard during a walk test is never suppressed.
+	if s.cfg.AlwaysOn && active && !wasActive {
+		e.alwaysOnFromSensor(ctx, a, s)
+		return
+	}
+
 	// A running walk test consumes activations of the disarmed area.
 	if e.walkTestObserve(ctx, a, sensorID, active) && a.state == hmenum.AlarmAreaStateDisarmed {
 		return
@@ -516,9 +710,29 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 	if wasActive {
 		return
 	}
+	// While disarmed, a member sensor's activity defers a pending
+	// auto-rearm (the quiet period restarts) and — if the sensor is a
+	// chime source — sounds the door chime. Neither happens during a
+	// walk test: the consumer above already returned.
+	if a.state == hmenum.AlarmAreaStateDisarmed {
+		if a.autoRearmCancel != nil && s.cfg.InMode(a.autoRearmMode) {
+			e.deferAutoRearm(ctx, a, sensorID)
+		}
+		if s.cfg.Chime {
+			e.chirp(ctx, a, ChirpRequest{Kind: ChirpChime})
+		}
+	}
 	if !s.cfg.InMode(a.mode) || a.bypassed[sensorID] {
 		return
 	}
+	e.dispatchSensorActivation(ctx, a, s, sensorID)
+}
+
+// dispatchSensorActivation routes a fresh member-sensor activation
+// through the arm-state machine. The caller holds the lock and has
+// already filtered walk tests, always-on sensors, bypasses, and
+// mode membership.
+func (e *Engine) dispatchSensorActivation(ctx context.Context, a *area, s *sensorState, sensorID string) {
 	cause := incidentCause{Kind: causeKindSensor, SensorID: sensorID, SensorName: s.row.Name}
 
 	switch a.state {
@@ -699,7 +913,8 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 	now := e.clk.Now()
 	dur := mcfg.triggerDuration()
 
-	if a.incident == nil {
+	newIncident := a.incident == nil
+	if newIncident {
 		causeJSON, err := json.Marshal(cause)
 		if err != nil {
 			causeJSON = []byte("{}")
@@ -720,16 +935,35 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 		a.incident = &inc
 	}
 
+	// Two-phase pre-alarm (docs/alarm-concept.md §15 row 21): a fresh,
+	// live (not restored) intrusion trigger with PreAlarmSeconds first
+	// runs a pre-alarm phase — only the pre-alarm output classes fire —
+	// then escalates to the full policy on elapse. A restore treats a
+	// persisted pre-alarm phase as a full trigger, so it never re-enters
+	// the pre-alarm phase here.
+	preAlarm := newIncident && !opts.Restored && mcfg.PreAlarmSeconds > 0
+
 	a.state = hmenum.AlarmAreaStateTriggered
 	a.pendingCause = ""
-	e.scheduleStateTimer(a, timerKindTrigger, dur)
+	a.preAlarm = preAlarm
+
+	if preAlarm {
+		opts.PreAlarm = true
+		e.scheduleStateTimer(a, timerKindPreAlarm, time.Duration(mcfg.PreAlarmSeconds)*time.Second)
+	} else {
+		e.scheduleStateTimer(a, timerKindTrigger, dur)
+	}
 	e.persist(ctx, a)
 
 	if err := e.outputs.FireCycle(ctx, a.id, *a.incident, opts); err != nil {
 		e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
 	}
+	event := "triggered"
+	if preAlarm {
+		event = "pre_alarm_started"
+	}
 	e.journalEntry(ctx, a, JournalEntry{
-		Class: hmenum.AlarmJournalClassTrigger, Event: "triggered",
+		Class: hmenum.AlarmJournalClassTrigger, Event: event,
 		IncidentID: a.incident.ID,
 		Details: map[string]any{
 			"cause": cause.Kind, "sensor_id": cause.SensorID, "mode": string(a.mode),
@@ -745,11 +979,56 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 	e.publishState(a, from, "", "engine")
 }
 
+// onPreAlarmElapsed escalates a pre-alarm phase to the full trigger, or
+// finishes the incident when it was silenced during the pre-alarm phase
+// (a silence during pre-alarm cancels the full escalation). The caller
+// holds the lock.
+func (e *Engine) onPreAlarmElapsed(ctx context.Context, a *area) {
+	a.preAlarm = false
+	inc := a.incident
+	if inc != nil && inc.Silenced {
+		// The full phase was cancelled by silence — leave triggered via
+		// the post-trigger policy, like a silenced full phase does.
+		e.finishTriggered(ctx, a, "pre_alarm_silenced")
+		return
+	}
+	mcfg := a.cfg.Modes[a.mode]
+	dur := mcfg.triggerDuration()
+	if inc != nil {
+		inc.TriggerDeadlineMS = unixMS(e.clk.Now().Add(dur))
+		if inc.ID != 0 {
+			if err := e.incidents.SetTriggerDeadline(ctx, inc.ID, inc.TriggerDeadlineMS); err != nil {
+				e.journalFault(ctx, a, "incident_persist_failed", err, inc.ID)
+			}
+		}
+	}
+	e.scheduleStateTimer(a, timerKindTrigger, dur)
+	e.persist(ctx, a)
+	if inc != nil {
+		if err := e.outputs.FireCycle(ctx, a.id, *inc, FireOptions{Policy: mcfg.Outputs}); err != nil {
+			e.journalFault(ctx, a, "output_fire_failed", err, inc.ID)
+		}
+	}
+	incID := int64(0)
+	if inc != nil {
+		incID = inc.ID
+	}
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassTrigger, Event: "pre_alarm_escalated", IncidentID: incID,
+	})
+}
+
 // onTriggerElapsed runs when the trigger-time deadline fires: either
 // the next bounded re-trigger cycle starts (accounted before firing;
 // an accounting failure skips the cycle — the safe direction), or the
 // post-trigger policy executes. The caller holds the lock.
 func (e *Engine) onTriggerElapsed(ctx context.Context, a *area) {
+	// Always-on (hazard/panic) incidents do not re-trigger; they return
+	// to the state they interrupted.
+	if a.preTriggerState != "" {
+		e.finishAlwaysOn(ctx, a, "always_on_elapsed", "engine")
+		return
+	}
 	inc := a.incident
 	mcfg := a.cfg.Modes[a.mode]
 	if inc != nil && !inc.Silenced && inc.RetriggerCycles < mcfg.MaxRetriggerCycles {
@@ -802,11 +1081,16 @@ func (e *Engine) finishTriggered(ctx context.Context, a *area, journalEvent stri
 		Class: hmenum.AlarmJournalClassTrigger, Event: journalEvent, IncidentID: incID,
 	})
 	if a.cfg.PostTrigger == hmenum.AlarmPostTriggerDisarm {
+		rearmMode := a.mode
 		a.cancelTimers()
 		a.state = hmenum.AlarmAreaStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
 		a.bypassed = map[string]bool{}
 		a.openAtArm = map[string]bool{}
+		// Auto-rearm (docs/alarm-concept.md §15 row 22): schedule a
+		// return to the pre-incident mode after a quiet period. Set
+		// before persist so the timer lands in timers_json.
+		e.scheduleAutoRearmIfConfigured(ctx, a, rearmMode, "engine")
 		e.persist(ctx, a)
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassDisarm, Event: "disarmed_post_trigger", Actor: "engine",
@@ -883,6 +1167,10 @@ func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
 				cause.SensorName = s.row.Name
 			}
 			e.trigger(ctx, a, cause, FireOptions{})
+		}
+	case timerKindPreAlarm:
+		if a.state == hmenum.AlarmAreaStateTriggered && a.preAlarm {
+			e.onPreAlarmElapsed(ctx, a)
 		}
 	case timerKindTrigger:
 		if a.state == hmenum.AlarmAreaStateTriggered {
@@ -1059,6 +1347,271 @@ func (e *Engine) ReevaluateSensors(ctx context.Context) {
 	}
 }
 
+// PanicTrigger fires a panic incident on areaID independent of its arm
+// state (docs/alarm-concept.md §7). silent suppresses acoustic outputs
+// (silent panic / duress panic). by/source attribute the trigger. It is
+// the verb behind keypad/remote panic keys and the MQTT TRIGGER payload.
+func (e *Engine) PanicTrigger(ctx context.Context, areaID string, silent bool, by, source string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.started {
+		return ErrInvalidState
+	}
+	a, ok := e.areas[areaID]
+	if !ok {
+		return ErrUnknownArea
+	}
+	policy := a.cfg.PanicOutputs
+	if silent {
+		policy.Silent = true
+	}
+	e.alwaysOnFire(ctx, a, causeKindPanic, policy, incidentCause{Kind: causeKindPanic, SensorName: by}, by, source)
+	e.refreshReadiness(a)
+	return nil
+}
+
+// alwaysOnFromSensor routes an always-on hazard/panic sensor activation
+// to the class output policy. The caller holds the lock.
+func (e *Engine) alwaysOnFromSensor(ctx context.Context, a *area, s *sensorState) {
+	causeKind := causeKindHazard
+	policy := a.cfg.HazardOutputs
+	if s.row.SensorType == hmenum.AlarmSensorTypePanic {
+		causeKind = causeKindPanic
+		policy = a.cfg.PanicOutputs
+		if s.cfg.PanicSilent {
+			policy.Silent = true
+		}
+	}
+	cause := incidentCause{Kind: causeKind, SensorID: s.row.ID, SensorName: s.row.Name}
+	e.alwaysOnFire(ctx, a, causeKind, policy, cause, s.row.Name, "engine")
+}
+
+// alwaysOnFire drives an always-on (hazard/panic) incident. It bypasses
+// the arm-state machine but still drives the panel to triggered so the
+// alarm is visible everywhere; the state it interrupts is recorded in
+// preTriggerState and restored on post-trigger. When the area is already
+// triggered it only layers the class output cycle onto the running
+// incident, leaving that incident's state/timer/return untouched. The
+// caller holds the lock.
+func (e *Engine) alwaysOnFire(ctx context.Context, a *area, causeKind string, policy OutputPolicy, cause incidentCause, by, source string) {
+	now := e.clk.Now()
+	if a.state == hmenum.AlarmAreaStateTriggered {
+		// An incident is already running: add the class outputs (unless
+		// silenced) and journal, but do not disturb the running incident.
+		if a.incident != nil && !a.incident.Silenced {
+			if err := e.outputs.FireCycle(ctx, a.id, *a.incident, FireOptions{Policy: policy}); err != nil {
+				e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
+			}
+		}
+		incID := int64(0)
+		if a.incident != nil {
+			incID = a.incident.ID
+		}
+		e.journalEntry(ctx, a, JournalEntry{
+			Class: hmenum.AlarmJournalClassTrigger, Event: "always_on_activation",
+			Actor: by, Source: source, IncidentID: incID,
+			Details: map[string]any{"cause": causeKind, "sensor_id": cause.SensorID},
+		})
+		return
+	}
+
+	from := a.state
+	a.preTriggerState = a.state
+	a.preTriggerMode = a.mode
+	dur := a.cfg.Modes[a.mode].triggerDuration()
+
+	if a.incident == nil {
+		causeJSON, err := json.Marshal(cause)
+		if err != nil {
+			causeJSON = []byte("{}")
+		}
+		inc := sqlitestore.AlarmIncident{
+			AreaID:            a.id,
+			Mode:              a.mode,
+			CauseJSON:         string(causeJSON),
+			StartedAtMS:       unixMS(now),
+			TriggerDeadlineMS: unixMS(now.Add(dur)),
+		}
+		id, err := e.incidents.Create(ctx, inc)
+		if err != nil {
+			e.journalFault(ctx, a, "incident_persist_failed", err, 0)
+		} else {
+			inc.ID = id
+		}
+		a.incident = &inc
+	}
+
+	a.state = hmenum.AlarmAreaStateTriggered
+	e.scheduleStateTimer(a, timerKindTrigger, dur)
+	e.persist(ctx, a)
+	if err := e.outputs.FireCycle(ctx, a.id, *a.incident, FireOptions{Policy: policy}); err != nil {
+		e.journalFault(ctx, a, "output_fire_failed", err, a.incident.ID)
+	}
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassTrigger, Event: "triggered",
+		Actor: by, Source: source, IncidentID: a.incident.ID,
+		Details: map[string]any{"cause": causeKind, "sensor_id": cause.SensorID, "mode": string(a.mode)},
+	})
+	e.sink.Publish(hmevent.AlarmTriggeredEvent{
+		Base:   hmevent.NewBaseAt(now),
+		AreaID: a.id, AreaName: a.name,
+		IncidentID: a.incident.ID,
+		SensorID:   cause.SensorID, SensorName: cause.SensorName,
+		Cause: causeKind, Mode: a.mode,
+	})
+	e.publishState(a, from, by, source)
+}
+
+// finishAlwaysOn ends an always-on incident and returns the area to the
+// state it interrupted (armed if it was armed-side, disarmed otherwise —
+// so a hazard during a disarmed period drops back to disarmed, and one
+// while armed resumes protection). The caller holds the lock.
+func (e *Engine) finishAlwaysOn(ctx context.Context, a *area, journalEvent, actor string) {
+	from := a.state
+	target := a.preTriggerMode
+	incID := int64(0)
+	if a.incident != nil {
+		incID = a.incident.ID
+	}
+	if err := e.outputs.StopAll(ctx, a.id, incID); err != nil {
+		e.journalFault(ctx, a, "output_stop_failed", err, incID)
+	}
+	e.closeIncident(ctx, a, closeReasonPostTrigger)
+	a.cancelTimers()
+	a.preTriggerState = ""
+	a.preTriggerMode = ""
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassTrigger, Event: journalEvent, IncidentID: incID,
+	})
+	if target.Armed() {
+		a.state = hmenum.AlarmAreaStateArmed
+		a.mode = target
+		e.recaptureOpenBaseline(a)
+	} else {
+		a.state = hmenum.AlarmAreaStateDisarmed
+		a.mode = hmenum.AlarmModeDisarmed
+		a.bypassed = map[string]bool{}
+		a.openAtArm = map[string]bool{}
+	}
+	e.persist(ctx, a)
+	e.publishState(a, from, actor, "engine")
+}
+
+// alwaysOnPolicyForIncident recovers the class output policy of a
+// persisted always-on incident from its cause kind (its per-activation
+// silent override is not persisted, so a restored panic uses the
+// configured PanicOutputs policy).
+func alwaysOnPolicyForIncident(a *area, inc *sqlitestore.AlarmIncident) OutputPolicy {
+	var c incidentCause
+	if inc != nil {
+		_ = json.Unmarshal([]byte(inc.CauseJSON), &c)
+	}
+	if c.Kind == causeKindPanic {
+		return a.cfg.PanicOutputs
+	}
+	return a.cfg.HazardOutputs
+}
+
+// scheduleAutoRearmIfConfigured arms the auto-rearm timer when the area
+// configures it and the pre-incident mode is armable. It sets the timer
+// fields (so a following persist captures the tuple) and journals. The
+// caller holds the lock.
+func (e *Engine) scheduleAutoRearmIfConfigured(ctx context.Context, a *area, rearmMode hmenum.AlarmMode, actor string) {
+	if a.cfg.AutoRearmSeconds <= 0 || !rearmMode.Armed() {
+		return
+	}
+	if _, ok := a.cfg.Modes[rearmMode]; !ok {
+		return
+	}
+	d := time.Duration(a.cfg.AutoRearmSeconds) * time.Second
+	e.scheduleAutoRearm(a, rearmMode, d)
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_scheduled", Actor: actor,
+		Details: map[string]any{"mode": string(rearmMode), "delay_s": a.cfg.AutoRearmSeconds},
+	})
+}
+
+// scheduleAutoRearm replaces the area's auto-rearm timer. The caller
+// holds the lock. The callback runs on the engine lifetime context.
+//
+//nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
+func (e *Engine) scheduleAutoRearm(a *area, mode hmenum.AlarmMode, d time.Duration) {
+	a.cancelAutoRearm()
+	a.autoRearmMode = mode
+	a.autoRearmSeq++
+	seq := a.autoRearmSeq
+	a.autoRearmDeadline = e.clk.Now().Add(d)
+	areaID := a.id
+	a.autoRearmCancel = e.sched.Schedule(d, func() {
+		e.onAutoRearmFired(areaID, seq)
+	})
+}
+
+// deferAutoRearm restarts the auto-rearm quiet period after member
+// activity. The caller holds the lock.
+func (e *Engine) deferAutoRearm(ctx context.Context, a *area, sensorID string) {
+	mode := a.autoRearmMode
+	e.scheduleAutoRearm(a, mode, time.Duration(a.cfg.AutoRearmSeconds)*time.Second)
+	e.persist(ctx, a)
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassArm, Event: "auto_rearm_deferred",
+		Details: map[string]any{"sensor_id": sensorID},
+	})
+}
+
+// onAutoRearmFired dispatches an auto-rearm timer expiry, discarding
+// stale fires. It runs on the engine lifetime context.
+//
+//nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
+func (e *Engine) onAutoRearmFired(areaID string, seq uint64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	a, ok := e.areas[areaID]
+	if !ok || a.autoRearmSeq != seq || a.autoRearmCancel == nil {
+		return
+	}
+	a.autoRearmCancel = nil
+	e.onAutoRearmElapsed(e.lifeCtx, a)
+}
+
+// onAutoRearmElapsed attempts the quiet-period rearm. It arms with
+// force=false: any remaining blocker journals a fail-visible
+// failed-to-arm fault and leaves the area disarmed (docs/alarm-concept.md
+// §15 row 22). The caller holds the lock.
+func (e *Engine) onAutoRearmElapsed(ctx context.Context, a *area) {
+	mode := a.autoRearmMode
+	a.autoRearmMode = ""
+	if a.state != hmenum.AlarmAreaStateDisarmed || !mode.Armed() {
+		e.persist(ctx, a)
+		return
+	}
+	mcfg, ok := a.cfg.Modes[mode]
+	if !ok {
+		e.journalFault(ctx, a, "auto_rearm_mode_unavailable", nil, 0)
+		e.persist(ctx, a)
+		return
+	}
+	_, err := e.beginArm(ctx, a, ArmRequest{Mode: mode, By: "engine", Source: "engine:auto_rearm"}, mcfg)
+	if err != nil {
+		var nr *NotReadyError
+		if errors.As(err, &nr) {
+			e.journalEntry(ctx, a, JournalEntry{
+				Class: hmenum.AlarmJournalClassFault, Event: "failed_to_arm",
+				Actor: "engine", Source: "engine:auto_rearm",
+				Details: map[string]any{"mode": string(mode), "blockers": nr.Blockers},
+			})
+		} else {
+			e.journalFault(ctx, a, "auto_rearm_failed", err, 0)
+		}
+		e.persist(ctx, a)
+		return
+	}
+	e.journalEntry(ctx, a, JournalEntry{
+		Class: hmenum.AlarmJournalClassArm, Event: "auto_rearmed",
+		Actor: "engine", Source: "engine:auto_rearm", Details: map[string]any{"mode": string(mode)},
+	})
+}
+
 // persist writes the area's full state row. A failure is journaled
 // and logged, never silently swallowed, and does not abort the
 // transition — the machine keeps operating from memory (S7).
@@ -1074,6 +1627,19 @@ func (e *Engine) persist(ctx context.Context, a *area) {
 		timers = append(timers, persistedTimer{
 			Kind:          a.timerKind,
 			DeadlineMS:    unixMS(a.timerDeadline),
+			RemainingMS:   remaining.Milliseconds(),
+			PersistedAtMS: unixMS(now),
+			BootCount:     e.bootCount,
+		})
+	}
+	if a.autoRearmCancel != nil {
+		remaining := a.autoRearmDeadline.Sub(now)
+		if remaining < 0 {
+			remaining = 0
+		}
+		timers = append(timers, persistedTimer{
+			Kind:          timerKindAutoRearm,
+			DeadlineMS:    unixMS(a.autoRearmDeadline),
 			RemainingMS:   remaining.Milliseconds(),
 			PersistedAtMS: unixMS(now),
 			BootCount:     e.bootCount,

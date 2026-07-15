@@ -277,9 +277,9 @@ function createAlarmPanelStore() {
     }
   }
 
-  async function disarm(id: string): Promise<boolean> {
+  async function disarm(id: string, code?: string): Promise<boolean> {
     try {
-      await api.disarmAlarmArea(id);
+      await api.disarmAlarmArea(id, code);
       return true;
     } catch (err) {
       toastStore.error(t("alarm.toast.disarm_failed"), friendlyError(err, t));
@@ -287,9 +287,12 @@ function createAlarmPanelStore() {
     }
   }
 
-  async function silence(id: string): Promise<boolean> {
+  // Silence never carries a SPA-collected code — the Overview never
+  // prompts for one (S3). The optional param exists only for callers
+  // wiring a per-surface silence policy; the human panel leaves it unset.
+  async function silence(id: string, code?: string): Promise<boolean> {
     try {
-      await api.silenceAlarmArea(id);
+      await api.silenceAlarmArea(id, code);
       return true;
     } catch (err) {
       toastStore.error(t("alarm.toast.silence_failed"), friendlyError(err, t));

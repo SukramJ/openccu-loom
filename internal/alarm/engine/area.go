@@ -65,9 +65,31 @@ type area struct {
 	timerCancel    func()
 	timerSeq       uint64
 
+	// preTriggerState / preTriggerMode record the state an always-on
+	// (hazard/panic) incident interrupted. Always-on incidents drive
+	// the panel to triggered (visible everywhere) but return to the
+	// prior state on post-trigger, not into armed. An empty
+	// preTriggerState marks a normal intrusion incident.
+	preTriggerState hmenum.AlarmAreaState
+	preTriggerMode  hmenum.AlarmMode
+	// preAlarm reports that the open incident is still in its pre-alarm
+	// phase (only pre-alarm output classes have fired). It survives a
+	// restart via context_json; a restore treats it as a full trigger.
+	preAlarm bool
+
 	// arm-after-closing debounce timer.
 	debounceCancel func()
 	debounceSeq    uint64
+
+	// auto-rearm timer: runs while disarmed after a post-trigger
+	// disarm, re-arming to autoRearmMode after a quiet period. It is a
+	// separate timer from the state timer (the area is disarmed, which
+	// has no state countdown) and survives a restart via timers_json +
+	// context_json.
+	autoRearmCancel   func()
+	autoRearmSeq      uint64
+	autoRearmDeadline time.Time
+	autoRearmMode     hmenum.AlarmMode
 
 	// countdown tick chain (1 Hz while arming/pending).
 	tickCancel func()
@@ -88,6 +110,15 @@ type areaContext struct {
 	// SilencedIncidentID is the redundant silence marker (S3): the
 	// open incident this area has silenced, 0 when none.
 	SilencedIncidentID int64 `json:"silenced_incident_id,omitempty"`
+	// PreTriggerState / PreTriggerMode persist the state an always-on
+	// incident interrupted, so a restore returns to the prior state.
+	PreTriggerState hmenum.AlarmAreaState `json:"pre_trigger_state,omitempty"`
+	PreTriggerMode  hmenum.AlarmMode      `json:"pre_trigger_mode,omitempty"`
+	// PreAlarm persists that the open incident is in its pre-alarm
+	// phase.
+	PreAlarm bool `json:"pre_alarm,omitempty"`
+	// AutoRearmMode persists the mode a pending auto-rearm will arm.
+	AutoRearmMode hmenum.AlarmMode `json:"auto_rearm_mode,omitempty"`
 }
 
 // cancelTimers stops the state timer, the debounce timer, and the
@@ -119,6 +150,19 @@ func (a *area) cancelDebounce() {
 		a.debounceCancel = nil
 	}
 	a.debounceSeq++
+}
+
+// cancelAutoRearm stops any pending auto-rearm timer and forgets its
+// target mode. It is kept separate from cancelTimers so a post-trigger
+// disarm can schedule the auto-rearm right after cancelling the state
+// timers.
+func (a *area) cancelAutoRearm() {
+	if a.autoRearmCancel != nil {
+		a.autoRearmCancel()
+		a.autoRearmCancel = nil
+	}
+	a.autoRearmSeq++
+	a.autoRearmMode = ""
 }
 
 // encodeBypass serializes the bypass set for alarm_state.bypass_json.
@@ -159,6 +203,10 @@ func (a *area) encodeContext() string {
 	doc := areaContext{
 		PendingCause:       a.pendingCause,
 		SilencedIncidentID: a.silencedIncidentID,
+		PreTriggerState:    a.preTriggerState,
+		PreTriggerMode:     a.preTriggerMode,
+		PreAlarm:           a.preAlarm,
+		AutoRearmMode:      a.autoRearmMode,
 	}
 	for id := range a.openAtArm {
 		doc.OpenAtArm = append(doc.OpenAtArm, id)

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	alarmjournal "github.com/SukramJ/openccu-loom/internal/alarm/journal"
 	"github.com/SukramJ/openccu-loom/internal/alarm/outputs"
@@ -68,6 +69,7 @@ type Service struct {
 	journal *alarmjournal.Journal
 	engine  *engine.Engine
 	manager *outputs.Manager
+	codes   *codes.Facade
 
 	mu           sync.Mutex
 	started      bool
@@ -78,8 +80,20 @@ type Service struct {
 	ifaceDown    map[string]map[string]bool // central → interface → unreachable
 	sysvarMirror *sysvarMirror
 	panels       *panelRegistry
-	retention    func() // retention chain cancel
+	intents      *intentRouter
+	schedules    *scheduleRunner
+	codeSource   CodeSource     // hardware-code identities; nil until wired
+	armFailure   ArmFailureHook // FAILED_TO_ARM notification hook; nil until wired
+	retention    func()         // retention chain cancel
 }
+
+// ArmFailureHook is a FAILED_TO_ARM notification callback. It mirrors
+// the MQTT alarm publisher's PublishFailedToArm signature
+// (cmd/openccu-loom/daemon_north.go) so the daemon composition root
+// can wire that publisher in one line via SetArmFailureHook. A nil
+// hook (the default) means the schedule chain's AutoArm failures stay
+// journal-only (docs/alarm-concept.md §15 row 19).
+type ArmFailureHook func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string)
 
 // NewService builds the alarm service. Construction is cheap and
 // side-effect free; Start loads state and subscribes.
@@ -140,6 +154,19 @@ func NewService(deps Deps) (*Service, error) {
 	}
 	s.manager = mgr
 
+	// The codes facade is built before the engine so its Validate
+	// method can be wired as the engine's CodeValidator port; it is
+	// wired onto the intent router below via SetCodeSource, through the
+	// codeSourceAdapter (the facade cannot implement alarm.CodeSource
+	// directly without importing this package, which already imports
+	// the facade's package to construct it).
+	s.codes = codes.New(codes.Deps{
+		Store:   deps.Stores.Codes,
+		Journal: s.journal,
+		Clock:   clk,
+		Logger:  logger,
+	})
+
 	eng, err := engine.New(engine.Deps{
 		Clock:               clk,
 		Areas:               deps.Stores.Areas,
@@ -151,6 +178,7 @@ func NewService(deps Deps) (*Service, error) {
 		Sink:                sinkFunc(s.publish),
 		Journal:             s.journal,
 		SensorReader:        &sensorReader{reg: deps.Registry},
+		Validator:           s.codes,
 		Logger:              logger,
 		RestartLoopBreakerK: deps.Settings.RestartLoopBreaker,
 	})
@@ -160,7 +188,118 @@ func NewService(deps Deps) (*Service, error) {
 	s.engine = eng
 	s.sysvarMirror = newSysvarMirror(s)
 	s.panels = newPanelRegistry(deps.Settings.MasterPanelName)
+	s.intents = newIntentRouter(s)
+	s.schedules = newScheduleRunner(scheduleRunnerDeps{
+		Areas:   deps.Stores.Areas,
+		Engine:  eng,
+		Journal: s.journal,
+		Publish: s.publish,
+		Clock:   clk,
+		Logger:  logger,
+		ArmFailure: func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string) {
+			if hook := s.armFailureHookRef(); hook != nil {
+				hook(areaID, areaName, mode, blockers)
+			}
+		},
+	})
+	s.SetCodeSource(codeSourceAdapter{facade: s.codes})
 	return s, nil
+}
+
+// SetArmFailureHook installs the FAILED_TO_ARM notification hook
+// consumed by the schedule chain's AutoArm path (docs/alarm-concept.md
+// §15 row 19). Wiring is optional and mirrors SetCodeSource: a nil
+// hook (the default) keeps the schedule chain journal-only.
+func (s *Service) SetArmFailureHook(fn ArmFailureHook) {
+	s.mu.Lock()
+	s.armFailure = fn
+	s.mu.Unlock()
+}
+
+// armFailureHookRef returns the currently wired hook (may be nil).
+func (s *Service) armFailureHookRef() ArmFailureHook {
+	s.mu.Lock()
+	fn := s.armFailure
+	s.mu.Unlock()
+	return fn
+}
+
+// Codes exposes the codes facade for management surfaces (REST/WS
+// code CRUD, hmcli).
+func (s *Service) Codes() *codes.Facade { return s.codes }
+
+// codeSourceAdapter maps the codes facade's Row projection onto the
+// CodeRow shape the intent router consumes. It lives in this package
+// (not internal/alarm/codes) so the codes package never has to import
+// package alarm — package alarm already imports codes to construct the
+// facade, and a two-way import would cycle.
+type codeSourceAdapter struct {
+	facade *codes.Facade
+}
+
+// Rows implements CodeSource.
+func (a codeSourceAdapter) Rows(ctx context.Context) ([]CodeRow, error) {
+	rows, err := a.facade.Rows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CodeRow, len(rows))
+	for i := range rows {
+		r := &rows[i]
+		out[i] = CodeRow{
+			ID:     r.ID,
+			Name:   r.Name,
+			Kind:   CodeKind(r.Kind),
+			Duress: r.Duress,
+			Perms: CodePerms{
+				Arm:     r.Perms.Arm,
+				Disarm:  r.Perms.Disarm,
+				Silence: r.Perms.Silence,
+			},
+			Areas: r.Areas,
+			Binding: CodeBinding{
+				Central:        r.Binding.Central,
+				DeviceAddress:  r.Binding.DeviceAddress,
+				Slot:           r.Binding.Slot,
+				ArmMode:        r.Binding.ArmMode,
+				ChannelAddress: r.Binding.ChannelAddress,
+				Parameter:      r.Binding.Parameter,
+				Action:         r.Binding.Action,
+				AreaID:         r.Binding.AreaID,
+			},
+			ValidFromMS:  r.ValidFromMS,
+			ValidUntilMS: r.ValidUntilMS,
+			Enabled:      r.Enabled,
+		}
+	}
+	return out, nil
+}
+
+// SetCodeSource wires the parsed-code source consumed by keypad and
+// remote intent routing. The codes facade injects it once built; a nil
+// source keeps hardware-code routing inert (docs/alarm-concept.md §11).
+func (s *Service) SetCodeSource(src CodeSource) {
+	s.mu.Lock()
+	s.codeSource = src
+	s.mu.Unlock()
+}
+
+// codeSourceRef returns the currently wired code source (may be nil).
+func (s *Service) codeSourceRef() CodeSource {
+	s.mu.Lock()
+	src := s.codeSource
+	s.mu.Unlock()
+	return src
+}
+
+// codeRows loads the parsed code rows, or returns nil when no source is
+// wired.
+func (s *Service) codeRows(ctx context.Context) ([]CodeRow, error) {
+	src := s.codeSourceRef()
+	if src == nil {
+		return nil, nil
+	}
+	return src.Rows(ctx)
 }
 
 // Name implements the bridge service contract.
@@ -193,6 +332,7 @@ func (s *Service) Reload(ctx context.Context) error {
 		return err
 	}
 	s.seedPanels(ctx)
+	s.schedules.start(ctx) // recompute every schedule's daily-time chain
 	return nil
 }
 
@@ -236,6 +376,7 @@ func (s *Service) Start(ctx context.Context) error {
 	s.reconcile(ctx)
 	s.seedPanels(ctx)
 	s.scheduleRetention()
+	s.schedules.start(ctx)
 	s.log.Info("alarm service started")
 	return nil
 }
@@ -276,6 +417,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	if retention != nil {
 		retention()
 	}
+	s.schedules.stop()
 	s.manager.StopWatchdogs()
 	s.engine.Stop(ctx)
 	return nil

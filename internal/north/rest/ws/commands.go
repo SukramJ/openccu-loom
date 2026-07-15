@@ -35,12 +35,18 @@ var writeCommandRoles = map[string]auth.Role{
 	"ccu.cache_clear": auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.
-	"alarm_messages.ack":                  auth.RoleOperator,
-	"alarm_panel.acknowledge":             auth.RoleOperator,
-	"alarm_panel.arm":                     auth.RoleOperator,
-	"alarm_panel.disarm":                  auth.RoleOperator,
-	"alarm_panel.silence":                 auth.RoleOperator,
-	"alarm_panel.silence_all":             auth.RoleOperator,
+	"alarm_messages.ack":      auth.RoleOperator,
+	"alarm_panel.acknowledge": auth.RoleOperator,
+	"alarm_panel.arm":         auth.RoleOperator,
+	"alarm_panel.disarm":      auth.RoleOperator,
+	"alarm_panel.silence":     auth.RoleOperator,
+	"alarm_panel.silence_all": auth.RoleOperator,
+	// Alarm codes are security material: every code command — including
+	// the list — is operator-gated, never viewer-open (§11/§16).
+	"alarm_panel.codes_list":              auth.RoleOperator,
+	"alarm_panel.codes_create":            auth.RoleOperator,
+	"alarm_panel.codes_update":            auth.RoleOperator,
+	"alarm_panel.codes_delete":            auth.RoleOperator,
 	"ccu.reload_channel_config":           auth.RoleOperator,
 	"ccu.reload_device_config":            auth.RoleOperator,
 	"cdp.invoke":                          auth.RoleOperator,
