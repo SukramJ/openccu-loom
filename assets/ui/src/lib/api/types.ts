@@ -441,3 +441,59 @@ export type LogRecord = components["schemas"]["LogRecord"];
 export type EnergyBucket = components["schemas"]["EnergyBucket"];
 export type EnergyDevice = components["schemas"]["EnergyDevice"];
 export type EnergyResponse = components["schemas"]["EnergyResponse"];
+
+// --- Alarm panel --------------------------------------------------
+// The native intrusion-alarm engine (docs/alarm-concept.md). Distinct
+// from the CCU alarm-messages surface above (AlarmMessage) — these are
+// the alarm-panel schemas served under /api/v1/alarm/*. All re-exported
+// from the generated contract so the SPA tracks the spec automatically.
+
+// One armable area (partition) — config-level identity + ordering.
+export type AlarmArea = components["schemas"]["AlarmArea"];
+// Free-form engine-owned per-area configuration document.
+export type AlarmAreaConfig = components["schemas"]["AlarmAreaConfig"];
+// One area's live status (state machine + incident + countdown +
+// per-mode readiness), returned by GET /alarm/state.
+export type AlarmAreaStatus = components["schemas"]["AlarmAreaStatus"];
+// One enrolled sensor input (door/window/motion/tamper/hazard/panic).
+export type AlarmSensor = components["schemas"]["AlarmSensor"];
+// One enrolled output consequence (siren/light/chirp/notification/…).
+export type AlarmOutput = components["schemas"]["AlarmOutput"];
+// Whether an area is ready to arm into one specific mode + blocker list.
+export type AlarmModeReadiness = components["schemas"]["AlarmModeReadiness"];
+// Arm request body (POST /alarm/areas/{id}/arm) and its accepted reply.
+export type AlarmArmRequest = components["schemas"]["AlarmArmRequest"];
+export type AlarmArmAccepted = components["schemas"]["AlarmArmAccepted"];
+// One append-only journal entry (GET /alarm/journal).
+export type AlarmJournalEntry = components["schemas"]["AlarmJournalEntry"];
+// Live walk-test session status (GET /alarm/areas/{id}/walktest).
+export type AlarmWalkTestStatus = components["schemas"]["AlarmWalkTestStatus"];
+// Output test-fire request body (POST /alarm/outputs/{id}/test).
+export type AlarmOutputTestRequest =
+  components["schemas"]["AlarmOutputTestRequest"];
+
+// Convenience string unions extracted from the status schema — views
+// switch on these to pick badges / colours / mode buttons.
+export type AlarmState = AlarmAreaStatus["state"];
+export type AlarmMode = NonNullable<AlarmAreaStatus["mode"]>;
+export type AlarmSensorType = AlarmSensor["type"];
+export type AlarmOutputClass = AlarmOutput["class"];
+export type AlarmJournalClass = AlarmJournalEntry["class"];
+
+// The seven `alarm.*` WS broadcast payloads (topic `alarm.panel`). The
+// events pump passes these through untouched as { type, payload }; the
+// alarm store narrows `payload` to the matching alias in applyEvent.
+export type AlarmStateChangedPayload =
+  components["schemas"]["AlarmStateChangedPayload"];
+export type AlarmCountdownPayload =
+  components["schemas"]["AlarmCountdownPayload"];
+export type AlarmReadinessChangedPayload =
+  components["schemas"]["AlarmReadinessChangedPayload"];
+export type AlarmTriggeredPayload =
+  components["schemas"]["AlarmTriggeredPayload"];
+export type AlarmJournalAppendedPayload =
+  components["schemas"]["AlarmJournalAppendedPayload"];
+export type AlarmWalkTestProgressPayload =
+  components["schemas"]["AlarmWalkTestProgressPayload"];
+export type AlarmHealthChangedPayload =
+  components["schemas"]["AlarmHealthChangedPayload"];

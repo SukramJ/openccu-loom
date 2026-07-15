@@ -55,6 +55,7 @@
     | "firmware"
     | "signal"
     | "matter"
+    | "alarm"
     | "visibility"
     | "access"
     | "about"
@@ -138,6 +139,12 @@
           icon: "mdi:star",
           label: t("nav.favorites"),
           matches: ["favorites"],
+        },
+        {
+          href: "#/alarm",
+          icon: "mdi:shield-home",
+          label: t("nav.alarm"),
+          matches: ["alarm"],
         },
         {
           href: "#/inbox",

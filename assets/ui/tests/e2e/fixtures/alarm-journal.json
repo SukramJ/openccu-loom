@@ -1,0 +1,49 @@
+[
+  {
+    "id": 5,
+    "when": "2026-07-14T03:12:41Z",
+    "area_id": "area-eg",
+    "class": "trigger",
+    "event": "triggered",
+    "actor": "",
+    "source": "engine",
+    "incident_id": 501,
+    "details": { "sensor_name": "Terrassentür", "room": "Wohnzimmer" }
+  },
+  {
+    "id": 4,
+    "when": "2026-07-13T22:41:05Z",
+    "area_id": "area-eg",
+    "class": "arm",
+    "event": "armed",
+    "actor": "Markus",
+    "source": "rest"
+  },
+  {
+    "id": 3,
+    "when": "2026-07-13T08:02:11Z",
+    "area_id": "area-og",
+    "class": "disarm",
+    "event": "disarmed",
+    "actor": "Anna",
+    "source": "ws"
+  },
+  {
+    "id": 2,
+    "when": "2026-07-12T21:15:30Z",
+    "area_id": "area-eg",
+    "class": "silence",
+    "event": "silenced",
+    "actor": "Markus",
+    "source": "rest"
+  },
+  {
+    "id": 1,
+    "when": "2026-07-12T09:00:00Z",
+    "area_id": "area-og",
+    "class": "fault",
+    "event": "sensor_low_battery",
+    "actor": "",
+    "source": "engine"
+  }
+]

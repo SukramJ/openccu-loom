@@ -81,6 +81,7 @@ import {
   Settings,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Signal,
   SlidersHorizontal,
   Sun,
@@ -161,6 +162,7 @@ export type IconName =
   | "mdi:server-network"
   | "mdi:settings"
   | "mdi:shield"
+  | "mdi:shield-home"
   | "mdi:signal"
   | "mdi:sliders"
   | "mdi:sun"
@@ -245,6 +247,9 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:server-network": Network,
   "mdi:settings": Settings,
   "mdi:shield": Shield,
+  // No dedicated shield-home glyph in Lucide; ShieldCheck reads as
+  // "protection active" for the alarm-panel nav entry.
+  "mdi:shield-home": ShieldCheck,
   "mdi:signal": Signal,
   "mdi:sliders": SlidersHorizontal,
   "mdi:sun": Sun,

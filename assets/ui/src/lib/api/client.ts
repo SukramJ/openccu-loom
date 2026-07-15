@@ -1,5 +1,16 @@
 import type {
+  AlarmArea,
+  AlarmArmAccepted,
+  AlarmArmRequest,
+  AlarmAreaStatus,
+  AlarmJournalClass,
+  AlarmJournalEntry,
   AlarmMessage,
+  AlarmModeReadiness,
+  AlarmOutput,
+  AlarmOutputTestRequest,
+  AlarmSensor,
+  AlarmWalkTestStatus,
   AuditEntry,
   BackupEntry,
   CentralLinksReport,
@@ -1298,6 +1309,140 @@ export const api = {
       `/centrals/discovered/${encodeURIComponent(serial)}/ignore`,
       { method: "DELETE" },
     );
+  },
+  // --- Alarm panel (native intrusion-alarm engine) --------------
+  // docs/alarm-concept.md §13. Areas are daemon-level (no central
+  // scoping in the path); sensors/outputs reference (central,
+  // channel_address) inside their bodies. Control verbs
+  // (arm/disarm/silence/…) are the safety surface — the alarm store
+  // wraps them so a failure toasts but never blocks the UI (S3/S6).
+  getAlarmState() {
+    return request<{ areas: AlarmAreaStatus[] }>(`/alarm/state`);
+  },
+  listAlarmAreas() {
+    return request<AlarmArea[]>(`/alarm/areas`);
+  },
+  createAlarmArea(area: AlarmArea) {
+    return request<AlarmArea>(`/alarm/areas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(area),
+    });
+  },
+  getAlarmArea(id: string) {
+    return request<AlarmArea>(`/alarm/areas/${encodeURIComponent(id)}`);
+  },
+  putAlarmArea(id: string, area: AlarmArea) {
+    return request<void>(`/alarm/areas/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(area),
+    });
+  },
+  deleteAlarmArea(id: string) {
+    return request<void>(`/alarm/areas/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+  listAlarmAreaSensors(id: string) {
+    return request<AlarmSensor[]>(
+      `/alarm/areas/${encodeURIComponent(id)}/sensors`,
+    );
+  },
+  putAlarmAreaSensors(id: string, sensors: AlarmSensor[]) {
+    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/sensors`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sensors),
+    });
+  },
+  listAlarmAreaOutputs(id: string) {
+    return request<AlarmOutput[]>(
+      `/alarm/areas/${encodeURIComponent(id)}/outputs`,
+    );
+  },
+  putAlarmAreaOutputs(id: string, outputs: AlarmOutput[]) {
+    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/outputs`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(outputs),
+    });
+  },
+  armAlarmArea(id: string, req: AlarmArmRequest) {
+    return request<AlarmArmAccepted>(
+      `/alarm/areas/${encodeURIComponent(id)}/arm`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+      },
+    );
+  },
+  disarmAlarmArea(id: string) {
+    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/disarm`, {
+      method: "POST",
+    });
+  },
+  silenceAlarmArea(id: string) {
+    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/silence`, {
+      method: "POST",
+    });
+  },
+  acknowledgeAlarmArea(id: string) {
+    return request<void>(
+      `/alarm/areas/${encodeURIComponent(id)}/acknowledge`,
+      { method: "POST" },
+    );
+  },
+  silenceAllAlarmAreas() {
+    return request<void>(`/alarm/silence-all`, { method: "POST" });
+  },
+  getAlarmAreaReadiness(id: string) {
+    return request<Record<string, AlarmModeReadiness>>(
+      `/alarm/areas/${encodeURIComponent(id)}/readiness`,
+    );
+  },
+  listAlarmJournal(
+    p: {
+      area?: string;
+      class?: AlarmJournalClass;
+      from?: string;
+      to?: string;
+      limit?: number;
+    } = {},
+  ) {
+    const qs = new URLSearchParams();
+    if (p.area) qs.set("area", p.area);
+    if (p.class) qs.set("class", p.class);
+    if (p.from) qs.set("from", p.from);
+    if (p.to) qs.set("to", p.to);
+    if (p.limit !== undefined) qs.set("limit", String(p.limit));
+    const q = qs.toString() ? `?${qs.toString()}` : "";
+    return request<AlarmJournalEntry[]>(`/alarm/journal${q}`);
+  },
+  startAlarmWalkTest(id: string) {
+    return request<void>(
+      `/alarm/areas/${encodeURIComponent(id)}/walktest/start`,
+      { method: "POST" },
+    );
+  },
+  stopAlarmWalkTest(id: string) {
+    return request<void>(
+      `/alarm/areas/${encodeURIComponent(id)}/walktest/stop`,
+      { method: "POST" },
+    );
+  },
+  getAlarmWalkTestStatus(id: string) {
+    return request<AlarmWalkTestStatus>(
+      `/alarm/areas/${encodeURIComponent(id)}/walktest`,
+    );
+  },
+  testAlarmOutput(id: string, req: AlarmOutputTestRequest = {}) {
+    return request<void>(`/alarm/outputs/${encodeURIComponent(id)}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
   },
 };
 
