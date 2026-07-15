@@ -1,6 +1,6 @@
 {
-  "generated": "a8888a8",
-  "head": "a8888a8",
+  "generated": "5564057",
+  "head": "5564057",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24951,
-    "reachable": 4231,
-    "whitelisted": 17940,
-    "unreachable": 2780
+    "total_exported": 25157,
+    "reachable": 4255,
+    "whitelisted": 18087,
+    "unreachable": 2815
   },
   "by_package": [
     {
@@ -117,12 +117,6 @@
       "unreachable_other": 0
     },
     {
-      "package": "internal/clock",
-      "unreachable_funcs": 2,
-      "unreachable_types": 5,
-      "unreachable_other": 0
-    },
-    {
       "package": "internal/model/device",
       "unreachable_funcs": 2,
       "unreachable_types": 45,
@@ -173,7 +167,7 @@
     {
       "package": "pkg/hmapi",
       "unreachable_funcs": 2,
-      "unreachable_types": 78,
+      "unreachable_types": 104,
       "unreachable_other": 14
     },
     {
@@ -197,8 +191,8 @@
     {
       "package": "internal/alarm/engine",
       "unreachable_funcs": 0,
-      "unreachable_types": 21,
-      "unreachable_other": 4
+      "unreachable_types": 23,
+      "unreachable_other": 5
     },
     {
       "package": "internal/alarm/journal",
@@ -210,7 +204,7 @@
       "package": "internal/alarm/outputs",
       "unreachable_funcs": 0,
       "unreachable_types": 22,
-      "unreachable_other": 0
+      "unreachable_other": 4
     },
     {
       "package": "internal/auth/ccuauth",
@@ -279,6 +273,12 @@
       "unreachable_other": 0
     },
     {
+      "package": "internal/clock",
+      "unreachable_funcs": 0,
+      "unreachable_types": 5,
+      "unreachable_other": 0
+    },
+    {
       "package": "internal/configstore",
       "unreachable_funcs": 0,
       "unreachable_types": 17,
@@ -317,7 +317,7 @@
     {
       "package": "internal/metrics",
       "unreachable_funcs": 0,
-      "unreachable_types": 60,
+      "unreachable_types": 62,
       "unreachable_other": 2
     },
     {
@@ -605,7 +605,7 @@
     {
       "package": "pkg/hmevent",
       "unreachable_funcs": 0,
-      "unreachable_types": 53,
+      "unreachable_types": 55,
       "unreachable_other": 0
     },
     {
@@ -668,7 +668,7 @@
       "package": "internal/alarm/engine",
       "identifier": "AreaSnapshot",
       "file": "internal/alarm/engine/area.go",
-      "line": 185,
+      "line": 188,
       "kind": "type"
     },
     {
@@ -743,6 +743,13 @@
     },
     {
       "package": "internal/alarm/engine",
+      "identifier": "ErrWalkTestActive",
+      "file": "internal/alarm/engine/walktest.go",
+      "line": 17,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/engine",
       "identifier": "EventSink",
       "file": "internal/alarm/engine/ports.go",
       "line": 119,
@@ -801,7 +808,7 @@
       "package": "internal/alarm/engine",
       "identifier": "SensorHealth",
       "file": "internal/alarm/engine/engine.go",
-      "line": 594,
+      "line": 583,
       "kind": "type"
     },
     {
@@ -830,6 +837,20 @@
       "identifier": "TimerScheduler",
       "file": "internal/alarm/engine/ports.go",
       "line": 156,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "WalkTestSensor",
+      "file": "internal/alarm/engine/walktest.go",
+      "line": 27,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/engine",
+      "identifier": "WalkTestStatus",
+      "file": "internal/alarm/engine/walktest.go",
+      "line": 34,
       "kind": "type"
     },
     {
@@ -880,6 +901,34 @@
       "file": "internal/alarm/outputs/ports.go",
       "line": 60,
       "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "ErrTestFireUnsupported",
+      "file": "internal/alarm/outputs/testfire.go",
+      "line": 27,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "ErrTestFireUnsupported",
+      "file": "internal/alarm/outputs/testfire.go",
+      "line": 27,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "ErrUnknownOutput",
+      "file": "internal/alarm/outputs/testfire.go",
+      "line": 22,
+      "kind": "var"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "ErrUnknownOutput",
+      "file": "internal/alarm/outputs/testfire.go",
+      "line": 22,
+      "kind": "var"
     },
     {
       "package": "internal/alarm/outputs",
@@ -1025,21 +1074,21 @@
       "package": "internal/audit",
       "identifier": "Buffer",
       "file": "internal/audit/audit.go",
-      "line": 135,
+      "line": 148,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 120,
+      "line": 133,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 120,
+      "line": 133,
       "kind": "type"
     },
     {
@@ -1088,14 +1137,14 @@
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 89,
+      "line": 102,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 89,
+      "line": 102,
       "kind": "type"
     },
     {
@@ -1137,28 +1186,28 @@
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 111,
+      "line": 124,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 111,
+      "line": 124,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 128,
+      "line": 141,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 128,
+      "line": 141,
       "kind": "type"
     },
     {
@@ -5335,20 +5384,6 @@
     },
     {
       "package": "internal/clock",
-      "identifier": "NewFake",
-      "file": "internal/clock/clock.go",
-      "line": 88,
-      "kind": "func"
-    },
-    {
-      "package": "internal/clock",
-      "identifier": "NewFake",
-      "file": "internal/clock/clock.go",
-      "line": 88,
-      "kind": "func"
-    },
-    {
-      "package": "internal/clock",
       "identifier": "Real",
       "file": "internal/clock/clock.go",
       "line": 48,
@@ -5919,6 +5954,20 @@
       "identifier": "AggregatorOption",
       "file": "internal/metrics/aggregator.go",
       "line": 193,
+      "kind": "type"
+    },
+    {
+      "package": "internal/metrics",
+      "identifier": "AlarmCollector",
+      "file": "internal/metrics/alarm_collector.go",
+      "line": 27,
+      "kind": "type"
+    },
+    {
+      "package": "internal/metrics",
+      "identifier": "AlarmCollector",
+      "file": "internal/metrics/alarm_collector.go",
+      "line": 27,
       "kind": "type"
     },
     {
@@ -17032,6 +17081,188 @@
     },
     {
       "package": "pkg/hmapi",
+      "identifier": "AlarmArea",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 22,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmArea",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 22,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmAreaStatus",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 97,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmAreaStatus",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 97,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmArmAccepted",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 131,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmArmAccepted",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 131,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmArmRequest",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 117,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmArmRequest",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 117,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmCountdown",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 75,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmCountdown",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 75,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmIncidentRef",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 68,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmIncidentRef",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 68,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmJournalEntry",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 143,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmJournalEntry",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 143,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmModeReadiness",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 84,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmModeReadiness",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 84,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmOutput",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 51,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmOutput",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 51,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmOutputTestRequest",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 187,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmOutputTestRequest",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 187,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmSensor",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 33,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmSensor",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 33,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmWalkTestSensor",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 169,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmWalkTestSensor",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 169,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmWalkTestStatus",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 180,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "AlarmWalkTestStatus",
+      "file": "pkg/hmapi/alarm.go",
+      "line": 180,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
       "identifier": "BackupEntry",
       "file": "pkg/hmapi/rest_contract.go",
       "line": 15,
@@ -18924,49 +19155,63 @@
       "package": "pkg/hmevent",
       "identifier": "AlarmCountdownEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 25,
+      "line": 58,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmHealthChangedEvent",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 27,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmJournalAppendedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 121,
+      "line": 154,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 95,
+      "line": 128,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 95,
+      "line": 128,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmReadinessChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 107,
+      "line": 140,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmStateChangedEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 43,
+      "line": 76,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmTriggeredEvent",
       "file": "pkg/hmevent/alarm.go",
-      "line": 70,
+      "line": 103,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "AlarmWalkTestEvent",
+      "file": "pkg/hmevent/alarm.go",
+      "line": 40,
       "kind": "type"
     },
     {
@@ -26046,42 +26291,42 @@
       "identifier": "TestChirp_CountdownTickPatternThinsAsRemainingShrinks",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/chirp_test.go",
-      "line": 69
+      "line": 74
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestChirp_MP3OutputPlaysSoundfileInsteadOfSiren",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/chirp_test.go",
-      "line": 126
+      "line": 131
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestChirp_RateLimitDropsSecondEmissionWithinGap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/chirp_test.go",
-      "line": 48
+      "line": 53
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestChirp_SuppressedWhileAreaActivationInFlight",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/chirp_test.go",
-      "line": 106
+      "line": 111
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_AcousticDurationClampsToHardCeiling",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 79
+      "line": 85
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_AcousticDurationDefaultsToManagerDefault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 57
+      "line": 63
     },
     {
       "package": "internal/alarm/outputs",
@@ -26095,70 +26340,70 @@
       "identifier": "TestFireCycle_CumulativeAcousticBudgetClampsAndExhausts",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 101
+      "line": 107
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_DegradedRestrictsToOpticalAndLight",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 194
+      "line": 200
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_ExcludeOutdoorSkipsOutdoorSiren",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 223
+      "line": 229
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_LedgerWriteFailureBlocksActivation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 145
+      "line": 151
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_ModeFilterSkipsOutputsOutsideMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 274
+      "line": 280
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_PerOutputFailureIsolatesRemainingOutputs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 358
+      "line": 364
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_SilentPolicySuppressesAcousticOutputsOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 165
+      "line": 171
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_SmokeSounderCancelsWatchdogOnActivationError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 334
+      "line": 340
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_SmokeSoundersGatedByPolicy",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 249
+      "line": 255
     },
     {
       "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_SwitchedSirenActivatesBoundedWithLedgerBeforeWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 298
+      "line": 304
     },
     {
       "package": "internal/alarm/outputs",
@@ -26214,14 +26459,14 @@
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 153
+      "line": 166
     },
     {
       "package": "internal/audit",
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 153
+      "line": 166
     },
     {
       "package": "internal/audit",
@@ -113620,6 +113865,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "AcknowledgeAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 181
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AcknowledgeAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 181
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "AddLink",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/links.go",
@@ -113659,6 +113918,48 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
       "line": 223
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AlarmPanel",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 34
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AlarmPanel",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 34
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AlarmState",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 70
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AlarmState",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 70
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ArmAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 102
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ArmAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 102
     },
     {
       "package": "internal/north/rest/handlers",
@@ -114432,6 +114733,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "CreateAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 57
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CreateAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 57
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "CreateCentral",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_centrals.go",
@@ -114695,6 +115010,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/write.go",
       "line": 43
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "DeleteAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 141
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "DeleteAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 141
     },
     {
       "package": "internal/north/rest/handlers",
@@ -115188,6 +115517,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "DisarmAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 154
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "DisarmAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 154
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "DiscoveredCentralLister",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/discovery.go",
@@ -115647,6 +115990,48 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/devices.go",
       "line": 314
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 40
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 40
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmAreaReadiness",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 83
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmAreaReadiness",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 83
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmWalkTestStatus",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 286
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAlarmWalkTestStatus",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 286
     },
     {
       "package": "internal/north/rest/handlers",
@@ -116641,6 +117026,62 @@
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/links.go",
       "line": 19
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmAreaOutputs",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 274
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmAreaOutputs",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 274
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmAreaSensors",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 181
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmAreaSensors",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 181
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmAreas",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmAreas",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 24
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmJournal",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 213
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListAlarmJournal",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 213
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118226,6 +118667,48 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "PutAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 94
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PutAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 94
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PutAlarmAreaOutputs",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 298
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PutAlarmAreaOutputs",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 298
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PutAlarmAreaSensors",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 205
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PutAlarmAreaSensors",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm_config.go",
+      "line": 205
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "PutConfigSection",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/admin_config.go",
@@ -118912,6 +119395,34 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "SilenceAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 168
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SilenceAlarmArea",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 168
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SilenceAllAlarmAreas",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 204
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SilenceAllAlarmAreas",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 204
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "SimpleScheduleEntry",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/schedules.go",
@@ -118996,6 +119507,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "StartAlarmWalkTest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 235
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "StartAlarmWalkTest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 235
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "StartCapture",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/diagnostics_capture.go",
@@ -119035,6 +119560,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_admin.go",
       "line": 21
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "StopAlarmWalkTest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 262
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "StopAlarmWalkTest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 262
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119353,6 +119892,27 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestAcknowledgeAlarmArea_NoIncident_Returns409",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 110
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAcknowledgeAlarmArea_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 98
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAcknowledgeAlarmArea_WithOpenIncident_Returns204",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 123
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestActorFromRequest_EmptyStringInContext_ReturnsAnonymous",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/matter_exposures_test.go",
@@ -119409,6 +119969,55 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestAlarmOutput",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 299
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAlarmOutput",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/alarm.go",
+      "line": 299
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAlarmState_ExitDelayCountdown",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_state_test.go",
+      "line": 94
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAlarmState_NoAreas_ReturnsEmptyList",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_state_test.go",
+      "line": 21
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAlarmState_ReflectsModeAndReadinessBeforeArm",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_state_test.go",
+      "line": 44
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAlarmState_WalkTestActiveReflected",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_state_test.go",
+      "line": 131
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestAlarmVerbHandlers_NoAuthContextRequired",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 189
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestAnonToken_DifferentKindsDifferentTokens",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/snapshot_test.go",
@@ -119427,6 +120036,48 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/snapshot_test.go",
       "line": 304
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestArmAlarmArea_ForceArm_Returns200AndBypassesBlockers",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_arming_test.go",
+      "line": 97
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestArmAlarmArea_HappyPath_Returns200WithBypassedList",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_arming_test.go",
+      "line": 32
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestArmAlarmArea_InvalidMode_Returns400",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_arming_test.go",
+      "line": 137
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestArmAlarmArea_NotReady_Returns409WithBlockers",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_arming_test.go",
+      "line": 67
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestArmAlarmArea_UnconfiguredMode_Returns400",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_arming_test.go",
+      "line": 154
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestArmAlarmArea_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_arming_test.go",
+      "line": 124
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119728,6 +120379,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/config_test.go",
       "line": 68
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateAlarmArea_HappyPath_Returns201AndRecordsAudit",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 120
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateAlarmArea_InvalidConfig_Returns422",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 156
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateAlarmArea_MalformedJSON_Returns400",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 173
     },
     {
       "package": "internal/north/rest/handlers",
@@ -120088,6 +120760,27 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestDeleteAlarmArea_UnknownID_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 235
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestDeleteAlarmArea_WhileArmed_Returns409",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 249
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestDeleteAlarmArea_WhileDisarmed_Returns204AndCascadesSensorsOutputs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 267
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestDeleteCentralLinks_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
@@ -120379,6 +121072,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
       "line": 1237
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestDisarmAlarmArea_HappyPath_Returns204",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 26
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestDisarmAlarmArea_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 50
     },
     {
       "package": "internal/north/rest/handlers",
@@ -120694,6 +121401,48 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/session_test.go",
       "line": 193
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestGetAlarmAreaReadiness_ReturnsPerModeVerdict",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_state_test.go",
+      "line": 173
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestGetAlarmAreaReadiness_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_state_test.go",
+      "line": 157
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestGetAlarmArea_ReturnsSeeded",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 96
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestGetAlarmArea_UnknownID_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 82
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestGetAlarmWalkTestStatus_ReflectsSeenSensors",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 111
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestGetAlarmWalkTestStatus_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 96
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121807,6 +122556,90 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/links_test.go",
       "line": 276
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmAreaOutputs_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 130
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmAreaSensors_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 31
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmAreas_Empty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 43
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmAreas_ReturnsSeededAreas",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 63
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_DefaultLimitAppliedWhenAbsent",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 169
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_FiltersByArea",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 43
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_FiltersByClass",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 66
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_FromToRFC3339",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 101
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_InvalidClass_Returns400",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 86
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_InvalidFrom_Returns400",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 128
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_InvalidTo_Returns400",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 141
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestListAlarmJournal_LimitClampedToMax",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_journal_test.go",
+      "line": 156
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123420,6 +124253,62 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaOutputs_InvalidClass_Returns422",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 190
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaOutputs_ReplaceSemantics",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 160
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaOutputs_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 144
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaSensors_EmptyBody_ClearsAllSensors",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 105
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaSensors_ReplaceSemantics",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 63
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaSensors_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 45
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmArea_HappyPath_Returns204AndPersists",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 203
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmArea_UnknownID_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_area_crud_test.go",
+      "line": 188
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestPutConfigSection_EmptyComplexSecretPlaceholder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/admin_config_masked_secret_test.go",
@@ -124330,6 +125219,27 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestSilenceAlarmArea_DisarmedArea_Returns204",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 67
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestSilenceAlarmArea_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 84
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestSilenceAllAlarmAreas_Returns204AndSilencesEveryArea",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_verbs_test.go",
+      "line": 150
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestSnapshotFunctions_MultipleDevices",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/snapshot_test.go",
@@ -124491,6 +125401,55 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestStartAlarmWalkTest_AlreadyActive_Returns409",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 78
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestStartAlarmWalkTest_HappyPath_Returns204",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 31
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestStartAlarmWalkTest_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 48
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestStartAlarmWalkTest_WhileArmed_Returns409",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestStopAlarmWalkTest_HappyPath_Returns204",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 157
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestStopAlarmWalkTest_NotActive_Returns409",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 184
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestStopAlarmWalkTest_UnknownArea_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_walktest_test.go",
+      "line": 197
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestSupportedOperationsFor_AllCategories",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/custom_data_points_test.go",
@@ -124565,6 +125524,41 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/system_status_test.go",
       "line": 147
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestTestAlarmOutput_AcousticSiren_Returns204",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_output_testfire_test.go",
+      "line": 29
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestTestAlarmOutput_OpticalOnlyRequestBody_Accepted",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_output_testfire_test.go",
+      "line": 49
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestTestAlarmOutput_SmokeSounder_Returns409",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_output_testfire_test.go",
+      "line": 84
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestTestAlarmOutput_SwitchedSirenActuator_Returns204",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_output_testfire_test.go",
+      "line": 66
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestTestAlarmOutput_UnknownOutput_Returns404",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_output_testfire_test.go",
+      "line": 98
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126836,6 +127830,48 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "AlarmCountdownPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 50
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmCountdownPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 50
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmHealthChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 104
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmHealthChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 104
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmJournalAppendedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 82
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmJournalAppendedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 82
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "AlarmMessagesTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
@@ -126847,6 +127883,104 @@
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
       "line": 315
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmPanelCommandsConfig",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_panel.go",
+      "line": 43
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmPanelCommandsConfig",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_panel.go",
+      "line": 43
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmPanelQuery",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_panel.go",
+      "line": 31
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmPanelQuery",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_panel.go",
+      "line": 31
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmPanelSubscriber",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 113
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmPanelSubscriber",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 113
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmReadinessChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmReadinessChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmStateChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 35
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmStateChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 35
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmTriggeredPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 69
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmTriggeredPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 69
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmWalkTestProgressPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 93
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmWalkTestProgressPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 93
     },
     {
       "package": "internal/north/rest/ws",
@@ -127007,140 +128141,140 @@
       "identifier": "CommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 168
+      "line": 177
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 168
+      "line": 177
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorBadRequest",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 184
+      "line": 193
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorBadRequest",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 184
+      "line": 193
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorForbidden",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 189
+      "line": 198
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorForbidden",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 189
+      "line": 198
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorInternal",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 185
+      "line": 194
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorInternal",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 185
+      "line": 194
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorLocked",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 203
+      "line": 212
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorLocked",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 203
+      "line": 212
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorNotImplemented",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 195
+      "line": 204
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorNotImplemented",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
+      "line": 204
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorRateLimited",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 207
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorRateLimited",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 207
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorUnauthorized",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
       "line": 195
     },
     {
       "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorRateLimited",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 198
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorRateLimited",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 198
-    },
-    {
-      "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnauthorized",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 186
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorUnauthorized",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 186
+      "line": 195
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnknownCommand",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 183
+      "line": 192
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnknownCommand",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 183
+      "line": 192
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandHandler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 162
+      "line": 171
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandHandler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 162
+      "line": 171
     },
     {
       "package": "internal/north/rest/ws",
@@ -127844,17 +128978,31 @@
     },
     {
       "package": "internal/north/rest/ws",
-      "identifier": "NewCommandError",
+      "identifier": "NewAlarmPanelSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 177
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 121
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "NewAlarmPanelSubscriber",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 121
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewCommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 177
+      "line": 186
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "NewCommandError",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 186
     },
     {
       "package": "internal/north/rest/ws",
@@ -127931,14 +129079,14 @@
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 240
+      "line": 249
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 240
+      "line": 249
     },
     {
       "package": "internal/north/rest/ws",
@@ -128068,6 +129216,20 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "RegisterAlarmPanelCommands",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_panel.go",
+      "line": 51
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "RegisterAlarmPanelCommands",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_panel.go",
+      "line": 51
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "RegisterCustomDPCommands",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/custom_data_points.go",
@@ -128141,28 +129303,28 @@
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 416
+      "line": 425
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 416
+      "line": 425
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 220
+      "line": 229
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 220
+      "line": 229
     },
     {
       "package": "internal/north/rest/ws",
@@ -128380,6 +129542,118 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/hub_events_test.go",
       "line": 201
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelAcknowledgeWithoutIncidentIsConflict",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 265
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelArmAndDisarmDispatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 153
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelArmUnknownAreaIsNotFound",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 191
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSilenceAllAndAcknowledgeDispatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 281
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSilenceDispatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 208
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSilenceWithoutIncidentSucceeds",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 246
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelStateAndReadinessDispatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 363
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberCountdown",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 74
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberHealthChanged",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 246
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberJournalAppended",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 180
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberNilSafe",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 276
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberReadinessChanged",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 108
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberStateChanged",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 36
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberTriggered",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 143
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberWalkTestProgress",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 213
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelWriteCommandsRequireOperatorRole",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_panel_test.go",
+      "line": 335
     },
     {
       "package": "internal/north/rest/ws",
@@ -130066,7 +131340,7 @@
       "identifier": "TestOperatorCanInvokeOperatorCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/role_gate_test.go",
-      "line": 98
+      "line": 108
     },
     {
       "package": "internal/north/rest/ws",
@@ -130276,7 +131550,7 @@
       "identifier": "TestReadCommandAllowedForViewer",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/role_gate_test.go",
-      "line": 116
+      "line": 126
     },
     {
       "package": "internal/north/rest/ws",
@@ -130864,14 +132138,14 @@
       "identifier": "TestUnauthenticatedCannotInvokeWriteCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/role_gate_test.go",
-      "line": 82
+      "line": 92
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestViewerCannotInvokeWriteCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/role_gate_test.go",
-      "line": 60
+      "line": 70
     },
     {
       "package": "internal/north/rest/ws",
@@ -130941,7 +132215,7 @@
       "identifier": "TestWriteCommandRolesAreRegistered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/role_gate_test.go",
-      "line": 131
+      "line": 141
     },
     {
       "package": "internal/north/rest/ws",
@@ -144507,7 +145781,7 @@
       "identifier": "TestRESTRouterMatchesOpenAPISpec",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/rest_router_openapi_walk_test.go",
-      "line": 585
+      "line": 608
     },
     {
       "package": "tests/contract",
@@ -144969,49 +146243,49 @@
       "identifier": "TestWSBroadcastsHaveProductionEmitter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ws_broadcast_emitter_test.go",
-      "line": 222
+      "line": 262
     },
     {
       "package": "tests/contract",
       "identifier": "TestWSCommandCatalogParity",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wsapi_schema_test.go",
-      "line": 362
+      "line": 364
     },
     {
       "package": "tests/contract",
       "identifier": "TestWSCommandsMatchPinnedSchema",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wsapi_schema_test.go",
-      "line": 199
+      "line": 201
     },
     {
       "package": "tests/contract",
       "identifier": "TestWSSchemaArgsResultUseTypedVocabulary",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wsapi_schema_test.go",
-      "line": 411
+      "line": 413
     },
     {
       "package": "tests/contract",
       "identifier": "TestWSSchemaCategoriesAreFromKnownSet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wsapi_schema_test.go",
-      "line": 324
+      "line": 326
     },
     {
       "package": "tests/contract",
       "identifier": "TestWSSchemaHasNoDuplicateNames",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wsapi_schema_test.go",
-      "line": 293
+      "line": 295
     },
     {
       "package": "tests/contract",
       "identifier": "TestWSSchemaIsValidJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/wsapi_schema_test.go",
-      "line": 265
+      "line": 267
     },
     {
       "package": "tests/contract",

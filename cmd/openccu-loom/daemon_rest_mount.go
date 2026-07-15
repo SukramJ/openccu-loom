@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -73,6 +74,11 @@ type restMountDeps struct {
 	hubAdapter         *adapter.HubAdapter
 	ifaceAdapter       *adapter.InterfacesAdapter
 	incidents          handlers.IncidentsReader
+	// alarm is the daemon-level alarm service backing the /alarm surface.
+	// It may be a nil *alarm.Service (subsystem disabled or failed to
+	// start); alarmPanelFrom converts that to a nil interface so the
+	// routes stay unmounted rather than dispatching to a nil pointer.
+	alarm *alarm.Service
 	// masterProfiles backs the read-only master-profiles REST routes
 	// (GET .../master-profiles[/{id}], POST .../master-profiles/match) —
 	// the same *masterprofile.Store instance the WS
@@ -195,6 +201,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Interfaces:            d.ifaceAdapter,
 		Incidents:             d.incidents,
 		IncidentsAdmin:        incidentsClearerFrom(d.incidents),
+		Alarm:                 alarmPanelFrom(d.alarm),
 		MasterProfiles:        d.masterProfiles,
 		SystemStatus:          d.sysStatusBuf,
 		Labels:                adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
@@ -377,6 +384,17 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 func incidentsClearerFrom(r handlers.IncidentsReader) handlers.IncidentsClearer {
 	c, _ := r.(handlers.IncidentsClearer)
 	return c
+}
+
+// alarmPanelFrom converts the concrete alarm service into the handler
+// facade, returning a genuinely nil interface when the service is a nil
+// pointer so the router leaves the /alarm routes unmounted (a non-nil
+// interface wrapping a nil pointer would dispatch and panic).
+func alarmPanelFrom(s *alarm.Service) handlers.AlarmPanel {
+	if s == nil {
+		return nil
+	}
+	return s
 }
 
 // mountMCP wraps the REST router so the configured MCP path serves the

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -101,8 +102,14 @@ func (e *Engine) Reload(ctx context.Context) error {
 		}
 	}
 
-	// Rebuild the sensor sets, preserving runtime sensor state
-	// (activation, availability, health) of surviving sensors.
+	return e.reloadSensorsLocked(ctx, sensorRows)
+}
+
+// reloadSensorsLocked rebuilds the sensor sets from fresh rows,
+// preserving runtime sensor state (activation, availability, health)
+// of surviving sensors and pruning references to removed ones. The
+// caller holds the lock.
+func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitestore.AlarmSensorRow) error {
 	newSensorsByArea := map[string]map[string]*sensorState{}
 	newIndex := map[string]string{}
 	for i := range sensorRows {

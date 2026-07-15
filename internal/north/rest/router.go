@@ -91,8 +91,12 @@ type Deps struct {
 	// every registered central). Nil disables the route (404); shares the
 	// domain call with the WS `incidents.clear` command.
 	IncidentsAdmin handlers.IncidentsClearer
-	Labels         handlers.ParameterLabeler
-	Metrics        *metrics.Registry
+	// Alarm backs the /alarm surface (the alarm-panel engine + output
+	// drivers + config stores). Nil leaves every /alarm route unmounted
+	// (the alarm subsystem is disabled or failed to come up).
+	Alarm   handlers.AlarmPanel
+	Labels  handlers.ParameterLabeler
+	Metrics *metrics.Registry
 	// MasterProfiles backs the read-only master-profile discovery routes:
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles/{id}
@@ -770,6 +774,32 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Mirrors the WS `incidents.clear` role (auth.RoleOperator in
 				// internal/north/rest/ws/commands.go's writeCommandRoles).
 				pr.With(op).Delete("/incidents", handlers.DeleteIncidents(d.IncidentsAdmin, d.AuditRecorder))
+			}
+			if d.Alarm != nil {
+				// Alarm-panel surface: reads authenticate, every mutation
+				// gates on the operator role (mirrors the alarm_panel WS
+				// command roles). Nil Alarm leaves the whole tree unmounted.
+				pr.Get("/alarm/state", handlers.AlarmState(d.Alarm))
+				pr.Get("/alarm/areas", handlers.ListAlarmAreas(d.Alarm))
+				pr.With(op).Post("/alarm/areas", handlers.CreateAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}", handlers.GetAlarmArea(d.Alarm))
+				pr.With(op).Put("/alarm/areas/{id}", handlers.PutAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Delete("/alarm/areas/{id}", handlers.DeleteAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/sensors", handlers.ListAlarmAreaSensors(d.Alarm))
+				pr.With(op).Put("/alarm/areas/{id}/sensors", handlers.PutAlarmAreaSensors(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/outputs", handlers.ListAlarmAreaOutputs(d.Alarm))
+				pr.With(op).Put("/alarm/areas/{id}/outputs", handlers.PutAlarmAreaOutputs(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/arm", handlers.ArmAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/disarm", handlers.DisarmAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/silence", handlers.SilenceAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/acknowledge", handlers.AcknowledgeAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/silence-all", handlers.SilenceAllAlarmAreas(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/readiness", handlers.GetAlarmAreaReadiness(d.Alarm))
+				pr.Get("/alarm/journal", handlers.ListAlarmJournal(d.Alarm))
+				pr.With(op).Post("/alarm/areas/{id}/walktest/start", handlers.StartAlarmWalkTest(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/walktest/stop", handlers.StopAlarmWalkTest(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/walktest", handlers.GetAlarmWalkTestStatus(d.Alarm))
+				pr.With(op).Post("/alarm/outputs/{id}/test", handlers.TestAlarmOutput(d.Alarm, d.AuditRecorder))
 			}
 			if d.SystemStatus != nil {
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))

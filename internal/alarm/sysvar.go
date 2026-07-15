@@ -92,7 +92,11 @@ type mirrorConfig struct {
 	SysvarAllowDisarm bool   `json:"sysvar_allow_disarm"`
 }
 
-// onStateChanged exports the area state to every mirror sysvar.
+// onStateChanged exports the area state to every mirror sysvar. It
+// runs from the event sink — detached from any caller context by
+// design.
+//
+//nolint:contextcheck // sink callbacks have no caller ctx; exports run on the service lifetime
 func (m *sysvarMirror) onStateChanged(e hmevent.AlarmStateChangedEvent) {
 	idx := sysvarIndexByMode[e.Mode]
 	if e.To == hmenum.AlarmAreaStateTriggered {

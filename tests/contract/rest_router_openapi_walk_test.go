@@ -18,8 +18,10 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	centralpkg "github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
@@ -449,6 +451,25 @@ func (fakeCustomDPWriter) InvokeCustomDP(
 // invoked by the walk in TestRESTRouterMatchesOpenAPISpec, only the routing
 // tree is inspected, so correctness of the fakes' return values does not
 // matter — only their presence (non-nil) does.
+// mustAlarmPanel builds a minimal real alarm service on an in-memory
+// database — the walk only needs the Deps field non-nil so the alarm
+// routes mount; no handler body ever runs.
+func mustAlarmPanel() handlers.AlarmPanel {
+	db, err := sqlite.Open(context.Background(), ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	svc, err := alarm.NewService(alarm.Deps{
+		Settings: alarm.Settings{Enabled: true},
+		Registry: centralpkg.NewRegistry(),
+		Stores:   alarm.NewStores(db),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return svc
+}
+
 func fullyWiredRouterDeps() rest.Deps {
 	authDeps := &handlers.AuthDeps{
 		Users:    auth.NewMemoryUserStore(),
@@ -475,6 +496,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Reloader:              fakeReloaderService{},
 		CentralLinks:          fakeCentralLinksService{},
 		Incidents:             fakeIncidentsReader{},
+		Alarm:                 mustAlarmPanel(),
 		IncidentsAdmin:        fakeIncidentsClearer{},
 		SystemStatus:          fakeSystemStatusReader{},
 		LogLevels:             fakeLogLevelsService{},

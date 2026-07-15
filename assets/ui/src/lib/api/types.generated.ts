@@ -3838,6 +3838,319 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current live status of every alarm area */
+        get: operations["getAlarmState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all configured alarm areas */
+        get: operations["listAlarmAreas"];
+        put?: never;
+        /** Create a new alarm area (operator) */
+        post: operations["createAlarmArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Get a single alarm area by id */
+        get: operations["getAlarmArea"];
+        /** Replace an alarm area (operator) */
+        put: operations["putAlarmArea"];
+        post?: never;
+        /**
+         * Delete an alarm area (operator)
+         * @description Refused with 409 unless the area is currently disarmed.
+         */
+        delete: operations["deleteAlarmArea"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/sensors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** List the sensors enrolled in an alarm area */
+        get: operations["listAlarmAreaSensors"];
+        /**
+         * Replace the full sensor set of an alarm area (operator)
+         * @description Bulk replace — the request body is the complete desired sensor list for the area; sensors omitted from the body are removed.
+         */
+        put: operations["putAlarmAreaSensors"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** List the outputs enrolled in an alarm area */
+        get: operations["listAlarmAreaOutputs"];
+        /**
+         * Replace the full output set of an alarm area (operator)
+         * @description Bulk replace — the request body is the complete desired output list for the area; outputs omitted from the body are removed.
+         */
+        put: operations["putAlarmAreaOutputs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/arm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Arm an alarm area (operator) */
+        post: operations["armAlarmArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/disarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disarm an alarm area (operator) */
+        post: operations["disarmAlarmArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/silence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Silence the active incident on an alarm area without disarming (operator) */
+        post: operations["silenceAlarmArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge (clear) a finished incident on an alarm area (operator) */
+        post: operations["acknowledgeAlarmArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/silence-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Silence the active incident on every alarm area at once (operator) */
+        post: operations["silenceAllAlarmAreas"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Per-mode arm-readiness of an alarm area */
+        get: operations["getAlarmAreaReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/journal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Query the alarm engine's event journal */
+        get: operations["listAlarmJournal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/walktest/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a walk-test session on an alarm area (operator) */
+        post: operations["startAlarmWalkTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/walktest/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop the running walk-test session on an alarm area (operator) */
+        post: operations["stopAlarmWalkTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/areas/{id}/walktest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Live status of an alarm area's walk-test session */
+        get: operations["getAlarmWalkTestStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/outputs/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fire an alarm output briefly for a walk test (operator)
+         * @description Refused with 409 for outputs of class `smoke_sounder` — smoke-detector sounders are excluded from live output tests (see docs/alarm-concept.md §7).
+         */
+        post: operations["testAlarmOutput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5318,6 +5631,21 @@ export interface components {
             new_state: string;
         };
         /**
+         * @description Payload of a `central.readiness_changed` broadcast. Topic pattern
+         *     `central.{name}.readiness`. Reflects a central's readiness-gated
+         *     southbound bring-up phase (waiting_for_ccu -> loading_hub ->
+         *     loading_devices -> ready).
+         */
+        CentralReadinessChangedPayload: {
+            central: string;
+            /** @enum {string} */
+            phase: "unknown" | "waiting_for_ccu" | "loading_hub" | "loading_devices" | "ready";
+            /** @description True only once southbound bring-up has latched complete (phase == ready). */
+            ready: boolean;
+            interfaces_loaded: number;
+            interfaces_total: number;
+        };
+        /**
          * @description Payload of a `system.status_changed` broadcast. Topic pattern
          *     `system.{central}.status`. Surfaces aggregated component
          *     health, connectivity, callback state, and degraded interface
@@ -5463,6 +5791,126 @@ export interface components {
             available_firmware?: string;
             update_available: boolean;
             in_progress: boolean;
+        };
+        /**
+         * @description Payload of an `alarm.state_changed` broadcast. Topic
+         *     `alarm.panel`. Fires on every arm-state-machine transition of
+         *     an alarm area (docs/alarm-concept.md §5).
+         */
+        AlarmStateChangedPayload: {
+            area_id: string;
+            area_name: string;
+            /** @enum {string} */
+            old_state: "disarmed" | "arming" | "armed" | "pending" | "triggered";
+            /** @enum {string} */
+            new_state: "disarmed" | "arming" | "armed" | "pending" | "triggered";
+            /**
+             * @description Active (or, while arming, target) protection mode.
+             * @enum {string}
+             */
+            mode?: "disarmed" | "perimeter" | "full" | "night" | "vacation" | "custom";
+            /** @description Attribution (operator account, keypad identity, code name, or an engine-internal actor such as "engine:restore"); omitted when unattributed. */
+            changed_by?: string;
+            /** @description Surface the action came from (rest, ws, mqtt, hmcli, keypad, engine). */
+            source?: string;
+            /**
+             * Format: int64
+             * @description References the active incident; omitted when none.
+             */
+            incident_id?: number;
+        };
+        /**
+         * @description Payload of an `alarm.countdown` broadcast. Topic `alarm.panel`.
+         *     Ticks once per second while an exit or entry delay runs on an
+         *     alarm area.
+         */
+        AlarmCountdownPayload: {
+            area_id: string;
+            /** @enum {string} */
+            kind: "exit_delay" | "entry_delay";
+            remaining_s: number;
+            total_s: number;
+        };
+        /**
+         * @description Payload of an `alarm.readiness_changed` broadcast. Topic
+         *     `alarm.panel`. Fires when the ready-to-arm computation of an
+         *     area changes for at least one mode (docs/alarm-concept.md
+         *     §6.3). Carries the full per-mode map, not a delta.
+         */
+        AlarmReadinessChangedPayload: {
+            area_id: string;
+            /** @description Per-mode arming readiness, keyed by mode name. */
+            readiness: {
+                [key: string]: components["schemas"]["AlarmModeReadiness"];
+            };
+        };
+        /**
+         * @description Payload of an `alarm.triggered` broadcast. Topic `alarm.panel`.
+         *     Fires when an area enters `triggered` and an incident is
+         *     opened (or re-adopted after a restart / reconnect).
+         */
+        AlarmTriggeredPayload: {
+            area_id: string;
+            area_name: string;
+            /** Format: int64 */
+            incident_id: number;
+            /** @description Triggering sensor id; omitted when the cause is not a sensor. */
+            sensor_id?: string;
+            sensor_name?: string;
+            /** @description Stable machine-readable cause token (sensor, adopted, central_lost, restored). */
+            cause: string;
+            /**
+             * @description Protection mode that was active at trigger time.
+             * @enum {string}
+             */
+            mode?: "perimeter" | "full" | "night" | "vacation" | "custom";
+        };
+        /**
+         * @description Payload of an `alarm.journal_appended` broadcast. Topic
+         *     `alarm.panel`. Fires after an alarm-journal entry has been
+         *     persisted; carries the entry head, not the full detail
+         *     document — consumers needing detail call GET /alarm/journal.
+         */
+        AlarmJournalAppendedPayload: {
+            /** Format: int64 */
+            entry_id: number;
+            /** @description Omitted for engine-global entries. */
+            area_id?: string;
+            /** @enum {string} */
+            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+            /** @description Stable machine-readable event token within the class. */
+            event: string;
+            /** @description Attribution; omitted when unattributed. */
+            actor?: string;
+            /**
+             * Format: int64
+             * @description References the related incident; omitted when none.
+             */
+            incident_id?: number;
+        };
+        /**
+         * @description Payload of an `alarm.walktest_progress` broadcast. Topic
+         *     `alarm.panel`. Fires when a walk-test session records a
+         *     sensor activation.
+         */
+        AlarmWalkTestProgressPayload: {
+            area_id: string;
+            sensor_id: string;
+            sensor_name?: string;
+            /** @description Number of enrolled sensors that have reported an activation so far this session. */
+            seen: number;
+            /** @description Total number of sensors enrolled in the walk-test session. */
+            total: number;
+        };
+        /**
+         * @description Payload of an `alarm.health_changed` broadcast. Topic
+         *     `alarm.panel`. Fires on alarm-subsystem health transitions
+         *     (siren stop-verification, service degradations).
+         */
+        AlarmHealthChangedPayload: {
+            healthy: boolean;
+            /** @description Stable, English machine string describing the transition. */
+            note: string;
         };
         /** @description The most recent event fired within an event group. */
         TriggeredEventSummary: {
@@ -6152,6 +6600,169 @@ export interface components {
         RoomEntry: {
             name: string;
             device_count: number;
+        };
+        /** @description Free-form, engine-owned document describing an alarm area's arming modes and per-mode policy (entry/exit delays, output policy, post-trigger policy, central-loss policy, blocker policies — see docs/alarm-concept.md §14). The REST and WebSocket layers pass this document through unvalidated; the alarm engine is the sole owner of its schema and versioning. */
+        AlarmAreaConfig: {
+            [key: string]: unknown;
+        };
+        /** @description One alarm area — an independently armable partition with its own arm state, sensor set, and output set (docs/alarm-concept.md §14). */
+        AlarmArea: {
+            id: string;
+            name: string;
+            /** @description Display ordering hint for the SPA area list. */
+            position?: number;
+            config?: components["schemas"]["AlarmAreaConfig"];
+        };
+        /** @description One CCU data point enrolled into an alarm area as a sensor input (door/window contact, motion, tamper, hazard, panic — docs/alarm-concept.md §6.1). */
+        AlarmSensor: {
+            id: string;
+            /** @description Owning CCU (central name). */
+            central: string;
+            interface_id: string;
+            channel_address: string;
+            parameter: string;
+            /**
+             * @description Sensor role; presets the mode matrix and behaviour flags.
+             * @enum {string}
+             */
+            type: "door" | "window" | "motion" | "tamper" | "hazard" | "panic";
+            name?: string;
+            /** @description Engine-owned per-sensor configuration document (mode matrix, entry-delay flag, bypass eligibility, …). */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description One CCU actuator enrolled into an alarm area as an alarm consequence — siren, switched siren, smoke-detector sounder, alarm light, chirp emitter, notification target, or sysvar mirror (docs/alarm-concept.md §7). */
+        AlarmOutput: {
+            id: string;
+            /**
+             * @description Output driver class. The class, not the backing device type, decides which safety invariants apply.
+             * @enum {string}
+             */
+            class: "acoustic_siren" | "switched_siren" | "smoke_sounder" | "optical_siren" | "alarm_light" | "chirp" | "notification" | "sysvar_mirror";
+            /** @description Owning CCU (central name). */
+            central: string;
+            channel_address: string;
+            name?: string;
+            /** @description Engine-owned per-output configuration document (per-mode assignment, indoor/outdoor flag, duration/tone, …). */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description Whether an alarm area is ready to arm into one specific mode. */
+        AlarmModeReadiness: {
+            /** @description True when the mode can be armed without `force`. */
+            ready: boolean;
+            /** @description Sensor ids currently blocking the arm into this mode. */
+            blockers?: string[];
+            /** @description Sensor ids with non-blocking health warnings for this mode. */
+            warnings?: string[];
+        };
+        /** @description One alarm area's live status, as returned by GET /alarm/state and GET /alarm/areas/{id}/status views. */
+        AlarmAreaStatus: {
+            id: string;
+            name: string;
+            /**
+             * @description Arm-state-machine state (docs/alarm-concept.md §5).
+             * @enum {string}
+             */
+            state: "disarmed" | "arming" | "armed" | "pending" | "triggered";
+            /**
+             * @description Currently active (or, while arming, target) protection mode.
+             * @enum {string}
+             */
+            mode?: "disarmed" | "perimeter" | "full" | "night" | "vacation" | "custom";
+            /** @description Sensor ids currently bypassed for the active/pending arm. */
+            bypassed?: string[];
+            /** @description The area's open incident, present only while `state` is `triggered`. */
+            incident?: {
+                id?: string;
+                silenced?: boolean;
+            };
+            /** @description A running exit/entry delay countdown, present only while one is active. */
+            countdown?: {
+                /** @enum {string} */
+                kind?: "exit_delay" | "entry_delay";
+                remaining_s?: number;
+                total_s?: number;
+            };
+            /** @description Per-mode arming readiness, keyed by mode name. */
+            readiness?: {
+                [key: string]: components["schemas"]["AlarmModeReadiness"];
+            };
+            /** @description True while a walk-test session is running on this area. */
+            walktest_active: boolean;
+        };
+        AlarmArmRequest: {
+            /**
+             * @description Target protection mode.
+             * @enum {string}
+             */
+            mode: "perimeter" | "full" | "night" | "vacation" | "custom";
+            /** @description Arm despite readiness blockers, where the engine's blocker policy allows overriding. */
+            force?: boolean;
+            /** @description Skip the configured exit delay and arm immediately. */
+            skip_delay?: boolean;
+            /** @description Sensor ids to bypass for this arm attempt. */
+            bypass?: string[];
+        };
+        AlarmArmAccepted: {
+            /**
+             * @description Resulting area state.
+             * @enum {string}
+             */
+            state: "arming" | "armed";
+            /** @description Sensor ids actually bypassed for this arm. */
+            bypassed?: string[];
+            /** @description Exit delay in seconds the area is now counting down; 0 when armed immediately. */
+            exit_delay_s?: number;
+        };
+        /** @description One entry in the alarm engine's append-only event journal (docs/alarm-concept.md §14), as returned by GET /alarm/journal. */
+        AlarmJournalEntry: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            when: string;
+            area_id: string;
+            /**
+             * @description Journal bucket used by the `class` query filter.
+             * @enum {string}
+             */
+            class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+            /** @description Stable machine-readable event token within the class (e.g. "armed", "force_armed", "silenced"). */
+            event: string;
+            /** @description Identity that caused the entry (operator account, keypad identity, code name, or an engine-internal actor); empty when unattributed. */
+            actor?: string;
+            /** @description Surface the action came from (rest, ws, mqtt, hmcli, keypad, engine). */
+            source?: string;
+            /**
+             * Format: int64
+             * @description Linked incident id, present when the entry belongs to a trigger episode.
+             */
+            incident_id?: number;
+            /** @description Engine-owned, event-class-specific detail document. */
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description Live status of a walk-test session on one alarm area, as returned by GET /alarm/areas/{id}/walktest. */
+        AlarmWalkTestStatus: {
+            active: boolean;
+            /** Format: date-time */
+            started_at?: string;
+            /** @description One row per sensor enrolled in the area, tracking walk-test coverage. */
+            sensors: {
+                id: string;
+                name?: string;
+                /** @description True once this sensor reported at least one activation during the current session. */
+                tested: boolean;
+                /** Format: date-time */
+                last_triggered_at?: string;
+            }[];
+        };
+        AlarmOutputTestRequest: {
+            /** @description Fire only the output's optical/visual indication, suppressing sound. Ignored for outputs with no audible element. */
+            optical_only?: boolean;
         };
     };
     responses: {
@@ -10623,6 +11234,521 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getAlarmState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-area alarm status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        areas: components["schemas"]["AlarmAreaStatus"][];
+                    };
+                };
+            };
+        };
+    };
+    listAlarmAreas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alarm area list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmArea"][];
+                };
+            };
+        };
+    };
+    createAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlarmArea"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmArea"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    getAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmArea"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlarmArea"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listAlarmAreaSensors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmSensor"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putAlarmAreaSensors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlarmSensor"][];
+            };
+        };
+        responses: {
+            /** @description Replaced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listAlarmAreaOutputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmOutput"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putAlarmAreaOutputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlarmOutput"][];
+            };
+        };
+        responses: {
+            /** @description Replaced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    armAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlarmArmRequest"];
+            };
+        };
+        responses: {
+            /** @description Arming accepted. The area may now be counting down an exit delay (state `arming`) or already armed (`exit_delay_s: 0`). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmArmAccepted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description Arming refused — readiness blockers are present for the requested mode. The problem detail's `errors` array carries the blocker list (mirrors AlarmModeReadiness.blockers). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    disarmAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disarmed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    silenceAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Silenced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acknowledgeAlarmArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Acknowledged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    silenceAllAlarmAreas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Silenced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAlarmAreaReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Readiness verdict for every mode configured on the area, keyed by mode name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["AlarmModeReadiness"];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAlarmJournal: {
+        parameters: {
+            query?: {
+                /** @description Only return entries for this alarm area id. */
+                area?: string;
+                /** @description Only return entries in this journal class. */
+                class?: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
+                /** @description Only return entries at-or-after this value (inclusive, RFC3339). Returns 400 if the value cannot be parsed. */
+                from?: string;
+                /** @description Only return entries strictly before this value (exclusive, RFC3339). Returns 400 if the value cannot be parsed. */
+                to?: string;
+                /** @description Maximum entries to return. 0 or absent uses the default (500). Values above 5000 are capped to 5000. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Filtered journal entries (newest first). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmJournalEntry"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    startAlarmWalkTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Started */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    stopAlarmWalkTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAlarmWalkTestStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmWalkTestStatus"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testAlarmOutput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AlarmOutputTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Test fired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Refused — smoke-detector sounders cannot be live-tested via this endpoint. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
@@ -297,6 +298,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	alarmSvc := wireAlarmService(cfg, reg, auditDB, healthTracker, logger)
 	if alarmSvc != nil {
 		northBridges.Register(alarmSvc)
+		// The alarm collector subscribes to the service's own event bus
+		// (see alarm.Service.Bus), so it can only be wired once alarmSvc
+		// exists — unlike NewMqttCollector in wireSharedInfrastructure,
+		// which runs before this point in the composition root.
+		_, stopAlarmCollector := metrics.NewAlarmCollector(metricsReg, alarmSvc.Bus())
+		defer stopAlarmCollector()
 	}
 	if err := northBridges.StartPhase(ctx, northbridge.PhaseEarly); err != nil {
 		logger.Warn("north.bridge.start_early", slog.String("err", err.Error()))
@@ -586,17 +593,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		editSessions:     editSessions,
 		// cacheResetSvc backs ccu.cache_clear — scope-aware clear + re-pull.
 		cacheResetSvc: cacheResetSvc,
-		logger:        logger,
-		centralName:   singleCentralName(reg),
-		sessionStore:  sessionStore,
-		changeLog:     configChangeLog,
-		labels:        parameterLabels,
+		// alarm backs alarm_panel.* — nil when the alarm service is disabled.
+		alarm:        alarmSvc,
+		logger:       logger,
+		centralName:  singleCentralName(reg),
+		sessionStore: sessionStore,
+		changeLog:    configChangeLog,
+		labels:       parameterLabels,
 	})
 	_ = uiSchemaAdapter
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, alarmSvc, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
 
 	// --- REST --------------------------------------------------
@@ -640,6 +649,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		hubAdapter:              hubAdapter,
 		ifaceAdapter:            ifaceAdapter,
 		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
+		alarm:                   alarmSvc,
 		masterProfiles:          masterProfilesStore,
 		sysStatusBuf:            sysStatusBuf,
 		visFilter:               visFilter,
