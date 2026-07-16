@@ -202,6 +202,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Incidents:             d.incidents,
 		IncidentsAdmin:        incidentsClearerFrom(d.incidents),
 		Alarm:                 alarmPanelFrom(d.alarm),
+		AlarmCodes:            alarmCodeAdminFrom(d.alarm),
 		MasterProfiles:        d.masterProfiles,
 		SystemStatus:          d.sysStatusBuf,
 		Labels:                adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
@@ -395,6 +396,18 @@ func alarmPanelFrom(s *alarm.Service) handlers.AlarmPanel {
 		return nil
 	}
 	return s
+}
+
+// alarmCodeAdminFrom converts the alarm service into the /alarm/codes CRUD
+// facade: a store-backed adapter that maps the wire DTOs onto the
+// argon2id-hashed alarm-code store (docs/alarm-concept.md §11). A nil
+// service or store yields a genuinely nil interface so the codes routes
+// serve 503 rather than panicking.
+func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {
+	if s == nil || s.Stores() == nil || s.Stores().Codes == nil {
+		return nil
+	}
+	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes).OnChange(s.NotifyCodesChanged)
 }
 
 // mountMCP wraps the REST router so the configured MCP path serves the

@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/codes"
 	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -132,6 +133,41 @@ func (f *alarmPublisherFixture) seedSensor(id, areaID, name string, modes []hmen
 	}
 	if err := f.svc.Reload(context.Background()); err != nil {
 		f.t.Fatalf("reload after seeding sensor %s: %v", id, err)
+	}
+}
+
+// seedPINCode persists an enabled or disabled pin-kind alarm-code row
+// directly through the store — there is no facade "create" path in
+// this package, so this mirrors the shape
+// internal/alarm/codes/codes_test.go's pinRow helper produces. Every
+// verb permission is granted: the code-policy tests care only about
+// whether an applicable pin code exists, never which verb it
+// authorizes. A nil areas list applies to every area, matching the
+// store's own "[]" catch-all convention (internal/alarm/codes/facade.go's
+// parseAreas).
+func (f *alarmPublisherFixture) seedPINCode(id, name, pin string, enabled bool, areas []string) {
+	f.t.Helper()
+	hash, err := codes.HashPIN(pin)
+	if err != nil {
+		f.t.Fatalf("HashPIN: %v", err)
+	}
+	areasJSON := "[]"
+	if len(areas) > 0 {
+		b, err := json.Marshal(areas)
+		if err != nil {
+			f.t.Fatalf("marshal areas: %v", err)
+		}
+		areasJSON = string(b)
+	}
+	now := time.Now().UnixMilli()
+	row := sqlitestore.AlarmCodeRow{
+		ID: id, Name: name, Kind: string(codes.KindPIN), Hash: hash,
+		PermsJSON: `{"arm":true,"disarm":true,"silence":true}`,
+		AreasJSON: areasJSON, BindingJSON: "{}",
+		Enabled: enabled, CreatedAtMS: now, UpdatedAtMS: now,
+	}
+	if err := f.svc.Stores().Codes.Upsert(context.Background(), row); err != nil {
+		f.t.Fatalf("seed pin code %s: %v", id, err)
 	}
 }
 
@@ -396,6 +432,61 @@ func TestAlarmMQTTPublisher_BrokerConnectReseeds(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// TestAlarmMQTTPublisher_DiscoveryReflipsOnCodesChanged pins the
+// review-fix regression: an area seeded with the RequireDisarm
+// default (nil, "required once a code exists") and no pin code yet
+// must advertise code_disarm_required=false, and adding an enabled
+// pin code must flip that flag to true once the alarm service
+// notifies AlarmCodesChangedEvent — without any other alarm activity
+// (arm/disarm/trigger) ever occurring. Asserting on a publish-count
+// increase before re-checking the topic mirrors
+// TestAlarmMQTTPublisher_BrokerConnectReseeds: the worker goroutine
+// republishes asynchronously, so a fixed record index would flake.
+func TestAlarmMQTTPublisher_DiscoveryReflipsOnCodesChanged(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+
+	discTopic := "homeassistant/alarm_control_panel/alarm/eg/config"
+	f.waitForPublish(discTopic, func(r publishRecord) bool {
+		var body map[string]any
+		if err := json.Unmarshal([]byte(r.payload), &body); err != nil {
+			return false
+		}
+		return body["code_disarm_required"] == false
+	})
+
+	f.mp.mu.Lock()
+	before := len(f.mp.sent)
+	f.mp.mu.Unlock()
+
+	f.seedPINCode("c1", "Markus", "1234", true, nil)
+	f.svc.NotifyCodesChanged()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		f.mp.mu.Lock()
+		after := len(f.mp.sent)
+		f.mp.mu.Unlock()
+		if after > before {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("NotifyCodesChanged produced no republish")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	f.waitForPublish(discTopic, func(r publishRecord) bool {
+		var body map[string]any
+		if err := json.Unmarshal([]byte(r.payload), &body); err != nil {
+			return false
+		}
+		return body["code_disarm_required"] == true && body["code"] == alarmRemoteCode
+	})
 }
 
 // TestAlarmMQTTPublisher_MasterAggregationAcrossTwoAreas covers the

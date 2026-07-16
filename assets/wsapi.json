@@ -840,7 +840,8 @@
         "mode": "string",
         "force": "boolean?",
         "skip_delay": "boolean?",
-        "bypass": "array?"
+        "bypass": "array?",
+        "code": "string?"
       },
       "result": {
         "state": "string",
@@ -853,7 +854,8 @@
       "description": "Disarm an alarm area.",
       "name": "alarm_panel.disarm",
       "args": {
-        "area_id": "string"
+        "area_id": "string",
+        "code": "string?"
       }
     },
     {
@@ -861,7 +863,8 @@
       "description": "Silence the active incident on an alarm area without disarming.",
       "name": "alarm_panel.silence",
       "args": {
-        "area_id": "string"
+        "area_id": "string",
+        "code": "string?"
       }
     },
     {
@@ -874,7 +877,8 @@
       "description": "Acknowledge (clear) a finished incident on an alarm area.",
       "name": "alarm_panel.acknowledge",
       "args": {
-        "area_id": "string"
+        "area_id": "string",
+        "code": "string?"
       }
     },
     {
@@ -914,6 +918,71 @@
       "category": "alarm_panel",
       "description": "List the alarm-control-panel entity projections (HA-state view incl. the master panel).",
       "name": "alarm_panel.panels"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "List alarm codes (operator). Codes are security material, so even the list is operator-gated; the argon2id hash and cleartext PIN are never returned.",
+      "name": "alarm_panel.codes_list",
+      "result": {
+        "codes": "array"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Create an alarm code (operator). The cleartext PIN is write-only and hashed before persistence.",
+      "name": "alarm_panel.codes_create",
+      "args": {
+        "code": "object"
+      },
+      "result": {
+        "id": "string",
+        "name": "string",
+        "kind": "string",
+        "duress": "boolean?",
+        "perms": "object",
+        "areas": "array?",
+        "binding": "object?",
+        "valid_from_ms": "integer?",
+        "valid_until_ms": "integer?",
+        "enabled": "boolean",
+        "created_ms": "integer?",
+        "updated_ms": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Replace an alarm code (operator). An empty PIN keeps the stored hash.",
+      "name": "alarm_panel.codes_update",
+      "args": {
+        "id": "string",
+        "code": "object"
+      },
+      "result": {
+        "id": "string",
+        "name": "string",
+        "kind": "string",
+        "duress": "boolean?",
+        "perms": "object",
+        "areas": "array?",
+        "binding": "object?",
+        "valid_from_ms": "integer?",
+        "valid_until_ms": "integer?",
+        "enabled": "boolean",
+        "created_ms": "integer?",
+        "updated_ms": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Delete an alarm code (operator).",
+      "name": "alarm_panel.codes_delete",
+      "args": {
+        "id": "string"
+      },
+      "result": {
+        "deleted": "boolean",
+        "id": "string"
+      }
     },
     {
       "category": "alarm_panel",
@@ -978,6 +1047,14 @@
       "name": "alarm.panel_changed",
       "topic": "alarm.panel",
       "payload": "AlarmPanelChangedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an arm schedule elapsed with auto-arm off while the area was not in the scheduled mode, so the engine notifies rather than arming (docs/alarm-concept.md §15 row 19).",
+      "kind": "broadcast",
+      "name": "alarm.reminder",
+      "topic": "alarm.panel",
+      "payload": "AlarmReminderPayload"
     }
   ]
 }

@@ -291,7 +291,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// flood during boot hydration would otherwise POST the whole device state
 	// on every restart. Matter and REST register later (also PhaseLate).
 	northBridges.RegisterPhase(newMQTTService(bridge, hubMQTT), northbridge.PhaseEarly)
-	northBridges.Register(webhook.NewOutbound(reg, cfg.North.Webhook, logger))
+	webhookOutbound := webhook.NewOutbound(reg, cfg.North.Webhook, logger)
+	northBridges.Register(webhookOutbound)
 	// Alarm engine: a PhaseLate service so it subscribes and reconciles
 	// only once the daemon is fully up (its stores ride the shared
 	// daemon DB; see wireAlarmService).
@@ -309,6 +310,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// which runs before this point in the composition root.
 		_, stopAlarmCollector := metrics.NewAlarmCollector(metricsReg, alarmSvc.Bus())
 		defer stopAlarmCollector()
+		// Forward alarm-panel events (state, trigger, journal, health,
+		// reminder, duress) through the outbound webhook. Set before the
+		// PhaseLate StartAll so the bridge subscribes the alarm bus on
+		// start (docs/alarm-concept.md §13.4).
+		webhookOutbound.SetAlarmBus(alarmSvc.Bus())
 	}
 	if err := northBridges.StartPhase(ctx, northbridge.PhaseEarly); err != nil {
 		logger.Warn("north.bridge.start_early", slog.String("err", err.Error()))

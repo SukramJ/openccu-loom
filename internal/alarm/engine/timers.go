@@ -14,9 +14,11 @@ import (
 // Timer kinds persisted in alarm_state.timers_json. The strings are
 // part of the persisted format — keep them stable.
 const (
-	timerKindExit    = "exit_delay"
-	timerKindEntry   = "entry_delay"
-	timerKindTrigger = "trigger_time"
+	timerKindExit      = "exit_delay"
+	timerKindEntry     = "entry_delay"
+	timerKindTrigger   = "trigger_time"
+	timerKindPreAlarm  = "pre_alarm"
+	timerKindAutoRearm = "auto_rearm"
 )
 
 // persistedTimer is the redundant countdown tuple stored per active

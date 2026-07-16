@@ -67,16 +67,20 @@
     tone: boolean;
     optical: boolean;
     level: boolean;
+    // chimeTone exposes a dedicated door-chime tone field, distinct from
+    // the arm/disarm/tick tone labels (§15 row 23; only the chirp class
+    // plays the door chime while an area is disarmed).
+    chimeTone: boolean;
   };
   const CAPS: Record<AlarmOutputClass, Caps> = {
-    acoustic_siren: { policy: true, outdoor: true, duration: true, tone: true, optical: false, level: false },
-    switched_siren: { policy: true, outdoor: true, duration: true, tone: false, optical: false, level: false },
-    smoke_sounder: { policy: true, outdoor: false, duration: false, tone: false, optical: false, level: false },
-    optical_siren: { policy: false, outdoor: true, duration: true, tone: false, optical: true, level: false },
-    alarm_light: { policy: false, outdoor: true, duration: true, tone: false, optical: true, level: true },
-    chirp: { policy: false, outdoor: false, duration: false, tone: true, optical: false, level: false },
-    notification: { policy: true, outdoor: false, duration: false, tone: false, optical: false, level: false },
-    sysvar_mirror: { policy: false, outdoor: false, duration: false, tone: false, optical: false, level: false },
+    acoustic_siren: { policy: true, outdoor: true, duration: true, tone: true, optical: false, level: false, chimeTone: false },
+    switched_siren: { policy: true, outdoor: true, duration: true, tone: false, optical: false, level: false, chimeTone: false },
+    smoke_sounder: { policy: true, outdoor: false, duration: false, tone: false, optical: false, level: false, chimeTone: false },
+    optical_siren: { policy: false, outdoor: true, duration: true, tone: false, optical: true, level: false, chimeTone: false },
+    alarm_light: { policy: false, outdoor: true, duration: true, tone: false, optical: true, level: true, chimeTone: false },
+    chirp: { policy: false, outdoor: false, duration: false, tone: true, optical: false, level: false, chimeTone: true },
+    notification: { policy: true, outdoor: false, duration: false, tone: false, optical: false, level: false, chimeTone: false },
+    sysvar_mirror: { policy: false, outdoor: false, duration: false, tone: false, optical: false, level: false, chimeTone: false },
   };
 
   // Devices surfaced by the add-output assist by default: sirens, switch
@@ -457,7 +461,7 @@
           {/if}
 
           <!-- Numeric / text fields -->
-          {#if caps.duration || caps.tone || caps.optical || caps.level}
+          {#if caps.duration || caps.tone || caps.optical || caps.level || caps.chimeTone}
             <div class="grid grid-cols-2 gap-3">
               {#if caps.duration}
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
@@ -488,6 +492,16 @@
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
                   {t("alarm.outputs.tone")}
                   <Input value={outStr(o, "tone")} oninput={(e) => updateOutputConfig(o.id, { tone: e.currentTarget.value || undefined })} />
+                </label>
+              {/if}
+              {#if caps.chimeTone}
+                <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("alarm.outputs.chirp_chime_tone")}
+                  <Input
+                    value={outStr(o, "chirp_chime_tone")}
+                    oninput={(e) =>
+                      updateOutputConfig(o.id, { chirp_chime_tone: e.currentTarget.value || undefined })}
+                  />
                 </label>
               {/if}
               {#if caps.optical}

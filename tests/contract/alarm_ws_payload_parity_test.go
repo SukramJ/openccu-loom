@@ -33,6 +33,7 @@ func TestAlarmWSPayloadStructsMatchOpenAPISchemas(t *testing.T) {
 		"AlarmWalkTestProgressPayload": ws.AlarmWalkTestProgressPayload{},
 		"AlarmHealthChangedPayload":    ws.AlarmHealthChangedPayload{},
 		"AlarmPanelChangedPayload":     ws.AlarmPanelChangedPayload{},
+		"AlarmReminderPayload":         ws.AlarmReminderPayload{},
 	}
 
 	loader := openapi3.NewLoader()

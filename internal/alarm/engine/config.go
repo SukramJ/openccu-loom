@@ -38,11 +38,87 @@ type AreaConfig struct {
 	Modes map[hmenum.AlarmMode]ModeConfig `json:"modes"`
 	// PostTrigger decides what happens when the trigger time elapses.
 	PostTrigger hmenum.AlarmPostTriggerPolicy `json:"post_trigger,omitempty"`
+	// AutoRearmSeconds re-arms the area to its pre-incident mode this
+	// many quiet seconds after a post-trigger disarm (docs/alarm-concept.md
+	// §15 row 22). 0 disables; only meaningful with PostTrigger==disarm.
+	// The countdown resets on any member-sensor activity.
+	AutoRearmSeconds int `json:"auto_rearm_s,omitempty"`
 	// CentralLoss decides how the armed area reacts when a whole
 	// central is lost.
 	CentralLoss hmenum.AlarmCentralLossPolicy `json:"central_loss,omitempty"`
 	// Blockers maps sensor-health classes onto arming policies.
 	Blockers BlockerPolicies `json:"blockers"`
+	// CodePolicy decides when arm/disarm/silence require an alarm code
+	// (docs/alarm-concept.md §11).
+	CodePolicy CodePolicy `json:"code_policy,omitempty"`
+	// HazardOutputs is the always-on hazard-class output policy
+	// (docs/alarm-concept.md §6.1/§7). The zero value is loud.
+	HazardOutputs OutputPolicy `json:"hazard_outputs,omitempty"`
+	// PanicOutputs is the always-on panic-class output policy. The zero
+	// value is loud; a silent panic (per-sensor PanicSilent or an
+	// explicit silent PanicTrigger) forces Silent for that activation.
+	PanicOutputs OutputPolicy `json:"panic_outputs,omitempty"`
+	// Schedules lists daily arm schedules and reminders for the area
+	// (docs/alarm-concept.md §15 row 19). The schedule service computes
+	// each entry's next fire time and recomputes every chain on Reload.
+	Schedules []AlarmSchedule `json:"schedules,omitempty"`
+}
+
+// AlarmSchedule is one per-area arm schedule / reminder entry
+// (docs/alarm-concept.md §15 row 19).
+type AlarmSchedule struct {
+	// Time is the fire time of day, 24h "HH:MM", evaluated in the
+	// daemon's local time zone.
+	Time string `json:"time"`
+	// Days restricts the schedule to specific weekdays using Go's
+	// time.Weekday numbering (0=Sunday .. 6=Saturday). Empty fires
+	// every day.
+	Days []int `json:"days,omitempty"`
+	// Mode is the protection mode the schedule expects the area to be
+	// in when it fires.
+	Mode hmenum.AlarmMode `json:"mode"`
+	// AutoArm arms the area into Mode when the schedule fires and the
+	// area is not already in it; false raises a reminder instead of
+	// arming (docs/alarm-concept.md §15 row 19).
+	AutoArm bool `json:"auto_arm,omitempty"`
+}
+
+// CodePolicy decides per verb whether an alarm code is required to act
+// on an area (docs/alarm-concept.md §11). The engine consults a
+// CodeValidator to resolve the code; a nil validator makes every policy
+// inert (codes disabled). Strongly-authenticated operator sources
+// (rest-operator, ws-operator, hmcli) bypass the requirement but still
+// surface duress when a code is supplied.
+type CodePolicy struct {
+	// RequireArm gates arming on a valid code (default off).
+	RequireArm bool `json:"require_arm,omitempty"`
+	// RequireDisarm gates disarming on a valid code. A nil pointer is
+	// the default: require a disarm code when the area has an enabled
+	// code (the CodeValidator resolves the "codes exist" half — an
+	// empty code against an area with no codes is permitted, so the
+	// requirement can never lock everyone out).
+	RequireDisarm *bool `json:"require_disarm,omitempty"`
+	// RequireSilence gates silence per source surface (default off per
+	// S3; keyed by the source string, e.g. "mqtt").
+	RequireSilence map[string]bool `json:"require_silence,omitempty"`
+}
+
+// requires reports whether verb needs a code for source under this
+// policy, before the CodeValidator resolves whether any code exists.
+func (p CodePolicy) requires(verb, source string) bool {
+	switch verb {
+	case codeVerbArm:
+		return p.RequireArm
+	case codeVerbDisarm:
+		if p.RequireDisarm == nil {
+			return true
+		}
+		return *p.RequireDisarm
+	case codeVerbSilence:
+		return p.RequireSilence[source]
+	default:
+		return false
+	}
 }
 
 // ModeConfig configures one protection level of an area.
@@ -55,6 +131,12 @@ type ModeConfig struct {
 	// TriggerSeconds bounds one triggered phase; 0 selects
 	// DefaultTriggerSeconds. Clamped to MaxTriggerSeconds.
 	TriggerSeconds int `json:"trigger_time_s,omitempty"`
+	// PreAlarmSeconds runs a pre-alarm phase before the full trigger
+	// (docs/alarm-concept.md §15 row 21): the incident opens and only
+	// the pre-alarm output classes (chirp / notification / light) fire
+	// for this long, then the full policy escalates. 0 disables. A
+	// silence during the pre-alarm phase cancels the full escalation.
+	PreAlarmSeconds int `json:"pre_alarm_s,omitempty"`
 	// MaxRetriggerCycles is the number of additional output cycles
 	// per incident after the initial one (0 = fire once).
 	MaxRetriggerCycles int `json:"max_retrigger_cycles,omitempty"`
@@ -141,6 +223,14 @@ type SensorConfig struct {
 	// TriggerWhenUnavailable treats vanishing while armed as an
 	// activation (default: warn only).
 	TriggerWhenUnavailable bool `json:"trigger_when_unavailable,omitempty"`
+	// Chime plays the door-chime tone on activation while the area is
+	// disarmed (docs/alarm-concept.md §15 row 23); never during a walk
+	// test.
+	Chime bool `json:"chime,omitempty"`
+	// PanicSilent marks a panic-class always-on sensor whose activation
+	// fires the panic policy with acoustic outputs suppressed (silent
+	// panic / duress panic — notifications only).
+	PanicSilent bool `json:"panic_silent,omitempty"`
 }
 
 // InMode reports whether the sensor participates in mode.

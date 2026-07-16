@@ -35,7 +35,7 @@ func alarmDiscoveryBody(t *testing.T, item DiscoveryItem) map[string]any {
 func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 	t.Parallel()
 	item := BuildAlarmPanelDiscovery("gh", "eg", "Erdgeschoss",
-		[]hmenum.AlarmMode{hmenum.AlarmModeFull, hmenum.AlarmModePerimeter}, false)
+		[]hmenum.AlarmMode{hmenum.AlarmModeFull, hmenum.AlarmModePerimeter}, false, false, false)
 
 	if item.Component != string(HAComponentAlarmControlPanel) {
 		t.Errorf("Component = %q, want %q", item.Component, HAComponentAlarmControlPanel)
@@ -79,7 +79,10 @@ func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 	if !ok {
 		t.Fatalf("supported_features not a list: %v", body["supported_features"])
 	}
-	wantFeatures := []string{alarmpanel.HAAlarmFeatureArmHome, alarmpanel.HAAlarmFeatureArmAway}
+	// The panel always advertises the TRIGGER capability after the arm
+	// modes (the raw command plane routes a TRIGGER payload onto the loud
+	// panic path).
+	wantFeatures := []string{alarmpanel.HAAlarmFeatureArmHome, alarmpanel.HAAlarmFeatureArmAway, alarmFeatureTrigger}
 	if len(features) != len(wantFeatures) {
 		t.Fatalf("supported_features = %v, want %v", features, wantFeatures)
 	}
@@ -141,7 +144,7 @@ func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 func TestBuildAlarmPanelDiscovery_MasterPanel(t *testing.T) {
 	t.Parallel()
 	item := BuildAlarmPanelDiscovery("gh", "ignored-area-id", "Alarmanlage",
-		[]hmenum.AlarmMode{hmenum.AlarmModeFull}, true)
+		[]hmenum.AlarmMode{hmenum.AlarmModeFull}, true, false, false)
 
 	if item.ObjectID != alarmMasterArea {
 		t.Errorf("ObjectID = %q, want %q", item.ObjectID, alarmMasterArea)
@@ -183,7 +186,7 @@ func TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales(t *testing.T) {
 		"de": "Alarmanlage",
 	}
 	for locale, want := range names {
-		item := BuildAlarmPanelDiscovery("gh", "", want, nil, true)
+		item := BuildAlarmPanelDiscovery("gh", "", want, nil, true, false, false)
 		body := alarmDiscoveryBody(t, item)
 		if got := body["name"]; got != want {
 			t.Errorf("locale %s: name = %v, want %v", locale, got, want)
@@ -196,25 +199,25 @@ func TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales(t *testing.T) {
 // for a non-master panel with a blank areaID.
 func TestBuildAlarmPanelDiscovery_EmptyAreaIsRejected(t *testing.T) {
 	t.Parallel()
-	item := BuildAlarmPanelDiscovery("gh", "", "Nameless", nil, false)
+	item := BuildAlarmPanelDiscovery("gh", "", "Nameless", nil, false, false, false)
 	if item.OK {
 		t.Fatalf("expected OK=false for an empty area segment, got %+v", item)
 	}
 }
 
-// TestBuildAlarmPanelDiscovery_NoModesYieldsEmptyFeatureList covers an
-// area with zero configured modes (e.g. mid-setup): the payload must
-// still be valid, with an empty (not omitted/nil-crashing)
-// supported_features list.
-func TestBuildAlarmPanelDiscovery_NoModesYieldsEmptyFeatureList(t *testing.T) {
+// TestBuildAlarmPanelDiscovery_NoModesYieldsTriggerOnlyFeatureList covers
+// an area with zero configured modes (e.g. mid-setup): the payload must
+// still be valid, carrying only the always-present TRIGGER capability and
+// no arm-mode features.
+func TestBuildAlarmPanelDiscovery_NoModesYieldsTriggerOnlyFeatureList(t *testing.T) {
 	t.Parallel()
-	item := BuildAlarmPanelDiscovery("gh", "eg", "Erdgeschoss", nil, false)
+	item := BuildAlarmPanelDiscovery("gh", "eg", "Erdgeschoss", nil, false, false, false)
 	body := alarmDiscoveryBody(t, item)
 	features, ok := body["supported_features"].([]any)
 	if !ok {
 		t.Fatalf("supported_features not a list: %v", body["supported_features"])
 	}
-	if len(features) != 0 {
-		t.Errorf("supported_features = %v, want empty", features)
+	if len(features) != 1 || features[0] != alarmFeatureTrigger {
+		t.Errorf("supported_features = %v, want [%s]", features, alarmFeatureTrigger)
 	}
 }

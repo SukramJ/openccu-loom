@@ -74,6 +74,25 @@ func alarmAvailability(base, area string) []map[string]string {
 	}
 }
 
+// alarmCommandTemplate is the HA command template used when a panel
+// requires a code: it wraps the plain HA action and the entered code into
+// the JSON envelope the raw command plane parses
+// (`{"action":"ARM_AWAY","code":"1234"}`). Verified against the HA
+// alarm_control_panel.mqtt docs (docs/alarm-assumptions.md, Alarmo/HA-app
+// section). Paired with code:"REMOTE_CODE" so HA prompts for a free-form
+// code rather than a fixed on-device PIN.
+const alarmCommandTemplate = `{"action":"{{ action }}","code":"{{ code }}"}`
+
+// alarmRemoteCode is HA's sentinel for "the code is validated remotely
+// (by loom), not fixed in the discovery config".
+const alarmRemoteCode = "REMOTE_CODE"
+
+// alarmFeatureTrigger advertises the HA TRIGGER capability so the panel
+// exposes a panic/trigger affordance; the raw command plane routes a
+// TRIGGER payload onto the engine's loud panic path
+// (docs/alarm-concept.md §7).
+const alarmFeatureTrigger = "trigger"
+
 // BuildAlarmPanelDiscovery builds the HA Discovery payload for one alarm
 // area (master==false) or the aggregate master panel (master==true). The
 // caller resolves the display name — for the master panel it passes the
@@ -81,9 +100,12 @@ func alarmAvailability(base, area string) []map[string]string {
 // its synthetic entities. When master is set the topic/unique-id segment
 // is forced to the reserved master token regardless of areaID.
 //
-// code_arm_required / code_disarm_required are hard-false in this slice;
-// the codes feature flips them per area policy in a later slice.
-func BuildAlarmPanelDiscovery(base, areaID, areaName string, modes []hmenum.AlarmMode, master bool) DiscoveryItem {
+// codeArmRequired / codeDisarmRequired reflect the area's per-verb code
+// policy (docs/alarm-concept.md §11). When either is set the panel
+// advertises code:"REMOTE_CODE" and a command template that folds the
+// entered code into the raw command JSON, so HA prompts for the code and
+// loom validates it.
+func BuildAlarmPanelDiscovery(base, areaID, areaName string, modes []hmenum.AlarmMode, master, codeArmRequired, codeDisarmRequired bool) DiscoveryItem {
 	area := areaID
 	if master {
 		area = alarmMasterArea
@@ -98,13 +120,20 @@ func BuildAlarmPanelDiscovery(base, areaID, areaName string, modes []hmenum.Alar
 		"object_id":            uniqueID,
 		"state_topic":          alarmStateTopic(base, area),
 		"command_topic":        alarmCommandTopic(base, area),
-		"code_arm_required":    false,
-		"code_disarm_required": false,
-		"supported_features":   alarmpanel.SupportedFeatures(modes),
+		"code_arm_required":    codeArmRequired,
+		"code_disarm_required": codeDisarmRequired,
+		"supported_features":   append(alarmpanel.SupportedFeatures(modes), alarmFeatureTrigger),
 		"availability":         alarmAvailability(base, area),
 		"availability_mode":    "all",
 		"device":               alarmDeviceBlock(),
 		"origin":               BuildOriginInfo(),
+	}
+	// A code-gated panel folds the entered code into the JSON command the
+	// raw plane parses; without a template HA sends the bare action and
+	// the code never reaches loom's validator.
+	if codeArmRequired || codeDisarmRequired {
+		body["code"] = alarmRemoteCode
+		body["command_template"] = alarmCommandTemplate
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {

@@ -62,6 +62,11 @@ type FireOptions struct {
 	Degraded bool
 	// Restored marks a restore-driven re-fire after a restart.
 	Restored bool
+	// PreAlarm restricts the cycle to the pre-alarm output classes
+	// (chirp + notification + light) — the first phase of a two-phase
+	// trigger. The driver filters by it; the full policy escalates when
+	// the pre-alarm timer elapses.
+	PreAlarm bool
 	// Policy is the resolved output policy of the mode that was armed
 	// at trigger time. The engine owns the configuration; the driver
 	// layer only filters by it.
@@ -113,6 +118,24 @@ type OutputPort interface {
 	FireCycle(ctx context.Context, areaID string, incident sqlitestore.AlarmIncident, opts FireOptions) error
 	StopAll(ctx context.Context, areaID string, incidentID int64) error
 	Chirp(ctx context.Context, areaID string, req ChirpRequest) error
+}
+
+// CodeValidator authenticates an alarm code for one verb on one area
+// (docs/alarm-concept.md §11). It is satisfied by the codes facade,
+// which owns the code store; the engine only knows this port.
+//
+// Contract:
+//   - A valid code returns its display identity and whether it is a
+//     duress code, with a nil error. The verb then proceeds normally
+//     (a duress code is not blocked — it fires a silent alarm instead).
+//   - A supplied code that does not authenticate returns ErrInvalidCode.
+//   - An empty code against an area that has no applicable enabled code
+//     returns a nil error with an empty identity: the requirement is
+//     inert, so a code policy can never lock an area out when no codes
+//     exist. This resolves the "codes exist" half of the effective
+//     disarm rule the engine cannot see through this port.
+type CodeValidator interface {
+	Validate(ctx context.Context, areaID, verb, code, source string) (identity string, duress bool, err error)
 }
 
 // EventSink receives the engine's domain events for bus publishing.

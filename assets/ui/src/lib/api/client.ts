@@ -3,6 +3,8 @@ import type {
   AlarmArmAccepted,
   AlarmArmRequest,
   AlarmAreaStatus,
+  AlarmCode,
+  AlarmCodeRequest,
   AlarmJournalClass,
   AlarmJournalEntry,
   AlarmMessage,
@@ -10,6 +12,7 @@ import type {
   AlarmOutput,
   AlarmOutputTestRequest,
   AlarmSensor,
+  AlarmVerbRequest,
   AlarmWalkTestStatus,
   AuditEntry,
   BackupEntry,
@@ -253,6 +256,20 @@ function editLockHeaders(editToken?: string): Record<string, string> {
   };
   if (editToken) headers["X-Edit-Token"] = editToken;
   return headers;
+}
+
+// alarmVerbInit builds the POST init for a code-carrying alarm verb
+// (disarm / silence). A supplied code rides in an AlarmVerbRequest body;
+// a code-free call sends no body at all, which the daemon tolerates
+// (absent body == code-free, S3/S6).
+function alarmVerbInit(code?: string): RequestInit {
+  if (!code) return { method: "POST" };
+  const body: AlarmVerbRequest = { code };
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
 }
 
 export const api = {
@@ -1378,15 +1395,17 @@ export const api = {
       },
     );
   },
-  disarmAlarmArea(id: string) {
-    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/disarm`, {
-      method: "POST",
-    });
+  disarmAlarmArea(id: string, code?: string) {
+    return request<void>(
+      `/alarm/areas/${encodeURIComponent(id)}/disarm`,
+      alarmVerbInit(code),
+    );
   },
-  silenceAlarmArea(id: string) {
-    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/silence`, {
-      method: "POST",
-    });
+  silenceAlarmArea(id: string, code?: string) {
+    return request<void>(
+      `/alarm/areas/${encodeURIComponent(id)}/silence`,
+      alarmVerbInit(code),
+    );
   },
   acknowledgeAlarmArea(id: string) {
     return request<void>(
@@ -1401,6 +1420,34 @@ export const api = {
     return request<Record<string, AlarmModeReadiness>>(
       `/alarm/areas/${encodeURIComponent(id)}/readiness`,
     );
+  },
+  // Alarm codes (operator-gated; hash + cleartext PIN never returned —
+  // docs/alarm-concept.md §11/§16). The write body's `pin` is
+  // write-only: omit it on update to keep the stored hash.
+  listAlarmCodes() {
+    return request<AlarmCode[]>(`/alarm/codes`);
+  },
+  createAlarmCode(body: AlarmCodeRequest) {
+    return request<AlarmCode>(`/alarm/codes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+  getAlarmCode(id: string) {
+    return request<AlarmCode>(`/alarm/codes/${encodeURIComponent(id)}`);
+  },
+  putAlarmCode(id: string, body: AlarmCodeRequest) {
+    return request<void>(`/alarm/codes/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+  deleteAlarmCode(id: string) {
+    return request<void>(`/alarm/codes/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   },
   listAlarmJournal(
     p: {

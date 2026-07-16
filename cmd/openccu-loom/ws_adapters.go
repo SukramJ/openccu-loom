@@ -196,9 +196,25 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 	// alarm_panel.* — the daemon-level alarm engine + journal. Registered
 	// only when the alarm service is present (nil-safe): *alarm.Service
 	// satisfies ws.AlarmPanelQuery via its Engine()/Stores() accessors.
+	// Codes is left nil until the argon2id code facade is wired (§11); the
+	// codes_* commands then serve "unavailable" rather than panicking.
 	if w.alarm != nil {
-		ws.RegisterAlarmPanelCommands(router, ws.AlarmPanelCommandsConfig{Panel: w.alarm})
+		ws.RegisterAlarmPanelCommands(router, ws.AlarmPanelCommandsConfig{
+			Panel: w.alarm,
+			Codes: wsAlarmCodeAdminFrom(w.alarm),
+		})
 	}
+}
+
+// wsAlarmCodeAdminFrom yields the codes_* WS command facade — the same
+// store-backed adapter the REST surface drives (docs/alarm-concept.md
+// §11). A nil service or store yields a genuinely nil interface so the
+// codes_* commands answer "unavailable" instead of panicking.
+func wsAlarmCodeAdminFrom(s *alarm.Service) ws.AlarmCodeAdmin {
+	if s == nil || s.Stores() == nil || s.Stores().Codes == nil {
+		return nil
+	}
+	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes).OnChange(s.NotifyCodesChanged)
 }
 
 // ── wsAllDevices ─────────────────────────────────────────────────────────────

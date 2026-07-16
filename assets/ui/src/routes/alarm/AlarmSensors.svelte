@@ -46,7 +46,10 @@
   ];
 
   // Boolean behaviour flags (§6.2). entry_delay_s / hold_time / group are
-  // rendered separately as their own value fields in the drawer.
+  // rendered separately as their own value fields in the drawer. `chime`
+  // is the door-chime-while-disarmed flag (§15 row 23,
+  // internal/alarm/engine/config.go SensorConfig.Chime) — plays a chirp
+  // when the sensor activates while its area is disarmed.
   const BOOL_FLAGS = [
     "use_exit_delay",
     "use_entry_delay",
@@ -55,6 +58,7 @@
     "arm_after_closing",
     "bypass_auto",
     "trigger_when_unavailable",
+    "chime",
   ] as const;
 
   const TYPE_ICON: Record<AlarmSensorType, IconName> = {

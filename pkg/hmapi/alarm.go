@@ -125,6 +125,20 @@ type AlarmArmRequest struct {
 	SkipDelay bool `json:"skip_delay,omitempty"`
 	// Bypass lists sensor ids to bypass for this arm attempt.
 	Bypass []string `json:"bypass,omitempty"`
+	// Code is the alarm code supplied with the arm, when the area's
+	// code policy requires one (or to surface a duress code). Empty when
+	// none was supplied. Never logged or persisted in cleartext.
+	Code string `json:"code,omitempty"`
+}
+
+// AlarmVerbRequest is the optional body of the code-carrying verbs
+// (POST /alarm/areas/{id}/disarm | silence | acknowledge). The body is
+// optional — an absent body disarms/silences without a code, honoring
+// the area's code policy and the S3/S6 operator-bypass rules
+// (docs/alarm-concept.md §11). Code is never logged or persisted in
+// cleartext.
+type AlarmVerbRequest struct {
+	Code string `json:"code,omitempty"`
 }
 
 // AlarmArmAccepted is the 200 response of POST /alarm/areas/{id}/arm.
@@ -202,4 +216,59 @@ type AlarmPanelEntity struct {
 	SupportedModes []string `json:"supported_modes,omitempty"`
 	Available      bool     `json:"available"`
 	Master         bool     `json:"master,omitempty"`
+}
+
+// AlarmCodePerms are the per-code verb permissions.
+type AlarmCodePerms struct {
+	Arm     bool `json:"arm"`
+	Disarm  bool `json:"disarm"`
+	Silence bool `json:"silence"`
+}
+
+// AlarmCode is one alarm code as returned by GET /alarm/codes. The
+// argon2id hash and the cleartext PIN are NEVER serialized onto this
+// surface (docs/alarm-concept.md §11, §16): a code projection carries
+// only identity, permissions, scope, validity, and lifecycle metadata.
+type AlarmCode struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Kind is the code class: pin, keypad_slot, remote_key.
+	Kind string `json:"kind"`
+	// Duress marks a PIN that disarms normally but fires a silent duress
+	// alarm. Only meaningful for the pin kind.
+	Duress bool           `json:"duress,omitempty"`
+	Perms  AlarmCodePerms `json:"perms"`
+	// Areas restricts the code to a subset of areas; an empty list means
+	// every area.
+	Areas []string `json:"areas,omitempty"`
+	// Binding is the engine-owned hardware-binding document for the
+	// keypad_slot / remote_key kinds; absent for pin codes.
+	Binding json.RawMessage `json:"binding,omitempty"`
+	// ValidFromMS / ValidUntilMS are the optional validity window in Unix
+	// milliseconds; 0 leaves the bound open (guest codes).
+	ValidFromMS  int64 `json:"valid_from_ms,omitempty"`
+	ValidUntilMS int64 `json:"valid_until_ms,omitempty"`
+	Enabled      bool  `json:"enabled"`
+	CreatedMS    int64 `json:"created_ms,omitempty"`
+	UpdatedMS    int64 `json:"updated_ms,omitempty"`
+}
+
+// AlarmCodeRequest is the body of POST/PUT /alarm/codes[/{id}]. It
+// mirrors AlarmCode plus the write-only PIN: the cleartext PIN is
+// accepted on the way in (hashed to argon2id by the codes facade before
+// persistence) and is NEVER echoed back on any read surface. An empty
+// PIN on an update leaves the stored hash unchanged.
+type AlarmCodeRequest struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	// PIN is the cleartext code, write-only, for the pin kind. Omitted on
+	// update to keep the existing hash.
+	PIN          string          `json:"pin,omitempty"`
+	Duress       bool            `json:"duress,omitempty"`
+	Perms        AlarmCodePerms  `json:"perms"`
+	Areas        []string        `json:"areas,omitempty"`
+	Binding      json.RawMessage `json:"binding,omitempty"`
+	ValidFromMS  int64           `json:"valid_from_ms,omitempty"`
+	ValidUntilMS int64           `json:"valid_until_ms,omitempty"`
+	Enabled      bool            `json:"enabled"`
 }

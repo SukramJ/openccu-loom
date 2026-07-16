@@ -38,7 +38,7 @@ func (e *Engine) Reload(ctx context.Context) error {
 		name string
 		cfg  AreaConfig
 	}
-	desired := map[string]desiredArea{}
+	desired := map[string]*desiredArea{}
 	for i := range areaRows {
 		row := &areaRows[i]
 		cfg, err := ParseAreaConfig(row.ConfigJSON)
@@ -53,11 +53,11 @@ func (e *Engine) Reload(ctx context.Context) error {
 				e.log.Error("alarm journal append failed", "error", jerr)
 			}
 			if prev, ok := e.areas[row.ID]; ok {
-				desired[row.ID] = desiredArea{name: prev.name, cfg: prev.cfg}
+				desired[row.ID] = &desiredArea{name: prev.name, cfg: prev.cfg}
 			}
 			continue
 		}
-		desired[row.ID] = desiredArea{name: row.Name, cfg: cfg}
+		desired[row.ID] = &desiredArea{name: row.Name, cfg: cfg}
 	}
 
 	// Drop removed areas. The management surface refuses to delete a
@@ -74,6 +74,11 @@ func (e *Engine) Reload(ctx context.Context) error {
 			e.disarmLocked(ctx, a, "engine:reload", "engine")
 		}
 		a.cancelTimers()
+		// A post-trigger-disarmed area may still hold a pending
+		// auto-rearm; cancelTimers deliberately leaves it alone, so an
+		// area drop must cancel it explicitly or the scheduler goroutine
+		// outlives the area until its deadline.
+		a.cancelAutoRearm()
 		if err := e.stateStore.Delete(ctx, id); err != nil {
 			e.log.Error("alarm state delete failed", "area", id, "error", err)
 		}
@@ -190,6 +195,7 @@ func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitesto
 func (e *Engine) disarmLocked(ctx context.Context, a *area, by, source string) {
 	from := a.state
 	a.cancelTimers()
+	a.cancelAutoRearm()
 	if a.incident != nil {
 		e.silenceIncident(ctx, a, by, source)
 		e.closeIncident(ctx, a, closeReasonDisarm)
@@ -199,6 +205,9 @@ func (e *Engine) disarmLocked(ctx context.Context, a *area, by, source string) {
 	a.bypassed = map[string]bool{}
 	a.openAtArm = map[string]bool{}
 	a.pendingCause = ""
+	a.preTriggerState = ""
+	a.preTriggerMode = ""
+	a.preAlarm = false
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
 		Class: hmenum.AlarmJournalClassDisarm, Event: "disarmed", Actor: by, Source: source,

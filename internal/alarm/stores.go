@@ -9,7 +9,7 @@ import (
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
-// Stores bundles the seven alarm access types over the shared daemon
+// Stores bundles the eight alarm access types over the shared daemon
 // database handle.
 type Stores struct {
 	Areas     *sqlitestore.AlarmAreaStore
@@ -19,6 +19,7 @@ type Stores struct {
 	Incidents *sqlitestore.AlarmIncidentStore
 	Journal   *sqlitestore.AlarmJournalStore
 	Runtime   *sqlitestore.AlarmRuntimeStore
+	Codes     *sqlitestore.AlarmCodeStore
 }
 
 // NewStores builds the bundle on db.
@@ -31,5 +32,6 @@ func NewStores(db *sql.DB) *Stores {
 		Incidents: sqlitestore.NewAlarmIncidentStore(db),
 		Journal:   sqlitestore.NewAlarmJournalStore(db),
 		Runtime:   sqlitestore.NewAlarmRuntimeStore(db),
+		Codes:     sqlitestore.NewAlarmCodeStore(db),
 	}
 }

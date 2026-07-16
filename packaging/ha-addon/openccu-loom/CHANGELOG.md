@@ -1,5 +1,29 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.0
+
+- **New: a complete, local alarm system.** OpenCCU-Loom now contains a
+  native intrusion-alarm engine for your Homematic devices — no cloud,
+  no extra hub. Create alarm areas, assign window/door contacts and
+  motion detectors per protection mode (perimeter / full / night /
+  vacation), pick sirens and lights as outputs, and control everything
+  from the new "Alarm system" section in the UI, from Home Assistant
+  (each area appears as an `alarm_control_panel` entity, plus a master
+  panel), via REST/WebSocket, or from the command line.
+- **Safety first**: sirens are always bounded — every activation has a
+  finite duration and a per-incident sound budget, stops are verified
+  and retried at the highest priority, and "silence sirens" works with
+  one tap from every surface, never behind a confirmation dialog. A
+  restarting add-on restores the armed state, running countdowns, and
+  even a silenced alarm exactly as they were.
+- **PIN codes, keypads, and remotes**: arm and disarm with per-person
+  PIN codes (with permissions, guest validity windows, and an optional
+  silent duress code), the HmIP-WKP keypad, or KRCA/KRC4 remotes.
+- **Extras**: walk test with live checklist, filterable alarm journal
+  with CSV export, arm schedules with reminders or opt-in auto-arm,
+  pre-alarm stage, automatic re-arm after false alarms, door chime,
+  and alarm events on the webhook plane for escalation automations.
+
 ## 0.41.0
 
 - **Single sign-on (OIDC) maps your provider's roles correctly, and is

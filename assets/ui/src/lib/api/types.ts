@@ -462,8 +462,22 @@ export type AlarmOutput = components["schemas"]["AlarmOutput"];
 // Whether an area is ready to arm into one specific mode + blocker list.
 export type AlarmModeReadiness = components["schemas"]["AlarmModeReadiness"];
 // Arm request body (POST /alarm/areas/{id}/arm) and its accepted reply.
+// AlarmArmRequest carries an optional `code` (docs/alarm-concept.md §11).
 export type AlarmArmRequest = components["schemas"]["AlarmArmRequest"];
 export type AlarmArmAccepted = components["schemas"]["AlarmArmAccepted"];
+// Optional { code? } body of the code-carrying verbs (disarm / silence /
+// acknowledge). An absent body acts without a code (S3/S6).
+export type AlarmVerbRequest = components["schemas"]["AlarmVerbRequest"];
+// One alarm code (GET /alarm/codes). Hash-free and PIN-free by contract
+// — the cleartext is never serialized onto this surface (§11/§16).
+export type AlarmCode = components["schemas"]["AlarmCode"];
+// Create/update body for a code (POST/PUT /alarm/codes). `pin` is
+// write-only; an empty pin on update keeps the stored hash.
+export type AlarmCodeRequest = components["schemas"]["AlarmCodeRequest"];
+// Per-code verb permissions (arm / disarm / silence).
+export type AlarmCodePerms = components["schemas"]["AlarmCodePerms"];
+// Code class union: pin | keypad_slot | remote_key.
+export type AlarmCodeKind = AlarmCode["kind"];
 // One append-only journal entry (GET /alarm/journal).
 export type AlarmJournalEntry = components["schemas"]["AlarmJournalEntry"];
 // Live walk-test session status (GET /alarm/areas/{id}/walktest).

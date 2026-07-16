@@ -103,9 +103,18 @@ type InstallModeSink interface {
 // §13.3). The reserved area segment "master" routes to the aggregate
 // arm/disarm verbs.
 type AlarmSink interface {
-	Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode) error
-	Disarm(ctx context.Context, areaID string) error
-	Silence(ctx context.Context, areaID string) error
+	// Arm / Disarm / Silence carry the optional code parsed from the JSON
+	// command envelope (docs/alarm-concept.md §11). The sink validates it
+	// through the engine's code policy; an empty code is code-free.
+	Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error
+	Disarm(ctx context.Context, areaID, code string) error
+	Silence(ctx context.Context, areaID, code string) error
+	// Panic fires the engine's loud panic path for an area (the HA
+	// TRIGGER command, docs/alarm-concept.md §7).
+	Panic(ctx context.Context, areaID string) error
+	// Master verbs act on every area at once and stay code-free — a single
+	// code cannot express the union of per-area policies (the individual
+	// area panels carry the code prompt).
 	MasterArm(ctx context.Context, mode hmenum.AlarmMode) error
 	MasterDisarm(ctx context.Context) error
 }
@@ -782,8 +791,7 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 
 // alarmCommandPayload is the JSON envelope accepted on the alarm command
 // topic (`{"action":"ARM_AWAY","code":"1234"}`). The bare-string HA
-// payload is accepted too. `code` is parsed but deliberately ignored —
-// the codes feature (a later slice) consumes it.
+// payload is accepted too; a bare string carries no code.
 type alarmCommandPayload struct {
 	Action string `json:"action"`
 	Code   string `json:"code"`
@@ -807,7 +815,7 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 		return
 	}
 	area := parts[2]
-	action := parseAlarmAction(body)
+	action, code := parseAlarmAction(body)
 	if action == "" {
 		c.logger.Warn("mqtt.command.alarm.empty_payload", slog.String("topic", topic))
 		return
@@ -819,13 +827,19 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 		return
 	}
 	c.incReceivedCommands()
-	c.dispatchAlarm(topic, area, action)
+	c.dispatchAlarm(topic, area, action, code)
 }
+
+// alarmCommandTrigger is the HA panic command routed onto the engine's
+// loud panic path (docs/alarm-concept.md §7). It has no master form.
+const alarmCommandTrigger = "TRIGGER"
 
 // dispatchAlarm resolves the HA command string onto the alarm verb and
 // enqueues it. The reserved "master" area routes to the aggregate verbs;
-// SILENCE has no master form and is dropped for it.
-func (c *CommandSubscriber) dispatchAlarm(topic, area, action string) {
+// SILENCE and TRIGGER have no master form and are dropped for it. The
+// parsed code is threaded into the per-area verbs and validated by the
+// sink; the master verbs stay code-free.
+func (c *CommandSubscriber) dispatchAlarm(topic, area, action, code string) {
 	master := area == alarmMasterArea
 	switch action {
 	case alarmpanel.HAAlarmCommandDisarm:
@@ -836,7 +850,7 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action string) {
 			if master {
 				err = c.alarmSink.MasterDisarm(ctx)
 			} else {
-				err = c.alarmSink.Disarm(ctx, area)
+				err = c.alarmSink.Disarm(ctx, area, code)
 			}
 			if err != nil {
 				c.logger.Warn("mqtt.command.alarm.disarm",
@@ -851,8 +865,21 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action string) {
 		c.dispatcher.Enqueue(topic, func() {
 			ctx, cancel := context.WithCancel(c.lifecycleCtx)
 			defer cancel()
-			if err := c.alarmSink.Silence(ctx, area); err != nil {
+			if err := c.alarmSink.Silence(ctx, area, code); err != nil {
 				c.logger.Warn("mqtt.command.alarm.silence",
+					slog.String("topic", topic), slog.String("err", err.Error()))
+			}
+		})
+	case alarmCommandTrigger:
+		if master {
+			c.logger.Debug("mqtt.command.alarm.master_trigger_unsupported", slog.String("topic", topic))
+			return
+		}
+		c.dispatcher.Enqueue(topic, func() {
+			ctx, cancel := context.WithCancel(c.lifecycleCtx)
+			defer cancel()
+			if err := c.alarmSink.Panic(ctx, area); err != nil {
+				c.logger.Warn("mqtt.command.alarm.trigger",
 					slog.String("topic", topic), slog.String("err", err.Error()))
 			}
 		})
@@ -870,7 +897,7 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action string) {
 			if master {
 				err = c.alarmSink.MasterArm(ctx, mode)
 			} else {
-				err = c.alarmSink.Arm(ctx, area, mode)
+				err = c.alarmSink.Arm(ctx, area, mode, code)
 			}
 			if err != nil {
 				c.logger.Warn("mqtt.command.alarm.arm",
@@ -880,24 +907,23 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action string) {
 	}
 }
 
-// parseAlarmAction extracts the upper-cased HA command from an alarm
-// command payload, accepting a bare string or the JSON envelope. Returns
-// "" for an empty or unparseable payload.
-func parseAlarmAction(body []byte) string {
+// parseAlarmAction extracts the upper-cased HA command and the optional
+// code from an alarm command payload, accepting a bare string (no code)
+// or the JSON envelope. Returns an empty action for an empty or
+// unparseable payload.
+func parseAlarmAction(body []byte) (action, code string) {
 	s := strings.TrimSpace(string(body))
 	if s == "" {
-		return ""
+		return "", ""
 	}
 	if strings.HasPrefix(s, "{") {
 		var pay alarmCommandPayload
 		if err := json.Unmarshal(body, &pay); err != nil {
-			return ""
+			return "", ""
 		}
-		// pay.Code is intentionally not used yet — the codes feature
-		// consumes it in a later slice.
-		return strings.ToUpper(strings.TrimSpace(pay.Action))
+		return strings.ToUpper(strings.TrimSpace(pay.Action)), pay.Code
 	}
-	return strings.ToUpper(s)
+	return strings.ToUpper(s), ""
 }
 
 func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained bool) {

@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
 
 	"github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -146,6 +147,7 @@ func (p *AlarmMQTTPublisher) Start() {
 		events.Subscribe(bus, p.onReadinessChanged),
 		events.Subscribe(bus, p.onHealthChanged),
 		events.Subscribe(bus, p.onPanelChanged),
+		events.Subscribe(bus, p.onCodesChanged),
 	)
 	go p.run()
 	p.signalReconcile()
@@ -248,6 +250,14 @@ func (p *AlarmMQTTPublisher) onPanelChanged(_ hmevent.AlarmPanelChangedEvent) {
 	p.signalReconcile()
 }
 
+// onCodesChanged re-derives the retained discovery configs after a code
+// mutation: the effective code_arm_required / code_disarm_required flags
+// depend on whether an applicable enabled pin code exists, so creating,
+// deleting, or toggling a code can flip them.
+func (p *AlarmMQTTPublisher) onCodesChanged(hmevent.AlarmCodesChangedEvent) {
+	p.signalReconcile()
+}
+
 // OnBrokerConnect re-seeds the retained alarm plane after a broker
 // (re)connect: a broker restart wipes the retained store, and the
 // initial connect may land after Start's one-shot reconcile — either
@@ -327,7 +337,8 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		for _, m := range modes {
 			union[m] = true
 		}
-		item := BuildAlarmPanelDiscovery(base, s.ID, s.Name, modes, false)
+		armReq, disarmReq := p.areaCodePolicy(ctx, s.ID)
+		item := BuildAlarmPanelDiscovery(base, s.ID, s.Name, modes, false, armReq, disarmReq)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
 			p.logger.Warn("mqtt.alarm.discovery", slog.String("area", s.ID), slog.String("err", err.Error()))
 		}
@@ -352,7 +363,10 @@ func (p *AlarmMQTTPublisher) reconcile() {
 
 	if len(snaps) >= 2 {
 		modes := modesFromSet(union)
-		item := BuildAlarmPanelDiscovery(base, alarmMasterArea, p.masterName(), modes, true)
+		// The master panel arms/disarms every area at once; a single code
+		// gate cannot express the union of per-area policies, so it stays
+		// code-free (code entry happens on the individual area panels).
+		item := BuildAlarmPanelDiscovery(base, alarmMasterArea, p.masterName(), modes, true, false, false)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
 			p.logger.Warn("mqtt.alarm.discovery", slog.String("area", alarmMasterArea), slog.String("err", err.Error()))
 		}
@@ -452,6 +466,43 @@ func (p *AlarmMQTTPublisher) masterName() string {
 		}
 	}
 	return alarmMasterNameFallback
+}
+
+// areaCodePolicy resolves the per-area arm/disarm code requirement for
+// the discovery flags, mirroring the requirement the engine will
+// actually enforce (docs/alarm-concept.md §11/§13.3): the policy half
+// comes from the area config (RequireDisarm defaults to required when
+// nil), and the "codes exist" half from the codes facade — an area
+// without an applicable enabled pin code advertises no requirement
+// (the engine passes an empty code through), while an area with one
+// advertises it even off the nil default, so HA prompts for the code
+// the engine is going to demand. Advertising either half alone would
+// trap disarm: requirement-without-codes leaves HA prompting for a
+// code that cannot exist, codes-without-requirement makes HA send a
+// bare DISARM the engine refuses. A missing area, parse error, or
+// absent store degrades to no requirement.
+func (p *AlarmMQTTPublisher) areaCodePolicy(ctx context.Context, areaID string) (armReq, disarmReq bool) {
+	stores := p.svc.Stores()
+	if stores == nil || stores.Areas == nil {
+		return false, false
+	}
+	row, ok, err := stores.Areas.Get(ctx, areaID)
+	if err != nil || !ok {
+		return false, false
+	}
+	cfg, err := engine.ParseAreaConfig(row.ConfigJSON)
+	if err != nil {
+		return false, false
+	}
+	armReq = cfg.CodePolicy.RequireArm
+	disarmReq = cfg.CodePolicy.RequireDisarm == nil || *cfg.CodePolicy.RequireDisarm
+	if armReq || disarmReq {
+		facade := p.svc.Codes()
+		hasPIN := facade != nil && facade.HasPINCodes(ctx, areaID)
+		armReq = armReq && hasPIN
+		disarmReq = disarmReq && hasPIN
+	}
+	return armReq, disarmReq
 }
 
 // modesFromReadiness extracts the configured protection modes of an area

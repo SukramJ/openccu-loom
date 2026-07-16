@@ -6,6 +6,59 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-07-15
+
+### Added
+
+- **Native alarm system ("Alarmanlage")** — a complete, local-first
+  intrusion-alarm engine inside the daemon, spanning six increments
+  (#344–#349) on the concept in `docs/alarm-concept.md` (#343):
+  - **Engine & safety core**: per-area arm-state machines (perimeter /
+    full / night / vacation / custom) with real entry delays,
+    force/bypass arming, bounded re-trigger cycles, and the full
+    restart-restore semantics incl. a restart-loop breaker and a
+    clock-plausibility rule. The seven hard safety invariants (S1–S7)
+    are contract-tested: every siren activation is finitely bounded and
+    budgeted per incident, every stop is verified with critical
+    priority (and may probe an open circuit breaker), silence is
+    persisted incident-scoped across restarts, reconciliation adopts
+    sounding sirens before stopping them, and every degradation is
+    journaled instead of swallowed.
+  - **Output drivers** for HmIP sirens (ASIR family), plug-in sirens on
+    switch/dimmer actuators (device-side auto-off travels with the
+    switch-on), smoke-detector sounders (engine-watchdog bounded, with
+    battery/group-fan-out caveats), alarm lights, chirps/countdown
+    ticks, and an optional CCU sysvar mirror (inbound intents arm-only
+    by default). Researched device assumptions in
+    `docs/alarm-assumptions.md`.
+  - **Surfaces**: REST namespace `/api/v1/alarm` and WebSocket category
+    `alarm_panel` (APIVersion 2.22.0), a full SPA section (panel with
+    single-tap silence, sensor picker with mode matrix, output
+    management, journal, walk test, setup wizard — de/en, all theme
+    combinations), Home Assistant MQTT discovery as
+    `alarm_control_panel` entities (per area + aggregate master panel,
+    daemon-level topics per ADR 0052), and an `hmcli alarm` break-glass
+    group. The panel is a first-class model entity so REST, WS, and
+    MQTT can never diverge.
+  - **Codes & identities**: argon2id-hashed PIN codes with permissions,
+    area restrictions, validity windows, rate limiting and lockout;
+    duress codes with silent fan-out; per-area code policies reflected
+    in the HA discovery (`REMOTE_CODE` command template); keypad
+    (HmIP-WKP) and remote (KRCA/KRC4) intents with on-device PIN slots
+    kept independent by design.
+  - **Always-on hazard & panic classes**, pre-alarm stage, auto-rearm
+    after quiet period, door chime, arm schedules with reminders (or
+    explicit opt-in auto-arm), and alarm events on the webhook plane
+    for user-land escalation chains.
+
+### Changed
+
+- Critical-priority commands may now probe an OPEN circuit breaker once
+  (alarm stop path); non-critical traffic keeps the fail-fast shed.
+- Repeated keypad press events (`PRESS_*`, `CODE_ID`) are no longer
+  suppressed as unchanged values — edge-trigger parameters always
+  publish.
+
 ## [0.41.0] — 2026-07-14
 
 ### Added

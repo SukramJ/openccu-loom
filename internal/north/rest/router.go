@@ -94,9 +94,14 @@ type Deps struct {
 	// Alarm backs the /alarm surface (the alarm-panel engine + output
 	// drivers + config stores). Nil leaves every /alarm route unmounted
 	// (the alarm subsystem is disabled or failed to come up).
-	Alarm   handlers.AlarmPanel
-	Labels  handlers.ParameterLabeler
-	Metrics *metrics.Registry
+	Alarm handlers.AlarmPanel
+	// AlarmCodes backs the /alarm/codes CRUD surface (the argon2id-hashed
+	// alarm-code store, docs/alarm-concept.md §11). The routes mount
+	// whenever Alarm is set; a nil AlarmCodes serves them as 503 so the
+	// contract is present even before the codes facade is wired.
+	AlarmCodes handlers.AlarmCodeAdmin
+	Labels     handlers.ParameterLabeler
+	Metrics    *metrics.Registry
 	// MasterProfiles backs the read-only master-profile discovery routes:
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles/{id}
@@ -801,6 +806,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm/areas/{id}/walktest/stop", handlers.StopAlarmWalkTest(d.Alarm, d.AuditRecorder))
 				pr.Get("/alarm/areas/{id}/walktest", handlers.GetAlarmWalkTestStatus(d.Alarm))
 				pr.With(op).Post("/alarm/outputs/{id}/test", handlers.TestAlarmOutput(d.Alarm, d.AuditRecorder))
+				// Alarm codes: reads and writes both require the operator
+				// role — codes are security material, so even the list is
+				// not viewer-open (docs/alarm-concept.md §11/§16). A nil
+				// AlarmCodes serves these as 503.
+				pr.With(op).Get("/alarm/codes", handlers.ListAlarmCodes(d.AlarmCodes))
+				pr.With(op).Post("/alarm/codes", handlers.CreateAlarmCode(d.AlarmCodes, d.AuditRecorder))
+				pr.With(op).Get("/alarm/codes/{id}", handlers.GetAlarmCode(d.AlarmCodes))
+				pr.With(op).Put("/alarm/codes/{id}", handlers.PutAlarmCode(d.AlarmCodes, d.AuditRecorder))
+				pr.With(op).Delete("/alarm/codes/{id}", handlers.DeleteAlarmCode(d.AlarmCodes, d.AuditRecorder))
 			}
 			if d.SystemStatus != nil {
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))
