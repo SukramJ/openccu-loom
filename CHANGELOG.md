@@ -6,6 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.2] — 2026-07-16
+
+### Fixed
+
+- **Link paramset saves from the SPA failed with 404** — the channel
+  editor called `PUT /devices/{addr}/link-paramsets/{peer}`, a path the
+  API never served (the contract route is
+  `/devices/{addr}/link-ps/{peer}`), so every direct-link configuration
+  save failed with "resource not found". The client now uses the
+  contract path.
+- **Percent-encoded path IDs are now decoded centrally** — the REST
+  router routes on the percent-decoded path, so every `chi.URLParam`
+  yields decoded values. Previously chi handed handlers the raw
+  segment whenever a client percent-encoded a path ID (as the SPA does
+  for every ID), which broke any endpoint whose IDs carry `:`, `|`,
+  `@`, spaces, or non-ASCII — the class behind the custom-DP invoke
+  fix, the 0.42.1 alarm test-fire fix, and the link-paramset lookup,
+  and still latent in sysvar/room/function/program routes. The two
+  per-handler workarounds are retired in favour of the router-level
+  guarantee, pinned by a routing contract test.
+
 ## [0.42.1] — 2026-07-16
 
 ### Added

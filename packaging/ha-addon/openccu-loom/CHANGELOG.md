@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.2
+
+- **Fixed: saving direct-link settings from the channel editor.** The
+  save always failed with "resource not found"; link configurations
+  can be edited and saved again.
+- **Fixed a whole class of "resource not found" errors.** IDs and
+  names containing characters like `:`, `@`, spaces or umlauts
+  (channel addresses, system variables, rooms, functions, programs)
+  are now handled correctly on every API route.
+
 ## 0.42.1
 
 - **Fixed: siren test fire from the UI.** The "Test fire" button on the

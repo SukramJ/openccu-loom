@@ -422,7 +422,7 @@ export const api = {
     editToken?: string,
   ) {
     return request<void>(
-      `/devices/${encodeURIComponent(channelAddress)}/link-paramsets/${encodeURIComponent(peer)}`,
+      `/devices/${encodeURIComponent(channelAddress)}/link-ps/${encodeURIComponent(peer)}`,
       {
         method: "PUT",
         headers: editLockHeaders(editToken),

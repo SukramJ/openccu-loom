@@ -9,7 +9,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -323,24 +322,13 @@ func GetAlarmWalkTestStatus(p AlarmPanel) http.HandlerFunc {
 	}
 }
 
-// alarmOutputID reads the `{id}` path parameter and URL-decodes it.
-// Output IDs embed `|` and `:` (central|channel:no|class); a conformant
-// client percent-encodes the path segment and chi keeps the raw
-// segment, so without decoding the manager lookup would miss and every
-// test fire would 404. Falls back to the raw value when the segment is
-// not valid percent-encoding so a literal `|` keeps working.
-func alarmOutputID(r *http.Request) string {
-	raw := chi.URLParam(r, "id")
-	if decoded, err := url.PathUnescape(raw); err == nil {
-		return decoded
-	}
-	return raw
-}
-
-// TestAlarmOutput fires a single output briefly for a walk test.
+// TestAlarmOutput fires a single output briefly for a walk test. The
+// `{id}` param arrives percent-decoded (the router routes on the
+// decoded path), so the pipe-separated output ID matches the enrolled
+// rows directly.
 func TestAlarmOutput(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := alarmOutputID(r)
+		id := chi.URLParam(r, "id")
 		var req hmapi.AlarmOutputTestRequest
 		// The request body is optional (default: full test fire); an
 		// empty body decodes as the zero request.
