@@ -28,6 +28,22 @@ type sensorState struct {
 	// sabotage / lowBattery mirror the device health flags.
 	sabotage   bool
 	lowBattery bool
+
+	// hold-time debounce: a fresh activation waits this timer out
+	// before it reaches the state machine; clearing cancels it. seq
+	// guards against stale fires. Deliberately not restart-persisted —
+	// the window is seconds-short.
+	holdCancel func()
+	holdSeq    uint64
+}
+
+// cancelHold stops a running hold-time debounce timer.
+func (s *sensorState) cancelHold() {
+	if s.holdCancel != nil {
+		s.holdCancel()
+		s.holdCancel = nil
+	}
+	s.holdSeq++
 }
 
 // area is the in-memory runtime state of one alarm area: its parsed
@@ -94,6 +110,13 @@ type area struct {
 	// countdown tick chain (1 Hz while arming/pending).
 	tickCancel func()
 	tickSeq    uint64
+
+	// groupHits records recent activations per cross-zoning group:
+	// group name → sensor ID → activation time. Entries beyond the
+	// cross-zone window are pruned lazily on the next hit.
+	// Deliberately not restart-persisted — the window is
+	// seconds-short.
+	groupHits map[string]map[string]time.Time
 
 	// readiness is the last published per-mode verdict.
 	readiness map[hmenum.AlarmMode]hmevent.AlarmModeReadiness

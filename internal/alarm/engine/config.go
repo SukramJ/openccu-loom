@@ -227,6 +227,17 @@ type SensorConfig struct {
 	// disarmed (docs/alarm-concept.md §15 row 23); never during a walk
 	// test.
 	Chime bool `json:"chime,omitempty"`
+	// HoldTimeSeconds requires an activation to persist this long
+	// before it counts (docs/alarm-concept.md §6.2) — the debounce for
+	// twitchy PIRs and doors rattling in wind. 0 counts instantly.
+	// Applies to the arm-state path only, never to always-on
+	// hazard/panic sensors.
+	HoldTimeSeconds int `json:"hold_time,omitempty"`
+	// Group names an optional cross-zoning group: a grouped sensor only
+	// triggers when a second distinct member of the same group
+	// activates within the cross-zone window (docs/alarm-concept.md
+	// §6.2). Empty disables grouping.
+	Group string `json:"group,omitempty"`
 	// PanicSilent marks a panic-class always-on sensor whose activation
 	// fires the panic policy with acoustic outputs suppressed (silent
 	// panic / duress panic — notifications only).

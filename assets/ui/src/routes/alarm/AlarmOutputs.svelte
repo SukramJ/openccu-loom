@@ -59,28 +59,29 @@
   };
 
   // Per-class field capabilities — the class, not the backing device,
-  // decides which controls apply (§7).
+  // decides which controls apply (§7). Loud/silent is a property of the
+  // mode/hazard/panic output policies (Policies tab), not of a single
+  // output, so no per-output toggle exists.
   type Caps = {
-    policy: boolean;
     outdoor: boolean;
     duration: boolean;
     tone: boolean;
     optical: boolean;
     level: boolean;
-    // chimeTone exposes a dedicated door-chime tone field, distinct from
-    // the arm/disarm/tick tone labels (§15 row 23; only the chirp class
-    // plays the door chime while an area is disarmed).
-    chimeTone: boolean;
+    // chirpTones exposes the three chirp tone labels the driver reads:
+    // arm squawk, disarm squawk, and tick (countdown ticks, entry
+    // warning, and the door chime all use the tick tone).
+    chirpTones: boolean;
   };
   const CAPS: Record<AlarmOutputClass, Caps> = {
-    acoustic_siren: { policy: true, outdoor: true, duration: true, tone: true, optical: false, level: false, chimeTone: false },
-    switched_siren: { policy: true, outdoor: true, duration: true, tone: false, optical: false, level: false, chimeTone: false },
-    smoke_sounder: { policy: true, outdoor: false, duration: false, tone: false, optical: false, level: false, chimeTone: false },
-    optical_siren: { policy: false, outdoor: true, duration: true, tone: false, optical: true, level: false, chimeTone: false },
-    alarm_light: { policy: false, outdoor: true, duration: true, tone: false, optical: true, level: true, chimeTone: false },
-    chirp: { policy: false, outdoor: false, duration: false, tone: true, optical: false, level: false, chimeTone: true },
-    notification: { policy: true, outdoor: false, duration: false, tone: false, optical: false, level: false, chimeTone: false },
-    sysvar_mirror: { policy: false, outdoor: false, duration: false, tone: false, optical: false, level: false, chimeTone: false },
+    acoustic_siren: { outdoor: true, duration: true, tone: true, optical: false, level: false, chirpTones: false },
+    switched_siren: { outdoor: true, duration: true, tone: false, optical: false, level: false, chirpTones: false },
+    smoke_sounder: { outdoor: false, duration: false, tone: false, optical: false, level: false, chirpTones: false },
+    optical_siren: { outdoor: true, duration: true, tone: false, optical: true, level: false, chirpTones: false },
+    alarm_light: { outdoor: true, duration: true, tone: false, optical: true, level: true, chirpTones: false },
+    chirp: { outdoor: false, duration: false, tone: false, optical: false, level: false, chirpTones: true },
+    notification: { outdoor: false, duration: false, tone: false, optical: false, level: false, chirpTones: false },
+    sysvar_mirror: { outdoor: false, duration: false, tone: false, optical: false, level: false, chirpTones: false },
   };
 
   // Devices surfaced by the add-output assist by default: sirens, switch
@@ -128,8 +129,15 @@
     const v = o.config?.[key];
     return typeof v === "string" ? v : "";
   }
-  function outPolicy(o: AlarmOutput): "loud" | "silent" {
-    return o.config?.policy === "silent" ? "silent" : "loud";
+  // Legacy-aware readers: early builds wrote `tone` / `chirp_chime_tone`,
+  // which the engine never read (it reads `acoustic_tone` and
+  // `chirp_*_tone`). Reading falls back to the legacy key; saving writes
+  // the engine key and clears the legacy one.
+  function outAcousticTone(o: AlarmOutput): string {
+    return outStr(o, "acoustic_tone") || outStr(o, "tone");
+  }
+  function outChirpTickTone(o: AlarmOutput): string {
+    return outStr(o, "chirp_tick_tone") || outStr(o, "chirp_chime_tone");
   }
 
   function markDirty() {
@@ -247,9 +255,10 @@
   );
 
   function defaultConfig(cls: AlarmOutputClass): Record<string, unknown> {
-    const base: Record<string, unknown> = { modes: ["full"], policy: "loud" };
+    const base: Record<string, unknown> = { modes: ["full"] };
     if (CAPS[cls].duration) base.duration_s = 180;
-    if (cls === "alarm_light") base.level = 100;
+    // Dimmer levels are 0–1 on the wire; default to full brightness.
+    if (cls === "alarm_light") base.level = 1;
     return base;
   }
   function openAdd() {
@@ -438,30 +447,8 @@
             {/each}
           </div>
 
-          <!-- Loud / silent policy -->
-          {#if caps.policy}
-            {@const policy = outPolicy(o)}
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.policy")}</span>
-              <div class="inline-flex overflow-hidden rounded-md border border-[var(--ha-divider-color)]">
-                {#each ["loud", "silent"] as p (p)}
-                  <button
-                    type="button"
-                    aria-pressed={policy === p}
-                    class="px-3 py-1 text-xs transition {policy === p
-                      ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_15%,transparent)] text-[var(--ha-primary-color)]'
-                      : 'text-[var(--ha-secondary-text-color)] hover:bg-black/5 dark:hover:bg-white/5'}"
-                    onclick={() => updateOutputConfig(o.id, { policy: p })}
-                  >
-                    {t(`alarm.outputs.policy.${p}`)}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
           <!-- Numeric / text fields -->
-          {#if caps.duration || caps.tone || caps.optical || caps.level || caps.chimeTone}
+          {#if caps.duration || caps.tone || caps.optical || caps.level || caps.chirpTones}
             <div class="grid grid-cols-2 gap-3">
               {#if caps.duration}
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
@@ -473,6 +460,7 @@
                     value={outNum(o, "duration_s") ?? ""}
                     oninput={(e) => setNum(o, "duration_s", e.currentTarget.value)}
                   />
+                  <span>{t("alarm.outputs.duration.hint")}</span>
                 </label>
               {/if}
               {#if caps.level}
@@ -481,55 +469,92 @@
                   <input
                     type="number"
                     min="0"
-                    max="100"
+                    max="1"
+                    step="0.05"
                     class="h-9 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-sm text-[var(--ha-primary-text-color)]"
                     value={outNum(o, "level") ?? ""}
                     oninput={(e) => setNum(o, "level", e.currentTarget.value)}
                   />
+                  <span>{t("alarm.outputs.level.hint")}</span>
                 </label>
               {/if}
               {#if caps.tone}
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
                   {t("alarm.outputs.tone")}
-                  <Input value={outStr(o, "tone")} oninput={(e) => updateOutputConfig(o.id, { tone: e.currentTarget.value || undefined })} />
+                  <Input
+                    value={outAcousticTone(o)}
+                    oninput={(e) =>
+                      updateOutputConfig(o.id, { acoustic_tone: e.currentTarget.value || undefined, tone: undefined })}
+                  />
+                  <span>{t("alarm.outputs.tone.hint")}</span>
                 </label>
               {/if}
-              {#if caps.chimeTone}
+              {#if caps.chirpTones}
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
-                  {t("alarm.outputs.chirp_chime_tone")}
+                  {t("alarm.outputs.chirp_arm_tone")}
                   <Input
-                    value={outStr(o, "chirp_chime_tone")}
+                    value={outStr(o, "chirp_arm_tone")}
                     oninput={(e) =>
-                      updateOutputConfig(o.id, { chirp_chime_tone: e.currentTarget.value || undefined })}
+                      updateOutputConfig(o.id, { chirp_arm_tone: e.currentTarget.value || undefined })}
                   />
+                </label>
+                <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("alarm.outputs.chirp_disarm_tone")}
+                  <Input
+                    value={outStr(o, "chirp_disarm_tone")}
+                    oninput={(e) =>
+                      updateOutputConfig(o.id, { chirp_disarm_tone: e.currentTarget.value || undefined })}
+                  />
+                </label>
+                <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("alarm.outputs.chirp_tick_tone")}
+                  <Input
+                    value={outChirpTickTone(o)}
+                    oninput={(e) =>
+                      updateOutputConfig(o.id, {
+                        chirp_tick_tone: e.currentTarget.value || undefined,
+                        chirp_chime_tone: undefined,
+                      })}
+                  />
+                  <span>{t("alarm.outputs.chirp_tick_tone.hint")}</span>
                 </label>
               {/if}
               {#if caps.optical}
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
                   {t("alarm.outputs.optical_pattern")}
                   <Input value={outStr(o, "optical_pattern")} oninput={(e) => updateOutputConfig(o.id, { optical_pattern: e.currentTarget.value || undefined })} />
+                  <span>{t("alarm.outputs.optical_pattern.hint")}</span>
                 </label>
               {/if}
             </div>
           {/if}
 
           <!-- Switches -->
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-3">
             {#if caps.outdoor}
-              <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
-                <span>{t("alarm.outputs.outdoor")}</span>
-                <Switch checked={outBool(o, "outdoor")} onCheckedChange={(v) => updateOutputConfig(o.id, { outdoor: v })} />
-              </label>
+              <div class="flex flex-col gap-1">
+                <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+                  <span>{t("alarm.outputs.outdoor")}</span>
+                  <Switch checked={outBool(o, "outdoor")} onCheckedChange={(v) => updateOutputConfig(o.id, { outdoor: v })} />
+                </label>
+                <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.outdoor.hint")}</p>
+              </div>
             {/if}
-            <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
-              <span>{t("alarm.outputs.shared_with_ccu")}</span>
-              <Switch checked={outBool(o, "shared_with_ccu")} onCheckedChange={(v) => updateOutputConfig(o.id, { shared_with_ccu: v })} />
-            </label>
+            <div class="flex flex-col gap-1">
+              <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+                <span>{t("alarm.outputs.shared_with_ccu")}</span>
+                <Switch checked={outBool(o, "shared_with_ccu")} onCheckedChange={(v) => updateOutputConfig(o.id, { shared_with_ccu: v })} />
+              </label>
+              <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.shared_with_ccu.hint")}</p>
+            </div>
           </div>
 
           <!-- Test fire -->
           <div class="mt-1 flex flex-wrap items-center gap-3 border-t border-[var(--ha-divider-color)] pt-3">
-            <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
+            <label
+              class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]"
+              title={t("alarm.outputs.test_optical_only.hint")}
+            >
               <input
                 type="checkbox"
                 checked={testOptical[o.id] === true}
@@ -587,6 +612,7 @@
             onValueChange={(v) => (addClass = v as AlarmOutputClass)}
             options={CLASSES.map((c) => ({ value: c, label: t(`alarm.output_class.${c}`) }))}
           />
+          <span class="text-xs text-[var(--ha-secondary-text-color)]">{t(`alarm.output_class.${addClass}.hint`)}</span>
         </div>
 
         <div class="flex flex-col gap-1.5">

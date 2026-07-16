@@ -110,6 +110,12 @@
       {/each}
     </div>
 
+    <!-- Per-tab orientation line: what the active view controls and how
+         it relates to the other tabs. -->
+    <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
+      {t(`alarm.intro.${activeTab}`)}
+    </p>
+
     <!-- Tab content -->
     <div class="mt-4">
       {#if activeTab === "overview"}
