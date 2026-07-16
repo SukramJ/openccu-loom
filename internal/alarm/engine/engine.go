@@ -724,6 +724,9 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 	}
 
 	if !active {
+		// Clearing before the hold window elapses discards the held
+		// activation — the hold-time debounce contract.
+		s.cancelHold()
 		if a.openAtArm[sensorID] {
 			delete(a.openAtArm, sensorID)
 			e.persist(ctx, a)
@@ -752,7 +755,7 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 	if !s.cfg.InMode(a.mode) || a.bypassed[sensorID] {
 		return
 	}
-	e.dispatchSensorActivation(ctx, a, s, sensorID)
+	e.gateSensorActivation(ctx, a, s, sensorID)
 }
 
 // dispatchSensorActivation routes a fresh member-sensor activation

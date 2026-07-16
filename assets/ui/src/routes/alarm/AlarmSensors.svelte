@@ -846,37 +846,55 @@
           </div>
         </div>
 
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-3">
           <span class="text-sm font-medium text-[var(--ha-primary-text-color)]">{t("alarm.flags.title")}</span>
           {#each BOOL_FLAGS as f (f)}
-            <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
-              <span>{t(`alarm.flag.${f}`)}</span>
-              <Switch checked={cfgBool(s, f)} onCheckedChange={() => toggleFlag(s, f)} />
-            </label>
+            <div class="flex flex-col gap-1">
+              <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+                <span>{t(`alarm.flag.${f}`)}</span>
+                <Switch checked={cfgBool(s, f)} onCheckedChange={() => toggleFlag(s, f)} />
+              </label>
+              <p class="text-xs text-[var(--ha-secondary-text-color)]">{t(`alarm.flag.${f}.hint`)}</p>
+            </div>
           {/each}
+          {#if s.type === "panic"}
+            <div class="flex flex-col gap-1">
+              <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+                <span>{t("alarm.flag.panic_silent")}</span>
+                <Switch checked={cfgBool(s, "panic_silent")} onCheckedChange={() => toggleFlag(s, "panic_silent")} />
+              </label>
+              <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.flag.panic_silent.hint")}</p>
+            </div>
+          {/if}
         </div>
 
         <div class="flex flex-col gap-3">
-          <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
-            <span>{t("alarm.flag.entry_delay_override")}</span>
-            <input
-              type="number"
-              min="0"
-              class="h-9 w-24 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-right text-sm text-[var(--ha-primary-text-color)]"
-              value={cfgNum(s, "entry_delay_s") ?? ""}
-              oninput={(e) => setNum(s, "entry_delay_s", e.currentTarget.value)}
-            />
-          </label>
-          <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
-            <span>{t("alarm.flag.hold_time")}</span>
-            <input
-              type="number"
-              min="0"
-              class="h-9 w-24 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-right text-sm text-[var(--ha-primary-text-color)]"
-              value={cfgNum(s, "hold_time") ?? ""}
-              oninput={(e) => setNum(s, "hold_time", e.currentTarget.value)}
-            />
-          </label>
+          <div class="flex flex-col gap-1">
+            <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+              <span>{t("alarm.flag.entry_delay_override")}</span>
+              <input
+                type="number"
+                min="0"
+                class="h-9 w-24 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-right text-sm text-[var(--ha-primary-text-color)]"
+                value={cfgNum(s, "entry_delay_s") ?? ""}
+                oninput={(e) => setNum(s, "entry_delay_s", e.currentTarget.value)}
+              />
+            </label>
+            <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.flag.entry_delay_override.hint")}</p>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+              <span>{t("alarm.flag.hold_time")}</span>
+              <input
+                type="number"
+                min="0"
+                class="h-9 w-24 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-right text-sm text-[var(--ha-primary-text-color)]"
+                value={cfgNum(s, "hold_time") ?? ""}
+                oninput={(e) => setNum(s, "hold_time", e.currentTarget.value)}
+              />
+            </label>
+            <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.flag.hold_time.hint")}</p>
+          </div>
           <div class="flex flex-col gap-1.5">
             <span class="text-sm text-[var(--ha-primary-text-color)]">{t("alarm.flag.group")}</span>
             <Input
@@ -884,6 +902,7 @@
               oninput={(e) =>
                 updateSensorConfig(s.id, { group: e.currentTarget.value || undefined })}
             />
+            <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.flag.group.hint")}</p>
           </div>
         </div>
       </div>

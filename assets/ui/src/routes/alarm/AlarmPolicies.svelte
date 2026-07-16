@@ -311,25 +311,32 @@
       <!-- Code policy -->
       <Card class="flex flex-col gap-3 p-4">
         <h3 class={sectionTitleClass}>{t("alarm.policies.section.codes")}</h3>
+        <p class={hintClass}>{t("alarm.policies.section.codes.hint")}</p>
 
-        <label class={rowClass}>
-          <span>{t("alarm.policies.code.require_arm")}</span>
-          <Switch
-            checked={getBool(["code_policy", "require_arm"])}
-            onCheckedChange={(v) => setBoolOrUndefined(["code_policy", "require_arm"], v)}
-          />
-        </label>
-
-        <label class={rowClass}>
-          <span>{t("alarm.policies.code.require_disarm")}</span>
-          <div class="min-w-44">
-            <Select
-              value={requireDisarmValue()}
-              onValueChange={setRequireDisarm}
-              options={requireDisarmOptions}
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.code.require_arm")}</span>
+            <Switch
+              checked={getBool(["code_policy", "require_arm"])}
+              onCheckedChange={(v) => setBoolOrUndefined(["code_policy", "require_arm"], v)}
             />
-          </div>
-        </label>
+          </label>
+          <p class={hintClass}>{t("alarm.policies.code.require_arm.hint")}</p>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.code.require_disarm")}</span>
+            <div class="min-w-44">
+              <Select
+                value={requireDisarmValue()}
+                onValueChange={setRequireDisarm}
+                options={requireDisarmOptions}
+              />
+            </div>
+          </label>
+          <p class={hintClass}>{t("alarm.policies.code.require_disarm.hint")}</p>
+        </div>
 
         <div class="flex flex-col gap-2">
           <span class="text-sm text-[var(--ha-primary-text-color)]">{t("alarm.policies.code.require_silence")}</span>
@@ -353,27 +360,36 @@
         <h3 class={sectionTitleClass}>{t("alarm.policies.section.hazard")}</h3>
         <p class={hintClass}>{t("alarm.policies.section.hazard.hint")}</p>
         {@const row = policyRow("hazard_outputs")}
-        <label class={rowClass}>
-          <span>{t("alarm.policies.output.silent")}</span>
-          <Switch
-            checked={row.silent}
-            onCheckedChange={(v) => setBoolOrUndefined(["hazard_outputs", "silent"], v)}
-          />
-        </label>
-        <label class={rowClass}>
-          <span>{t("alarm.policies.output.exclude_outdoor")}</span>
-          <Switch
-            checked={row.excludeOutdoor}
-            onCheckedChange={(v) => setBoolOrUndefined(["hazard_outputs", "exclude_outdoor"], v)}
-          />
-        </label>
-        <label class={rowClass}>
-          <span>{t("alarm.policies.output.smoke_sounders")}</span>
-          <Switch
-            checked={row.smokeSounders}
-            onCheckedChange={(v) => setBoolOrUndefined(["hazard_outputs", "smoke_sounders"], v)}
-          />
-        </label>
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.output.silent")}</span>
+            <Switch
+              checked={row.silent}
+              onCheckedChange={(v) => setBoolOrUndefined(["hazard_outputs", "silent"], v)}
+            />
+          </label>
+          <p class={hintClass}>{t("alarm.policies.output.silent.hint")}</p>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.output.exclude_outdoor")}</span>
+            <Switch
+              checked={row.excludeOutdoor}
+              onCheckedChange={(v) => setBoolOrUndefined(["hazard_outputs", "exclude_outdoor"], v)}
+            />
+          </label>
+          <p class={hintClass}>{t("alarm.policies.output.exclude_outdoor.hint")}</p>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.output.smoke_sounders")}</span>
+            <Switch
+              checked={row.smokeSounders}
+              onCheckedChange={(v) => setBoolOrUndefined(["hazard_outputs", "smoke_sounders"], v)}
+            />
+          </label>
+          <p class={hintClass}>{t("alarm.policies.output.smoke_sounders.hint")}</p>
+        </div>
       </Card>
 
       <!-- Panic outputs -->
@@ -381,27 +397,36 @@
         <h3 class={sectionTitleClass}>{t("alarm.policies.section.panic")}</h3>
         <p class={hintClass}>{t("alarm.policies.section.panic.hint")}</p>
         {@const row = policyRow("panic_outputs")}
-        <label class={rowClass}>
-          <span>{t("alarm.policies.output.silent")}</span>
-          <Switch
-            checked={row.silent}
-            onCheckedChange={(v) => setBoolOrUndefined(["panic_outputs", "silent"], v)}
-          />
-        </label>
-        <label class={rowClass}>
-          <span>{t("alarm.policies.output.exclude_outdoor")}</span>
-          <Switch
-            checked={row.excludeOutdoor}
-            onCheckedChange={(v) => setBoolOrUndefined(["panic_outputs", "exclude_outdoor"], v)}
-          />
-        </label>
-        <label class={rowClass}>
-          <span>{t("alarm.policies.output.smoke_sounders")}</span>
-          <Switch
-            checked={row.smokeSounders}
-            onCheckedChange={(v) => setBoolOrUndefined(["panic_outputs", "smoke_sounders"], v)}
-          />
-        </label>
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.output.silent")}</span>
+            <Switch
+              checked={row.silent}
+              onCheckedChange={(v) => setBoolOrUndefined(["panic_outputs", "silent"], v)}
+            />
+          </label>
+          <p class={hintClass}>{t("alarm.policies.output.silent.hint")}</p>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.output.exclude_outdoor")}</span>
+            <Switch
+              checked={row.excludeOutdoor}
+              onCheckedChange={(v) => setBoolOrUndefined(["panic_outputs", "exclude_outdoor"], v)}
+            />
+          </label>
+          <p class={hintClass}>{t("alarm.policies.output.exclude_outdoor.hint")}</p>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.output.smoke_sounders")}</span>
+            <Switch
+              checked={row.smokeSounders}
+              onCheckedChange={(v) => setBoolOrUndefined(["panic_outputs", "smoke_sounders"], v)}
+            />
+          </label>
+          <p class={hintClass}>{t("alarm.policies.output.smoke_sounders.hint")}</p>
+        </div>
       </Card>
 
       <!-- Pre-alarm (per configured mode) -->
@@ -429,20 +454,23 @@
       <!-- Post-trigger + auto-rearm -->
       <Card class="flex flex-col gap-3 p-4">
         <h3 class={sectionTitleClass}>{t("alarm.policies.section.rearm")}</h3>
-        <label class={rowClass}>
-          <span>{t("alarm.policies.posttrigger")}</span>
-          <div class="min-w-44">
-            <Select
-              value={getStr(["post_trigger"]) || "return_to_armed"}
-              onValueChange={(v) =>
-                setPath(["post_trigger"], v === "return_to_armed" ? undefined : v)}
-              options={[
-                { value: "return_to_armed", label: t("alarm.policies.posttrigger.return_to_armed") },
-                { value: "disarm", label: t("alarm.policies.posttrigger.disarm") },
-              ]}
-            />
-          </div>
-        </label>
+        <div class="flex flex-col gap-1">
+          <label class={rowClass}>
+            <span>{t("alarm.policies.posttrigger")}</span>
+            <div class="min-w-44">
+              <Select
+                value={getStr(["post_trigger"]) || "return_to_armed"}
+                onValueChange={(v) =>
+                  setPath(["post_trigger"], v === "return_to_armed" ? undefined : v)}
+                options={[
+                  { value: "return_to_armed", label: t("alarm.policies.posttrigger.return_to_armed") },
+                  { value: "disarm", label: t("alarm.policies.posttrigger.disarm") },
+                ]}
+              />
+            </div>
+          </label>
+          <p class={hintClass}>{t("alarm.policies.posttrigger.hint")}</p>
+        </div>
         <label class={rowClass}>
           <span>{t("alarm.policies.rearm.seconds")}</span>
           <input
@@ -465,6 +493,7 @@
             {t("alarm.policies.schedules.add")}
           </Button>
         </div>
+        <p class={hintClass}>{t("alarm.policies.section.schedules.hint")}</p>
 
         {#if schedules().length === 0}
           <EmptyState icon="mdi:calendar-clock" message={t("alarm.policies.schedules.empty")} />

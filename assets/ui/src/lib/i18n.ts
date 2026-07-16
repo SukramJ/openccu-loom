@@ -164,15 +164,41 @@ const EN: Catalog = {
   // Per-sensor flags (§6.2).
   "alarm.flags.title": "Flags",
   "alarm.flag.use_exit_delay": "Exit delay",
+  "alarm.flag.use_exit_delay.hint":
+    "The sensor may be active while you leave: activations during the exit delay are ignored. Without this flag they trigger instantly.",
   "alarm.flag.use_entry_delay": "Entry delay",
+  "alarm.flag.use_entry_delay.hint":
+    "An activation starts the pending countdown instead of triggering instantly — the time you have to disarm after entering.",
   "alarm.flag.entry_delay_override": "Entry delay override (s)",
+  "alarm.flag.entry_delay_override.hint":
+    "Replaces the mode's entry delay for this sensor (seconds) — e.g. 60 for the garage door while the front door keeps 15. Empty uses the mode's default.",
   "alarm.flag.always_on": "Always on",
+  "alarm.flag.always_on.hint":
+    "Fires around the clock, independent of the armed state — for hazard sensors (smoke, water, gas) and panic buttons. Outputs follow the hazard/panic policies from the Policies tab.",
   "alarm.flag.allow_open_after_arming": "Allow open after arming",
+  "alarm.flag.allow_open_after_arming.hint":
+    "The sensor may stay open (e.g. a tilted window) while the area arms; only a fresh activation after it cleared triggers.",
   "alarm.flag.arm_after_closing": "Arm after closing",
+  "alarm.flag.arm_after_closing.hint":
+    "Closing this sensor during the exit delay finishes arming early, after a short settle time.",
   "alarm.flag.bypass_auto": "Auto-bypass",
+  "alarm.flag.bypass_auto.hint":
+    "If this sensor would block arming, it is bypassed automatically until the next disarm instead of failing the arm; the bypass is recorded and visible.",
   "alarm.flag.trigger_when_unavailable": "Trigger when unavailable",
+  "alarm.flag.trigger_when_unavailable.hint":
+    "Treats the sensor becoming unreachable while armed as an activation. Off raises only a warning.",
+  "alarm.flag.chime": "Door chime while disarmed",
+  "alarm.flag.chime.hint":
+    "Plays the door-chime tone on chirp outputs when this sensor activates while the area is disarmed — never during a walk test.",
+  "alarm.flag.panic_silent": "Silent panic (duress)",
+  "alarm.flag.panic_silent.hint":
+    "Activations fire the panic policy with all acoustic outputs suppressed — notifications only. For duress buttons that must not sound locally.",
   "alarm.flag.hold_time": "Hold time (s)",
+  "alarm.flag.hold_time.hint":
+    "The activation must persist this many seconds before it counts — filters twitchy motion sensors and rattling doors. If the sensor clears earlier, the activation is discarded. Never applied to always-on (hazard/panic) sensors.",
   "alarm.flag.group": "Cross-zoning group",
+  "alarm.flag.group.hint":
+    "Sensors sharing the same group name only trigger when a second member activates within 60 seconds. A single activation does not sound the alarm but is recorded in the journal.",
   "alarm.matrix.sensor": "Sensor",
   // Output picker (§7, §12.2).
   "alarm.outputs.placeholder": "No outputs yet",
@@ -185,29 +211,54 @@ const EN: Catalog = {
   "alarm.outputs.expert.hint": "Show every modelled actuator, not just curated siren/light candidates.",
   "alarm.outputs.test": "Test fire",
   "alarm.outputs.test_optical_only": "Optical only",
+  "alarm.outputs.test_optical_only.hint": "Tests with light only — no tone.",
   "alarm.outputs.test.confirm.title": "Test fire this output?",
   "alarm.outputs.test.confirm.body": "This briefly activates the real device (siren/light). Use optical-only to spare the neighbours.",
   "alarm.outputs.indoor": "Indoor",
   "alarm.outputs.outdoor": "Outdoor",
+  "alarm.outputs.outdoor.hint":
+    "Marks this output as outdoor, so policies with \"Exclude outdoor outputs\" skip it.",
   "alarm.outputs.shared_with_ccu": "Shared with CCU programs",
+  "alarm.outputs.shared_with_ccu.hint":
+    "The output is also driven by CCU programs: Loom never switches it off automatically while the area is disarmed.",
   "alarm.outputs.duration": "Duration (s)",
+  "alarm.outputs.duration.hint":
+    "Seconds one activation runs; acoustic activations are hard-capped at 600 s. Empty uses the bounded default.",
   "alarm.outputs.tone": "Tone",
+  "alarm.outputs.tone.hint":
+    "Tone label from the device's tone list. Empty plays the device's default alarm tone.",
   "alarm.outputs.optical_pattern": "Optical pattern",
-  "alarm.outputs.policy.loud": "Loud",
-  "alarm.outputs.policy.silent": "Silent",
+  "alarm.outputs.optical_pattern.hint":
+    "Light-pattern label from the device's list. Empty uses the device default.",
   "alarm.outputs.tier": "Tier",
   "alarm.outputs.switched_caveat": "Convenience-grade: no sabotage contact, no battery backup, trivially unpluggable.",
   "alarm.outputs.smoke_caveat": "Smoke detectors double as sounders — no device-side duration, engine-watchdogged only, and repeated intrusion tones shorten battery life. Best on full protection only.",
   "alarm.outputs.acoustic_no_ontime": "This actuator has no ON_TIME, so it can't self-off — not eligible as an acoustic output.",
   // Output classes (§7).
   "alarm.output_class.acoustic_siren": "Acoustic siren",
+  "alarm.output_class.acoustic_siren.hint":
+    "A real siren device (e.g. HmIP-ASIR): tone and duration configurable, every activation bounded and stop-verified by the engine.",
   "alarm.output_class.switched_siren": "Plug-in siren",
+  "alarm.output_class.switched_siren.hint":
+    "A mains plug-in siren behind a switch actuator. Convenience grade: no sabotage contact, no battery backup, trivially unpluggable; the actuator must support device-side auto-off (ON_TIME).",
   "alarm.output_class.smoke_sounder": "Smoke-detector sounder",
+  "alarm.output_class.smoke_sounder.hint":
+    "Sounds enrolled smoke detectors for intrusion alarms. Costs detector battery, usually sounds the whole group, and offers no live test fire.",
   "alarm.output_class.optical_siren": "Optical siren",
+  "alarm.output_class.optical_siren.hint":
+    "The optical channel of a siren — signals without noise and may run longer than the acoustic cap.",
   "alarm.output_class.alarm_light": "Alarm light",
+  "alarm.output_class.alarm_light.hint":
+    "A switch or dimmer actuator as alarm light: on at trigger, off at silence or disarm.",
   "alarm.output_class.chirp": "Chirp",
+  "alarm.output_class.chirp.hint":
+    "Short confirmation tones only: arm/disarm squawks, countdown ticks and the door chime — never the loud alarm.",
   "alarm.output_class.notification": "Notification",
+  "alarm.output_class.notification.hint":
+    "A notification event (MQTT, WebSocket, webhook) — fires on every alarm and is never cancelled by silence.",
   "alarm.output_class.sysvar_mirror": "Sysvar mirror",
+  "alarm.output_class.sysvar_mirror.hint":
+    "Maintains a CCU system variable mirroring the alarm state, for existing CCU programs.",
   // Journal (§12.5).
   "alarm.journal.placeholder": "No journal entries",
   "alarm.journal.title": "Journal",
@@ -269,9 +320,26 @@ const EN: Catalog = {
   "alarm.health.healthy": "Alarm system OK",
   "alarm.health.unhealthy": "Alarm system fault",
   "alarm.health.unknown": "Status unknown",
+  // Per-tab intro lines rendered by the alarm section shell under the
+  // tab bar — one orientation sentence per view.
+  "alarm.intro.overview":
+    "Arm and disarm each area and handle a triggered alarm. Silence stops the sirens but keeps the incident open, disarm ends it, acknowledge only marks it as seen.",
+  "alarm.intro.sensors":
+    "Choose which sensors guard each area and in which arm modes they count. The detail drawer tunes per-sensor behaviour such as entry delay and bypass; the matrix view is the fastest way to audit many sensors at once.",
+  "alarm.intro.outputs":
+    "Enroll sirens, lights, chirps and notification targets as alarm consequences and tune tone, duration and mode assignment per output. Every output can be test-fired briefly; the optical-only option spares the neighbours.",
+  "alarm.intro.policies":
+    "Per-area rules beyond plain arm/disarm: when a code is required, which outputs hazard and panic triggers fire around the clock, how a pre-alarm softens escalation, and what happens after a trigger phase ends.",
+  "alarm.intro.codes":
+    "PIN codes, keypad slots and remote keys that can arm, disarm or silence the alarm — independent of login accounts, e.g. for household members without access to this UI.",
+  "alarm.intro.journal":
+    "The persistent log of everything the alarm engine does or observes — arming, triggers, bypasses, faults and tests. Filter by area, event class and time range, or export the current view as CSV.",
+  "alarm.intro.walktest":
+    "Tests sensors without arming the area: start a session, walk the house and trip each sensor — every activation turns its row green, and no alarm fires. The result is recorded in the journal.",
   "alarm.outputs.field.class": "Output class",
   "alarm.outputs.level": "Dimmer level (0–1)",
-  "alarm.outputs.policy": "Mode assignment",
+  "alarm.outputs.level.hint":
+    "Dimmer level for actuator-backed outputs, 0–1. Empty keeps the device's last level.",
   "alarm.sensors.add.no_devices": "No matching device channels found.",
   "alarm.sensors.add.show_all": "Show all channels",
   "alarm.sensors.area": "Area",
@@ -287,7 +355,8 @@ const EN: Catalog = {
   "alarm.wizard.delay.entry": "Entry delay (s)",
   "alarm.wizard.delay.exit": "Exit delay (s)",
   "alarm.wizard.delay.trigger": "Alarm duration (s)",
-  "alarm.wizard.delays.hint": "The exit delay lets you leave after arming; the entry delay gives you time to disarm after opening the door.",
+  "alarm.wizard.delays.hint":
+    "The exit delay lets you leave after arming; the entry delay gives you time to disarm after opening the door. Alarm duration bounds how long one alarm phase (and its sirens) runs — at most 600 s per cycle.",
   "alarm.wizard.finish.hint": "The area is created disarmed. Run a walk test before relying on it.",
   "alarm.wizard.outputs.cta": "Open output picker",
   "alarm.wizard.outputs.hint": "Enroll sirens, lights, and chirp outputs afterwards in the outputs tab.",
@@ -318,6 +387,8 @@ const EN: Catalog = {
   "alarm.codes.field.duress": "Duress code",
   "alarm.codes.field.enabled": "Enabled",
   "alarm.codes.field.kind": "Type",
+  "alarm.codes.field.kind.hint":
+    "A PIN is typed on the PIN pad or anonymous surfaces; keypad-slot and remote-key entries bind a hardware keypad user slot or a radio remote so its actions run under this name.",
   "alarm.codes.field.name": "Name",
   "alarm.codes.field.pin": "PIN",
   "alarm.codes.field.pin.help": "4–8 digit PIN, stored as a salted hash — the daemon never returns it again.",
@@ -333,12 +404,18 @@ const EN: Catalog = {
   "alarm.codes.perm.disarm": "Disarm",
   "alarm.codes.perm.silence": "Silence",
   "alarm.codes.perms": "Permissions",
-  "alarm.codes.subtitle": "PIN codes, keypad slots and remote keys that can arm, disarm or silence this alarm system.",
+  "alarm.codes.perms.hint": "What this code is allowed to do: arm, disarm, and silence sirens.",
   "alarm.codes.unavailable": "Alarm codes unavailable",
   "alarm.codes.unavailable.description": "The alarm-code subsystem is not configured on this daemon.",
   "alarm.codes.validity.open": "No limit",
-  // Door chime tone (docs/alarm-concept.md §15 row 23).
-  "alarm.outputs.chirp_chime_tone": "Door chime tone",
+  // Chirp tone labels (docs/alarm-concept.md §15 row 23). The driver
+  // reads three tone labels: arm squawk, disarm squawk, and the tick
+  // tone (countdown ticks, entry warning, and the door chime).
+  "alarm.outputs.chirp_arm_tone": "Arm chirp tone",
+  "alarm.outputs.chirp_disarm_tone": "Disarm chirp tone",
+  "alarm.outputs.chirp_tick_tone": "Tick & chime tone",
+  "alarm.outputs.chirp_tick_tone.hint":
+    "Used for countdown ticks, entry warnings and the door chime. An empty tone label skips that chirp kind on this output.",
   // PIN pad (docs/alarm-concept.md §12.1).
   "alarm.pinpad.arm_title": "Enter code to arm — {mode}",
   "alarm.pinpad.backspace": "Backspace",
@@ -352,9 +429,13 @@ const EN: Catalog = {
   "alarm.policies.code.hint":
     "Operator sessions (REST, WebSocket, hmcli) always bypass these checks — the documented break-glass path — but a duress code they enter still fires a silent alarm.",
   "alarm.policies.code.require_arm": "Require code to arm",
+  "alarm.policies.code.require_arm.hint":
+    "Requires a valid code before the area arms. Off by default — arming is the safe direction and stays one tap.",
   "alarm.policies.code.require_disarm": "Require code to disarm",
   "alarm.policies.code.require_disarm.always": "Always",
   "alarm.policies.code.require_disarm.default": "Automatic (on when codes exist)",
+  "alarm.policies.code.require_disarm.hint":
+    "Automatic requires a code as soon as this area has an enabled code. An area without codes never demands one, so a disarm can never lock you out.",
   "alarm.policies.code.require_disarm.never": "Never",
   "alarm.policies.code.require_silence": "Require code to silence",
   "alarm.policies.code.require_silence.hint":
@@ -363,10 +444,18 @@ const EN: Catalog = {
   "alarm.policies.code.source.mqtt": "MQTT",
   "alarm.policies.code.source.remote": "Remote key",
   "alarm.policies.output.exclude_outdoor": "Exclude outdoor outputs",
+  "alarm.policies.output.exclude_outdoor.hint":
+    "Skips outputs marked as outdoor (e.g. an outdoor siren); indoor outputs still fire.",
   "alarm.policies.output.silent": "Silent (no siren)",
+  "alarm.policies.output.silent.hint":
+    "Suppresses all acoustic outputs for this policy — notifications, optical signals and alarm lights still fire.",
   "alarm.policies.output.smoke_sounders": "Enroll smoke-detector sounders",
+  "alarm.policies.output.smoke_sounders.hint":
+    "Additionally sounds the enrolled smoke-detector sirens. Use deliberately: each activation costs irreplaceable detector battery and usually sounds the whole smoke-detector group.",
   "alarm.policies.posttrigger": "When the trigger phase ends",
   "alarm.policies.posttrigger.disarm": "Disarm",
+  "alarm.policies.posttrigger.hint":
+    "A trigger phase is always time-limited (default 180 s, at most 600 s per cycle); sirens stop when it ends no matter what. This setting decides what the area does afterwards: stay armed in the previous mode, or disarm.",
   "alarm.policies.posttrigger.return_to_armed": "Return to armed",
   "alarm.policies.prealarm.empty": "No modes configured for this area yet — add modes in the setup wizard first.",
   "alarm.policies.prealarm.hint":
@@ -382,14 +471,19 @@ const EN: Catalog = {
   "alarm.policies.schedules.mode": "Mode",
   "alarm.policies.schedules.time": "Time",
   "alarm.policies.section.codes": "Codes",
+  "alarm.policies.section.codes.hint":
+    "Alarm codes are managed on the Codes tab and are independent of login accounts. These switches decide when a code must be entered; they only apply to anonymous surfaces such as MQTT, keypads and remote keys.",
   "alarm.policies.section.hazard": "Hazard outputs",
   "alarm.policies.section.hazard.hint":
-    "Always-on output policy for hazard-class triggers (smoke, water, gas) — independent of the armed mode.",
+    "Always-on output policy for hazard-class triggers (smoke, water, gas) — these sensors fire around the clock, independent of the armed mode.",
   "alarm.policies.section.panic": "Panic outputs",
-  "alarm.policies.section.panic.hint": "Always-on output policy for panic-class triggers — independent of the armed mode.",
+  "alarm.policies.section.panic.hint":
+    "Always-on output policy for panic-class triggers — independent of the armed mode. A sensor marked as silent panic suppresses acoustic outputs for its activations regardless of this policy.",
   "alarm.policies.section.prealarm": "Pre-alarm",
   "alarm.policies.section.rearm": "Post-trigger & auto re-arm",
   "alarm.policies.section.schedules": "Schedules",
+  "alarm.policies.section.schedules.hint":
+    "Time-of-day arm schedules for this area, evaluated in the daemon's local time zone. With no day selected an entry fires every day. With auto-arm the area actually arms; otherwise the entry only raises a reminder when the area is not in the expected mode.",
   "audit.title": "Change history",
   "audit.empty": "No changes recorded yet.",
   "audit.empty.description":
@@ -2644,15 +2738,41 @@ const DE: Catalog = {
   // Sensor-Flags (§6.2).
   "alarm.flags.title": "Flags",
   "alarm.flag.use_exit_delay": "Austrittsverzögerung",
+  "alarm.flag.use_exit_delay.hint":
+    "Der Sensor darf beim Verlassen aktiv sein: Aktivierungen während der Austrittsverzögerung werden ignoriert. Ohne dieses Flag lösen sie sofort aus.",
   "alarm.flag.use_entry_delay": "Eintrittsverzögerung",
+  "alarm.flag.use_entry_delay.hint":
+    "Eine Aktivierung startet den Eintritts-Countdown statt sofort auszulösen — die Zeit zum Unscharfschalten nach dem Betreten.",
   "alarm.flag.entry_delay_override": "Eintrittsverzögerung überschreiben (s)",
+  "alarm.flag.entry_delay_override.hint":
+    "Ersetzt die Eintrittsverzögerung des Modus für diesen Sensor (Sekunden) — z. B. 60 fürs Garagentor, während die Haustür bei 15 bleibt. Leer nutzt den Modus-Standard.",
   "alarm.flag.always_on": "Immer aktiv",
+  "alarm.flag.always_on.hint":
+    "Löst rund um die Uhr aus, unabhängig vom Scharf-Zustand — für Gefahrensensoren (Rauch, Wasser, Gas) und Panik-Taster. Die Ausgänge folgen den Gefahren-/Panik-Richtlinien aus dem Reiter Richtlinien.",
   "alarm.flag.allow_open_after_arming": "Offen beim Schärfen erlaubt",
+  "alarm.flag.allow_open_after_arming.hint":
+    "Der Sensor darf beim Scharfschalten offen bleiben (z. B. ein gekipptes Fenster); erst eine neue Aktivierung nach dem Schließen löst aus.",
   "alarm.flag.arm_after_closing": "Schärfen beim Schließen",
+  "alarm.flag.arm_after_closing.hint":
+    "Schließt dieser Sensor während der Austrittsverzögerung, wird das Scharfschalten nach kurzer Beruhigungszeit vorzeitig abgeschlossen.",
   "alarm.flag.bypass_auto": "Automatisch überbrücken",
+  "alarm.flag.bypass_auto.hint":
+    "Würde dieser Sensor das Scharfschalten blockieren, wird er automatisch bis zum nächsten Unscharfschalten überbrückt, statt das Scharfschalten scheitern zu lassen; die Überbrückung wird protokolliert und angezeigt.",
   "alarm.flag.trigger_when_unavailable": "Auslösen bei Ausfall",
+  "alarm.flag.trigger_when_unavailable.hint":
+    "Wird der Sensor im scharfen Zustand unerreichbar, zählt das als Aktivierung. Ausgeschaltet gibt es nur eine Warnung.",
+  "alarm.flag.chime": "Türgong bei unscharf",
+  "alarm.flag.chime.hint":
+    "Spielt den Türgong auf Signalton-Ausgängen, wenn dieser Sensor bei unscharfem Bereich aktiviert wird — nie während eines Begehungstests.",
+  "alarm.flag.panic_silent": "Stiller Panik-Alarm",
+  "alarm.flag.panic_silent.hint":
+    "Aktivierungen feuern die Panik-Richtlinie ohne akustische Ausgänge — nur Benachrichtigungen. Für Panik-Taster, die vor Ort lautlos bleiben müssen.",
   "alarm.flag.hold_time": "Haltezeit (s)",
+  "alarm.flag.hold_time.hint":
+    "Die Aktivierung muss so viele Sekunden anstehen, bevor sie zählt — filtert zappelige Bewegungsmelder und klappernde Türen. Wird der Sensor vorher wieder inaktiv, verfällt die Aktivierung. Gilt nie für Immer-aktiv-Sensoren (Gefahr/Panik).",
   "alarm.flag.group": "Verbund-Gruppe",
+  "alarm.flag.group.hint":
+    "Sensoren mit demselben Gruppennamen lösen erst aus, wenn ein zweiter Sensor der Gruppe binnen 60 Sekunden aktiviert wird. Eine Einzelaktivierung löst keinen Alarm aus, wird aber im Journal protokolliert.",
   "alarm.matrix.sensor": "Sensor",
   // Ausgangs-Auswahl (§7, §12.2).
   "alarm.outputs.placeholder": "Noch keine Ausgänge",
@@ -2665,29 +2785,54 @@ const DE: Catalog = {
   "alarm.outputs.expert.hint": "Alle modellierten Aktoren anzeigen, nicht nur kuratierte Sirenen/Lichter.",
   "alarm.outputs.test": "Test auslösen",
   "alarm.outputs.test_optical_only": "Nur optisch",
+  "alarm.outputs.test_optical_only.hint": "Testet nur mit Licht — ohne Ton.",
   "alarm.outputs.test.confirm.title": "Ausgang testen?",
   "alarm.outputs.test.confirm.body": "Das aktiviert kurz das echte Gerät (Sirene/Licht). Nur optisch schont die Nachbarn.",
   "alarm.outputs.indoor": "Innen",
   "alarm.outputs.outdoor": "Außen",
+  "alarm.outputs.outdoor.hint":
+    "Markiert diesen Ausgang als außen, sodass Richtlinien mit „Außenausgänge ausschließen“ ihn überspringen.",
   "alarm.outputs.shared_with_ccu": "Von CCU-Programmen genutzt",
+  "alarm.outputs.shared_with_ccu.hint":
+    "Der Ausgang wird auch von CCU-Programmen geschaltet: Loom schaltet ihn bei unscharfem Bereich nie automatisch ab.",
   "alarm.outputs.duration": "Dauer (s)",
+  "alarm.outputs.duration.hint":
+    "Sekunden, die eine Aktivierung läuft; akustische Aktivierungen sind hart auf 600 s begrenzt. Leer nutzt den begrenzten Standard.",
   "alarm.outputs.tone": "Ton",
+  "alarm.outputs.tone.hint":
+    "Ton-Bezeichner aus der Tonliste des Geräts. Leer spielt den Standard-Alarmton des Geräts.",
   "alarm.outputs.optical_pattern": "Optisches Muster",
-  "alarm.outputs.policy.loud": "Laut",
-  "alarm.outputs.policy.silent": "Still",
+  "alarm.outputs.optical_pattern.hint":
+    "Lichtmuster-Bezeichner aus der Liste des Geräts. Leer nutzt den Geräte-Standard.",
   "alarm.outputs.tier": "Stufe",
   "alarm.outputs.switched_caveat": "Komfort-Klasse: kein Sabotagekontakt, keine Batteriepufferung, leicht ausgesteckt.",
   "alarm.outputs.smoke_caveat": "Rauchmelder dienen zusätzlich als Sirenen — keine geräteseitige Dauer, nur per Engine überwacht, und wiederholte Alarmtöne verkürzen die Batterielaufzeit. Am besten nur im Vollschutz.",
   "alarm.outputs.acoustic_no_ontime": "Dieser Aktor hat kein ON_TIME und kann sich nicht selbst abschalten — als akustischer Ausgang nicht zulässig.",
   // Ausgangsklassen (§7).
   "alarm.output_class.acoustic_siren": "Akustische Sirene",
+  "alarm.output_class.acoustic_siren.hint":
+    "Ein echtes Sirenengerät (z. B. HmIP-ASIR): Ton und Dauer einstellbar, jede Aktivierung von der Engine begrenzt und mit verifiziertem Stopp.",
   "alarm.output_class.switched_siren": "Steckdosen-Sirene",
+  "alarm.output_class.switched_siren.hint":
+    "Eine Netzstecker-Sirene hinter einem Schaltaktor. Komfort-Klasse: kein Sabotagekontakt, keine Batteriepufferung, leicht ausgesteckt; der Aktor muss geräteseitiges Auto-Aus (ON_TIME) unterstützen.",
   "alarm.output_class.smoke_sounder": "Rauchmelder-Sirene",
+  "alarm.output_class.smoke_sounder.hint":
+    "Lässt eingebundene Rauchmelder bei Einbruchalarm ertönen. Kostet Melder-Batterie, löst meist die ganze Gruppe aus und bietet keinen Live-Test.",
   "alarm.output_class.optical_siren": "Optische Sirene",
+  "alarm.output_class.optical_siren.hint":
+    "Der optische Kanal einer Sirene — signalisiert ohne Lärm und darf länger laufen als die akustische Begrenzung.",
   "alarm.output_class.alarm_light": "Alarm-Licht",
+  "alarm.output_class.alarm_light.hint":
+    "Ein Schalt- oder Dimmaktor als Alarm-Licht: an bei Auslösung, aus bei Stummschalten oder Unscharfschalten.",
   "alarm.output_class.chirp": "Signalton",
+  "alarm.output_class.chirp.hint":
+    "Nur kurze Quittungstöne: Scharf-/Unscharf-Bestätigung, Countdown-Ticks und Türgong — nie der laute Alarm.",
   "alarm.output_class.notification": "Benachrichtigung",
+  "alarm.output_class.notification.hint":
+    "Ein Benachrichtigungs-Ereignis (MQTT, WebSocket, Webhook) — feuert bei jedem Alarm und wird durch Stummschalten nie abgebrochen.",
   "alarm.output_class.sysvar_mirror": "Systemvariable",
+  "alarm.output_class.sysvar_mirror.hint":
+    "Pflegt eine CCU-Systemvariable, die den Alarmzustand spiegelt — für bestehende CCU-Programme.",
   // Journal (§12.5).
   "alarm.journal.placeholder": "Keine Journaleinträge",
   "alarm.journal.title": "Journal",
@@ -2749,9 +2894,26 @@ const DE: Catalog = {
   "alarm.health.healthy": "Alarmanlage OK",
   "alarm.health.unhealthy": "Alarmanlage gestört",
   "alarm.health.unknown": "Status unbekannt",
+  // Per-tab intro lines rendered by the alarm section shell under the
+  // tab bar — one orientation sentence per view.
+  "alarm.intro.overview":
+    "Schalte jeden Bereich scharf oder unscharf und behandle einen ausgelösten Alarm. Stummschalten stoppt die Sirenen, lässt den Vorfall aber offen; Unscharfschalten beendet ihn; Quittieren markiert ihn nur als gesehen.",
+  "alarm.intro.sensors":
+    "Wähle, welche Sensoren jeden Bereich überwachen und in welchen Scharf-Modi sie zählen. Die Detailansicht stellt das Verhalten pro Sensor ein, etwa Eintrittsverzögerung und Überbrückung; die Matrix-Ansicht ist der schnellste Weg, viele Sensoren auf einmal zu prüfen.",
+  "alarm.intro.outputs":
+    "Binde Sirenen, Lichter, Signaltöne und Benachrichtigungsziele als Alarmfolgen ein und stelle Ton, Dauer und Modus-Zuordnung pro Ausgang ein. Jeder Ausgang lässt sich kurz testen; die Option „nur optisch“ schont die Nachbarn.",
+  "alarm.intro.policies":
+    "Regeln pro Bereich jenseits von Scharf/Unscharf: wann ein Code verlangt wird, welche Ausgänge Gefahren- und Panik-Auslöser rund um die Uhr feuern, wie ein Voralarm die Eskalation abmildert und was nach dem Ende einer Auslösephase passiert.",
+  "alarm.intro.codes":
+    "PIN-Codes, Codetastatur-Slots und Funkschlüssel, die die Alarmanlage scharf-/unscharfschalten oder stummschalten können — unabhängig von Login-Konten, z. B. für Haushaltsmitglieder ohne Zugang zu dieser Oberfläche.",
+  "alarm.intro.journal":
+    "Das dauerhafte Protokoll von allem, was die Alarm-Engine tut oder beobachtet — Scharfschaltungen, Auslösungen, Überbrückungen, Störungen und Tests. Filtere nach Bereich, Kategorie und Zeitraum oder exportiere die aktuelle Ansicht als CSV.",
+  "alarm.intro.walktest":
+    "Testet Sensoren, ohne den Bereich scharf zu schalten: Starte eine Sitzung, gehe durchs Haus und löse jeden Sensor aus — jede Aktivierung färbt ihre Zeile grün, und es wird kein Alarm ausgelöst. Das Ergebnis landet im Journal.",
   "alarm.outputs.field.class": "Ausgabeklasse",
   "alarm.outputs.level": "Dimmerstufe (0–1)",
-  "alarm.outputs.policy": "Modus-Zuordnung",
+  "alarm.outputs.level.hint":
+    "Dimmstufe für aktorbasierte Ausgänge, 0–1. Leer behält die letzte Stufe des Geräts.",
   "alarm.sensors.add.no_devices": "Keine passenden Gerätekanäle gefunden.",
   "alarm.sensors.add.show_all": "Alle Kanäle anzeigen",
   "alarm.sensors.area": "Bereich",
@@ -2767,7 +2929,8 @@ const DE: Catalog = {
   "alarm.wizard.delay.entry": "Eintrittsverzögerung (s)",
   "alarm.wizard.delay.exit": "Austrittsverzögerung (s)",
   "alarm.wizard.delay.trigger": "Alarmdauer (s)",
-  "alarm.wizard.delays.hint": "Die Austrittsverzögerung lässt Zeit zum Verlassen nach dem Scharfschalten; die Eintrittsverzögerung gibt Zeit zum Unscharfschalten nach dem Öffnen der Tür.",
+  "alarm.wizard.delays.hint":
+    "Die Austrittsverzögerung lässt Zeit zum Verlassen nach dem Scharfschalten; die Eintrittsverzögerung gibt Zeit zum Unscharfschalten nach dem Öffnen der Tür. Die Alarmdauer begrenzt, wie lange eine Alarmphase (und ihre Sirenen) läuft — höchstens 600 s pro Zyklus.",
   "alarm.wizard.finish.hint": "Der Bereich wird unscharf angelegt. Führe vor dem Verlassen auf die Anlage einen Begehungstest durch.",
   "alarm.wizard.outputs.cta": "Zum Ausgabe-Picker",
   "alarm.wizard.outputs.hint": "Sirenen, Licht und Quittungstöne ordnest du anschließend im Ausgaben-Tab zu.",
@@ -2798,6 +2961,8 @@ const DE: Catalog = {
   "alarm.codes.field.duress": "Stiller Notfall-Code (Duress)",
   "alarm.codes.field.enabled": "Aktiviert",
   "alarm.codes.field.kind": "Art",
+  "alarm.codes.field.kind.hint":
+    "Ein PIN wird am PIN-Pad oder auf anonymen Wegen eingegeben; Codetastatur-Slot und Funkschlüssel binden einen Hardware-Slot bzw. eine Funkfernbedienung, sodass deren Aktionen unter diesem Namen laufen.",
   "alarm.codes.field.name": "Name",
   "alarm.codes.field.pin": "PIN-Code",
   "alarm.codes.field.pin.help": "4–8-stelliger PIN-Code, wird als gesalzener Hash gespeichert – der Daemon gibt ihn nie wieder aus.",
@@ -2813,12 +2978,18 @@ const DE: Catalog = {
   "alarm.codes.perm.disarm": "Unscharf schalten",
   "alarm.codes.perm.silence": "Sirenen aus",
   "alarm.codes.perms": "Berechtigungen",
-  "alarm.codes.subtitle": "PIN-Codes, Codetastatur-Slots und Funkschlüssel, mit denen sich die Alarmanlage scharf-/unscharfschalten oder stummschalten lässt.",
+  "alarm.codes.perms.hint": "Was dieser Code darf: scharf schalten, unscharf schalten und Sirenen stummschalten.",
   "alarm.codes.unavailable": "Alarm-Codes nicht verfügbar",
   "alarm.codes.unavailable.description": "Das Alarm-Code-Subsystem ist auf diesem Daemon nicht eingerichtet.",
   "alarm.codes.validity.open": "Unbegrenzt",
-  // Door chime tone (docs/alarm-concept.md §15 row 23).
-  "alarm.outputs.chirp_chime_tone": "Türgong-Ton",
+  // Chirp tone labels (docs/alarm-concept.md §15 row 23). The driver
+  // reads three tone labels: arm squawk, disarm squawk, and the tick
+  // tone (countdown ticks, entry warning, and the door chime).
+  "alarm.outputs.chirp_arm_tone": "Quittungston Scharf",
+  "alarm.outputs.chirp_disarm_tone": "Quittungston Unscharf",
+  "alarm.outputs.chirp_tick_tone": "Tick- & Türgong-Ton",
+  "alarm.outputs.chirp_tick_tone.hint":
+    "Für Countdown-Ticks, Eintrittswarnung und Türgong. Ein leerer Ton-Bezeichner überspringt diese Ton-Art auf diesem Ausgang.",
   // PIN pad (docs/alarm-concept.md §12.1).
   "alarm.pinpad.arm_title": "Code zum Scharfschalten eingeben — {mode}",
   "alarm.pinpad.backspace": "Rücktaste",
@@ -2832,9 +3003,13 @@ const DE: Catalog = {
   "alarm.policies.code.hint":
     "Operator-Sitzungen (REST, WebSocket, hmcli) umgehen diese Prüfungen immer — der dokumentierte Break-Glass-Pfad. Ein dabei eingegebener Zwangs-Code löst aber trotzdem einen stillen Alarm aus.",
   "alarm.policies.code.require_arm": "Code zum Scharfschalten erforderlich",
+  "alarm.policies.code.require_arm.hint":
+    "Verlangt einen gültigen Code, bevor der Bereich scharf schaltet. Standardmäßig aus — Scharfschalten ist die sichere Richtung und bleibt ein Fingertipp.",
   "alarm.policies.code.require_disarm": "Code zum Unscharfschalten erforderlich",
   "alarm.policies.code.require_disarm.always": "Immer",
   "alarm.policies.code.require_disarm.default": "Automatisch (an, sobald Codes existieren)",
+  "alarm.policies.code.require_disarm.hint":
+    "Automatisch verlangt einen Code, sobald für diesen Bereich ein aktiver Code existiert. Ein Bereich ohne Codes verlangt nie einen — ein Aussperren ist damit ausgeschlossen.",
   "alarm.policies.code.require_disarm.never": "Nie",
   "alarm.policies.code.require_silence": "Code zum Stummschalten erforderlich",
   "alarm.policies.code.require_silence.hint":
@@ -2843,10 +3018,18 @@ const DE: Catalog = {
   "alarm.policies.code.source.mqtt": "MQTT",
   "alarm.policies.code.source.remote": "Funkschlüssel",
   "alarm.policies.output.exclude_outdoor": "Außenausgänge ausschließen",
+  "alarm.policies.output.exclude_outdoor.hint":
+    "Überspringt als außen markierte Ausgänge (z. B. eine Außensirene); Innen-Ausgänge feuern weiterhin.",
   "alarm.policies.output.silent": "Lautlos (keine Sirene)",
+  "alarm.policies.output.silent.hint":
+    "Unterdrückt alle akustischen Ausgänge dieser Richtlinie — Benachrichtigungen, optische Signale und Alarm-Licht feuern weiterhin.",
   "alarm.policies.output.smoke_sounders": "Rauchmelder-Sirenen einbeziehen",
+  "alarm.policies.output.smoke_sounders.hint":
+    "Lässt zusätzlich die eingebundenen Rauchmelder-Sirenen ertönen. Bewusst einsetzen: Jede Aktivierung kostet unwiederbringlich Melder-Batterie und löst meist die ganze Rauchmelder-Gruppe aus.",
   "alarm.policies.posttrigger": "Wenn die Auslösephase endet",
   "alarm.policies.posttrigger.disarm": "Unscharf schalten",
+  "alarm.policies.posttrigger.hint":
+    "Eine Auslösephase ist immer zeitlich begrenzt (Standard 180 s, höchstens 600 s pro Zyklus); Sirenen stoppen an ihrem Ende in jedem Fall. Diese Einstellung bestimmt, was der Bereich danach tut: im vorherigen Modus scharf bleiben oder unscharf schalten.",
   "alarm.policies.posttrigger.return_to_armed": "Zurück zu scharf",
   "alarm.policies.prealarm.empty": "Für diesen Bereich sind noch keine Modi eingerichtet — lege sie zuerst im Einrichtungsassistenten an.",
   "alarm.policies.prealarm.hint":
@@ -2862,14 +3045,19 @@ const DE: Catalog = {
   "alarm.policies.schedules.mode": "Modus",
   "alarm.policies.schedules.time": "Uhrzeit",
   "alarm.policies.section.codes": "Codes",
+  "alarm.policies.section.codes.hint":
+    "Alarm-Codes werden im Reiter Codes verwaltet und sind unabhängig von Login-Konten. Diese Schalter legen fest, wann ein Code eingegeben werden muss; sie wirken nur auf anonyme Eingabewege wie MQTT, Codetastatur und Funkschlüssel.",
   "alarm.policies.section.hazard": "Gefahrenausgänge",
   "alarm.policies.section.hazard.hint":
-    "Immer aktive Ausgangs-Richtlinie für Gefahren-Auslöser (Rauch, Wasser, Gas) — unabhängig vom Scharf-Modus.",
+    "Immer aktive Ausgangs-Richtlinie für Gefahren-Auslöser (Rauch, Wasser, Gas) — diese Sensoren feuern rund um die Uhr, unabhängig vom Scharf-Modus.",
   "alarm.policies.section.panic": "Panikausgänge",
-  "alarm.policies.section.panic.hint": "Immer aktive Ausgangs-Richtlinie für Panik-Auslöser — unabhängig vom Scharf-Modus.",
+  "alarm.policies.section.panic.hint":
+    "Immer aktive Ausgangs-Richtlinie für Panik-Auslöser — unabhängig vom Scharf-Modus. Ein als stiller Panik-Auslöser markierter Sensor unterdrückt akustische Ausgänge bei seinen Auslösungen unabhängig von dieser Richtlinie.",
   "alarm.policies.section.prealarm": "Voralarm",
   "alarm.policies.section.rearm": "Nachlauf & automatisches Wiederscharfschalten",
   "alarm.policies.section.schedules": "Zeitpläne",
+  "alarm.policies.section.schedules.hint":
+    "Tägliche Scharfschalt-Zeitpläne für diesen Bereich, ausgewertet in der lokalen Zeitzone des Daemons. Ohne ausgewählte Tage feuert ein Eintrag jeden Tag. Mit automatischem Scharfschalten wird der Bereich wirklich scharf geschaltet; andernfalls erscheint nur eine Erinnerung, wenn der Bereich nicht im erwarteten Modus ist.",
   "audit.title": "Änderungs-Verlauf",
   "audit.empty": "Noch keine Änderungen aufgezeichnet.",
   "audit.empty.description":

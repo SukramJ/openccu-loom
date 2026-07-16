@@ -262,8 +262,10 @@
 
 <svelte:window onkeydown={onKeydown} />
 
+<!-- The page orientation line is rendered centrally by the alarm
+     section shell (alarm.intro.codes), so this toolbar only carries
+     the create action. -->
 <div class="mb-4 flex flex-wrap items-center gap-3">
-  <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("alarm.codes.subtitle")}</p>
   <Button size="sm" class="ml-auto" onclick={openCreate} disabled={unavailable}>
     <Icon name="mdi:plus" size={16} aria-label="" />
     {t("alarm.codes.add")}
@@ -417,6 +419,7 @@
           onValueChange={(v) => draft && (draft = { ...draft, kind: v as AlarmCodeKind })}
           options={KINDS.map((k) => ({ value: k, label: t(`alarm.codes.kind.${k}`) }))}
         />
+        <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.kind.hint")}</span>
       </div>
 
       {#if draft.kind === "pin"}
@@ -466,6 +469,7 @@
       <!-- Permissions -->
       <div class="flex flex-col gap-2">
         <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.perms")}</span>
+        <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.perms.hint")}</span>
         <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
           <span>{t("alarm.codes.perm.arm")}</span>
           <Switch checked={draft.perms.arm} onCheckedChange={(v) => draft && (draft = { ...draft, perms: { ...draft.perms, arm: v } })} />

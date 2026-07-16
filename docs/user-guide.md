@@ -249,6 +249,8 @@ An active RPC recording survives a daemon restart (the active-recording marker i
 - [Backup](admin/backup.md) — what to back up and how to restore.
 - [Observability](admin/observability.md) — health, metrics, tracing.
 - [Troubleshooting](admin/troubleshooting.md) — common failure modes.
+- [Alarm system](alarm-user-guide.md) — set up and operate the built-in
+  alarm system (areas, sensors, outputs, policies, codes, walk test).
 - [Security](SECURITY.md) — security model + hardening checklist.
 - [REST + WebSocket API](integrations/rest-ws.md) — the full API contract.
 - [MQTT topic schema](mqtt-topic-schema.md) — topic layout reference.
