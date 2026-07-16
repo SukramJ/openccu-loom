@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **All-zero firmware placeholder rendered as an update** — devices the
+  CCU has no OTA image for (e.g. the RPI-RF-MOD gateway module, which
+  is updated through the CCU firmware itself) report the placeholder
+  available version `0.0.0`. The firmware overview treated any version
+  difference as a pending update and showed "Update available" /
+  "Awaiting transfer to the device" next to 4.4.22 → 0.0.0. The
+  placeholder now counts as "no available version": the row reads "Up
+  to date", the available column shows "—", and the updates filter +
+  summary no longer count the device. The domain gate
+  (`GatedLatestFirmware`) applies the same rule, so a `0.0.0` can never
+  surface as an installable target on the BidCos path or in the MQTT
+  update entity either.
+
 ## [0.42.4] — 2026-07-16
 
 ### Fixed

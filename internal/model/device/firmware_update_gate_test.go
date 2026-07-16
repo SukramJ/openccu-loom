@@ -66,6 +66,18 @@ func TestGatedLatestFirmware(t *testing.T) {
 			FirmwareInfo{Current: cur, Available: "", UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
 			cur,
 		},
+		{
+			"hmip all-zero placeholder stays current",
+			hmenum.InterfaceHmIPRF,
+			FirmwareInfo{Current: "4.4.22", Available: "0.0.0", UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
+			"4.4.22",
+		},
+		{
+			"bidcos all-zero placeholder stays current",
+			hmenum.InterfaceBidCosRF,
+			FirmwareInfo{Current: "4.4.22", Available: "0.0.0"},
+			"4.4.22",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -102,5 +114,10 @@ func TestDeviceUpdateAvailable(t *testing.T) {
 		Current: "1.0.0", Available: "1.0.0",
 	}); d.UpdateAvailable() {
 		t.Error("equal versions must not report update available")
+	}
+	if d := newDev(hmenum.InterfaceBidCosRF, FirmwareInfo{
+		Current: "4.4.22", Available: "0.0.0",
+	}); d.UpdateAvailable() {
+		t.Error("all-zero placeholder version must not report update available")
 	}
 }

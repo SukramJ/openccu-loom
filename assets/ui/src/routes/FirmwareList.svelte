@@ -46,6 +46,16 @@
     ...new Set(allDevices.map((d) => d.central).filter(Boolean)),
   ].sort());
 
+  // The CCU reports the all-zero placeholder "0.0.0" as the available
+  // firmware of devices it has no OTA image for — e.g. the RPI-RF-MOD
+  // gateway module, which is updated through the CCU firmware itself.
+  // A placeholder is not an available version: comparing it against
+  // the installed version must never yield "update available".
+  function availableVersion(fw: DeviceDetail["firmware"] | undefined): string {
+    const v = fw?.Available ?? "";
+    return /^0+(\.0+)*$/.test(v) ? "" : v;
+  }
+
   // hasUpdate treats a device as having an update when either the
   // gated flag says an install can start now, or the loaded firmware
   // detail shows a newer version the CCU has not delivered to the
@@ -55,10 +65,11 @@
   function hasUpdate(d: DeviceSummary): boolean {
     if (d.update_available) return true;
     const fw = detailMap[d.address]?.firmware;
+    const avail = availableVersion(fw);
     return (
       !!fw?.Current &&
-      !!fw?.Available &&
-      fw.Available !== fw.Current &&
+      !!avail &&
+      avail !== fw.Current &&
       fw.UpdateState !== "UP_TO_DATE" &&
       fw.UpdateState !== "LIVE_UP_TO_DATE"
     );
@@ -79,7 +90,7 @@
     { key: "device", label: t("firmware.col.device"), sortable: true, title: true, get: (d) => d.name || d.address },
     { key: "model", label: t("firmware.col.model"), sortable: true, get: (d) => d.model },
     { key: "current", label: t("firmware.col.current"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.Current ?? "" },
-    { key: "available", label: t("firmware.col.available"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.Available ?? "" },
+    { key: "available", label: t("firmware.col.available"), sortable: true, get: (d) => availableVersion(detailMap[d.address]?.firmware) },
     { key: "state", label: t("firmware.col.state"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.UpdateState ?? (d.update_available ? "NEW_FIRMWARE_AVAILABLE" : "UP_TO_DATE") },
     { key: "action", label: t("firmware.col.action"), align: "right", cellClass: "reflow-actions" },
   ]);
@@ -266,8 +277,9 @@
           {@const fw = detail?.firmware}
           {@const busy = updating.has(device.address)}
           {@const loadingFw = loadingDetail.has(device.address)}
-          {@const versionsMatch = !!fw?.Current && !!fw?.Available && fw.Current === fw.Available}
-          {@const newerVersion = !!fw?.Current && !!fw?.Available && fw.Available !== fw.Current}
+          {@const avail = availableVersion(fw)}
+          {@const versionsMatch = !!fw?.Current && !!avail && fw.Current === avail}
+          {@const newerVersion = !!fw?.Current && !!avail && avail !== fw.Current}
           {@const updateAvailable = detail?.update_available ?? false}
           {#if col.key === "device"}
             <a
@@ -290,9 +302,9 @@
             <span class="font-mono text-xs">
               {#if loadingFw}
                 <span class="text-slate-400 dark:text-slate-500">…</span>
-              {:else if fw?.Available && fw.Available !== fw.Current}
-                <span class="font-semibold text-amber-600 dark:text-amber-400">{fw.Available}</span>
-              {:else}{fw?.Available || "—"}{/if}
+              {:else if newerVersion}
+                <span class="font-semibold text-amber-600 dark:text-amber-400">{avail}</span>
+              {:else}{avail || "—"}{/if}
             </span>
           {:else if col.key === "state"}
             <!-- The CCU firmware lifecycle state is the truth for this
