@@ -208,8 +208,10 @@ describe("api paramset writes — edit-lock token header", () => {
       "tok-xyz",
     );
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    // Pins the contract path (assets/openapi.yaml /devices/{addr}/link-ps/{peer});
+    // the daemon decodes the percent-encoded segments centrally.
     expect(url).toBe(
-      "/api/v1/devices/00021BE9957782%3A4/link-paramsets/00021BE9957783%3A1",
+      "/api/v1/devices/00021BE9957782%3A4/link-ps/00021BE9957783%3A1",
     );
     expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
     const headers = headersOf(fetchMock.mock.calls[0]);

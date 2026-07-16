@@ -443,6 +443,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	}
 
 	r := chi.NewRouter()
+	// First middleware by contract: route on the percent-decoded path so
+	// every chi.URLParam yields decoded values (see decodedPathRouting).
+	r.Use(decodedPathRouting)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.ReqContextWithCentral(d.CentralName))

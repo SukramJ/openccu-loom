@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 
 	"github.com/go-chi/chi/v5"
 
@@ -204,19 +203,13 @@ func lookupCustomDP(d *device.Device, name string) (device.AttachableDataPoint, 
 	return custom.FindByWireName(d, name)
 }
 
-// cdpName reads the `{name}` path parameter and URL-decodes it. Channel-
-// group wire names embed an `@` (e.g. `STATE@3`); a conformant client
-// that percent-encodes the path segment sends `STATE%403`. chi keeps the
-// raw segment, so without decoding the lookup would miss and the invoke
-// path would 502 with "data point STATE%403 not found". Falls back to the
-// raw value when the segment is not valid percent-encoding so a literal
-// `@` (which most clients send unencoded) keeps working.
+// cdpName reads the `{name}` path parameter. The router routes on the
+// percent-decoded path (the rest package's decodedPathRouting
+// middleware), so a client encoding the channel-group wire name
+// (`STATE%403`) and one sending the literal `@` both arrive here as
+// `STATE@3` — no per-handler unescaping (it would decode twice).
 func cdpName(r *http.Request) string {
-	raw := chi.URLParam(r, "name")
-	if decoded, err := url.PathUnescape(raw); err == nil {
-		return decoded
-	}
-	return raw
+	return chi.URLParam(r, "name")
 }
 
 // ListCustomDataPoints returns all custom DPs of a device.
