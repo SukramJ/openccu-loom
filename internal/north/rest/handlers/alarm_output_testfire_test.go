@@ -95,6 +95,28 @@ func TestTestAlarmOutput_SmokeSounder_Returns409(t *testing.T) {
 	}
 }
 
+// TestTestAlarmOutput_PercentEncodedID_Resolves verifies a
+// percent-encoded output ID resolves to the enrolled output. Output IDs
+// embed `|` and `:` (central|channel:no|class); a conformant client
+// percent-encodes the path segment and chi keeps the raw segment, so
+// the handler must URL-decode it before the manager lookup — otherwise
+// every SPA test fire 404s.
+func TestTestAlarmOutput_PercentEncodedID_Resolves(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedOutput("OttoLoom|00245A49949662:1|acoustic_siren", "eg",
+		hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
+
+	w := httptest.NewRecorder()
+	TestAlarmOutput(fx, nil).ServeHTTP(w,
+		outputTestRequest(t, "OttoLoom%7C00245A49949662%3A1%7Cacoustic_siren", nil))
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestTestAlarmOutput_UnknownOutput_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
