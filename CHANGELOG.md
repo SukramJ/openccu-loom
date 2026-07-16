@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.4] — 2026-07-16
+
+### Fixed
+
+- **Firmware overview contradicted itself** — a device whose CCU knows
+  a newer firmware that is not yet delivered to the device (HmIP
+  `NEW_FIRMWARE_AVAILABLE`, e.g. 1.2.2 installed / 1.4.10 available)
+  showed "Up to date" twice, because the status column let the gated
+  `update_available` flag (which only says an install can start *now*)
+  overrule the real CCU lifecycle state. The status column now renders
+  the CCU state ("Update available"), the action column explains
+  "Awaiting transfer to the device" instead of claiming currency, and
+  the updates filter + summary count include such devices.
+
 ## [0.42.3] — 2026-07-16
 
 ### Added

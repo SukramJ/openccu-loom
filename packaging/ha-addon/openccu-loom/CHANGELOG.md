@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.4
+
+- **Fixed: the firmware overview no longer claims "up to date" for
+  devices that have a pending update.** When the CCU knows a newer
+  firmware but has not yet transferred it to the device, the overview
+  now shows "Update available" with the hint "Awaiting transfer to the
+  device", and such devices appear in the updates filter and counter.
+
 ## 0.42.3
 
 - **Fixed: pairing mode ("install mode") never opened.** Starting the
