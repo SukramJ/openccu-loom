@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 06ead19
-HEAD: 06ead19
+Generated: 39c50da
+HEAD: 39c50da
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25459 |
-| Reachable | 4519 |
-| Whitelisted | 18229 |
+| Total Exported | 25475 |
+| Reachable | 4524 |
+| Whitelisted | 18240 |
 | **Unreachable** | **2711** |
 
 ## Top-20 Packages by Dead Code
