@@ -126,3 +126,34 @@ func TestIdentityFromSubjectPreference(t *testing.T) {
 		t.Fatalf("subject = %q, want fallback to Subject", id.Subject)
 	}
 }
+
+// TestClaimStringsDirect exercises claimStrings' leaf-type dispatch
+// directly: an empty string leaf must not produce a spurious role name, a
+// concrete []string leaf (as opposed to the []any shape JSON decoding
+// actually produces) must pass through unchanged, and a leaf that is
+// neither a string nor an array must yield nothing rather than panicking.
+func TestClaimStringsDirect(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  map[string]any
+		path string
+		want []string
+	}{
+		{"empty string leaf", map[string]any{"role": ""}, "role", nil},
+		{"concrete string slice leaf", map[string]any{"role": []string{"admin", "operator"}}, "role", []string{"admin", "operator"}},
+		{"unsupported leaf type", map[string]any{"role": 42}, "role", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := claimStrings(tc.raw, tc.path)
+			if len(got) != len(tc.want) {
+				t.Fatalf("claimStrings(%v, %q) = %v, want %v", tc.raw, tc.path, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("claimStrings(%v, %q) = %v, want %v", tc.raw, tc.path, got, tc.want)
+				}
+			}
+		})
+	}
+}
