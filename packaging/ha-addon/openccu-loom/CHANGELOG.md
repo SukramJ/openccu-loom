@@ -1,5 +1,28 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.1
+
+- **Fixed: siren test fire from the UI.** The "Test fire" button on the
+  alarm Outputs page returned "resource not found" for every output;
+  testing sirens (including optical-only) works again.
+- **Fixed: several alarm output settings did not reach the device.**
+  The siren tone, chirp tones and dimmer level were saved under names
+  the engine never read; they now work, and the chirp card offers the
+  three real tone slots (arm, disarm, tick/chime). A misleading
+  loud/silent toggle per output was removed — loud vs. silent is
+  configured per mode on the Policies page.
+- **New: sensor hold time and cross-zoning groups.** A sensor can
+  require its activation to persist a few seconds before it counts, and
+  sensors in the same group only alarm when two of them trip within 60
+  seconds — both kill classic false-alarm sources. Panic sensors can
+  now be marked as silent (duress) directly in the sensor editor.
+- **Better guidance in the alarm UI.** Every alarm tab now starts with a
+  short explanation, and the complex pages — especially Policies — explain
+  every setting inline (code requirements, hazard/panic behaviour,
+  pre-alarm, auto re-arm, schedules, sensor flags, output classes), in
+  English and German.
+- **New operator guide** for the alarm system in the documentation.
+
 ## 0.42.0
 
 - **New: a complete, local alarm system.** OpenCCU-Loom now contains a

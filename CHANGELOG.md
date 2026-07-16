@@ -6,6 +6,63 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.1] — 2026-07-16
+
+### Added
+
+- **Alarm sensor hold time** — `hold_time` on a sensor now works: an
+  activation must persist that many seconds before it counts; clearing
+  earlier discards it. Filters twitchy PIRs and doors rattling in wind.
+  Never applied to always-on hazard/panic sensors, so a smoke or panic
+  alarm is never delayed.
+- **Alarm cross-zoning groups** — the sensor `group` field now works:
+  sensors sharing a group name only trigger when a second distinct
+  member activates within 60 seconds; a lone activation is suppressed
+  but journaled (`cross_zone_first_hit`). Kills single-PIR false
+  alarms. Both windows are deliberately not restart-persisted
+  (seconds-short).
+- **Silent-panic flag in the sensor drawer** — panic-class sensors can
+  now be marked as silent panic (duress) from the UI; the engine
+  support existed but had no editor surface.
+
+- **Alarm SPA help texts** — every alarm tab now opens with a short
+  orientation line (what the view controls, how it relates to the other
+  tabs), and the complex editors grew inline explanations: the Policies
+  page explains every switch (code requirements incl. the automatic
+  disarm-code rule, hazard/panic always-on semantics, pre-alarm,
+  post-trigger/auto re-arm, schedules), the sensor detail drawer explains
+  every behaviour flag, the output cards explain duration/tone/outdoor/
+  shared-with-CCU, and the add-output drawer describes the selected
+  output class. All texts in both locales. The previously missing
+  `alarm.flag.chime` label (the door-chime switch rendered its raw i18n
+  key) is fixed.
+- **Alarm operator guide** — new `docs/alarm-user-guide.md`: an
+  operator-facing walkthrough of the whole alarm system (concepts,
+  safety promise, wizard, every tab, every policy and sensor flag,
+  integrations), linked from the user guide.
+
+### Fixed
+
+- **Alarm output test fire 404** — `POST /api/v1/alarm/outputs/{id}/test`
+  returned `404 Unknown alarm resource` for every output when the client
+  percent-encoded the ID's `|`/`:` separators (as the SPA does), because
+  the handler compared the still-encoded path segment against the
+  enrolled output IDs. The ID is now URL-decoded before the lookup, so
+  the SPA's siren/optical test buttons work again.
+- **Alarm output editor wrote fields the engine never read** — the
+  siren tone field saved `tone` while the driver reads `acoustic_tone`
+  (the configured tone silently never played), the chirp card offered a
+  single `chirp_chime_tone` the driver does not know (it reads
+  `chirp_arm_tone` / `chirp_disarm_tone` / `chirp_tick_tone` — the card
+  now exposes exactly those three), and the dimmer-level input accepted
+  0–100 while the wire expects 0–1 (now 0–1 with the add-default fixed
+  from 100 to 1). Legacy values saved under the old keys are read as
+  fallbacks and migrated on the next save.
+- **Per-output loud/silent toggle removed** — it wrote a `policy` field
+  no engine path reads. Loud vs. silent is a property of the mode /
+  hazard / panic output policies (Policies tab), where it already
+  works; the dead toggle only suggested a control that did nothing.
+
 ## [0.42.0] — 2026-07-15
 
 ### Added
