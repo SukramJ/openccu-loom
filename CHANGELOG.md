@@ -6,6 +6,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Hot-plug: newly paired devices appear without a restart** — a device
+  taught in at the CCU while the daemon is running is now materialised
+  live from the `newDevices` callback: the device pipeline hydrates
+  exactly the new device (paramset descriptions, data points, custom
+  data points, initial values, CCU-assigned name via a forced
+  device-details refresh), MQTT publishes its discovery + state as soon
+  as the model announces it, the Matter bridge reassembles its bridged
+  endpoints (debounced, with the PartsList change notified to
+  commissioners), and the WebSocket device-lifecycle broadcast continues
+  to fire. The ingest dedups against the model and is serialised with
+  the interface bring-up, so the CCU's full-inventory re-announcement
+  after every reconnect stays a no-op instead of re-reading the whole
+  interface. Previously the callback only updated internal registries —
+  the device stayed invisible in REST/SPA/MQTT/Matter until the daemon
+  restarted. Applies to the XML-RPC interfaces and CUxD (BIN-RPC) alike.
+
 ### Fixed
 
 - **All-zero firmware placeholder rendered as an update** — devices the

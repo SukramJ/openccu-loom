@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
@@ -127,6 +129,22 @@ type DevicePipeline struct {
 	// snapshots; the subsequent fetch_all_device_data pass overwrites
 	// them with live data wherever the CCU returns a fresh value.
 	valuesCache *sqlite.ValuesCacheStore
+
+	// ingestMu serialises every ingest run — the interface bring-up
+	// ([IngestFromBackend]) and the hot-plug path ([IngestNewDevices]).
+	// The CCU re-announces its whole inventory via `newDevices` on every
+	// reconnect, so a callback can race the initial bring-up; without
+	// this lock both paths would hydrate the same channels concurrently
+	// and [device.Device.AddChannel] (register-or-replace) would drop
+	// freshly built data points. A pointer so [scopedTo]'s shallow copy
+	// shares the same lock instead of copying it.
+	ingestMu *sync.Mutex
+
+	// addressScope, when non-nil, narrows every interface-wide pass to
+	// the listed device-root addresses (see [devicesFor]). Set only on
+	// the shallow copy [scopedTo] returns for hot-plug ingests; the
+	// bring-up pipeline keeps it nil and sees every device.
+	addressScope map[string]struct{}
 }
 
 // NewDevicePipeline constructs a pipeline bound to c.
@@ -140,7 +158,46 @@ func NewDevicePipeline(u *central.Unit) *DevicePipeline {
 		cdpLightLastBrightness:     true,
 		cdpUseGroupChannelForCover: true,
 		cdpEnableFirmwareCheck:     true,
+		ingestMu:                   &sync.Mutex{},
 	}
+}
+
+// scopedTo returns a shallow copy of the pipeline whose interface-wide
+// passes only see the given device-root addresses. The copy shares the
+// unit, the lookup maps, and the ingest mutex with the original — it
+// differs only in [DevicePipeline.addressScope], so a hot-plug ingest
+// can reuse the exact bring-up sequence without re-hydrating devices
+// that already exist.
+func (p *DevicePipeline) scopedTo(addresses map[string]struct{}) *DevicePipeline {
+	scoped := *p
+	scoped.addressScope = addresses
+	return &scoped
+}
+
+// devicesFor returns the ModelRegistry devices that belong to
+// interfaceID, narrowed to the pipeline's address scope when one is set.
+// Every interface-wide pass iterates through this helper so the hot-plug
+// path touches only the freshly materialised devices — re-running a pass
+// over the whole interface would re-issue per-channel CCU reads and burn
+// radio duty-cycle on every `newDevices` callback.
+func (p *DevicePipeline) devicesFor(interfaceID string) []*device.Device {
+	if p.unit == nil {
+		return nil
+	}
+	all := p.unit.ModelRegistry.List()
+	out := make([]*device.Device, 0, len(all))
+	for _, d := range all {
+		if d == nil || d.InterfaceID != interfaceID {
+			continue
+		}
+		if p.addressScope != nil {
+			if _, ok := p.addressScope[d.Address]; !ok {
+				continue
+			}
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 // WithCustomDPBehavior sets the per-central custom-DP rendering toggles
@@ -302,6 +359,22 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		if p.functions != nil {
 			ch.Functions = p.functions[dd.Address]
 		}
+		// Hot-plugged devices are absent from the bring-up snapshot maps
+		// (names/rooms/functions were pulled once during hub wiring). The
+		// DeviceDetails cache is the living source — refreshed by the
+		// periodic loader and force-refreshed before each hot-plug ingest —
+		// so fall back to it whenever the snapshot has no entry.
+		if p.unit.DeviceDetails != nil {
+			if ch.Name == "" {
+				ch.Name = p.unit.DeviceDetails.GetName(dd.Address)
+			}
+			if len(ch.Rooms) == 0 {
+				ch.Rooms = p.unit.DeviceDetails.GetChannelRooms(dd.Address)
+			}
+			if len(ch.Functions) == 0 {
+				ch.Functions = p.unit.DeviceDetails.GetFunctions(dd.Address)
+			}
+		}
 		// Stamp the channel's CCU ise_id from the DeviceDetails cache (seeded
 		// in WireHub before ingest). It lets a system variable / program whose
 		// name carries the channel identifier be linked to this channel — see
@@ -328,6 +401,21 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 	}
 	if p.functions != nil {
 		functions = p.functions[dd.Address]
+	}
+	// Hot-plugged devices are absent from the bring-up snapshot maps; the
+	// DeviceDetails cache is the living source (periodic loader + a forced
+	// refresh before each hot-plug ingest), so fall back to it whenever
+	// the snapshot has no entry.
+	if p.unit.DeviceDetails != nil {
+		if displayName == "" {
+			displayName = p.unit.DeviceDetails.GetName(dd.Address)
+		}
+		if len(rooms) == 0 {
+			rooms = p.unit.DeviceDetails.GetDeviceRooms(dd.Address)
+		}
+		if len(functions) == 0 {
+			functions = p.unit.DeviceDetails.GetFunctions(dd.Address)
+		}
 	}
 	// The device's CCU ise_id from the DeviceDetails cache (seeded in WireHub
 	// before ingest). It lets a system variable / program whose name carries
@@ -407,6 +495,8 @@ func (p *DevicePipeline) IngestFromBackend(
 	runner *rega.Runner,
 	logger *slog.Logger,
 ) error {
+	p.ingestMu.Lock()
+	defer p.ingestMu.Unlock()
 	descs, err := b.ListDevices(ctx)
 	if err != nil {
 		return fmt.Errorf("pipeline: ListDevices: %w", err)
@@ -421,6 +511,105 @@ func (p *DevicePipeline) IngestFromBackend(
 	if p.unit != nil && p.unit.Devices != nil {
 		_ = p.unit.Devices.CheckAndCreateDevicesFromCache(ctx)
 	}
+	return p.finishIngest(ctx, interfaceID, iface, b, writer, runner, logger)
+}
+
+// IngestNewDevices is the hot-plug entry point: it materialises devices
+// announced by a live `newDevices` callback without re-pulling or
+// re-hydrating the whole interface. The CCU re-announces its entire
+// inventory on every reconnect (the callback server's listDevices reply
+// is deliberately empty — see [CallbackHandlers.ListDevices]), so the
+// method first narrows descs to device roots the ModelRegistry does not
+// know yet; when nothing is new it returns without touching the CCU.
+// The shared ingest mutex serialises against [IngestFromBackend], so a
+// callback racing the interface bring-up waits and then no-ops — every
+// address is materialised by then. All post-ingest passes run scoped to
+// the new device roots via [scopedTo].
+//
+// Returns the addresses of the newly materialised device roots (empty
+// when every announced device already existed).
+func (p *DevicePipeline) IngestNewDevices(
+	ctx context.Context,
+	interfaceID string,
+	iface hmenum.Interface,
+	b backends.Operations,
+	writer ValueWriter,
+	runner *rega.Runner,
+	descs []hmproto.DeviceDescription,
+	logger *slog.Logger,
+) ([]string, error) {
+	if p.unit == nil {
+		return nil, errors.New("pipeline: no central")
+	}
+	if b == nil {
+		return nil, errors.New("pipeline: no backend")
+	}
+	p.ingestMu.Lock()
+	defer p.ingestMu.Unlock()
+
+	// Narrow to device roots the model does not know yet. Channel-only
+	// announcements (factory-reset re-pairs of a known device) are out of
+	// scope here — the existing device keeps its channels and the next
+	// bring-up reconciles them.
+	newRoots := make(map[string]struct{})
+	for i := range descs {
+		dd := &descs[i]
+		if dd.Parent != "" {
+			continue
+		}
+		if _, isChannel := splitChannel(dd.Address); isChannel {
+			continue
+		}
+		if _, exists := p.unit.ModelRegistry.Get(dd.Address); exists {
+			continue
+		}
+		newRoots[dd.Address] = struct{}{}
+	}
+	if len(newRoots) == 0 {
+		return nil, nil
+	}
+	scopedDescs := make([]hmproto.DeviceDescription, 0, len(descs))
+	for i := range descs {
+		dd := descs[i]
+		root := dd.Address
+		if dd.Parent != "" {
+			root = dd.Parent
+		}
+		if _, ok := newRoots[root]; ok {
+			scopedDescs = append(scopedDescs, dd)
+		}
+	}
+	if err := p.Ingest(ctx, interfaceID, iface, scopedDescs); err != nil {
+		return nil, err
+	}
+	scoped := p.scopedTo(newRoots)
+	if err := scoped.finishIngest(ctx, interfaceID, iface, b, writer, runner, logger); err != nil {
+		return nil, err
+	}
+	addrs := make([]string, 0, len(newRoots))
+	for a := range newRoots {
+		addrs = append(addrs, a)
+	}
+	sort.Strings(addrs)
+	return addrs, nil
+}
+
+// finishIngest runs the shared post-ingest sequence — data-point
+// hydration, custom/calculated/combined-DP materialisation, lifecycle
+// wiring, week-profile handling, value seeding, and every visibility
+// mark pass — over [devicesFor]'s view of interfaceID. Both the
+// interface bring-up and the hot-plug path funnel through this method
+// so the two can never drift apart; the hot-plug caller narrows the
+// view via [scopedTo] first. Callers must hold ingestMu.
+func (p *DevicePipeline) finishIngest(
+	ctx context.Context,
+	interfaceID string,
+	iface hmenum.Interface,
+	b backends.Operations,
+	writer ValueWriter,
+	runner *rega.Runner,
+	logger *slog.Logger,
+) error {
 	if err := p.hydrateDataPoints(ctx, interfaceID, b, writer, logger); err != nil {
 		return err
 	}
@@ -458,10 +647,7 @@ func (p *DevicePipeline) IngestFromBackend(
 	// exists in the catalogue but no producer surfaces it to north-bound
 	// consumers.
 	if p.unit != nil && p.unit.EventBus != nil {
-		for _, d := range p.unit.ModelRegistry.List() {
-			if d.InterfaceID != interfaceID {
-				continue
-			}
+		for _, d := range p.devicesFor(interfaceID) {
 			bridgeDataPointRollbacksToBus(p.unit.EventBus, d)
 		}
 	}
@@ -473,10 +659,7 @@ func (p *DevicePipeline) IngestFromBackend(
 	//   so MQTT/WS subscribers see schedule updates without polling.
 	if p.unit != nil && p.unit.EventBus != nil {
 		centralName := p.unit.Name()
-		for _, d := range p.unit.ModelRegistry.List() {
-			if d.InterfaceID != interfaceID {
-				continue
-			}
+		for _, d := range p.devicesFor(interfaceID) {
 			wireDataPointLifecycle(p.unit.EventBus, centralName, d)
 		}
 	}
@@ -608,10 +791,7 @@ func (p *DevicePipeline) finalizeChannelInit(interfaceID string) {
 		return
 	}
 	centralName := p.unit.Name()
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		for _, ch := range d.Channels() {
 			ch.FinalizeInit(centralName)
 		}
@@ -634,10 +814,7 @@ func (p *DevicePipeline) applyInternalParameterMarks(interfaceID string) {
 	if p.visibility != nil {
 		decider = p.visibility.Parameter()
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		visibility.ApplyInternalParameterMarksWithDecider(d, decider)
 	}
 }
@@ -651,10 +828,7 @@ func (p *DevicePipeline) applyNoEventNoWriteMarks(interfaceID string) {
 	if p.unit == nil {
 		return
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		visibility.ApplyNoEventNoWriteMarks(d)
 	}
 }
@@ -668,10 +842,7 @@ func (p *DevicePipeline) applyUnIgnoredMarks(interfaceID string) {
 		return
 	}
 	decider := p.visibility.Parameter()
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		visibility.ApplyUnIgnoredMarks(d, decider)
 	}
 }
@@ -682,10 +853,7 @@ func (p *DevicePipeline) applyForceSensorMarks(interfaceID string) {
 	if p.unit == nil {
 		return
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		visibility.ApplyForceSensorMarks(d)
 	}
 }
@@ -705,10 +873,7 @@ func (p *DevicePipeline) applyIgnoredParameterMarks(interfaceID string) {
 		return
 	}
 	decider := p.visibility.Parameter()
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		visibility.ApplyIgnoredParameterMarks(d, decider)
 	}
 }
@@ -726,10 +891,7 @@ func (p *DevicePipeline) applyHiddenParameterMarks(interfaceID string) {
 	if p.visibility != nil {
 		decider = p.visibility.Parameter()
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		visibility.ApplyHiddenParameterMarksWithDecider(d, decider)
 	}
 }
@@ -770,8 +932,8 @@ func (p *DevicePipeline) applyClickEventMarks(interfaceID string) {
 	if p.unit == nil {
 		return
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID || d.IsVirtualRemote() {
+	for _, d := range p.devicesFor(interfaceID) {
+		if d.IsVirtualRemote() {
 			continue
 		}
 		// The reference base usage withholds the generic button when the device
@@ -841,10 +1003,7 @@ func (p *DevicePipeline) applyChannelOperationModeGating(interfaceID string) {
 	if p.unit == nil {
 		return
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		visibility.ApplyChannelOperationModeGatingDevice(d)
 	}
 }
@@ -924,10 +1083,7 @@ func (p *DevicePipeline) suppressUndefinedGenericDataPoints(interfaceID string) 
 	if p.unit == nil {
 		return
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		// SuppressUndefinedGenericDataPoints relies on the per-DP
 		// `IsUnIgnored()` mark (custom_only=True). Built-in
 		// `unIgnoreParametersByDevice` rules are deliberately NOT
@@ -946,10 +1102,7 @@ func (p *DevicePipeline) materialiseCustomDataPoints(interfaceID string, logger 
 		return
 	}
 	customReg := custom.DefaultRegistry()
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		// Stamp the per-central rendering toggles before materialising
 		// so the light / cover factories read the operator's choice.
 		d.SetCustomDPBehavior(p.cdpLightLastBrightness, p.cdpUseGroupChannelForCover)
@@ -993,10 +1146,7 @@ func (p *DevicePipeline) materialiseCalculatedDataPoints(interfaceID string, log
 	}
 	bus := p.unit.EventBus
 	centralName := p.unit.Name()
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		for _, ch := range d.Channels() {
 			sensors := calculated.CreateCalculatedDataPoints(ch, d.Model)
 			if len(sensors) == 0 {
@@ -1026,10 +1176,7 @@ func (p *DevicePipeline) materialiseCombinedDataPoints(interfaceID string, logge
 		return
 	}
 	bus := p.unit.EventBus
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		for _, ch := range d.Channels() {
 			for _, rawDP := range ch.CombinedDataPoints() {
 				dp, ok := rawDP.(CombinedDataPoint)
@@ -1276,10 +1423,7 @@ func (p *DevicePipeline) hydrateDataPoints(
 		return nil
 	}
 	bw := newBoundWriter(p.unit.Name(), interfaceID, writer)
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		// Hydrate the device-root MASTER paramset first. Classic HM thermostats
 		// (HM-CC-RT-DN family) carry their week-profile schedule on the device
 		// address itself (no `:N` suffix); without this pass those schedules would
@@ -1636,10 +1780,7 @@ func (p *DevicePipeline) restoreValuesFromCache(
 		return
 	}
 	applied, skipped := 0, 0
-	for _, dev := range p.unit.ModelRegistry.List() {
-		if dev == nil || dev.InterfaceID != interfaceID {
-			continue
-		}
+	for _, dev := range p.devicesFor(interfaceID) {
 		for _, ch := range dev.Channels() {
 			if ch == nil {
 				continue

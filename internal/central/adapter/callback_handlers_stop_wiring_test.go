@@ -119,7 +119,7 @@ func TestRegisterCentralCallbacksDeregisterDrainsHandler(t *testing.T) {
 		CallbackHostFor: func(*config.CentralConfig) string { return "127.0.0.1" },
 	}
 	cc := &config.CentralConfig{Name: "drain-ccu"}
-	_, _, deregister := registerCentralCallbacks(deps, cc, unit, logger)
+	_, _, _, deregister := registerCentralCallbacks(deps, cc, unit, logger)
 	if deregister == nil {
 		t.Fatal("registerCentralCallbacks returned a nil deregister closure")
 	}

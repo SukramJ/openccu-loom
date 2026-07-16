@@ -25,9 +25,11 @@ func newDeviceDescs() xmlrpc.ArrayValue {
 	}
 }
 
-// With delay off (default), NewDevices ingests immediately and a
-// DeviceCreatedEvent fires; with delay on, ingest is deferred and no
-// creation event fires.
+// With delay off (default), NewDevices ingests in the background and a
+// DeviceCreatedEvent fires once the ingest goroutine has run; with
+// delay on, ingest is deferred and no creation event fires. Stop()
+// drains the background goroutine, so after it returns the event has
+// either fired or never will.
 func TestCallbackHandlersDelayNewDeviceCreation(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -55,6 +57,7 @@ func TestCallbackHandlersDelayNewDeviceCreation(t *testing.T) {
 			if err := h.NewDevices(context.Background(), "HmIP-RF", newDeviceDescs()); err != nil {
 				t.Fatalf("NewDevices: %v", err)
 			}
+			h.Stop()
 
 			got := created.Load() > 0
 			if got != tc.wantEvent {
