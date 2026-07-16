@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.5] — 2026-07-16
+
 ### Added
 
 - **Hot-plug: newly paired devices appear without a restart** — a device
