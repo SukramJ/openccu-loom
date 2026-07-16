@@ -163,6 +163,22 @@ func TestVerifyIDTokenRejectsMissingExp(t *testing.T) {
 	}
 }
 
+// TestVerifyIDTokenRejectsNotYetValid covers an ID token whose "nbf" claim
+// is still in the future beyond the clock-skew leeway — OIDC Core §3.1.3.7
+// forbids accepting a token before its not-before time.
+func TestVerifyIDTokenRejectsNotYetValid(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": "openccu-loom",
+		"exp": now + 3600, "nbf": now + 3600,
+	})
+	_, err := client.VerifyIDToken(context.Background(), tok)
+	if err == nil || !strings.Contains(err.Error(), "not yet valid") {
+		t.Fatalf("expected not-yet-valid rejection, got %v", err)
+	}
+}
+
 func TestVerifyIDTokenRejectsWrongAudience(t *testing.T) {
 	client, priv, kid, issuer := newVerifyClient(t)
 	now := time.Now().Unix()
