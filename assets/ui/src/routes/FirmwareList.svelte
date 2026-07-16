@@ -46,13 +46,31 @@
     ...new Set(allDevices.map((d) => d.central).filter(Boolean)),
   ].sort());
 
+  // hasUpdate treats a device as having an update when either the
+  // gated flag says an install can start now, or the loaded firmware
+  // detail shows a newer version the CCU has not delivered to the
+  // device yet (HmIP NEW_FIRMWARE_AVAILABLE). The gated flag alone
+  // would hide a pending 1.2.2 → 1.4.10 update from the filter and
+  // summary while the row visibly lists both versions.
+  function hasUpdate(d: DeviceSummary): boolean {
+    if (d.update_available) return true;
+    const fw = detailMap[d.address]?.firmware;
+    return (
+      !!fw?.Current &&
+      !!fw?.Available &&
+      fw.Available !== fw.Current &&
+      fw.UpdateState !== "UP_TO_DATE" &&
+      fw.UpdateState !== "LIVE_UP_TO_DATE"
+    );
+  }
+
   const filtered = $derived.by(() => {
     let list = allDevices;
     if (centralFilter) {
       list = list.filter((d) => d.central === centralFilter);
     }
     if (filterMode === "updatable") {
-      list = list.filter((d) => d.update_available);
+      list = list.filter((d) => hasUpdate(d));
     }
     return list;
   });
@@ -66,9 +84,7 @@
     { key: "action", label: t("firmware.col.action"), align: "right", cellClass: "reflow-actions" },
   ]);
 
-  const updatableCount = $derived(
-    allDevices.filter((d) => d.update_available).length,
-  );
+  const updatableCount = $derived(allDevices.filter((d) => hasUpdate(d)).length);
 
   // ---- lifecycle -------------------------------------------------------
 
@@ -251,6 +267,7 @@
           {@const busy = updating.has(device.address)}
           {@const loadingFw = loadingDetail.has(device.address)}
           {@const versionsMatch = !!fw?.Current && !!fw?.Available && fw.Current === fw.Available}
+          {@const newerVersion = !!fw?.Current && !!fw?.Available && fw.Available !== fw.Current}
           {@const updateAvailable = detail?.update_available ?? false}
           {#if col.key === "device"}
             <a
@@ -278,22 +295,19 @@
               {:else}{fw?.Available || "—"}{/if}
             </span>
           {:else if col.key === "state"}
-            <!-- Priority: equal versions → Up to date; else update-available
-                 → CCU state or generic badge; else loaded-and-equal → Up to
-                 date; else best-effort from the gated update_available flag. -->
+            <!-- The CCU firmware lifecycle state is the truth for this
+                 column. The gated update_available flag only says whether
+                 an install can start right now (HmIP delivers the image to
+                 the device first) — it must never repaint an existing
+                 update (NEW_FIRMWARE_AVAILABLE) as "up to date" while the
+                 row lists two different versions. -->
             {#if loadingFw}
               <span class="text-xs text-slate-400 dark:text-slate-500">…</span>
-            {:else if versionsMatch || (!updateAvailable && !!fw?.Current && !!fw?.Available)}
-              <Badge variant="success">{t("firmware.state.UP_TO_DATE")}</Badge>
-            {:else if updateAvailable}
-              {#if fw?.UpdateState}
-                <Badge variant={stateBadgeVariant(fw.UpdateState)}>{stateLabel(fw.UpdateState)}</Badge>
-              {:else}
-                <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
-              {/if}
-            {:else if fw?.UpdateState}
+            {:else if fw?.UpdateState && fw.UpdateState !== "UNKNOWN"}
               <Badge variant={stateBadgeVariant(fw.UpdateState)}>{stateLabel(fw.UpdateState)}</Badge>
-            {:else if device.update_available}
+            {:else if versionsMatch}
+              <Badge variant="success">{t("firmware.state.UP_TO_DATE")}</Badge>
+            {:else if updateAvailable || device.update_available || newerVersion}
               <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
             {:else}
               <Badge variant="muted">{t("firmware.state.UP_TO_DATE")}</Badge>
@@ -315,7 +329,15 @@
                 {t("firmware.triggering")}
               </Button>
             {:else if !loadingFw && detail && !updateAvailable}
-              <span class="text-xs text-slate-500 dark:text-slate-400">{t("firmware.up_to_date")}</span>
+              {#if newerVersion && !isInProgress(fw?.UpdateState)}
+                <!-- A newer firmware exists but is not installable yet:
+                     the CCU still has to deliver the image to the device.
+                     Saying "up to date" here contradicts the version
+                     columns. -->
+                <span class="text-xs text-slate-500 dark:text-slate-400">{t("firmware.awaiting_transfer")}</span>
+              {:else if !newerVersion}
+                <span class="text-xs text-slate-500 dark:text-slate-400">{t("firmware.up_to_date")}</span>
+              {/if}
             {/if}
           {/if}
         {/snippet}
