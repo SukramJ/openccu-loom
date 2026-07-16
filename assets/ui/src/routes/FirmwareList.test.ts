@@ -93,3 +93,50 @@ describe("FirmwareList", () => {
     expect(queryByRole("button", { name: "Update" })).toBeNull();
   });
 });
+
+// The gateway RF module (RPI-RF-MOD) has no OTA image of its own — it is
+// updated through the CCU firmware — so the CCU reports the all-zero
+// placeholder "0.0.0" as its available version. A placeholder is not a
+// pending update: rendering "Update available" / "Awaiting transfer"
+// next to 4.4.22 → 0.0.0 contradicts the version columns.
+describe("FirmwareList zero-version placeholder", () => {
+  const rfMod = {
+    address: "001F5A4993D962",
+    name: "Otto-Funkmodul",
+    model: "RPI-RF-MOD",
+    interface_id: "ccu-HmIP-RF",
+    central: "",
+    updatable: true,
+    update_available: false,
+  };
+
+  beforeEach(() => {
+    mockItems = [rfMod];
+    mockGetDevice.mockResolvedValue({
+      address: rfMod.address,
+      update_available: false,
+      firmware: {
+        Current: "4.4.22",
+        Available: "0.0.0",
+        Updatable: true,
+        UpdateState: "UNKNOWN",
+      },
+    });
+  });
+
+  it("treats the all-zero available version as 'no update known', not as a pending transfer", async () => {
+    const { findByText, findAllByText, queryByText } = render(FirmwareList);
+
+    await findByText("4.4.22");
+    // Status badge and action column both settle on "up to date".
+    expect((await findAllByText("Up to date")).length).toBeGreaterThan(0);
+    expect(queryByText("Update available")).toBeNull();
+    expect(queryByText("Awaiting transfer to the device")).toBeNull();
+    // The placeholder never renders as an installable version, and the
+    // summary bar does not count the device as having an update.
+    expect(queryByText("0.0.0")).toBeNull();
+    expect(
+      queryByText("1 device(s) have a firmware update available."),
+    ).toBeNull();
+  });
+});

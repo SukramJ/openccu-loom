@@ -28,7 +28,7 @@ type FirmwareInfo struct {
 // update.latest_firmware gating — a newer firmware merely existing on the CCU
 // (NEW_FIRMWARE_AVAILABLE) is NOT yet an installable update.
 func GatedLatestFirmware(iface hmenum.Interface, info FirmwareInfo) string {
-	if info.Available == "" {
+	if info.Available == "" || isZeroVersion(info.Available) {
 		return info.Current
 	}
 	switch iface {
@@ -42,6 +42,25 @@ func GatedLatestFirmware(iface hmenum.Interface, info FirmwareInfo) string {
 	default:
 		return info.Current
 	}
+}
+
+// isZeroVersion reports whether v consists only of zero segments
+// ("0.0.0", "0.0", "0"). The CCU reports this all-zero placeholder as
+// the available firmware of devices it has no OTA image for — e.g. the
+// gateway RF module, which is updated through the CCU firmware itself —
+// so it must never count as an installable version.
+func isZeroVersion(v string) bool {
+	sawZero := false
+	for _, r := range v {
+		switch r {
+		case '0':
+			sawZero = true
+		case '.':
+		default:
+			return false
+		}
+	}
+	return sawZero
 }
 
 // Firmware owns the mutable firmware record and fires change
