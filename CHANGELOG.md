@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.3] — 2026-07-16
+
+### Added
+
+- **SPA↔contract path guard** — a new vitest contract test parses every
+  URL the REST client constructs and matches it (method + path shape)
+  against the OpenAPI contract via the generated types. A client call
+  against a path or method the daemon never serves now fails CI instead
+  of failing the user at runtime — the class behind the 0.42.2
+  link-paramset 404. A full audit of all 184 client calls against the
+  217 contract operations found no further mismatches; the existing
+  router↔spec walk test already pins the other edge in both directions.
+
+### Fixed
+
+- **Install mode never opened** — `POST /api/v1/install-mode/interfaces`
+  (and the per-device teach-in route) failed on every attempt: the
+  install-mode writer looked its backend up under the bare interface
+  type (`HmIP-RF`) while the registry keys backends by the canonical
+  central-prefixed wire ID. The writer now translates to the wire ID;
+  the unit-test fixtures register backends exactly like production
+  wiring so this class of key mismatch can no longer hide.
+- **Log viewer showed `"error": {}`** — the SPA log viewer and
+  diagnostic captures passed error attributes through as raw values,
+  which marshal to an empty JSON object, hiding the failure reason for
+  every logged error (the install-mode failure above was undiagnosable
+  from the UI). Error attrs now render as their message string,
+  matching the stdout log.
+
 ## [0.42.2] — 2026-07-16
 
 ### Fixed

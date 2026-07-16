@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.3
+
+- **Fixed: pairing mode ("install mode") never opened.** Starting the
+  pairing window from the UI always failed with "Install mode write
+  failed"; teaching in new devices works now, both per interface and
+  targeted at a single device.
+- **Fixed: the log viewer hid error reasons.** Failed operations showed
+  an empty error object in the log viewer; the actual failure message
+  is now visible, so problems can be diagnosed from the UI.
+
 ## 0.42.2
 
 - **Fixed: saving direct-link settings from the channel editor.** The

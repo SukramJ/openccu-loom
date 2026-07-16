@@ -273,7 +273,16 @@ func attrValue(v slog.Value) any {
 		}
 		return out
 	default:
-		return v.Any()
+		raw := v.Any()
+		// Errors must surface as their message: passed through raw they
+		// json.Marshal to `{}` in the log-viewer/capture output (most
+		// error implementations carry no exported fields) and the
+		// failure reason is lost. Mirrors the stdlib JSON handler,
+		// which special-cases error values the same way.
+		if err, ok := raw.(error); ok && err != nil {
+			return err.Error()
+		}
+		return raw
 	}
 }
 
