@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.7
+
+- **Fixed: list-type system variables show their text again.** A CCU
+  system variable with a value list (e.g. an alarm status with options
+  like "Aus", "Vollschutz") published its numeric index instead of the
+  option text, so Home Assistant rejected the value and the sensor
+  stayed "unknown". The option text is published again.
+
 ## 0.42.6
 
 - **Improved: alarm panels now tell clients when a code is needed.**

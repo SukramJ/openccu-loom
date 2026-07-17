@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // ============================================================
@@ -146,6 +147,13 @@ func TestParseSysvarValueAlarmTrue(t *testing.T) {
 	_ = pv
 }
 
+// The numeric assertions below pin the ParamValue KIND, not just the
+// parse success: the CCU delivers every sysvar value as a quoted
+// string, and a value that stays ValueKindString silently breaks every
+// downstream type dispatch — most visibly the LIST index→label mapping
+// on the MQTT state topic (sysvarStateForMQTT), where HA then rejects
+// the raw index against the discovery's enum options.
+
 func TestParseSysvarValueNumber(t *testing.T) {
 	t.Parallel()
 	raw := json.RawMessage(`"42.5"`)
@@ -153,7 +161,9 @@ func TestParseSysvarValueNumber(t *testing.T) {
 	if !ok {
 		t.Fatal("parseSysvarValue number must succeed")
 	}
-	_ = pv
+	if pv.Kind != hmtypes.ValueKindFloat || pv.Float != 42.5 {
+		t.Errorf("number value = %+v, want float 42.5", pv)
+	}
 }
 
 func TestParseSysvarValueFloat(t *testing.T) {
@@ -163,7 +173,9 @@ func TestParseSysvarValueFloat(t *testing.T) {
 	if !ok {
 		t.Fatal("parseSysvarValue float must succeed")
 	}
-	_ = pv
+	if pv.Kind != hmtypes.ValueKindFloat || pv.Float != 3.14 {
+		t.Errorf("float value = %+v, want float 3.14", pv)
+	}
 }
 
 func TestParseSysvarValueInteger(t *testing.T) {
@@ -173,7 +185,51 @@ func TestParseSysvarValueInteger(t *testing.T) {
 	if !ok {
 		t.Fatal("parseSysvarValue integer must succeed")
 	}
-	_ = pv
+	if pv.Kind != hmtypes.ValueKindInt || pv.Int != 7 {
+		t.Errorf("integer value = %+v, want int 7", pv)
+	}
+}
+
+func TestParseSysvarValueListIndexIsInt(t *testing.T) {
+	t.Parallel()
+	// LIST sysvars report the zero-based index into the value list as a
+	// quoted string. It must parse to an int so the publish path can
+	// resolve it to its label.
+	raw := json.RawMessage(`"0"`)
+	pv, ok := parseSysvarValue(hmenum.HubValueTypeList, raw)
+	if !ok {
+		t.Fatal("parseSysvarValue list must succeed")
+	}
+	if pv.Kind != hmtypes.ValueKindInt || pv.Int != 0 {
+		t.Errorf("list value = %+v, want int 0", pv)
+	}
+}
+
+func TestParseSysvarValueListBareIndex(t *testing.T) {
+	t.Parallel()
+	// Bare numeric JSON (no quotes) rides the json.Number fallback.
+	raw := json.RawMessage(`2`)
+	pv, ok := parseSysvarValue(hmenum.HubValueTypeList, raw)
+	if !ok {
+		t.Fatal("parseSysvarValue bare list index must succeed")
+	}
+	if pv.Kind != hmtypes.ValueKindInt || pv.Int != 2 {
+		t.Errorf("list value = %+v, want int 2", pv)
+	}
+}
+
+func TestParseSysvarValueListNonNumericFallsBackToString(t *testing.T) {
+	t.Parallel()
+	// A non-numeric LIST payload degrades to the string fallback so the
+	// caller still observes something instead of dropping the update.
+	raw := json.RawMessage(`"garbled"`)
+	pv, ok := parseSysvarValue(hmenum.HubValueTypeList, raw)
+	if !ok {
+		t.Fatal("parseSysvarValue non-numeric list must still succeed")
+	}
+	if pv.Kind != hmtypes.ValueKindString || pv.String != "garbled" {
+		t.Errorf("list fallback value = %+v, want string \"garbled\"", pv)
+	}
 }
 
 func TestParseSysvarValueString(t *testing.T) {
@@ -183,7 +239,9 @@ func TestParseSysvarValueString(t *testing.T) {
 	if !ok {
 		t.Fatal("parseSysvarValue string must succeed")
 	}
-	_ = pv
+	if pv.Kind != hmtypes.ValueKindString || pv.String != "hello world" {
+		t.Errorf("string value = %+v, want string \"hello world\"", pv)
+	}
 }
 
 func TestParseSysvarValueBareNumber(t *testing.T) {
