@@ -68,3 +68,16 @@ func StripInstance(instanceName, id string) string {
 	}
 	return strings.TrimPrefix(id, instanceName+"-")
 }
+
+// BareInterfaceFromWireID inverts [WireInterfaceID]: it strips the
+// central-name prefix from a canonical `<central>-<iface>` id and returns
+// the bare interface. An id without the prefix (empty central name) is
+// returned unchanged.
+func BareInterfaceFromWireID(centralName, wireID string) hmenum.Interface {
+	if centralName != "" {
+		if bare, ok := strings.CutPrefix(wireID, centralName+"-"); ok {
+			return hmenum.Interface(bare)
+		}
+	}
+	return hmenum.Interface(wireID)
+}

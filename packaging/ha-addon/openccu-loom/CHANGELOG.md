@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.5
+
+- **New: devices paired at the CCU appear immediately.** A device you
+  teach in while the add-on is running now shows up right away — in the
+  UI, in MQTT/Home Assistant discovery, and as a Matter endpoint —
+  including its CCU-assigned name and current values. Previously a new
+  device only appeared after restarting the add-on. Devices deleted at
+  the CCU now also disappear from the Matter bridge without a restart.
+
 ## 0.42.4
 
 - **Fixed: the firmware overview no longer claims "up to date" for

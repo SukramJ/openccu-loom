@@ -29,7 +29,11 @@ type centralBringUp struct {
 	deps               WireDeps
 	callbackURL        string
 	binRPCCallbackAddr string
-	logger             *slog.Logger
+	// cbHandlers is the XML-RPC callback handler registered for this
+	// central (nil without a callback route). The gated bring-up installs
+	// the hot-plug ingestor on it once the pipeline and backends exist.
+	cbHandlers *CallbackHandlers
+	logger     *slog.Logger
 
 	parentCtx context.Context //nolint:containedctx // teardown-bounded daemon-lifetime ctx; the handle re-derives a child per (re)start
 
@@ -88,7 +92,7 @@ func (b *centralBringUp) start() {
 	SafeGo("central_bringup."+b.cc.Name, func() {
 		defer b.wg.Done()
 		ccCopy := b.cc
-		gatedCentralBringUp(ctx, b.cfg, &ccCopy, b.unit, b.deps, b.callbackURL, b.binRPCCallbackAddr, b.addCloser, b.logger)
+		gatedCentralBringUp(ctx, b.cfg, &ccCopy, b.unit, b.deps, b.callbackURL, b.binRPCCallbackAddr, b.cbHandlers, b.addCloser, b.logger)
 	})
 }
 
@@ -230,7 +234,7 @@ func (m *BringUpManager) add(b *centralBringUp) {
 // AddCentral (runtime); uses the manager's captured parentCtx/cfg/deps/logger.
 // The Unit must already be registered in the shared registry.
 func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.Unit) *centralBringUp {
-	callbackURL, binRPCCallbackAddr, deregister := registerCentralCallbacks(m.deps, cc, unit, m.logger)
+	callbackURL, binRPCCallbackAddr, cbHandlers, deregister := registerCentralCallbacks(m.deps, cc, unit, m.logger)
 	b := &centralBringUp{
 		cfg:                m.cfg,
 		cc:                 *cc,
@@ -238,6 +242,7 @@ func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.U
 		deps:               m.deps,
 		callbackURL:        callbackURL,
 		binRPCCallbackAddr: binRPCCallbackAddr,
+		cbHandlers:         cbHandlers,
 		logger:             m.logger,
 		parentCtx:          m.parentCtx,
 	}

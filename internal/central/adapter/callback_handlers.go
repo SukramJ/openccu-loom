@@ -59,6 +59,18 @@ type CallbackHandlers struct {
 	// entities right away. Set per-central via [SetDelayNewDeviceCreation].
 	delayNewDeviceCreation bool
 
+	// hotplugMu guards hotplugIngest. The handler is registered with the
+	// callback server before the central's device pipeline exists, so the
+	// ingestor arrives later via [SetHotplugIngestor] while callbacks may
+	// already be firing.
+	hotplugMu sync.RWMutex
+	// hotplugIngest materialises freshly announced devices into the
+	// domain model (paramset hydration, custom DPs, value seeding). Nil
+	// until the wiring installs it; NewDevices then degrades to the
+	// registry-and-event bookkeeping only. interfaceID is the canonical
+	// wire id (`<central>-<iface>`).
+	hotplugIngest func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error
+
 	// selfReloadSem is a non-blocking semaphore (buffered channel) that
 	// caps the number of concurrent self-reload goroutines at
 	// selfReloadConcurrency. A value-flood from the CCU can otherwise
@@ -103,6 +115,25 @@ func (h *CallbackHandlers) SetWriter(w *clientpkg.ValueWriter) {
 // entities immediately.
 func (h *CallbackHandlers) SetDelayNewDeviceCreation(delay bool) {
 	h.delayNewDeviceCreation = delay
+}
+
+// SetHotplugIngestor installs the hot-plug materialiser NewDevices hands
+// freshly announced devices to. The wiring builds it once the device
+// pipeline and the per-interface backends exist — callbacks arriving
+// before that fall back to registry bookkeeping only (the interface
+// bring-up materialises those devices anyway).
+func (h *CallbackHandlers) SetHotplugIngestor(fn func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error) {
+	h.hotplugMu.Lock()
+	h.hotplugIngest = fn
+	h.hotplugMu.Unlock()
+}
+
+// hotplugIngestor returns the currently installed hot-plug materialiser,
+// or nil when the wiring has not provided one yet.
+func (h *CallbackHandlers) hotplugIngestor() func(ctx context.Context, interfaceID string, descriptions []hmproto.DeviceDescription) error {
+	h.hotplugMu.RLock()
+	defer h.hotplugMu.RUnlock()
+	return h.hotplugIngest
 }
 
 // incidentRecorder returns the incident recorder wired to the central's
@@ -424,10 +455,19 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 
 // NewDevices acknowledges a hot-plug announcement. It stores the incoming
 // device descriptions in the DeviceCoordinator's delayed-inbox for later
-// manual acceptance and immediately ingests them via HandleNewDevices so
-// that the DeviceRegistry and ModelRegistry are updated without waiting
-// for the next reconnect cycle.
-func (h *CallbackHandlers) NewDevices(ctx context.Context, interfaceID string, descs xmlrpc.ArrayValue) error {
+// manual acceptance and hands them to the hot-plug ingestor in the
+// background so the full domain device (channels, data points, custom
+// DPs, values) exists without waiting for a daemon restart.
+//
+// The materialisation runs detached: the CCU blocks its event channel
+// until this callback returns, while a full hydration round-trips the
+// CCU several times per new channel. The ingestor dedups against the
+// ModelRegistry, so the full-inventory announcement the CCU sends after
+// every reconnect (our listDevices reply is deliberately empty) no-ops.
+// HandleNewDevices — and with it the DeviceCreatedEvent — runs after the
+// ingest so north-bound subscribers (MQTT discovery, Matter reassembly)
+// resolve the device in the model when the event fires.
+func (h *CallbackHandlers) NewDevices(_ context.Context, interfaceID string, descs xmlrpc.ArrayValue) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.new_devices",
 		slog.String("interface", interfaceID),
@@ -454,11 +494,27 @@ func (h *CallbackHandlers) NewDevices(ctx context.Context, interfaceID string, d
 			slog.Int("count", len(descriptions)))
 		return nil
 	}
-	// Immediately ingest so the device is reachable via the REST / MQTT
-	// surfaces without requiring a daemon restart or reconnect.
-	h.unit.Devices.HandleNewDevices(ctx, iface, descriptions)
+	h.wg.Go(func() { //nolint:contextcheck // background ingest uses h.ctx — the callback ctx dies when the RPC response is written
+		bgCtx, cancel := context.WithTimeout(h.ctx, newDevicesIngestTimeout)
+		defer cancel()
+		if ingest := h.hotplugIngestor(); ingest != nil {
+			if err := ingest(bgCtx, interfaceID, descriptions); err != nil {
+				h.logger.Warn("callback.new_devices.ingest_failed",
+					slog.String("interface", interfaceID),
+					slog.String("err", err.Error()))
+			}
+		}
+		// Registry + description-cache bookkeeping and the (at-least-once)
+		// DeviceCreatedEvent — after materialisation, see doc comment.
+		h.unit.Devices.HandleNewDevices(bgCtx, iface, descriptions)
+	})
 	return nil
 }
+
+// newDevicesIngestTimeout bounds one background hot-plug materialisation.
+// A single device needs a handful of paramset reads plus one ReGa call;
+// the generous bound only reaps a hung CCU connection.
+const newDevicesIngestTimeout = 2 * time.Minute
 
 // DeleteDevices drops the listed devices from the model registry so
 // the REST / MQTT views stop advertising them.
