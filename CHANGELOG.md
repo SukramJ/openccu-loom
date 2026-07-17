@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.9] — 2026-07-17
+
+### Fixed
+
+- **Untranslated climate parameters on HmIP-BWTH** — the parameter
+  editor showed raw identifiers for `TEMPERATURE_COMFORT_COOLING`
+  (the cooling-mode comfort temperature on climate transceivers) and
+  `SUPPORTING_WIRED_OPERATION_MODE` (MAINTENANCE channel): the CCU's
+  own stringtable never carried them, and the curated translation
+  overlay had no gap-fill. Both now resolve in German and English
+  ("Komfort-Temperatur (Kühl-Modus)" / "Comfort temperature (cooling
+  mode)"), pinned by an overlay regression test.
+
 ## [0.42.8] — 2026-07-17
 
 ### Fixed
