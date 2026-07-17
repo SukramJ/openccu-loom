@@ -4431,7 +4431,9 @@ export interface components {
              * @description Runtime feature set. Always-on entries:
              *     `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
              *     Conditional entries surface only when configured:
-             *     `mqtt.discovery.v1`, `matter.bridge.v1`, `auth.oidc.v1`.
+             *     `mqtt.discovery.v1`, `matter.bridge.v1`, `auth.oidc.v1`,
+             *     `alarm.v1` (the `/alarm` surface is mounted — absent, the
+             *     alarm subsystem is off and every `/alarm` route answers 404).
              *
              *     Open-ended on purpose: the daemon may advertise additional
              *     capabilities (e.g. `system.restart.supervised.v1`, `mcp.v1`)
@@ -5952,11 +5954,26 @@ export interface components {
             supported_modes?: string[];
             available: boolean;
             master?: boolean;
+            /**
+             * @description Effective per-area code requirement for arming: the area's
+             *     code policy AND an applicable enabled pin code exists —
+             *     exactly the requirement the daemon enforces, so a client
+             *     prompts for a code precisely when one is needed. The master
+             *     aggregate carries `true` when any member area requires one.
+             */
+            code_arm_required: boolean;
+            /**
+             * @description Effective per-area code requirement for disarming; same
+             *     derivation and master aggregation as `code_arm_required`.
+             */
+            code_disarm_required: boolean;
         };
         /**
          * @description Payload of an `alarm.panel_changed` broadcast. Topic
          *     `alarm.panel`. Fires whenever a panel entity's projection
          *     changes; `removed` marks a deleted area's panel.
+         *     `code_arm_required` / `code_disarm_required` mirror the
+         *     `AlarmPanelEntity` flags so live code-policy edits propagate.
          */
         AlarmPanelChangedPayload: {
             unique_id: string;
@@ -5964,6 +5981,8 @@ export interface components {
             name: string;
             state: string;
             available: boolean;
+            code_arm_required: boolean;
+            code_disarm_required: boolean;
             removed?: boolean;
         };
         /**

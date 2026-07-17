@@ -265,7 +265,11 @@ type AlarmPanelChangedPayload struct {
 	Name      string `json:"name"`
 	State     string `json:"state"`
 	Available bool   `json:"available"`
-	Removed   bool   `json:"removed,omitempty"`
+	// CodeArmRequired / CodeDisarmRequired mirror the panel entity's
+	// effective per-verb code policy so live policy edits propagate.
+	CodeArmRequired    bool `json:"code_arm_required"`
+	CodeDisarmRequired bool `json:"code_disarm_required"`
+	Removed            bool `json:"removed,omitempty"`
 }
 
 // AlarmReminderPayload is the broadcast payload for an arm-schedule
@@ -303,12 +307,14 @@ func (s *AlarmPanelSubscriber) onPanelChanged(e hmevent.AlarmPanelChangedEvent) 
 		Type:  broadcastAlarmPanelChanged,
 		When:  e.Timestamp(),
 		Payload: AlarmPanelChangedPayload{
-			UniqueID:  e.UniqueID,
-			AreaID:    e.AreaID,
-			Name:      e.Name,
-			State:     e.State,
-			Available: e.Available,
-			Removed:   e.Removed,
+			UniqueID:           e.UniqueID,
+			AreaID:             e.AreaID,
+			Name:               e.Name,
+			State:              e.State,
+			Available:          e.Available,
+			CodeArmRequired:    e.CodeArmRequired,
+			CodeDisarmRequired: e.CodeDisarmRequired,
+			Removed:            e.Removed,
 		},
 	})
 }

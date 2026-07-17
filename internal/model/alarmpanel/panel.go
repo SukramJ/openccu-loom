@@ -35,6 +35,16 @@ type Panel struct {
 	Available bool
 	// Master marks the aggregate panel.
 	Master bool
+	// CodeArmRequired / CodeDisarmRequired carry the area's effective
+	// per-verb code policy (docs/alarm-concept.md §11/§13.3): the
+	// area-config policy half AND the "an applicable enabled pin code
+	// exists" half, exactly as the engine will enforce them — so a
+	// client prompts for a code precisely when one is needed. The
+	// master aggregate carries the any-area-requires union: a client
+	// driving the aggregate fans the entered code out to the per-area
+	// verbs.
+	CodeArmRequired    bool
+	CodeDisarmRequired bool
 }
 
 // Category returns the model taxonomy category of the entity.

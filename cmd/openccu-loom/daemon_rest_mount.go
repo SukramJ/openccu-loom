@@ -261,6 +261,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			supervisedRestart: detectSupervisedRestart(),
 			mcp:               cfg.North.MCP.Enabled,
 			mcpWrite:          cfg.North.MCP.AllowWrites,
+			// Mirrors the Deps.Alarm mount condition below: the token
+			// tracks whether the /alarm routes exist, not whether the
+			// engine is armed/healthy.
+			alarm: d.alarm != nil,
 		},
 		CORS:       buildCORS(cfg),
 		Idempotent: true,

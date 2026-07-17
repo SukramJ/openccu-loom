@@ -608,14 +608,16 @@ func ListAlarmPanels(p AlarmPanel) http.HandlerFunc {
 				modes = append(modes, string(m))
 			}
 			out = append(out, hmapi.AlarmPanelEntity{
-				UniqueID:       pan.UniqueID,
-				AreaID:         pan.AreaID,
-				Name:           pan.Name,
-				Category:       string(pan.Category()),
-				State:          pan.State,
-				SupportedModes: modes,
-				Available:      pan.Available,
-				Master:         pan.Master,
+				UniqueID:           pan.UniqueID,
+				AreaID:             pan.AreaID,
+				Name:               pan.Name,
+				Category:           string(pan.Category()),
+				State:              pan.State,
+				SupportedModes:     modes,
+				Available:          pan.Available,
+				Master:             pan.Master,
+				CodeArmRequired:    pan.CodeArmRequired,
+				CodeDisarmRequired: pan.CodeDisarmRequired,
 			})
 		}
 		JSON(w, http.StatusOK, out)

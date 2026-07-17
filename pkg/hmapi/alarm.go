@@ -216,6 +216,13 @@ type AlarmPanelEntity struct {
 	SupportedModes []string `json:"supported_modes,omitempty"`
 	Available      bool     `json:"available"`
 	Master         bool     `json:"master,omitempty"`
+	// CodeArmRequired / CodeDisarmRequired carry the area's effective
+	// per-verb code policy: the area-config policy AND an applicable
+	// enabled pin code exists — exactly the requirement the engine
+	// enforces, so a client prompts for a code precisely when one is
+	// needed. The master aggregate carries the any-area-requires union.
+	CodeArmRequired    bool `json:"code_arm_required"`
+	CodeDisarmRequired bool `json:"code_disarm_required"`
 }
 
 // AlarmCodePerms are the per-code verb permissions.

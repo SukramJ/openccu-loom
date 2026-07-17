@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.6] — 2026-07-17
+
+### Added
+
+- **`alarm.v1` capability token** (#357) — `GET /api/v1/info` now
+  advertises `alarm.v1` in `capabilities` whenever the daemon-level
+  alarm service is mounted (the same condition that mounts the
+  `/alarm` routes). External clients gate their alarm surface on the
+  token instead of probing `GET /alarm/panels` for a 404, which cannot
+  distinguish a disabled subsystem from an old daemon or a
+  reverse-proxy misroute.
+- **Per-area code policy on the panel entity** (#358) — the
+  alarm-control-panel entity (`GET /alarm/panels`, WS
+  `alarm_panel.panels`, and the `alarm.panel_changed` broadcast) now
+  carries `code_arm_required` / `code_disarm_required`: the same
+  effective per-verb code requirement the MQTT discovery already
+  advertises (area code policy AND an applicable enabled pin code
+  exists), so REST/WS consumers can prompt for a code upfront instead
+  of surfacing the daemon's 403 after the fact. The master aggregate
+  carries the any-area-requires union; live code CRUD re-derives the
+  flags and pushes changed panels over the broadcast. APIVersion
+  2.23.0.
+
 ## [0.42.5] — 2026-07-16
 
 ### Added

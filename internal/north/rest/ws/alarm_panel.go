@@ -617,14 +617,16 @@ func alarmPanelPanelsHandler(svc AlarmPanelQuery) CommandHandler {
 				modes = append(modes, string(m))
 			}
 			out = append(out, hmapi.AlarmPanelEntity{
-				UniqueID:       p.UniqueID,
-				AreaID:         p.AreaID,
-				Name:           p.Name,
-				Category:       string(p.Category()),
-				State:          p.State,
-				SupportedModes: modes,
-				Available:      p.Available,
-				Master:         p.Master,
+				UniqueID:           p.UniqueID,
+				AreaID:             p.AreaID,
+				Name:               p.Name,
+				Category:           string(p.Category()),
+				State:              p.State,
+				SupportedModes:     modes,
+				Available:          p.Available,
+				Master:             p.Master,
+				CodeArmRequired:    p.CodeArmRequired,
+				CodeDisarmRequired: p.CodeDisarmRequired,
 			})
 		}
 		return map[string]any{"panels": out}, nil

@@ -231,9 +231,48 @@ func (s *Service) Codes() *codes.Facade { return s.codes }
 // NotifyCodesChanged publishes the codes-changed reconcile poke on the
 // alarm bus. The composition root wires it into the code CRUD adapter;
 // the MQTT publisher re-derives its discovery flags (effective
-// code_arm_required / code_disarm_required) on it.
+// code_arm_required / code_disarm_required) on it, and the panel
+// registry refreshes the same flags on its entity projections. The
+// refresh runs on the caller (a management write, never the engine
+// sink), so the store reads it needs are safe here.
 func (s *Service) NotifyCodesChanged() {
 	events.Publish(s.bus, hmevent.AlarmCodesChangedEvent{Base: hmevent.NewBaseAt(s.clk.Now())})
+	s.refreshPanelCodePolicies(context.Background())
+}
+
+// EffectiveCodePolicy resolves the per-area arm/disarm code requirement
+// exactly as the engine will enforce it (docs/alarm-concept.md
+// §11/§13.3): the policy half comes from the area config (RequireDisarm
+// defaults to required when nil), and the "codes exist" half from the
+// codes facade — an area without an applicable enabled pin code
+// advertises no requirement (the engine passes an empty code through),
+// while an area with one advertises it even off the nil default, so
+// clients prompt for the code the engine is going to demand.
+// Advertising either half alone would trap disarm: requirement-without-
+// codes leaves the client prompting for a code that cannot exist,
+// codes-without-requirement makes it send a bare disarm the engine
+// refuses. A missing area, parse error, or absent store degrades to no
+// requirement.
+func (s *Service) EffectiveCodePolicy(ctx context.Context, areaID string) (armRequired, disarmRequired bool) {
+	if s.stores == nil || s.stores.Areas == nil {
+		return false, false
+	}
+	row, ok, err := s.stores.Areas.Get(ctx, areaID)
+	if err != nil || !ok {
+		return false, false
+	}
+	cfg, err := engine.ParseAreaConfig(row.ConfigJSON)
+	if err != nil {
+		return false, false
+	}
+	armRequired = cfg.CodePolicy.RequireArm
+	disarmRequired = cfg.CodePolicy.RequireDisarm == nil || *cfg.CodePolicy.RequireDisarm
+	if armRequired || disarmRequired {
+		hasPIN := s.codes != nil && s.codes.HasPINCodes(ctx, areaID)
+		armRequired = armRequired && hasPIN
+		disarmRequired = disarmRequired && hasPIN
+	}
+	return armRequired, disarmRequired
 }
 
 // codeSourceAdapter maps the codes facade's Row projection onto the

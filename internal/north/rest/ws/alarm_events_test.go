@@ -269,6 +269,45 @@ func TestAlarmPanelSubscriberHealthChanged(t *testing.T) {
 	}
 }
 
+// TestAlarmPanelSubscriberPanelChanged verifies an
+// AlarmPanelChangedEvent fans out as alarm.panel_changed carrying the
+// entity's effective code-policy flags through to the broadcast
+// payload, so a live policy edit (docs/alarm-concept.md §11) propagates
+// to WebSocket clients the same way it does to REST and MQTT.
+func TestAlarmPanelSubscriberPanelChanged(t *testing.T) {
+	t.Parallel()
+	h, bus := newAlarmPanelSubscriberFixture(t)
+
+	events.Publish(bus, hmevent.AlarmPanelChangedEvent{
+		Base:               hmevent.NewBase(),
+		UniqueID:           "openccu-loom_alarm_eg",
+		AreaID:             "eg",
+		Name:               "Erdgeschoss",
+		State:              "armed_away",
+		Available:          true,
+		CodeArmRequired:    true,
+		CodeDisarmRequired: true,
+	})
+
+	ev := pollHub(t, h, alarmTopicFilter)
+	if ev.Type != broadcastAlarmPanelChanged {
+		t.Fatalf("type = %q, want %q", ev.Type, broadcastAlarmPanelChanged)
+	}
+	p, ok := ev.Payload.(AlarmPanelChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want AlarmPanelChangedPayload", ev.Payload)
+	}
+	if p.UniqueID != "openccu-loom_alarm_eg" || p.AreaID != "eg" {
+		t.Fatalf("identity fields = %+v", p)
+	}
+	if !p.CodeArmRequired || !p.CodeDisarmRequired {
+		t.Fatalf("code policy fields = %+v, want both true", p)
+	}
+	if p.Removed {
+		t.Fatalf("removed = true, want false for a live update")
+	}
+}
+
 // TestAlarmPanelSubscriberNilSafe mirrors
 // TestHubEventsSubscriberNilSafe: Start/Stop on a subscriber with no
 // bus and no hub must not panic — the daemon leaves the subscriber

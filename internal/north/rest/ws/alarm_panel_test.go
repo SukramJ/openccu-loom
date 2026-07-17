@@ -76,6 +76,17 @@ func (h *alarmPanelHarness) Stores() *alarmpkg.Stores { return h.stores }
 // the service-level tests; the command handler only needs the method.
 func (h *alarmPanelHarness) Panels() []alarmpanel.Panel { return nil }
 
+// stubbedPanelHarness substitutes a fixed Panels() result over an
+// otherwise real alarmPanelHarness. alarm_panel.panels only calls
+// Panels(), so the rest of the AlarmPanelQuery facade can stay the
+// harness's real engine/stores.
+type stubbedPanelHarness struct {
+	*alarmPanelHarness
+	panels []alarmpanel.Panel
+}
+
+func (s stubbedPanelHarness) Panels() []alarmpanel.Panel { return s.panels }
+
 // seedArea persists one area config row.
 func (h *alarmPanelHarness) seedArea(id, name string, cfg engine.AreaConfig) {
 	h.t.Helper()
@@ -404,5 +415,53 @@ func TestAlarmPanelStateAndReadinessDispatch(t *testing.T) {
 	res = dispatchJSON(context.Background(), t, r, "alarm_panel.readiness", map[string]any{"area_id": "missing"})
 	if res.Error == nil || res.Error.Code != "not_found" {
 		t.Fatalf("readiness on unknown area = %+v, want not_found", res.Error)
+	}
+}
+
+// TestAlarmPanelPanelsDispatchMapsCodePolicyFlags verifies the
+// alarm_panel.panels command handler carries a panel's effective
+// code-policy flags onto the wire hmapi.AlarmPanelEntity, the same
+// projection GET /alarm/panels and MQTT discovery serve.
+func TestAlarmPanelPanelsDispatchMapsCodePolicyFlags(t *testing.T) {
+	h := newAlarmPanelHarness(t)
+	h.start()
+	stub := stubbedPanelHarness{
+		alarmPanelHarness: h,
+		panels: []alarmpanel.Panel{
+			{
+				UniqueID:           alarmpanel.PanelUniqueID("eg"),
+				AreaID:             "eg",
+				Name:               "Erdgeschoss",
+				State:              "disarmed",
+				Available:          true,
+				CodeArmRequired:    true,
+				CodeDisarmRequired: false,
+			},
+		},
+	}
+	r := NewRouter()
+	RegisterAlarmPanelCommands(r, AlarmPanelCommandsConfig{Panel: stub})
+
+	res := r.Dispatch(context.Background(), "alarm_panel.panels", nil)
+	if res.Error != nil {
+		t.Fatalf("panels: %+v", res.Error)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("data type %T, want map[string]any", res.Data)
+	}
+	panels, ok := data["panels"].([]hmapi.AlarmPanelEntity)
+	if !ok || len(panels) != 1 {
+		t.Fatalf("panels = %+v", data["panels"])
+	}
+	p := panels[0]
+	if p.AreaID != "eg" {
+		t.Fatalf("area_id = %q, want eg", p.AreaID)
+	}
+	if !p.CodeArmRequired {
+		t.Errorf("code_arm_required = false, want true")
+	}
+	if p.CodeDisarmRequired {
+		t.Errorf("code_disarm_required = true, want false")
 	}
 }
