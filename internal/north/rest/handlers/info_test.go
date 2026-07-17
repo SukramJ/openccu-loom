@@ -64,7 +64,7 @@ func TestInfo_ContentTypeIsJSON(t *testing.T) {
 }
 
 type fakeCapDetector struct {
-	mqtt, matter, oidc bool
+	mqtt, matter, oidc, alarm bool
 }
 
 func (f fakeCapDetector) HasMQTTDiscovery() bool     { return f.mqtt }
@@ -74,6 +74,7 @@ func (f fakeCapDetector) HasCCUAuth() bool           { return false }
 func (f fakeCapDetector) HasSupervisedRestart() bool { return false }
 func (f fakeCapDetector) HasMCP() bool               { return false }
 func (f fakeCapDetector) HasMCPWrite() bool          { return false }
+func (f fakeCapDetector) HasAlarm() bool             { return f.alarm }
 
 func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {
 	t.Parallel()
@@ -122,6 +123,24 @@ func TestInfo_ConditionalCapabilities(t *testing.T) {
 	}
 	if has(CapabilityOIDC) {
 		t.Error("auth.oidc.v1 should be absent")
+	}
+	if has(CapabilityAlarm) {
+		t.Error("alarm.v1 should be absent when the alarm service is unmounted")
+	}
+}
+
+func TestInfo_AlarmCapability(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
+	w := httptest.NewRecorder()
+	Info(time.Now(), fakeCapDetector{alarm: true}).ServeHTTP(w, req)
+
+	var body InfoResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !slices.Contains(body.Capabilities, CapabilityAlarm) {
+		t.Fatalf("alarm.v1 missing from %v when the alarm service is mounted", body.Capabilities)
 	}
 }
 

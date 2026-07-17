@@ -102,6 +102,12 @@ type AlarmPanelChangedEvent struct {
 	State string
 	// Available reports the alarm-health verdict.
 	Available bool
+	// CodeArmRequired / CodeDisarmRequired carry the area's effective
+	// per-verb code policy (docs/alarm-concept.md §11): the area-config
+	// policy half AND the "an applicable enabled pin code exists" half.
+	// The master aggregate carries the any-area-requires union.
+	CodeArmRequired    bool
+	CodeDisarmRequired bool
 	// Removed marks a panel whose area was deleted.
 	Removed bool
 }

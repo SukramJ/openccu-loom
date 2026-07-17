@@ -16,7 +16,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "2.22.0"
+const APIVersion = "2.23.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -47,6 +47,13 @@ const (
 	CapabilityMCP = "mcp.v1"
 	//nolint:gosec // G101 false positive: a capability token, not a credential; see #20
 	CapabilityMCPWrite = "mcp.write.v1"
+	// CapabilityAlarm is surfaced when the daemon-level alarm service
+	// is mounted — the same condition that mounts the /alarm REST
+	// routes and the alarm_panel WS commands. Clients gate their alarm
+	// surface on this token instead of probing /alarm/panels for a 404
+	// (which cannot distinguish a disabled subsystem from an old daemon
+	// or a reverse-proxy misroute).
+	CapabilityAlarm = "alarm.v1"
 )
 
 // InfoResponse is the body of `GET /api/v1/info`.
@@ -81,6 +88,9 @@ type CapabilityDetector interface {
 	// whether its write tools are permitted. HasMCPWrite implies HasMCP.
 	HasMCP() bool
 	HasMCPWrite() bool
+	// HasAlarm reports whether the daemon-level alarm service is
+	// mounted (the /alarm routes exist).
+	HasAlarm() bool
 }
 
 // Info serves build metadata plus the daemon's wall-clock uptime.
@@ -135,6 +145,9 @@ func capabilities(d CapabilityDetector) []string {
 	}
 	if d.HasMCPWrite() {
 		out = append(out, CapabilityMCPWrite)
+	}
+	if d.HasAlarm() {
+		out = append(out, CapabilityAlarm)
 	}
 	return out
 }

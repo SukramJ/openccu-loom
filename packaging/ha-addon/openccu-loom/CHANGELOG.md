@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.6
+
+- **Improved: alarm panels now tell clients when a code is needed.**
+  The alarm-panel API reports per area whether arming or disarming
+  requires an alarm code, so connected clients (e.g. the Home
+  Assistant integration) can ask for the code upfront instead of
+  failing after the fact. The API also advertises whether the alarm
+  subsystem is available at all, so clients no longer have to guess.
+
 ## 0.42.5
 
 - **New: devices paired at the CCU appear immediately.** A device you

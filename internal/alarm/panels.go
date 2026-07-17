@@ -65,13 +65,16 @@ func (s *Service) seedPanels(ctx context.Context) {
 		snap := &snaps[i]
 		known[snap.ID] = true
 		modes := s.modesForArea(ctx, snap.ID)
+		armReq, disarmReq := s.EffectiveCodePolicy(ctx, snap.ID)
 		r.byArea[snap.ID] = &alarmpanel.Panel{
-			UniqueID:  alarmpanel.PanelUniqueID(snap.ID),
-			AreaID:    snap.ID,
-			Name:      snap.Name,
-			Modes:     modes,
-			State:     alarmpanel.StateToken(snap.State, snap.Mode),
-			Available: r.health,
+			UniqueID:           alarmpanel.PanelUniqueID(snap.ID),
+			AreaID:             snap.ID,
+			Name:               snap.Name,
+			Modes:              modes,
+			State:              alarmpanel.StateToken(snap.State, snap.Mode),
+			Available:          r.health,
+			CodeArmRequired:    armReq,
+			CodeDisarmRequired: disarmReq,
 		}
 	}
 	var removed []alarmpanel.Panel
@@ -172,34 +175,95 @@ func (s *Service) onPanelHealthEvent(e hmevent.AlarmHealthChangedEvent) {
 }
 
 // masterLocked aggregates the master panel; present with ≥2 areas.
-// The caller holds the registry lock.
+// The caller holds the registry lock. The code flags are the any-area
+// union: a client driving the aggregate prompts upfront when any
+// member area will demand a code and fans the entered code out to the
+// per-area verbs. (The MQTT master *command topic* stays code-free by
+// design — its aggregate verbs cannot carry per-area codes — so its
+// discovery config diverges deliberately from this projection.)
 func (r *panelRegistry) masterLocked() (alarmpanel.Panel, bool) {
 	if len(r.byArea) < 2 {
 		return alarmpanel.Panel{}, false
 	}
 	tokens := make([]string, 0, len(r.byArea))
+	var armReq, disarmReq bool
 	for _, p := range r.byArea {
 		tokens = append(tokens, p.State)
+		armReq = armReq || p.CodeArmRequired
+		disarmReq = disarmReq || p.CodeDisarmRequired
 	}
 	return alarmpanel.Panel{
-		UniqueID:  alarmpanel.PanelUniqueID(alarmpanel.MasterAreaID),
-		AreaID:    alarmpanel.MasterAreaID,
-		Name:      r.masterName,
-		State:     alarmpanel.MasterStateToken(tokens),
-		Available: r.health,
-		Master:    true,
+		UniqueID:           alarmpanel.PanelUniqueID(alarmpanel.MasterAreaID),
+		AreaID:             alarmpanel.MasterAreaID,
+		Name:               r.masterName,
+		State:              alarmpanel.MasterStateToken(tokens),
+		Available:          r.health,
+		Master:             true,
+		CodeArmRequired:    armReq,
+		CodeDisarmRequired: disarmReq,
 	}, true
 }
 
 // publishPanel emits the entity change onto the alarm bus.
 func (s *Service) publishPanel(p alarmpanel.Panel, removed bool) {
 	s.publish(hmevent.AlarmPanelChangedEvent{
-		Base:      hmevent.NewBaseAt(s.clk.Now()),
-		UniqueID:  p.UniqueID,
-		AreaID:    p.AreaID,
-		Name:      p.Name,
-		State:     p.State,
-		Available: p.Available,
-		Removed:   removed,
+		Base:               hmevent.NewBaseAt(s.clk.Now()),
+		UniqueID:           p.UniqueID,
+		AreaID:             p.AreaID,
+		Name:               p.Name,
+		State:              p.State,
+		Available:          p.Available,
+		CodeArmRequired:    p.CodeArmRequired,
+		CodeDisarmRequired: p.CodeDisarmRequired,
+		Removed:            removed,
 	})
+}
+
+// refreshPanelCodePolicies re-derives every panel's effective code
+// policy after a code-set change and republishes exactly the panels
+// whose flags flipped (plus the master aggregate, whose union may flip
+// with them). Store reads happen outside the registry lock; the caller
+// is a management write, never the engine sink.
+func (s *Service) refreshPanelCodePolicies(ctx context.Context) {
+	r := s.panels
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	ids := make([]string, 0, len(r.byArea))
+	for id := range r.byArea {
+		ids = append(ids, id)
+	}
+	r.mu.Unlock()
+
+	type codeFlags struct{ arm, disarm bool }
+	derived := make(map[string]codeFlags, len(ids))
+	for _, id := range ids {
+		armReq, disarmReq := s.EffectiveCodePolicy(ctx, id)
+		derived[id] = codeFlags{arm: armReq, disarm: disarmReq}
+	}
+
+	r.mu.Lock()
+	var changed []alarmpanel.Panel
+	for id, f := range derived {
+		p, ok := r.byArea[id]
+		if !ok || (p.CodeArmRequired == f.arm && p.CodeDisarmRequired == f.disarm) {
+			continue
+		}
+		p.CodeArmRequired = f.arm
+		p.CodeDisarmRequired = f.disarm
+		changed = append(changed, *p)
+	}
+	master, hasMaster := r.masterLocked()
+	r.mu.Unlock()
+
+	if len(changed) == 0 {
+		return
+	}
+	for i := range changed {
+		s.publishPanel(changed[i], false)
+	}
+	if hasMaster {
+		s.publishPanel(master, false)
+	}
 }
