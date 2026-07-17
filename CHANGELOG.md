@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.7] — 2026-07-17
+
+### Fixed
+
+- **LIST sysvar published its raw index instead of the label** — the
+  CCU delivers every sysvar value as a string, and the scan kept LIST
+  (and numeric) sysvar values string-typed instead of parsing them to
+  the declared type. The MQTT state topic therefore carried the raw
+  index (`0`) while the discovery advertised the labels as enum
+  options, so Home Assistant rejected every update ("got '0', allowed:
+  Aus, …") and the sensor stayed unknown. LIST values now parse to the
+  integer index (resolved to its label on publish), INTEGER to int,
+  NUMBER/FLOAT to float; REST/WS mirror the correctly typed value. A
+  non-numeric payload still degrades to the string fallback.
+
 ## [0.42.6] — 2026-07-17
 
 ### Added

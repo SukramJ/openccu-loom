@@ -1398,7 +1398,13 @@ func inferSysvarType(declaredType string, rawValue json.RawMessage) hmenum.HubVa
 
 // parseSysvarValue converts the raw JSON payload the CCU sends (a
 // quoted string for most types) into a [hmtypes.ParamValue] matching
-// the declared value type.
+// the declared value type. The numeric branches must parse the string
+// content — the declared type, not the wire shape, decides the value
+// kind: every downstream type dispatch keys on it, most visibly the
+// LIST index→label resolution on the MQTT state topic
+// (sysvarStateForMQTT), which HA validates against the discovery's
+// enum options. Mirrors Python `parse_sys_var`
+// (support/__init__.py:116-126).
 func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.ParamValue, bool) {
 	if len(raw) == 0 {
 		return hmtypes.ParamValue{}, false
@@ -1421,9 +1427,16 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 		case "false", "0":
 			return hmtypes.BoolValue(false), true
 		}
-	case hmenum.HubValueTypeNumber, hmenum.HubValueTypeFloat, hmenum.HubValueTypeInteger, hmenum.HubValueTypeList:
-		if pv, err := hmtypes.NewParamValue(s); err == nil {
-			return pv, true
+	case hmenum.HubValueTypeInteger, hmenum.HubValueTypeList:
+		// LIST carries the zero-based index into the value list.
+		// bitSize 32 bounds the parse so the int conversion stays safe
+		// on 32-bit builds (armv7).
+		if n, err := strconv.ParseInt(s, 10, 32); err == nil {
+			return hmtypes.IntValue(int(n)), true
+		}
+	case hmenum.HubValueTypeNumber, hmenum.HubValueTypeFloat:
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return hmtypes.FloatValue(f), true
 		}
 	case hmenum.HubValueTypeString:
 		return hmtypes.StringValue(s), true
