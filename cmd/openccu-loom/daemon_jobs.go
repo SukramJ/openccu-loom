@@ -71,7 +71,13 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		jobs.AlarmMessagesRefresh = u.Hub.RefreshAlarmMessages
 		jobs.SystemUpdateRefresh = u.Hub.RefreshSystemUpdate
 		jobs.InstallModeRefresh = u.Hub.RefreshInstallMode
-		jobs.HubMetricsRefresh = u.Hub.RefreshMetrics
+		// HubMetricsRefresh is deliberately NOT wired: no wiring installs
+		// the coordinator's inner Metrics hook (WireHub sets every other
+		// hook), so the job would fire every interval as a permanent
+		// no-op. The two hub metrics that exist are produced elsewhere —
+		// MetricSystemHealth by central.reconcile and
+		// MetricLastEventAgeSecs by hub.last_event_age_refresh. Wire the
+		// slot once a real CCU metrics fetch exists.
 		jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
 	}
 	// MetricLastEventAgeSecs: seconds since the most recent CCU callback
