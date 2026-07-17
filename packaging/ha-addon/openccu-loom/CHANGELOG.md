@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.8
+
+- **Fixed: the firmware overview now notices updates.** Device firmware
+  versions were read only once at start-up, so an update performed at
+  the CCU never showed up — the overview kept offering "Update" for
+  firmware that was installed long ago, and the "Reload" button did
+  nothing. The add-on now re-checks firmware data every hour (faster
+  while an update is running), and "Reload" fetches the current state
+  from the CCU immediately. This also applies to the firmware update
+  entities in Home Assistant.
+
 ## 0.42.7
 
 - **Fixed: list-type system variables show their text again.** A CCU

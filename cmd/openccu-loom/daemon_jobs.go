@@ -11,9 +11,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
+	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // registerStandardJobs registers the standard per-central background jobs
@@ -102,6 +104,67 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 	jobs.Reconcile = u.Reconciler.Reconcile
 	if _, err := central.RegisterStandardJobs(u, jobs); err != nil {
 		logger.Warn("central.standard_jobs.register_failed",
+			slog.String("central", u.Name()),
+			slog.String("err", err.Error()))
+	}
+}
+
+// registerFirmwareJobs adds the three per-central firmware scheduler jobs.
+// They cannot ride registerStandardJobs: the description fetcher resolves
+// through the ValueWriter, which is built after the standard jobs are
+// registered — so this runs as a second registration pass (same pattern as
+// registerScheduledBackupJobs). Without these jobs the daemon reads device
+// firmware data exactly once (at materialisation, possibly from the SQLite
+// description cache) and the firmware overview never notices an update the
+// CCU performed — the slow check re-pulls descriptions AND propagates them
+// onto the live device models; the delivery/updating checks poll faster
+// while an update transaction is running. Cadences mirror the reference
+// scheduler (central/scheduler.py:212-220).
+func registerFirmwareJobs(reg *central.Registry, valueWriter *clientpkg.ValueWriter, logger *slog.Logger) {
+	if valueWriter == nil {
+		return
+	}
+	for _, u := range reg.List() {
+		registerFirmwareJobsFor(u, valueWriter, logger)
+	}
+}
+
+// firmwareDeliveringStates / firmwareUpdatingStates are the lifecycle
+// groups the fast-cadence jobs poll. Mirrors the reference scheduler's
+// _fetch_device_firmware_update_data_in_delivery / _in_update
+// (central/scheduler.py:431-468).
+var (
+	firmwareDeliveringStates = []hmenum.DeviceFirmwareState{
+		hmenum.DeviceFirmwareStateDeliverFirmwareImage,
+		hmenum.DeviceFirmwareStateLiveDeliverFirmwareImage,
+	}
+	firmwareUpdatingStates = []hmenum.DeviceFirmwareState{
+		hmenum.DeviceFirmwareStateReadyForUpdate,
+		hmenum.DeviceFirmwareStateDoUpdatePending,
+		hmenum.DeviceFirmwareStatePerformingUpdate,
+	}
+)
+
+// registerFirmwareJobsFor registers one central's firmware jobs. Factored
+// out so the live CCU-adopt orchestrator can register them for a
+// runtime-added central too.
+func registerFirmwareJobsFor(u *central.Unit, valueWriter *clientpkg.ValueWriter, logger *slog.Logger) {
+	if u == nil || valueWriter == nil {
+		return
+	}
+	jobs := central.StandardJobs{
+		FirmwareUpdateCheck: func(ctx context.Context) error {
+			return adapter.RefreshCentralFirmwareData(ctx, u, valueWriter)
+		},
+		FirmwareDeliveringCheck: func(ctx context.Context) error {
+			return adapter.RefreshCentralFirmwareDataByState(ctx, u, valueWriter, firmwareDeliveringStates)
+		},
+		FirmwareUpdatingCheck: func(ctx context.Context) error {
+			return adapter.RefreshCentralFirmwareDataByState(ctx, u, valueWriter, firmwareUpdatingStates)
+		},
+	}
+	if _, err := central.RegisterFirmwareJobs(u, jobs); err != nil {
+		logger.Warn("central.firmware_jobs.register_failed",
 			slog.String("central", u.Name()),
 			slog.String("err", err.Error()))
 	}

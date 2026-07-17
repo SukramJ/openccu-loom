@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -96,6 +97,33 @@ func UpdateDeviceFirmware(admin DeviceAdmin) http.HandlerFunc {
 			return
 		}
 		JSON(w, http.StatusAccepted, map[string]string{"status": "scheduled"})
+	}
+}
+
+// FirmwareRefresher force-refreshes the per-device firmware data by
+// re-pulling device descriptions from every CCU and applying them to
+// the live device models. Same contract as the WS `firmware.refresh`
+// command.
+type FirmwareRefresher interface {
+	RefreshFirmwareData(ctx context.Context) error
+}
+
+// RefreshFirmwareData serves `POST /devices/firmware/refresh`: a
+// synchronous sweep across every configured CCU so the firmware
+// overview reflects updates the CCU performed without waiting for the
+// next scheduled poll.
+func RefreshFirmwareData(refresher FirmwareRefresher) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if refresher == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Firmware refresh unavailable", ""))
+			return
+		}
+		if err := refresher.RefreshFirmwareData(r.Context()); err != nil {
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Firmware refresh failed", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

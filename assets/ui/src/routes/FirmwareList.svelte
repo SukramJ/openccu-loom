@@ -111,6 +111,39 @@
 
   // ---- helpers ---------------------------------------------------------
 
+  let reloading = $state(false);
+
+  // Reload = ask the daemon to re-read firmware data from the CCU, then
+  // re-fetch the device list AND the per-device firmware details. The
+  // detail cache must be dropped explicitly — loadDetail short-circuits
+  // on cached entries, so without this the version columns would keep
+  // showing the values from the first page load forever.
+  async function reloadAll() {
+    if (reloading) return;
+    reloading = true;
+    try {
+      try {
+        await api.refreshFirmwareData();
+      } catch (err) {
+        // An old daemon (route missing, 404) or an unreachable CCU must
+        // not block the UI-side reload — surface it and continue.
+        toastStore.error(
+          err instanceof ApiError
+            ? `${err.status}: ${err.message}`
+            : err instanceof Error
+              ? err.message
+              : String(err),
+        );
+      }
+      await deviceStore.refresh();
+      detailMap = {};
+      const updatable = deviceStore.items.filter((d) => d.updatable);
+      await Promise.allSettled(updatable.map((d) => loadDetail(d.address)));
+    } finally {
+      reloading = false;
+    }
+  }
+
   async function loadDetail(addr: string) {
     if (detailMap[addr] || loadingDetail.has(addr)) return;
     const next = new Set(loadingDetail);
@@ -142,8 +175,14 @@
     try {
       await api.updateFirmware(addr);
       toastStore.success(t("firmware.triggered", { name }));
-      // Refresh device list so the updatable badge updates.
+      // Refresh device list so the updatable badge updates, and re-read
+      // this device's firmware detail so the lifecycle state column
+      // follows the update (loadDetail short-circuits on cached entries).
       await deviceStore.refresh();
+      const next = { ...detailMap };
+      delete next[addr];
+      detailMap = next;
+      await loadDetail(addr);
     } catch (err) {
       toastStore.error(
         err instanceof ApiError
@@ -199,8 +238,8 @@
         type="button"
         variant="outline"
         size="sm"
-        onclick={() => void deviceStore.refresh()}
-        disabled={deviceStore.loading}
+        onclick={() => void reloadAll()}
+        disabled={deviceStore.loading || reloading}
       >
         {t("common.reload")}
       </Button>

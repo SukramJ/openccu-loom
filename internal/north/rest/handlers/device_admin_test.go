@@ -351,3 +351,75 @@ func TestPatchDevice_SetFunctionsError_Returns502(t *testing.T) {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+// --- RefreshFirmwareData ---
+
+// stubFirmwareRefresher is an inline stub for the FirmwareRefresher port.
+type stubFirmwareRefresher struct {
+	err   error
+	calls int
+}
+
+func (s *stubFirmwareRefresher) RefreshFirmwareData(_ context.Context) error {
+	s.calls++
+	return s.err
+}
+
+// TestRefreshFirmwareData_NilRefresher_Returns503 verifies that a nil
+// FirmwareRefresher yields HTTP 503 with a problem+json body — the same
+// "not wired yet" contract as the other DeviceAdmin handlers.
+func TestRefreshFirmwareData_NilRefresher_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPost, "/devices/firmware/refresh", http.NoBody)
+	w := httptest.NewRecorder()
+	RefreshFirmwareData(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("expected Content-Type application/problem+json, got %q", ct)
+	}
+}
+
+// TestRefreshFirmwareData_RefresherError_Returns502 verifies that a sweep
+// error is surfaced as HTTP 502 (upstream/CCU unavailable), matching the
+// other admin handlers' error-mapping convention.
+func TestRefreshFirmwareData_RefresherError_Returns502(t *testing.T) {
+	t.Parallel()
+	refresher := &stubFirmwareRefresher{err: errors.New("ccu unreachable")}
+	req := httptest.NewRequest(http.MethodPost, "/devices/firmware/refresh", http.NoBody)
+	w := httptest.NewRecorder()
+	RefreshFirmwareData(refresher).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("expected Content-Type application/problem+json, got %q", ct)
+	}
+	if refresher.calls != 1 {
+		t.Errorf("expected 1 call to RefreshFirmwareData, got %d", refresher.calls)
+	}
+}
+
+// TestRefreshFirmwareData_HappyPath_Returns204 verifies the success path
+// responds with an empty 204 body — the sweep is synchronous and there is
+// nothing to report back beyond the status code.
+func TestRefreshFirmwareData_HappyPath_Returns204(t *testing.T) {
+	t.Parallel()
+	refresher := &stubFirmwareRefresher{}
+	req := httptest.NewRequest(http.MethodPost, "/devices/firmware/refresh", http.NoBody)
+	w := httptest.NewRecorder()
+	RefreshFirmwareData(refresher).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if w.Body.Len() != 0 {
+		t.Errorf("expected empty body on 204, got %q", w.Body.String())
+	}
+	if refresher.calls != 1 {
+		t.Errorf("expected 1 call to RefreshFirmwareData, got %d", refresher.calls)
+	}
+}

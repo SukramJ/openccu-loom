@@ -303,6 +303,116 @@ func TestCheckConnectionDisabledByNegativeInterval(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// RegisterFirmwareJobs
+// ---------------------------------------------------------------------------
+
+// TestRegisterFirmwareJobs_AllHooksRegisterExactNames verifies that supplying
+// all three firmware hooks registers exactly the three documented job names,
+// in the order RegisterFirmwareJobs wires them.
+func TestRegisterFirmwareJobs_AllHooksRegisterExactNames(t *testing.T) {
+	t.Parallel()
+
+	c, err := New(Config{Name: "test-fw-all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := StandardJobs{
+		FirmwareUpdateCheck:     func(context.Context) error { return nil },
+		FirmwareDeliveringCheck: func(context.Context) error { return nil },
+		FirmwareUpdatingCheck:   func(context.Context) error { return nil },
+	}
+	names, err := RegisterFirmwareJobs(c, cfg)
+	if err != nil {
+		t.Fatalf("RegisterFirmwareJobs: %v", err)
+	}
+	want := []string{"central.firmware_check", "central.firmware_delivery_check", "central.firmware_updating_check"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("registered = %v, want %v", names, want)
+	}
+
+	for _, n := range want {
+		count := 0
+		for _, j := range c.Scheduler.Jobs() {
+			if j.Name == n {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Errorf("job %q registered %d times in scheduler, want 1", n, count)
+		}
+	}
+}
+
+// TestRegisterFirmwareJobs_ZeroValueRegistersNothing verifies that a
+// zero-value StandardJobs (no firmware hooks set) registers no jobs at all.
+func TestRegisterFirmwareJobs_ZeroValueRegistersNothing(t *testing.T) {
+	t.Parallel()
+
+	c, err := New(Config{Name: "test-fw-zero"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, err := RegisterFirmwareJobs(c, StandardJobs{})
+	if err != nil {
+		t.Fatalf("RegisterFirmwareJobs: %v", err)
+	}
+	if len(names) != 0 {
+		t.Fatalf("registered = %v, want empty", names)
+	}
+}
+
+// TestRegisterFirmwareJobs_NilUnitErrors verifies the nil-unit guard.
+func TestRegisterFirmwareJobs_NilUnitErrors(t *testing.T) {
+	t.Parallel()
+
+	if _, err := RegisterFirmwareJobs(nil, StandardJobs{}); err == nil {
+		t.Fatal("nil unit must error")
+	}
+}
+
+// TestRegisterStandardJobsThenRegisterFirmwareJobs_NoDuplicates verifies the
+// two-phase registration pattern the daemon uses: RegisterStandardJobs runs
+// first without the firmware hooks (the daemon wires them later, once the
+// ValueWriter exists), then a separate RegisterFirmwareJobs call adds them.
+// Each firmware job name must end up registered exactly once — the first
+// pass must not have already registered a nil-hook placeholder under the
+// same name.
+func TestRegisterStandardJobsThenRegisterFirmwareJobs_NoDuplicates(t *testing.T) {
+	t.Parallel()
+
+	c, err := New(Config{Name: "test-fw-twophase"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// First pass: no firmware slots set, mirroring the daemon's early wiring
+	// before the ValueWriter exists.
+	if _, err := RegisterStandardJobs(c, StandardJobs{}); err != nil {
+		t.Fatalf("RegisterStandardJobs: %v", err)
+	}
+	// Second pass: the real hooks arrive once the ValueWriter is wired.
+	fwCfg := StandardJobs{
+		FirmwareUpdateCheck:     func(context.Context) error { return nil },
+		FirmwareDeliveringCheck: func(context.Context) error { return nil },
+		FirmwareUpdatingCheck:   func(context.Context) error { return nil },
+	}
+	if _, err := RegisterFirmwareJobs(c, fwCfg); err != nil {
+		t.Fatalf("RegisterFirmwareJobs: %v", err)
+	}
+
+	for _, n := range []string{"central.firmware_check", "central.firmware_delivery_check", "central.firmware_updating_check"} {
+		count := 0
+		for _, j := range c.Scheduler.Jobs() {
+			if j.Name == n {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Errorf("job %q registered %d times after two-phase registration, want 1", n, count)
+		}
+	}
+}
+
 // TestStandardJobsFirmwareDeliveryInterval verifies that the firmware-delivery
 // check fires with a 1-hour default, not the erroneous 1-minute value.
 func TestStandardJobsFirmwareDeliveryInterval(t *testing.T) {

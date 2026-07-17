@@ -64,6 +64,9 @@ type restMountDeps struct {
 	devicesAdapter    *adapter.DevicesAdapter
 	deviceAdminDomain *adapter.DeviceAdminDomain
 	deviceReloader    *adapter.DeviceReloaderAdapter
+	// firmwareRefresher backs POST /devices/firmware/refresh (the same
+	// FirmwareDomain the WS `firmware.refresh` command uses).
+	firmwareRefresher *adapter.FirmwareDomain
 	// editSessions is the shared edit-lock registry — backs both the
 	// `/sessions/edit` endpoints and the strict MASTER/LINK paramset-write
 	// gate, and is shared with the WS `paramset.put` enforcement.
@@ -187,6 +190,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Config:                d.configAdapter,
 		Devices:               d.devicesAdapter,
 		DeviceAdmin:           d.deviceAdminDomain,
+		FirmwareRefresher:     firmwareRefresherFrom(d.firmwareRefresher),
 		DeviceInstallMode:     d.deviceAdminDomain,
 		DeviceIcons:           newDeviceIconProxy(d.reg, centralResolve),
 		RefreshDevices:        d.devicesAdapter,
@@ -389,6 +393,17 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 func incidentsClearerFrom(r handlers.IncidentsReader) handlers.IncidentsClearer {
 	c, _ := r.(handlers.IncidentsClearer)
 	return c
+}
+
+// firmwareRefresherFrom converts the concrete FirmwareDomain into the
+// handler port, returning a genuinely nil interface for a nil pointer so
+// the router leaves the refresh route unmounted (a non-nil interface
+// wrapping a nil pointer would dispatch and panic).
+func firmwareRefresherFrom(d *adapter.FirmwareDomain) handlers.FirmwareRefresher {
+	if d == nil {
+		return nil
+	}
+	return d
 }
 
 // alarmPanelFrom converts the concrete alarm service into the handler

@@ -212,6 +212,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// working gate from t=0 for this central too.
 	unit.WireDevicesCreatedGate()
 	registerStandardJobsFor(unit, o.cfg, o.logger)
+	registerFirmwareJobsFor(unit, o.sbDeps.valueWriter, o.logger)
 
 	if err := unit.Start(ctx); err != nil {
 		rollback()

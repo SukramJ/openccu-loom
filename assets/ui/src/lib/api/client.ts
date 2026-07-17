@@ -986,6 +986,12 @@ export const api = {
       { method: "POST" },
     );
   },
+  // Force a re-read of per-device firmware data from every CCU so the
+  // firmware overview reflects updates the CCU performed, without
+  // waiting for the next scheduled poll. Synchronous 204.
+  refreshFirmwareData() {
+    return request<void>(`/devices/firmware/refresh`, { method: "POST" });
+  },
   // --- Paramset export / import --------------------------------
   exportParamset(
     channelAddress: string,

@@ -1926,6 +1926,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/firmware/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-read device firmware data from every CCU
+         * @description Force-refreshes the per-device firmware data (installed /
+         *     available version, update lifecycle state) by re-pulling the
+         *     device descriptions from every configured CCU and applying them
+         *     to the live device models. Complements the periodic firmware
+         *     polling: use it when the firmware overview should reflect an
+         *     update the CCU performed right now instead of at the next poll.
+         *     Synchronous — a 204 means every reachable CCU has been swept.
+         */
+        post: operations["refreshFirmwareData"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/firmware/update": {
         parameters: {
             query?: never;
@@ -7986,6 +8012,26 @@ export interface operations {
         responses: {
             /** @description Accept dispatched */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    refreshFirmwareData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Firmware data refreshed */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
