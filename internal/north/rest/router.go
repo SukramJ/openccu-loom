@@ -51,6 +51,10 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// FirmwareRefresher backs POST /devices/firmware/refresh (force
+	// re-read of per-device firmware data from every CCU). Nil leaves
+	// the route unmounted.
+	FirmwareRefresher handlers.FirmwareRefresher
 	// DeviceInstallMode opens a targeted (per-device / serial) pairing
 	// window at POST /devices/{addr}/install-mode. Nil disables the route.
 	DeviceInstallMode handlers.DeviceInstallModePort
@@ -743,6 +747,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
+			}
+			if d.FirmwareRefresher != nil {
+				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))
 			}
 			if d.DeviceInstallMode != nil {
 				pr.With(op).Post("/devices/{addr}/install-mode", handlers.PostDeviceInstallMode(d.DeviceInstallMode, d.AuditRecorder))

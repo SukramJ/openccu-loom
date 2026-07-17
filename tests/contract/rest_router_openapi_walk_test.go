@@ -152,6 +152,12 @@ func (fakeEnergyService) Energy(context.Context, handlers.EnergyQuery) (handlers
 
 type fakeDeviceAdmin struct{}
 
+// fakeFirmwareRefresher backs the /devices/firmware/refresh route in the
+// walked router.
+type fakeFirmwareRefresher struct{}
+
+func (fakeFirmwareRefresher) RefreshFirmwareData(context.Context) error { return nil }
+
 func (fakeDeviceAdmin) UnpairDevice(context.Context, string) error           { return nil }
 func (fakeDeviceAdmin) RenameDevice(context.Context, string, string) error   { return nil }
 func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string) error      { return nil }
@@ -490,6 +496,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		History:               fakeHistoryService{},
 		Energy:                fakeEnergyService{},
 		DeviceAdmin:           fakeDeviceAdmin{},
+		FirmwareRefresher:     fakeFirmwareRefresher{},
 		DeviceInstallMode:     fakeDeviceInstallMode{},
 		RoomFunctionAdmin:     fakeRoomFunctionAdmin{},
 		RefreshDevices:        fakeRefreshDevicesService{},

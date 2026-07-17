@@ -293,6 +293,69 @@ func gatedRunWithDevicesCreatedGate(unit *Unit, skipOnConnectionIssue bool, fn f
 	}
 }
 
+// RegisterFirmwareJobs wires the three firmware polling jobs
+// (central.firmware_check / firmware_delivery_check /
+// firmware_updating_check) onto the central's scheduler. Exposed
+// separately from [RegisterStandardJobs] because the daemon builds their
+// hooks — which resolve CCU backends through the ValueWriter — after the
+// standard jobs are registered, so they arrive in a second registration
+// pass. Same lifecycle constraint: the scheduler must not have been
+// started yet. The slow check hydrates the per-device firmware data and
+// therefore runs behind the devices-created gate; the delivery/updating
+// checks track CCU-side update transactions and only need the
+// operational gate. Unlike [RegisterStandardJobs] this may also run
+// after the scheduler started — a post-start Add launches the job
+// runner immediately (same pattern as the scheduled-backup job).
+func RegisterFirmwareJobs(unit *Unit, cfg StandardJobs) ([]string, error) {
+	if unit == nil {
+		return nil, errors.New("central: nil unit")
+	}
+	if unit.Scheduler == nil {
+		return nil, errors.New("central: nil scheduler")
+	}
+	registered := make([]string, 0, 3)
+	if cfg.FirmwareUpdateCheck != nil {
+		interval := cfg.FirmwareUpdateCheckInterval
+		if interval <= 0 {
+			interval = defaultFirmwareCheckSlot
+		}
+		if err := unit.Scheduler.Add(scheduler.Job{
+			Name:     "central.firmware_check",
+			Interval: interval,
+			Run:      gatedRunWithDevicesCreatedGate(unit, true, cfg.FirmwareUpdateCheck),
+		}); err != nil {
+			return registered, fmt.Errorf("central: register firmware job: %w", err)
+		}
+		registered = append(registered, "central.firmware_check")
+	}
+	for _, j := range []struct {
+		name     string
+		fn       func(context.Context) error
+		interval time.Duration
+		dflt     time.Duration
+	}{
+		{"central.firmware_delivery_check", cfg.FirmwareDeliveringCheck, cfg.FirmwareDeliveringCheckInterval, defaultFirmwareDeliverySlot},
+		{"central.firmware_updating_check", cfg.FirmwareUpdatingCheck, cfg.FirmwareUpdatingCheckInterval, defaultFirmwareUpdatingSlot},
+	} {
+		if j.fn == nil {
+			continue
+		}
+		interval := j.interval
+		if interval <= 0 {
+			interval = j.dflt
+		}
+		if err := unit.Scheduler.Add(scheduler.Job{
+			Name:     j.name,
+			Interval: interval,
+			Run:      gatedRun(unit, true, j.fn),
+		}); err != nil {
+			return registered, fmt.Errorf("central: register %s: %w", j.name, err)
+		}
+		registered = append(registered, j.name)
+	}
+	return registered, nil
+}
+
 // RegisterStandardJobs wires the configured jobs onto the central's
 // scheduler. Returns the names of registered jobs for diagnostics. The
 // scheduler must not have been started yet — same lifecycle constraint
@@ -498,19 +561,14 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 		registered = append(registered, "hub.last_event_age_refresh")
 	}
 
-	if cfg.FirmwareUpdateCheck != nil {
-		interval := cfg.FirmwareUpdateCheckInterval
-		if interval <= 0 {
-			interval = defaultFirmwareCheckSlot
-		}
-		if err := unit.Scheduler.Add(scheduler.Job{
-			Name:     "central.firmware_check",
-			Interval: interval,
-			Run:      gatedRunWithDevicesCreatedGate(unit, true, cfg.FirmwareUpdateCheck),
-		}); err != nil {
-			return registered, fmt.Errorf("central: register firmware job: %w", err)
-		}
-		registered = append(registered, "central.firmware_check")
+	// The three firmware jobs are registered through RegisterFirmwareJobs
+	// (the daemon wires their hooks in a second pass once the ValueWriter
+	// exists); delegating here keeps single-pass callers that set the
+	// firmware slots working.
+	fwRegistered, err := RegisterFirmwareJobs(unit, cfg)
+	registered = append(registered, fwRegistered...)
+	if err != nil {
+		return registered, err
 	}
 
 	type extraJobSpec struct {
@@ -521,14 +579,6 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 		needsDevicesReady bool
 	}
 	for _, j := range []extraJobSpec{
-		// firmware_delivery_check / firmware_updating_check track CCU-side
-		// firmware-update transactions (queued / in-progress) — these can
-		// fire even before the daemon has hydrated its own device list, so
-		// they only need the operational gate. central.firmware_check
-		// (above) hydrates the per-device firmware tracker and therefore
-		// needs the devices-created gate; the other two do not.
-		{"central.firmware_delivery_check", cfg.FirmwareDeliveringCheck, cfg.FirmwareDeliveringCheckInterval, defaultFirmwareDeliverySlot, false},
-		{"central.firmware_updating_check", cfg.FirmwareUpdatingCheck, cfg.FirmwareUpdatingCheckInterval, defaultFirmwareUpdatingSlot, false},
 		{"hub.program_refresh", cfg.ProgramRefresh, cfg.ProgramRefreshInterval, defaultProgramRefreshSlot, true},
 		{"hub.sysvar_refresh", cfg.SysvarRefresh, cfg.SysvarRefreshInterval, defaultSysvarRefreshSlot, true},
 		{"hub.inbox_refresh", cfg.InboxRefresh, cfg.InboxRefreshInterval, defaultInboxRefreshSlot, true},

@@ -6,6 +6,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.8] — 2026-07-17
+
+### Fixed
+
+- **Firmware overview froze on the state from daemon start** — the
+  daemon read each device's firmware data (installed / available
+  version, update lifecycle state) exactly once, at device
+  materialisation, possibly straight from the SQLite description cache.
+  An update performed at the CCU never surfaced: the overview kept
+  offering "Update" for firmware installed long ago, and the RPI-RF-MOD
+  placeholder row persisted. Three gaps closed:
+  - the periodic firmware polling jobs (`central.firmware_check` hourly,
+    plus fast delivery/updating polls while an update transaction runs)
+    existed as scheduler slots but were never wired — they run now, and
+    the refresh propagates the fresh description fields onto the live
+    device models (previously even the WS `firmware.refresh` command
+    only updated an internal registry no surface reads).
+  - new REST endpoint `POST /api/v1/devices/firmware/refresh`
+    (APIVersion 2.24.0) forces the same sweep on demand.
+  - the firmware overview's "Reload" button now actually reloads: it
+    triggers the daemon-side refresh and re-fetches the per-device
+    firmware details, which were previously served from a never-
+    invalidated page cache — the button visibly did nothing.
+
 ## [0.42.7] — 2026-07-17
 
 ### Fixed

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
 
 // The deviceStore is a module-level singleton; mock the whole module so
 // we can control its state without touching any real API or WebSocket.
@@ -18,10 +18,12 @@ vi.mock("$lib/stores/devices.svelte", () => ({
 }));
 
 const mockGetDevice = vi.fn();
+const mockRefreshFirmwareData = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
     getDevice: (...args: unknown[]) => mockGetDevice(...args),
     updateFirmware: vi.fn(),
+    refreshFirmwareData: (...args: unknown[]) => mockRefreshFirmwareData(...args),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -34,6 +36,9 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
+import { toastStore } from "$lib/stores/toast.svelte";
+import { deviceStore } from "$lib/stores/devices.svelte";
+import { ApiError } from "$lib/api/client";
 import FirmwareList from "./FirmwareList.svelte";
 
 // A pairing-capable HmIP device where the CCU knows a newer firmware
@@ -64,6 +69,7 @@ beforeEach(() => {
       UpdateState: "NEW_FIRMWARE_AVAILABLE",
     },
   });
+  mockRefreshFirmwareData.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -91,6 +97,55 @@ describe("FirmwareList", () => {
 
     await findByText("Awaiting transfer to the device");
     expect(queryByRole("button", { name: "Update" })).toBeNull();
+  });
+});
+
+describe("FirmwareList reload", () => {
+  it("re-fetches firmware details on reload even though they were already cached", async () => {
+    const { findByText, getByRole } = render(FirmwareList);
+
+    // Initial mount loads the detail for the one updatable device.
+    await findByText("1.4.10");
+    expect(mockGetDevice).toHaveBeenCalledTimes(1);
+
+    mockGetDevice.mockClear();
+    mockRefreshFirmwareData.mockClear();
+    (deviceStore.refresh as ReturnType<typeof vi.fn>).mockClear();
+
+    await fireEvent.click(getByRole("button", { name: "Reload" }));
+
+    // The detail cache must have been dropped: getDevice is called again
+    // for the same, already-loaded device.
+    await waitFor(() => {
+      expect(mockRefreshFirmwareData).toHaveBeenCalledTimes(1);
+      expect(deviceStore.refresh).toHaveBeenCalledTimes(1);
+      expect(mockGetDevice).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("still refreshes the list and details, and raises a toast, when refreshFirmwareData rejects", async () => {
+    const { findByText, getByRole } = render(FirmwareList);
+
+    await findByText("1.4.10");
+    mockGetDevice.mockClear();
+    mockRefreshFirmwareData.mockClear();
+    (deviceStore.refresh as ReturnType<typeof vi.fn>).mockClear();
+    mockRefreshFirmwareData.mockRejectedValueOnce(
+      new ApiError(404, {}, "not found"),
+    );
+    const toastErrorSpy = vi.spyOn(toastStore, "error");
+
+    await fireEvent.click(getByRole("button", { name: "Reload" }));
+
+    // An old daemon (missing route, 404) must not block the rest of the
+    // reload: the list and per-device details still refresh, and the
+    // error surfaces as a toast instead of vanishing silently.
+    await waitFor(() => {
+      expect(mockRefreshFirmwareData).toHaveBeenCalledTimes(1);
+      expect(toastErrorSpy).toHaveBeenCalledWith("404: not found");
+      expect(deviceStore.refresh).toHaveBeenCalledTimes(1);
+      expect(mockGetDevice).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

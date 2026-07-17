@@ -201,6 +201,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	mqttCollector := si.mqttCollector
 	mqttSup := si.mqttSup
 	mqttWiring := si.mqttWiring
+	// Firmware polling jobs arrive in a second registration pass: their
+	// hooks resolve CCU backends through the ValueWriter, which does not
+	// exist yet when registerStandardJobs runs above.
+	registerFirmwareJobs(reg, valueWriter, logger)
 	// --- CCU translation archive ------------------------------
 	// Extracted into loadCCUArchive (daemon_boot.go).
 	arch := loadCCUArchive(cfg, logger)
@@ -653,6 +657,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		devicesAdapter:          devicesAdapter,
 		deviceAdminDomain:       deviceAdminDomain,
 		deviceReloader:          deviceReloader,
+		firmwareRefresher:       adapter.NewFirmwareDomain(reg, valueWriter),
 		editSessions:            editSessions,
 		dpWriterAdapter:         dpWriterAdapter,
 		customDPDispatcher:      customDPDispatcher,

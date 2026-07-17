@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.23.0
+  version: 2.24.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1574,6 +1574,28 @@ paths:
       responses:
         "202":
           description: Accept dispatched
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/firmware/refresh:
+    post:
+      operationId: refreshFirmwareData
+      summary: Re-read device firmware data from every CCU
+      description: |
+        Force-refreshes the per-device firmware data (installed /
+        available version, update lifecycle state) by re-pulling the
+        device descriptions from every configured CCU and applying them
+        to the live device models. Complements the periodic firmware
+        polling: use it when the firmware overview should reflect an
+        update the CCU performed right now instead of at the next poll.
+        Synchronous — a 204 means every reachable CCU has been swept.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204":
+          description: Firmware data refreshed
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/firmware/update:
