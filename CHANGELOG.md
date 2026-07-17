@@ -29,6 +29,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     triggers the daemon-side refresh and re-fetches the per-device
     firmware details, which were previously served from a never-
     invalidated page cache — the button visibly did nothing.
+- **Reload/interval audit follow-ups** — a sweep over every reload
+  button and periodic-refresh job after the firmware finding:
+  - the system-variables page's "Reload" now forces a CCU re-pull
+    (`POST /sysvars/fetch`, which existed but was never called by the
+    SPA) before reading the list — previously a value just changed at
+    the CCU stayed invisible for up to one sysvar-scan interval.
+  - the overview's error-retry drops its per-device tile caches and
+    re-fetches expanded groups instead of serving the session's first
+    detail/CDP snapshots forever.
+  - the `hub.metrics_refresh` job is no longer scheduled: its inner
+    hook was never wired anywhere, so it fired every 5 minutes as a
+    permanent no-op (both existing hub metrics are produced by other
+    jobs). All other reload buttons and refresh jobs verified working.
 
 ## [0.42.7] — 2026-07-17
 

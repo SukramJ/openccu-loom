@@ -143,6 +143,23 @@
   let detailsByAddress = $state<Record<string, DeviceDetail>>({});
   let cdpsByAddress = $state<Record<string, CustomDPSummary[]>>({});
 
+  // Retry = drop the per-device tile caches before re-fetching the
+  // summary list: loadGroupTiles skips every cached address, so without
+  // this a retry after an error would keep serving the session's first
+  // (possibly partial or stale) detail/CDP snapshots forever. Expanded
+  // groups are re-fetched explicitly — the auto-expand effect runs only
+  // once per group mode and would leave them tile-less otherwise.
+  async function retryLoad() {
+    detailsByAddress = {};
+    cdpsByAddress = {};
+    await deviceStore.refresh();
+    for (const group of groups) {
+      if (expandedKeys.has(group.key)) {
+        void loadGroupTiles(group);
+      }
+    }
+  }
+
   async function loadGroupTiles(group: DeviceOverviewGroup) {
     const pending = group.devices.filter((d) => !(d.address in detailsByAddress));
     if (pending.length === 0) return;
@@ -287,7 +304,7 @@
     <div class="mb-4">
       <ErrorState
         message={t("overview.load_error", { error: deviceStore.error })}
-        onRetry={() => deviceStore.refresh()}
+        onRetry={() => void retryLoad()}
       />
     </div>
   {/if}

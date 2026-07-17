@@ -495,6 +495,13 @@ export const api = {
     return `${apiBase()}/backups/${encodeURIComponent(id)}/download`;
   },
   // --- Sysvars / programs / messages ----------------------------
+  // Force a re-pull of the CCU sysvar catalogue (SysVar.getAll) into the
+  // hub model before reading it — without this a reload only serves the
+  // daemon's periodic-poll state (up to one poll interval stale).
+  fetchSysvars(central?: string) {
+    const q = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/sysvars/fetch${q}`, { method: "POST" });
+  },
   listSysvars() {
     return fetchAllPages<SysvarEntry>((page, perPage) =>
       request<SysvarEntry[]>(`/sysvars?page=${page}&per_page=${perPage}`),

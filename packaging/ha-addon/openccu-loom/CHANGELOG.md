@@ -10,6 +10,11 @@
   while an update is running), and "Reload" fetches the current state
   from the CCU immediately. This also applies to the firmware update
   entities in Home Assistant.
+- **Fixed: "Reload" on the system-variables page fetches from the CCU.**
+  Previously it only re-read the add-on's own state, so a variable just
+  changed at the CCU could stay stale for a few minutes; now the button
+  pulls the current values from the CCU immediately. All other reload
+  buttons and background refresh intervals were audited and verified.
 
 ## 0.42.7
 

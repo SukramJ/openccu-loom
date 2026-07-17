@@ -58,7 +58,6 @@ func TestRegisterStandardJobsForRegistersUnconditionalJobs(t *testing.T) {
 		"central.health_heartbeat",
 		"central.check_connection",
 		"hub.connectivity_refresh",
-		"hub.metrics_refresh",
 		"hub.last_event_age_refresh",
 		"hub.program_refresh",
 		"hub.sysvar_refresh",
@@ -77,12 +76,14 @@ func TestRegisterStandardJobsForRegistersUnconditionalJobs(t *testing.T) {
 		}
 	}
 
-	// Firmware-poll jobs are never wired by registerStandardJobsFor, so they
-	// must be absent — asserting this locks in the extraction's exact
-	// behavior instead of just a loose subset check.
-	for _, name := range []string{"central.firmware_check", "central.firmware_delivery_check", "central.firmware_updating_check"} {
+	// Firmware-poll jobs are never wired by registerStandardJobsFor (they
+	// arrive in the second registration pass), and hub.metrics_refresh is
+	// deliberately unwired — no inner Metrics hook exists, so registering
+	// it would schedule a permanent no-op. Asserting absence locks in the
+	// exact behavior instead of just a loose subset check.
+	for _, name := range []string{"central.firmware_check", "central.firmware_delivery_check", "central.firmware_updating_check", "hub.metrics_refresh"} {
 		if slices.Contains(got, name) {
-			t.Errorf("registered jobs = %v, want %q absent (never wired by registerStandardJobsFor)", got, name)
+			t.Errorf("registered jobs = %v, want %q absent (not wired by registerStandardJobsFor)", got, name)
 		}
 	}
 }
