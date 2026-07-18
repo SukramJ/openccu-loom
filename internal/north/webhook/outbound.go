@@ -197,6 +197,7 @@ func (o *Outbound) subscribeAlarm(bus *events.Bus) {
 		o.unsubs,
 		events.Subscribe(bus, o.onAlarmStateChanged),
 		events.Subscribe(bus, o.onAlarmTriggered),
+		events.Subscribe(bus, o.onAlarmNotification),
 		events.Subscribe(bus, o.onAlarmJournalAppended),
 		events.Subscribe(bus, o.onAlarmHealthChanged),
 		events.Subscribe(bus, o.onAlarmReminder),
@@ -331,6 +332,19 @@ func (o *Outbound) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 		AreaID: e.AreaID, AreaName: e.AreaName, IncidentID: e.IncidentID,
 		SensorID: e.SensorID, SensorName: e.SensorName,
 		Cause: e.Cause, Mode: string(e.Mode),
+	})
+}
+
+// onAlarmNotification forwards one enrolled notification output's
+// fire signal; outputs that opted out of the webhook plane are
+// skipped.
+func (o *Outbound) onAlarmNotification(e hmevent.AlarmNotificationEvent) {
+	if !e.Webhook {
+		return
+	}
+	o.enqueueAlarm(string(hmevent.EventTypeAlarmNotification), alarmPayload{
+		AreaID: e.AreaID, AreaName: e.AreaName, IncidentID: e.IncidentID,
+		Mode: string(e.Mode), OutputID: e.OutputID, OutputName: e.OutputName,
 	})
 }
 
@@ -589,6 +603,10 @@ type alarmPayload struct {
 	Verb         string `json:"verb,omitempty"`
 	Healthy      *bool  `json:"healthy,omitempty"`
 	Note         string `json:"note,omitempty"`
+	// OutputID / OutputName identify the enrolled notification output
+	// on alarm_panel.notification events.
+	OutputID   string `json:"output_id,omitempty"`
+	OutputName string `json:"output_name,omitempty"`
 }
 
 // marshalValue JSON-encodes a datapoint value. A marshal error (should not

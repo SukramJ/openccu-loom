@@ -164,11 +164,33 @@ Follows the general event-topic policy below. Payload shape:
 ```
 
 `type` vocabulary for this slice: `TRIGGER`, `SILENCED`,
-`FAILED_TO_ARM`, `DISARMED`, `ARMED`. `open_sensors` and `delay_s` are
-present only where meaningful (e.g. `FAILED_TO_ARM` carries
-`open_sensors`; a `pending`→`triggered` transition may carry
+`FAILED_TO_ARM`, `DISARMED`, `ARMED`, `NOTIFICATION`. `open_sensors`
+and `delay_s` are present only where meaningful (e.g. `FAILED_TO_ARM`
+carries `open_sensors`; a `pending`→`triggered` transition may carry
 `delay_s`). `INVALID_CODE` and `DURESS` extend this vocabulary once
 per-area codes ship (`docs/alarm-concept.md` §13.3, §15 item 6).
+
+`NOTIFICATION` (0.43.1) is published once per enrolled notification
+output at incident-fire time — for every mode the output is enrolled
+in, including silent policies, and never cancelled by silence. It
+carries an additional `output` field: the enrolled output's display
+name, or its id when unnamed.
+
+```json
+{
+  "type": "NOTIFICATION",
+  "area_id": "eg",
+  "area_name": "Erdgeschoss",
+  "output": "Doorbell"
+}
+```
+
+Delivery is per-output and opt-out: each notification output has its
+own `notify_mqtt` / `notify_webhook` flags (both default on) — a
+`false` value on `notify_mqtt` skips this MQTT entry for that output,
+independent of the webhook plane's own `notify_webhook` flag. The
+`alarm.notification` WebSocket broadcast (topic `alarm.panel`) is
+unconditional and always fires alongside, regardless of either flag.
 
 #### `<base>/alarm/<area>/set` (command, not retained, QoS 1)
 

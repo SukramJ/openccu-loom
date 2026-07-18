@@ -6,6 +6,54 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-07-18
+
+### Added
+
+- **Sysvar-mirror outputs became configurable — and can target existing
+  alarm variables** — the add-output dialog no longer demands a device
+  for the sysvar-mirror class: it asks for the central and the variable
+  target instead. Either a managed value-list variable (created on the
+  CCU automatically, as before — but the name was previously not
+  settable from the SPA at all, leaving the enrollment a silent no-op)
+  or, new, an operator-owned ALARM-type variable: the mirror then
+  writes true while triggered and false otherwise, never creates or
+  retypes the variable, and accepts no inbound intents through it. The
+  output card now edits the variable name and the allow-disarm opt-in,
+  and saving without a variable name is rejected with 422.
+- **Notification outputs actually notify now** — the class previously
+  had no consumer. A notification output now emits a deliberate,
+  per-area, mode-filtered `alarm_panel.notification` event at fire time
+  (one-shot, never cancelled by silence): published as a NOTIFICATION
+  entry on the area's MQTT alarm event topic, forwarded to outbound
+  webhook receivers, and broadcast on the WebSocket alarm_panel topic
+  (`alarm.notification`, APIVersion 2.26.0). Each plane can be toggled
+  per output (`notify_mqtt` / `notify_webhook`, both default on) from
+  the output card; the add dialog no longer demands a device for this
+  class.
+- **Alarm keyfobs surface first in the remote-key picker** — security
+  remotes (HmIP-KRCA and peers) sort to the top of the guided binding
+  picker and the KRCA carries an "alarm keyfob" badge; generic wall
+  buttons and remotes follow.
+
+### Fixed
+
+- **Remote-key picker found no keys** — the candidate enumeration
+  looked for press parameters in the channel's generic-event set,
+  which the device pipeline never populates; every remote and
+  wall-button key was invisible ("no remote or wall-button keys
+  found"). Press parameters are ordinary VALUES data points, and the
+  enumeration now checks exactly that. Pinned by a godevccu
+  integration test that asserts the HmIP-KRCA surfaces with both
+  press parameters.
+- **Tone / pattern / soundfile dropdowns could miss their device
+  lists** — the output card matched candidates strictly by
+  central + channel address; enrollments whose stored central differs
+  (older rows may carry an empty one) silently fell back to free-text
+  fields. An unambiguous address-only fallback now covers those rows,
+  and the ASIR/MP3P ENUM lists themselves are pinned end-to-end by a
+  godevccu integration test.
+
 ## [0.43.0] — 2026-07-17
 
 ### Added

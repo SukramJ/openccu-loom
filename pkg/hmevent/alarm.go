@@ -23,7 +23,35 @@ const (
 	EventTypeAlarmDuress           EventType = "alarm_panel.duress"
 	EventTypeAlarmReminder         EventType = "alarm_panel.reminder"
 	EventTypeAlarmCodesChanged     EventType = "alarm_panel.codes_changed"
+	EventTypeAlarmNotification     EventType = "alarm_panel.notification"
 )
+
+// AlarmNotificationEvent is one enrolled notification output firing
+// for an alarm (docs/alarm-concept.md §7): a deliberate, per-area,
+// mode-filtered notification signal — distinct from the raw state
+// events every north-bound plane already receives. It is one-shot at
+// fire time and never cancelled by a later silence.
+type AlarmNotificationEvent struct {
+	Base
+	// AreaID identifies the alarm area.
+	AreaID string
+	// AreaName is the display name at publish time.
+	AreaName string
+	// OutputID / OutputName identify the enrolled notification output.
+	OutputID   string
+	OutputName string
+	// IncidentID references the incident this notification belongs to.
+	IncidentID int64
+	// Mode is the protection mode that was active at trigger time.
+	Mode hmenum.AlarmMode
+	// MQTT / Webhook select the delivery planes the output enrolled
+	// for (both default true); each consumer honours its own flag.
+	MQTT    bool
+	Webhook bool
+}
+
+// Type implements Event.
+func (AlarmNotificationEvent) Type() EventType { return EventTypeAlarmNotification }
 
 // AlarmDuressEvent is the silent fan-out of a duress-code use
 // (docs/alarm-concept.md §11). A duress code disarms (or arms /

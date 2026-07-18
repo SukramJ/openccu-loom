@@ -20,11 +20,12 @@ import (
 
 // Non-retained alarm event-topic types (docs/alarm-concept.md §13.3).
 const (
-	alarmEventTypeTrigger     = "TRIGGER"
-	alarmEventTypeSilenced    = "SILENCED"
-	alarmEventTypeFailedToArm = "FAILED_TO_ARM"
-	alarmEventTypeDisarmed    = "DISARMED"
-	alarmEventTypeArmed       = "ARMED"
+	alarmEventTypeTrigger      = "TRIGGER"
+	alarmEventTypeSilenced     = "SILENCED"
+	alarmEventTypeFailedToArm  = "FAILED_TO_ARM"
+	alarmEventTypeDisarmed     = "DISARMED"
+	alarmEventTypeArmed        = "ARMED"
+	alarmEventTypeNotification = "NOTIFICATION"
 )
 
 // alarmMasterNameKey resolves the master panel's display name; the
@@ -44,6 +45,9 @@ type alarmEventPayload struct {
 	Mode        string   `json:"mode,omitempty"`
 	OpenSensors []string `json:"open_sensors,omitempty"`
 	DelayS      int      `json:"delay_s,omitempty"`
+	// Output carries the enrolled notification output's name (or ID
+	// when unnamed) on NOTIFICATION events.
+	Output string `json:"output,omitempty"`
 }
 
 // alarmEventMsg is one queued non-retained event-topic publish.
@@ -142,6 +146,7 @@ func (p *AlarmMQTTPublisher) Start() {
 		p.unsubs,
 		events.Subscribe(bus, p.onStateChanged),
 		events.Subscribe(bus, p.onTriggered),
+		events.Subscribe(bus, p.onNotification),
 		events.Subscribe(bus, p.onJournalAppended),
 		events.Subscribe(bus, p.onReadinessChanged),
 		events.Subscribe(bus, p.onHealthChanged),
@@ -223,6 +228,24 @@ func (p *AlarmMQTTPublisher) onTriggered(e hmevent.AlarmTriggeredEvent) {
 	}
 	p.enqueueEvent(e.AreaID, pay)
 	p.signalReconcile()
+}
+
+// onNotification publishes one enrolled notification output's fire
+// signal on the area's event topic; outputs that opted out of the
+// MQTT plane are skipped.
+func (p *AlarmMQTTPublisher) onNotification(e hmevent.AlarmNotificationEvent) {
+	if !e.MQTT {
+		return
+	}
+	p.rememberName(e.AreaID, e.AreaName)
+	name := e.OutputName
+	if name == "" {
+		name = e.OutputID
+	}
+	p.enqueueEvent(e.AreaID, alarmEventPayload{
+		Type: alarmEventTypeNotification, AreaID: e.AreaID, AreaName: e.AreaName,
+		Mode: string(e.Mode), Output: name,
+	})
 }
 
 func (p *AlarmMQTTPublisher) onJournalAppended(e hmevent.AlarmJournalAppendedEvent) {

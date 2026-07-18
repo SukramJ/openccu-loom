@@ -316,9 +316,18 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 					problem.New(problem.TypeValidation, r, "Invalid output class", "unknown output class: "+c))
 				return
 			}
-			if _, err := outputs.ParseOutputConfig(string(in[i].Config)); err != nil {
+			ocfg, err := outputs.ParseOutputConfig(string(in[i].Config))
+			if err != nil {
 				problem.Write(w, http.StatusUnprocessableEntity,
 					problem.New(problem.TypeValidation, r, "Invalid output configuration", err.Error()))
+				return
+			}
+			// A sysvar mirror without a variable name would be a silent
+			// no-op (the mirror skips nameless targets) — reject it.
+			if hmenum.AlarmOutputClass(in[i].Class) == hmenum.AlarmOutputClassSysvarMirror && ocfg.SysvarName == "" {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "Sysvar mirror needs a variable name",
+						"sysvar_name is required for class sysvar_mirror"))
 				return
 			}
 			// Soft target validation: reject a channel that resolves but

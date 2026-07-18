@@ -174,6 +174,47 @@ func TestAlarmPanelSubscriberTriggered(t *testing.T) {
 	}
 }
 
+// TestAlarmPanelSubscriberNotification verifies an
+// AlarmNotificationEvent fans out as alarm.notification with every
+// payload field carried through.
+func TestAlarmPanelSubscriberNotification(t *testing.T) {
+	t.Parallel()
+	h, bus := newAlarmPanelSubscriberFixture(t)
+
+	events.Publish(bus, hmevent.AlarmNotificationEvent{
+		Base:       hmevent.NewBase(),
+		AreaID:     "eg",
+		AreaName:   "Erdgeschoss",
+		OutputID:   "notify1",
+		OutputName: "Doorbell",
+		IncidentID: 9,
+		Mode:       hmenum.AlarmModeFull,
+		MQTT:       true,
+		Webhook:    true,
+	})
+
+	ev := pollHub(t, h, alarmTopicFilter)
+	if ev.Type != broadcastAlarmNotification {
+		t.Fatalf("type = %q, want %q", ev.Type, broadcastAlarmNotification)
+	}
+	p, ok := ev.Payload.(AlarmNotificationPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want AlarmNotificationPayload", ev.Payload)
+	}
+	if p.AreaID != "eg" || p.AreaName != "Erdgeschoss" {
+		t.Fatalf("area fields = %+v", p)
+	}
+	if p.OutputID != "notify1" || p.OutputName != "Doorbell" {
+		t.Fatalf("output fields = %+v", p)
+	}
+	if p.IncidentID != 9 {
+		t.Fatalf("incident_id = %d, want 9", p.IncidentID)
+	}
+	if p.Mode != "full" {
+		t.Fatalf("mode = %q, want full", p.Mode)
+	}
+}
+
 // TestAlarmPanelSubscriberJournalAppended verifies an
 // AlarmJournalAppendedEvent fans out as alarm.journal_appended
 // carrying the entry head, not the details document.

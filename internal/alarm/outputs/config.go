@@ -68,6 +68,20 @@ type OutputConfig struct {
 	// SysvarName is the CCU system variable a sysvar-mirror output
 	// maintains.
 	SysvarName string `json:"sysvar_name,omitempty"`
+	// NotifyMQTT / NotifyWebhook select the delivery planes of a
+	// notification output; nil means enabled (both default on).
+	NotifyMQTT    *bool `json:"notify_mqtt,omitempty"`
+	NotifyWebhook *bool `json:"notify_webhook,omitempty"`
+}
+
+// NotifyMQTTEnabled resolves the MQTT plane flag (default true).
+func (c OutputConfig) NotifyMQTTEnabled() bool {
+	return c.NotifyMQTT == nil || *c.NotifyMQTT
+}
+
+// NotifyWebhookEnabled resolves the webhook plane flag (default true).
+func (c OutputConfig) NotifyWebhookEnabled() bool {
+	return c.NotifyWebhook == nil || *c.NotifyWebhook
 }
 
 // InMode reports whether the output participates in mode (empty Modes

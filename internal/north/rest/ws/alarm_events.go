@@ -30,6 +30,7 @@ const (
 	broadcastAlarmHealthChanged    = "alarm.health_changed"
 	broadcastAlarmPanelChanged     = "alarm.panel_changed"
 	broadcastAlarmReminder         = "alarm.reminder"
+	broadcastAlarmNotification     = "alarm.notification"
 )
 
 // AlarmStateChangedPayload is the broadcast payload for an arm-state
@@ -75,6 +76,18 @@ type AlarmTriggeredPayload struct {
 	SensorID   string `json:"sensor_id,omitempty"`
 	SensorName string `json:"sensor_name,omitempty"`
 	Cause      string `json:"cause"`
+	Mode       string `json:"mode,omitempty"`
+}
+
+// AlarmNotificationPayload is the broadcast payload of one enrolled
+// notification output firing for an alarm (one-shot at fire time,
+// never cancelled by a later silence).
+type AlarmNotificationPayload struct {
+	AreaID     string `json:"area_id"`
+	AreaName   string `json:"area_name,omitempty"`
+	OutputID   string `json:"output_id"`
+	OutputName string `json:"output_name,omitempty"`
+	IncidentID int64  `json:"incident_id"`
 	Mode       string `json:"mode,omitempty"`
 }
 
@@ -135,6 +148,7 @@ func (s *AlarmPanelSubscriber) Start() {
 		events.Subscribe(s.bus, s.onCountdown),
 		events.Subscribe(s.bus, s.onReadinessChanged),
 		events.Subscribe(s.bus, s.onTriggered),
+		events.Subscribe(s.bus, s.onNotification),
 		events.Subscribe(s.bus, s.onJournalAppended),
 		events.Subscribe(s.bus, s.onWalkTest),
 		events.Subscribe(s.bus, s.onHealthChanged),
@@ -193,6 +207,22 @@ func (s *AlarmPanelSubscriber) onReadinessChanged(e hmevent.AlarmReadinessChange
 		Payload: AlarmReadinessChangedPayload{
 			AreaID:    e.AreaID,
 			Readiness: alarmReadinessDTO(e.Readiness),
+		},
+	})
+}
+
+func (s *AlarmPanelSubscriber) onNotification(e hmevent.AlarmNotificationEvent) {
+	s.hub.Publish(Event{
+		Topic: alarmPanelTopic,
+		Type:  broadcastAlarmNotification,
+		When:  e.Timestamp(),
+		Payload: AlarmNotificationPayload{
+			AreaID:     e.AreaID,
+			AreaName:   e.AreaName,
+			OutputID:   e.OutputID,
+			OutputName: e.OutputName,
+			IncidentID: e.IncidentID,
+			Mode:       string(e.Mode),
 		},
 	})
 }

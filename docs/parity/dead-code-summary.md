@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 227c65c0
-HEAD: 227c65c0
+Generated: b3a68130
+HEAD: b3a68130
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25600 |
-| Reachable | 4534 |
-| Whitelisted | 18347 |
-| **Unreachable** | **2719** |
+| Total Exported | 25608 |
+| Reachable | 4538 |
+| Whitelisted | 18349 |
+| **Unreachable** | **2721** |
 
 ## Top-20 Packages by Dead Code
 
@@ -119,7 +119,7 @@ HEAD: 227c65c0
 | internal/alarm/codes | 0 | 13 | 0 |
 | internal/alarm/engine | 0 | 25 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
-| internal/alarm/outputs | 0 | 22 | 4 |
+| internal/alarm/outputs | 0 | 24 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
