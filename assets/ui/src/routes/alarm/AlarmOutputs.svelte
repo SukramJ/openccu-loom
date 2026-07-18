@@ -179,8 +179,23 @@
   const candidateByChannel = $derived(
     new Map(candidates.map((c) => [`${c.central}|${c.channel_address}`, c])),
   );
+  // Address-only fallback index for enrollments whose stored central
+  // differs from the candidate's (older rows may carry an empty
+  // central). Ambiguous addresses (same channel on two centrals) are
+  // dropped rather than guessed.
+  const candidateByAddress = $derived.by(() => {
+    const map = new Map<string, AlarmOutputCandidate | null>();
+    for (const c of candidates) {
+      map.set(c.channel_address, map.has(c.channel_address) ? null : c);
+    }
+    return map;
+  });
   function extrasFor(o: AlarmOutput): AlarmOutputCandidate | undefined {
-    return candidateByChannel.get(`${o.central}|${o.channel_address}`);
+    return (
+      candidateByChannel.get(`${o.central}|${o.channel_address}`) ??
+      candidateByAddress.get(o.channel_address) ??
+      undefined
+    );
   }
   async function loadCandidates() {
     try {

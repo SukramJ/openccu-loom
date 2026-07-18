@@ -200,13 +200,14 @@ func (s *Service) RemoteKeyCandidates() []RemoteKeyCandidate {
 				continue
 			}
 			for _, ch := range d.Channels() {
+				// Press parameters are ordinary VALUES data points —
+				// the pipeline materialises every wire parameter as a
+				// DP (device_pipeline.go), so presence in the VALUES
+				// paramset is the authoritative key-channel signal.
 				var params []string
 				for _, p := range remoteKeyParams {
-					for _, ev := range ch.GenericEvents() {
-						if ev.DataPointKey().Parameter == string(p) {
-							params = append(params, string(p))
-							break
-						}
+					if ch.Parameter(p) != nil {
+						params = append(params, string(p))
 					}
 				}
 				if len(params) == 0 {

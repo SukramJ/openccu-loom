@@ -14,6 +14,12 @@
   off per output.
 - **Improved: alarm keyfobs first.** The remote-key picker sorts
   security remotes (e.g. HmIP-KRCA) to the top and badges them.
+- **Fixed: the remote-key picker actually finds your keys.** The
+  candidate list was empty for every remote and wall button; keyfobs
+  (HmIP-KRCA) and wall switches now appear.
+- **Fixed: siren tone and light dropdowns.** HmIP-ASIR outputs offer
+  their acoustic and optical signals as dropdowns (and the HmIP-MP3P
+  its soundfiles) even for outputs enrolled with older versions.
 
 ## 0.43.0
 

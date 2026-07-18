@@ -746,27 +746,23 @@ func TestOutputTargetEligibleMatchingClass(t *testing.T) {
 // generic events directly via [device.Channel.AttachGenericEvent] — no
 // custom data point is involved, since the candidate is purely event-driven.
 
-// stubGenericEvent is a minimal device.AttachableEvent: RemoteKeyCandidates
-// only reads DataPointKey().Parameter, so a bare key/kind pair is enough
-// (mirrors fakeEvent in internal/model/device/aggregate_test.go, redefined
-// here because that type lives in a different package).
-type stubGenericEvent struct {
-	key hmtypes.DataPointKey
-}
-
-func (s *stubGenericEvent) DataPointKey() hmtypes.DataPointKey { return s.key }
-func (s *stubGenericEvent) EventKind() string                  { return "homematic.keypress" }
-
-// attachPressEvent attaches a generic event source carrying parameter p to
-// ch, keyed under ch's own address.
+// attachPressEvent attaches a press VALUES parameter (an ACTION-style
+// wire DP, mirroring the device pipeline that materialises every wire
+// parameter as a data point) — presence in the VALUES paramset is what
+// RemoteKeyCandidates treats as the key-channel signal.
 func attachPressEvent(ch *device.Channel, p hmenum.Parameter) {
-	ch.AttachGenericEvent(&stubGenericEvent{
-		key: hmtypes.DataPointKey{
+	dp := generic.NewButton(generic.Spec{
+		Key: hmtypes.DataPointKey{
 			ChannelAddress: ch.Address,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      string(p),
 		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeAction,
+			Operations: hmenum.OperationsEvent | hmenum.OperationsWrite,
+		},
 	})
+	ch.Put(dp)
 }
 
 // newVirtualRemoteChannel builds a device whose Model marks it as one of

@@ -36,6 +36,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   picker and the KRCA carries an "alarm keyfob" badge; generic wall
   buttons and remotes follow.
 
+### Fixed
+
+- **Remote-key picker found no keys** — the candidate enumeration
+  looked for press parameters in the channel's generic-event set,
+  which the device pipeline never populates; every remote and
+  wall-button key was invisible ("no remote or wall-button keys
+  found"). Press parameters are ordinary VALUES data points, and the
+  enumeration now checks exactly that. Pinned by a godevccu
+  integration test that asserts the HmIP-KRCA surfaces with both
+  press parameters.
+- **Tone / pattern / soundfile dropdowns could miss their device
+  lists** — the output card matched candidates strictly by
+  central + channel address; enrollments whose stored central differs
+  (older rows may carry an empty one) silently fell back to free-text
+  fields. An unambiguous address-only fallback now covers those rows,
+  and the ASIR/MP3P ENUM lists themselves are pinned end-to-end by a
+  godevccu integration test.
+
 ## [0.43.0] — 2026-07-17
 
 ### Added
