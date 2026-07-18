@@ -9,6 +9,7 @@
   import { makeTextMatcher } from "$lib/utils";
   import type {
     AlarmOutput,
+    AlarmOutputCandidate,
     AlarmOutputClass,
     DeviceSummary,
   } from "$lib/api/types";
@@ -84,9 +85,22 @@
     sysvar_mirror: { outdoor: false, duration: false, tone: false, optical: false, level: false, chirpTones: false },
   };
 
-  // Devices surfaced by the add-output assist by default: sirens, switch
-  // actuators (plug-in sirens / alarm lights), smoke sounders. Expert mode
-  // widens the list to every modelled actuator (§12.2).
+  // Device-backed classes enroll a real channel that must resolve to an
+  // output driver; notification and sysvar_mirror carry the channel
+  // address as identity only, so no candidate filtering applies.
+  const DEVICE_BACKED = new Set<AlarmOutputClass>([
+    "acoustic_siren",
+    "optical_siren",
+    "switched_siren",
+    "smoke_sounder",
+    "alarm_light",
+    "chirp",
+  ]);
+
+  // Fallback device heuristic for expert mode and the non-device-backed
+  // classes: sirens, switch actuators (plug-in sirens / alarm lights),
+  // smoke sounders. The default add flow uses the backend candidate
+  // list instead (capability ground truth from the live model, §12.2).
   const OUTPUT_RE =
     /asir|sir|swsd|ps[m]?\b|psm|switch|schalt|dimmer|dim|light|licht|lamp|relay|relais|bsm|fsm|dr\b|mp3/i;
 
@@ -110,8 +124,29 @@
   let addExpert = $state(false);
   let addDeviceSearch = $state("");
   let addDevice = $state<DeviceSummary | null>(null);
+  let addCandidate = $state<AlarmOutputCandidate | null>(null);
   let addChannel = $state("");
   let addName = $state("");
+
+  // Enrollment candidates from the live domain model (all device-backed
+  // classes at once). Also feeds the per-output tone/pattern pickers
+  // with the device's real ENUM label lists.
+  let candidates = $state<AlarmOutputCandidate[]>([]);
+  const candidateByChannel = $derived(
+    new Map(candidates.map((c) => [`${c.central}|${c.channel_address}`, c])),
+  );
+  function extrasFor(o: AlarmOutput): AlarmOutputCandidate | undefined {
+    return candidateByChannel.get(`${o.central}|${o.channel_address}`);
+  }
+  async function loadCandidates() {
+    try {
+      candidates = await api.listAlarmOutputCandidates();
+    } catch (e) {
+      // Candidates are an assist — the expert flow stays usable, but
+      // the failure must surface (operating concept: no silent aborts).
+      toastStore.error(t("alarm.outputs.candidates.load_failed"), friendlyError(e, t));
+    }
+  }
 
   // --- config accessors -------------------------------------------
   function outModes(o: AlarmOutput): string[] {
@@ -135,6 +170,15 @@
   // the engine key and clears the legacy one.
   function outAcousticTone(o: AlarmOutput): string {
     return outStr(o, "acoustic_tone") || outStr(o, "tone");
+  }
+  // SOUNDFILE_NNN ↔ numeric soundfile_index round-trip (device wire
+  // labels are 1-based; unset falls back to the device default).
+  function soundfileLabel(idx: number | undefined): string {
+    return idx && idx > 0 ? `SOUNDFILE_${String(idx).padStart(3, "0")}` : "";
+  }
+  function soundfileIndex(label: string): number | undefined {
+    const m = /^SOUNDFILE_(\d+)$/.exec(label);
+    return m ? parseInt(m[1], 10) : undefined;
   }
   function outChirpTickTone(o: AlarmOutput): string {
     return outStr(o, "chirp_tick_tone") || outStr(o, "chirp_chime_tone");
@@ -234,6 +278,24 @@
 
   // --- add flow ----------------------------------------------------
   const addDeviceMatch = $derived(makeTextMatcher(addDeviceSearch));
+  // Candidate mode: device-backed class without expert override — the
+  // list comes from the backend capability ground truth, one row per
+  // eligible channel.
+  const addUseCandidates = $derived(DEVICE_BACKED.has(addClass) && !addExpert);
+  const addClassCandidates = $derived(
+    candidates
+      .filter((c) => ((c.classes ?? []) as string[]).includes(addClass))
+      .filter(
+        (c) =>
+          !addDeviceSearch ||
+          addDeviceMatch(c.device_name ?? "") ||
+          addDeviceMatch(c.channel_name ?? "") ||
+          addDeviceMatch(c.device_address) ||
+          addDeviceMatch(c.channel_address) ||
+          addDeviceMatch(c.model),
+      )
+      .slice(0, 60),
+  );
   const addCandidates = $derived(
     deviceStore.items
       .filter((d) => {
@@ -267,6 +329,15 @@
     addExpert = false;
     addDeviceSearch = "";
     addDevice = null;
+    addCandidate = null;
+    addChannel = "";
+    addName = "";
+  }
+  // The class and the expert toggle both switch the candidate pool, so
+  // a prior pick may no longer be valid — always reset the selection.
+  function resetAddSelection() {
+    addDevice = null;
+    addCandidate = null;
     addChannel = "";
     addName = "";
   }
@@ -275,14 +346,22 @@
     addChannel = `${d.address}:1`;
     addName = d.name ?? "";
   }
-  const canAdd = $derived(!!addDevice && addChannel.trim() !== "");
+  function pickAddCandidate(c: AlarmOutputCandidate) {
+    addCandidate = c;
+    addName = c.channel_name || c.device_name || "";
+  }
+  const canAdd = $derived(
+    addUseCandidates ? !!addCandidate : !!addDevice && addChannel.trim() !== "",
+  );
   function confirmAdd() {
-    if (!addDevice || !canAdd) return;
-    const channel = addChannel.trim();
+    if (!canAdd) return;
+    const central = addUseCandidates ? (addCandidate?.central ?? "") : (addDevice?.central ?? "");
+    const channel = addUseCandidates ? (addCandidate?.channel_address ?? "") : addChannel.trim();
+    if (channel === "") return;
     const output: AlarmOutput = {
-      id: `${addDevice.central ?? ""}|${channel}|${addClass}`,
+      id: `${central}|${channel}|${addClass}`,
       class: addClass,
-      central: addDevice.central ?? "",
+      central,
       channel_address: channel,
       name: addName.trim() || undefined,
       config: defaultConfig(addClass),
@@ -319,6 +398,7 @@
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
+    void loadCandidates();
   });
 </script>
 
@@ -388,6 +468,7 @@
     <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {#each outputs as o (o.id)}
         {@const caps = CAPS[o.class]}
+        {@const ex = extrasFor(o)}
         <Card class="flex flex-col gap-3 p-4">
           <!-- Header -->
           <div class="flex items-start gap-2">
@@ -481,48 +562,122 @@
               {#if caps.tone}
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
                   {t("alarm.outputs.tone")}
-                  <Input
-                    value={outAcousticTone(o)}
-                    oninput={(e) =>
-                      updateOutputConfig(o.id, { acoustic_tone: e.currentTarget.value || undefined, tone: undefined })}
-                  />
+                  {#if ex?.available_tones?.length}
+                    <Select
+                      value={outAcousticTone(o)}
+                      onValueChange={(v) => updateOutputConfig(o.id, { acoustic_tone: v || undefined, tone: undefined })}
+                      options={[
+                        { value: "", label: t("alarm.outputs.device_default") },
+                        ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
+                      ]}
+                    />
+                  {:else}
+                    <Input
+                      value={outAcousticTone(o)}
+                      oninput={(e) =>
+                        updateOutputConfig(o.id, { acoustic_tone: e.currentTarget.value || undefined, tone: undefined })}
+                    />
+                  {/if}
                   <span>{t("alarm.outputs.tone.hint")}</span>
                 </label>
               {/if}
               {#if caps.chirpTones}
-                <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
-                  {t("alarm.outputs.chirp_arm_tone")}
-                  <Input
-                    value={outStr(o, "chirp_arm_tone")}
-                    oninput={(e) =>
-                      updateOutputConfig(o.id, { chirp_arm_tone: e.currentTarget.value || undefined })}
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
-                  {t("alarm.outputs.chirp_disarm_tone")}
-                  <Input
-                    value={outStr(o, "chirp_disarm_tone")}
-                    oninput={(e) =>
-                      updateOutputConfig(o.id, { chirp_disarm_tone: e.currentTarget.value || undefined })}
-                  />
-                </label>
-                <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
-                  {t("alarm.outputs.chirp_tick_tone")}
-                  <Input
-                    value={outChirpTickTone(o)}
-                    oninput={(e) =>
-                      updateOutputConfig(o.id, {
-                        chirp_tick_tone: e.currentTarget.value || undefined,
-                        chirp_chime_tone: undefined,
-                      })}
-                  />
-                  <span>{t("alarm.outputs.chirp_tick_tone.hint")}</span>
-                </label>
+                {#if ex?.available_soundfiles?.length}
+                  <!-- MP3-player chirp (e.g. HmIP-MP3P): one soundfile pick
+                       instead of siren tone labels. -->
+                  <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+                    {t("alarm.outputs.soundfile")}
+                    <Select
+                      value={soundfileLabel(outNum(o, "soundfile_index"))}
+                      onValueChange={(v) =>
+                        updateOutputConfig(o.id, { soundfile_index: soundfileIndex(v) })}
+                      options={[
+                        { value: "", label: t("alarm.outputs.device_default") },
+                        ...ex.available_soundfiles.map((sf) => ({ value: sf, label: sf })),
+                      ]}
+                    />
+                    <span>{t("alarm.outputs.soundfile.hint")}</span>
+                  </label>
+                {:else}
+                  <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+                    {t("alarm.outputs.chirp_arm_tone")}
+                    {#if ex?.available_tones?.length}
+                      <Select
+                        value={outStr(o, "chirp_arm_tone")}
+                        onValueChange={(v) => updateOutputConfig(o.id, { chirp_arm_tone: v || undefined })}
+                        options={[
+                          { value: "", label: t("alarm.outputs.device_default") },
+                          ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
+                        ]}
+                      />
+                    {:else}
+                      <Input
+                        value={outStr(o, "chirp_arm_tone")}
+                        oninput={(e) =>
+                          updateOutputConfig(o.id, { chirp_arm_tone: e.currentTarget.value || undefined })}
+                      />
+                    {/if}
+                  </label>
+                  <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+                    {t("alarm.outputs.chirp_disarm_tone")}
+                    {#if ex?.available_tones?.length}
+                      <Select
+                        value={outStr(o, "chirp_disarm_tone")}
+                        onValueChange={(v) => updateOutputConfig(o.id, { chirp_disarm_tone: v || undefined })}
+                        options={[
+                          { value: "", label: t("alarm.outputs.device_default") },
+                          ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
+                        ]}
+                      />
+                    {:else}
+                      <Input
+                        value={outStr(o, "chirp_disarm_tone")}
+                        oninput={(e) =>
+                          updateOutputConfig(o.id, { chirp_disarm_tone: e.currentTarget.value || undefined })}
+                      />
+                    {/if}
+                  </label>
+                  <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+                    {t("alarm.outputs.chirp_tick_tone")}
+                    {#if ex?.available_tones?.length}
+                      <Select
+                        value={outChirpTickTone(o)}
+                        onValueChange={(v) =>
+                          updateOutputConfig(o.id, { chirp_tick_tone: v || undefined, chirp_chime_tone: undefined })}
+                        options={[
+                          { value: "", label: t("alarm.outputs.device_default") },
+                          ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
+                        ]}
+                      />
+                    {:else}
+                      <Input
+                        value={outChirpTickTone(o)}
+                        oninput={(e) =>
+                          updateOutputConfig(o.id, {
+                            chirp_tick_tone: e.currentTarget.value || undefined,
+                            chirp_chime_tone: undefined,
+                          })}
+                      />
+                    {/if}
+                    <span>{t("alarm.outputs.chirp_tick_tone.hint")}</span>
+                  </label>
+                {/if}
               {/if}
               {#if caps.optical}
                 <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
                   {t("alarm.outputs.optical_pattern")}
-                  <Input value={outStr(o, "optical_pattern")} oninput={(e) => updateOutputConfig(o.id, { optical_pattern: e.currentTarget.value || undefined })} />
+                  {#if ex?.available_lights?.length}
+                    <Select
+                      value={outStr(o, "optical_pattern")}
+                      onValueChange={(v) => updateOutputConfig(o.id, { optical_pattern: v || undefined })}
+                      options={[
+                        { value: "", label: t("alarm.outputs.device_default") },
+                        ...ex.available_lights.map((pat) => ({ value: pat, label: pat })),
+                      ]}
+                    />
+                  {:else}
+                    <Input value={outStr(o, "optical_pattern")} oninput={(e) => updateOutputConfig(o.id, { optical_pattern: e.currentTarget.value || undefined })} />
+                  {/if}
                   <span>{t("alarm.outputs.optical_pattern.hint")}</span>
                 </label>
               {/if}
@@ -609,7 +764,10 @@
           <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.field.class")}</span>
           <Select
             value={addClass}
-            onValueChange={(v) => (addClass = v as AlarmOutputClass)}
+            onValueChange={(v) => {
+              addClass = v as AlarmOutputClass;
+              resetAddSelection();
+            }}
             options={CLASSES.map((c) => ({ value: c, label: t(`alarm.output_class.${c}`) }))}
           />
           <span class="text-xs text-[var(--ha-secondary-text-color)]">{t(`alarm.output_class.${addClass}.hint`)}</span>
@@ -619,13 +777,33 @@
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.device")}</span>
             <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]" title={t("alarm.outputs.expert.hint")}>
-              <input type="checkbox" bind:checked={addExpert} />
+              <input type="checkbox" bind:checked={addExpert} onchange={resetAddSelection} />
               {t("alarm.outputs.expert")}
             </label>
           </div>
           <Input type="search" placeholder={t("common.search")} bind:value={addDeviceSearch} />
           <div class="mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--ha-divider-color)]">
-            {#if addCandidates.length === 0}
+            {#if addUseCandidates}
+              {#if addClassCandidates.length === 0}
+                <p class="p-3 text-center text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.candidates.empty")}</p>
+              {:else}
+                {#each addClassCandidates as c (`${c.central}|${c.channel_address}`)}
+                  <button
+                    type="button"
+                    class="flex w-full flex-col items-start gap-0.5 border-b border-[var(--ha-divider-color)] px-3 py-2 text-left transition last:border-0 hover:bg-[var(--ha-secondary-background-color)] {addCandidate?.channel_address ===
+                      c.channel_address && addCandidate?.central === c.central
+                      ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_12%,transparent)]'
+                      : ''}"
+                    onclick={() => pickAddCandidate(c)}
+                  >
+                    <span class="truncate text-sm text-[var(--ha-primary-text-color)]">
+                      {c.device_name || c.device_address}{c.channel_name ? ` · ${c.channel_name}` : ""}
+                    </span>
+                    <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{c.model} · {c.channel_address}</span>
+                  </button>
+                {/each}
+              {/if}
+            {:else if addCandidates.length === 0}
               <p class="p-3 text-center text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.add.no_devices")}</p>
             {:else}
               {#each addCandidates as d (d.address)}
@@ -645,7 +823,12 @@
           </div>
         </div>
 
-        {#if addDevice}
+        {#if addUseCandidates && addCandidate}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.name")}</span>
+            <Input bind:value={addName} />
+          </div>
+        {:else if !addUseCandidates && addDevice}
           <div class="flex flex-col gap-1.5">
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.channel")}</span>
             <Input bind:value={addChannel} />

@@ -1,5 +1,21 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.43.0
+
+- **New: smarter alarm output enrollment.** The "add output" dialog in
+  the alarm settings now only offers devices that can actually perform
+  the selected output class — sirens for the siren classes, actuators
+  with device-side auto-off for plug-in sirens — with a real channel
+  picker. Tone and light-pattern fields offer the device's own value
+  lists (e.g. HmIP-ASIR), and MP3 players (HmIP-MP3P) get a soundfile
+  picker for chirps. Saving rejects impossible device/class pairings
+  immediately instead of failing later during an alarm.
+- **New: arm your alarm with a keyfob remote.** Remote-key alarm codes
+  (e.g. the Homematic IP keyfob remote HmIP-KRCA) can now be set up
+  with a guided picker — choose the button, short or long press, the
+  action (arm/disarm/silence/panic) and the area — instead of writing
+  a JSON binding by hand.
+
 ## 0.42.9
 
 - **Fixed: missing German/English labels on the HmIP-BWTH.** The

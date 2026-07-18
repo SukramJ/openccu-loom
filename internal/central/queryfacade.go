@@ -88,6 +88,15 @@ func (q *QueryFacade) Devices() []registry.DeviceEntry {
 	return q.devices.List()
 }
 
+// ModelDevices returns every device of the domain model. The slice is
+// a fresh snapshot; the devices themselves are shared live objects.
+func (q *QueryFacade) ModelDevices() []*device.Device {
+	if q.model == nil {
+		return nil
+	}
+	return q.model.List()
+}
+
 // HealthSnapshot returns the tracker's current sample set.
 func (q *QueryFacade) HealthSnapshot() []health.Component {
 	if q.health == nil {

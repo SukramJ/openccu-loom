@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 39c50da
-HEAD: 39c50da
+Generated: 227c65c0
+HEAD: 227c65c0
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25475 |
-| Reachable | 4524 |
-| Whitelisted | 18240 |
-| **Unreachable** | **2711** |
+| Total Exported | 25600 |
+| Reachable | 4534 |
+| Whitelisted | 18347 |
+| **Unreachable** | **2719** |
 
 ## Top-20 Packages by Dead Code
 
@@ -35,7 +35,7 @@ HEAD: 39c50da
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
-| internal/alarm | 0 | 19 | 0 |
+| internal/alarm | 0 | 23 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -115,7 +115,7 @@ HEAD: 39c50da
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
-| internal/alarm | 0 | 19 | 0 |
+| internal/alarm | 0 | 23 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
 | internal/alarm/engine | 0 | 25 | 6 |
 | internal/alarm/journal | 0 | 1 | 0 |
@@ -192,7 +192,7 @@ HEAD: 39c50da
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 84 | 22 |
-| pkg/hmapi | 0 | 113 | 14 |
+| pkg/hmapi | 0 | 117 | 14 |
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

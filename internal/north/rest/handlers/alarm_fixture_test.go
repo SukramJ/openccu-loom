@@ -56,6 +56,18 @@ func (f *alarmPanelFixture) Stores() *alarm.Stores     { return f.stores }
 
 func (f *alarmPanelFixture) Panels() []alarmpanel.Panel { return nil }
 
+func (f *alarmPanelFixture) OutputCandidates(hmenum.AlarmOutputClass) []alarm.OutputCandidate {
+	return nil
+}
+
+// OutputTargetEligible reports unknown targets: the fixture has no
+// central registry, so soft validation must always pass.
+func (f *alarmPanelFixture) OutputTargetEligible(string, string, hmenum.AlarmOutputClass) (eligible, known bool) {
+	return true, false
+}
+
+func (f *alarmPanelFixture) RemoteKeyCandidates() []alarm.RemoteKeyCandidate { return nil }
+
 // Reload mirrors the driver + engine half of alarm.Service.Reload; the
 // REST surface never touches the sensor-event routing indexes that
 // belong to the daemon-level service's central subscriptions.
