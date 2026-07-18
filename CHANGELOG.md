@@ -6,6 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.2] — 2026-07-18
+
+### Added
+
+- **Localised siren tone / pattern / soundfile pickers** — the
+  candidate extras now carry parallel `*_labels` lists translated
+  through the curated CCU value translations (APIVersion 2.27.0), so
+  the ASIR tone and pattern dropdowns show "Frequenz steigend" instead
+  of `FREQUENCY_RISING`; raw wire values remain what is stored.
+- **Optical pattern on the acoustic-siren card** — the acoustic
+  activation writes the optical selection in the same atomic device
+  paramset, so the acoustic card now exposes the optical dropdown too
+  (previously only optical-siren and alarm-light cards had it).
+- **Stale enrollments are visible and repairable** — pre-0.43
+  enrollments could point at a non-siren channel (the old dialog
+  defaulted to `:1`); such rows never fired and, since 0.43.0's save
+  validation, block the whole output set with 422 — invisibly. The
+  output card now flags an ineligible channel/class pair with an
+  explanation and, when the device has exactly one eligible channel,
+  offers a one-click channel repair.
+
 ## [0.43.1] — 2026-07-18
 
 ### Added

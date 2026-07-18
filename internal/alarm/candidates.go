@@ -28,6 +28,10 @@ type OutputCandidate struct {
 	ChannelAddress string
 	ChannelNo      int
 	ChannelName    string
+	// ChannelType is the raw wire channel type (e.g.
+	// ALARM_SWITCH_VIRTUAL_RECEIVER) — the translation key prefix for
+	// localised ENUM value labels.
+	ChannelType string
 	// Classes are the device-backed output classes this channel can
 	// carry, in the canonical class order.
 	Classes []hmenum.AlarmOutputClass
@@ -146,6 +150,7 @@ func (s *Service) OutputCandidates(class hmenum.AlarmOutputClass) []OutputCandid
 				cand.ChannelAddress = ch.Address
 				cand.ChannelNo = ch.Number
 				cand.ChannelName = ch.NameData().ChannelName
+				cand.ChannelType = ch.Type
 				out = append(out, cand)
 			}
 		}

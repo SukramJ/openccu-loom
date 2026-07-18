@@ -83,6 +83,30 @@ test.describe('Alarm', () => {
     ).toBeVisible();
   });
 
+  test('acoustic-siren card offers the device tone list even when the stored central is empty (address fallback)', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('tab', { name: 'Outputs' }).click();
+    await expect(page.getByText('Außensirene')).toBeVisible();
+
+    // output-1 (Außensirene, VEQ0000010:1) deliberately carries an empty
+    // `central` in alarm-outputs.json while the candidate row carries
+    // "ccu1" — the address-only fallback must still bind the device's
+    // ENUM extras, turning the tone field into a Select fed by the
+    // candidate's available_tones, displayed via the localised
+    // available_tone_labels.
+    await page.locator('label:has-text("Tone") button').first().click();
+    await expect(page.getByRole('option', { name: 'Device default' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Frequency rising', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // The acoustic card also exposes the optical pattern (the acoustic
+    // activation writes it in the same atomic paramset).
+    await page.locator('label:has-text("Optical pattern") button').first().click();
+    await expect(page.getByRole('option', { name: 'Blinking alternately' })).toBeVisible();
+  });
+
   test('journal tab renders the five-entry journal table', async ({ page }) => {
     await page.goto('http://localhost:5173/app/#/alarm');
     await page.waitForSelector('#main');

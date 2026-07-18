@@ -234,6 +234,9 @@ const EN: Catalog = {
   "alarm.outputs.switched_caveat": "Convenience-grade: no sabotage contact, no battery backup, trivially unpluggable.",
   "alarm.outputs.smoke_caveat": "Smoke detectors double as sounders — no device-side duration, engine-watchdogged only, and repeated intrusion tones shorten battery life. Best on full protection only.",
   "alarm.outputs.device_default": "Device default",
+  "alarm.outputs.channel_mismatch":
+    "This channel cannot back the selected class — the enrollment predates channel validation and never fired. Saving is blocked until it is fixed or removed.",
+  "alarm.outputs.channel_mismatch.repair": "Repair channel",
   "alarm.outputs.candidates.empty":
     "No eligible channels for this class. Expert mode lists every device without capability filtering.",
   "alarm.outputs.candidates.load_failed": "Loading output candidates failed",
@@ -2862,6 +2865,9 @@ const DE: Catalog = {
   "alarm.outputs.switched_caveat": "Komfort-Klasse: kein Sabotagekontakt, keine Batteriepufferung, leicht ausgesteckt.",
   "alarm.outputs.smoke_caveat": "Rauchmelder dienen zusätzlich als Sirenen — keine geräteseitige Dauer, nur per Engine überwacht, und wiederholte Alarmtöne verkürzen die Batterielaufzeit. Am besten nur im Vollschutz.",
   "alarm.outputs.device_default": "Geräte-Standard",
+  "alarm.outputs.channel_mismatch":
+    "Dieser Kanal kann die gewählte Klasse nicht tragen — die Zuordnung stammt aus einer Version ohne Kanalprüfung und hat nie ausgelöst. Speichern ist blockiert, bis sie repariert oder entfernt ist.",
+  "alarm.outputs.channel_mismatch.repair": "Kanal reparieren",
   "alarm.outputs.candidates.empty":
     "Keine geeigneten Kanäle für diese Klasse. Der Expertenmodus listet alle Geräte ohne Fähigkeitsfilter.",
   "alarm.outputs.candidates.load_failed": "Laden der Ausgangs-Kandidaten fehlgeschlagen",
