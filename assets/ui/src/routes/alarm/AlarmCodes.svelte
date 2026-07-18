@@ -626,6 +626,7 @@
                   label: t(`alarm.codes.remote.param.${p.toLowerCase()}`),
                 }))}
               />
+              <span>{t("alarm.codes.remote.parameter.hint")}</span>
             </label>
             <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
               {t("alarm.codes.remote.action")}
@@ -634,6 +635,7 @@
                 onValueChange={(v) => draft && (draft = { ...draft, remote: { ...draft.remote, action: v } })}
                 options={remoteActionOptions}
               />
+              <span>{t("alarm.codes.remote.action.hint")}</span>
             </label>
           </div>
           <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
@@ -643,6 +645,7 @@
               onValueChange={(v) => draft && (draft = { ...draft, remote: { ...draft.remote, areaId: v } })}
               options={areas.map((a) => ({ value: a.id, label: a.name }))}
             />
+            <span>{t("alarm.codes.remote.area.hint")}</span>
           </label>
         {/if}
       {:else}

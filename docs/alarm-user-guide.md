@@ -163,8 +163,20 @@ not the device type — decides which safety rules apply.
 | **Optical siren** | The optical channel of a siren | Signals without noise; may run longer than the acoustic cap. |
 | **Alarm light** | Any switch/dimmer actuator | On at trigger, off at silence or disarm. |
 | **Chirp** | Short confirmation tones | Arm/disarm squawks, countdown ticks, door chime — never the loud alarm. |
-| **Notification** | MQTT / WebSocket / webhook event | Fires on every alarm; never cancelled by silence. Push delivery to a phone is your notification tooling's job — Loom guarantees the event. |
-| **Sysvar mirror** | A CCU system variable mirroring the alarm state | For existing CCU programs. |
+| **Notification** | MQTT / WebSocket / webhook event | One-shot at fire time, for every mode it's enrolled in — including silent policies; never cancelled by silence. Toggle the MQTT and webhook delivery planes independently per output (both on by default). Push delivery to a phone is your notification tooling's job — Loom guarantees the event. |
+| **Sysvar mirror** | A CCU system variable mirroring the alarm state | Two variable targets: a managed value-list variable Loom creates and keeps in sync, or an existing ALARM-type variable you already own — Loom then only writes `true`/`false` to it and never changes its type or creates it. |
+
+**Add output**: pick a class, then a device channel — the dialog lists
+only channels the live model confirms can carry that class (e.g.
+sirens gated on their acoustic/optical capability, plug-in sirens on
+`ON_TIME` support). The *Show all channels* toggle (expert) widens the
+list to every modelled actuator, for wiring the automatic gate misses.
+Saving an enrollment whose channel cannot carry its class is rejected;
+a channel the CCU cannot currently reach still saves — the fault
+journal covers it once it's back. Sysvar-mirror outputs skip the
+device picker entirely: choose the central and either let Loom manage
+the value-list variable, or tick *Existing variable* and name a sysvar
+you already created as ALARM type — saving without a name is rejected.
 
 Per output you can set the mode assignment, tone / light pattern
 (device value-list labels; empty = device default), duration (acoustic
@@ -173,7 +185,11 @@ exclude outdoor sirens), and *Shared with CCU programs* (Loom then never
 auto-stops that output while the area is disarmed). Chirp outputs carry
 three tone labels — arm squawk, disarm squawk, and the tick tone used
 for countdown ticks, entry warnings and the door chime; an empty label
-skips that chirp kind on the output.
+skips that chirp kind on the output. Notification outputs instead carry
+the *Notify via MQTT* / *Notify via webhook* toggles; sysvar-mirror
+outputs carry the variable name and, for the managed variant only,
+*Allow disarm* (the existing-variable target never accepts inbound
+intents, so the toggle does not apply to it).
 
 **Test fire**: every output (except smoke sounders) offers a short,
 bounded live test from its card — with an optical-only option for the
@@ -261,6 +277,15 @@ salted hashes and never shown again.
   the visible journal until the incident is resolved. Never hand out a
   duress code casually.
 
+**Binding a remote key**: the editor lists every physical remote/
+wall-button key channel that can drive a code — short- and long-press
+buttons read straight from the live model; virtual remote channels are
+not listed here. Security keyfobs such as the HmIP-KRCA sort to the top
+with an *alarm keyfob* badge. Pick the key, then the trigger (short or
+long press), the action (an arm mode or disarm) and, optionally, the
+area it applies to. Raw JSON binding remains available as an expert
+fallback, and is the only way to bind a virtual remote channel.
+
 Wrong codes are rate-limited with escalating lockout per source;
 operator sessions are exempt from the lockout (an attacker spamming a
 wall keypad cannot lock you out of your own panel).
@@ -293,10 +318,14 @@ restart-restored incident) lands here instead of being swallowed.
   `alarm_control_panel` entity via MQTT discovery (plus an aggregate
   master panel). Arm modes map to the HA vocabulary
   (`armed_home` = perimeter, `armed_away` = full, `armed_night`,
-  `armed_vacation`, `armed_custom_bypass`).
+  `armed_vacation`, `armed_custom_bypass`). Enrolled notification
+  outputs additionally publish a `NOTIFICATION` entry on the area's
+  event topic and forward to configured webhook receivers — toggle
+  each plane per output on the Outputs tab.
 - **REST / WebSocket**: the full surface lives under `/api/v1/alarm`
   and the WS category `alarm_panel` — see `assets/openapi.yaml` and
-  `assets/wsapi.json`.
+  `assets/wsapi.json`. The `alarm.notification` broadcast mirrors the
+  same notification-output firings for WS clients.
 - **hmcli**: `hmcli alarm` is the host-local break-glass control —
   whoever has shell access to the daemon host already owns the system.
 

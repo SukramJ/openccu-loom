@@ -762,6 +762,7 @@
                           updateOutputConfig(o.id, { chirp_arm_tone: e.currentTarget.value || undefined })}
                       />
                     {/if}
+                    <span>{t("alarm.outputs.chirp_arm_tone.hint")}</span>
                   </label>
                   <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
                     {t("alarm.outputs.chirp_disarm_tone")}
@@ -781,6 +782,7 @@
                           updateOutputConfig(o.id, { chirp_disarm_tone: e.currentTarget.value || undefined })}
                       />
                     {/if}
+                    <span>{t("alarm.outputs.chirp_disarm_tone.hint")}</span>
                   </label>
                   <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
                     {t("alarm.outputs.chirp_tick_tone")}
@@ -930,6 +932,7 @@
               }}
               options={centralOptions}
             />
+            <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.central.hint")}</span>
           </div>
           <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
             <span>{t("alarm.outputs.sysvar.existing")}</span>
@@ -1033,6 +1036,7 @@
           <div class="flex flex-col gap-1.5">
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.channel")}</span>
             <Input bind:value={addChannel} />
+            <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.channel.hint")}</span>
           </div>
           <div class="flex flex-col gap-1.5">
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.name")}</span>

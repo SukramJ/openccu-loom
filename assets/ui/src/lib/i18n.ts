@@ -233,7 +233,6 @@ const EN: Catalog = {
   "alarm.outputs.tier": "Tier",
   "alarm.outputs.switched_caveat": "Convenience-grade: no sabotage contact, no battery backup, trivially unpluggable.",
   "alarm.outputs.smoke_caveat": "Smoke detectors double as sounders — no device-side duration, engine-watchdogged only, and repeated intrusion tones shorten battery life. Best on full protection only.",
-  "alarm.outputs.acoustic_no_ontime": "This actuator has no ON_TIME, so it can't self-off — not eligible as an acoustic output.",
   "alarm.outputs.device_default": "Device default",
   "alarm.outputs.candidates.empty":
     "No eligible channels for this class. Expert mode lists every device without capability filtering.",
@@ -241,6 +240,13 @@ const EN: Catalog = {
   "alarm.outputs.soundfile": "Soundfile",
   "alarm.outputs.soundfile.hint": "MP3 soundfile played for chirps. Empty uses the device default.",
   "alarm.outputs.sysvar.central": "Central",
+  "alarm.outputs.sysvar.central.hint":
+    "CCU the variable lives on — the mirror writes (and, for managed variables, creates) it there.",
+  "alarm.outputs.channel.hint": "Channel address as <device>:<channel>, e.g. 0001D3C9A4B2:3.",
+  "alarm.outputs.chirp_arm_tone.hint":
+    "Tone label for the arm squawk, from the device's tone list. Empty skips it on this output.",
+  "alarm.outputs.chirp_disarm_tone.hint":
+    "Tone label for the disarm squawk. Empty skips it on this output.",
   "alarm.outputs.sysvar.name": "Variable name",
   "alarm.outputs.sysvar.name.hint":
     "Created on the CCU automatically as a value-list variable mirroring the area state (Unscharf … Alarm).",
@@ -435,9 +441,12 @@ const EN: Catalog = {
   "alarm.codes.remote.alarm_keyfob": "Alarm keyfob",
   "alarm.codes.remote.candidates_failed": "Loading remote keys failed",
   "alarm.codes.remote.parameter": "Trigger",
+  "alarm.codes.remote.parameter.hint": "Which press of the bound key fires the action — short or long.",
   "alarm.codes.remote.param.press_short": "Short press",
   "alarm.codes.remote.param.press_long": "Long press",
   "alarm.codes.remote.action": "Action",
+  "alarm.codes.remote.action.hint": "What the key does: arm into a specific mode, disarm, silence, or panic.",
+  "alarm.codes.remote.area.hint": "Alarm area the action applies to.",
   "alarm.codes.remote.action.arm": "Arm",
   "alarm.codes.remote.action.disarm": "Disarm",
   "alarm.codes.remote.action.silence": "Silence",
@@ -2852,7 +2861,6 @@ const DE: Catalog = {
   "alarm.outputs.tier": "Stufe",
   "alarm.outputs.switched_caveat": "Komfort-Klasse: kein Sabotagekontakt, keine Batteriepufferung, leicht ausgesteckt.",
   "alarm.outputs.smoke_caveat": "Rauchmelder dienen zusätzlich als Sirenen — keine geräteseitige Dauer, nur per Engine überwacht, und wiederholte Alarmtöne verkürzen die Batterielaufzeit. Am besten nur im Vollschutz.",
-  "alarm.outputs.acoustic_no_ontime": "Dieser Aktor hat kein ON_TIME und kann sich nicht selbst abschalten — als akustischer Ausgang nicht zulässig.",
   "alarm.outputs.device_default": "Geräte-Standard",
   "alarm.outputs.candidates.empty":
     "Keine geeigneten Kanäle für diese Klasse. Der Expertenmodus listet alle Geräte ohne Fähigkeitsfilter.",
@@ -2860,6 +2868,13 @@ const DE: Catalog = {
   "alarm.outputs.soundfile": "Sounddatei",
   "alarm.outputs.soundfile.hint": "MP3-Sounddatei für Signaltöne. Leer nutzt den Geräte-Standard.",
   "alarm.outputs.sysvar.central": "Zentrale",
+  "alarm.outputs.sysvar.central.hint":
+    "CCU, auf der die Variable liegt — der Spiegel schreibt sie dort (und legt verwaltete Variablen dort an).",
+  "alarm.outputs.channel.hint": "Kanaladresse als <Gerät>:<Kanal>, z. B. 0001D3C9A4B2:3.",
+  "alarm.outputs.chirp_arm_tone.hint":
+    "Ton-Bezeichner für den Scharf-Quittungston, aus der Tonliste des Geräts. Leer überspringt ihn auf diesem Ausgang.",
+  "alarm.outputs.chirp_disarm_tone.hint":
+    "Ton-Bezeichner für den Unscharf-Quittungston. Leer überspringt ihn auf diesem Ausgang.",
   "alarm.outputs.sysvar.name": "Variablenname",
   "alarm.outputs.sysvar.name.hint":
     "Wird auf der CCU automatisch als Werteliste-Variable angelegt und spiegelt den Bereichszustand (Unscharf … Alarm).",
@@ -3054,9 +3069,12 @@ const DE: Catalog = {
   "alarm.codes.remote.alarm_keyfob": "Alarm-Fernbedienung",
   "alarm.codes.remote.candidates_failed": "Laden der Funktasten fehlgeschlagen",
   "alarm.codes.remote.parameter": "Auslöser",
+  "alarm.codes.remote.parameter.hint": "Welcher Druck der gebundenen Taste die Aktion auslöst — kurz oder lang.",
   "alarm.codes.remote.param.press_short": "Kurzer Tastendruck",
   "alarm.codes.remote.param.press_long": "Langer Tastendruck",
   "alarm.codes.remote.action": "Aktion",
+  "alarm.codes.remote.action.hint": "Was die Taste tut: in einen Modus scharf schalten, unscharf schalten, stummschalten oder Panik.",
+  "alarm.codes.remote.area.hint": "Alarmbereich, auf den die Aktion wirkt.",
   "alarm.codes.remote.action.arm": "Scharf",
   "alarm.codes.remote.action.disarm": "Unscharf",
   "alarm.codes.remote.action.silence": "Stummschalten",

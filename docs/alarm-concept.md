@@ -1,6 +1,10 @@
 # Alarm System Concept for OpenCCU-Loom
 
-**Status:** Draft / concept — not yet scheduled for a release.
+**Status:** Shipped — the alarm engine landed in 0.42.0 and has been
+extended through 0.43.x (capability-derived enrollment, guided
+remote-key bindings, real notification outputs). This document is kept
+in sync with the implementation; where they disagree, the code and
+`CHANGELOG.md` win.
 **Date:** 2026-07-14
 **Scope:** A native, local-first intrusion-alarm engine ("alarm panel") inside
 the OpenCCU-Loom daemon, driving Homematic / Homematic IP sensors and sirens,
@@ -497,8 +501,21 @@ configuration:
 | **Optical siren** | ASIR optical channel | may run longer than acoustic (still bounded); useful after the 3-min acoustic cap. |
 | **Alarm light** | any switch/dimmer actuator | "Alarm-Licht": on at trigger, off at silence/disarm; optionally flashing. |
 | **Chirps & chimes** | ASIR confirmation tones (`EXTERNALLY_ARMED`, `DISARMED`, `EVENT`, …), MP3 player, actuator pulse | arm/disarm squawk (1×/2× DSC-style), exit-delay countdown ticks (accelerating), entry-delay warning tone, optional door chime while disarmed. Chirps yield first under duty-cycle pressure (S5). |
-| **Notifications** | MQTT event topic, webhook adapter, WS broadcast | push delivery is delegated to HA companion / ntfy / user tooling; loom guarantees the event, not the phone. Never cancelled by silence. |
-| **Sysvar mirror** | CCU ALARM/value-list sysvars | optional interop with existing CCU programs (§13.5). |
+| **Notifications** | MQTT event topic, webhook adapter, WS broadcast | shipped (0.43.1, APIVersion 2.26.0): each enrolled notification output fires a dedicated, one-shot `alarm_panel.notification` event at incident-fire time — for every mode it's enrolled in, including silent policies — never cancelled by silence; per-output `notify_mqtt`/`notify_webhook` toggles gate the MQTT and webhook planes independently (both default on). Push delivery to a phone is still delegated to HA companion / ntfy / user tooling; loom guarantees the event, not the phone. |
+| **Sysvar mirror** | CCU ALARM/value-list sysvars | optional interop with existing CCU programs (§13.5); targets either a managed value-list variable (created by loom) or an existing operator-owned ALARM-type variable (shipped 0.43.1). |
+
+**Capability-derived output enrollment (shipped 0.43.0, APIVersion 2.25.0).**
+`GET /api/v1/alarm/output-candidates` enumerates, from the live domain
+model, every channel that can back a device-backed class (acoustic/
+optical siren, switched siren gated on `ON_TIME`, smoke sounder, alarm
+light, chirp) plus the device's real ENUM label lists (ASIR acoustic
+tones and optical patterns, MP3P soundfiles). The SPA add-output dialog
+lists these ground-truth candidates per class with a channel picker;
+an expert toggle falls back to the unfiltered device list for wiring
+the automatic gate misses. `PUT .../outputs` soft-validates the saved
+set: a resolvable channel that cannot carry its declared class is
+rejected with 422, while an unresolvable target (CCU down) still saves
+— the fault journal remains its safety net.
 
 **Generic actuator outputs (expert).** Beyond the built-in classes, *any*
 actuator loom models (switch, dimmer, relay, …) can be enrolled as an
@@ -784,6 +801,16 @@ Restore policy on boot (given a plausible clock):
   remote addresses map to named alarm users, so `changed_by` is populated
   for hardware interactions too. Whether WKP on-device PIN slots mirror
   engine codes or stay independent is an open question (§18).
+- **Guided remote-key bindings** (shipped 0.43.0/0.43.1, APIVersion
+  2.25.0): `GET /api/v1/alarm/remote-key-candidates` enumerates every
+  physical remote/wall-button key channel — `PRESS_SHORT`/`PRESS_LONG`
+  as ordinary VALUES data points, read straight from the live model;
+  virtual remote channels are excluded. The codes editor's guided
+  builder assembles the binding document from a key picker plus
+  trigger/action/area selects; raw JSON remains the expert fallback and
+  the only path for virtual remote channels. Security keyfobs
+  (HmIP-KRCA and peers) sort first in the picker with an "alarm keyfob"
+  badge.
 - **Wrong-code handling**: rate limiting + exponential lockout per source,
   journal entries, optional tamper event after N failures (keypads
   additionally lock out on-device).
@@ -938,6 +965,8 @@ alarm-message surface (`/api/v1/alarm-messages`), see the naming note in
 GET/POST/PUT/DELETE  /api/v1/alarm/areas[/{id}]
 GET/PUT              /api/v1/alarm/areas/{id}/sensors
 GET/PUT              /api/v1/alarm/areas/{id}/outputs
+GET                  /api/v1/alarm/output-candidates      (channels per device-backed class; APIVersion 2.25.0)
+GET                  /api/v1/alarm/remote-key-candidates  (physical remote/wall-button key channels; APIVersion 2.25.0)
 POST                 /api/v1/alarm/areas/{id}/arm        {mode, code?, force?, skip_delay?, bypass?[]}
 POST                 /api/v1/alarm/areas/{id}/disarm     {code?}
 POST                 /api/v1/alarm/areas/{id}/silence
@@ -969,6 +998,10 @@ broadcasts: `alarm.state_changed`, `alarm.countdown` (tick),
 - Event topic (JSON, Alarmo-compatible spirit): `TRIGGER`,
   `FAILED_TO_ARM` (+ blocking sensors), `INVALID_CODE`, `SILENCED`,
   `DURESS`, with `area`, `changed_by`, `open_sensors`, `delay` fields.
+  `NOTIFICATION` (shipped 0.43.1, APIVersion 2.26.0) extends this
+  vocabulary: one entry per enrolled notification output at fire time,
+  carrying an `output` field (the output's name, or its id when
+  unnamed) — see `docs/mqtt-topic-schema.md`.
 - Raw command plane: `<base>/alarm/<area>/set`. Note this is a
   **deliberate extension** of the topic schema: areas are daemon-level,
   so the topic omits the `<central>` segment that every existing command
@@ -981,20 +1014,41 @@ broadcasts: `alarm.state_changed`, `alarm.countdown` (tick),
 Every journal-grade event is published on the internal bus (new
 `hmevent.Alarm*Event` types) and fans out through the existing webhook
 adapter — escalation chains, DECT-call bridges, ntfy etc. stay user-land.
+Notification-output firings (shipped 0.43.1) forward under event type
+`alarm_panel.notification`, carrying `output_id`/`output_name` in the
+detail payload, gated per output by its own `notify_webhook` toggle.
 
 ### 13.5 CCU sysvar mirror (optional)
 
-Per area, the engine can maintain CCU system variables (e.g. value-list
-`Loom-Alarm-EG`: Unscharf/Hüllschutz/Vollschutz/Alarm) so existing CCU
-programs, other CCU frontends, and legacy logic interoperate.
+Per area, the engine can maintain a CCU system variable so existing CCU
+programs, other CCU frontends, and legacy logic interoperate. Shipped
+0.43.1: the output's add dialog no longer asks for a device — it asks
+for the central and the variable target, which comes in two kinds:
+
+- **Managed value-list variable** (default) — Loom creates it on the
+  CCU automatically (e.g. `Loom-Alarm-EG`: Unscharf/Hüllschutz/
+  Vollschutz/Alarm) and owns its lifecycle. `sysvar_name` is editable
+  from the output card (previously not settable from the SPA at all,
+  which left the enrollment a silent no-op).
+- **Existing operator-owned ALARM-type variable** — a pre-existing
+  bool sysvar the operator already created. The mirror writes `true`
+  while the area is `triggered` and `false` otherwise, and never
+  creates or retypes the variable. Because a bool carries no mode, this
+  target accepts **no inbound intents** at all — `sysvar_allow_disarm`
+  does not apply to it, only to the managed value-list variant.
+
+Saving an output set with class `sysvar_mirror` and no `sysvar_name` is
+rejected with 422 (a nameless mirror would be a silent no-op).
 
 The mirror is split by direction, because a sysvar write cannot carry a
 PIN and the CCU's auth model is far weaker than loom's:
 
 - **Outbound (state export)** — always safe, on by default when the
   mirror is enabled.
-- **Inbound (intents)** — per-area policy, default **arm-only**: a
-  third-party sysvar write may arm (escalate) but never disarm or
+- **Inbound (intents)** — applies only to the managed value-list
+  variant (the existing-variable target takes no inbound intents at
+  all, above); per-area policy, default **arm-only**: a third-party
+  sysvar write may arm (escalate) but never disarm or
   silence. Disarm-via-sysvar can only be enabled for areas whose
   operator has explicitly disabled the disarm-code requirement *and*
   acknowledged a warning that anything able to write a ReGa sysvar
@@ -1072,7 +1126,7 @@ internal/alarm/
 | 15 | Generic actuator outputs (any switch/dimmer/relay, expert, user-declared class) | P2 | §7 |
 | 16 | Tier B classic-hardware ARMSTATE mirroring + static links | P2 | §9.2, needs classic sirens |
 | 17 | Guest codes with validity windows, duress code | P2 | §11 |
-| 18 | Sysvar mirror (outbound; inbound arm-only intents) | P2 | §13.5 |
+| 18 | Sysvar mirror (outbound; inbound arm-only intents) | P2 | §13.5; two target kinds shipped 0.43.1 — managed value-list variable, or an existing operator-owned ALARM-type variable (no inbound intents) |
 | 19 | Schedules & auto-arm reminders (presence hints via API) | P3 | reminders, not silent auto-arm |
 | 20 | Escalation chains with acknowledgement | P3 | webhook/notify ordering |
 | 21 | Pre-alarm stage (internal chime before sirens) | P3 | Bosch-style |
