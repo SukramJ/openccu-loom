@@ -82,11 +82,16 @@ type AlarmOutputCandidate struct {
 	// Kind is the stable custom-DP kind string (widget selection).
 	Kind string `json:"kind"`
 	// AvailableTones / AvailableLights / AvailableSoundfiles are the
-	// device's ENUM label lists (acoustic tones and optical patterns
-	// for sirens, soundfiles for MP3 players).
-	AvailableTones      []string `json:"available_tones,omitempty"`
-	AvailableLights     []string `json:"available_lights,omitempty"`
-	AvailableSoundfiles []string `json:"available_soundfiles,omitempty"`
+	// device's raw ENUM wire values (acoustic tones and optical
+	// patterns for sirens, soundfiles for MP3 players). The parallel
+	// *Labels lists carry the localised display strings in the same
+	// order; absent when the server has no value translations.
+	AvailableTones           []string `json:"available_tones,omitempty"`
+	AvailableToneLabels      []string `json:"available_tone_labels,omitempty"`
+	AvailableLights          []string `json:"available_lights,omitempty"`
+	AvailableLightLabels     []string `json:"available_light_labels,omitempty"`
+	AvailableSoundfiles      []string `json:"available_soundfiles,omitempty"`
+	AvailableSoundfileLabels []string `json:"available_soundfile_labels,omitempty"`
 	// Dimmable reports level support for the alarm_light class.
 	Dimmable bool `json:"dimmable,omitempty"`
 }

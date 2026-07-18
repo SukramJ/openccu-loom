@@ -76,7 +76,9 @@
     chirpTones: boolean;
   };
   const CAPS: Record<AlarmOutputClass, Caps> = {
-    acoustic_siren: { outdoor: true, duration: true, tone: true, optical: false, level: false, chirpTones: false },
+    // The acoustic activation carries the optical selection in the same
+    // atomic device write, so the acoustic card exposes both pickers.
+    acoustic_siren: { outdoor: true, duration: true, tone: true, optical: true, level: false, chirpTones: false },
     switched_siren: { outdoor: true, duration: true, tone: false, optical: false, level: false, chirpTones: false },
     smoke_sounder: { outdoor: false, duration: false, tone: false, optical: false, level: false, chirpTones: false },
     optical_siren: { outdoor: true, duration: true, tone: false, optical: true, level: false, chirpTones: false },
@@ -196,6 +198,41 @@
       candidateByAddress.get(o.channel_address) ??
       undefined
     );
+  }
+  // ENUM picker options: raw wire value + localised label (same-order
+  // parallel array from the candidates endpoint), with the
+  // device-default empty choice first.
+  function enumOptions(values: string[] | undefined, labels: string[] | undefined) {
+    return [
+      { value: "", label: t("alarm.outputs.device_default") },
+      ...(values ?? []).map((v, i) => ({ value: v, label: labels?.[i] || v })),
+    ];
+  }
+  // outputRepair flags an enrolled device-backed output whose channel
+  // cannot back its class (typical: a pre-0.43 enrollment defaulting to
+  // channel :1) — the server rejects saving such a row with 422. When
+  // exactly one channel of the same device can back the class, it is
+  // offered as a one-click repair target. Unknown devices (central
+  // down, model not loaded) are never flagged.
+  function outputRepair(o: AlarmOutput): { flagged: boolean; target?: AlarmOutputCandidate } {
+    if (!DEVICE_BACKED.has(o.class as AlarmOutputClass) || candidates.length === 0) {
+      return { flagged: false };
+    }
+    const devAddr = o.channel_address.split(":")[0] ?? "";
+    const dev = candidates.filter((c) => c.device_address === devAddr);
+    if (dev.length === 0) return { flagged: false };
+    const ok = dev.some(
+      (c) => c.channel_address === o.channel_address && ((c.classes ?? []) as string[]).includes(o.class),
+    );
+    if (ok) return { flagged: false };
+    const eligible = dev.filter((c) => ((c.classes ?? []) as string[]).includes(o.class));
+    return { flagged: true, target: eligible.length === 1 ? eligible[0] : undefined };
+  }
+  function repairOutput(o: AlarmOutput, target: AlarmOutputCandidate) {
+    outputs = outputs.map((x) =>
+      x.id === o.id ? { ...x, central: target.central, channel_address: target.channel_address } : x,
+    );
+    markDirty();
   }
   async function loadCandidates() {
     try {
@@ -565,6 +602,7 @@
       {#each outputs as o (o.id)}
         {@const caps = CAPS[o.class]}
         {@const ex = extrasFor(o)}
+        {@const repair = outputRepair(o)}
         <Card class="flex flex-col gap-3 p-4">
           <!-- Header -->
           <div class="flex items-start gap-2">
@@ -603,6 +641,22 @@
             >
               <Icon name="mdi:alert" size={16} class="mt-0.5 shrink-0 text-[var(--ha-warning-color)]" />
               <span>{t("alarm.outputs.switched_caveat")}</span>
+            </div>
+          {/if}
+
+          {#if repair.flagged}
+            <div
+              class="flex gap-2 rounded-md border border-[color-mix(in_srgb,var(--ha-error-color)_45%,transparent)] bg-[color-mix(in_srgb,var(--ha-error-color)_10%,transparent)] p-2 text-xs text-[var(--ha-primary-text-color)]"
+            >
+              <Icon name="mdi:alert-circle" size={16} class="mt-0.5 shrink-0 text-[var(--ha-error-color)]" aria-label="" />
+              <div class="flex min-w-0 flex-col items-start gap-1.5">
+                <span>{t("alarm.outputs.channel_mismatch")}</span>
+                {#if repair.target}
+                  <Button size="sm" variant="outline" onclick={() => repair.target && repairOutput(o, repair.target)}>
+                    {t("alarm.outputs.channel_mismatch.repair")} → {repair.target.channel_address}
+                  </Button>
+                {/if}
+              </div>
             </div>
           {/if}
 
@@ -711,10 +765,7 @@
                     <Select
                       value={outAcousticTone(o)}
                       onValueChange={(v) => updateOutputConfig(o.id, { acoustic_tone: v || undefined, tone: undefined })}
-                      options={[
-                        { value: "", label: t("alarm.outputs.device_default") },
-                        ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
-                      ]}
+                      options={enumOptions(ex.available_tones, ex.available_tone_labels)}
                     />
                   {:else}
                     <Input
@@ -736,10 +787,7 @@
                       value={soundfileLabel(outNum(o, "soundfile_index"))}
                       onValueChange={(v) =>
                         updateOutputConfig(o.id, { soundfile_index: soundfileIndex(v) })}
-                      options={[
-                        { value: "", label: t("alarm.outputs.device_default") },
-                        ...ex.available_soundfiles.map((sf) => ({ value: sf, label: sf })),
-                      ]}
+                      options={enumOptions(ex.available_soundfiles, ex.available_soundfile_labels)}
                     />
                     <span>{t("alarm.outputs.soundfile.hint")}</span>
                   </label>
@@ -750,10 +798,7 @@
                       <Select
                         value={outStr(o, "chirp_arm_tone")}
                         onValueChange={(v) => updateOutputConfig(o.id, { chirp_arm_tone: v || undefined })}
-                        options={[
-                          { value: "", label: t("alarm.outputs.device_default") },
-                          ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
-                        ]}
+                        options={enumOptions(ex.available_tones, ex.available_tone_labels)}
                       />
                     {:else}
                       <Input
@@ -770,10 +815,7 @@
                       <Select
                         value={outStr(o, "chirp_disarm_tone")}
                         onValueChange={(v) => updateOutputConfig(o.id, { chirp_disarm_tone: v || undefined })}
-                        options={[
-                          { value: "", label: t("alarm.outputs.device_default") },
-                          ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
-                        ]}
+                        options={enumOptions(ex.available_tones, ex.available_tone_labels)}
                       />
                     {:else}
                       <Input
@@ -791,10 +833,7 @@
                         value={outChirpTickTone(o)}
                         onValueChange={(v) =>
                           updateOutputConfig(o.id, { chirp_tick_tone: v || undefined, chirp_chime_tone: undefined })}
-                        options={[
-                          { value: "", label: t("alarm.outputs.device_default") },
-                          ...ex.available_tones.map((tone) => ({ value: tone, label: tone })),
-                        ]}
+                        options={enumOptions(ex.available_tones, ex.available_tone_labels)}
                       />
                     {:else}
                       <Input
@@ -817,10 +856,7 @@
                     <Select
                       value={outStr(o, "optical_pattern")}
                       onValueChange={(v) => updateOutputConfig(o.id, { optical_pattern: v || undefined })}
-                      options={[
-                        { value: "", label: t("alarm.outputs.device_default") },
-                        ...ex.available_lights.map((pat) => ({ value: pat, label: pat })),
-                      ]}
+                      options={enumOptions(ex.available_lights, ex.available_light_labels)}
                     />
                   {:else}
                     <Input value={outStr(o, "optical_pattern")} oninput={(e) => updateOutputConfig(o.id, { optical_pattern: e.currentTarget.value || undefined })} />

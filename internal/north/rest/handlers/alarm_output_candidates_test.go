@@ -122,7 +122,7 @@ func TestListAlarmOutputCandidates_MirrorsAllFields(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/output-candidates", http.NoBody)
 	w := httptest.NewRecorder()
-	ListAlarmOutputCandidates(fx).ServeHTTP(w, req)
+	ListAlarmOutputCandidates(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
@@ -148,7 +148,7 @@ func TestListAlarmOutputCandidates_ClassFilter_ForwardsToFacade(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/output-candidates?class=acoustic_siren", http.NoBody)
 	w := httptest.NewRecorder()
-	ListAlarmOutputCandidates(fx).ServeHTTP(w, req)
+	ListAlarmOutputCandidates(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
@@ -172,7 +172,7 @@ func TestListAlarmOutputCandidates_NonDeviceBackedOrUnknownClass_Returns400(t *t
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/output-candidates?class="+class, http.NoBody)
 			w := httptest.NewRecorder()
-			ListAlarmOutputCandidates(fx).ServeHTTP(w, req)
+			ListAlarmOutputCandidates(fx, nil).ServeHTTP(w, req)
 
 			if w.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want 400, body=%s", w.Code, w.Body.String())
@@ -203,7 +203,7 @@ func TestListAlarmOutputCandidates_EmptyList_RendersEmptyArrayNotNull(t *testing
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/output-candidates", http.NoBody)
 	w := httptest.NewRecorder()
-	ListAlarmOutputCandidates(fx).ServeHTTP(w, req)
+	ListAlarmOutputCandidates(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())

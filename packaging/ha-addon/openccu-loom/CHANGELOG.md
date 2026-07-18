@@ -1,5 +1,18 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.43.2
+
+- **New: readable signal names.** Siren tone and light-pattern
+  dropdowns (HmIP-ASIR) show translated names like "Frequenz
+  steigend" instead of technical codes.
+- **New: pick the optical signal on acoustic sirens.** The acoustic
+  siren card now offers the optical pattern too — both are sent to
+  the device together.
+- **Fixed: "Saving failed … cannot back class".** Old alarm outputs
+  created before channel validation could point at the wrong channel
+  and silently block saving. Affected cards now show a clear warning
+  and a one-click "repair channel" button.
+
 ## 0.43.1
 
 - **New: alarm system variables without a device.** Adding a

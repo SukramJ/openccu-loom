@@ -6876,12 +6876,18 @@ export interface components {
             classes: ("acoustic_siren" | "optical_siren" | "switched_siren" | "smoke_sounder" | "alarm_light" | "chirp")[];
             /** @description Stable custom-DP kind string (widget selection). */
             kind: string;
-            /** @description Acoustic tone labels the siren offers (sirens only). */
+            /** @description Raw acoustic tone wire values the siren offers (sirens only). */
             available_tones?: string[];
-            /** @description Optical pattern labels the siren offers (sirens only). */
+            /** @description Localised display labels for available_tones, same order. Absent when the server has no value translations. */
+            available_tone_labels?: string[];
+            /** @description Raw optical pattern wire values the siren offers (sirens only). */
             available_lights?: string[];
-            /** @description Soundfile labels an MP3 player offers for the chirp class (e.g. SOUNDFILE_001). */
+            /** @description Localised display labels for available_lights, same order. */
+            available_light_labels?: string[];
+            /** @description Raw soundfile wire values an MP3 player offers for the chirp class (e.g. SOUNDFILE_001). */
             available_soundfiles?: string[];
+            /** @description Localised display labels for available_soundfiles, same order. */
+            available_soundfile_labels?: string[];
             /** @description Level support for the alarm_light class. */
             dimmable?: boolean;
         };

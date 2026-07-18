@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.26.0
+  version: 2.27.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -8634,17 +8634,31 @@ components:
         available_tones:
           type: array
           items: { type: string }
-          description: Acoustic tone labels the siren offers (sirens only).
+          description: Raw acoustic tone wire values the siren offers (sirens only).
+        available_tone_labels:
+          type: array
+          items: { type: string }
+          description: >-
+            Localised display labels for available_tones, same order.
+            Absent when the server has no value translations.
         available_lights:
           type: array
           items: { type: string }
-          description: Optical pattern labels the siren offers (sirens only).
+          description: Raw optical pattern wire values the siren offers (sirens only).
+        available_light_labels:
+          type: array
+          items: { type: string }
+          description: Localised display labels for available_lights, same order.
         available_soundfiles:
           type: array
           items: { type: string }
           description: >-
-            Soundfile labels an MP3 player offers for the chirp class
-            (e.g. SOUNDFILE_001).
+            Raw soundfile wire values an MP3 player offers for the
+            chirp class (e.g. SOUNDFILE_001).
+        available_soundfile_labels:
+          type: array
+          items: { type: string }
+          description: Localised display labels for available_soundfiles, same order.
         dimmable:
           type: boolean
           description: Level support for the alarm_light class.
