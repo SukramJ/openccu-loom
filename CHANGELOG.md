@@ -6,6 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.3] — 2026-07-18
+
+### Fixed
+
+- **The MCP endpoint rejected every credential** — the `/mcp` mount
+  wrapped its handler only in the auth chain's `Require` step, which
+  checks the identity the `Resolve` middleware places in the request
+  context; `Resolve` never ran on that mount (it sits outside the REST
+  router's middleware stack), so every request — valid Bearer token,
+  Basic auth, or none — got `401 no valid credentials`. The mount now
+  resolves credentials before requiring them, restoring the documented
+  "same auth chain as REST" behaviour. Pinned by a mount-level
+  regression test.
+- **Claude Desktop connection example fixed** — the documented
+  `claude_desktop_config.json` snippet put `"Authorization: Bearer …"`
+  into `args`, which Claude Desktop mangles (spaces in args); mcp-remote
+  then fell into an OAuth discovery flow and failed with `/register`
+  404s. The example now passes the full header value through an
+  environment variable (`Authorization:${AUTH_HEADER}`), which
+  mcp-remote expands itself.
+
 ## [0.43.2] — 2026-07-18
 
 ### Added

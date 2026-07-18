@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.43.3
+
+- **Fixed: MCP access works now.** The MCP endpoint (for AI clients
+  like Claude Desktop) rejected every login with 401 even with a valid
+  API token. Also corrected the Claude Desktop configuration example
+  in the documentation.
+
 ## 0.43.2
 
 - **New: readable signal names.** Siren tone and light-pattern
