@@ -434,7 +434,11 @@ func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {
 // every other path falls through to the REST router. The MCP server is
 // read-only unless North.MCP.AllowWrites is also set. See ADR 0025.
 func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *slog.Logger) http.Handler {
-	mcpHandler := d.authMw.Require(mcp.Handler(mcp.Deps{
+	// Resolve must wrap Require: Require only checks the identity the
+	// resolve chain put into the context — without it every request,
+	// credentialed or not, is rejected with 401 (the MCP mount sits
+	// outside the REST router's own middleware stack).
+	mcpHandler := d.restResolve(d.authMw.Require(mcp.Handler(mcp.Deps{
 		Centrals:    d.reg,
 		Devices:     d.devicesAdapter,
 		Writer:      d.dpWriterAdapter,
@@ -445,7 +449,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		Incidents:   d.incidents,
 		AllowWrites: cfg.North.MCP.AllowWrites,
 		Version:     build.Version,
-	}))
+	})))
 	path := cfg.North.MCP.MountPath()
 	mux := http.NewServeMux()
 	mux.Handle(path, mcpHandler)
