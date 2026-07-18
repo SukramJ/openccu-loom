@@ -22,6 +22,34 @@ func TestCustomOverlayMergesDEParameters(t *testing.T) {
 	}
 }
 
+// TestCustomOverlayFillsCoolingProfileGaps pins the curated gap-fills the
+// CCU stringtable extract lacks: the cooling-mode counterparts of the
+// heating-profile parameters on climate transceivers (HmIP-BWTH and
+// friends) and the wired-operation toggle on the MAINTENANCE channel.
+// Without these entries the parameter editor falls back to the raw
+// UPPER_SNAKE identifier. Both locales must resolve — a one-sided entry
+// renders untranslated in the other language.
+func TestCustomOverlayFillsCoolingProfileGaps(t *testing.T) {
+	tr, err := LoadTranslationsEmbedded()
+	if err != nil {
+		t.Fatalf("LoadTranslationsEmbedded: %v", err)
+	}
+	cases := []struct {
+		channelType string
+		parameter   string
+	}{
+		{"HEATING_CLIMATECONTROL_TRANSCEIVER", "TEMPERATURE_COMFORT_COOLING"},
+		{"MAINTENANCE", "SUPPORTING_WIRED_OPERATION_MODE"},
+	}
+	for _, tc := range cases {
+		for _, locale := range []string{"de", "en"} {
+			if got := tr.ParameterLabel(locale, tc.channelType, tc.parameter); got == "" {
+				t.Errorf("ParameterLabel(%s, %s, %s) = empty, want curated label", locale, tc.channelType, tc.parameter)
+			}
+		}
+	}
+}
+
 // TestEmbeddedProfilesCount guards against accidental archive trim:
 func TestEmbeddedProfilesCount(t *testing.T) {
 	store, err := LoadProfilesEmbedded()

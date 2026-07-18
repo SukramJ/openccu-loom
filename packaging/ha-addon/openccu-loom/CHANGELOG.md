@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.42.9
+
+- **Fixed: missing German/English labels on the HmIP-BWTH.** The
+  cooling-mode comfort temperature and the wired-operation-mode
+  setting showed their raw technical names in the device settings;
+  both are now properly labelled.
+
 ## 0.42.8
 
 - **Fixed: the firmware overview now notices updates.** Device firmware
