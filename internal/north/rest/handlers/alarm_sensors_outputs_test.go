@@ -203,6 +203,56 @@ func TestPutAlarmAreaOutputs_InvalidClass_Returns422(t *testing.T) {
 	}
 }
 
+// TestPutAlarmAreaOutputs_SysvarMirrorWithoutName_Returns422 verifies a
+// sysvar_mirror output whose config lacks sysvar_name is rejected: the
+// mirror silently skips a nameless target (internal/alarm/sysvar.go's
+// mirrorTargets), so accepting it here would let an operator save a
+// no-op mirror.
+func TestPutAlarmAreaOutputs_SysvarMirrorWithoutName_Returns422(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+
+	bad := []hmapi.AlarmOutput{
+		{ID: "mirror", Class: string(hmenum.AlarmOutputClassSysvarMirror), Config: json.RawMessage(`{}`)},
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs", jsonRequestBody(t, bad))
+	req = withChiParam(req, "id", "eg")
+	w := httptest.NewRecorder()
+	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPutAlarmAreaOutputs_SysvarMirrorWithName_Saves verifies the same
+// output class saves once sysvar_name is present.
+func TestPutAlarmAreaOutputs_SysvarMirrorWithName_Saves(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+
+	good := []hmapi.AlarmOutput{
+		{ID: "mirror", Class: string(hmenum.AlarmOutputClassSysvarMirror), Config: json.RawMessage(`{"sysvar_name":"AlarmState"}`)},
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs", jsonRequestBody(t, good))
+	req = withChiParam(req, "id", "eg")
+	w := httptest.NewRecorder()
+	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
+	}
+	rows, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	if err != nil {
+		t.Fatalf("list outputs: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "mirror" {
+		t.Fatalf("outputs after save = %+v, want exactly [mirror]", rows)
+	}
+}
+
 // stubbedOutputEligibilityFixture substitutes a fixed OutputTargetEligible
 // verdict over an otherwise real alarmPanelFixture, so PutAlarmAreaOutputs's
 // soft target-validation branch (alarm_config.go, "Soft target validation")

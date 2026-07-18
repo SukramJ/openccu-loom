@@ -1,5 +1,20 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.43.1
+
+- **New: alarm system variables without a device.** Adding a
+  "system variable" alarm output now asks for the central and the
+  variable — either a managed status variable (created automatically)
+  or one of your existing alarm-type variables, which is set to true
+  while the alarm is triggered. No more meaningless device picking,
+  and the variable name is finally editable.
+- **New: notification outputs really notify.** A "notification" alarm
+  output now sends a dedicated event to MQTT, WebSocket, and webhook
+  receivers when the area alarms — each channel can be switched on or
+  off per output.
+- **Improved: alarm keyfobs first.** The remote-key picker sorts
+  security remotes (e.g. HmIP-KRCA) to the top and badges them.
+
 ## 0.43.0
 
 - **New: smarter alarm output enrollment.** The "add output" dialog in

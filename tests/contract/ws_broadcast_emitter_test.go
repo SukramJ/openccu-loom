@@ -171,6 +171,11 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmTriggered = "alarm.triggered"`},
 		WireValue: "alarm.triggered",
 	},
+	"alarm.notification": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmNotification     = "alarm.notification"`},
+		WireValue: "alarm.notification",
+	},
 	"alarm.journal_appended": {
 		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
 		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmJournalAppended = "alarm.journal_appended"`},

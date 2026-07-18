@@ -6,6 +6,36 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.1] — 2026-07-18
+
+### Added
+
+- **Sysvar-mirror outputs became configurable — and can target existing
+  alarm variables** — the add-output dialog no longer demands a device
+  for the sysvar-mirror class: it asks for the central and the variable
+  target instead. Either a managed value-list variable (created on the
+  CCU automatically, as before — but the name was previously not
+  settable from the SPA at all, leaving the enrollment a silent no-op)
+  or, new, an operator-owned ALARM-type variable: the mirror then
+  writes true while triggered and false otherwise, never creates or
+  retypes the variable, and accepts no inbound intents through it. The
+  output card now edits the variable name and the allow-disarm opt-in,
+  and saving without a variable name is rejected with 422.
+- **Notification outputs actually notify now** — the class previously
+  had no consumer. A notification output now emits a deliberate,
+  per-area, mode-filtered `alarm_panel.notification` event at fire time
+  (one-shot, never cancelled by silence): published as a NOTIFICATION
+  entry on the area's MQTT alarm event topic, forwarded to outbound
+  webhook receivers, and broadcast on the WebSocket alarm_panel topic
+  (`alarm.notification`, APIVersion 2.26.0). Each plane can be toggled
+  per output (`notify_mqtt` / `notify_webhook`, both default on) from
+  the output card; the add dialog no longer demands a device for this
+  class.
+- **Alarm keyfobs surface first in the remote-key picker** — security
+  remotes (HmIP-KRCA and peers) sort to the top of the guided binding
+  picker and the KRCA carries an "alarm keyfob" badge; generic wall
+  buttons and remotes follow.
+
 ## [0.43.0] — 2026-07-17
 
 ### Added

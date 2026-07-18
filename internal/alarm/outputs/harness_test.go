@@ -46,8 +46,18 @@ type harness struct {
 	healthMu    sync.Mutex
 	healthCalls []healthCall
 
+	notifyMu    sync.Mutex
+	notifyCalls []notifyCall
+
 	allRows []sqlitestore.AlarmOutputRow
 	mgr     *Manager
+}
+
+// notifyCall records one Config.Notify invocation.
+type notifyCall struct {
+	row      sqlitestore.AlarmOutputRow
+	cfg      OutputConfig
+	incident sqlitestore.AlarmIncident
 }
 
 // newHarness builds an empty harness: no rows, no devices, no
@@ -180,6 +190,22 @@ func (h *harness) recordHealth(healthy bool, note string) {
 	h.healthMu.Lock()
 	defer h.healthMu.Unlock()
 	h.healthCalls = append(h.healthCalls, healthCall{Healthy: healthy, Note: note})
+}
+
+// recordNotify is a Config.Notify implementation that records every
+// call for later assertion; wire it via h.build's cfgOverride.
+func (h *harness) recordNotify(row sqlitestore.AlarmOutputRow, cfg OutputConfig, incident sqlitestore.AlarmIncident) {
+	h.notifyMu.Lock()
+	defer h.notifyMu.Unlock()
+	h.notifyCalls = append(h.notifyCalls, notifyCall{row: row, cfg: cfg, incident: incident})
+}
+
+// notifyCallsSnapshot returns a defensive copy of every recorded
+// Notify call so far.
+func (h *harness) notifyCallsSnapshot() []notifyCall {
+	h.notifyMu.Lock()
+	defer h.notifyMu.Unlock()
+	return append([]notifyCall(nil), h.notifyCalls...)
 }
 
 func (h *harness) healthCallCount() int {

@@ -1018,6 +1018,14 @@
     },
     {
       "category": "alarm_panel",
+      "description": "Server-pushed: one enrolled notification output fired for an alarm — a deliberate, per-area, mode-filtered notification signal (one-shot at fire time, never cancelled by a later silence).",
+      "kind": "broadcast",
+      "name": "alarm.notification",
+      "topic": "alarm.panel",
+      "payload": "AlarmNotificationPayload"
+    },
+    {
+      "category": "alarm_panel",
       "description": "Server-pushed: a new entry was appended to the alarm engine's event journal. Payload carries the entry head; clients needing full detail call GET /alarm/journal.",
       "kind": "broadcast",
       "name": "alarm.journal_appended",

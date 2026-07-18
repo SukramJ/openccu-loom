@@ -240,6 +240,26 @@ const EN: Catalog = {
   "alarm.outputs.candidates.load_failed": "Loading output candidates failed",
   "alarm.outputs.soundfile": "Soundfile",
   "alarm.outputs.soundfile.hint": "MP3 soundfile played for chirps. Empty uses the device default.",
+  "alarm.outputs.sysvar.central": "Central",
+  "alarm.outputs.sysvar.name": "Variable name",
+  "alarm.outputs.sysvar.name.hint":
+    "Created on the CCU automatically as a value-list variable mirroring the area state (Unscharf … Alarm).",
+  "alarm.outputs.sysvar.existing": "Use existing alarm variable",
+  "alarm.outputs.sysvar.existing.hint":
+    "Writes an operator-owned alarm-type variable: true while triggered, false otherwise. The variable is never created or retyped, and it accepts no inbound commands.",
+  "alarm.outputs.sysvar.existing.badge": "existing",
+  "alarm.outputs.sysvar.pick": "Alarm variable",
+  "alarm.outputs.sysvar.none": "No alarm-type variables on this central.",
+  "alarm.outputs.sysvar.load_failed": "Loading system variables failed",
+  "alarm.outputs.sysvar.allow_disarm": "Allow disarm via variable",
+  "alarm.outputs.sysvar.allow_disarm.hint":
+    "Off (default): a CCU write can only arm — it can never disarm the area. Enable only if you trust every CCU program that can write this variable.",
+  "alarm.outputs.notification.note":
+    "Emits a notification event to the enrolled planes when the area alarms — no device involved. Configure the planes on the output card after adding.",
+  "alarm.outputs.notify.mqtt": "MQTT event",
+  "alarm.outputs.notify.mqtt.hint": "Publish a NOTIFICATION entry on the area's MQTT alarm event topic.",
+  "alarm.outputs.notify.webhook": "Webhook event",
+  "alarm.outputs.notify.webhook.hint": "Forward an alarm_panel.notification event to the outbound webhook receivers.",
   // Output classes (§7).
   "alarm.output_class.acoustic_siren": "Acoustic siren",
   "alarm.output_class.acoustic_siren.hint":
@@ -261,10 +281,10 @@ const EN: Catalog = {
     "Short confirmation tones only: arm/disarm squawks, countdown ticks and the door chime — never the loud alarm.",
   "alarm.output_class.notification": "Notification",
   "alarm.output_class.notification.hint":
-    "A notification event (MQTT, WebSocket, webhook) — fires on every alarm and is never cancelled by silence.",
+    "Emits a deliberate notification event (MQTT, WebSocket, webhook) when the area alarms — one-shot at fire time, never cancelled by silence. Each plane can be toggled per output.",
   "alarm.output_class.sysvar_mirror": "Sysvar mirror",
   "alarm.output_class.sysvar_mirror.hint":
-    "Maintains a CCU system variable mirroring the alarm state, for existing CCU programs.",
+    "Maintains a CCU system variable mirroring the alarm state — either a managed value-list variable (created automatically) or an existing alarm-type variable (true while triggered).",
   // Journal (§12.5).
   "alarm.journal.placeholder": "No journal entries",
   "alarm.journal.title": "Journal",
@@ -412,6 +432,7 @@ const EN: Catalog = {
     "Edit the binding document directly — needed for virtual remote channels or unusual setups.",
   "alarm.codes.remote.no_candidates":
     "No remote or wall-button keys found. Teach-in the remote first, or use raw JSON.",
+  "alarm.codes.remote.alarm_keyfob": "Alarm keyfob",
   "alarm.codes.remote.candidates_failed": "Loading remote keys failed",
   "alarm.codes.remote.parameter": "Trigger",
   "alarm.codes.remote.param.press_short": "Short press",
@@ -2838,6 +2859,26 @@ const DE: Catalog = {
   "alarm.outputs.candidates.load_failed": "Laden der Ausgangs-Kandidaten fehlgeschlagen",
   "alarm.outputs.soundfile": "Sounddatei",
   "alarm.outputs.soundfile.hint": "MP3-Sounddatei für Signaltöne. Leer nutzt den Geräte-Standard.",
+  "alarm.outputs.sysvar.central": "Zentrale",
+  "alarm.outputs.sysvar.name": "Variablenname",
+  "alarm.outputs.sysvar.name.hint":
+    "Wird auf der CCU automatisch als Werteliste-Variable angelegt und spiegelt den Bereichszustand (Unscharf … Alarm).",
+  "alarm.outputs.sysvar.existing": "Bestehende Alarm-Variable verwenden",
+  "alarm.outputs.sysvar.existing.hint":
+    "Beschreibt eine eigene Variable vom Typ Alarm: wahr bei ausgelöstem Alarm, sonst falsch. Die Variable wird nie angelegt oder umtypisiert und nimmt keine eingehenden Befehle an.",
+  "alarm.outputs.sysvar.existing.badge": "bestehend",
+  "alarm.outputs.sysvar.pick": "Alarm-Variable",
+  "alarm.outputs.sysvar.none": "Keine Variablen vom Typ Alarm auf dieser Zentrale.",
+  "alarm.outputs.sysvar.load_failed": "Laden der Systemvariablen fehlgeschlagen",
+  "alarm.outputs.sysvar.allow_disarm": "Unscharf über Variable erlauben",
+  "alarm.outputs.sysvar.allow_disarm.hint":
+    "Aus (Standard): ein CCU-Schreibzugriff kann nur scharf schalten — nie unscharf. Nur aktivieren, wenn jedes CCU-Programm mit Schreibzugriff vertrauenswürdig ist.",
+  "alarm.outputs.notification.note":
+    "Sendet bei Alarm ein Benachrichtigungs-Ereignis an die gewählten Kanäle — ohne Gerät. Die Kanäle werden nach dem Hinzufügen auf der Karte konfiguriert.",
+  "alarm.outputs.notify.mqtt": "MQTT-Ereignis",
+  "alarm.outputs.notify.mqtt.hint": "Veröffentlicht einen NOTIFICATION-Eintrag auf dem MQTT-Alarm-Ereignis-Topic des Bereichs.",
+  "alarm.outputs.notify.webhook": "Webhook-Ereignis",
+  "alarm.outputs.notify.webhook.hint": "Leitet ein alarm_panel.notification-Ereignis an die ausgehenden Webhook-Empfänger weiter.",
   // Ausgangsklassen (§7).
   "alarm.output_class.acoustic_siren": "Akustische Sirene",
   "alarm.output_class.acoustic_siren.hint":
@@ -2859,10 +2900,10 @@ const DE: Catalog = {
     "Nur kurze Quittungstöne: Scharf-/Unscharf-Bestätigung, Countdown-Ticks und Türgong — nie der laute Alarm.",
   "alarm.output_class.notification": "Benachrichtigung",
   "alarm.output_class.notification.hint":
-    "Ein Benachrichtigungs-Ereignis (MQTT, WebSocket, Webhook) — feuert bei jedem Alarm und wird durch Stummschalten nie abgebrochen.",
+    "Sendet bei Alarm ein gezieltes Benachrichtigungs-Ereignis (MQTT, WebSocket, Webhook) — einmalig beim Auslösen, wird durch Stummschalten nie abgebrochen. Jeder Kanal ist pro Ausgang schaltbar.",
   "alarm.output_class.sysvar_mirror": "Systemvariable",
   "alarm.output_class.sysvar_mirror.hint":
-    "Pflegt eine CCU-Systemvariable, die den Alarmzustand spiegelt — für bestehende CCU-Programme.",
+    "Pflegt eine CCU-Systemvariable, die den Alarmzustand spiegelt — entweder eine verwaltete Werteliste-Variable (wird automatisch angelegt) oder eine bestehende Variable vom Typ Alarm (wahr bei ausgelöstem Alarm).",
   // Journal (§12.5).
   "alarm.journal.placeholder": "Keine Journaleinträge",
   "alarm.journal.title": "Journal",
@@ -3010,6 +3051,7 @@ const DE: Catalog = {
     "Das Binding-Dokument direkt bearbeiten — nötig für virtuelle Fernbedienungskanäle oder Sonderfälle.",
   "alarm.codes.remote.no_candidates":
     "Keine Funk- oder Wandtaster-Tasten gefunden. Erst die Fernbedienung anlernen oder Roh-JSON verwenden.",
+  "alarm.codes.remote.alarm_keyfob": "Alarm-Fernbedienung",
   "alarm.codes.remote.candidates_failed": "Laden der Funktasten fehlgeschlagen",
   "alarm.codes.remote.parameter": "Auslöser",
   "alarm.codes.remote.param.press_short": "Kurzer Tastendruck",

@@ -1,6 +1,6 @@
 {
-  "generated": "227c65c0",
-  "head": "227c65c0",
+  "generated": "b3a68130",
+  "head": "b3a68130",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 25600,
-    "reachable": 4534,
-    "whitelisted": 18347,
-    "unreachable": 2719
+    "total_exported": 25608,
+    "reachable": 4538,
+    "whitelisted": 18349,
+    "unreachable": 2721
   },
   "by_package": [
     {
@@ -155,7 +155,7 @@
     {
       "package": "internal/alarm/outputs",
       "unreachable_funcs": 0,
-      "unreachable_types": 22,
+      "unreachable_types": 24,
       "unreachable_other": 4
     },
     {
@@ -640,14 +640,14 @@
       "package": "internal/alarm",
       "identifier": "ArmFailureHook",
       "file": "internal/alarm/service.go",
-      "line": 96,
+      "line": 97,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "ArmFailureHook",
       "file": "internal/alarm/service.go",
-      "line": 96,
+      "line": 97,
       "kind": "type"
     },
     {
@@ -724,14 +724,14 @@
       "package": "internal/alarm",
       "identifier": "Deps",
       "file": "internal/alarm/service.go",
-      "line": 47,
+      "line": 48,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "Deps",
       "file": "internal/alarm/service.go",
-      "line": 47,
+      "line": 48,
       "kind": "type"
     },
     {
@@ -766,21 +766,21 @@
       "package": "internal/alarm",
       "identifier": "Service",
       "file": "internal/alarm/service.go",
-      "line": 60,
+      "line": 61,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "Settings",
       "file": "internal/alarm/service.go",
-      "line": 33,
+      "line": 34,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "Settings",
       "file": "internal/alarm/service.go",
-      "line": 33,
+      "line": 34,
       "kind": "type"
     },
     {
@@ -1214,7 +1214,21 @@
       "package": "internal/alarm/outputs",
       "identifier": "Manager",
       "file": "internal/alarm/outputs/manager.go",
-      "line": 55,
+      "line": 63,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "NotificationSink",
+      "file": "internal/alarm/outputs/manager.go",
+      "line": 51,
+      "kind": "type"
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "NotificationSink",
+      "file": "internal/alarm/outputs/manager.go",
+      "line": 51,
       "kind": "type"
     },
     {
@@ -13296,7 +13310,7 @@
       "package": "internal/north/mqtt",
       "identifier": "AlarmMQTTPublisher",
       "file": "internal/north/mqtt/alarm_publisher.go",
-      "line": 69,
+      "line": 73,
       "kind": "type"
     },
     {
@@ -18868,14 +18882,14 @@
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 222,
+      "line": 250,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmevent/alarm.go",
-      "line": 222,
+      "line": 250,
       "kind": "type"
     },
     {
@@ -128778,42 +128792,42 @@
       "identifier": "AlarmCountdownPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 52
+      "line": 53
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmCountdownPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 52
+      "line": 53
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmHealthChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 106
+      "line": 119
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmHealthChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 106
+      "line": 119
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmJournalAppendedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 84
+      "line": 97
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmJournalAppendedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 84
+      "line": 97
     },
     {
       "package": "internal/north/rest/ws",
@@ -128831,17 +128845,31 @@
     },
     {
       "package": "internal/north/rest/ws",
-      "identifier": "AlarmPanelChangedPayload",
+      "identifier": "AlarmNotificationPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 262
+      "line": 85
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmNotificationPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 85
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmPanelChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 262
+      "line": 292
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AlarmPanelChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/alarm_events.go",
+      "line": 292
     },
     {
       "package": "internal/north/rest/ws",
@@ -128876,84 +128904,84 @@
       "identifier": "AlarmPanelSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 115
+      "line": 128
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmPanelSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 115
+      "line": 128
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmReadinessChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 64
+      "line": 65
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmReadinessChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 64
+      "line": 65
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmReminderPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 279
+      "line": 309
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmReminderPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 279
+      "line": 309
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmStateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 37
+      "line": 38
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmStateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 37
+      "line": 38
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmTriggeredPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 71
+      "line": 72
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmTriggeredPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 71
+      "line": 72
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmWalkTestProgressPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 95
+      "line": 108
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmWalkTestProgressPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 95
+      "line": 108
     },
     {
       "package": "internal/north/rest/ws",
@@ -129954,14 +129982,14 @@
       "identifier": "NewAlarmPanelSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 123
+      "line": 136
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewAlarmPanelSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_events.go",
-      "line": 123
+      "line": 136
     },
     {
       "package": "internal/north/rest/ws",

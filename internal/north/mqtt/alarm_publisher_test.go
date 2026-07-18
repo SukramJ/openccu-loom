@@ -594,3 +594,98 @@ func TestAlarmMQTTPublisher_EventTopicJSONOnTriggered(t *testing.T) {
 		t.Errorf("event open_sensors = %v, want [Front Door]", pay.OpenSensors)
 	}
 }
+
+// TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag covers
+// onNotification: an AlarmNotificationEvent with MQTT=false must never
+// enqueue an event-topic publish, while the identical event with
+// MQTT=true enqueues a NOTIFICATION body carrying the output's name.
+func TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+
+	stateTopic := f.base + "/alarm/eg/state"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+
+	f.mp.mu.Lock()
+	before := len(f.mp.sent)
+	f.mp.mu.Unlock()
+
+	events.Publish(f.svc.Bus(), hmevent.AlarmNotificationEvent{
+		Base: hmevent.NewBaseAt(time.Now()), AreaID: "eg", AreaName: "Erdgeschoss",
+		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 1, Mode: hmenum.AlarmModeFull,
+		MQTT: false, Webhook: true,
+	})
+
+	time.Sleep(20 * time.Millisecond)
+	f.mp.mu.Lock()
+	after := len(f.mp.sent)
+	f.mp.mu.Unlock()
+	if after != before {
+		t.Fatalf("MQTT=false notification enqueued %d new publish(es), want 0", after-before)
+	}
+
+	events.Publish(f.svc.Bus(), hmevent.AlarmNotificationEvent{
+		Base: hmevent.NewBaseAt(time.Now()), AreaID: "eg", AreaName: "Erdgeschoss",
+		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 1, Mode: hmenum.AlarmModeFull,
+		MQTT: true, Webhook: true,
+	})
+
+	eventTopic := f.base + "/alarm/eg/event"
+	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
+		var pay alarmEventPayload
+		if err := json.Unmarshal([]byte(r.payload), &pay); err != nil {
+			return false
+		}
+		return pay.Type == alarmEventTypeNotification
+	})
+	if rec.retain {
+		t.Errorf("notification event-topic publish must not be retained")
+	}
+	var pay alarmEventPayload
+	if err := json.Unmarshal([]byte(rec.payload), &pay); err != nil {
+		t.Fatalf("unmarshal event payload: %v", err)
+	}
+	if pay.Output != "Doorbell" {
+		t.Errorf("event output = %q, want Doorbell", pay.Output)
+	}
+	if pay.Mode != string(hmenum.AlarmModeFull) {
+		t.Errorf("event mode = %q, want full", pay.Mode)
+	}
+}
+
+// TestAlarmMQTTPublisher_NotificationOutputFallsBackToID covers the
+// unnamed-output case: an enrolled notification output with no display
+// name publishes its ID in the event body's output field instead.
+func TestAlarmMQTTPublisher_NotificationOutputFallsBackToID(t *testing.T) {
+	t.Parallel()
+	f := newAlarmPublisherFixture(t)
+	f.seedArea("eg", "Erdgeschoss", zeroDelayFullMode())
+	f.start()
+
+	stateTopic := f.base + "/alarm/eg/state"
+	f.waitForPublish(stateTopic, func(r publishRecord) bool { return r.payload == alarmpanel.HAAlarmStateDisarmed })
+
+	events.Publish(f.svc.Bus(), hmevent.AlarmNotificationEvent{
+		Base: hmevent.NewBaseAt(time.Now()), AreaID: "eg", AreaName: "Erdgeschoss",
+		OutputID: "notify2", OutputName: "", IncidentID: 2, Mode: hmenum.AlarmModeFull,
+		MQTT: true, Webhook: false,
+	})
+
+	eventTopic := f.base + "/alarm/eg/event"
+	rec := f.waitForPublish(eventTopic, func(r publishRecord) bool {
+		var pay alarmEventPayload
+		if err := json.Unmarshal([]byte(r.payload), &pay); err != nil {
+			return false
+		}
+		return pay.Type == alarmEventTypeNotification
+	})
+	var pay alarmEventPayload
+	if err := json.Unmarshal([]byte(rec.payload), &pay); err != nil {
+		t.Fatalf("unmarshal event payload: %v", err)
+	}
+	if pay.Output != "notify2" {
+		t.Errorf("event output = %q, want notify2 (ID fallback for an unnamed output)", pay.Output)
+	}
+}

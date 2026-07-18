@@ -5985,6 +5985,21 @@ export interface components {
             };
         };
         /**
+         * @description Payload of an `alarm.notification` broadcast. Topic
+         *     `alarm.panel`. One enrolled notification output fired for an
+         *     alarm — one-shot at fire time, never cancelled by a later
+         *     silence.
+         */
+        AlarmNotificationPayload: {
+            area_id: string;
+            area_name?: string;
+            output_id: string;
+            output_name?: string;
+            /** Format: int64 */
+            incident_id: number;
+            mode?: string;
+        };
+        /**
          * @description Payload of an `alarm.triggered` broadcast. Topic `alarm.panel`.
          *     Fires when an area enters `triggered` and an incident is
          *     opened (or re-adopted after a restart / reconnect).

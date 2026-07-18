@@ -40,7 +40,15 @@ type Config struct {
 	// priority before it converts into a health incident (S2). Sized
 	// beyond the transport's duty-cycle retry latency.
 	StopVerifyWindow time.Duration
+	// Notify receives each notification output's fire signal (the
+	// composition root publishes it on the alarm event bus). Nil
+	// drops the signal.
+	Notify NotificationSink
 }
+
+// NotificationSink consumes one notification output firing for an
+// incident. Implementations must not call back into the manager.
+type NotificationSink func(row sqlitestore.AlarmOutputRow, cfg OutputConfig, incident sqlitestore.AlarmIncident)
 
 // instance is one enrolled output with its parsed configuration.
 type instance struct {
@@ -60,6 +68,7 @@ type Manager struct {
 	journal  engine.Journal
 	rows     OutputRowSource
 	health   HealthFunc
+	notify   NotificationSink
 	log      *slog.Logger
 
 	defaultSiren     time.Duration
@@ -101,6 +110,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		journal:          journal,
 		rows:             cfg.Rows,
 		health:           cfg.Health,
+		notify:           cfg.Notify,
 		log:              logger,
 		defaultSiren:     cfg.DefaultSirenDuration,
 		maxPerIncident:   cfg.MaxAcousticPerIncident,
@@ -179,9 +189,16 @@ func (m *Manager) FireCycle(ctx context.Context, areaID string, incident sqlites
 			err = m.fireSmokeSounder(ctx, inst, incident.ID, &remaining)
 		case hmenum.AlarmOutputClassAlarmLight:
 			err = m.fireAlarmLight(ctx, inst, incident.ID)
-		case hmenum.AlarmOutputClassNotification, hmenum.AlarmOutputClassSysvarMirror, hmenum.AlarmOutputClassChirp:
-			// Notifications ride the event bus, the sysvar mirror is
-			// state-driven, chirps have their own path.
+		case hmenum.AlarmOutputClassNotification:
+			// One-shot fire signal; the composition root fans it out
+			// to the enrolled delivery planes. Never stop-tracked and
+			// never cancelled by a later silence.
+			if m.notify != nil {
+				m.notify(inst.row, inst.cfg, incident)
+			}
+		case hmenum.AlarmOutputClassSysvarMirror, hmenum.AlarmOutputClassChirp:
+			// The sysvar mirror is state-driven, chirps have their
+			// own path.
 		}
 		if err != nil {
 			m.journalFault(ctx, areaID, "output_fire_failed", inst.row.ID, incident.ID, err)

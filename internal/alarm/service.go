@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/clock"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -138,8 +139,11 @@ func NewService(deps Deps) (*Service, error) {
 
 	resolver := &deviceResolver{reg: deps.Registry}
 	mgr, err := outputs.NewManager(outputs.Config{
-		Clock:                  clk,
-		Resolver:               resolver,
+		Clock:    clk,
+		Resolver: resolver,
+		// Notification outputs fan out onto the alarm bus; MQTT,
+		// webhook, and WS pick the event up per their plane flag.
+		Notify:                 s.notifyOutputFired,
 		Ledger:                 deps.Stores.Incidents,
 		Journal:                s.journal,
 		Rows:                   deps.Stores.Outputs,
@@ -502,6 +506,33 @@ func (s *Service) DetachCentral(name string) {
 
 // publish fans an alarm event onto the alarm bus. events.Publish is
 // generic over the concrete type, so the sink dispatches explicitly.
+// notifyOutputFired publishes one notification output's fire signal
+// on the alarm bus (outputs.NotificationSink); MQTT, webhook, and WS
+// pick it up per their plane flag.
+func (s *Service) notifyOutputFired(row sqlitestore.AlarmOutputRow, cfg outputs.OutputConfig, incident sqlitestore.AlarmIncident) {
+	areaName := ""
+	if s.engine != nil {
+		areas := s.engine.Areas()
+		for i := range areas {
+			if areas[i].ID == row.AreaID {
+				areaName = areas[i].Name
+				break
+			}
+		}
+	}
+	events.Publish(s.bus, hmevent.AlarmNotificationEvent{
+		Base:       hmevent.NewBaseAt(s.clk.Now()),
+		AreaID:     row.AreaID,
+		AreaName:   areaName,
+		OutputID:   row.ID,
+		OutputName: row.Name,
+		IncidentID: incident.ID,
+		Mode:       incident.Mode,
+		MQTT:       cfg.NotifyMQTTEnabled(),
+		Webhook:    cfg.NotifyWebhookEnabled(),
+	})
+}
+
 func (s *Service) publish(e hmevent.Event) {
 	switch ev := e.(type) {
 	case hmevent.AlarmStateChangedEvent:

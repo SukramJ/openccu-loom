@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.25.0
+  version: 2.26.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -7441,6 +7441,22 @@ components:
           type: object
           additionalProperties: { $ref: "#/components/schemas/AlarmModeReadiness" }
           description: Per-mode arming readiness, keyed by mode name.
+
+    AlarmNotificationPayload:
+      type: object
+      description: |
+        Payload of an `alarm.notification` broadcast. Topic
+        `alarm.panel`. One enrolled notification output fired for an
+        alarm — one-shot at fire time, never cancelled by a later
+        silence.
+      required: [area_id, output_id, incident_id]
+      properties:
+        area_id: { type: string }
+        area_name: { type: string }
+        output_id: { type: string }
+        output_name: { type: string }
+        incident_id: { type: integer, format: int64 }
+        mode: { type: string }
 
     AlarmTriggeredPayload:
       type: object

@@ -74,7 +74,13 @@ func (m *sysvarMirror) mirrorTargets(areaID string) []mirrorTarget {
 		if err != nil || cfg.SysvarName == "" {
 			continue
 		}
-		out = append(out, mirrorTarget{central: row.CentralName, name: cfg.SysvarName, areaID: areaID, allowDisarm: cfg.SysvarAllowDisarm})
+		out = append(out, mirrorTarget{
+			central:     row.CentralName,
+			name:        cfg.SysvarName,
+			areaID:      areaID,
+			allowDisarm: cfg.SysvarAllowDisarm,
+			existing:    cfg.SysvarExisting,
+		})
 	}
 	return out
 }
@@ -84,12 +90,18 @@ type mirrorTarget struct {
 	name        string
 	areaID      string
 	allowDisarm bool
+	// existing marks a pre-existing ALARM-type (bool) variable owned
+	// by the operator: the mirror writes true while triggered and
+	// false otherwise, never creates or retypes the variable, and
+	// accepts no inbound intents through it (a bool carries no mode).
+	existing bool
 }
 
 // mirrorConfig is the sysvar-relevant slice of the output config.
 type mirrorConfig struct {
 	SysvarName        string `json:"sysvar_name"`
 	SysvarAllowDisarm bool   `json:"sysvar_allow_disarm"`
+	SysvarExisting    bool   `json:"sysvar_existing"`
 }
 
 // onStateChanged exports the area state to every mirror sysvar. It
@@ -115,6 +127,17 @@ func (m *sysvarMirror) export(t mirrorTarget, idx int) {
 		return
 	}
 	key := t.central + "|" + t.name
+	if t.existing {
+		// Operator-owned ALARM (bool) variable: plain triggered flag,
+		// no ensure — creating or retyping it is not ours to do.
+		m.mu.Lock()
+		m.lastWritten[key] = idx
+		m.mu.Unlock()
+		if err := u.Hub.SetSystemVariable(ctx, t.name, idx == sysvarAlarmIndex); err != nil {
+			m.svc.log.Warn("alarm sysvar mirror: export failed", "sysvar", t.name, "error", err)
+		}
+		return
+	}
 	m.mu.Lock()
 	ensured := m.ensured[key]
 	m.mu.Unlock()
@@ -156,6 +179,11 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 	for i := range areas {
 		snap := areas[i]
 		for _, t := range m.mirrorTargets(snap.ID) {
+			if t.existing {
+				// A bool triggered flag carries no mode — never an
+				// inbound intent channel.
+				continue
+			}
 			if t.central == centralName && t.name == e.Name {
 				matches = append(matches, match{target: t, snap: snap})
 			}

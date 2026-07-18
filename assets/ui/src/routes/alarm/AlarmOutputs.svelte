@@ -12,6 +12,7 @@
     AlarmOutputCandidate,
     AlarmOutputClass,
     DeviceSummary,
+    SysvarEntry,
   } from "$lib/api/types";
   import type { IconName } from "$lib/icons";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -127,6 +128,49 @@
   let addCandidate = $state<AlarmOutputCandidate | null>(null);
   let addChannel = $state("");
   let addName = $state("");
+
+  // --- sysvar-mirror add assist -------------------------------------
+  // The mirror either manages its own value-list variable (created on
+  // the CCU automatically) or writes an operator-owned ALARM (bool)
+  // variable picked from the central's existing sysvars.
+  let addSysvarCentral = $state("");
+  let addSysvarExisting = $state(false);
+  let addSysvarName = $state("");
+  let sysvars = $state<SysvarEntry[]>([]);
+  let sysvarsLoaded = $state(false);
+  async function loadSysvars() {
+    try {
+      sysvars = await api.listSysvars();
+      sysvarsLoaded = true;
+    } catch (e) {
+      toastStore.error(t("alarm.outputs.sysvar.load_failed"), friendlyError(e, t));
+    }
+  }
+  $effect(() => {
+    if (addOpen && addClass === "sysvar_mirror" && !sysvarsLoaded) void loadSysvars();
+  });
+  // Centrals known to this daemon, derived from the loaded device and
+  // sysvar inventories (viewer-safe; no operator-gated centrals CRUD).
+  const centralOptions = $derived(
+    [...new Set([
+      ...deviceStore.items.map((d) => d.central ?? ""),
+      ...sysvars.map((v) => v.central ?? ""),
+    ])]
+      .filter((c) => c !== "")
+      .sort()
+      .map((c) => ({ value: c, label: c })),
+  );
+  $effect(() => {
+    if (addOpen && addClass === "sysvar_mirror" && !addSysvarCentral && centralOptions.length === 1) {
+      addSysvarCentral = centralOptions[0].value;
+    }
+  });
+  const alarmSysvarOptions = $derived(
+    sysvars
+      .filter((v) => (v.central ?? "") === addSysvarCentral && v.value_type === "ALARM")
+      .map((v) => ({ value: v.name, label: v.name }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  );
 
   // Enrollment candidates from the live domain model (all device-backed
   // classes at once). Also feeds the per-output tone/pattern pickers
@@ -340,6 +384,9 @@
     addCandidate = null;
     addChannel = "";
     addName = "";
+    addSysvarCentral = "";
+    addSysvarExisting = false;
+    addSysvarName = "";
   }
   function pickAddDevice(d: DeviceSummary) {
     addDevice = d;
@@ -351,14 +398,43 @@
     addName = c.channel_name || c.device_name || "";
   }
   const canAdd = $derived(
-    addUseCandidates ? !!addCandidate : !!addDevice && addChannel.trim() !== "",
+    addClass === "sysvar_mirror"
+      ? addSysvarCentral !== "" && addSysvarName.trim() !== ""
+      : addClass === "notification"
+        ? true
+        : addUseCandidates
+          ? !!addCandidate
+          : !!addDevice && addChannel.trim() !== "",
   );
-  function confirmAdd() {
-    if (!canAdd) return;
+  function buildAddOutput(): AlarmOutput | null {
+    if (addClass === "sysvar_mirror") {
+      const svName = addSysvarName.trim();
+      if (!addSysvarCentral || !svName) return null;
+      const config: Record<string, unknown> = { ...defaultConfig(addClass), sysvar_name: svName };
+      if (addSysvarExisting) config.sysvar_existing = true;
+      return {
+        id: `${addSysvarCentral}|sysvar:${svName}|${addClass}`,
+        class: addClass,
+        central: addSysvarCentral,
+        channel_address: "",
+        name: addName.trim() || svName,
+        config,
+      };
+    }
+    if (addClass === "notification") {
+      return {
+        id: `notification|${crypto.randomUUID()}`,
+        class: addClass,
+        central: "",
+        channel_address: "",
+        name: addName.trim() || undefined,
+        config: defaultConfig(addClass),
+      };
+    }
     const central = addUseCandidates ? (addCandidate?.central ?? "") : (addDevice?.central ?? "");
     const channel = addUseCandidates ? (addCandidate?.channel_address ?? "") : addChannel.trim();
-    if (channel === "") return;
-    const output: AlarmOutput = {
+    if (channel === "") return null;
+    return {
       id: `${central}|${channel}|${addClass}`,
       class: addClass,
       central,
@@ -366,6 +442,11 @@
       name: addName.trim() || undefined,
       config: defaultConfig(addClass),
     };
+  }
+  function confirmAdd() {
+    if (!canAdd) return;
+    const output = buildAddOutput();
+    if (!output) return;
     if (outputs.some((o) => o.id === output.id)) {
       addOpen = false;
       return;
@@ -527,6 +608,55 @@
               </button>
             {/each}
           </div>
+
+          {#if o.class === "sysvar_mirror"}
+            <div class="flex flex-col gap-3">
+              <div class="flex flex-col gap-1">
+                <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.name")}</span>
+                <p class="font-mono text-sm text-[var(--ha-primary-text-color)]">
+                  {outStr(o, "sysvar_name") || "—"}
+                  {#if outBool(o, "sysvar_existing")}
+                    <Badge variant="muted">{t("alarm.outputs.sysvar.existing.badge")}</Badge>
+                  {/if}
+                </p>
+              </div>
+              {#if !outBool(o, "sysvar_existing")}
+                <div class="flex flex-col gap-1">
+                  <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+                    <span>{t("alarm.outputs.sysvar.allow_disarm")}</span>
+                    <Switch
+                      checked={outBool(o, "sysvar_allow_disarm")}
+                      onCheckedChange={(v) => updateOutputConfig(o.id, { sysvar_allow_disarm: v || undefined })}
+                    />
+                  </label>
+                  <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.allow_disarm.hint")}</p>
+                </div>
+              {/if}
+            </div>
+          {:else if o.class === "notification"}
+            <div class="flex flex-col gap-3">
+              <div class="flex flex-col gap-1">
+                <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+                  <span>{t("alarm.outputs.notify.mqtt")}</span>
+                  <Switch
+                    checked={o.config?.notify_mqtt !== false}
+                    onCheckedChange={(v) => updateOutputConfig(o.id, { notify_mqtt: v ? undefined : false })}
+                  />
+                </label>
+                <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.notify.mqtt.hint")}</p>
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+                  <span>{t("alarm.outputs.notify.webhook")}</span>
+                  <Switch
+                    checked={o.config?.notify_webhook !== false}
+                    onCheckedChange={(v) => updateOutputConfig(o.id, { notify_webhook: v ? undefined : false })}
+                  />
+                </label>
+                <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.notify.webhook.hint")}</p>
+              </div>
+            </div>
+          {/if}
 
           <!-- Numeric / text fields -->
           {#if caps.duration || caps.tone || caps.optical || caps.level || caps.chirpTones}
@@ -773,6 +903,62 @@
           <span class="text-xs text-[var(--ha-secondary-text-color)]">{t(`alarm.output_class.${addClass}.hint`)}</span>
         </div>
 
+        {#if addClass === "sysvar_mirror"}
+          <!-- Sysvar mirror: no device — central + variable target. -->
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.central")}</span>
+            <Select
+              value={addSysvarCentral}
+              onValueChange={(v) => {
+                addSysvarCentral = v;
+                addSysvarName = "";
+              }}
+              options={centralOptions}
+            />
+          </div>
+          <label class="flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]">
+            <span>{t("alarm.outputs.sysvar.existing")}</span>
+            <Switch
+              checked={addSysvarExisting}
+              onCheckedChange={(v) => {
+                addSysvarExisting = v;
+                addSysvarName = "";
+              }}
+            />
+          </label>
+          <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.existing.hint")}</p>
+          {#if addSysvarExisting}
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.pick")}</span>
+              {#if alarmSysvarOptions.length === 0}
+                <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.none")}</p>
+              {:else}
+                <Select
+                  value={addSysvarName}
+                  onValueChange={(v) => (addSysvarName = v)}
+                  options={alarmSysvarOptions}
+                />
+              {/if}
+            </div>
+          {:else}
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.name")}</span>
+              <Input bind:value={addSysvarName} />
+              <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.sysvar.name.hint")}</span>
+            </label>
+          {/if}
+          <label class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.name")}</span>
+            <Input bind:value={addName} />
+          </label>
+        {:else if addClass === "notification"}
+          <!-- Notification: no device — event fan-out to the enrolled planes. -->
+          <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.outputs.notification.note")}</p>
+          <label class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.name")}</span>
+            <Input bind:value={addName} />
+          </label>
+        {:else}
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.device")}</span>
@@ -837,6 +1023,7 @@
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.field.name")}</span>
             <Input bind:value={addName} />
           </div>
+        {/if}
         {/if}
       </div>
 

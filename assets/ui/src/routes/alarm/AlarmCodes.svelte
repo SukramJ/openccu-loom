@@ -89,6 +89,15 @@
     }
   });
   const remoteMatch = $derived(makeTextMatcher(remoteSearch));
+  // Keyfobs built for arming surface first: the HmIP-KRCA (alarm
+  // keyfob) tops the list, other security remotes follow, generic
+  // wall buttons and remotes come last. Display ranking only — every
+  // press-capable key stays selectable.
+  function remoteRank(c: AlarmRemoteKeyCandidate): number {
+    if (/krca/i.test(c.model)) return 0;
+    if (/krc|rc-sec|rc-key/i.test(c.model)) return 1;
+    return 2;
+  }
   const remoteFiltered = $derived(
     remoteCandidates
       .filter(
@@ -100,6 +109,7 @@
           remoteMatch(c.channel_address) ||
           remoteMatch(c.model),
       )
+      .sort((a, b) => remoteRank(a) - remoteRank(b))
       .slice(0, 60),
   );
   const remoteSelected = $derived(
@@ -590,8 +600,13 @@
                     : ''}"
                   onclick={() => pickRemoteKey(c)}
                 >
-                  <span class="truncate text-sm text-[var(--ha-primary-text-color)]">
-                    {c.device_name || c.device_address}{c.channel_name ? ` · ${c.channel_name}` : ""}
+                  <span class="flex w-full items-center gap-1.5 text-sm text-[var(--ha-primary-text-color)]">
+                    <span class="truncate">
+                      {c.device_name || c.device_address}{c.channel_name ? ` · ${c.channel_name}` : ""}
+                    </span>
+                    {#if remoteRank(c) === 0}
+                      <Badge variant="success">{t("alarm.codes.remote.alarm_keyfob")}</Badge>
+                    {/if}
                   </span>
                   <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{c.model} · {c.channel_address}</span>
                 </button>

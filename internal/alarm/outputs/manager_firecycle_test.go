@@ -357,6 +357,105 @@ func TestFireCycle_SmokeSounderCancelsWatchdogOnActivationError(t *testing.T) {
 	}
 }
 
+// TestFireCycle_NotificationOutputNotifiesInMode verifies an in-mode
+// notification-class output calls the wired Notify sink exactly once
+// per cycle, forwarding the exact row and incident FireCycle received.
+func TestFireCycle_NotificationOutputNotifiesInMode(t *testing.T) {
+	h := newHarness(t)
+	h.build(func(c *Config) { c.Notify = h.recordNotify })
+	h.seedOutputs(outputRow("notify1", hmenum.AlarmOutputClassNotification, OutputConfig{}))
+
+	incident := newIncident(21, hmenum.AlarmModeFull)
+	if err := h.mgr.FireCycle(h.ctx, "eg", incident, engine.FireOptions{Policy: noPolicy}); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+
+	calls := h.notifyCallsSnapshot()
+	if len(calls) != 1 {
+		t.Fatalf("notify calls = %+v, want exactly 1", calls)
+	}
+	if calls[0].row.ID != "notify1" {
+		t.Fatalf("notify row ID = %q, want notify1", calls[0].row.ID)
+	}
+	if calls[0].incident.ID != incident.ID || calls[0].incident.Mode != incident.Mode {
+		t.Fatalf("notify incident = %+v, want %+v", calls[0].incident, incident)
+	}
+}
+
+// TestFireCycle_NotificationOutputSkippedOutOfMode verifies a
+// notification output restricted to a mode the incident is not in
+// never reaches the Notify sink.
+func TestFireCycle_NotificationOutputSkippedOutOfMode(t *testing.T) {
+	h := newHarness(t)
+	h.build(func(c *Config) { c.Notify = h.recordNotify })
+	h.seedOutputs(outputRow("notify1", hmenum.AlarmOutputClassNotification, OutputConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}}))
+
+	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(22, hmenum.AlarmModePerimeter), engine.FireOptions{Policy: noPolicy}); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+
+	if calls := h.notifyCallsSnapshot(); len(calls) != 0 {
+		t.Fatalf("notify calls = %+v, want none for an out-of-mode incident", calls)
+	}
+}
+
+// TestFireCycle_NotificationFiresUnderSilentPolicy verifies the
+// notification class is not an acoustic class (classEligible only
+// suppresses acoustic classes under Policy.Silent), so a silenced
+// incident still notifies.
+func TestFireCycle_NotificationFiresUnderSilentPolicy(t *testing.T) {
+	h := newHarness(t)
+	h.build(func(c *Config) { c.Notify = h.recordNotify })
+	h.seedOutputs(outputRow("notify1", hmenum.AlarmOutputClassNotification, OutputConfig{}))
+
+	opts := engine.FireOptions{Policy: engine.OutputPolicy{Silent: true}}
+	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(23, hmenum.AlarmModeFull), opts); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+
+	if calls := h.notifyCallsSnapshot(); len(calls) != 1 {
+		t.Fatalf("notify calls = %+v, want exactly 1 under a silent policy", calls)
+	}
+}
+
+// TestFireCycle_NilNotifySinkDoesNotPanic verifies a notification
+// output fires safely when no Notify sink is wired (Config.Notify's
+// documented nil-drops-the-signal contract).
+func TestFireCycle_NilNotifySinkDoesNotPanic(t *testing.T) {
+	h := newHarness(t)
+	h.seedOutputs(outputRow("notify1", hmenum.AlarmOutputClassNotification, OutputConfig{}))
+
+	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(24, hmenum.AlarmModeFull), engine.FireOptions{Policy: noPolicy}); err != nil {
+		t.Fatalf("FireCycle: %v", err)
+	}
+}
+
+// TestOutputConfig_NotifyMQTTEnabledDefaultsToTrue verifies the MQTT
+// delivery-plane flag resolves to true when unset and honours an
+// explicit false.
+func TestOutputConfig_NotifyMQTTEnabledDefaultsToTrue(t *testing.T) {
+	if !(OutputConfig{}).NotifyMQTTEnabled() {
+		t.Error("NotifyMQTTEnabled() with nil NotifyMQTT = false, want true (default on)")
+	}
+	off := false
+	if (OutputConfig{NotifyMQTT: &off}).NotifyMQTTEnabled() {
+		t.Error("NotifyMQTTEnabled() with NotifyMQTT=false = true, want false")
+	}
+}
+
+// TestOutputConfig_NotifyWebhookEnabledDefaultsToTrue verifies the
+// webhook delivery-plane flag resolves to true when unset and honours
+// an explicit false.
+func TestOutputConfig_NotifyWebhookEnabledDefaultsToTrue(t *testing.T) {
+	if !(OutputConfig{}).NotifyWebhookEnabled() {
+		t.Error("NotifyWebhookEnabled() with nil NotifyWebhook = false, want true (default on)")
+	}
+	off := false
+	if (OutputConfig{NotifyWebhook: &off}).NotifyWebhookEnabled() {
+		t.Error("NotifyWebhookEnabled() with NotifyWebhook=false = true, want false")
+	}
+}
+
 // TestFireCycle_PerOutputFailureIsolatesRemainingOutputs covers S1
 // case 13: one output's activation failure is journaled and joined
 // into the returned error but never stops sibling outputs from

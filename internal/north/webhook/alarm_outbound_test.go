@@ -178,6 +178,59 @@ func TestOutboundForwardsAlarmReminder(t *testing.T) {
 	}
 }
 
+// TestOutboundForwardsAlarmNotification covers the notification plane
+// (docs/alarm-concept.md §7): an enrolled notification output firing
+// with Webhook=true forwards under alarm_panel.notification, carrying
+// the output identity in the nested detail.
+func TestOutboundForwardsAlarmNotification(t *testing.T) {
+	t.Parallel()
+	ft := &fakeTransport{}
+	_, bus := alarmOutboundFixture(t, ft)
+
+	events.Publish(bus, hmevent.AlarmNotificationEvent{
+		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss",
+		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 9, Mode: hmenum.AlarmModeFull,
+		MQTT: true, Webhook: true,
+	})
+	waitForCount(t, ft, 1, 2*time.Second)
+
+	r := ft.get(0)
+	if got := r.header.Get("X-OpenCCU-Event"); got != string(hmevent.EventTypeAlarmNotification) {
+		t.Errorf("X-OpenCCU-Event = %q, want %q", got, hmevent.EventTypeAlarmNotification)
+	}
+	_, detail := alarmEnvelope(t, r)
+	if detail["output_id"] != "notify1" || detail["output_name"] != "Doorbell" {
+		t.Errorf("alarm detail = %+v, want output_id=notify1 output_name=Doorbell", detail)
+	}
+	if detail["area_id"] != "eg" || detail["mode"] != "full" {
+		t.Errorf("alarm detail = %+v, want area_id=eg mode=full", detail)
+	}
+	if v, ok := detail["incident_id"].(float64); !ok || int64(v) != 9 {
+		t.Errorf("incident_id = %v, want 9", detail["incident_id"])
+	}
+}
+
+// TestOutboundSkipsAlarmNotificationWhenWebhookDisabled covers the
+// per-output plane opt-out: Webhook=false must never enqueue a
+// delivery, even though the output fired (and the MQTT plane is
+// enabled for the same event).
+func TestOutboundSkipsAlarmNotificationWhenWebhookDisabled(t *testing.T) {
+	t.Parallel()
+	ft := &fakeTransport{}
+	_, bus := alarmOutboundFixture(t, ft)
+
+	events.Publish(bus, hmevent.AlarmNotificationEvent{
+		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss",
+		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 9, Mode: hmenum.AlarmModeFull,
+		MQTT: true, Webhook: false,
+	})
+
+	time.Sleep(50 * time.Millisecond)
+	if ft.count() != 0 {
+		t.Fatalf("POST count = %d, want 0 (Webhook=false must not enqueue a delivery)", ft.count())
+	}
+}
+
 // TestOutboundAlarmEventTypeFilterAppliesToAlarmPlane asserts the alarm
 // plane rides the same event-type allow-list as the datapoint/system
 // planes: an operator who allow-lists only alarm_panel.triggered never
