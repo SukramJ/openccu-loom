@@ -2,7 +2,7 @@
   {
     "id": "output-1",
     "class": "acoustic_siren",
-    "central": "ccu1",
+    "central": "",
     "channel_address": "VEQ0000010:1",
     "name": "Außensirene",
     "config": { "modes": ["perimeter", "full", "night"], "policy": "loud", "outdoor": true, "duration_s": 180 }
