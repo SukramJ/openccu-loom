@@ -6,7 +6,8 @@
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
-  import type { AlarmCode, AlarmCodeKind, AlarmCodeRequest } from "$lib/api/types";
+  import type { AlarmCode, AlarmCodeKind, AlarmCodeRequest, AlarmRemoteKeyCandidate } from "$lib/api/types";
+  import { makeTextMatcher } from "$lib/utils";
   import type { IconName } from "$lib/icons";
   import Icon from "$lib/components/ui/Icon.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -57,12 +58,84 @@
     perms: { arm: boolean; disarm: boolean; silence: boolean };
     areas: string[]; // empty → every area
     bindingText: string; // raw JSON for the hardware kinds
+    // Guided remote-key binding fields (kind remote_key, non-expert):
+    // serialized into the binding document on save.
+    remote: { central: string; channelAddress: string; parameter: string; action: string; areaId: string };
+    remoteExpert: boolean; // raw-JSON fallback for remote_key
     validFrom: string; // datetime-local string
     validUntil: string;
     enabled: boolean;
   };
   let draft = $state<Draft | null>(null);
   let saveError = $state<string | null>(null);
+
+  // --- remote-key candidates ---------------------------------------
+  // Physical remote/wall-button key channels (PRESS_SHORT/PRESS_LONG),
+  // loaded lazily the first time the editor shows the remote_key kind.
+  let remoteCandidates = $state<AlarmRemoteKeyCandidate[]>([]);
+  let remoteCandidatesLoaded = $state(false);
+  let remoteSearch = $state("");
+  async function loadRemoteCandidates() {
+    try {
+      remoteCandidates = await api.listAlarmRemoteKeyCandidates();
+      remoteCandidatesLoaded = true;
+    } catch (err) {
+      toastStore.error(t("alarm.codes.remote.candidates_failed"), friendlyError(err, t));
+    }
+  }
+  $effect(() => {
+    if (draft?.kind === "remote_key" && !draft.remoteExpert && !remoteCandidatesLoaded) {
+      void loadRemoteCandidates();
+    }
+  });
+  const remoteMatch = $derived(makeTextMatcher(remoteSearch));
+  const remoteFiltered = $derived(
+    remoteCandidates
+      .filter(
+        (c) =>
+          !remoteSearch ||
+          remoteMatch(c.device_name ?? "") ||
+          remoteMatch(c.channel_name ?? "") ||
+          remoteMatch(c.device_address) ||
+          remoteMatch(c.channel_address) ||
+          remoteMatch(c.model),
+      )
+      .slice(0, 60),
+  );
+  const remoteSelected = $derived(
+    draft?.kind === "remote_key" && draft.remote.channelAddress
+      ? remoteCandidates.find(
+          (c) => c.central === draft?.remote.central && c.channel_address === draft?.remote.channelAddress,
+        )
+      : undefined,
+  );
+  function pickRemoteKey(c: AlarmRemoteKeyCandidate) {
+    if (!draft) return;
+    const params = c.parameters ?? [];
+    draft = {
+      ...draft,
+      remote: {
+        ...draft.remote,
+        central: c.central,
+        channelAddress: c.channel_address,
+        parameter: (params as string[]).includes(draft.remote.parameter)
+          ? draft.remote.parameter
+          : (params[0] ?? ""),
+      },
+    };
+  }
+  // Bindable actions: every arm mode plus the three plain verbs
+  // (mirrors the intent router's action grammar).
+  const REMOTE_MODES = ["full", "perimeter", "night", "vacation", "custom"] as const;
+  const remoteActionOptions = $derived([
+    ...REMOTE_MODES.map((m) => ({
+      value: `arm:${m}`,
+      label: `${t("alarm.codes.remote.action.arm")} — ${t(`alarm.mode.${m}`)}`,
+    })),
+    { value: "disarm", label: t("alarm.codes.remote.action.disarm") },
+    { value: "silence", label: t("alarm.codes.remote.action.silence") },
+    { value: "panic", label: t("alarm.codes.remote.action.panic") },
+  ]);
 
   const editing = $derived(draft?.id != null);
 
@@ -134,6 +207,8 @@
       perms: { arm: false, disarm: true, silence: false },
       areas: [],
       bindingText: "",
+      remote: { central: "", channelAddress: "", parameter: "", action: "arm:full", areaId: "" },
+      remoteExpert: false,
       validFrom: "",
       validUntil: "",
       enabled: true,
@@ -155,9 +230,29 @@
       },
       areas: [...(c.areas ?? [])],
       bindingText: c.binding != null ? JSON.stringify(c.binding, null, 2) : "",
+      remote: parseRemoteBinding(c),
+      remoteExpert: c.kind === "remote_key" && c.binding != null && parseRemoteBinding(c).channelAddress === "",
       validFrom: msToInput(c.valid_from_ms),
       validUntil: msToInput(c.valid_until_ms),
       enabled: c.enabled,
+    };
+  }
+
+  // parseRemoteBinding lifts a stored remote-key binding document into
+  // the guided fields; a document the guided editor can't represent
+  // (no channel address) sends the editor to the raw-JSON fallback.
+  function parseRemoteBinding(c: AlarmCode): Draft["remote"] {
+    const empty = { central: "", channelAddress: "", parameter: "", action: "arm:full", areaId: "" };
+    if (c.kind !== "remote_key" || c.binding == null || typeof c.binding !== "object") return empty;
+    const b = c.binding as Record<string, unknown>;
+    const str = (k: string) => (typeof b[k] === "string" ? (b[k] as string) : "");
+    if (!str("channel_address")) return empty;
+    return {
+      central: str("central"),
+      channelAddress: str("channel_address"),
+      parameter: str("parameter") || "PRESS_SHORT",
+      action: str("action") || "arm:full",
+      areaId: str("area_id"),
     };
   }
 
@@ -182,7 +277,22 @@
       return null;
     }
     let binding: unknown;
-    if (d.kind !== "pin" && d.bindingText.trim() !== "") {
+    if (d.kind === "remote_key" && !d.remoteExpert) {
+      // Guided remote-key binding: assemble the document from the
+      // picked key + trigger + action + area.
+      const r = d.remote;
+      if (!r.channelAddress || !r.parameter || !r.action || !r.areaId) {
+        saveError = t("alarm.codes.error.remote_incomplete");
+        return null;
+      }
+      binding = {
+        central: r.central || undefined,
+        channel_address: r.channelAddress,
+        parameter: r.parameter,
+        action: r.action,
+        area_id: r.areaId,
+      };
+    } else if (d.kind !== "pin" && d.bindingText.trim() !== "") {
       try {
         binding = JSON.parse(d.bindingText);
       } catch {
@@ -451,10 +561,91 @@
             </div>
           {/if}
         </div>
+      {:else if draft.kind === "remote_key" && !draft.remoteExpert}
+        <!-- Guided remote-key binding: pick a physical key, its trigger,
+             the action, and the target area (e.g. HmIP-KRCA keyfob). -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.remote.key")}</span>
+            <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]" title={t("alarm.codes.remote.expert.hint")}>
+              <input
+                type="checkbox"
+                checked={draft.remoteExpert}
+                onchange={(e) => draft && (draft = { ...draft, remoteExpert: e.currentTarget.checked })}
+              />
+              {t("alarm.codes.remote.expert")}
+            </label>
+          </div>
+          <Input type="search" placeholder={t("common.search")} bind:value={remoteSearch} />
+          <div class="mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--ha-divider-color)]">
+            {#if remoteFiltered.length === 0}
+              <p class="p-3 text-center text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.remote.no_candidates")}</p>
+            {:else}
+              {#each remoteFiltered as c (`${c.central}|${c.channel_address}`)}
+                <button
+                  type="button"
+                  class="flex w-full flex-col items-start gap-0.5 border-b border-[var(--ha-divider-color)] px-3 py-2 text-left transition last:border-0 hover:bg-[var(--ha-secondary-background-color)] {draft.remote.channelAddress ===
+                    c.channel_address && draft.remote.central === c.central
+                    ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_12%,transparent)]'
+                    : ''}"
+                  onclick={() => pickRemoteKey(c)}
+                >
+                  <span class="truncate text-sm text-[var(--ha-primary-text-color)]">
+                    {c.device_name || c.device_address}{c.channel_name ? ` · ${c.channel_name}` : ""}
+                  </span>
+                  <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{c.model} · {c.channel_address}</span>
+                </button>
+              {/each}
+            {/if}
+          </div>
+        </div>
+        {#if draft.remote.channelAddress}
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+              {t("alarm.codes.remote.parameter")}
+              <Select
+                value={draft.remote.parameter}
+                onValueChange={(v) => draft && (draft = { ...draft, remote: { ...draft.remote, parameter: v } })}
+                options={(remoteSelected?.parameters ?? ["PRESS_SHORT", "PRESS_LONG"]).map((p) => ({
+                  value: p,
+                  label: t(`alarm.codes.remote.param.${p.toLowerCase()}`),
+                }))}
+              />
+            </label>
+            <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+              {t("alarm.codes.remote.action")}
+              <Select
+                value={draft.remote.action}
+                onValueChange={(v) => draft && (draft = { ...draft, remote: { ...draft.remote, action: v } })}
+                options={remoteActionOptions}
+              />
+            </label>
+          </div>
+          <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
+            {t("alarm.codes.remote.area")}
+            <Select
+              value={draft.remote.areaId}
+              onValueChange={(v) => draft && (draft = { ...draft, remote: { ...draft.remote, areaId: v } })}
+              options={areas.map((a) => ({ value: a.id, label: a.name }))}
+            />
+          </label>
+        {/if}
       {:else}
-        <!-- Hardware binding (keypad slot / remote key) -->
+        <!-- Hardware binding (keypad slot / remote-key expert): raw JSON. -->
         <label class="flex flex-col gap-1.5">
-          <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.binding")}</span>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.binding")}</span>
+            {#if draft.kind === "remote_key"}
+              <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]" title={t("alarm.codes.remote.expert.hint")}>
+                <input
+                  type="checkbox"
+                  checked={draft.remoteExpert}
+                  onchange={(e) => draft && (draft = { ...draft, remoteExpert: e.currentTarget.checked })}
+                />
+                {t("alarm.codes.remote.expert")}
+              </label>
+            {/if}
+          </div>
           <textarea
             bind:value={draft.bindingText}
             rows="5"

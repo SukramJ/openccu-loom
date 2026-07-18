@@ -108,6 +108,16 @@ func (f *alarmVerbCodeFixture) Panels() []alarmpanel.Panel { return nil }
 
 func (f *alarmVerbCodeFixture) Reload(ctx context.Context) error { return f.eng.Reload(ctx) }
 
+func (f *alarmVerbCodeFixture) OutputCandidates(hmenum.AlarmOutputClass) []alarm.OutputCandidate {
+	return nil
+}
+
+func (f *alarmVerbCodeFixture) OutputTargetEligible(string, string, hmenum.AlarmOutputClass) (eligible, known bool) {
+	return true, false
+}
+
+func (f *alarmVerbCodeFixture) RemoteKeyCandidates() []alarm.RemoteKeyCandidate { return nil }
+
 // newAlarmVerbCodeFixture builds an empty, started fixture wired with
 // validator and a recordingSink.
 func newAlarmVerbCodeFixture(t *testing.T, validator *fakeVerbCodeValidator) *alarmVerbCodeFixture {

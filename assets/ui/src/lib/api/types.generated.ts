@@ -4178,6 +4178,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm/output-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Channels that can back a device-backed alarm output class
+         * @description Enumerates every channel across all centrals whose custom data point can carry at least one device-backed output class (acoustic_siren, optical_siren, switched_siren, smoke_sounder, alarm_light, chirp). Derived from the live domain model — a candidate always resolves to an output driver at runtime. Notification and sysvar_mirror outputs are not device-backed and never appear; passing them as `class` is rejected.
+         */
+        get: operations["listAlarmOutputCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/remote-key-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Remote/wall-button key channels usable for remote-key code bindings
+         * @description Enumerates every channel across all centrals that emits a key-press parameter the alarm intent router dispatches remote-key code bindings on (PRESS_SHORT / PRESS_LONG) — e.g. the HmIP-KRCA keyfob buttons. Virtual remote channels are excluded; they can still be bound via a raw binding document.
+         */
+        get: operations["listAlarmRemoteKeyCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alarm/outputs/{id}/test": {
         parameters: {
             query?: never;
@@ -6806,6 +6846,42 @@ export interface components {
             config?: {
                 [key: string]: unknown;
             };
+        };
+        /** @description One channel whose custom data point can back at least one device-backed alarm output class. Derived from the live domain model, so enrolling a candidate always resolves to an output driver. */
+        AlarmOutputCandidate: {
+            /** @description Owning CCU (central name). */
+            central: string;
+            device_address: string;
+            device_name?: string;
+            model: string;
+            channel_address: string;
+            channel_no: number;
+            channel_name?: string;
+            /** @description Device-backed output classes this channel can carry, in canonical class order. The switched_siren class requires device-side auto-off (ON_TIME) and is only listed when the channel supports it. */
+            classes: ("acoustic_siren" | "optical_siren" | "switched_siren" | "smoke_sounder" | "alarm_light" | "chirp")[];
+            /** @description Stable custom-DP kind string (widget selection). */
+            kind: string;
+            /** @description Acoustic tone labels the siren offers (sirens only). */
+            available_tones?: string[];
+            /** @description Optical pattern labels the siren offers (sirens only). */
+            available_lights?: string[];
+            /** @description Soundfile labels an MP3 player offers for the chirp class (e.g. SOUNDFILE_001). */
+            available_soundfiles?: string[];
+            /** @description Level support for the alarm_light class. */
+            dimmable?: boolean;
+        };
+        /** @description One channel that emits the key-press events remote-key code bindings dispatch on — a physical remote-control or wall-button key. */
+        AlarmRemoteKeyCandidate: {
+            /** @description Owning CCU (central name). */
+            central: string;
+            device_address: string;
+            device_name?: string;
+            model: string;
+            channel_address: string;
+            channel_no: number;
+            channel_name?: string;
+            /** @description Press parameters this key offers, in dispatch order (PRESS_SHORT before PRESS_LONG). */
+            parameters: ("PRESS_SHORT" | "PRESS_LONG")[];
         };
         /** @description Whether an alarm area is ready to arm into one specific mode. */
         AlarmModeReadiness: {
@@ -12015,6 +12091,50 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    listAlarmOutputCandidates: {
+        parameters: {
+            query?: {
+                /** @description Restrict to channels that can carry this class. */
+                class?: "acoustic_siren" | "optical_siren" | "switched_siren" | "smoke_sounder" | "alarm_light" | "chirp";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidate channel list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmOutputCandidate"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    listAlarmRemoteKeyCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remote key candidate list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmRemoteKeyCandidate"][];
+                };
+            };
         };
     };
     testAlarmOutput: {

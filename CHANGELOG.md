@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-07-17
+
+### Added
+
+- **Capability-aware alarm output enrollment** — new REST endpoint
+  `GET /api/v1/alarm/output-candidates` (APIVersion 2.25.0) derives,
+  from the live domain model, which channels can back each
+  device-backed output class (acoustic/optical siren, switched siren,
+  smoke sounder, alarm light, chirp — including ON_TIME-gated
+  switched-siren eligibility) plus the device's real ENUM label lists
+  (siren tones, optical patterns, MP3 soundfiles). The SPA add-output
+  dialog now lists these ground-truth candidates per class with a real
+  channel picker (expert mode keeps the unfiltered device list), the
+  tone / optical-pattern / chirp-tone editors offer the device's ENUM
+  values instead of free text (e.g. HmIP-ASIR), and MP3-player chirp
+  outputs (HmIP-MP3P) get a soundfile picker. Saving an output set now
+  soft-validates enrollments: a resolvable channel that cannot carry
+  its class is rejected with 422 instead of failing at fire time;
+  unresolvable channels (CCU down) still save and remain guarded by
+  the fault journal.
+- **Guided remote-key bindings (keyfob arming, e.g. HmIP-KRCA)** —
+  remote-key alarm codes no longer require a hand-written JSON binding:
+  `GET /api/v1/alarm/remote-key-candidates` enumerates every physical
+  remote/wall-button key channel (PRESS_SHORT / PRESS_LONG from the
+  live model; virtual remotes excluded), and the codes editor gained a
+  key picker plus trigger / action / area selects that assemble the
+  binding document. Raw JSON remains available as an expert fallback
+  (also the path for virtual remote channels).
+
 ## [0.42.9] — 2026-07-17
 
 ### Fixed

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.24.0
+  version: 2.25.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5046,6 +5046,63 @@ paths:
               schema: { $ref: "#/components/schemas/AlarmWalkTestStatus" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /alarm/output-candidates:
+    get:
+      operationId: listAlarmOutputCandidates
+      summary: Channels that can back a device-backed alarm output class
+      description: >
+        Enumerates every channel across all centrals whose custom data
+        point can carry at least one device-backed output class
+        (acoustic_siren, optical_siren, switched_siren, smoke_sounder,
+        alarm_light, chirp). Derived from the live domain model — a
+        candidate always resolves to an output driver at runtime.
+        Notification and sysvar_mirror outputs are not device-backed
+        and never appear; passing them as `class` is rejected.
+      tags: [alarm]
+      parameters:
+        - name: class
+          in: query
+          required: false
+          description: Restrict to channels that can carry this class.
+          schema:
+            type: string
+            enum:
+              - acoustic_siren
+              - optical_siren
+              - switched_siren
+              - smoke_sounder
+              - alarm_light
+              - chirp
+      responses:
+        "200":
+          description: Candidate channel list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmOutputCandidate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /alarm/remote-key-candidates:
+    get:
+      operationId: listAlarmRemoteKeyCandidates
+      summary: Remote/wall-button key channels usable for remote-key code bindings
+      description: >
+        Enumerates every channel across all centrals that emits a
+        key-press parameter the alarm intent router dispatches
+        remote-key code bindings on (PRESS_SHORT / PRESS_LONG) — e.g.
+        the HmIP-KRCA keyfob buttons. Virtual remote channels are
+        excluded; they can still be bound via a raw binding document.
+      tags: [alarm]
+      responses:
+        "200":
+          description: Remote key candidate list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmRemoteKeyCandidate" }
+
   /alarm/outputs/{id}/test:
     parameters:
       - name: id
@@ -8522,6 +8579,83 @@ components:
           description: >-
             Engine-owned per-output configuration document (per-mode
             assignment, indoor/outdoor flag, duration/tone, …).
+
+    AlarmOutputCandidate:
+      type: object
+      required: [central, device_address, model, channel_address, channel_no, classes, kind]
+      description: >-
+        One channel whose custom data point can back at least one
+        device-backed alarm output class. Derived from the live domain
+        model, so enrolling a candidate always resolves to an output
+        driver.
+      properties:
+        central: { type: string, description: Owning CCU (central name). }
+        device_address: { type: string }
+        device_name: { type: string }
+        model: { type: string }
+        channel_address: { type: string }
+        channel_no: { type: integer }
+        channel_name: { type: string }
+        classes:
+          type: array
+          description: >-
+            Device-backed output classes this channel can carry, in
+            canonical class order. The switched_siren class requires
+            device-side auto-off (ON_TIME) and is only listed when the
+            channel supports it.
+          items:
+            type: string
+            enum:
+              - acoustic_siren
+              - optical_siren
+              - switched_siren
+              - smoke_sounder
+              - alarm_light
+              - chirp
+        kind:
+          type: string
+          description: Stable custom-DP kind string (widget selection).
+        available_tones:
+          type: array
+          items: { type: string }
+          description: Acoustic tone labels the siren offers (sirens only).
+        available_lights:
+          type: array
+          items: { type: string }
+          description: Optical pattern labels the siren offers (sirens only).
+        available_soundfiles:
+          type: array
+          items: { type: string }
+          description: >-
+            Soundfile labels an MP3 player offers for the chirp class
+            (e.g. SOUNDFILE_001).
+        dimmable:
+          type: boolean
+          description: Level support for the alarm_light class.
+
+    AlarmRemoteKeyCandidate:
+      type: object
+      required: [central, device_address, model, channel_address, channel_no, parameters]
+      description: >-
+        One channel that emits the key-press events remote-key code
+        bindings dispatch on — a physical remote-control or wall-button
+        key.
+      properties:
+        central: { type: string, description: Owning CCU (central name). }
+        device_address: { type: string }
+        device_name: { type: string }
+        model: { type: string }
+        channel_address: { type: string }
+        channel_no: { type: integer }
+        channel_name: { type: string }
+        parameters:
+          type: array
+          description: >-
+            Press parameters this key offers, in dispatch order
+            (PRESS_SHORT before PRESS_LONG).
+          items:
+            type: string
+            enum: [PRESS_SHORT, PRESS_LONG]
 
     AlarmModeReadiness:
       type: object

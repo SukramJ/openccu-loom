@@ -205,6 +205,15 @@ export async function mockAllApis(page: Page): Promise<void> {
     if (route.request().method() === 'PUT') return route.fulfill({ status: 200 });
     return route.fulfill({ json: fixture('alarm-outputs.json') });
   });
+  // Capability-derived enrollment candidates (add-output assist + the
+  // tone/pattern ENUM pickers on enrolled outputs).
+  await page.route('**/api/v1/alarm/output-candidates*', (route) =>
+    route.fulfill({ json: fixture('alarm-output-candidates.json') }),
+  );
+  // Remote/wall-button keys for the guided remote-key code binding.
+  await page.route('**/api/v1/alarm/remote-key-candidates', (route) =>
+    route.fulfill({ json: fixture('alarm-remote-key-candidates.json') }),
+  );
   await page.route('**/api/v1/alarm/areas/*/readiness', (route) =>
     route.fulfill({ json: fixture('alarm-readiness.json') }),
   );

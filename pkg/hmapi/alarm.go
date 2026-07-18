@@ -63,6 +63,50 @@ type AlarmOutput struct {
 	Config json.RawMessage `json:"config,omitempty"`
 }
 
+// AlarmOutputCandidate is one channel whose custom data point can back
+// at least one device-backed alarm output class (acoustic_siren,
+// optical_siren, switched_siren, smoke_sounder, alarm_light, chirp).
+// Derived from the live domain model, so enrolling a candidate always
+// resolves to an output driver.
+type AlarmOutputCandidate struct {
+	Central        string `json:"central"`
+	DeviceAddress  string `json:"device_address"`
+	DeviceName     string `json:"device_name,omitempty"`
+	Model          string `json:"model"`
+	ChannelAddress string `json:"channel_address"`
+	ChannelNo      int    `json:"channel_no"`
+	ChannelName    string `json:"channel_name,omitempty"`
+	// Classes are the device-backed output classes this channel can
+	// carry, in canonical class order.
+	Classes []string `json:"classes"`
+	// Kind is the stable custom-DP kind string (widget selection).
+	Kind string `json:"kind"`
+	// AvailableTones / AvailableLights / AvailableSoundfiles are the
+	// device's ENUM label lists (acoustic tones and optical patterns
+	// for sirens, soundfiles for MP3 players).
+	AvailableTones      []string `json:"available_tones,omitempty"`
+	AvailableLights     []string `json:"available_lights,omitempty"`
+	AvailableSoundfiles []string `json:"available_soundfiles,omitempty"`
+	// Dimmable reports level support for the alarm_light class.
+	Dimmable bool `json:"dimmable,omitempty"`
+}
+
+// AlarmRemoteKeyCandidate is one channel that emits the key-press
+// events remote-key code bindings dispatch on (PRESS_SHORT /
+// PRESS_LONG) — a physical remote-control or wall-button key.
+type AlarmRemoteKeyCandidate struct {
+	Central        string `json:"central"`
+	DeviceAddress  string `json:"device_address"`
+	DeviceName     string `json:"device_name,omitempty"`
+	Model          string `json:"model"`
+	ChannelAddress string `json:"channel_address"`
+	ChannelNo      int    `json:"channel_no"`
+	ChannelName    string `json:"channel_name,omitempty"`
+	// Parameters are the press parameters this key offers, in
+	// dispatch order (PRESS_SHORT before PRESS_LONG).
+	Parameters []string `json:"parameters"`
+}
+
 // AlarmIncidentRef is the open-incident reference nested in
 // AlarmAreaStatus. Present only while the area's state is triggered.
 type AlarmIncidentRef struct {

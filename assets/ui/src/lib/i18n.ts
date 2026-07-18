@@ -234,6 +234,12 @@ const EN: Catalog = {
   "alarm.outputs.switched_caveat": "Convenience-grade: no sabotage contact, no battery backup, trivially unpluggable.",
   "alarm.outputs.smoke_caveat": "Smoke detectors double as sounders — no device-side duration, engine-watchdogged only, and repeated intrusion tones shorten battery life. Best on full protection only.",
   "alarm.outputs.acoustic_no_ontime": "This actuator has no ON_TIME, so it can't self-off — not eligible as an acoustic output.",
+  "alarm.outputs.device_default": "Device default",
+  "alarm.outputs.candidates.empty":
+    "No eligible channels for this class. Expert mode lists every device without capability filtering.",
+  "alarm.outputs.candidates.load_failed": "Loading output candidates failed",
+  "alarm.outputs.soundfile": "Soundfile",
+  "alarm.outputs.soundfile.hint": "MP3 soundfile played for chirps. Empty uses the device default.",
   // Output classes (§7).
   "alarm.output_class.acoustic_siren": "Acoustic siren",
   "alarm.output_class.acoustic_siren.hint":
@@ -400,6 +406,23 @@ const EN: Catalog = {
   "alarm.codes.kind.keypad_slot": "Keypad slot",
   "alarm.codes.kind.pin": "PIN",
   "alarm.codes.kind.remote_key": "Remote key",
+  "alarm.codes.remote.key": "Remote button",
+  "alarm.codes.remote.expert": "Raw JSON",
+  "alarm.codes.remote.expert.hint":
+    "Edit the binding document directly — needed for virtual remote channels or unusual setups.",
+  "alarm.codes.remote.no_candidates":
+    "No remote or wall-button keys found. Teach-in the remote first, or use raw JSON.",
+  "alarm.codes.remote.candidates_failed": "Loading remote keys failed",
+  "alarm.codes.remote.parameter": "Trigger",
+  "alarm.codes.remote.param.press_short": "Short press",
+  "alarm.codes.remote.param.press_long": "Long press",
+  "alarm.codes.remote.action": "Action",
+  "alarm.codes.remote.action.arm": "Arm",
+  "alarm.codes.remote.action.disarm": "Disarm",
+  "alarm.codes.remote.action.silence": "Silence",
+  "alarm.codes.remote.action.panic": "Panic",
+  "alarm.codes.remote.area": "Area",
+  "alarm.codes.error.remote_incomplete": "Pick a remote button, trigger, action, and area.",
   "alarm.codes.perm.arm": "Arm",
   "alarm.codes.perm.disarm": "Disarm",
   "alarm.codes.perm.silence": "Silence",
@@ -2809,6 +2832,12 @@ const DE: Catalog = {
   "alarm.outputs.switched_caveat": "Komfort-Klasse: kein Sabotagekontakt, keine Batteriepufferung, leicht ausgesteckt.",
   "alarm.outputs.smoke_caveat": "Rauchmelder dienen zusätzlich als Sirenen — keine geräteseitige Dauer, nur per Engine überwacht, und wiederholte Alarmtöne verkürzen die Batterielaufzeit. Am besten nur im Vollschutz.",
   "alarm.outputs.acoustic_no_ontime": "Dieser Aktor hat kein ON_TIME und kann sich nicht selbst abschalten — als akustischer Ausgang nicht zulässig.",
+  "alarm.outputs.device_default": "Geräte-Standard",
+  "alarm.outputs.candidates.empty":
+    "Keine geeigneten Kanäle für diese Klasse. Der Expertenmodus listet alle Geräte ohne Fähigkeitsfilter.",
+  "alarm.outputs.candidates.load_failed": "Laden der Ausgangs-Kandidaten fehlgeschlagen",
+  "alarm.outputs.soundfile": "Sounddatei",
+  "alarm.outputs.soundfile.hint": "MP3-Sounddatei für Signaltöne. Leer nutzt den Geräte-Standard.",
   // Ausgangsklassen (§7).
   "alarm.output_class.acoustic_siren": "Akustische Sirene",
   "alarm.output_class.acoustic_siren.hint":
@@ -2975,6 +3004,23 @@ const DE: Catalog = {
   "alarm.codes.kind.keypad_slot": "Codetastatur-Slot",
   "alarm.codes.kind.pin": "PIN-Code",
   "alarm.codes.kind.remote_key": "Funkschlüssel",
+  "alarm.codes.remote.key": "Funktaste",
+  "alarm.codes.remote.expert": "Roh-JSON",
+  "alarm.codes.remote.expert.hint":
+    "Das Binding-Dokument direkt bearbeiten — nötig für virtuelle Fernbedienungskanäle oder Sonderfälle.",
+  "alarm.codes.remote.no_candidates":
+    "Keine Funk- oder Wandtaster-Tasten gefunden. Erst die Fernbedienung anlernen oder Roh-JSON verwenden.",
+  "alarm.codes.remote.candidates_failed": "Laden der Funktasten fehlgeschlagen",
+  "alarm.codes.remote.parameter": "Auslöser",
+  "alarm.codes.remote.param.press_short": "Kurzer Tastendruck",
+  "alarm.codes.remote.param.press_long": "Langer Tastendruck",
+  "alarm.codes.remote.action": "Aktion",
+  "alarm.codes.remote.action.arm": "Scharf",
+  "alarm.codes.remote.action.disarm": "Unscharf",
+  "alarm.codes.remote.action.silence": "Stummschalten",
+  "alarm.codes.remote.action.panic": "Panik",
+  "alarm.codes.remote.area": "Bereich",
+  "alarm.codes.error.remote_incomplete": "Funktaste, Auslöser, Aktion und Bereich auswählen.",
   "alarm.codes.perm.arm": "Scharf schalten",
   "alarm.codes.perm.disarm": "Unscharf schalten",
   "alarm.codes.perm.silence": "Sirenen aus",

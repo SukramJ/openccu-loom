@@ -10,7 +10,9 @@ import type {
   AlarmMessage,
   AlarmModeReadiness,
   AlarmOutput,
+  AlarmOutputCandidate,
   AlarmOutputTestRequest,
+  AlarmRemoteKeyCandidate,
   AlarmSensor,
   AlarmVerbRequest,
   AlarmWalkTestStatus,
@@ -1397,6 +1399,13 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(outputs),
     });
+  },
+  listAlarmOutputCandidates(cls?: string) {
+    const q = cls ? `?class=${encodeURIComponent(cls)}` : "";
+    return request<AlarmOutputCandidate[]>(`/alarm/output-candidates${q}`);
+  },
+  listAlarmRemoteKeyCandidates() {
+    return request<AlarmRemoteKeyCandidate[]>(`/alarm/remote-key-candidates`);
   },
   armAlarmArea(id: string, req: AlarmArmRequest) {
     return request<AlarmArmAccepted>(

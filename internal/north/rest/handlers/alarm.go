@@ -38,6 +38,16 @@ type AlarmPanel interface {
 	Stores() *alarm.Stores
 	Reload(ctx context.Context) error
 	Panels() []alarmpanel.Panel
+	// OutputCandidates enumerates the channels that can back a
+	// device-backed output class (empty class returns all).
+	OutputCandidates(class hmenum.AlarmOutputClass) []alarm.OutputCandidate
+	// OutputTargetEligible soft-validates an enrollment target:
+	// known=false (central/channel unresolvable) must be treated as
+	// eligible so a CCU outage never blocks a config save.
+	OutputTargetEligible(centralName, channelAddress string, class hmenum.AlarmOutputClass) (eligible, known bool)
+	// RemoteKeyCandidates enumerates the physical remote/wall-button
+	// key channels a remote-key code binding can dispatch on.
+	RemoteKeyCandidates() []alarm.RemoteKeyCandidate
 }
 
 // Compile-time proof the daemon-level alarm service satisfies the

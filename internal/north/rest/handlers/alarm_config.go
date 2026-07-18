@@ -321,6 +321,18 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 					problem.New(problem.TypeValidation, r, "Invalid output configuration", err.Error()))
 				return
 			}
+			// Soft target validation: reject a channel that resolves but
+			// cannot carry the class (the runtime driver would fault on
+			// every fire). Unresolvable targets pass — a CCU that is down
+			// or still booting must never block a config save; the fault
+			// journal remains their safety net.
+			if eligible, known := p.OutputTargetEligible(in[i].Central, in[i].ChannelAddress,
+				hmenum.AlarmOutputClass(in[i].Class)); known && !eligible {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "Output class not supported by channel",
+						in[i].ChannelAddress+" cannot back class "+in[i].Class))
+				return
+			}
 		}
 		now := time.Now().UnixMilli()
 		rows := make([]sqlitestore.AlarmOutputRow, 0, len(in))

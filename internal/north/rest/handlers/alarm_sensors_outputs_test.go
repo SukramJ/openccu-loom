@@ -202,3 +202,81 @@ func TestPutAlarmAreaOutputs_InvalidClass_Returns422(t *testing.T) {
 		t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
 	}
 }
+
+// stubbedOutputEligibilityFixture substitutes a fixed OutputTargetEligible
+// verdict over an otherwise real alarmPanelFixture, so PutAlarmAreaOutputs's
+// soft target-validation branch (alarm_config.go, "Soft target validation")
+// can be exercised without a live central registry. Mirrors the
+// embed-and-override pattern of stubbedPanelsFixture in alarm_panels_test.go.
+type stubbedOutputEligibilityFixture struct {
+	*alarmPanelFixture
+	eligible bool
+	known    bool
+}
+
+func (s stubbedOutputEligibilityFixture) OutputTargetEligible(string, string, hmenum.AlarmOutputClass) (eligible, known bool) {
+	return s.eligible, s.known
+}
+
+var _ AlarmPanel = stubbedOutputEligibilityFixture{}
+
+// TestPutAlarmAreaOutputs_KnownIneligibleTarget_Returns422AndLeavesStoreUntouched
+// verifies a resolvable channel that cannot carry the requested class (the
+// runtime driver would fault on every fire) is rejected with 422, and that
+// the pre-existing output set is left exactly as it was.
+func TestPutAlarmAreaOutputs_KnownIneligibleTarget_Returns422AndLeavesStoreUntouched(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedOutput("sirenA", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
+	stub := stubbedOutputEligibilityFixture{alarmPanelFixture: fx, eligible: false, known: true}
+
+	replacement := []hmapi.AlarmOutput{
+		{ID: "light", Class: string(hmenum.AlarmOutputClassAlarmLight), Central: alarmFixtureCentral, ChannelAddress: "light:1", Name: "Light"},
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs", jsonRequestBody(t, replacement))
+	req = withChiParam(req, "id", "eg")
+	w := httptest.NewRecorder()
+	PutAlarmAreaOutputs(stub, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
+	}
+	rows, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	if err != nil {
+		t.Fatalf("list outputs: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "sirenA" {
+		t.Fatalf("outputs after refused save = %+v, want unchanged [sirenA]", rows)
+	}
+}
+
+// TestPutAlarmAreaOutputs_UnknownTarget_SavesDespiteUnresolvedEligibility
+// verifies an unresolvable central/channel (known=false, e.g. the CCU is
+// down or still booting) never blocks the config save — soft validation
+// treats it as eligible and the replace proceeds.
+func TestPutAlarmAreaOutputs_UnknownTarget_SavesDespiteUnresolvedEligibility(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	stub := stubbedOutputEligibilityFixture{alarmPanelFixture: fx, eligible: true, known: false}
+
+	replacement := []hmapi.AlarmOutput{
+		{ID: "light", Class: string(hmenum.AlarmOutputClassAlarmLight), Central: alarmFixtureCentral, ChannelAddress: "light:1", Name: "Light"},
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs", jsonRequestBody(t, replacement))
+	req = withChiParam(req, "id", "eg")
+	w := httptest.NewRecorder()
+	PutAlarmAreaOutputs(stub, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
+	}
+	rows, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	if err != nil {
+		t.Fatalf("list outputs: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "light" {
+		t.Fatalf("outputs after save = %+v, want exactly [light]", rows)
+	}
+}

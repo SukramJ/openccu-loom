@@ -459,6 +459,14 @@ export type AlarmAreaStatus = components["schemas"]["AlarmAreaStatus"];
 export type AlarmSensor = components["schemas"]["AlarmSensor"];
 // One enrolled output consequence (siren/light/chirp/notification/…).
 export type AlarmOutput = components["schemas"]["AlarmOutput"];
+// One channel that can back a device-backed output class, with the
+// device's ENUM extras (tones/lights/soundfiles) for real-value pickers.
+export type AlarmOutputCandidate =
+  components["schemas"]["AlarmOutputCandidate"];
+// One remote/wall-button key channel usable for a remote-key code
+// binding (PRESS_SHORT / PRESS_LONG dispatch, e.g. HmIP-KRCA).
+export type AlarmRemoteKeyCandidate =
+  components["schemas"]["AlarmRemoteKeyCandidate"];
 // Whether an area is ready to arm into one specific mode + blocker list.
 export type AlarmModeReadiness = components["schemas"]["AlarmModeReadiness"];
 // Arm request body (POST /alarm/areas/{id}/arm) and its accepted reply.
