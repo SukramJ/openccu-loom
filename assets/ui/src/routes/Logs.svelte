@@ -432,7 +432,7 @@
           {#each detailRows as r (r.seq)}
             {@const expanded = expandedSeqs.has(r.seq)}
             <div
-              class="border-b px-3 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              class="border-b px-3 py-1 hover:bg-slate-50 dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_50%,transparent)]"
               style="border-color: var(--ha-divider-color);"
             >
               <button
@@ -470,7 +470,7 @@
           {#each aggregatedRows as row (row.key)}
             {@const groupExpanded = expandedGroups.has(row.key)}
             <div
-              class="border-b px-3 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              class="border-b px-3 py-1 hover:bg-slate-50 dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_50%,transparent)]"
               style="border-color: var(--ha-divider-color);"
             >
               <button

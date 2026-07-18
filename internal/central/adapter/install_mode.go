@@ -10,7 +10,9 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // installModeNormal is the CCU's "normal" install-mode flavour (mode=1).
@@ -31,12 +33,27 @@ type installModeWriter struct {
 	writer *clientpkg.ValueWriter
 }
 
+// backend resolves the interface's backend from the ValueWriter
+// registry. The registry is keyed by the canonical central-prefixed
+// wire ID (the writer.Register call in ccu_wiring.go uses
+// [WireInterfaceID]), while the install-mode DPs carry the bare
+// interface type for the operator surfaces — translate here, or every
+// install-mode write misses the registry and fails.
+func (w *installModeWriter) backend(interfaceID string) (backends.Operations, error) {
+	wireID := WireInterfaceID(w.unit.Name(), hmenum.Interface(interfaceID))
+	b, ok := w.writer.Backend(w.unit.Name(), wireID)
+	if !ok {
+		return nil, fmt.Errorf("install-mode: no backend for %s/%s", w.unit.Name(), wireID)
+	}
+	return b, nil
+}
+
 // SetInstallMode opens (enabled) or closes install mode on interfaceID by
 // broadcasting to the interface's backend (no device filter).
 func (w *installModeWriter) SetInstallMode(ctx context.Context, interfaceID string, enabled bool, duration time.Duration) error {
-	b, ok := w.writer.Backend(w.unit.Name(), interfaceID)
-	if !ok {
-		return fmt.Errorf("install-mode: no backend for %s/%s", w.unit.Name(), interfaceID)
+	b, err := w.backend(interfaceID)
+	if err != nil {
+		return err
 	}
 	return b.SetInstallMode(ctx, enabled, int(duration.Seconds()), installModeNormal, "")
 }
@@ -44,9 +61,9 @@ func (w *installModeWriter) SetInstallMode(ctx context.Context, interfaceID stri
 // SetInstallModeForDevice opens install mode on interfaceID scoped to a
 // single device address (targeted teach-in / re-pairing by serial).
 func (w *installModeWriter) SetInstallModeForDevice(ctx context.Context, interfaceID string, duration time.Duration, deviceAddress string) error {
-	b, ok := w.writer.Backend(w.unit.Name(), interfaceID)
-	if !ok {
-		return fmt.Errorf("install-mode: no backend for %s/%s", w.unit.Name(), interfaceID)
+	b, err := w.backend(interfaceID)
+	if err != nil {
+		return err
 	}
 	return b.SetInstallMode(ctx, true, int(duration.Seconds()), installModeNormal, deviceAddress)
 }

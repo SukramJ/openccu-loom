@@ -51,6 +51,10 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// FirmwareRefresher backs POST /devices/firmware/refresh (force
+	// re-read of per-device firmware data from every CCU). Nil leaves
+	// the route unmounted.
+	FirmwareRefresher handlers.FirmwareRefresher
 	// DeviceInstallMode opens a targeted (per-device / serial) pairing
 	// window at POST /devices/{addr}/install-mode. Nil disables the route.
 	DeviceInstallMode handlers.DeviceInstallModePort
@@ -91,8 +95,17 @@ type Deps struct {
 	// every registered central). Nil disables the route (404); shares the
 	// domain call with the WS `incidents.clear` command.
 	IncidentsAdmin handlers.IncidentsClearer
-	Labels         handlers.ParameterLabeler
-	Metrics        *metrics.Registry
+	// Alarm backs the /alarm surface (the alarm-panel engine + output
+	// drivers + config stores). Nil leaves every /alarm route unmounted
+	// (the alarm subsystem is disabled or failed to come up).
+	Alarm handlers.AlarmPanel
+	// AlarmCodes backs the /alarm/codes CRUD surface (the argon2id-hashed
+	// alarm-code store, docs/alarm-concept.md §11). The routes mount
+	// whenever Alarm is set; a nil AlarmCodes serves them as 503 so the
+	// contract is present even before the codes facade is wired.
+	AlarmCodes handlers.AlarmCodeAdmin
+	Labels     handlers.ParameterLabeler
+	Metrics    *metrics.Registry
 	// MasterProfiles backs the read-only master-profile discovery routes:
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles
 	//   GET  /api/v1/devices/{addr}/channels/{no}/master-profiles/{id}
@@ -434,6 +447,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	}
 
 	r := chi.NewRouter()
+	// First middleware by contract: route on the percent-decoded path so
+	// every chi.URLParam yields decoded values (see decodedPathRouting).
+	r.Use(decodedPathRouting)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.ReqContextWithCentral(d.CentralName))
@@ -732,6 +748,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
 			}
+			if d.FirmwareRefresher != nil {
+				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))
+			}
 			if d.DeviceInstallMode != nil {
 				pr.With(op).Post("/devices/{addr}/install-mode", handlers.PostDeviceInstallMode(d.DeviceInstallMode, d.AuditRecorder))
 			}
@@ -770,6 +789,44 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Mirrors the WS `incidents.clear` role (auth.RoleOperator in
 				// internal/north/rest/ws/commands.go's writeCommandRoles).
 				pr.With(op).Delete("/incidents", handlers.DeleteIncidents(d.IncidentsAdmin, d.AuditRecorder))
+			}
+			if d.Alarm != nil {
+				// Alarm-panel surface: reads authenticate, every mutation
+				// gates on the operator role (mirrors the alarm_panel WS
+				// command roles). Nil Alarm leaves the whole tree unmounted.
+				pr.Get("/alarm/state", handlers.AlarmState(d.Alarm))
+				pr.Get("/alarm/areas", handlers.ListAlarmAreas(d.Alarm))
+				pr.With(op).Post("/alarm/areas", handlers.CreateAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}", handlers.GetAlarmArea(d.Alarm))
+				pr.With(op).Put("/alarm/areas/{id}", handlers.PutAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Delete("/alarm/areas/{id}", handlers.DeleteAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/sensors", handlers.ListAlarmAreaSensors(d.Alarm))
+				pr.With(op).Put("/alarm/areas/{id}/sensors", handlers.PutAlarmAreaSensors(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/outputs", handlers.ListAlarmAreaOutputs(d.Alarm))
+				pr.With(op).Put("/alarm/areas/{id}/outputs", handlers.PutAlarmAreaOutputs(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/arm", handlers.ArmAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/disarm", handlers.DisarmAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/silence", handlers.SilenceAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/acknowledge", handlers.AcknowledgeAlarmArea(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/silence-all", handlers.SilenceAllAlarmAreas(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/readiness", handlers.GetAlarmAreaReadiness(d.Alarm))
+				pr.Get("/alarm/journal", handlers.ListAlarmJournal(d.Alarm))
+				pr.Get("/alarm/panels", handlers.ListAlarmPanels(d.Alarm))
+				pr.With(op).Post("/alarm/areas/{id}/walktest/start", handlers.StartAlarmWalkTest(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/areas/{id}/walktest/stop", handlers.StopAlarmWalkTest(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/areas/{id}/walktest", handlers.GetAlarmWalkTestStatus(d.Alarm))
+				pr.Get("/alarm/output-candidates", handlers.ListAlarmOutputCandidates(d.Alarm, d.Labels))
+				pr.Get("/alarm/remote-key-candidates", handlers.ListAlarmRemoteKeyCandidates(d.Alarm))
+				pr.With(op).Post("/alarm/outputs/{id}/test", handlers.TestAlarmOutput(d.Alarm, d.AuditRecorder))
+				// Alarm codes: reads and writes both require the operator
+				// role — codes are security material, so even the list is
+				// not viewer-open (docs/alarm-concept.md §11/§16). A nil
+				// AlarmCodes serves these as 503.
+				pr.With(op).Get("/alarm/codes", handlers.ListAlarmCodes(d.AlarmCodes))
+				pr.With(op).Post("/alarm/codes", handlers.CreateAlarmCode(d.AlarmCodes, d.AuditRecorder))
+				pr.With(op).Get("/alarm/codes/{id}", handlers.GetAlarmCode(d.AlarmCodes))
+				pr.With(op).Put("/alarm/codes/{id}", handlers.PutAlarmCode(d.AlarmCodes, d.AuditRecorder))
+				pr.With(op).Delete("/alarm/codes/{id}", handlers.DeleteAlarmCode(d.AlarmCodes, d.AuditRecorder))
 			}
 			if d.SystemStatus != nil {
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))

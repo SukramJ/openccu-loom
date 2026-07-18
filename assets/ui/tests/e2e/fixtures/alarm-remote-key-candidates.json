@@ -1,0 +1,31 @@
+[
+  {
+    "central": "ccu1",
+    "device_address": "VEQ0000030",
+    "device_name": "Schlüsselbund Markus",
+    "model": "HmIP-KRCA",
+    "channel_address": "VEQ0000030:1",
+    "channel_no": 1,
+    "channel_name": "Taste Scharf",
+    "parameters": ["PRESS_SHORT", "PRESS_LONG"]
+  },
+  {
+    "central": "ccu1",
+    "device_address": "VEQ0000030",
+    "device_name": "Schlüsselbund Markus",
+    "model": "HmIP-KRCA",
+    "channel_address": "VEQ0000030:2",
+    "channel_no": 2,
+    "channel_name": "Taste Unscharf",
+    "parameters": ["PRESS_SHORT", "PRESS_LONG"]
+  },
+  {
+    "central": "ccu1",
+    "device_address": "VEQ0000031",
+    "device_name": "Wandtaster Flur",
+    "model": "HmIP-WRC2",
+    "channel_address": "VEQ0000031:1",
+    "channel_no": 1,
+    "parameters": ["PRESS_SHORT", "PRESS_LONG"]
+  }
+]

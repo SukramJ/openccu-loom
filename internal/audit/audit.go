@@ -81,6 +81,23 @@ const (
 	// every registered central (DELETE /api/v1/incidents; shares the
 	// domain call with the WS `incidents.clear` command).
 	ActionIncidentsClear Action = "incidents_clear"
+
+	// Alarm-system surface. Command actions (arm / disarm / silence /
+	// acknowledge / walk test / output test) record who drove the panel
+	// and from where; ActionAlarmConfigChange covers every area / sensor
+	// / output CRUD mutation, and ActionAlarmCodeChange every alarm-code
+	// CRUD mutation (kept distinct so a code change is auditable apart
+	// from ordinary config edits — codes are security material, §11/§16).
+	// The Entry's Note carries the target context (e.g.
+	// `area=<id> mode=<mode>`).
+	ActionAlarmArm          Action = "alarm_arm"
+	ActionAlarmDisarm       Action = "alarm_disarm"
+	ActionAlarmSilence      Action = "alarm_silence"
+	ActionAlarmAcknowledge  Action = "alarm_acknowledge"
+	ActionAlarmConfigChange Action = "alarm_config_change"
+	ActionAlarmCodeChange   Action = "alarm_code_change"
+	ActionAlarmWalkTest     Action = "alarm_walk_test"
+	ActionAlarmOutputTest   Action = "alarm_output_test"
 )
 
 // Entry is one recorded change. The User field is filled by the REST

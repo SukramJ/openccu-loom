@@ -150,3 +150,4 @@ tests/integration/testdata/discovery_snapshot_aiohomematic2mqtt.json
 site/
 __pycache__/
 *-read-only.env
+test-results/

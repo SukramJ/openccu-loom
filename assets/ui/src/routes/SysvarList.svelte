@@ -100,6 +100,28 @@
     }
   }
 
+  // Reload = force the daemon to re-pull the sysvar catalogue from the
+  // CCU first, then read the refreshed list. A plain load() only serves
+  // the daemon's periodic-poll state (up to one sysvar-scan interval
+  // stale), so a value just changed at the CCU would not show up. A
+  // failing re-pull (CCU unreachable) surfaces as a toast but never
+  // blocks reading the current daemon state.
+  async function reload() {
+    loading = true;
+    try {
+      await api.fetchSysvars();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError
+          ? `${err.status}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
+    }
+    await load();
+  }
+
   function draftKey(sv: SysvarEntry): string {
     return (sv.central ?? "") + "/" + sv.name;
   }
@@ -248,7 +270,7 @@
           {/each}
         </select>
       {/if}
-      <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
+      <Button type="button" variant="outline" size="sm" onclick={() => void reload()} disabled={loading}>
         {t("common.reload")}
       </Button>
       <Button type="button" size="sm" onclick={() => (creating = !creating)}>
@@ -410,7 +432,7 @@
 
 {#if editing}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--color-slate-900)_50%,transparent)] p-4"
     role="dialog"
     aria-modal="true"
     aria-label={t("sysvars.edit.title")}

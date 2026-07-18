@@ -67,9 +67,122 @@ func TestDiscoverMissingEndpoints(t *testing.T) {
 	}
 }
 
+// TestRequireHTTPSURL is a table test for the accept/reject decision across
+// the URL shapes the OIDC flow can encounter: a plain https URL, a loopback
+// http URL (allowed for local development), a non-loopback http URL, and a
+// string that fails to parse as a URL at all.
+func TestRequireHTTPSURL(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		wantErr bool
+	}{
+		{"https accepted", "https://idp.example.com/issuer", false},
+		{"http loopback accepted", "http://127.0.0.1:8080/issuer", false},
+		{"http non-loopback rejected", "http://idp.example.com/issuer", true},
+		{"unparsable URL rejected", "://not-a-url", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := requireHTTPSURL(tc.raw)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error for %q", tc.raw)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error for %q: %v", tc.raw, err)
+			}
+		})
+	}
+}
+
+// TestIsLoopbackHostVariants is a table test for every host shape
+// isLoopbackHost has to classify: the "localhost" literal, loopback IPv4
+// and IPv6 addresses, and non-loopback hosts (a resolvable-looking hostname
+// and a routable IP).
+func TestIsLoopbackHostVariants(t *testing.T) {
+	cases := []struct {
+		host string
+		want bool
+	}{
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"::1", true},
+		{"idp.example.com", false},
+		{"8.8.8.8", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			if got := isLoopbackHost(tc.host); got != tc.want {
+				t.Fatalf("isLoopbackHost(%q) = %v, want %v", tc.host, got, tc.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // jwks.go gaps
 // ---------------------------------------------------------------------------
+
+// TestJWKSCacheRefreshInvalidURL exercises the NewRequestWithContext error
+// branch in refresh — a URL that cannot be parsed as a request target.
+func TestJWKSCacheRefreshInvalidURL(t *testing.T) {
+	cache := NewJWKSCache("://not-a-url", http.DefaultClient)
+	err := cache.refresh(context.Background())
+	if err == nil {
+		t.Fatal("expected error for unparsable JWKS URL")
+	}
+}
+
+// TestVerifyRejectsMalformedHeaderSegment exercises the decodeHeader error
+// branch inside Verify itself (as opposed to calling decodeHeader
+// directly) — a 3-part token whose header segment is not valid base64.
+func TestVerifyRejectsMalformedHeaderSegment(t *testing.T) {
+	tok := "!!!invalid!!!.payload.sig"
+	_, err := Verify(context.Background(), tok, nil)
+	if err == nil {
+		t.Fatal("expected error for malformed header segment")
+	}
+}
+
+// TestVerifyRejectsUnknownKid exercises the cache.Key error branch inside
+// Verify — a well-formed RS256 header naming a key id the JWKS does not
+// publish.
+func TestVerifyRejectsUnknownKid(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"keys":[]}`))
+	}))
+	defer srv.Close()
+
+	cache := NewJWKSCache(srv.URL, srv.Client())
+	h := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","kid":"missing"}`))
+	p := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"x"}`))
+	tok := h + "." + p + ".sig"
+
+	_, err := Verify(context.Background(), tok, cache)
+	if err == nil {
+		t.Fatal("expected error for unknown kid")
+	}
+}
+
+// TestVerifyRejectsUnsupportedKty exercises the parseRSAPub error branch
+// inside Verify — the JWKS publishes a key for the requested kid, but its
+// key type is not RSA.
+func TestVerifyRejectsUnsupportedKty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"keys":[{"kty":"EC","kid":"k1"}]}`))
+	}))
+	defer srv.Close()
+
+	cache := NewJWKSCache(srv.URL, srv.Client())
+	h := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","kid":"k1"}`))
+	p := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"x"}`))
+	tok := h + "." + p + ".sig"
+
+	_, err := Verify(context.Background(), tok, cache)
+	if err == nil {
+		t.Fatal("expected error for unsupported kty")
+	}
+}
 
 // TestParseRSAPubUnsupportedKty exercises the non-RSA kty branch.
 func TestParseRSAPubUnsupportedKty(t *testing.T) {
@@ -634,6 +747,96 @@ func TestJWKSRefreshDoError(t *testing.T) {
 	err := cache.refresh(context.Background())
 	if err == nil {
 		t.Fatal("expected error for closed server")
+	}
+}
+
+// TestNewNilHTTPClientUsesDefaultClient exercises the nil-httpClient
+// fallback in New — the caller passes nil and the package must substitute
+// http.DefaultClient rather than dereferencing a nil client.
+func TestNewNilHTTPClientUsesDefaultClient(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			issuer := "http://" + r.Host
+			_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
+				issuer, issuer+"/auth", issuer+"/token", issuer+"/jwks")
+		}
+	}))
+	defer srv.Close()
+
+	c, err := New(context.Background(), Config{
+		Issuer:      srv.URL,
+		ClientID:    "openccu-loom",
+		RedirectURL: "http://localhost/cb",
+	}, nil)
+	if err != nil {
+		t.Fatalf("new with nil http client: %v", err)
+	}
+	if c.http != http.DefaultClient {
+		t.Fatal("expected New to substitute http.DefaultClient for a nil httpClient")
+	}
+}
+
+// TestExchangeInvalidTokenEndpointURL exercises the NewRequestWithContext
+// error branch in Exchange — a token endpoint containing a raw control
+// character is not a parsable request target.
+func TestExchangeInvalidTokenEndpointURL(t *testing.T) {
+	c := &Client{
+		cfg:       Config{ClientID: "openccu-loom", RedirectURL: "http://localhost/cb"},
+		providers: &Providers{TokenEndpoint: "http://idp.example/\x7f"},
+		http:      http.DefaultClient,
+	}
+	_, err := c.Exchange(context.Background(), "code", "verifier")
+	if err == nil {
+		t.Fatal("expected error for unparsable token endpoint")
+	}
+}
+
+// TestExchangeRequestDoFails exercises the http.Client.Do network-error
+// branch in Exchange — the token endpoint points at a server that has
+// already stopped listening.
+func TestExchangeRequestDoFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	tokenURL := srv.URL + "/token"
+	client := srv.Client()
+	srv.Close() // close before the request arrives
+
+	c := &Client{
+		cfg:       Config{ClientID: "openccu-loom", RedirectURL: "http://localhost/cb"},
+		providers: &Providers{TokenEndpoint: tokenURL},
+		http:      client,
+	}
+	_, err := c.Exchange(context.Background(), "code", "verifier")
+	if err == nil {
+		t.Fatal("expected error when the token endpoint is unreachable")
+	}
+}
+
+// TestAudienceUnmarshalJSONEdgeCases covers the branches UnmarshalJSON
+// takes beyond the happy-path string/array forms already exercised by the
+// VerifyIDToken tests: an empty or null value, a malformed quoted string,
+// and a value that is neither a string nor a string array.
+func TestAudienceUnmarshalJSONEdgeCases(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		wantErr bool
+	}{
+		{"empty bytes", "", false},
+		{"null literal", "null", false},
+		{"malformed quoted string", `"unterminated`, true},
+		{"neither string nor array", "42", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var a Audience
+			err := a.UnmarshalJSON([]byte(tc.raw))
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error for %q", tc.raw)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error for %q: %v", tc.raw, err)
+			}
+		})
 	}
 }
 

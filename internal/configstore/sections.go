@@ -47,6 +47,9 @@ const (
 	SectionReliability Section = "reliability"
 	// SectionPersistence carries [config.PersistenceConfig].
 	SectionPersistence Section = "persistence"
+	// SectionAlarm carries [config.AlarmConfig] — the alarm engine's
+	// global settings (docs/alarm-concept.md §14).
+	SectionAlarm Section = "alarm"
 	// SectionLocale carries the per-daemon default locale (the
 	// single field at the top of the legacy YAML).
 	SectionLocale Section = "locale"
@@ -75,6 +78,7 @@ func AllSections() []Section {
 		SectionCCUData,
 		SectionReliability,
 		SectionPersistence,
+		SectionAlarm,
 		SectionSecurity,
 	}
 }

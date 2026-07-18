@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/binrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -191,6 +192,23 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	logger.Info("wire.ingest.ok",
 		slog.String("central", cc.Name),
 		slog.String("interface", wireID))
+
+	// Hot-plug: CUxD announces newly created virtual devices through the
+	// same newDevices callback shape. Installed AFTER the bring-up ingest
+	// (and before init announces the callback), mirroring the XML-RPC
+	// path's ordering rationale in bringUpCentral.
+	if cbHandlers != nil {
+		var ddLoader *devicedetails.Loader
+		if runner != nil {
+			ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
+		}
+		cuxdBackend := backend
+		cbHandlers.SetHotplugIngestor(newHotplugIngestor(
+			unit, pipeline, writer, runner,
+			func(string) backends.Operations { return cuxdBackend },
+			ddLoader, logger,
+		))
+	}
 
 	// (Re)establish hub-data-point device links now that this interface's
 	// devices are materialised — see assignHubChannels. Idempotent across the

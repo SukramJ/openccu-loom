@@ -32,9 +32,12 @@ func (f *installFakeOps) SetInstallMode(_ context.Context, on bool, duration, mo
 	return nil
 }
 
-// buildInstallModeFixture creates a central with one ValueWriter
-// that has a fake backend registered for (centralName, ifaceID).
-func buildInstallModeFixture(t *testing.T, centralName, ifaceID string) (
+// buildInstallModeFixture creates a central with one ValueWriter that
+// has a fake backend registered exactly like production wiring does:
+// under the canonical wire ID (central-prefixed, see [WireInterfaceID]
+// and the writer.Register call in ccu_wiring.go) — NOT under the bare
+// interface type. The install-mode writer must bridge that difference.
+func buildInstallModeFixture(t *testing.T, centralName string, iface hmenum.Interface) (
 	*central.Unit,
 	*clientpkg.ValueWriter,
 	*installFakeOps,
@@ -46,7 +49,7 @@ func buildInstallModeFixture(t *testing.T, centralName, ifaceID string) (
 	}
 	fake := &installFakeOps{}
 	w := clientpkg.NewValueWriter()
-	w.Register(centralName, ifaceID, fake)
+	w.Register(centralName, WireInterfaceID(centralName, iface), fake)
 	return c, w, fake
 }
 
@@ -56,7 +59,7 @@ func buildInstallModeFixture(t *testing.T, centralName, ifaceID string) (
 
 func TestInstallModeWriter_SetInstallMode_Enable(t *testing.T) {
 	t.Parallel()
-	c, w, fake := buildInstallModeFixture(t, "ccu-01", "HmIP-RF")
+	c, w, fake := buildInstallModeFixture(t, "ccu-01", hmenum.InterfaceHmIPRF)
 	writer := &installModeWriter{unit: c, writer: w}
 
 	if err := writer.SetInstallMode(context.Background(), "HmIP-RF", true, 60*time.Second); err != nil {
@@ -83,7 +86,7 @@ func TestInstallModeWriter_SetInstallMode_Enable(t *testing.T) {
 
 func TestInstallModeWriter_SetInstallMode_Disable(t *testing.T) {
 	t.Parallel()
-	c, w, fake := buildInstallModeFixture(t, "ccu-01", "HmIP-RF")
+	c, w, fake := buildInstallModeFixture(t, "ccu-01", hmenum.InterfaceHmIPRF)
 	writer := &installModeWriter{unit: c, writer: w}
 
 	if err := writer.SetInstallMode(context.Background(), "HmIP-RF", false, 0); err != nil {
@@ -100,7 +103,7 @@ func TestInstallModeWriter_SetInstallMode_Disable(t *testing.T) {
 
 func TestInstallModeWriter_SetInstallMode_UnknownInterface(t *testing.T) {
 	t.Parallel()
-	c, w, _ := buildInstallModeFixture(t, "ccu-01", "HmIP-RF")
+	c, w, _ := buildInstallModeFixture(t, "ccu-01", hmenum.InterfaceHmIPRF)
 	writer := &installModeWriter{unit: c, writer: w}
 
 	err := writer.SetInstallMode(context.Background(), "NoSuchIface", true, 30*time.Second)
@@ -115,7 +118,7 @@ func TestInstallModeWriter_SetInstallMode_UnknownInterface(t *testing.T) {
 
 func TestInstallModeWriter_SetInstallModeForDevice(t *testing.T) {
 	t.Parallel()
-	c, w, fake := buildInstallModeFixture(t, "ccu-01", "BidCos-RF")
+	c, w, fake := buildInstallModeFixture(t, "ccu-01", hmenum.InterfaceBidCosRF)
 	writer := &installModeWriter{unit: c, writer: w}
 
 	if err := writer.SetInstallModeForDevice(context.Background(), "BidCos-RF", 60*time.Second, "ABC123"); err != nil {
@@ -139,7 +142,7 @@ func TestInstallModeWriter_SetInstallModeForDevice(t *testing.T) {
 
 func TestInstallModeWriter_SetInstallModeForDevice_UnknownInterface(t *testing.T) {
 	t.Parallel()
-	c, w, _ := buildInstallModeFixture(t, "ccu-01", "BidCos-RF")
+	c, w, _ := buildInstallModeFixture(t, "ccu-01", hmenum.InterfaceBidCosRF)
 	writer := &installModeWriter{unit: c, writer: w}
 
 	err := writer.SetInstallModeForDevice(context.Background(), "NoSuchIface", 30*time.Second, "ABC123")
@@ -183,8 +186,8 @@ func buildWireFixture(t *testing.T) (*central.Unit, *clientpkg.ValueWriter) {
 	}
 
 	w := clientpkg.NewValueWriter()
-	w.Register(centralName, "HmIP-RF", &installFakeOps{})
-	w.Register(centralName, "VirtualDevices", &installFakeOps{})
+	w.Register(centralName, WireInterfaceID(centralName, hmenum.InterfaceHmIPRF), &installFakeOps{})
+	w.Register(centralName, WireInterfaceID(centralName, hmenum.InterfaceVirtualDevices), &installFakeOps{})
 
 	return c, w
 }

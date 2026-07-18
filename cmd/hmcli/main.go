@@ -113,6 +113,7 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
 		newDelegateCmd("program", "Manage CCU programs (list, get, run, enable, disable)", cmdProgram, stdout, stderr),
 		newDelegateCmd("paramset", "Read and write device paramsets (get, set)", cmdParamset, stdout, stderr),
 		newDelegateCmd("events", "Tail the daemon's live event stream (events tail)", cmdEvents, stdout, stderr),
+		newDelegateCmd("alarm", "Break-glass alarm-panel control (status, arm, disarm, silence, ack)", cmdAlarm, stdout, stderr),
 	)
 	return root
 }

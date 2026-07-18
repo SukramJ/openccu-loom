@@ -8,6 +8,7 @@
     applyTheme,
     bindSystemTheme,
   } from "$lib/stores/preferences.svelte";
+  import { isEmbedded, startHaBridge } from "$lib/theme/ha-bridge";
   import DeviceList from "./routes/DeviceList.svelte";
   import Overview from "./routes/Overview.svelte";
   import DeviceDetail from "./routes/DeviceDetail.svelte";
@@ -35,6 +36,10 @@
   // defaults to off), so it is code-split via dynamic import — most
   // installs never load its JS. See the {#await} in the router below.
   const loadMatter = () => import("./routes/matter/Matter.svelte");
+  // The alarm section is a self-contained subtree (panel + picker +
+  // journal + walk test + wizard); code-split so installs that never
+  // open it don't pay for its JS.
+  const loadAlarm = () => import("./routes/alarm/Alarm.svelte");
   // Diagnostics + Logs are infrequently visited and not part of the core
   // device-control surface, so they are code-split.
   const loadDiagnostics = () => import("./routes/Diagnostics.svelte");
@@ -113,6 +118,10 @@
     // preference changes for "system" mode.
     applyTheme();
     const unbindTheme = bindSystemTheme();
+    // When embedded in HA (Ingress iframe) mirror the live HA theme:
+    // copy HA's CSS vars onto our root and track HA's light/dark. Inert
+    // and cleanup is a no-op when standalone or cross-origin.
+    const stopHaBridge = startHaBridge();
     // Browser-level guard against losing unsaved edits. Any editor
     // that touches `dirty.set(id, true)` will participate.
     const beforeUnload = (e: BeforeUnloadEvent) => {
@@ -138,6 +147,7 @@
       window.removeEventListener("beforeunload", beforeUnload);
       window.removeEventListener("keydown", onKey);
       unbindTheme();
+      stopHaBridge();
     };
   });
 
@@ -172,6 +182,7 @@
     | { kind: "firmware" }
     | { kind: "signal" }
     | { kind: "matter"; subpath: string }
+    | { kind: "alarm"; subpath: string }
     | { kind: "visibility" }
     | { kind: "access" }
     | { kind: "about" }
@@ -200,6 +211,9 @@
     if (path === "/matter" || path.startsWith("/matter/")) {
       return { kind: "matter", subpath: path.slice("/matter".length) || "" };
     }
+    if (path === "/alarm" || path.startsWith("/alarm/")) {
+      return { kind: "alarm", subpath: path.slice("/alarm".length) || "" };
+    }
     const m = path.match(
       /^\/devices\/([^/]+)(?:\/channels\/(\d+))?\/?$/,
     );
@@ -223,6 +237,8 @@
 </script>
 
 <svelte:head>
+  <!-- Embedded in HA, let HA own the browser-tab title: render none. -->
+  {#if !isEmbedded()}
   <title>{
     route.kind === "diagnostics" ? t("page.title.diagnostics") :
     route.kind === "energy" ? t("page.title.energy") :
@@ -232,9 +248,11 @@
     route.kind === "overview" ? t("page.title.overview") :
     route.kind === "settings" ? t("page.title.settings") :
     route.kind === "access" ? t("page.title.access") :
+    route.kind === "alarm" ? t("page.title.alarm") :
     route.kind === "about" ? t("page.title.about") :
     t("page.title.default")
   }</title>
+  {/if}
 </svelte:head>
 
 <a
@@ -366,6 +384,12 @@
             <LoadingState />
           {:then { default: Matter }}
             <Matter subpath={route.subpath} />
+          {/await}
+        {:else if route.kind === "alarm"}
+          {#await loadAlarm()}
+            <LoadingState />
+          {:then { default: Alarm }}
+            <Alarm subpath={route.subpath} />
           {/await}
         {:else if route.kind === "visibility"}
           <UnIgnoreList />

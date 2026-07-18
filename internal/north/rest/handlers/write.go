@@ -56,6 +56,10 @@ func DecodeJSONStatus(err error) int {
 // unauthenticated or lower-privileged caller should see. 4xx
 // validation failures are unaffected — those details stay put.
 func writeServerError(w http.ResponseWriter, r *http.Request, status int, pType problem.Type, title string, err error) {
+	// The raw error stays out of the response body by design (see
+	// TestWriteServerErrorOmitsRawErrorFromBody — driver/path-carrying
+	// error strings must never reach a caller); operators read the full
+	// reason from the log viewer, which renders error attrs verbatim.
 	slog.Default().ErrorContext(r.Context(), title, "error", err, "method", r.Method, "path", r.URL.Path)
 	problem.Write(w, status, problem.New(pType, r, title, ""))
 }

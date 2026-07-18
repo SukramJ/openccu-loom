@@ -1,5 +1,216 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.43.3
+
+- **Fixed: MCP access works now.** The MCP endpoint (for AI clients
+  like Claude Desktop) rejected every login with 401 even with a valid
+  API token. Also corrected the Claude Desktop configuration example
+  in the documentation.
+
+## 0.43.2
+
+- **New: readable signal names.** Siren tone and light-pattern
+  dropdowns (HmIP-ASIR) show translated names like "Frequenz
+  steigend" instead of technical codes.
+- **New: pick the optical signal on acoustic sirens.** The acoustic
+  siren card now offers the optical pattern too — both are sent to
+  the device together.
+- **Fixed: "Saving failed … cannot back class".** Old alarm outputs
+  created before channel validation could point at the wrong channel
+  and silently block saving. Affected cards now show a clear warning
+  and a one-click "repair channel" button.
+
+## 0.43.1
+
+- **New: alarm system variables without a device.** Adding a
+  "system variable" alarm output now asks for the central and the
+  variable — either a managed status variable (created automatically)
+  or one of your existing alarm-type variables, which is set to true
+  while the alarm is triggered. No more meaningless device picking,
+  and the variable name is finally editable.
+- **New: notification outputs really notify.** A "notification" alarm
+  output now sends a dedicated event to MQTT, WebSocket, and webhook
+  receivers when the area alarms — each channel can be switched on or
+  off per output.
+- **Improved: alarm keyfobs first.** The remote-key picker sorts
+  security remotes (e.g. HmIP-KRCA) to the top and badges them.
+- **Fixed: the remote-key picker actually finds your keys.** The
+  candidate list was empty for every remote and wall button; keyfobs
+  (HmIP-KRCA) and wall switches now appear.
+- **Fixed: siren tone and light dropdowns.** HmIP-ASIR outputs offer
+  their acoustic and optical signals as dropdowns (and the HmIP-MP3P
+  its soundfiles) even for outputs enrolled with older versions.
+
+## 0.43.0
+
+- **New: smarter alarm output enrollment.** The "add output" dialog in
+  the alarm settings now only offers devices that can actually perform
+  the selected output class — sirens for the siren classes, actuators
+  with device-side auto-off for plug-in sirens — with a real channel
+  picker. Tone and light-pattern fields offer the device's own value
+  lists (e.g. HmIP-ASIR), and MP3 players (HmIP-MP3P) get a soundfile
+  picker for chirps. Saving rejects impossible device/class pairings
+  immediately instead of failing later during an alarm.
+- **New: arm your alarm with a keyfob remote.** Remote-key alarm codes
+  (e.g. the Homematic IP keyfob remote HmIP-KRCA) can now be set up
+  with a guided picker — choose the button, short or long press, the
+  action (arm/disarm/silence/panic) and the area — instead of writing
+  a JSON binding by hand.
+
+## 0.42.9
+
+- **Fixed: missing German/English labels on the HmIP-BWTH.** The
+  cooling-mode comfort temperature and the wired-operation-mode
+  setting showed their raw technical names in the device settings;
+  both are now properly labelled.
+
+## 0.42.8
+
+- **Fixed: the firmware overview now notices updates.** Device firmware
+  versions were read only once at start-up, so an update performed at
+  the CCU never showed up — the overview kept offering "Update" for
+  firmware that was installed long ago, and the "Reload" button did
+  nothing. The add-on now re-checks firmware data every hour (faster
+  while an update is running), and "Reload" fetches the current state
+  from the CCU immediately. This also applies to the firmware update
+  entities in Home Assistant.
+- **Fixed: "Reload" on the system-variables page fetches from the CCU.**
+  Previously it only re-read the add-on's own state, so a variable just
+  changed at the CCU could stay stale for a few minutes; now the button
+  pulls the current values from the CCU immediately. All other reload
+  buttons and background refresh intervals were audited and verified.
+
+## 0.42.7
+
+- **Fixed: list-type system variables show their text again.** A CCU
+  system variable with a value list (e.g. an alarm status with options
+  like "Aus", "Vollschutz") published its numeric index instead of the
+  option text, so Home Assistant rejected the value and the sensor
+  stayed "unknown". The option text is published again.
+
+## 0.42.6
+
+- **Improved: alarm panels now tell clients when a code is needed.**
+  The alarm-panel API reports per area whether arming or disarming
+  requires an alarm code, so connected clients (e.g. the Home
+  Assistant integration) can ask for the code upfront instead of
+  failing after the fact. The API also advertises whether the alarm
+  subsystem is available at all, so clients no longer have to guess.
+
+## 0.42.5
+
+- **New: devices paired at the CCU appear immediately.** A device you
+  teach in while the add-on is running now shows up right away — in the
+  UI, in MQTT/Home Assistant discovery, and as a Matter endpoint —
+  including its CCU-assigned name and current values. Previously a new
+  device only appeared after restarting the add-on. Devices deleted at
+  the CCU now also disappear from the Matter bridge without a restart.
+
+## 0.42.4
+
+- **Fixed: the firmware overview no longer claims "up to date" for
+  devices that have a pending update.** When the CCU knows a newer
+  firmware but has not yet transferred it to the device, the overview
+  now shows "Update available" with the hint "Awaiting transfer to the
+  device", and such devices appear in the updates filter and counter.
+
+## 0.42.3
+
+- **Fixed: pairing mode ("install mode") never opened.** Starting the
+  pairing window from the UI always failed with "Install mode write
+  failed"; teaching in new devices works now, both per interface and
+  targeted at a single device.
+- **Fixed: the log viewer hid error reasons.** Failed operations showed
+  an empty error object in the log viewer; the actual failure message
+  is now visible, so problems can be diagnosed from the UI.
+
+## 0.42.2
+
+- **Fixed: saving direct-link settings from the channel editor.** The
+  save always failed with "resource not found"; link configurations
+  can be edited and saved again.
+- **Fixed a whole class of "resource not found" errors.** IDs and
+  names containing characters like `:`, `@`, spaces or umlauts
+  (channel addresses, system variables, rooms, functions, programs)
+  are now handled correctly on every API route.
+
+## 0.42.1
+
+- **Fixed: siren test fire from the UI.** The "Test fire" button on the
+  alarm Outputs page returned "resource not found" for every output;
+  testing sirens (including optical-only) works again.
+- **Fixed: several alarm output settings did not reach the device.**
+  The siren tone, chirp tones and dimmer level were saved under names
+  the engine never read; they now work, and the chirp card offers the
+  three real tone slots (arm, disarm, tick/chime). A misleading
+  loud/silent toggle per output was removed — loud vs. silent is
+  configured per mode on the Policies page.
+- **New: sensor hold time and cross-zoning groups.** A sensor can
+  require its activation to persist a few seconds before it counts, and
+  sensors in the same group only alarm when two of them trip within 60
+  seconds — both kill classic false-alarm sources. Panic sensors can
+  now be marked as silent (duress) directly in the sensor editor.
+- **Better guidance in the alarm UI.** Every alarm tab now starts with a
+  short explanation, and the complex pages — especially Policies — explain
+  every setting inline (code requirements, hazard/panic behaviour,
+  pre-alarm, auto re-arm, schedules, sensor flags, output classes), in
+  English and German.
+- **New operator guide** for the alarm system in the documentation.
+
+## 0.42.0
+
+- **New: a complete, local alarm system.** OpenCCU-Loom now contains a
+  native intrusion-alarm engine for your Homematic devices — no cloud,
+  no extra hub. Create alarm areas, assign window/door contacts and
+  motion detectors per protection mode (perimeter / full / night /
+  vacation), pick sirens and lights as outputs, and control everything
+  from the new "Alarm system" section in the UI, from Home Assistant
+  (each area appears as an `alarm_control_panel` entity, plus a master
+  panel), via REST/WebSocket, or from the command line.
+- **Safety first**: sirens are always bounded — every activation has a
+  finite duration and a per-incident sound budget, stops are verified
+  and retried at the highest priority, and "silence sirens" works with
+  one tap from every surface, never behind a confirmation dialog. A
+  restarting add-on restores the armed state, running countdowns, and
+  even a silenced alarm exactly as they were.
+- **PIN codes, keypads, and remotes**: arm and disarm with per-person
+  PIN codes (with permissions, guest validity windows, and an optional
+  silent duress code), the HmIP-WKP keypad, or KRCA/KRC4 remotes.
+- **Extras**: walk test with live checklist, filterable alarm journal
+  with CSV export, arm schedules with reminders or opt-in auto-arm,
+  pre-alarm stage, automatic re-arm after false alarms, door chime,
+  and alarm events on the webhook plane for escalation automations.
+
+## 0.41.0
+
+- **Single sign-on (OIDC) maps your provider's roles correctly, and is
+  hardened.** Roles from Keycloak (realm roles or groups) — or any OIDC provider
+  — now map to OpenCCU-Loom's admin / operator / viewer through the `role_claim`
+  setting; previously only a single hardcoded `role` claim worked, so most users
+  ended up read-only. OIDC now also requires an https identity provider and
+  validates the sign-in token more strictly. If you use OIDC, see the new
+  Keycloak setup guide in the documentation.
+
+## 0.40.0
+
+- **Fixed: OpenCCU-Loom no longer uses up your CCU's login slots.** If you ever
+  found yourself unable to log into the CCU's own web interface — with the CCU
+  complaining about too many logged-in users — this was why. The add-on threw
+  its CCU login away roughly every 90 seconds and logged in again without
+  logging the old one out, so the abandoned logins piled up until the CCU ran
+  out. Your CCU only allows a handful of logins at once (3 on stock firmware,
+  10 on RaspberryMatic/OpenCCU) and that pool is shared with its web interface,
+  so this could lock you out of your own CCU. OpenCCU-Loom now holds exactly
+  one CCU login for as long as it runs, and hands it back when it no longer
+  needs it. Backups and firmware downloads no longer consume an extra login
+  either. **If you have been hitting this, no action is needed beyond updating
+  — but a CCU reboot clears out any logins the old version left behind.**
+
+- **The Home-Assistant look now covers the entire Config UI.** The HA visual
+  skin introduced in 0.39.0 applied to the most-used screens; it now applies
+  everywhere, and its default colors were refreshed to match current Home
+  Assistant. The standalone OpenCCU-Loom look is unchanged.
+
 ## 0.39.0
 
 - **You can now see when a CCU is still starting up.** Actions like enabling
@@ -12,6 +223,11 @@
   when it is waiting for a CCU and becomes available as soon as at least one CCU
   is ready. With several CCUs each is tracked separately, so one still starting
   up never hides the others' devices or blocks Matter pairing.
+- **The interface now matches Home Assistant.** Opened inside Home Assistant,
+  the OpenCCU-Loom panel automatically adopts your active HA theme — colors and
+  light/dark, including custom themes — so it no longer looks like a separate
+  app. Opened on its own in a browser, you can choose the Home Assistant look or
+  the default OpenCCU-Loom style under Settings → Appearance.
 
 ## 0.38.0
 

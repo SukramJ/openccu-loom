@@ -1,0 +1,32 @@
+{
+  "areas": [
+    {
+      "id": "area-eg",
+      "name": "Erdgeschoss",
+      "state": "armed",
+      "mode": "full",
+      "bypassed": [],
+      "walktest_active": false,
+      "readiness": {
+        "perimeter": { "ready": true },
+        "full": { "ready": true },
+        "night": { "ready": true, "warnings": ["sensor-3"] },
+        "vacation": { "ready": true },
+        "custom": { "ready": true }
+      }
+    },
+    {
+      "id": "area-og",
+      "name": "Dachgeschoss",
+      "state": "disarmed",
+      "walktest_active": false,
+      "readiness": {
+        "perimeter": { "ready": true },
+        "full": { "ready": true },
+        "night": { "ready": true },
+        "vacation": { "ready": true },
+        "custom": { "ready": true }
+      }
+    }
+  ]
+}

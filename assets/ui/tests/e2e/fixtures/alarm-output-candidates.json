@@ -1,0 +1,38 @@
+[
+  {
+    "central": "ccu1",
+    "device_address": "VEQ0000010",
+    "device_name": "Außensirene",
+    "model": "HmIP-ASIR-O",
+    "channel_address": "VEQ0000010:1",
+    "channel_no": 1,
+    "channel_name": "Alarmierung",
+    "classes": ["acoustic_siren", "optical_siren", "chirp"],
+    "kind": "siren",
+    "available_tones": ["FREQUENCY_RISING", "FREQUENCY_FALLING", "FREQUENCY_RISING_AND_FALLING"],
+    "available_tone_labels": ["Frequency rising", "Frequency falling", "Frequency rising and falling"],
+    "available_lights": ["BLINKING_ALTERNATELY_REPEATING", "DOUBLE_FLASHING_REPEATING"],
+    "available_light_labels": ["Blinking alternately", "Double flashing"]
+  },
+  {
+    "central": "ccu1",
+    "device_address": "VEQ0000011",
+    "device_name": "Rauchmelder Flur",
+    "model": "HmIP-SWSD",
+    "channel_address": "VEQ0000011:1",
+    "channel_no": 1,
+    "classes": ["smoke_sounder"],
+    "kind": "siren_smoke"
+  },
+  {
+    "central": "ccu1",
+    "device_address": "VEQ0000020",
+    "device_name": "Steckdose Flur",
+    "model": "HmIP-PS",
+    "channel_address": "VEQ0000020:3",
+    "channel_no": 3,
+    "channel_name": "Schaltaktor",
+    "classes": ["switched_siren", "alarm_light"],
+    "kind": "switch"
+  }
+]

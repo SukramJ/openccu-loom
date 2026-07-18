@@ -186,7 +186,7 @@
   });
 </script>
 
-<section class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/40">
+<section class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-[color-mix(in_srgb,var(--color-slate-900)_40%,transparent)]">
   <header class="mb-2 flex items-center justify-between gap-2">
     <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">{heading}</h3>
     <span class="text-[11px] text-[var(--ha-secondary-text-color)]">{hint}</span>
@@ -239,7 +239,7 @@
             {#each timeLabels as tl (`grid-${day}-${tl.hour}`)}
               {#if tl.hour > 0 && tl.hour < 24}
                 <div
-                  class="pointer-events-none absolute inset-x-0 border-t border-slate-200/60 dark:border-slate-700/40"
+                  class="pointer-events-none absolute inset-x-0 border-t border-[color-mix(in_srgb,var(--color-slate-200)_60%,transparent)] dark:border-[color-mix(in_srgb,var(--color-slate-700)_40%,transparent)]"
                   style:top="{tl.top}%"
                 ></div>
               {/if}

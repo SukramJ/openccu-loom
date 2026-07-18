@@ -1,0 +1,18 @@
+{
+  "areas": [
+    {
+      "id": "area-eg",
+      "name": "Erdgeschoss",
+      "state": "triggered",
+      "mode": "full",
+      "walktest_active": false,
+      "incident": { "id": "501", "silenced": false }
+    },
+    {
+      "id": "area-og",
+      "name": "Dachgeschoss",
+      "state": "disarmed",
+      "walktest_active": false
+    }
+  ]
+}

@@ -302,10 +302,7 @@ func (p *DevicePipeline) attachNonClimateWeekProfiles(interfaceID string) {
 	if p.unit == nil {
 		return
 	}
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		attachNonClimateWeekProfileToDevice(d, p.unit.Name())
 	}
 }
@@ -331,10 +328,7 @@ func (p *DevicePipeline) normalizeClimateWeekProfiles(interfaceID string) {
 		return
 	}
 	reg := custom.DefaultRegistry()
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		// Only act on a CLIMATE week profile the slot-parameter heuristic
 		// already attached. Devices with no climate profile (non-climate
 		// schedule devices handled by attachNonClimateWeekProfiles) are left
@@ -443,10 +437,7 @@ func (p *DevicePipeline) refineAttachedWeekProfiles(interfaceID string, logger *
 		return
 	}
 	refined := 0
-	for _, d := range p.unit.ModelRegistry.List() {
-		if d.InterfaceID != interfaceID {
-			continue
-		}
+	for _, d := range p.devicesFor(interfaceID) {
 		// Walk both real channels AND the device-root pseudo-channel
 		// (classic HM-CC-RT-DN carries its week profile there).
 		channels := append([]*device.Channel(nil), d.Channels()...)

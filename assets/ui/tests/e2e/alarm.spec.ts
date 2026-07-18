@@ -1,0 +1,235 @@
+import { test, expect } from '@playwright/test';
+import { mockAllApis, mockAlarmTriggered } from './helpers/mock-api';
+
+// Alarm section (#/alarm, docs/alarm-concept.md §12). mockAllApis now wires
+// sane defaults for every /api/v1/alarm/* route: two areas — "Erdgeschoss"
+// (armed, full protection, steady state) and "Dachgeschoss" (disarmed) —
+// three sensors, two outputs (one acoustic siren, one smoke-detector
+// sounder) and a five-entry journal.
+
+test.describe('Alarm', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page);
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openccu-loom.prefs.v1',
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+      );
+    });
+  });
+
+  test('nav entry exists and routes to the overview', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/overview');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('link', { name: 'Alarm system' }).click();
+
+    await expect(page).toHaveURL(/#\/alarm$/);
+    await expect(page.getByRole('heading', { name: 'Alarm system', level: 1 })).toBeVisible();
+    // Overview is the default sub-route: its tab reads selected.
+    await expect(page.getByRole('tab', { name: 'Overview', selected: true })).toBeVisible();
+  });
+
+  test('document title is localized', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+    await expect(page).toHaveTitle('Alarm system — OpenCCU-Loom');
+  });
+
+  test('overview shows both area cards with localized state badges', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await expect(page.getByRole('heading', { name: 'Erdgeschoss', level: 3 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dachgeschoss', level: 3 })).toBeVisible();
+
+    // The state badge is the sole direct <span> child of each card's header
+    // row (the icon+name block is the other child) — scoping this way avoids
+    // the ambiguity of "Disarmed" also appearing on that area's mode button.
+    const egHeader = page
+      .locator('div.flex.items-start.justify-between.gap-3')
+      .filter({ hasText: 'Erdgeschoss' });
+    await expect(egHeader.locator('> span')).toHaveText('Armed · Full protection');
+
+    const ogHeader = page
+      .locator('div.flex.items-start.justify-between.gap-3')
+      .filter({ hasText: 'Dachgeschoss' });
+    await expect(ogHeader.locator('> span')).toHaveText('Disarmed');
+  });
+
+  test('sensors tab renders the sensor picker surface', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('tab', { name: 'Sensors' }).click();
+    await expect(page).toHaveURL(/#\/alarm\/picker$/);
+
+    await expect(page.getByRole('button', { name: 'Add sensor' })).toBeVisible();
+    await expect(page.getByText('Haustür')).toBeVisible();
+  });
+
+  test('outputs tab renders the output picker surface, incl. the smoke-sounder caveat', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('tab', { name: 'Outputs' }).click();
+    await expect(page).toHaveURL(/#\/alarm\/outputs$/);
+
+    await expect(page.getByRole('button', { name: 'Add output' })).toBeVisible();
+    await expect(page.getByText('Außensirene')).toBeVisible();
+    await expect(page.getByText('Smoke-detector sounder')).toBeVisible();
+    await expect(
+      page.getByText('Smoke detectors double as sounders', { exact: false }),
+    ).toBeVisible();
+  });
+
+  test('acoustic-siren card offers the device tone list even when the stored central is empty (address fallback)', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('tab', { name: 'Outputs' }).click();
+    await expect(page.getByText('Außensirene')).toBeVisible();
+
+    // output-1 (Außensirene, VEQ0000010:1) deliberately carries an empty
+    // `central` in alarm-outputs.json while the candidate row carries
+    // "ccu1" — the address-only fallback must still bind the device's
+    // ENUM extras, turning the tone field into a Select fed by the
+    // candidate's available_tones, displayed via the localised
+    // available_tone_labels.
+    await page.locator('label:has-text("Tone") button').first().click();
+    await expect(page.getByRole('option', { name: 'Device default' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Frequency rising', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // The acoustic card also exposes the optical pattern (the acoustic
+    // activation writes it in the same atomic paramset).
+    await page.locator('label:has-text("Optical pattern") button').first().click();
+    await expect(page.getByRole('option', { name: 'Blinking alternately' })).toBeVisible();
+  });
+
+  test('journal tab renders the five-entry journal table', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('tab', { name: 'Journal' }).click();
+    await expect(page).toHaveURL(/#\/alarm\/journal$/);
+
+    await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
+    await expect(page.locator('table tbody tr')).toHaveCount(5);
+    await expect(page.getByText('Markus').first()).toBeVisible();
+  });
+
+  test('codes tab lists codes from the fixture without leaking any hash or PIN', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('tab', { name: 'Codes' }).click();
+    await expect(page).toHaveURL(/#\/alarm\/codes$/);
+    await expect(page.getByRole('button', { name: 'Add code' })).toBeVisible();
+
+    await expect(page.getByText('Markus')).toBeVisible();
+    await expect(page.getByText('Gast-Code')).toBeVisible();
+    await expect(page.getByText('Haustür-Keypad Slot 1')).toBeVisible();
+    await expect(page.getByText('Notfall')).toBeVisible();
+    // The fixture carries exactly one duress-marked code ("Notfall"), so the
+    // "Duress" badge renders exactly once on the list view.
+    await expect(page.getByText('Duress', { exact: true })).toBeVisible();
+
+    // Hash/PIN never round-trip onto this surface (docs/alarm-concept.md
+    // §11/§16) — the fixture does not carry one, so this also guards
+    // against a future fixture regression accidentally leaking one.
+    await expect(page.getByText(/argon2/)).toHaveCount(0);
+  });
+
+  test('codes tab: create dialog shows the duress warning only once toggled, and posts the pin + duress flag on save', async ({ page }) => {
+    let created: Record<string, unknown> | null = null;
+    await page.route('**/api/v1/alarm/codes', (route) => {
+      // Only the POST (create) is overridden here; GET falls back to the
+      // default fixture-backed list route registered by mockAllApis so
+      // the toolbar stays the sole "Add" affordance (an empty list would
+      // also render the EmptyState's own "Add" action, breaking the
+      // single-match assumption below).
+      if (route.request().method() !== 'POST') return route.fallback();
+      created = route.request().postDataJSON();
+      return route.fulfill({ json: { id: 'code-new', ...created, areas: [], enabled: true } });
+    });
+
+    await page.goto('http://localhost:5173/app/#/alarm/codes');
+    await page.waitForSelector('#main');
+
+    await page.getByRole('button', { name: 'Add code' }).click();
+    const dialog = page.getByRole('dialog');
+    // Match on a distinguishing substring of the (long) duress-warning
+    // copy rather than the full catalogue string, mirroring the
+    // exact:false style used elsewhere in this spec for long strings.
+    await expect(dialog.getByText('nothing changes on the panel', { exact: false })).toHaveCount(0);
+
+    // Scoped to the dialog: "Name" is a common accessible name reused by
+    // several other fields across the SPA (area name, sensor name, …), so
+    // an unscoped getByLabel would be a strict-mode trap the moment any of
+    // those mount alongside this drawer.
+    await dialog.getByLabel('Name', { exact: true }).fill('Notfall-Test');
+    await page.locator('input[type="password"]').fill('4321');
+    // The duress toggle is the first switch in the pin-kind drawer (PIN
+    // field + duress row, ahead of the arm/disarm/silence permission
+    // switches and the trailing enabled switch).
+    await page.getByRole('switch').first().click();
+    await expect(dialog.getByText('nothing changes on the panel', { exact: false })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save' }).click();
+
+    await expect.poll(() => created).not.toBeNull();
+    expect(created?.name).toBe('Notfall-Test');
+    expect(created?.kind).toBe('pin');
+    expect(created?.pin).toBe('4321');
+    expect(created?.duress).toBe(true);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('policies tab: adding a schedule row and saving PUTs it back through the area config', async ({ page }) => {
+    let putBody: { config?: { schedules?: unknown[] } } | null = null;
+    await page.route('**/api/v1/alarm/areas/area-eg', (route) => {
+      if (route.request().method() === 'PUT') {
+        putBody = route.request().postDataJSON();
+        return route.fulfill({ status: 200 });
+      }
+      return route.fulfill({ json: { id: 'area-eg', name: 'Erdgeschoss', position: 1, config: {} } });
+    });
+
+    await page.goto('http://localhost:5173/app/#/alarm/policies');
+    await page.waitForSelector('#main');
+
+    await expect(page.getByText('No schedules yet')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add schedule' }).click();
+    await expect(page.getByText('No schedules yet')).toHaveCount(0);
+    await expect(page.locator('input[type="time"]')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Save' }).click();
+
+    await expect.poll(() => putBody).not.toBeNull();
+    expect(putBody?.config?.schedules).toHaveLength(1);
+  });
+
+  test('silence acts on the first tap for a triggered area, with no confirm dialog', async ({ page }) => {
+    await mockAlarmTriggered(page);
+
+    let silenceCalls = 0;
+    await page.route('**/api/v1/alarm/areas/area-eg/silence', (route) => {
+      silenceCalls += 1;
+      return route.fulfill({ status: 200 });
+    });
+
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+
+    await expect(page.getByText('ALARM — Intrusion')).toBeVisible();
+
+    // Safety invariants S3/S6 (docs/alarm-concept.md §2): silence acts on
+    // the first tap, no confirm dialog is allowed to intercept it.
+    await page.getByRole('button', { name: 'Silence sirens' }).click();
+
+    await expect.poll(() => silenceCalls).toBe(1);
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+  });
+});

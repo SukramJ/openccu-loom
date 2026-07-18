@@ -171,7 +171,7 @@ north:
         client_id: "openccu-loom"
         client_secret: "…"          # optional for public clients
         redirect_url: "https://loom.example/api/v1/auth/oidc/callback"
-        role_claim: "role"          # defaults to "role" when empty
+        role_claim: "realm_access.roles"  # string, array, or nested path; "role" when empty
 ```
 
 Step by step:
@@ -182,13 +182,22 @@ Step by step:
 2. Fill the `oidc` block above. The daemon discovers the authorization,
    token, and JWKS endpoints from
    `<issuer>/.well-known/openid-configuration` at startup. Default scopes
-   are `openid profile email`.
+   are `openid profile email`. The issuer must be **https** (plain http is
+   allowed only on localhost), and its discovery `issuer` must match the
+   configured value.
 3. The SPA login page offers a "Login with OIDC" entry that drives
    `GET /api/v1/auth/oidc/start` → IdP → `…/auth/oidc/callback`.
-4. Role mapping reads the `role_claim` claim: `admin` /
-   `administrator` → `admin`, `operator` → `operator`, everything else
-   → `viewer`. The session subject is `preferred_username` when present,
-   otherwise the `sub` claim.
+4. Role mapping reads the claim named by `role_claim` (default `role`),
+   which may be a string, a string array, or a dotted path into a nested
+   object (e.g. `realm_access.roles`): `admin` / `administrator` → `admin`,
+   `operator` → `operator`, everything else → `viewer`. When the claim
+   carries several roles the highest one wins. The session subject is
+   `preferred_username` when present, otherwise the `sub` claim.
+
+    !!! note
+        For a provider-specific walkthrough — client, redirect URI, and
+        mapping Keycloak realm roles / groups into the role claim — see
+        [Keycloak (OIDC)](keycloak-oidc.md).
 
 !!! note "How the ID token is validated"
     The callback verifies the ID token's RS256 signature against the

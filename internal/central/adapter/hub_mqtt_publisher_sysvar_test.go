@@ -122,3 +122,32 @@ func TestSysvarStateForMQTT(t *testing.T) {
 		t.Fatalf("string raw: got %v, want hello", got)
 	}
 }
+
+// TestSysvarStateForMQTT_ScannedListValueResolvesToLabel replays the
+// production defect end-to-end across the two halves that must agree:
+// the CCU scan delivers a LIST sysvar value as the quoted string "0";
+// parseSysvarValue must type it as the integer index so
+// sysvarStateForMQTT resolves the label the discovery's enum options
+// advertise. When the parse half leaves the value a string, the state
+// topic carries the raw "0" and HA rejects it against the options list
+// ("got '0', allowed: Aus, …").
+func TestSysvarStateForMQTT_ScannedListValueResolvesToLabel(t *testing.T) {
+	t.Parallel()
+
+	sv := hub.NewSysvar("ccu-01", "S_Alarm_System_Status", "", hmenum.HubValueTypeList, nil)
+	sv.ValueList = []string{"Aus", "Aktivierung", "Hüllschutz", "Vollschutz", "Wiederholung"}
+
+	pv, ok := parseSysvarValue(hmenum.HubValueTypeList, []byte(`"0"`))
+	if !ok {
+		t.Fatal("parseSysvarValue must accept the scanned list index")
+	}
+	sv.OnValue(pv)
+
+	val, observed := sv.Value()
+	if !observed {
+		t.Fatal("sysvar must be observed after OnValue")
+	}
+	if got := sysvarStateForMQTT(sv, val.Unwrap()); got != "Aus" {
+		t.Fatalf("state payload = %v, want label Aus", got)
+	}
+}

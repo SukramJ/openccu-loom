@@ -2836,6 +2836,32 @@ func subscribeMatterReadyTrigger(bus *events.Bus, trigger func()) func() {
 	})
 }
 
+// subscribeMatterDeviceLifecycleTrigger feeds device create/remove events
+// into the same debounced reassemble pipeline: a device hot-plugged (or
+// deleted) after its central's bring-up must surface as a bridged
+// endpoint without a daemon restart — Reassemble handles endpoint add,
+// GC and the PartsList subscription notification. Events arriving before
+// the central is southbound-ready are skipped: the boot ingest fires one
+// DeviceCreatedEvent per device and the ready trigger already covers
+// that batch with a single reassemble. Create events are at-least-once
+// (the CCU re-announces its inventory on reconnect); the debounce
+// coalesces such bursts and a no-change reassemble is cheap in-memory
+// work. Returns the unsubscribe closers (empty when nothing to wire).
+func subscribeMatterDeviceLifecycleTrigger(u *central.Unit, trigger func()) []func() {
+	if u == nil || u.EventBus == nil || trigger == nil {
+		return nil
+	}
+	fire := func() {
+		if u.IsSouthboundReady() {
+			trigger()
+		}
+	}
+	return []func(){
+		events.Subscribe(u.EventBus, func(hmevent.DeviceCreatedEvent) { fire() }),
+		events.Subscribe(u.EventBus, func(hmevent.DeviceRemovedEvent) { fire() }),
+	}
+}
+
 // runMatterReassemble invokes reassemble with panic isolation so a fault in the
 // topology build cannot crash the daemon from the debounce goroutine.
 func runMatterReassemble(ctx context.Context, reassemble func(context.Context) error, logger *slog.Logger) {
@@ -3001,6 +3027,9 @@ func newMatterCentralHook(
 		if unsub := subscribeMatterReadyTrigger(u.EventBus, reassembleTrigger); unsub != nil {
 			unsubs = append(unsubs, unsub)
 		}
+		// Hot-plugged / removed devices on the adopted central feed the
+		// same debounced reassemble as the boot-time centrals.
+		unsubs = append(unsubs, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger)...)
 		// A model already loaded before the hook ran (ready event fired in
 		// the adopt window) needs a reassemble kick too — the event that
 		// would have triggered it is gone.
@@ -3090,6 +3119,12 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		}
 		reassembleClosers, reassembleTrigger := wireMatterReassembleOnReady(ctx, readyBuses, mb.Reassemble, matterReassembleReadyDebounce, logger)
 		closers = append(closers, reassembleClosers...)
+		// Hot-plug: device create/remove events on a ready central feed the
+		// same debounced reassemble so runtime-paired (or deleted) CCU
+		// devices appear as (or vanish from) bridged endpoints live.
+		for _, u := range reg.List() {
+			closers = append(closers, subscribeMatterDeviceLifecycleTrigger(u, reassembleTrigger)...)
+		}
 		// Per-central hook for the live-adopt orchestrator: a runtime-added
 		// central gets the same readiness latch, reassemble-on-ready and
 		// reachable-forward wiring as the boot-time centrals above.

@@ -5,13 +5,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm"
+	"github.com/SukramJ/openccu-loom/internal/alarm/engine"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/auth/oidc"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
@@ -260,6 +264,114 @@ func (a scheduleWeekProfileSink) SetActiveProfile(
 	return a.sd.SetActiveProfile(ctx, deviceAddress, channelIdx, profileKey)
 }
 
+// alarmSourceMQTT tags every alarm verb the raw MQTT command plane issues
+// so the journal / audit trail attributes it correctly.
+const alarmSourceMQTT = "mqtt"
+
+// alarmMQTTSink adapts the daemon-level alarm engine onto the
+// [mqtt.AlarmSink] contract. Areas are daemon-level, so the sink drives
+// the engine directly without central scoping. The master verbs fan out
+// best-effort over every area; a per-area arm failure is collected and
+// also surfaced as a FAILED_TO_ARM event through onArmFailure, wired to
+// the MQTT alarm publisher once it exists (see wireSystemStatusSubscribers).
+type alarmMQTTSink struct {
+	svc *alarm.Service
+
+	mu           sync.RWMutex
+	onArmFailure func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string)
+}
+
+// Compile-time proof the sink satisfies the command-subscriber contract.
+var _ mqtt.AlarmSink = (*alarmMQTTSink)(nil)
+
+// newAlarmMQTTSink returns a sink over svc, or nil when the alarm service
+// is disabled — the command subscriber then leaves the alarm plane unwired.
+func newAlarmMQTTSink(svc *alarm.Service) *alarmMQTTSink {
+	if svc == nil {
+		return nil
+	}
+	return &alarmMQTTSink{svc: svc}
+}
+
+// setArmFailureHook installs the FAILED_TO_ARM publisher. A nil hook
+// disables the per-area failure event.
+func (s *alarmMQTTSink) setArmFailureHook(fn func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string)) {
+	s.mu.Lock()
+	s.onArmFailure = fn
+	s.mu.Unlock()
+}
+
+func (s *alarmMQTTSink) Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error {
+	_, err := s.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{Mode: mode, Code: code, Source: alarmSourceMQTT})
+	return err
+}
+
+func (s *alarmMQTTSink) Disarm(ctx context.Context, areaID, code string) error {
+	return s.svc.Engine().DisarmWithCode(ctx, areaID, "", alarmSourceMQTT, code)
+}
+
+func (s *alarmMQTTSink) Silence(ctx context.Context, areaID, code string) error {
+	return s.svc.Engine().SilenceWithCode(ctx, areaID, "", alarmSourceMQTT, code)
+}
+
+// Panic fires the engine's loud panic path (silent=false) for the area —
+// the HA TRIGGER command routes here (docs/alarm-concept.md §7).
+func (s *alarmMQTTSink) Panic(ctx context.Context, areaID string) error {
+	return s.svc.Engine().PanicTrigger(ctx, areaID, false, "", alarmSourceMQTT)
+}
+
+// MasterArm arms every area best-effort. An area that does not configure
+// the requested mode is skipped silently (not a failure); any other arm
+// error is collected and surfaces a FAILED_TO_ARM event with the blocking
+// sensors.
+func (s *alarmMQTTSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) error {
+	eng := s.svc.Engine()
+	var errs []error
+	areas := eng.Areas()
+	for i := range areas {
+		a := &areas[i]
+		if _, err := eng.Arm(ctx, a.ID, engine.ArmRequest{Mode: mode, Source: alarmSourceMQTT}); err != nil {
+			if errors.Is(err, engine.ErrUnknownMode) {
+				continue
+			}
+			errs = append(errs, err)
+			s.emitArmFailure(a.ID, a.Name, mode, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// MasterDisarm disarms every area best-effort.
+func (s *alarmMQTTSink) MasterDisarm(ctx context.Context) error {
+	eng := s.svc.Engine()
+	var errs []error
+	areas := eng.Areas()
+	for i := range areas {
+		a := &areas[i]
+		if err := eng.Disarm(ctx, a.ID, "", alarmSourceMQTT); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// emitArmFailure publishes a FAILED_TO_ARM event, extracting the blocking
+// sensors from a not-ready refusal.
+func (s *alarmMQTTSink) emitArmFailure(areaID, areaName string, mode hmenum.AlarmMode, cause error) {
+	s.mu.RLock()
+	hook := s.onArmFailure
+	s.mu.RUnlock()
+	if hook == nil {
+		return
+	}
+	var blockers []string
+	var nre *engine.NotReadyError
+	if errors.As(cause, &nre) {
+		blockers = nre.Blockers
+	}
+	hook(areaID, areaName, mode, blockers)
+}
+
 // buildOIDCRest discovers the IdP and constructs the REST OIDC deps backing
 // the SPA's SSO flow (`/api/v1/auth/oidc/{start,callback}`). Returns nil when
 // OIDC is disabled or discovery fails — the SPA then hides the SSO button.
@@ -418,6 +530,7 @@ type runtimeCapabilityDetector struct {
 	supervisedRestart bool
 	mcp               bool
 	mcpWrite          bool
+	alarm             bool
 }
 
 func (r runtimeCapabilityDetector) HasMQTTDiscovery() bool     { return r.mqtt }
@@ -427,6 +540,7 @@ func (r runtimeCapabilityDetector) HasCCUAuth() bool           { return r.ccuAut
 func (r runtimeCapabilityDetector) HasSupervisedRestart() bool { return r.supervisedRestart }
 func (r runtimeCapabilityDetector) HasMCP() bool               { return r.mcp }
 func (r runtimeCapabilityDetector) HasMCPWrite() bool          { return r.mcp && r.mcpWrite }
+func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm }
 
 // detectSupervisedRestart reports whether the daemon is running
 // under a supervisor that will restart it after a clean shutdown.

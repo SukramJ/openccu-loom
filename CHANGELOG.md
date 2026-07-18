@@ -6,9 +6,517 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.3] — 2026-07-18
+
+### Fixed
+
+- **The MCP endpoint rejected every credential** — the `/mcp` mount
+  wrapped its handler only in the auth chain's `Require` step, which
+  checks the identity the `Resolve` middleware places in the request
+  context; `Resolve` never ran on that mount (it sits outside the REST
+  router's middleware stack), so every request — valid Bearer token,
+  Basic auth, or none — got `401 no valid credentials`. The mount now
+  resolves credentials before requiring them, restoring the documented
+  "same auth chain as REST" behaviour. Pinned by a mount-level
+  regression test.
+- **Claude Desktop connection example fixed** — the documented
+  `claude_desktop_config.json` snippet put `"Authorization: Bearer …"`
+  into `args`, which Claude Desktop mangles (spaces in args); mcp-remote
+  then fell into an OAuth discovery flow and failed with `/register`
+  404s. The example now passes the full header value through an
+  environment variable (`Authorization:${AUTH_HEADER}`), which
+  mcp-remote expands itself.
+
+## [0.43.2] — 2026-07-18
+
+### Added
+
+- **Localised siren tone / pattern / soundfile pickers** — the
+  candidate extras now carry parallel `*_labels` lists translated
+  through the curated CCU value translations (APIVersion 2.27.0), so
+  the ASIR tone and pattern dropdowns show "Frequenz steigend" instead
+  of `FREQUENCY_RISING`; raw wire values remain what is stored.
+- **Optical pattern on the acoustic-siren card** — the acoustic
+  activation writes the optical selection in the same atomic device
+  paramset, so the acoustic card now exposes the optical dropdown too
+  (previously only optical-siren and alarm-light cards had it).
+- **Stale enrollments are visible and repairable** — pre-0.43
+  enrollments could point at a non-siren channel (the old dialog
+  defaulted to `:1`); such rows never fired and, since 0.43.0's save
+  validation, block the whole output set with 422 — invisibly. The
+  output card now flags an ineligible channel/class pair with an
+  explanation and, when the device has exactly one eligible channel,
+  offers a one-click channel repair.
+
+## [0.43.1] — 2026-07-18
+
+### Added
+
+- **Sysvar-mirror outputs became configurable — and can target existing
+  alarm variables** — the add-output dialog no longer demands a device
+  for the sysvar-mirror class: it asks for the central and the variable
+  target instead. Either a managed value-list variable (created on the
+  CCU automatically, as before — but the name was previously not
+  settable from the SPA at all, leaving the enrollment a silent no-op)
+  or, new, an operator-owned ALARM-type variable: the mirror then
+  writes true while triggered and false otherwise, never creates or
+  retypes the variable, and accepts no inbound intents through it. The
+  output card now edits the variable name and the allow-disarm opt-in,
+  and saving without a variable name is rejected with 422.
+- **Notification outputs actually notify now** — the class previously
+  had no consumer. A notification output now emits a deliberate,
+  per-area, mode-filtered `alarm_panel.notification` event at fire time
+  (one-shot, never cancelled by silence): published as a NOTIFICATION
+  entry on the area's MQTT alarm event topic, forwarded to outbound
+  webhook receivers, and broadcast on the WebSocket alarm_panel topic
+  (`alarm.notification`, APIVersion 2.26.0). Each plane can be toggled
+  per output (`notify_mqtt` / `notify_webhook`, both default on) from
+  the output card; the add dialog no longer demands a device for this
+  class.
+- **Alarm keyfobs surface first in the remote-key picker** — security
+  remotes (HmIP-KRCA and peers) sort to the top of the guided binding
+  picker and the KRCA carries an "alarm keyfob" badge; generic wall
+  buttons and remotes follow.
+
+### Fixed
+
+- **Remote-key picker found no keys** — the candidate enumeration
+  looked for press parameters in the channel's generic-event set,
+  which the device pipeline never populates; every remote and
+  wall-button key was invisible ("no remote or wall-button keys
+  found"). Press parameters are ordinary VALUES data points, and the
+  enumeration now checks exactly that. Pinned by a godevccu
+  integration test that asserts the HmIP-KRCA surfaces with both
+  press parameters.
+- **Tone / pattern / soundfile dropdowns could miss their device
+  lists** — the output card matched candidates strictly by
+  central + channel address; enrollments whose stored central differs
+  (older rows may carry an empty one) silently fell back to free-text
+  fields. An unambiguous address-only fallback now covers those rows,
+  and the ASIR/MP3P ENUM lists themselves are pinned end-to-end by a
+  godevccu integration test.
+
+## [0.43.0] — 2026-07-17
+
+### Added
+
+- **Capability-aware alarm output enrollment** — new REST endpoint
+  `GET /api/v1/alarm/output-candidates` (APIVersion 2.25.0) derives,
+  from the live domain model, which channels can back each
+  device-backed output class (acoustic/optical siren, switched siren,
+  smoke sounder, alarm light, chirp — including ON_TIME-gated
+  switched-siren eligibility) plus the device's real ENUM label lists
+  (siren tones, optical patterns, MP3 soundfiles). The SPA add-output
+  dialog now lists these ground-truth candidates per class with a real
+  channel picker (expert mode keeps the unfiltered device list), the
+  tone / optical-pattern / chirp-tone editors offer the device's ENUM
+  values instead of free text (e.g. HmIP-ASIR), and MP3-player chirp
+  outputs (HmIP-MP3P) get a soundfile picker. Saving an output set now
+  soft-validates enrollments: a resolvable channel that cannot carry
+  its class is rejected with 422 instead of failing at fire time;
+  unresolvable channels (CCU down) still save and remain guarded by
+  the fault journal.
+- **Guided remote-key bindings (keyfob arming, e.g. HmIP-KRCA)** —
+  remote-key alarm codes no longer require a hand-written JSON binding:
+  `GET /api/v1/alarm/remote-key-candidates` enumerates every physical
+  remote/wall-button key channel (PRESS_SHORT / PRESS_LONG from the
+  live model; virtual remotes excluded), and the codes editor gained a
+  key picker plus trigger / action / area selects that assemble the
+  binding document. Raw JSON remains available as an expert fallback
+  (also the path for virtual remote channels).
+
+## [0.42.9] — 2026-07-17
+
+### Fixed
+
+- **Untranslated climate parameters on HmIP-BWTH** — the parameter
+  editor showed raw identifiers for `TEMPERATURE_COMFORT_COOLING`
+  (the cooling-mode comfort temperature on climate transceivers) and
+  `SUPPORTING_WIRED_OPERATION_MODE` (MAINTENANCE channel): the CCU's
+  own stringtable never carried them, and the curated translation
+  overlay had no gap-fill. Both now resolve in German and English
+  ("Komfort-Temperatur (Kühl-Modus)" / "Comfort temperature (cooling
+  mode)"), pinned by an overlay regression test.
+
+## [0.42.8] — 2026-07-17
+
+### Fixed
+
+- **Firmware overview froze on the state from daemon start** — the
+  daemon read each device's firmware data (installed / available
+  version, update lifecycle state) exactly once, at device
+  materialisation, possibly straight from the SQLite description cache.
+  An update performed at the CCU never surfaced: the overview kept
+  offering "Update" for firmware installed long ago, and the RPI-RF-MOD
+  placeholder row persisted. Three gaps closed:
+  - the periodic firmware polling jobs (`central.firmware_check` hourly,
+    plus fast delivery/updating polls while an update transaction runs)
+    existed as scheduler slots but were never wired — they run now, and
+    the refresh propagates the fresh description fields onto the live
+    device models (previously even the WS `firmware.refresh` command
+    only updated an internal registry no surface reads).
+  - new REST endpoint `POST /api/v1/devices/firmware/refresh`
+    (APIVersion 2.24.0) forces the same sweep on demand.
+  - the firmware overview's "Reload" button now actually reloads: it
+    triggers the daemon-side refresh and re-fetches the per-device
+    firmware details, which were previously served from a never-
+    invalidated page cache — the button visibly did nothing.
+- **Reload/interval audit follow-ups** — a sweep over every reload
+  button and periodic-refresh job after the firmware finding:
+  - the system-variables page's "Reload" now forces a CCU re-pull
+    (`POST /sysvars/fetch`, which existed but was never called by the
+    SPA) before reading the list — previously a value just changed at
+    the CCU stayed invisible for up to one sysvar-scan interval.
+  - the overview's error-retry drops its per-device tile caches and
+    re-fetches expanded groups instead of serving the session's first
+    detail/CDP snapshots forever.
+  - the `hub.metrics_refresh` job is no longer scheduled: its inner
+    hook was never wired anywhere, so it fired every 5 minutes as a
+    permanent no-op (both existing hub metrics are produced by other
+    jobs). All other reload buttons and refresh jobs verified working.
+
+## [0.42.7] — 2026-07-17
+
+### Fixed
+
+- **LIST sysvar published its raw index instead of the label** — the
+  CCU delivers every sysvar value as a string, and the scan kept LIST
+  (and numeric) sysvar values string-typed instead of parsing them to
+  the declared type. The MQTT state topic therefore carried the raw
+  index (`0`) while the discovery advertised the labels as enum
+  options, so Home Assistant rejected every update ("got '0', allowed:
+  Aus, …") and the sensor stayed unknown. LIST values now parse to the
+  integer index (resolved to its label on publish), INTEGER to int,
+  NUMBER/FLOAT to float; REST/WS mirror the correctly typed value. A
+  non-numeric payload still degrades to the string fallback.
+
+## [0.42.6] — 2026-07-17
+
+### Added
+
+- **`alarm.v1` capability token** (#357) — `GET /api/v1/info` now
+  advertises `alarm.v1` in `capabilities` whenever the daemon-level
+  alarm service is mounted (the same condition that mounts the
+  `/alarm` routes). External clients gate their alarm surface on the
+  token instead of probing `GET /alarm/panels` for a 404, which cannot
+  distinguish a disabled subsystem from an old daemon or a
+  reverse-proxy misroute.
+- **Per-area code policy on the panel entity** (#358) — the
+  alarm-control-panel entity (`GET /alarm/panels`, WS
+  `alarm_panel.panels`, and the `alarm.panel_changed` broadcast) now
+  carries `code_arm_required` / `code_disarm_required`: the same
+  effective per-verb code requirement the MQTT discovery already
+  advertises (area code policy AND an applicable enabled pin code
+  exists), so REST/WS consumers can prompt for a code upfront instead
+  of surfacing the daemon's 403 after the fact. The master aggregate
+  carries the any-area-requires union; live code CRUD re-derives the
+  flags and pushes changed panels over the broadcast. APIVersion
+  2.23.0.
+
+## [0.42.5] — 2026-07-16
+
+### Added
+
+- **Hot-plug: newly paired devices appear without a restart** — a device
+  taught in at the CCU while the daemon is running is now materialised
+  live from the `newDevices` callback: the device pipeline hydrates
+  exactly the new device (paramset descriptions, data points, custom
+  data points, initial values, CCU-assigned name via a forced
+  device-details refresh), MQTT publishes its discovery + state as soon
+  as the model announces it, the Matter bridge reassembles its bridged
+  endpoints (debounced, with the PartsList change notified to
+  commissioners), and the WebSocket device-lifecycle broadcast continues
+  to fire. The ingest dedups against the model and is serialised with
+  the interface bring-up, so the CCU's full-inventory re-announcement
+  after every reconnect stays a no-op instead of re-reading the whole
+  interface. Previously the callback only updated internal registries —
+  the device stayed invisible in REST/SPA/MQTT/Matter until the daemon
+  restarted. Applies to the XML-RPC interfaces and CUxD (BIN-RPC) alike.
+
+### Fixed
+
+- **All-zero firmware placeholder rendered as an update** — devices the
+  CCU has no OTA image for (e.g. the RPI-RF-MOD gateway module, which
+  is updated through the CCU firmware itself) report the placeholder
+  available version `0.0.0`. The firmware overview treated any version
+  difference as a pending update and showed "Update available" /
+  "Awaiting transfer to the device" next to 4.4.22 → 0.0.0. The
+  placeholder now counts as "no available version": the row reads "Up
+  to date", the available column shows "—", and the updates filter +
+  summary no longer count the device. The domain gate
+  (`GatedLatestFirmware`) applies the same rule, so a `0.0.0` can never
+  surface as an installable target on the BidCos path or in the MQTT
+  update entity either.
+
+## [0.42.4] — 2026-07-16
+
+### Fixed
+
+- **Firmware overview contradicted itself** — a device whose CCU knows
+  a newer firmware that is not yet delivered to the device (HmIP
+  `NEW_FIRMWARE_AVAILABLE`, e.g. 1.2.2 installed / 1.4.10 available)
+  showed "Up to date" twice, because the status column let the gated
+  `update_available` flag (which only says an install can start *now*)
+  overrule the real CCU lifecycle state. The status column now renders
+  the CCU state ("Update available"), the action column explains
+  "Awaiting transfer to the device" instead of claiming currency, and
+  the updates filter + summary count include such devices.
+
+## [0.42.3] — 2026-07-16
+
+### Added
+
+- **SPA↔contract path guard** — a new vitest contract test parses every
+  URL the REST client constructs and matches it (method + path shape)
+  against the OpenAPI contract via the generated types. A client call
+  against a path or method the daemon never serves now fails CI instead
+  of failing the user at runtime — the class behind the 0.42.2
+  link-paramset 404. A full audit of all 184 client calls against the
+  217 contract operations found no further mismatches; the existing
+  router↔spec walk test already pins the other edge in both directions.
+
+### Fixed
+
+- **Install mode never opened** — `POST /api/v1/install-mode/interfaces`
+  (and the per-device teach-in route) failed on every attempt: the
+  install-mode writer looked its backend up under the bare interface
+  type (`HmIP-RF`) while the registry keys backends by the canonical
+  central-prefixed wire ID. The writer now translates to the wire ID;
+  the unit-test fixtures register backends exactly like production
+  wiring so this class of key mismatch can no longer hide.
+- **Log viewer showed `"error": {}`** — the SPA log viewer and
+  diagnostic captures passed error attributes through as raw values,
+  which marshal to an empty JSON object, hiding the failure reason for
+  every logged error (the install-mode failure above was undiagnosable
+  from the UI). Error attrs now render as their message string,
+  matching the stdout log.
+
+## [0.42.2] — 2026-07-16
+
+### Fixed
+
+- **Link paramset saves from the SPA failed with 404** — the channel
+  editor called `PUT /devices/{addr}/link-paramsets/{peer}`, a path the
+  API never served (the contract route is
+  `/devices/{addr}/link-ps/{peer}`), so every direct-link configuration
+  save failed with "resource not found". The client now uses the
+  contract path.
+- **Percent-encoded path IDs are now decoded centrally** — the REST
+  router routes on the percent-decoded path, so every `chi.URLParam`
+  yields decoded values. Previously chi handed handlers the raw
+  segment whenever a client percent-encoded a path ID (as the SPA does
+  for every ID), which broke any endpoint whose IDs carry `:`, `|`,
+  `@`, spaces, or non-ASCII — the class behind the custom-DP invoke
+  fix, the 0.42.1 alarm test-fire fix, and the link-paramset lookup,
+  and still latent in sysvar/room/function/program routes. The two
+  per-handler workarounds are retired in favour of the router-level
+  guarantee, pinned by a routing contract test.
+
+## [0.42.1] — 2026-07-16
+
+### Added
+
+- **Alarm sensor hold time** — `hold_time` on a sensor now works: an
+  activation must persist that many seconds before it counts; clearing
+  earlier discards it. Filters twitchy PIRs and doors rattling in wind.
+  Never applied to always-on hazard/panic sensors, so a smoke or panic
+  alarm is never delayed.
+- **Alarm cross-zoning groups** — the sensor `group` field now works:
+  sensors sharing a group name only trigger when a second distinct
+  member activates within 60 seconds; a lone activation is suppressed
+  but journaled (`cross_zone_first_hit`). Kills single-PIR false
+  alarms. Both windows are deliberately not restart-persisted
+  (seconds-short).
+- **Silent-panic flag in the sensor drawer** — panic-class sensors can
+  now be marked as silent panic (duress) from the UI; the engine
+  support existed but had no editor surface.
+
+- **Alarm SPA help texts** — every alarm tab now opens with a short
+  orientation line (what the view controls, how it relates to the other
+  tabs), and the complex editors grew inline explanations: the Policies
+  page explains every switch (code requirements incl. the automatic
+  disarm-code rule, hazard/panic always-on semantics, pre-alarm,
+  post-trigger/auto re-arm, schedules), the sensor detail drawer explains
+  every behaviour flag, the output cards explain duration/tone/outdoor/
+  shared-with-CCU, and the add-output drawer describes the selected
+  output class. All texts in both locales. The previously missing
+  `alarm.flag.chime` label (the door-chime switch rendered its raw i18n
+  key) is fixed.
+- **Alarm operator guide** — new `docs/alarm-user-guide.md`: an
+  operator-facing walkthrough of the whole alarm system (concepts,
+  safety promise, wizard, every tab, every policy and sensor flag,
+  integrations), linked from the user guide.
+
+### Fixed
+
+- **Alarm output test fire 404** — `POST /api/v1/alarm/outputs/{id}/test`
+  returned `404 Unknown alarm resource` for every output when the client
+  percent-encoded the ID's `|`/`:` separators (as the SPA does), because
+  the handler compared the still-encoded path segment against the
+  enrolled output IDs. The ID is now URL-decoded before the lookup, so
+  the SPA's siren/optical test buttons work again.
+- **Alarm output editor wrote fields the engine never read** — the
+  siren tone field saved `tone` while the driver reads `acoustic_tone`
+  (the configured tone silently never played), the chirp card offered a
+  single `chirp_chime_tone` the driver does not know (it reads
+  `chirp_arm_tone` / `chirp_disarm_tone` / `chirp_tick_tone` — the card
+  now exposes exactly those three), and the dimmer-level input accepted
+  0–100 while the wire expects 0–1 (now 0–1 with the add-default fixed
+  from 100 to 1). Legacy values saved under the old keys are read as
+  fallbacks and migrated on the next save.
+- **Per-output loud/silent toggle removed** — it wrote a `policy` field
+  no engine path reads. Loud vs. silent is a property of the mode /
+  hazard / panic output policies (Policies tab), where it already
+  works; the dead toggle only suggested a control that did nothing.
+
+## [0.42.0] — 2026-07-15
+
+### Added
+
+- **Native alarm system ("Alarmanlage")** — a complete, local-first
+  intrusion-alarm engine inside the daemon, spanning six increments
+  (#344–#349) on the concept in `docs/alarm-concept.md` (#343):
+  - **Engine & safety core**: per-area arm-state machines (perimeter /
+    full / night / vacation / custom) with real entry delays,
+    force/bypass arming, bounded re-trigger cycles, and the full
+    restart-restore semantics incl. a restart-loop breaker and a
+    clock-plausibility rule. The seven hard safety invariants (S1–S7)
+    are contract-tested: every siren activation is finitely bounded and
+    budgeted per incident, every stop is verified with critical
+    priority (and may probe an open circuit breaker), silence is
+    persisted incident-scoped across restarts, reconciliation adopts
+    sounding sirens before stopping them, and every degradation is
+    journaled instead of swallowed.
+  - **Output drivers** for HmIP sirens (ASIR family), plug-in sirens on
+    switch/dimmer actuators (device-side auto-off travels with the
+    switch-on), smoke-detector sounders (engine-watchdog bounded, with
+    battery/group-fan-out caveats), alarm lights, chirps/countdown
+    ticks, and an optional CCU sysvar mirror (inbound intents arm-only
+    by default). Researched device assumptions in
+    `docs/alarm-assumptions.md`.
+  - **Surfaces**: REST namespace `/api/v1/alarm` and WebSocket category
+    `alarm_panel` (APIVersion 2.22.0), a full SPA section (panel with
+    single-tap silence, sensor picker with mode matrix, output
+    management, journal, walk test, setup wizard — de/en, all theme
+    combinations), Home Assistant MQTT discovery as
+    `alarm_control_panel` entities (per area + aggregate master panel,
+    daemon-level topics per ADR 0052), and an `hmcli alarm` break-glass
+    group. The panel is a first-class model entity so REST, WS, and
+    MQTT can never diverge.
+  - **Codes & identities**: argon2id-hashed PIN codes with permissions,
+    area restrictions, validity windows, rate limiting and lockout;
+    duress codes with silent fan-out; per-area code policies reflected
+    in the HA discovery (`REMOTE_CODE` command template); keypad
+    (HmIP-WKP) and remote (KRCA/KRC4) intents with on-device PIN slots
+    kept independent by design.
+  - **Always-on hazard & panic classes**, pre-alarm stage, auto-rearm
+    after quiet period, door chime, arm schedules with reminders (or
+    explicit opt-in auto-arm), and alarm events on the webhook plane
+    for user-land escalation chains.
+
+### Changed
+
+- Critical-priority commands may now probe an OPEN circuit breaker once
+  (alarm stop path); non-critical traffic keeps the fail-fast shed.
+- Repeated keypad press events (`PRESS_*`, `CODE_ID`) are no longer
+  suppressed as unchanged values — edge-trigger parameters always
+  publish.
+
+## [0.41.0] — 2026-07-14
+
+### Added
+
+- **OIDC role mapping now works with your identity provider's real roles.** The
+  `role_claim` setting is finally honored: it reads the configured claim from
+  the ID token — a plain string, a string array, or a dotted path into a nested
+  object such as Keycloak's `realm_access.roles` — and grants the highest of
+  `admin` / `operator` / `viewer` it finds. Previously the field was ignored and
+  only a single hardcoded top-level `role` string mapped, so Keycloak realm-role
+  and group users all fell back to `viewer`. A new
+  [Keycloak setup guide](docs/admin/keycloak-oidc.md) walks through the client,
+  redirect URI, and role mapping.
+
+### Security
+
+- **OIDC no longer runs over cleartext.** The identity-provider issuer and every
+  endpoint discovered from it must use https (plain http is allowed only on
+  localhost). A misconfigured `http://` issuer used to run the whole login —
+  including the code exchange and ID-token retrieval — in the clear; such a
+  deployment is now refused. Move the issuer to https.
+- **Stricter ID-token validation.** The discovery document's own `issuer` must
+  equal the configured issuer (RFC 8414 §3.3), and the `azp` (authorized-party)
+  claim is now checked — a present `azp` must name this client, and a
+  multi-audience token must carry it (OIDC Core §3.1.3.7).
+
+## [0.40.0] — 2026-07-13
+
+### Changed
+
+- **The HA-native visual skin (0.39.0) now covers the whole Config UI, not
+  just the primitives and highest-traffic views.** `html[data-skin="ha"]`
+  remaps Tailwind's `--color-*` palette scale (the CSS variables every plain
+  `bg-slate-500`-style utility resolves through), so every remaining view
+  follows the active skin automatically — no per-file sweep needed. Opacity-
+  modified utilities (`bg-slate-900/50`) were rewritten to `color-mix()`
+  against the same variables since Tailwind inlines those as literals. The
+  HA-skin default values were also refreshed to the latest
+  `home-assistant/frontend` design tokens (primary `#009ac7`, flat
+  shadow-less cards, Roboto body font, refreshed neutral/semantic ramps).
+  `data-skin="loom"` (the standalone default) is unaffected. See
+  [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) §
+  "Complete theme coverage via palette remap".
+
+### Fixed
+
+- **OpenCCU-Loom no longer exhausts the CCU's login-session pool.** The daemon
+  discarded its CCU session roughly every 90 seconds and opened a fresh one,
+  without releasing the old one — on the order of 40 abandoned sessions per
+  hour per CCU. Because the CCU's session pool is shared with its WebUI, the
+  leak eventually locked operators out of their own CCU with "invalid
+  credentials or too many sessions". The cause was a wire-contract mismatch:
+  the CCU answers `Session.renew` with the boolean `true` (it extends the
+  session in place and does *not* issue a new ID), but the client decoded the
+  reply as a session-ID string. Every renewal therefore failed to parse, was
+  treated as a dead session, and triggered a re-login. A long-running daemon
+  now holds exactly **one** CCU session for its entire life, pinned by a
+  contract test.
+
+- **Backup and firmware downloads no longer displace the CCU session.** Both
+  authenticate against `cp_security.cgi` by session ID and asked the shared
+  JSON-RPC client for a *forced fresh login* first, abandoning the session the
+  rest of the central was working with — one burned CCU session slot per
+  download. They now renew the existing session instead, which is what the
+  code's own comment always said it did.
+
+- **A session the daemon abandons is now handed back to the CCU.** When a
+  session really does have to be replaced (CCU reboot, expired session,
+  privilege error), the client issues `Session.logout` for the old one instead
+  of leaving it to idle out of the pool.
+
+- **A rejected login now engages the existing backoff.** The CCU reports both
+  wrong credentials and an exhausted session pool as a JSON-RPC error rather
+  than an empty result, which slipped past the backoff and made the daemon
+  retry at full speed — turning an exhausted pool into a self-sustaining retry
+  storm exactly when it needed to back off.
+
 ## [0.39.0] — 2026-07-12
 
 ### Added
+
+- **The Config UI has a Home-Assistant-native visual skin.** Settings →
+  Appearance gains a "Design" control offering the default OpenCCU-Loom
+  teal/slate look or a Home Assistant look. Opened standalone (browser tab,
+  not inside HA), the operator's choice is remembered and applied on every
+  load. Opened inside Home Assistant via Ingress, the HA skin is applied
+  automatically and mirrors the operator's real, live HA theme — including
+  any custom theme, not just the built-in ones — via a same-origin bridge
+  that reads Home Assistant's own color and light/dark settings and re-syncs
+  whenever they change. The sidebar, header, and navigation are identical in
+  every context; only the color palette adapts, and the browser tab title is
+  left to Home Assistant while embedded. See
+  [`docs/design/ha-theme-bridge.md`](docs/design/ha-theme-bridge.md) for the
+  design. The shared UI primitives and the highest-traffic views carry the
+  new skin now; a handful of less-visited views are a documented follow-up.
 
 - **A CCU's operational readiness is now visible in the UI.** Many actions
   depend on a CCU having finished its readiness-gated southbound bring-up

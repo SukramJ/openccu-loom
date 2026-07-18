@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -63,6 +64,9 @@ type restMountDeps struct {
 	devicesAdapter    *adapter.DevicesAdapter
 	deviceAdminDomain *adapter.DeviceAdminDomain
 	deviceReloader    *adapter.DeviceReloaderAdapter
+	// firmwareRefresher backs POST /devices/firmware/refresh (the same
+	// FirmwareDomain the WS `firmware.refresh` command uses).
+	firmwareRefresher *adapter.FirmwareDomain
 	// editSessions is the shared edit-lock registry — backs both the
 	// `/sessions/edit` endpoints and the strict MASTER/LINK paramset-write
 	// gate, and is shared with the WS `paramset.put` enforcement.
@@ -73,6 +77,11 @@ type restMountDeps struct {
 	hubAdapter         *adapter.HubAdapter
 	ifaceAdapter       *adapter.InterfacesAdapter
 	incidents          handlers.IncidentsReader
+	// alarm is the daemon-level alarm service backing the /alarm surface.
+	// It may be a nil *alarm.Service (subsystem disabled or failed to
+	// start); alarmPanelFrom converts that to a nil interface so the
+	// routes stay unmounted rather than dispatching to a nil pointer.
+	alarm *alarm.Service
 	// masterProfiles backs the read-only master-profiles REST routes
 	// (GET .../master-profiles[/{id}], POST .../master-profiles/match) —
 	// the same *masterprofile.Store instance the WS
@@ -181,6 +190,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Config:                d.configAdapter,
 		Devices:               d.devicesAdapter,
 		DeviceAdmin:           d.deviceAdminDomain,
+		FirmwareRefresher:     firmwareRefresherFrom(d.firmwareRefresher),
 		DeviceInstallMode:     d.deviceAdminDomain,
 		DeviceIcons:           newDeviceIconProxy(d.reg, centralResolve),
 		RefreshDevices:        d.devicesAdapter,
@@ -195,6 +205,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Interfaces:            d.ifaceAdapter,
 		Incidents:             d.incidents,
 		IncidentsAdmin:        incidentsClearerFrom(d.incidents),
+		Alarm:                 alarmPanelFrom(d.alarm),
+		AlarmCodes:            alarmCodeAdminFrom(d.alarm),
 		MasterProfiles:        d.masterProfiles,
 		SystemStatus:          d.sysStatusBuf,
 		Labels:                adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
@@ -253,6 +265,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			supervisedRestart: detectSupervisedRestart(),
 			mcp:               cfg.North.MCP.Enabled,
 			mcpWrite:          cfg.North.MCP.AllowWrites,
+			// Mirrors the Deps.Alarm mount condition below: the token
+			// tracks whether the /alarm routes exist, not whether the
+			// engine is armed/healthy.
+			alarm: d.alarm != nil,
 		},
 		CORS:       buildCORS(cfg),
 		Idempotent: true,
@@ -379,12 +395,50 @@ func incidentsClearerFrom(r handlers.IncidentsReader) handlers.IncidentsClearer 
 	return c
 }
 
+// firmwareRefresherFrom converts the concrete FirmwareDomain into the
+// handler port, returning a genuinely nil interface for a nil pointer so
+// the router leaves the refresh route unmounted (a non-nil interface
+// wrapping a nil pointer would dispatch and panic).
+func firmwareRefresherFrom(d *adapter.FirmwareDomain) handlers.FirmwareRefresher {
+	if d == nil {
+		return nil
+	}
+	return d
+}
+
+// alarmPanelFrom converts the concrete alarm service into the handler
+// facade, returning a genuinely nil interface when the service is a nil
+// pointer so the router leaves the /alarm routes unmounted (a non-nil
+// interface wrapping a nil pointer would dispatch and panic).
+func alarmPanelFrom(s *alarm.Service) handlers.AlarmPanel {
+	if s == nil {
+		return nil
+	}
+	return s
+}
+
+// alarmCodeAdminFrom converts the alarm service into the /alarm/codes CRUD
+// facade: a store-backed adapter that maps the wire DTOs onto the
+// argon2id-hashed alarm-code store (docs/alarm-concept.md §11). A nil
+// service or store yields a genuinely nil interface so the codes routes
+// serve 503 rather than panicking.
+func alarmCodeAdminFrom(s *alarm.Service) handlers.AlarmCodeAdmin {
+	if s == nil || s.Stores() == nil || s.Stores().Codes == nil {
+		return nil
+	}
+	return handlers.NewAlarmCodeStoreAdmin(s.Stores().Codes).OnChange(s.NotifyCodesChanged)
+}
+
 // mountMCP wraps the REST router so the configured MCP path serves the
 // Streamable-HTTP MCP handler behind the same auth chain as REST, while
 // every other path falls through to the REST router. The MCP server is
 // read-only unless North.MCP.AllowWrites is also set. See ADR 0025.
 func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *slog.Logger) http.Handler {
-	mcpHandler := d.authMw.Require(mcp.Handler(mcp.Deps{
+	// Resolve must wrap Require: Require only checks the identity the
+	// resolve chain put into the context — without it every request,
+	// credentialed or not, is rejected with 401 (the MCP mount sits
+	// outside the REST router's own middleware stack).
+	mcpHandler := d.restResolve(d.authMw.Require(mcp.Handler(mcp.Deps{
 		Centrals:    d.reg,
 		Devices:     d.devicesAdapter,
 		Writer:      d.dpWriterAdapter,
@@ -395,7 +449,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		Incidents:   d.incidents,
 		AllowWrites: cfg.North.MCP.AllowWrites,
 		Version:     build.Version,
-	}))
+	})))
 	path := cfg.North.MCP.MountPath()
 	mux := http.NewServeMux()
 	mux.Handle(path, mcpHandler)

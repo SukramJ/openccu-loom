@@ -20,8 +20,11 @@
     setLocale,
     setExpertMode,
     setTheme,
+    setSkin,
     type Theme,
+    type Skin,
   } from "$lib/stores/preferences.svelte";
+  import { isEmbedded } from "$lib/theme/ha-bridge";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { t } from "$lib/i18n";
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
@@ -305,7 +308,7 @@
         ? 'w-full'
         : ''}
         {activeTab === tab.id
-          ? 'bg-brand-50 font-medium text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
+          ? 'bg-brand-50 font-medium text-brand-900 dark:bg-[color-mix(in_srgb,var(--color-brand-900)_20%,transparent)] dark:text-brand-100'
           : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
       aria-current={activeTab === tab.id ? "page" : undefined}
       onclick={() => (activeTab = tab.id)}
@@ -411,6 +414,27 @@
                   <option value="system">{t("settings.theme.system")}</option>
                 </select>
               </label>
+
+              <div class="flex items-start gap-3">
+                <label class="flex items-center gap-3 text-sm">
+                  <span class="min-w-24">{t("settings.appearance.design")}</span>
+                  <select
+                    class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900"
+                    value={prefs.skin}
+                    disabled={isEmbedded()}
+                    onchange={(e) =>
+                      setSkin((e.target as HTMLSelectElement).value as Skin)}
+                  >
+                    <option value="loom">{t("settings.appearance.design.loom")}</option>
+                    <option value="ha">{t("settings.appearance.design.ha")}</option>
+                  </select>
+                </label>
+                <p class="pt-1.5 text-xs text-[var(--ha-secondary-text-color)]">
+                  {isEmbedded()
+                    ? t("settings.appearance.design.embedded_hint")
+                    : t("settings.appearance.design.help")}
+                </p>
+              </div>
 
               <div class="flex items-start gap-3">
                 <div class="min-w-24 pt-0.5">

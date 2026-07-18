@@ -1,0 +1,7 @@
+{
+  "perimeter": { "ready": true },
+  "full": { "ready": true },
+  "night": { "ready": true, "warnings": ["sensor-3"] },
+  "vacation": { "ready": true },
+  "custom": { "ready": true }
+}

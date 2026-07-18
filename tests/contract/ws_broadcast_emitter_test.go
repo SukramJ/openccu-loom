@@ -146,6 +146,61 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{"hub.Publish(Event{", "string(hmevent.EventTypeSystemStatusChanged)"},
 		WireValue: string(hmevent.EventTypeSystemStatusChanged),
 	},
+	// alarm_panel.* broadcasts: emitted by AlarmPanelSubscriber off the
+	// daemon-level alarm bus. The wire identity is a ws-package-local
+	// unexported constant (the `alarm.` broadcast namespace, distinct from
+	// the `alarm_panel.` hmevent tags), so WireValue is the literal name and
+	// the constant declaration is pinned via Tokens.
+	"alarm.state_changed": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmStateChanged = "alarm.state_changed"`},
+		WireValue: "alarm.state_changed",
+	},
+	"alarm.countdown": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmCountdown = "alarm.countdown"`},
+		WireValue: "alarm.countdown",
+	},
+	"alarm.readiness_changed": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmReadinessChanged = "alarm.readiness_changed"`},
+		WireValue: "alarm.readiness_changed",
+	},
+	"alarm.triggered": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmTriggered = "alarm.triggered"`},
+		WireValue: "alarm.triggered",
+	},
+	"alarm.notification": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmNotification     = "alarm.notification"`},
+		WireValue: "alarm.notification",
+	},
+	"alarm.journal_appended": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmJournalAppended = "alarm.journal_appended"`},
+		WireValue: "alarm.journal_appended",
+	},
+	"alarm.walktest_progress": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmWalkTestProgress = "alarm.walktest_progress"`},
+		WireValue: "alarm.walktest_progress",
+	},
+	"alarm.health_changed": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmHealthChanged = "alarm.health_changed"`},
+		WireValue: "alarm.health_changed",
+	},
+	"alarm.panel_changed": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmPanelChanged     = "alarm.panel_changed"`},
+		WireValue: "alarm.panel_changed",
+	},
+	"alarm.reminder": {
+		Files:     []string{"internal/north/rest/ws/alarm_events.go"},
+		Tokens:    []string{"s.hub.Publish(Event{", `broadcastAlarmReminder = "alarm.reminder"`},
+		WireValue: "alarm.reminder",
+	},
 	"matter.exposable_changed": {
 		Files: []string{
 			"internal/north/rest/handlers/matter_events.go",

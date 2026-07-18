@@ -293,45 +293,22 @@ func TestInvokeCustomDataPoint_MissingOperation_Returns400(t *testing.T) {
 	}
 }
 
-// --- tests: percent-encoded channel-group wire names ---
+// --- tests: channel-group wire names ---
 
 // addChannelGroupSwitches attaches two switch CDPs that materialise the
 // same STATE parameter on channels 3 and 4 so [custom.WireName]
-// disambiguates them to STATE@3 / STATE@4 — the channel-group shape a
-// percent-encoding client addresses as STATE%403.
+// disambiguates them to STATE@3 / STATE@4. Percent-encoded segments
+// (STATE%403) are decoded centrally by the router (the rest package's
+// decodedPathRouting middleware and its test), so these tests exercise
+// the handler with the decoded values chi delivers.
 func addChannelGroupSwitches(d *device.Device, addr string) {
 	for _, no := range []int{3, 4} {
 		addCustomDP(d, addr, "STATE", no, hmenum.DataPointCategorySwitch)
 	}
 }
 
-// TestInvokeCustomDataPoint_PercentEncodedName decodes a percent-encoded
-// `{name}` segment (STATE%403 → STATE@3) so a conformant client that
-// encodes the path resolves the same channel-group CDP as one sending a
-// literal `@`. Without the decode the lookup misses and the invoke 502s.
-func TestInvokeCustomDataPoint_PercentEncodedName(t *testing.T) {
-	t.Parallel()
-	d := newTestDevice("DEV0100", "HMIP-PS")
-	addChannelGroupSwitches(d, "DEV0100")
-	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0100": d}}
-	writer := &stubCustomDPWriter{}
-
-	body := bytes.NewBufferString(`{}`)
-	req := httptest.NewRequest(http.MethodPost, "/", body)
-	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0100", "name": "STATE%403", "operation": "turn_on"}))
-	w := httptest.NewRecorder()
-	InvokeCustomDataPoint(idx, writer).ServeHTTP(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 for encoded name, got %d body=%s", w.Code, w.Body.String())
-	}
-	if len(writer.calls) != 1 || writer.calls[0].name != "STATE@3" {
-		t.Fatalf("expected one invoke for decoded name STATE@3, got %+v", writer.calls)
-	}
-}
-
-// TestInvokeCustomDataPoint_LiteralAtName keeps the unencoded `@` path
-// working — most clients send the literal character.
+// TestInvokeCustomDataPoint_LiteralAtName pins the channel-group `@`
+// lookup on the invoke path.
 func TestInvokeCustomDataPoint_LiteralAtName(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice("DEV0101", "HMIP-PS")
@@ -353,21 +330,22 @@ func TestInvokeCustomDataPoint_LiteralAtName(t *testing.T) {
 	}
 }
 
-// TestGetCustomDataPoint_PercentEncodedName decodes the encoded name on the
-// read path too, so GET …/cdps/STATE%403 returns the same CDP detail.
-func TestGetCustomDataPoint_PercentEncodedName(t *testing.T) {
+// TestGetCustomDataPoint_ChannelGroupName pins the channel-group `@`
+// lookup on the read path, so GET …/cdps/STATE@3 returns the CDP of
+// channel 3.
+func TestGetCustomDataPoint_ChannelGroupName(t *testing.T) {
 	t.Parallel()
 	d := newTestDevice("DEV0102", "HMIP-PS")
 	addChannelGroupSwitches(d, "DEV0102")
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0102": d}}
 
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0102", "name": "STATE%403"}))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0102", "name": "STATE@3"}))
 	w := httptest.NewRecorder()
 	GetCustomDataPoint(idx).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for encoded name, got %d body=%s", w.Code, w.Body.String())
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 	var out CustomDPDetail
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {

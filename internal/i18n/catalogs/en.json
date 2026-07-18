@@ -136,6 +136,7 @@
   "message.code.UNREACH": "Unreachable",
   "message.code.UPDATE_PENDING": "Update Pending",
   "discovery.alarm_messages": "Alarm messages",
+  "discovery.alarm_system": "Alarm system",
   "discovery.service_messages": "Service messages",
   "discovery.inbox": "Inbox",
   "discovery.system_health": "System Health",

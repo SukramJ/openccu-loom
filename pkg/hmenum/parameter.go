@@ -26,6 +26,8 @@ const (
 	ParameterAutoMode                      Parameter = "AUTO_MODE"
 	ParameterAutoRelockState               Parameter = "AUTO_RELOCK_STATE"
 	ParameterBatteryState                  Parameter = "BATTERY_STATE"
+	ParameterBlockedPermanent              Parameter = "BLOCKED_PERMANENT"
+	ParameterBlockedTemporary              Parameter = "BLOCKED_TEMPORARY"
 	ParameterBoostMode                     Parameter = "BOOST_MODE"
 	ParameterBurstLimitWarning             Parameter = "BURST_LIMIT_WARNING"
 	ParameterButtonLock                    Parameter = "BUTTON_LOCK"
@@ -33,6 +35,7 @@ const (
 	ParameterChannelLock                   Parameter = "CHANNEL_LOCK"
 	ParameterChannelOperationMode          Parameter = "CHANNEL_OPERATION_MODE"
 	ParameterCodeID                        Parameter = "CODE_ID"
+	ParameterCodeState                     Parameter = "CODE_STATE"
 	ParameterColor                         Parameter = "COLOR"
 	ParameterColorBehaviour                Parameter = "COLOR_BEHAVIOUR"
 	ParameterColorTemperature              Parameter = "COLOR_TEMPERATURE"
@@ -199,6 +202,35 @@ var ClickEvents = map[Parameter]struct{}{
 // IsClickEvent reports whether p is a click-event parameter.
 func (p Parameter) IsClickEvent() bool {
 	_, ok := ClickEvents[p]
+	return ok
+}
+
+// edgeTriggerParameters is the set of parameters whose every emission is
+// a discrete edge (a momentary push or an identity token), not a stateful
+// value the CCU polls. The CCU frequently re-emits the same wire value for
+// these — a keypad user pressing the same key twice, a remote sending
+// PRESS_SHORT again — so the event coordinator must NOT collapse an
+// unchanged repeat into a no-op: dropping the second identical PRESS_LOCK
+// would swallow a real "disarm again" intent. Consumers (the alarm intent
+// router) rely on every edge surfacing on the bus.
+var edgeTriggerParameters = map[Parameter]struct{}{
+	ParameterPress:            {},
+	ParameterPressCont:        {},
+	ParameterPressLock:        {},
+	ParameterPressLong:        {},
+	ParameterPressLongRelease: {},
+	ParameterPressLongStart:   {},
+	ParameterPressShort:       {},
+	ParameterPressUnlock:      {},
+	ParameterCodeID:           {},
+	ParameterCodeState:        {},
+}
+
+// IsEdgeTriggerParameter reports whether p is an edge-trigger parameter:
+// one whose repeated identical emission must still be published as an
+// event rather than suppressed by value-unchanged deduplication.
+func IsEdgeTriggerParameter(p Parameter) bool {
+	_, ok := edgeTriggerParameters[p]
 	return ok
 }
 

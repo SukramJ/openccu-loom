@@ -1,0 +1,8 @@
+{
+  "active": false,
+  "sensors": [
+    { "id": "sensor-1", "name": "Haustür", "tested": false },
+    { "id": "sensor-2", "name": "Fenster Küche West", "tested": false },
+    { "id": "sensor-3", "name": "Bewegungsmelder Flur", "tested": false }
+  ]
+}

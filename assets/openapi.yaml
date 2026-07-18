@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.19.0
+  version: 2.27.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -31,6 +31,8 @@ tags:
   - name: sessions
   - name: audit
   - name: diagnostics
+  - name: alarm
+    description: Alarm system areas, arming, sensors, outputs, journal, walk-test
   - name: matter
   - name: config-admin
     description: Live config section read / write / delete + schema introspection
@@ -1572,6 +1574,28 @@ paths:
       responses:
         "202":
           description: Accept dispatched
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/firmware/refresh:
+    post:
+      operationId: refreshFirmwareData
+      summary: Re-read device firmware data from every CCU
+      description: |
+        Force-refreshes the per-device firmware data (installed /
+        available version, update lifecycle state) by re-pulling the
+        device descriptions from every configured CCU and applying them
+        to the live device models. Complements the periodic firmware
+        polling: use it when the firmware overview should reflect an
+        update the CCU performed right now instead of at the next poll.
+        Synchronous — a 204 means every reachable CCU has been swept.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204":
+          description: Firmware data refreshed
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/firmware/update:
@@ -4551,6 +4575,666 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /alarm/state:
+    get:
+      operationId: getAlarmState
+      summary: Current live status of every alarm area
+      tags: [alarm]
+      responses:
+        "200":
+          description: Per-area alarm status.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [areas]
+                properties:
+                  areas:
+                    type: array
+                    items: { $ref: "#/components/schemas/AlarmAreaStatus" }
+
+  /alarm/areas:
+    get:
+      operationId: listAlarmAreas
+      summary: List all configured alarm areas
+      tags: [alarm]
+      responses:
+        "200":
+          description: Alarm area list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmArea" }
+    post:
+      operationId: createAlarmArea
+      summary: Create a new alarm area (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmArea" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmArea" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /alarm/areas/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAlarmArea
+      summary: Get a single alarm area by id
+      tags: [alarm]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmArea" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: putAlarmArea
+      summary: Replace an alarm area (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmArea" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      operationId: deleteAlarmArea
+      summary: Delete an alarm area (operator)
+      description: Refused with 409 unless the area is currently disarmed.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /alarm/areas/{id}/sensors:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listAlarmAreaSensors
+      summary: List the sensors enrolled in an alarm area
+      tags: [alarm]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmSensor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: putAlarmAreaSensors
+      summary: Replace the full sensor set of an alarm area (operator)
+      description: >
+        Bulk replace — the request body is the complete desired sensor
+        list for the area; sensors omitted from the body are removed.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/AlarmSensor" }
+      responses:
+        "204": { description: Replaced }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /alarm/areas/{id}/outputs:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listAlarmAreaOutputs
+      summary: List the outputs enrolled in an alarm area
+      tags: [alarm]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmOutput" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: putAlarmAreaOutputs
+      summary: Replace the full output set of an alarm area (operator)
+      description: >
+        Bulk replace — the request body is the complete desired output
+        list for the area; outputs omitted from the body are removed.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/AlarmOutput" }
+      responses:
+        "204": { description: Replaced }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /alarm/areas/{id}/arm:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: armAlarmArea
+      summary: Arm an alarm area (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmArmRequest" }
+      responses:
+        "200":
+          description: >
+            Arming accepted. The area may now be counting down an exit
+            delay (state `arming`) or already armed (`exit_delay_s: 0`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmArmAccepted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: >
+            The area's code policy requires an arm code and the supplied
+            `code` is missing or wrong. The detail stays opaque
+            (`invalid_code`) so a prober learns nothing about which codes
+            exist.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >
+            Arming refused — readiness blockers are present for the
+            requested mode. The problem detail's `errors` array carries
+            the blocker list (mirrors AlarmModeReadiness.blockers).
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /alarm/areas/{id}/disarm:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: disarmAlarmArea
+      summary: Disarm an alarm area (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: false
+        description: >
+          Optional disarm code. An absent body disarms code-free; an
+          operator-session surface is permitted to do so even when a
+          code policy is set (break-glass, docs/alarm-concept.md §11 S6).
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
+      responses:
+        "204": { description: Disarmed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/AlarmInvalidCode" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /alarm/areas/{id}/silence:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: silenceAlarmArea
+      summary: Silence the active incident on an alarm area without disarming (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: false
+        description: >
+          Optional silence code, for surfaces whose per-surface policy
+          requires one (silence is code-free by default, S3).
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
+      responses:
+        "204": { description: Silenced }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/AlarmInvalidCode" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /alarm/areas/{id}/acknowledge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: acknowledgeAlarmArea
+      summary: Acknowledge (clear) a finished incident on an alarm area (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: false
+        description: >
+          Accepts the shared optional code body for surface symmetry, but
+          acknowledge is journal-only with no code gate — a supplied code
+          is inert here.
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmVerbRequest" }
+      responses:
+        "204": { description: Acknowledged }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /alarm/silence-all:
+    post:
+      operationId: silenceAllAlarmAreas
+      summary: Silence the active incident on every alarm area at once (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Silenced }
+
+  /alarm/areas/{id}/readiness:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAlarmAreaReadiness
+      summary: Per-mode arm-readiness of an alarm area
+      tags: [alarm]
+      responses:
+        "200":
+          description: Readiness verdict for every mode configured on the area, keyed by mode name.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { $ref: "#/components/schemas/AlarmModeReadiness" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /alarm/panels:
+    get:
+      operationId: listAlarmPanels
+      summary: List the alarm-control-panel entity projections
+      description: |
+        The HA-facing entity view of every alarm area (plus the
+        aggregate master panel when two or more areas exist) — the
+        same projection the MQTT discovery entities and the
+        `alarm.panel_changed` WebSocket broadcast carry.
+      tags: [alarm]
+      responses:
+        "200":
+          description: Panel entities.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmPanelEntity" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /alarm/journal:
+    get:
+      operationId: listAlarmJournal
+      summary: Query the alarm engine's event journal
+      tags: [alarm]
+      parameters:
+        - in: query
+          name: area
+          schema: { type: string }
+          description: Only return entries for this alarm area id.
+        - in: query
+          name: class
+          schema:
+            type: string
+            enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+          description: Only return entries in this journal class.
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+          description: >
+            Only return entries at-or-after this value (inclusive, RFC3339).
+            Returns 400 if the value cannot be parsed.
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+          description: >
+            Only return entries strictly before this value (exclusive, RFC3339).
+            Returns 400 if the value cannot be parsed.
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 500 }
+          description: >
+            Maximum entries to return. 0 or absent uses the default (500).
+            Values above 5000 are capped to 5000.
+      responses:
+        "200":
+          description: Filtered journal entries (newest first).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmJournalEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /alarm/areas/{id}/walktest/start:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: startAlarmWalkTest
+      summary: Start a walk-test session on an alarm area (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Started }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /alarm/areas/{id}/walktest/stop:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: stopAlarmWalkTest
+      summary: Stop the running walk-test session on an alarm area (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Stopped }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /alarm/areas/{id}/walktest:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAlarmWalkTestStatus
+      summary: Live status of an alarm area's walk-test session
+      tags: [alarm]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmWalkTestStatus" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /alarm/output-candidates:
+    get:
+      operationId: listAlarmOutputCandidates
+      summary: Channels that can back a device-backed alarm output class
+      description: >
+        Enumerates every channel across all centrals whose custom data
+        point can carry at least one device-backed output class
+        (acoustic_siren, optical_siren, switched_siren, smoke_sounder,
+        alarm_light, chirp). Derived from the live domain model — a
+        candidate always resolves to an output driver at runtime.
+        Notification and sysvar_mirror outputs are not device-backed
+        and never appear; passing them as `class` is rejected.
+      tags: [alarm]
+      parameters:
+        - name: class
+          in: query
+          required: false
+          description: Restrict to channels that can carry this class.
+          schema:
+            type: string
+            enum:
+              - acoustic_siren
+              - optical_siren
+              - switched_siren
+              - smoke_sounder
+              - alarm_light
+              - chirp
+      responses:
+        "200":
+          description: Candidate channel list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmOutputCandidate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /alarm/remote-key-candidates:
+    get:
+      operationId: listAlarmRemoteKeyCandidates
+      summary: Remote/wall-button key channels usable for remote-key code bindings
+      description: >
+        Enumerates every channel across all centrals that emits a
+        key-press parameter the alarm intent router dispatches
+        remote-key code bindings on (PRESS_SHORT / PRESS_LONG) — e.g.
+        the HmIP-KRCA keyfob buttons. Virtual remote channels are
+        excluded; they can still be bound via a raw binding document.
+      tags: [alarm]
+      responses:
+        "200":
+          description: Remote key candidate list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmRemoteKeyCandidate" }
+
+  /alarm/outputs/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: testAlarmOutput
+      summary: Fire an alarm output briefly for a walk test (operator)
+      description: >
+        Refused with 409 for outputs of class `smoke_sounder` —
+        smoke-detector sounders are excluded from live output tests
+        (see docs/alarm-concept.md §7).
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmOutputTestRequest" }
+      responses:
+        "204": { description: Test fired }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Refused — smoke-detector sounders cannot be live-tested via this endpoint.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /alarm/codes:
+    get:
+      operationId: listAlarmCodes
+      summary: List alarm codes (operator)
+      description: >
+        Codes are security material, so even the list is operator-gated,
+        never viewer-open (docs/alarm-concept.md §11/§16). The argon2id
+        hash and cleartext PIN are never returned. 503 when the alarm-code
+        subsystem is not wired.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: Every configured alarm code (hash-free).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmCode" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createAlarmCode
+      summary: Create an alarm code (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmCodeRequest" }
+      responses:
+        "201":
+          description: The created code (hash-free).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmCode" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /alarm/codes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAlarmCode
+      summary: Get one alarm code (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: The alarm code (hash-free).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AlarmCode" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putAlarmCode
+      summary: Replace an alarm code (operator)
+      description: An empty `pin` keeps the stored hash.
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AlarmCodeRequest" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteAlarmCode
+      summary: Delete an alarm code (operator)
+      tags: [alarm]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
 components:
   securitySchemes:
     basicAuth:
@@ -4642,6 +5326,15 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
     NotFound:
       description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    AlarmInvalidCode:
+      description: >
+        The area's code policy requires a code and the supplied `code` is
+        missing or wrong. The detail stays opaque (`invalid_code`) so a
+        prober learns nothing about which codes exist
+        (docs/alarm-concept.md §16).
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -4941,7 +5634,9 @@ components:
             Runtime feature set. Always-on entries:
             `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
             Conditional entries surface only when configured:
-            `mqtt.discovery.v1`, `matter.bridge.v1`, `auth.oidc.v1`.
+            `mqtt.discovery.v1`, `matter.bridge.v1`, `auth.oidc.v1`,
+            `alarm.v1` (the `/alarm` surface is mounted — absent, the
+            alarm subsystem is off and every `/alarm` route answers 404).
 
             Open-ended on purpose: the daemon may advertise additional
             capabilities (e.g. `system.restart.supervised.v1`, `mcp.v1`)
@@ -6677,6 +7372,241 @@ components:
         update_available: { type: boolean }
         in_progress: { type: boolean }
 
+    AlarmStateChangedPayload:
+      type: object
+      description: |
+        Payload of an `alarm.state_changed` broadcast. Topic
+        `alarm.panel`. Fires on every arm-state-machine transition of
+        an alarm area (docs/alarm-concept.md §5).
+      required: [area_id, area_name, old_state, new_state]
+      properties:
+        area_id: { type: string }
+        area_name: { type: string }
+        old_state:
+          type: string
+          enum: [disarmed, arming, armed, pending, triggered]
+        new_state:
+          type: string
+          enum: [disarmed, arming, armed, pending, triggered]
+        mode:
+          type: string
+          enum: [disarmed, perimeter, full, night, vacation, custom]
+          description: Active (or, while arming, target) protection mode.
+        changed_by:
+          type: string
+          description: >-
+            Attribution (operator account, keypad identity, code name,
+            or an engine-internal actor such as "engine:restore");
+            omitted when unattributed.
+        source:
+          type: string
+          description: Surface the action came from (rest, ws, mqtt, hmcli, keypad, engine).
+        incident_id:
+          type: integer
+          format: int64
+          description: References the active incident; omitted when none.
+
+    AlarmCountdownPayload:
+      type: object
+      description: |
+        Payload of an `alarm.countdown` broadcast. Topic `alarm.panel`.
+        Ticks once per second while an exit or entry delay runs on an
+        alarm area.
+      required: [area_id, kind, remaining_s, total_s, remaining_ms, total_ms]
+      properties:
+        area_id: { type: string }
+        kind:
+          type: string
+          enum: [exit_delay, entry_delay]
+        remaining_s: { type: integer }
+        total_s: { type: integer }
+        remaining_ms:
+          type: integer
+          description: Remaining time in milliseconds (source fidelity).
+        total_ms:
+          type: integer
+          description: Total countdown length in milliseconds.
+
+    AlarmReadinessChangedPayload:
+      type: object
+      description: |
+        Payload of an `alarm.readiness_changed` broadcast. Topic
+        `alarm.panel`. Fires when the ready-to-arm computation of an
+        area changes for at least one mode (docs/alarm-concept.md
+        §6.3). Carries the full per-mode map, not a delta.
+      required: [area_id, readiness]
+      properties:
+        area_id: { type: string }
+        readiness:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/AlarmModeReadiness" }
+          description: Per-mode arming readiness, keyed by mode name.
+
+    AlarmNotificationPayload:
+      type: object
+      description: |
+        Payload of an `alarm.notification` broadcast. Topic
+        `alarm.panel`. One enrolled notification output fired for an
+        alarm — one-shot at fire time, never cancelled by a later
+        silence.
+      required: [area_id, output_id, incident_id]
+      properties:
+        area_id: { type: string }
+        area_name: { type: string }
+        output_id: { type: string }
+        output_name: { type: string }
+        incident_id: { type: integer, format: int64 }
+        mode: { type: string }
+
+    AlarmTriggeredPayload:
+      type: object
+      description: |
+        Payload of an `alarm.triggered` broadcast. Topic `alarm.panel`.
+        Fires when an area enters `triggered` and an incident is
+        opened (or re-adopted after a restart / reconnect).
+      required: [area_id, area_name, incident_id, cause]
+      properties:
+        area_id: { type: string }
+        area_name: { type: string }
+        incident_id: { type: integer, format: int64 }
+        sensor_id:
+          type: string
+          description: Triggering sensor id; omitted when the cause is not a sensor.
+        sensor_name: { type: string }
+        cause:
+          type: string
+          description: Stable machine-readable cause token (sensor, adopted, central_lost, restored).
+        mode:
+          type: string
+          enum: [perimeter, full, night, vacation, custom]
+          description: Protection mode that was active at trigger time.
+
+    AlarmPanelEntity:
+      type: object
+      description: |
+        Alarm-control-panel entity projection (model category
+        `alarm_control_panel`), identical across REST, WebSocket, and
+        MQTT. `area_id` is `master` for the aggregate panel.
+      required: [unique_id, area_id, name, category, state, available, code_arm_required, code_disarm_required]
+      properties:
+        unique_id: { type: string }
+        area_id: { type: string }
+        name: { type: string }
+        category: { type: string }
+        state:
+          type: string
+          enum: [disarmed, arming, pending, triggered, armed_home, armed_away, armed_night, armed_vacation, armed_custom_bypass]
+        supported_modes:
+          type: array
+          items: { type: string }
+        available: { type: boolean }
+        master: { type: boolean }
+        code_arm_required:
+          type: boolean
+          description: |
+            Effective per-area code requirement for arming: the area's
+            code policy AND an applicable enabled pin code exists —
+            exactly the requirement the daemon enforces, so a client
+            prompts for a code precisely when one is needed. The master
+            aggregate carries `true` when any member area requires one.
+        code_disarm_required:
+          type: boolean
+          description: |
+            Effective per-area code requirement for disarming; same
+            derivation and master aggregation as `code_arm_required`.
+
+    AlarmPanelChangedPayload:
+      type: object
+      description: |
+        Payload of an `alarm.panel_changed` broadcast. Topic
+        `alarm.panel`. Fires whenever a panel entity's projection
+        changes; `removed` marks a deleted area's panel.
+        `code_arm_required` / `code_disarm_required` mirror the
+        `AlarmPanelEntity` flags so live code-policy edits propagate.
+      required: [unique_id, area_id, name, state, available, code_arm_required, code_disarm_required]
+      properties:
+        unique_id: { type: string }
+        area_id: { type: string }
+        name: { type: string }
+        state: { type: string }
+        available: { type: boolean }
+        code_arm_required: { type: boolean }
+        code_disarm_required: { type: boolean }
+        removed: { type: boolean }
+
+    AlarmReminderPayload:
+      type: object
+      description: |
+        Payload of an `alarm.reminder` broadcast. Topic `alarm.panel`.
+        Fires when an arm schedule elapses with auto-arm off while the
+        area is not in the scheduled mode — the engine notifies rather
+        than arming (docs/alarm-concept.md §15 row 19).
+      required: [area_id, mode]
+      properties:
+        area_id: { type: string }
+        area_name: { type: string }
+        mode:
+          type: string
+          description: The protection mode the schedule expected the area to be in.
+
+    AlarmJournalAppendedPayload:
+      type: object
+      description: |
+        Payload of an `alarm.journal_appended` broadcast. Topic
+        `alarm.panel`. Fires after an alarm-journal entry has been
+        persisted; carries the entry head, not the full detail
+        document — consumers needing detail call GET /alarm/journal.
+      required: [entry_id, class, event]
+      properties:
+        entry_id: { type: integer, format: int64 }
+        area_id:
+          type: string
+          description: Omitted for engine-global entries.
+        class:
+          type: string
+          enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+        event:
+          type: string
+          description: Stable machine-readable event token within the class.
+        actor:
+          type: string
+          description: Attribution; omitted when unattributed.
+        incident_id:
+          type: integer
+          format: int64
+          description: References the related incident; omitted when none.
+
+    AlarmWalkTestProgressPayload:
+      type: object
+      description: |
+        Payload of an `alarm.walktest_progress` broadcast. Topic
+        `alarm.panel`. Fires when a walk-test session records a
+        sensor activation.
+      required: [area_id, sensor_id, seen, total]
+      properties:
+        area_id: { type: string }
+        sensor_id: { type: string }
+        sensor_name: { type: string }
+        seen:
+          type: integer
+          description: Number of enrolled sensors that have reported an activation so far this session.
+        total:
+          type: integer
+          description: Total number of sensors enrolled in the walk-test session.
+
+    AlarmHealthChangedPayload:
+      type: object
+      description: |
+        Payload of an `alarm.health_changed` broadcast. Topic
+        `alarm.panel`. Fires on alarm-subsystem health transitions
+        (siren stop-verification, service degradations).
+      required: [healthy, note]
+      properties:
+        healthy: { type: boolean }
+        note:
+          type: string
+          description: Stable, English machine string describing the transition.
+
     TriggeredEventSummary:
       type: object
       description: The most recent event fired within an event group.
@@ -7579,3 +8509,435 @@ components:
       properties:
         name: { type: string }
         device_count: { type: integer }
+
+    AlarmAreaConfig:
+      type: object
+      additionalProperties: true
+      description: >-
+        Free-form, engine-owned document describing an alarm area's
+        arming modes and per-mode policy (entry/exit delays, output
+        policy, post-trigger policy, central-loss policy, blocker
+        policies — see docs/alarm-concept.md §14). The REST and
+        WebSocket layers pass this document through unvalidated; the
+        alarm engine is the sole owner of its schema and versioning.
+
+    AlarmArea:
+      type: object
+      required: [id, name]
+      description: >-
+        One alarm area — an independently armable partition with its
+        own arm state, sensor set, and output set (docs/alarm-concept.md
+        §14).
+      properties:
+        id: { type: string }
+        name: { type: string }
+        position:
+          type: integer
+          description: Display ordering hint for the SPA area list.
+        config:
+          $ref: "#/components/schemas/AlarmAreaConfig"
+
+    AlarmSensor:
+      type: object
+      required: [id, central, interface_id, channel_address, parameter, type]
+      description: >-
+        One CCU data point enrolled into an alarm area as a sensor
+        input (door/window contact, motion, tamper, hazard, panic —
+        docs/alarm-concept.md §6.1).
+      properties:
+        id: { type: string }
+        central: { type: string, description: Owning CCU (central name). }
+        interface_id: { type: string }
+        channel_address: { type: string }
+        parameter: { type: string }
+        type:
+          type: string
+          enum: [door, window, motion, tamper, hazard, panic]
+          description: Sensor role; presets the mode matrix and behaviour flags.
+        name: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+          description: >-
+            Engine-owned per-sensor configuration document (mode
+            matrix, entry-delay flag, bypass eligibility, …).
+
+    AlarmOutput:
+      type: object
+      required: [id, class, central, channel_address]
+      description: >-
+        One CCU actuator enrolled into an alarm area as an alarm
+        consequence — siren, switched siren, smoke-detector sounder,
+        alarm light, chirp emitter, notification target, or sysvar
+        mirror (docs/alarm-concept.md §7).
+      properties:
+        id: { type: string }
+        class:
+          type: string
+          enum:
+            - acoustic_siren
+            - switched_siren
+            - smoke_sounder
+            - optical_siren
+            - alarm_light
+            - chirp
+            - notification
+            - sysvar_mirror
+          description: >-
+            Output driver class. The class, not the backing device
+            type, decides which safety invariants apply.
+        central: { type: string, description: Owning CCU (central name). }
+        channel_address: { type: string }
+        name: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+          description: >-
+            Engine-owned per-output configuration document (per-mode
+            assignment, indoor/outdoor flag, duration/tone, …).
+
+    AlarmOutputCandidate:
+      type: object
+      required: [central, device_address, model, channel_address, channel_no, classes, kind]
+      description: >-
+        One channel whose custom data point can back at least one
+        device-backed alarm output class. Derived from the live domain
+        model, so enrolling a candidate always resolves to an output
+        driver.
+      properties:
+        central: { type: string, description: Owning CCU (central name). }
+        device_address: { type: string }
+        device_name: { type: string }
+        model: { type: string }
+        channel_address: { type: string }
+        channel_no: { type: integer }
+        channel_name: { type: string }
+        classes:
+          type: array
+          description: >-
+            Device-backed output classes this channel can carry, in
+            canonical class order. The switched_siren class requires
+            device-side auto-off (ON_TIME) and is only listed when the
+            channel supports it.
+          items:
+            type: string
+            enum:
+              - acoustic_siren
+              - optical_siren
+              - switched_siren
+              - smoke_sounder
+              - alarm_light
+              - chirp
+        kind:
+          type: string
+          description: Stable custom-DP kind string (widget selection).
+        available_tones:
+          type: array
+          items: { type: string }
+          description: Raw acoustic tone wire values the siren offers (sirens only).
+        available_tone_labels:
+          type: array
+          items: { type: string }
+          description: >-
+            Localised display labels for available_tones, same order.
+            Absent when the server has no value translations.
+        available_lights:
+          type: array
+          items: { type: string }
+          description: Raw optical pattern wire values the siren offers (sirens only).
+        available_light_labels:
+          type: array
+          items: { type: string }
+          description: Localised display labels for available_lights, same order.
+        available_soundfiles:
+          type: array
+          items: { type: string }
+          description: >-
+            Raw soundfile wire values an MP3 player offers for the
+            chirp class (e.g. SOUNDFILE_001).
+        available_soundfile_labels:
+          type: array
+          items: { type: string }
+          description: Localised display labels for available_soundfiles, same order.
+        dimmable:
+          type: boolean
+          description: Level support for the alarm_light class.
+
+    AlarmRemoteKeyCandidate:
+      type: object
+      required: [central, device_address, model, channel_address, channel_no, parameters]
+      description: >-
+        One channel that emits the key-press events remote-key code
+        bindings dispatch on — a physical remote-control or wall-button
+        key.
+      properties:
+        central: { type: string, description: Owning CCU (central name). }
+        device_address: { type: string }
+        device_name: { type: string }
+        model: { type: string }
+        channel_address: { type: string }
+        channel_no: { type: integer }
+        channel_name: { type: string }
+        parameters:
+          type: array
+          description: >-
+            Press parameters this key offers, in dispatch order
+            (PRESS_SHORT before PRESS_LONG).
+          items:
+            type: string
+            enum: [PRESS_SHORT, PRESS_LONG]
+
+    AlarmModeReadiness:
+      type: object
+      required: [ready]
+      description: Whether an alarm area is ready to arm into one specific mode.
+      properties:
+        ready:
+          type: boolean
+          description: True when the mode can be armed without `force`.
+        blockers:
+          type: array
+          items: { type: string }
+          description: Sensor ids currently blocking the arm into this mode.
+        warnings:
+          type: array
+          items: { type: string }
+          description: Sensor ids with non-blocking health warnings for this mode.
+
+    AlarmAreaStatus:
+      type: object
+      required: [id, name, state, walktest_active]
+      description: >-
+        One alarm area's live status, as returned by GET /alarm/state
+        and GET /alarm/areas/{id}/status views.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        state:
+          type: string
+          enum: [disarmed, arming, armed, pending, triggered]
+          description: Arm-state-machine state (docs/alarm-concept.md §5).
+        mode:
+          type: string
+          enum: [disarmed, perimeter, full, night, vacation, custom]
+          description: Currently active (or, while arming, target) protection mode.
+        bypassed:
+          type: array
+          items: { type: string }
+          description: Sensor ids currently bypassed for the active/pending arm.
+        incident:
+          type: object
+          description: The area's open incident, present only while `state` is `triggered`.
+          properties:
+            id: { type: string }
+            silenced: { type: boolean }
+        countdown:
+          type: object
+          description: A running exit/entry delay countdown, present only while one is active.
+          properties:
+            kind:
+              type: string
+              enum: [exit_delay, entry_delay]
+            remaining_s: { type: integer }
+            total_s: { type: integer }
+        readiness:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/AlarmModeReadiness" }
+          description: Per-mode arming readiness, keyed by mode name.
+        walktest_active:
+          type: boolean
+          description: True while a walk-test session is running on this area.
+
+    AlarmArmRequest:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [perimeter, full, night, vacation, custom]
+          description: Target protection mode.
+        force:
+          type: boolean
+          description: Arm despite readiness blockers, where the engine's blocker policy allows overriding.
+        skip_delay:
+          type: boolean
+          description: Skip the configured exit delay and arm immediately.
+        bypass:
+          type: array
+          items: { type: string }
+          description: Sensor ids to bypass for this arm attempt.
+        code:
+          type: string
+          description: >
+            Alarm code supplied with the arm, when the area's code policy
+            requires one (or to surface a duress code). Never logged or
+            persisted in cleartext.
+
+    AlarmVerbRequest:
+      type: object
+      description: >
+        Optional body of the code-carrying verbs (disarm / silence /
+        acknowledge). An absent body acts without a code.
+      properties:
+        code:
+          type: string
+          description: >
+            Alarm code for the verb, when the area's code policy requires
+            one. Never logged or persisted in cleartext.
+
+    AlarmCodePerms:
+      type: object
+      description: Per-code verb permissions.
+      required: [arm, disarm, silence]
+      properties:
+        arm: { type: boolean }
+        disarm: { type: boolean }
+        silence: { type: boolean }
+
+    AlarmCode:
+      type: object
+      description: >
+        One alarm code. The argon2id hash and the cleartext PIN are NEVER
+        serialized onto this surface (docs/alarm-concept.md §11, §16).
+      required: [id, name, kind, perms, enabled]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind:
+          type: string
+          enum: [pin, keypad_slot, remote_key]
+          description: Code class.
+        duress:
+          type: boolean
+          description: >
+            A PIN that disarms normally but fires a silent duress alarm.
+            Only meaningful for the pin kind.
+        perms: { $ref: "#/components/schemas/AlarmCodePerms" }
+        areas:
+          type: array
+          items: { type: string }
+          description: Restrict to these area ids; empty means every area.
+        binding:
+          description: >
+            Engine-owned hardware-binding document for the keypad_slot /
+            remote_key kinds; absent for pin codes.
+        valid_from_ms:
+          type: integer
+          format: int64
+          description: Optional validity-window start (Unix ms); 0 leaves it open.
+        valid_until_ms:
+          type: integer
+          format: int64
+          description: Optional validity-window end (Unix ms); 0 leaves it open.
+        enabled: { type: boolean }
+        created_ms: { type: integer, format: int64 }
+        updated_ms: { type: integer, format: int64 }
+
+    AlarmCodeRequest:
+      type: object
+      description: >
+        Create/update body for an alarm code. The cleartext PIN is
+        write-only — hashed to argon2id before persistence and never
+        echoed back. An empty PIN on update keeps the stored hash.
+      required: [name, kind, perms, enabled]
+      properties:
+        name: { type: string }
+        kind:
+          type: string
+          enum: [pin, keypad_slot, remote_key]
+        pin:
+          type: string
+          description: >
+            Cleartext code, write-only, for the pin kind. Omitted on
+            update to keep the existing hash.
+        duress: { type: boolean }
+        perms: { $ref: "#/components/schemas/AlarmCodePerms" }
+        areas:
+          type: array
+          items: { type: string }
+        binding:
+          description: Engine-owned hardware-binding document (keypad_slot / remote_key).
+        valid_from_ms: { type: integer, format: int64 }
+        valid_until_ms: { type: integer, format: int64 }
+        enabled: { type: boolean }
+
+    AlarmArmAccepted:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [arming, armed]
+          description: Resulting area state.
+        bypassed:
+          type: array
+          items: { type: string }
+          description: Sensor ids actually bypassed for this arm.
+        exit_delay_s:
+          type: integer
+          description: Exit delay in seconds the area is now counting down; 0 when armed immediately.
+
+    AlarmJournalEntry:
+      type: object
+      required: [id, when, area_id, class, event]
+      description: >-
+        One entry in the alarm engine's append-only event journal
+        (docs/alarm-concept.md §14), as returned by GET /alarm/journal.
+      properties:
+        id:
+          type: integer
+          format: int64
+        when: { type: string, format: date-time }
+        area_id: { type: string }
+        class:
+          type: string
+          enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
+          description: Journal bucket used by the `class` query filter.
+        event:
+          type: string
+          description: Stable machine-readable event token within the class (e.g. "armed", "force_armed", "silenced").
+        actor:
+          type: string
+          description: Identity that caused the entry (operator account, keypad identity, code name, or an engine-internal actor); empty when unattributed.
+        source:
+          type: string
+          description: Surface the action came from (rest, ws, mqtt, hmcli, keypad, engine).
+        incident_id:
+          type: integer
+          format: int64
+          description: Linked incident id, present when the entry belongs to a trigger episode.
+        details:
+          type: object
+          additionalProperties: true
+          description: Engine-owned, event-class-specific detail document.
+
+    AlarmWalkTestStatus:
+      type: object
+      required: [active, sensors]
+      description: Live status of a walk-test session on one alarm area, as returned by GET /alarm/areas/{id}/walktest.
+      properties:
+        active: { type: boolean }
+        started_at: { type: string, format: date-time }
+        sensors:
+          type: array
+          description: One row per sensor enrolled in the area, tracking walk-test coverage.
+          items:
+            type: object
+            required: [id, tested]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              tested:
+                type: boolean
+                description: True once this sensor reported at least one activation during the current session.
+              last_triggered_at: { type: string, format: date-time }
+
+    AlarmOutputTestRequest:
+      type: object
+      properties:
+        optical_only:
+          type: boolean
+          description: >-
+            Fire only the output's optical/visual indication,
+            suppressing sound. Ignored for outputs with no audible
+            element.

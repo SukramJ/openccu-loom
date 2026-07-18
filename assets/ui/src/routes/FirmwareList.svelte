@@ -46,13 +46,42 @@
     ...new Set(allDevices.map((d) => d.central).filter(Boolean)),
   ].sort());
 
+  // The CCU reports the all-zero placeholder "0.0.0" as the available
+  // firmware of devices it has no OTA image for — e.g. the RPI-RF-MOD
+  // gateway module, which is updated through the CCU firmware itself.
+  // A placeholder is not an available version: comparing it against
+  // the installed version must never yield "update available".
+  function availableVersion(fw: DeviceDetail["firmware"] | undefined): string {
+    const v = fw?.Available ?? "";
+    return /^0+(\.0+)*$/.test(v) ? "" : v;
+  }
+
+  // hasUpdate treats a device as having an update when either the
+  // gated flag says an install can start now, or the loaded firmware
+  // detail shows a newer version the CCU has not delivered to the
+  // device yet (HmIP NEW_FIRMWARE_AVAILABLE). The gated flag alone
+  // would hide a pending 1.2.2 → 1.4.10 update from the filter and
+  // summary while the row visibly lists both versions.
+  function hasUpdate(d: DeviceSummary): boolean {
+    if (d.update_available) return true;
+    const fw = detailMap[d.address]?.firmware;
+    const avail = availableVersion(fw);
+    return (
+      !!fw?.Current &&
+      !!avail &&
+      avail !== fw.Current &&
+      fw.UpdateState !== "UP_TO_DATE" &&
+      fw.UpdateState !== "LIVE_UP_TO_DATE"
+    );
+  }
+
   const filtered = $derived.by(() => {
     let list = allDevices;
     if (centralFilter) {
       list = list.filter((d) => d.central === centralFilter);
     }
     if (filterMode === "updatable") {
-      list = list.filter((d) => d.update_available);
+      list = list.filter((d) => hasUpdate(d));
     }
     return list;
   });
@@ -61,14 +90,12 @@
     { key: "device", label: t("firmware.col.device"), sortable: true, title: true, get: (d) => d.name || d.address },
     { key: "model", label: t("firmware.col.model"), sortable: true, get: (d) => d.model },
     { key: "current", label: t("firmware.col.current"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.Current ?? "" },
-    { key: "available", label: t("firmware.col.available"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.Available ?? "" },
+    { key: "available", label: t("firmware.col.available"), sortable: true, get: (d) => availableVersion(detailMap[d.address]?.firmware) },
     { key: "state", label: t("firmware.col.state"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.UpdateState ?? (d.update_available ? "NEW_FIRMWARE_AVAILABLE" : "UP_TO_DATE") },
     { key: "action", label: t("firmware.col.action"), align: "right", cellClass: "reflow-actions" },
   ]);
 
-  const updatableCount = $derived(
-    allDevices.filter((d) => d.update_available).length,
-  );
+  const updatableCount = $derived(allDevices.filter((d) => hasUpdate(d)).length);
 
   // ---- lifecycle -------------------------------------------------------
 
@@ -83,6 +110,39 @@
   });
 
   // ---- helpers ---------------------------------------------------------
+
+  let reloading = $state(false);
+
+  // Reload = ask the daemon to re-read firmware data from the CCU, then
+  // re-fetch the device list AND the per-device firmware details. The
+  // detail cache must be dropped explicitly — loadDetail short-circuits
+  // on cached entries, so without this the version columns would keep
+  // showing the values from the first page load forever.
+  async function reloadAll() {
+    if (reloading) return;
+    reloading = true;
+    try {
+      try {
+        await api.refreshFirmwareData();
+      } catch (err) {
+        // An old daemon (route missing, 404) or an unreachable CCU must
+        // not block the UI-side reload — surface it and continue.
+        toastStore.error(
+          err instanceof ApiError
+            ? `${err.status}: ${err.message}`
+            : err instanceof Error
+              ? err.message
+              : String(err),
+        );
+      }
+      await deviceStore.refresh();
+      detailMap = {};
+      const updatable = deviceStore.items.filter((d) => d.updatable);
+      await Promise.allSettled(updatable.map((d) => loadDetail(d.address)));
+    } finally {
+      reloading = false;
+    }
+  }
 
   async function loadDetail(addr: string) {
     if (detailMap[addr] || loadingDetail.has(addr)) return;
@@ -115,8 +175,14 @@
     try {
       await api.updateFirmware(addr);
       toastStore.success(t("firmware.triggered", { name }));
-      // Refresh device list so the updatable badge updates.
+      // Refresh device list so the updatable badge updates, and re-read
+      // this device's firmware detail so the lifecycle state column
+      // follows the update (loadDetail short-circuits on cached entries).
       await deviceStore.refresh();
+      const next = { ...detailMap };
+      delete next[addr];
+      detailMap = next;
+      await loadDetail(addr);
     } catch (err) {
       toastStore.error(
         err instanceof ApiError
@@ -172,8 +238,8 @@
         type="button"
         variant="outline"
         size="sm"
-        onclick={() => void deviceStore.refresh()}
-        disabled={deviceStore.loading}
+        onclick={() => void reloadAll()}
+        disabled={deviceStore.loading || reloading}
       >
         {t("common.reload")}
       </Button>
@@ -250,7 +316,9 @@
           {@const fw = detail?.firmware}
           {@const busy = updating.has(device.address)}
           {@const loadingFw = loadingDetail.has(device.address)}
-          {@const versionsMatch = !!fw?.Current && !!fw?.Available && fw.Current === fw.Available}
+          {@const avail = availableVersion(fw)}
+          {@const versionsMatch = !!fw?.Current && !!avail && fw.Current === avail}
+          {@const newerVersion = !!fw?.Current && !!avail && avail !== fw.Current}
           {@const updateAvailable = detail?.update_available ?? false}
           {#if col.key === "device"}
             <a
@@ -273,27 +341,24 @@
             <span class="font-mono text-xs">
               {#if loadingFw}
                 <span class="text-slate-400 dark:text-slate-500">…</span>
-              {:else if fw?.Available && fw.Available !== fw.Current}
-                <span class="font-semibold text-amber-600 dark:text-amber-400">{fw.Available}</span>
-              {:else}{fw?.Available || "—"}{/if}
+              {:else if newerVersion}
+                <span class="font-semibold text-amber-600 dark:text-amber-400">{avail}</span>
+              {:else}{avail || "—"}{/if}
             </span>
           {:else if col.key === "state"}
-            <!-- Priority: equal versions → Up to date; else update-available
-                 → CCU state or generic badge; else loaded-and-equal → Up to
-                 date; else best-effort from the gated update_available flag. -->
+            <!-- The CCU firmware lifecycle state is the truth for this
+                 column. The gated update_available flag only says whether
+                 an install can start right now (HmIP delivers the image to
+                 the device first) — it must never repaint an existing
+                 update (NEW_FIRMWARE_AVAILABLE) as "up to date" while the
+                 row lists two different versions. -->
             {#if loadingFw}
               <span class="text-xs text-slate-400 dark:text-slate-500">…</span>
-            {:else if versionsMatch || (!updateAvailable && !!fw?.Current && !!fw?.Available)}
-              <Badge variant="success">{t("firmware.state.UP_TO_DATE")}</Badge>
-            {:else if updateAvailable}
-              {#if fw?.UpdateState}
-                <Badge variant={stateBadgeVariant(fw.UpdateState)}>{stateLabel(fw.UpdateState)}</Badge>
-              {:else}
-                <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
-              {/if}
-            {:else if fw?.UpdateState}
+            {:else if fw?.UpdateState && fw.UpdateState !== "UNKNOWN"}
               <Badge variant={stateBadgeVariant(fw.UpdateState)}>{stateLabel(fw.UpdateState)}</Badge>
-            {:else if device.update_available}
+            {:else if versionsMatch}
+              <Badge variant="success">{t("firmware.state.UP_TO_DATE")}</Badge>
+            {:else if updateAvailable || device.update_available || newerVersion}
               <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
             {:else}
               <Badge variant="muted">{t("firmware.state.UP_TO_DATE")}</Badge>
@@ -315,7 +380,15 @@
                 {t("firmware.triggering")}
               </Button>
             {:else if !loadingFw && detail && !updateAvailable}
-              <span class="text-xs text-slate-500 dark:text-slate-400">{t("firmware.up_to_date")}</span>
+              {#if newerVersion && !isInProgress(fw?.UpdateState)}
+                <!-- A newer firmware exists but is not installable yet:
+                     the CCU still has to deliver the image to the device.
+                     Saying "up to date" here contradicts the version
+                     columns. -->
+                <span class="text-xs text-slate-500 dark:text-slate-400">{t("firmware.awaiting_transfer")}</span>
+              {:else if !newerVersion}
+                <span class="text-xs text-slate-500 dark:text-slate-400">{t("firmware.up_to_date")}</span>
+              {/if}
             {/if}
           {/if}
         {/snippet}

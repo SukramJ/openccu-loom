@@ -364,7 +364,7 @@
           {#each groups as group (group.address)}
             <tbody>
               <!-- Group header: device name + address + row count. -->
-              <tr class="bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800">
+              <tr class="bg-slate-50 dark:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] border-b border-slate-200 dark:border-slate-800">
                 <th colspan="6" scope="colgroup" class="px-3 py-2 text-left font-normal">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-semibold text-slate-900 dark:text-slate-100">{group.name}</span>
@@ -383,7 +383,7 @@
                 {@const pending = matterStore.pendingUpdates.has(key)}
                 {@const si = stateInfo(item)}
                 <tr
-                  class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/40 {selected ? 'bg-black/5 dark:bg-white/5' : ''}"
+                  class="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-[color-mix(in_srgb,var(--color-slate-800)_60%,transparent)] dark:hover:bg-[color-mix(in_srgb,var(--color-slate-800)_40%,transparent)] {selected ? 'bg-black/5 dark:bg-white/5' : ''}"
                 >
                   <td class="px-3 py-2 w-10">
                     <label class="flex items-center justify-center">
@@ -496,7 +496,7 @@
       </div>
       <!-- Conflict hint: non-custom DP, but a custom DP is already enabled on this channel -->
       {#if drawerConflictCustomActive}
-        <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
+        <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-[color-mix(in_srgb,var(--color-amber-950)_40%,transparent)] px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
           <p class="font-semibold flex items-center gap-1">
             <Icon name="mdi:alert-circle" size={16} class="shrink-0 text-amber-600 dark:text-amber-400" />
             {t("matter.expose.conflict_hint")}
@@ -508,7 +508,7 @@
       {/if}
       <!-- Conflict hint: custom DP, but generic/calculated/combined/measurement DP is already enabled -->
       {#if drawerConflictGenericActive}
-        <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
+        <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-[color-mix(in_srgb,var(--color-amber-950)_40%,transparent)] px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
           <p class="font-semibold flex items-center gap-1">
             <Icon name="mdi:alert-circle" size={16} class="shrink-0 text-amber-600 dark:text-amber-400" />
             {t("matter.expose.conflict_hint")}

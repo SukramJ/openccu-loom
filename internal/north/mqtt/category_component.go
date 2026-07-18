@@ -55,6 +55,8 @@ func componentFromCategory(c hmenum.DataPointCategory) (HAComponent, bool) {
 		return HAComponentLight, true
 	case hmenum.DataPointCategoryValve:
 		return HAComponentValve, true
+	case hmenum.DataPointCategoryAlarmControlPanel:
+		return HAComponentAlarmControlPanel, true
 	case hmenum.DataPointCategorySiren:
 		return HAComponentSiren, true
 	case hmenum.DataPointCategoryEvent,

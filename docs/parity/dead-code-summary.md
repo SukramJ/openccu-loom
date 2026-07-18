@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: de93c63
-HEAD: de93c63
+Generated: b3a68130
+HEAD: b3a68130
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24594 |
-| Reachable | 4217 |
-| Whitelisted | 17830 |
-| **Unreachable** | **2547** |
+| Total Exported | 25608 |
+| Reachable | 4538 |
+| Whitelisted | 18349 |
+| **Unreachable** | **2721** |
 
 ## Top-20 Packages by Dead Code
 
@@ -34,8 +34,8 @@ HEAD: de93c63
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
-| pkg/hmevent | 2 | 5 | 0 |
 | cmd/openccu-loom | 0 | 2 | 0 |
+| internal/alarm | 0 | 23 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -85,10 +85,10 @@ HEAD: de93c63
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 87 |
-| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 87 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 84 |
-| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 84 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
+| internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
+| internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
 | internal/payload | For | internal/payload/payload.go | 39 |
 | internal/payload | For | internal/payload/payload.go | 39 |
 
@@ -114,8 +114,12 @@ HEAD: de93c63
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
-| pkg/hmevent | 2 | 5 | 0 |
 | cmd/openccu-loom | 0 | 2 | 0 |
+| internal/alarm | 0 | 23 | 0 |
+| internal/alarm/codes | 0 | 13 | 0 |
+| internal/alarm/engine | 0 | 25 | 6 |
+| internal/alarm/journal | 0 | 1 | 0 |
+| internal/alarm/outputs | 0 | 24 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
@@ -135,8 +139,9 @@ HEAD: de93c63
 | internal/health | 0 | 16 | 0 |
 | internal/history | 0 | 12 | 0 |
 | internal/i18n | 0 | 2 | 0 |
-| internal/metrics | 0 | 60 | 2 |
+| internal/metrics | 0 | 62 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
+| internal/model/alarmpanel | 0 | 1 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
 | internal/model/combined | 0 | 8 | 0 |
 | internal/model/custom | 0 | 49 | 10 |
@@ -174,7 +179,7 @@ HEAD: de93c63
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 8 | 0 |
-| internal/north/mqtt | 0 | 76 | 4 |
+| internal/north/mqtt | 0 | 79 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |
@@ -186,8 +191,9 @@ HEAD: de93c63
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 60 | 22 |
-| pkg/hmapi | 0 | 77 | 14 |
-| pkg/hmenum | 0 | 92 | 36 |
+| internal/store/sqlite | 0 | 84 | 22 |
+| pkg/hmapi | 0 | 117 | 14 |
+| pkg/hmenum | 0 | 100 | 36 |
+| pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 78 | 0 |

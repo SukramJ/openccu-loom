@@ -303,3 +303,37 @@ func TestLiveLog_TeeHandler_BoundAttrsPopulateRecord(t *testing.T) {
 		t.Errorf("Attrs[elapsed_ms] = %v (%T), want int64(4)", rec.Attrs["elapsed_ms"], rec.Attrs["elapsed_ms"])
 	}
 }
+
+// --------------------------------------------------------------------------
+// Error attrs
+// --------------------------------------------------------------------------
+
+// TestLiveLog_ErrorAttrRendersAsString pins the live-log (SPA log
+// viewer / capture) attr contract: an `"error", err` attribute must
+// arrive as the error's message string. Errors passed through as raw
+// values marshal to `{}` in the viewer JSON (most error
+// implementations carry no exported fields), which made a failing
+// install-mode write undiagnosable from the UI.
+func TestLiveLog_ErrorAttrRendersAsString(t *testing.T) {
+	t.Parallel()
+	l := NewLiveLog(4)
+	r := buildRec(slog.LevelError, "Install mode write failed")
+	r.AddAttrs(slog.Any("error", io.ErrUnexpectedEOF))
+	l.record(r, nil)
+
+	got := l.Snapshot(0, slog.LevelDebug)
+	if len(got) != 1 {
+		t.Fatalf("Snapshot len = %d, want 1", len(got))
+	}
+	v, ok := got[0].Attrs["error"]
+	if !ok {
+		t.Fatalf("record has no error attr: %+v", got[0].Attrs)
+	}
+	s, ok := v.(string)
+	if !ok {
+		t.Fatalf("error attr = %#v (%T), want the message string", v, v)
+	}
+	if s != io.ErrUnexpectedEOF.Error() {
+		t.Fatalf("error attr = %q, want %q", s, io.ErrUnexpectedEOF.Error())
+	}
+}

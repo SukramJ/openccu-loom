@@ -38,6 +38,7 @@ type centralHandle struct {
 	avail   func()
 	climate func()
 	matter  func()
+	alarm   func()
 }
 
 // centralOrchestrator is the live-CCU-adopt composition seam: it drives one
@@ -68,12 +69,27 @@ type centralOrchestrator struct {
 	// is stood up (the orchestrator is constructed first); nil while the
 	// bridge is disabled or never came up.
 	matterHook matterCentralHook
+	// alarmHook subscribes an adopted central onto the alarm service's
+	// event routing. Set via [centralOrchestrator.setAlarmCentralHook];
+	// nil while the alarm engine is disabled.
+	alarmHook func(u *central.Unit) (unwire func())
 	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
 	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
 	// southbound wiring result so a runtime-adopted central publishes its
 	// serial-gated hub discovery the same way a boot-time central does. Nil when
 	// MQTT is not configured.
 	hubReadyTrigger func()
+}
+
+// setAlarmCentralHook installs the per-central alarm wiring hook.
+// Nil-safe on both sides, mirroring setMatterCentralHook.
+func (o *centralOrchestrator) setAlarmCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.alarmHook = hook
+	o.mu.Unlock()
 }
 
 // setMatterCentralHook installs the per-central Matter wiring hook. Nil-safe
@@ -196,6 +212,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// working gate from t=0 for this central too.
 	unit.WireDevicesCreatedGate()
 	registerStandardJobsFor(unit, o.cfg, o.logger)
+	registerFirmwareJobsFor(unit, o.sbDeps.valueWriter, o.logger)
 
 	if err := unit.Start(ctx); err != nil {
 		rollback()
@@ -212,6 +229,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	// bridge is disabled.
 	o.mu.Lock()
 	matterHook := o.matterHook
+	alarmHook := o.alarmHook
 	hubReadyTrigger := o.hubReadyTrigger
 	o.mu.Unlock()
 	var matterUnwire func()
@@ -219,6 +237,13 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 		matterUnwire = matterHook(unit)
 		if matterUnwire != nil {
 			undo = append(undo, matterUnwire)
+		}
+	}
+	var alarmUnwire func()
+	if alarmHook != nil {
+		alarmUnwire = alarmHook(unit)
+		if alarmUnwire != nil {
+			undo = append(undo, alarmUnwire)
 		}
 	}
 	// Subscribe the adopted central onto the hub-discovery ready pipeline so its
@@ -248,7 +273,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	avail, climate := wireCentralNorthbound(o.sbDeps, unit)
 
 	o.mu.Lock()
-	o.handles[cc.Name] = &centralHandle{cc: cc, avail: avail, climate: climate, matter: matterUnwire}
+	o.handles[cc.Name] = &centralHandle{cc: cc, avail: avail, climate: climate, matter: matterUnwire, alarm: alarmUnwire}
 	o.mu.Unlock()
 
 	o.logger.Info("central.adopt.live", slog.String("central", cc.Name))
@@ -289,6 +314,9 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	// teardown has begun.
 	if h.matter != nil {
 		h.matter()
+	}
+	if h.alarm != nil {
+		h.alarm()
 	}
 	// Climate before availability, mirroring wireSouthbound's teardown order
 	// (its LIFO defer runs climate closers before availability closers).

@@ -206,13 +206,22 @@ endpoint with `mcp-remote`:
       "args": [
         "-y", "mcp-remote",
         "http://host:8119/mcp",
-        "--header", "Authorization: Bearer ${OCCU_TOKEN}"
+        "--header", "Authorization:${AUTH_HEADER}"
       ],
-      "env": { "OCCU_TOKEN": "<your-api-token>" }
+      "env": { "AUTH_HEADER": "Bearer <your-api-token>" }
     }
   }
 }
 ```
+
+> **No spaces inside `args` entries.** Claude Desktop currently mangles
+> arguments containing spaces, so the header value must arrive through
+> the environment variable (`mcp-remote` expands `${AUTH_HEADER}`
+> itself). Writing `"Authorization: Bearer …"` directly into `args`
+> breaks the header, mcp-remote then falls back to an OAuth discovery
+> flow, and the connection fails with confusing `/register` 404 errors.
+> Use an absolute `command` path (e.g. `/opt/homebrew/bin/npx`) if
+> Claude Desktop cannot find `npx` on its minimal PATH.
 
 ### 3.3 Raw protocol smoke test
 

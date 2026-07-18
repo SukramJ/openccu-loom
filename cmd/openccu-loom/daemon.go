@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
@@ -200,6 +201,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	mqttCollector := si.mqttCollector
 	mqttSup := si.mqttSup
 	mqttWiring := si.mqttWiring
+	// Firmware polling jobs arrive in a second registration pass: their
+	// hooks resolve CCU backends through the ValueWriter, which does not
+	// exist yet when registerStandardJobs runs above.
+	registerFirmwareJobs(reg, valueWriter, logger)
 	// --- CCU translation archive ------------------------------
 	// Extracted into loadCCUArchive (daemon_boot.go).
 	arch := loadCCUArchive(cfg, logger)
@@ -290,7 +295,31 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// flood during boot hydration would otherwise POST the whole device state
 	// on every restart. Matter and REST register later (also PhaseLate).
 	northBridges.RegisterPhase(newMQTTService(bridge, hubMQTT), northbridge.PhaseEarly)
-	northBridges.Register(webhook.NewOutbound(reg, cfg.North.Webhook, logger))
+	webhookOutbound := webhook.NewOutbound(reg, cfg.North.Webhook, logger)
+	northBridges.Register(webhookOutbound)
+	// Alarm engine: a PhaseLate service so it subscribes and reconciles
+	// only once the daemon is fully up (its stores ride the shared
+	// daemon DB; see wireAlarmService).
+	alarmSvc := wireAlarmService(cfg, reg, auditDB, healthTracker, catalogs, logger)
+	// The MQTT alarm command sink is built once here (nil when the alarm
+	// service is disabled) and shared by the command subscriber and the
+	// MQTT alarm publisher, which wires its FAILED_TO_ARM hook — see
+	// wireSystemStatusSubscribers.
+	alarmMQTTSink := newAlarmMQTTSink(alarmSvc)
+	if alarmSvc != nil {
+		northBridges.Register(alarmSvc)
+		// The alarm collector subscribes to the service's own event bus
+		// (see alarm.Service.Bus), so it can only be wired once alarmSvc
+		// exists — unlike NewMqttCollector in wireSharedInfrastructure,
+		// which runs before this point in the composition root.
+		_, stopAlarmCollector := metrics.NewAlarmCollector(metricsReg, alarmSvc.Bus())
+		defer stopAlarmCollector()
+		// Forward alarm-panel events (state, trigger, journal, health,
+		// reminder, duress) through the outbound webhook. Set before the
+		// PhaseLate StartAll so the bridge subscribes the alarm bus on
+		// start (docs/alarm-concept.md §13.4).
+		webhookOutbound.SetAlarmBus(alarmSvc.Bus())
+	}
 	if err := northBridges.StartPhase(ctx, northbridge.PhaseEarly); err != nil {
 		logger.Warn("north.bridge.start_early", slog.String("err", err.Error()))
 	}
@@ -484,7 +513,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// once for the initial stack, and re-invoked automatically on
 	// every Swap (hot-reload) so birth sync + command subscriber
 	// follow the new broker without manual re-attachment.
-	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, logger))
+	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, alarmMQTTSink, logger))
 	if err := mqttSup.AttachSubscribers(ctx); err != nil {
 		logger.Warn("mqtt.subscribers.attach", slog.String("err", err.Error()))
 	}
@@ -503,6 +532,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// central. Nil-safe on both sides (bridge disabled / orchestrator
 	// unavailable).
 	centralOrch.setMatterCentralHook(matter.centralHook)
+	centralOrch.setAlarmCentralHook(alarmCentralHook(alarmSvc))
 	// Matter's ordered teardown is owned by the north-bound registry (it
 	// stops after REST, before the webhook). Only registered when enabled —
 	// a disabled bridge yields a no-op matterStop and is not a surface. The
@@ -578,17 +608,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		editSessions:     editSessions,
 		// cacheResetSvc backs ccu.cache_clear — scope-aware clear + re-pull.
 		cacheResetSvc: cacheResetSvc,
-		logger:        logger,
-		centralName:   singleCentralName(reg),
-		sessionStore:  sessionStore,
-		changeLog:     configChangeLog,
-		labels:        parameterLabels,
+		// alarm backs alarm_panel.* — nil when the alarm service is disabled.
+		alarm:        alarmSvc,
+		logger:       logger,
+		centralName:  singleCentralName(reg),
+		sessionStore: sessionStore,
+		changeLog:    configChangeLog,
+		labels:       parameterLabels,
 	})
 	_ = uiSchemaAdapter
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
 
 	// --- REST --------------------------------------------------
@@ -625,6 +657,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		devicesAdapter:          devicesAdapter,
 		deviceAdminDomain:       deviceAdminDomain,
 		deviceReloader:          deviceReloader,
+		firmwareRefresher:       adapter.NewFirmwareDomain(reg, valueWriter),
 		editSessions:            editSessions,
 		dpWriterAdapter:         dpWriterAdapter,
 		customDPDispatcher:      customDPDispatcher,
@@ -632,6 +665,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		hubAdapter:              hubAdapter,
 		ifaceAdapter:            ifaceAdapter,
 		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
+		alarm:                   alarmSvc,
 		masterProfiles:          masterProfilesStore,
 		sysStatusBuf:            sysStatusBuf,
 		visFilter:               visFilter,

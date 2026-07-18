@@ -63,6 +63,14 @@ test.describe('Visual regression - light mode', () => {
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('sysvars-error-light.png');
   });
+
+  test('Alarm light', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('alarm-light.png');
+  });
 });
 
 test.describe('Visual regression - dark mode', () => {
@@ -115,5 +123,13 @@ test.describe('Visual regression - dark mode', () => {
     await page.waitForTimeout(1500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('sysvars-empty-dark.png');
+  });
+
+  test('Alarm dark', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('alarm-dark.png');
   });
 });

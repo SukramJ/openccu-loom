@@ -55,6 +55,7 @@
     | "firmware"
     | "signal"
     | "matter"
+    | "alarm"
     | "visibility"
     | "access"
     | "about"
@@ -138,6 +139,12 @@
           icon: "mdi:star",
           label: t("nav.favorites"),
           matches: ["favorites"],
+        },
+        {
+          href: "#/alarm",
+          icon: "mdi:shield-home",
+          label: t("nav.alarm"),
+          matches: ["alarm"],
         },
         {
           href: "#/inbox",
@@ -315,7 +322,7 @@
   >
     <button
       type="button"
-      class="rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+      class="rounded-md p-1.5 hover:bg-black/5 dark:hover:bg-white/5"
       aria-label={collapsed ? t("app.menu") : t("app.close_menu")}
       title={collapsed ? t("app.menu") : t("app.close_menu")}
       onclick={toggle}
@@ -391,7 +398,7 @@
     <div class="flex flex-wrap items-center gap-1">
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 dark:hover:bg-white/5"
         title={t("app.switch_language")}
         aria-label={t("app.switch_language")}
         onclick={onLocaleToggle}
@@ -400,7 +407,7 @@
       </button>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 dark:hover:bg-white/5"
         title={t("app.theme.toggle")}
         aria-label={t("app.theme.toggle")}
         onclick={cycleTheme}
@@ -409,7 +416,7 @@
       </button>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 pointer-coarse:hidden dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 pointer-coarse:hidden dark:hover:bg-white/5"
         title={t("shortcut.title")}
         aria-label={t("shortcut.title")}
         aria-keyshortcuts="?"
@@ -419,7 +426,7 @@
       </button>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-black/5 dark:hover:bg-white/5"
         title={t("nav.logout")}
         aria-label={t("nav.logout")}
         onclick={onLogout}

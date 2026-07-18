@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
+	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
@@ -239,6 +240,7 @@ func gatedCentralBringUp(
 	unit *central.Unit,
 	deps WireDeps,
 	callbackURL, binRPCCallbackAddr string,
+	cbHandlers *CallbackHandlers,
 	addCloser func(func()),
 	logger *slog.Logger,
 ) {
@@ -248,7 +250,7 @@ func gatedCentralBringUp(
 		if !WaitForCCUReady(ctx, *cc, CCUReadinessConfig{Timeout: -1}, logger) {
 			return // teardown
 		}
-		if err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, addCloser, logger); err == nil {
+		if err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, cbHandlers, addCloser, logger); err == nil {
 			// Bring-up done: clear the transient "waiting for CCU" component so it
 			// does not linger and decay to UNKNOWN (which would drag the overall
 			// health verdict down forever even though the central is now healthy).
@@ -342,6 +344,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	unit *central.Unit,
 	deps WireDeps,
 	callbackURL, binRPCCallbackAddr string,
+	cbHandlers *CallbackHandlers,
 	addCloser func(func()),
 	logger *slog.Logger,
 ) error {
@@ -441,6 +444,25 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// safety net). runner is non-nil here — the hub load above succeeded.
 	wireLoadAndRefresh(unit, pipeline, cc.Interfaces, runner, logger)
 
+	// Hot-plug: hand freshly announced devices (newDevices callback) to the
+	// pipeline so a device paired at runtime is materialised without a
+	// daemon restart. Installed only AFTER every interface's bring-up so a
+	// callback racing the initial ingest cannot double-hydrate: before this
+	// point the ingestor is nil and NewDevices degrades to registry
+	// bookkeeping — those devices arrive through the bring-up's own
+	// ListDevices anyway. Reset on teardown so a re-init generation never
+	// leaves a stale closure (old backends, old pipeline) behind.
+	if cbHandlers != nil {
+		var ddLoader *devicedetails.Loader
+		if runner != nil {
+			ddLoader = devicedetails.NewLoaderForJSONRPC(unit.DeviceDetails, runner.Client(), cc.Name, logger)
+		}
+		cbHandlers.SetHotplugIngestor(newHotplugIngestor(
+			unit, pipeline, writer, runner, backendsByInterface.operations, ddLoader, logger,
+		))
+		addCloser(func() { cbHandlers.SetHotplugIngestor(nil) })
+	}
+
 	// Late-binding handlers: resolve the primary client/backend at call time.
 	WireSysvarCreator(unit, writer)
 	WireBackupAndDownload(unit, writer)
@@ -489,6 +511,18 @@ func (r *backendRegistry) homegearBackend() backends.Operations {
 	return nil
 }
 
+// operations returns the raw backend registered for interfaceID, or nil
+// when the interface has not been wired (yet). Used by the hot-plug
+// ingestor to resolve the southbound backend at callback time.
+func (r *backendRegistry) operations(interfaceID string) backends.Operations {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.m[interfaceID]
+}
+
 // getter is a closure suitable for [wireConfigPendingHook]. Resolves
 // the backend lazily at event-fire time so the wiring order between
 // the hook installer and per-interface wiring stays simple.
@@ -510,10 +544,12 @@ func (r *backendRegistry) getter(interfaceID string) backends.MasterGetter {
 // one, or an explicit PublicHost override — see [WireDeps.CallbackHostFor]),
 // registers the XML-RPC callback handler, and returns the per-central
 // XML-RPC callback URL, the BIN-RPC (CUxD) callback address (same host so
-// an external CCU's CUxD reaches us too), and a deregister closure (nil
+// an external CCU's CUxD reaches us too), the registered handler (nil when
+// no XML-RPC callback was registered — the bring-up installs the hot-plug
+// ingestor on it once the pipeline exists), and a deregister closure (nil
 // when no XML-RPC callback was registered). An empty host skips callback
 // registration for the central — it still works, just without push events.
-func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *central.Unit, logger *slog.Logger) (callbackURL, binRPCCallbackAddr string, deregister func()) {
+func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *central.Unit, logger *slog.Logger) (callbackURL, binRPCCallbackAddr string, handlers *CallbackHandlers, deregister func()) {
 	callbackHost := ""
 	if deps.CallbackHostFor != nil {
 		callbackHost = deps.CallbackHostFor(cc)
@@ -521,7 +557,7 @@ func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *cen
 
 	switch {
 	case deps.CallbackServer != nil && deps.CallbackPort != 0 && callbackHost != "":
-		handlers := NewCallbackHandlers(unit, logger)
+		handlers = NewCallbackHandlers(unit, logger)
 		if deps.Writer != nil {
 			handlers.SetWriter(deps.Writer)
 		}
@@ -548,7 +584,7 @@ func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *cen
 	if deps.BINRPCCallbackServer != nil && deps.BINRPCCallbackPort != 0 && callbackHost != "" {
 		binRPCCallbackAddr = fmt.Sprintf("%s:%d", callbackHost, deps.BINRPCCallbackPort)
 	}
-	return callbackURL, binRPCCallbackAddr, deregister
+	return callbackURL, binRPCCallbackAddr, handlers, deregister
 }
 
 //nolint:contextcheck,gocognit,gocyclo,funlen // the probe / async consistency-check / deinit contexts are intentionally rooted in a fresh context (cancelled via their own cancel funcs on teardown), not the wiring ctx — see the per-line notes below; composition/wiring: long sequential setup
@@ -714,11 +750,14 @@ func wireInterface(
 			sessionIDFn = jc.Client().SessionID
 			// The backup download (cp_security.cgi) authenticates by session
 			// id and serves a login page under HTTP 200 for a stale one, so
-			// force a fresh login first — mirrors the reference stack's
-			// login-or-renew before the backup download.
+			// make sure the session is usable first. EnsureSession renews the
+			// live session rather than displacing it: a forced login here
+			// would abandon the session the whole central is working with and
+			// burn a slot in the CCU's small, WebUI-shared session pool on
+			// every backup or firmware download.
 			rpcClient := jc.Client()
 			ccuBackend.SetSessionRenewer(func(ctx context.Context) (string, error) {
-				if err := rpcClient.Login(ctx); err != nil {
+				if err := rpcClient.EnsureSession(ctx); err != nil {
 					return "", err
 				}
 				return rpcClient.SessionID(), nil

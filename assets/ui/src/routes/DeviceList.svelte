@@ -311,11 +311,11 @@
           type="search"
           placeholder={t("devicelist.search_placeholder")}
           bind:value={filter}
-          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:w-72 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
+          class="w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 py-2 text-base text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none focus:ring-1 focus:ring-[var(--ha-primary-color)] sm:w-72 sm:text-sm"
         />
         <select
           bind:value={availability}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
           title={t("devicelist.availability")}
         >
           <option value="all">{t("devicelist.all")}</option>
@@ -325,7 +325,7 @@
         {#if rooms.length > 0}
           <select
             bind:value={roomFilter}
-            class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
             title={t("devicelist.room")}
           >
             <option value="">{t("devicelist.all_rooms")}</option>
@@ -337,7 +337,7 @@
         {#if centrals.length > 1}
           <select
             bind:value={centralFilter}
-            class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
             title="CCU"
           >
             <option value="">{t("common.all_ccus")}</option>
@@ -346,7 +346,7 @@
             {/each}
           </select>
         {/if}
-        <label class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+        <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
           <input type="checkbox" bind:checked={updateOnly} />
           {t("devicelist.update_available")}
         </label>
@@ -368,15 +368,15 @@
         </Button>
         <!-- Grid / list layout toggle (persisted preference). -->
         <div
-          class="ml-auto inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-slate-700"
+          class="ml-auto inline-flex overflow-hidden rounded-md border border-[var(--ha-divider-color)]"
           role="group"
           aria-label={t("devicelist.view_mode")}
         >
           <button
             type="button"
             class="px-2.5 py-2 transition {prefs.deviceView === 'grid'
-              ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
-              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
+              ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_15%,transparent)] text-[var(--ha-primary-color)]'
+              : 'text-[var(--ha-secondary-text-color)] hover:bg-black/5 dark:hover:bg-white/5'}"
             aria-pressed={prefs.deviceView === "grid"}
             title={t("devicelist.view_grid")}
             onclick={() => setDeviceView("grid")}
@@ -386,8 +386,8 @@
           <button
             type="button"
             class="px-2.5 py-2 transition {prefs.deviceView === 'list'
-              ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
-              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
+              ? 'bg-[color-mix(in_srgb,var(--ha-primary-color)_15%,transparent)] text-[var(--ha-primary-color)]'
+              : 'text-[var(--ha-secondary-text-color)] hover:bg-black/5 dark:hover:bg-white/5'}"
             aria-pressed={prefs.deviceView === "list"}
             title={t("devicelist.view_list")}
             onclick={() => setDeviceView("list")}
@@ -400,8 +400,8 @@
   </PageHeader>
 
   {#if selected.size > 0}
-    <div class="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-brand-300 bg-brand-50 p-2 text-sm dark:border-brand-800 dark:bg-brand-950/40">
-      <span class="font-medium text-brand-900 dark:text-brand-100">
+    <div class="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-[color-mix(in_srgb,var(--ha-primary-color)_40%,transparent)] bg-[color-mix(in_srgb,var(--ha-primary-color)_12%,transparent)] p-2 text-sm">
+      <span class="font-medium text-[var(--ha-primary-color)]">
         {t("devicelist.selected", { count: selected.size })}
       </span>
       <Button type="button" variant="outline" size="sm" onclick={selectAll}>{t("devicelist.select_filtered")}</Button>
@@ -412,7 +412,7 @@
           bind:value={roomDraft}
           placeholder={t("devicelist.room_placeholder")}
           aria-label={t("devicelist.room_aria")}
-          class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-base sm:w-48 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
+          class="h-9 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-base text-[var(--ha-primary-text-color)] sm:w-48 sm:text-sm"
           onkeydown={(e) => {
             if (e.key === "Enter") void bulkSetRoom();
             else if (e.key === "Escape") roomEditing = false;
@@ -451,8 +451,8 @@
     <div class="mb-4 flex flex-col gap-2">
       {#each notReadyCentrals as c (c.name)}
         <Card class="flex flex-wrap items-center gap-3 p-3 text-sm">
-          <Icon name="mdi:refresh" size={18} class="text-amber-500" />
-          <span class="min-w-0 flex-1 text-slate-700 dark:text-slate-300">
+          <Icon name="mdi:refresh" size={18} class="text-[var(--ha-warning-color)]" />
+          <span class="min-w-0 flex-1 text-[var(--ha-primary-text-color)]">
             {t("devices.initializing_banner", {
               name: c.name,
               loaded: c.readiness.interfaces_loaded,
@@ -468,7 +468,7 @@
   <!-- Sort toolbar: in card (grid) mode the buttons drive the order; in
        table mode the DataTable column headers sort, so only the group-by
        toggle remains. -->
-  <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+  <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--ha-secondary-text-color)]">
     {#if prefs.deviceView !== "list"}
       <span>{t("common.sort")}</span>
       {#each [
@@ -479,8 +479,8 @@
         <button
           type="button"
           class="rounded-md border px-2 py-0.5 transition {sortColumn === col.key
-            ? 'border-brand-500 text-brand-700 dark:text-brand-300'
-            : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300'}"
+            ? 'border-[var(--ha-primary-color)] text-[var(--ha-primary-color)]'
+            : 'border-[var(--ha-divider-color)] text-[var(--ha-secondary-text-color)] hover:border-[var(--ha-secondary-text-color)]'}"
           onclick={() => setSort(col.key as "name" | "address" | "model")}
         >
           {col.label}
@@ -502,7 +502,7 @@
     {#if col.key === "select"}
       <input
         type="checkbox"
-        class="h-4 w-4 cursor-pointer accent-brand-500"
+        class="h-4 w-4 cursor-pointer accent-[var(--ha-primary-color)]"
         checked={selected.has(device.address)}
         onchange={(e) => toggleSelect(device.address, e.currentTarget.checked)}
         aria-label={device.name || device.address}
@@ -510,7 +510,7 @@
     {:else if col.key === "name"}
       <a
         href="#/devices/{encodeURIComponent(device.address)}"
-        class="font-medium text-brand-700 hover:underline dark:text-brand-400"
+        class="font-medium text-[var(--ha-primary-color)] hover:underline"
       >{device.name || device.address}</a>
       <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{device.address}</span>
     {:else if col.key === "model"}
@@ -562,9 +562,9 @@
     {#if groups}
       {#each groups as g (g.iface)}
         <section class="mb-6">
-          <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
             {g.iface}
-            <span class="text-slate-400 dark:text-slate-500">·&nbsp;{g.items.length}</span>
+            <span class="text-[var(--ha-disabled-text-color)]">·&nbsp;{g.items.length}</span>
           </h2>
           <Card class="p-4">
             <DataTable
@@ -591,16 +591,16 @@
         />
       </Card>
     {/if}
-    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {:else if groups}
     <!-- CARD (GRID) MODE, grouped -->
     {#each groups as g (g.iface)}
       <section class="mb-6">
-        <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
           {g.iface}
-          <span class="text-slate-400 dark:text-slate-500">·&nbsp;{g.items.length}</span>
+          <span class="text-[var(--ha-disabled-text-color)]">·&nbsp;{g.items.length}</span>
         </h2>
         <ul class={listClass}>
           {#each g.items as device (device.interface_id + "/" + device.address)}
@@ -615,7 +615,7 @@
         </ul>
       </section>
     {/each}
-    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {:else}
@@ -631,7 +631,7 @@
         </li>
       {/each}
     </ul>
-    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-4 text-sm text-[var(--ha-secondary-text-color)]">
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {/if}

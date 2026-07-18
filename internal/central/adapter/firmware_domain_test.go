@@ -145,3 +145,210 @@ func TestFirmwareDomainRefreshFirmwareData_HappyPath(t *testing.T) {
 		t.Errorf("expected backend ListDevices to be invoked, got %d calls", fake.calls)
 	}
 }
+
+// ─── applyFirmwareFromDescriptions ───────────────────────────────────────────
+
+// TestApplyFirmwareFromDescriptions_UpdatesFromFreshDescription verifies that
+// the current/available firmware version and the update lifecycle state move
+// from the (just refreshed) description registry onto the live device model,
+// while the Updatable capability bound at materialisation time is preserved
+// untouched.
+func TestApplyFirmwareFromDescriptions_UpdatesFromFreshDescription(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-apply"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0004ABCD",
+		Model:       "HmIP-PSM",
+		Firmware: device.FirmwareInfo{
+			Current:     "1.2.2",
+			Updatable:   true,
+			UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate,
+		},
+	})
+	c.ModelRegistry.Put(dev)
+
+	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+		Address:             "0004ABCD",
+		Type:                "HmIP-PSM",
+		Firmware:            "1.4.10",
+		AvailableFirmware:   "1.4.10",
+		FirmwareUpdateState: "UP_TO_DATE",
+	})
+
+	applyFirmwareFromDescriptions(c)
+
+	info := dev.Firmware().Info()
+	if info.Current != "1.4.10" {
+		t.Errorf("Current = %q, want 1.4.10", info.Current)
+	}
+	if info.Available != "1.4.10" {
+		t.Errorf("Available = %q, want 1.4.10", info.Available)
+	}
+	if info.UpdateState != hmenum.DeviceFirmwareStateUpToDate {
+		t.Errorf("UpdateState = %q, want UP_TO_DATE", info.UpdateState)
+	}
+	if !info.Updatable {
+		t.Error("Updatable must stay true — it is bound at materialisation time, not refreshed here")
+	}
+}
+
+// TestApplyFirmwareFromDescriptions_DeviceWithoutDescriptionUntouched verifies
+// that a live device with no matching entry in the description registry keeps
+// its previously observed firmware info unchanged.
+func TestApplyFirmwareFromDescriptions_DeviceWithoutDescriptionUntouched(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-apply-notfound"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0005ABCD",
+		Model:       "HmIP-PSM",
+		Firmware: device.FirmwareInfo{
+			Current:     "9.9.9",
+			Updatable:   true,
+			UpdateState: hmenum.DeviceFirmwareStateUpToDate,
+		},
+	})
+	c.ModelRegistry.Put(dev)
+	// No description registered for 0005ABCD.
+
+	applyFirmwareFromDescriptions(c)
+
+	info := dev.Firmware().Info()
+	if info.Current != "9.9.9" || info.UpdateState != hmenum.DeviceFirmwareStateUpToDate {
+		t.Errorf("firmware info changed for a device without a description: %+v", info)
+	}
+}
+
+// ─── RefreshCentralFirmwareDataByState ───────────────────────────────────────
+
+// TestRefreshCentralFirmwareDataByState_NilGuards verifies the nil-unit and
+// nil-writer guards return an error without touching anything else.
+func TestRefreshCentralFirmwareDataByState_NilGuards(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-bystate-nil"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	w := clientpkg.NewValueWriter()
+
+	if err := RefreshCentralFirmwareDataByState(context.Background(), nil, w, nil); err == nil {
+		t.Fatal("expected error for nil unit")
+	}
+	if err := RefreshCentralFirmwareDataByState(context.Background(), c, nil, nil); err == nil {
+		t.Fatal("expected error for nil writer")
+	}
+}
+
+// TestRefreshCentralFirmwareDataByState_StateGateShortCircuits verifies that
+// when no live device on an interface sits in one of the requested firmware
+// states, the per-interface state gate skips the description re-pull
+// entirely — the fake backend must observe zero ListDevices calls.
+func TestRefreshCentralFirmwareDataByState_StateGateShortCircuits(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-bystate-gate"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0006ABCD",
+		Model:       "HmIP-PSM",
+		Firmware:    device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateUpToDate},
+	})
+	c.ModelRegistry.Put(dev)
+
+	// Seed the description registry so GetInterfaceIDs() returns HmIP-RF and
+	// the outer per-interface loop actually runs.
+	c.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "0006ABCD"})
+
+	fake := &listRecordingOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	w := clientpkg.NewValueWriter()
+	w.Register("ccu-bystate-gate", "HmIP-RF", fake)
+
+	// The requested states do not include UP_TO_DATE, so no device matches.
+	err = RefreshCentralFirmwareDataByState(context.Background(), c, w,
+		[]hmenum.DeviceFirmwareState{hmenum.DeviceFirmwareStateDeliverFirmwareImage})
+	if err != nil {
+		t.Fatalf("RefreshCentralFirmwareDataByState: %v", err)
+	}
+	if fake.calls != 0 {
+		t.Errorf("ListDevices called %d times, want 0 (state gate should short-circuit)", fake.calls)
+	}
+}
+
+// TestRefreshCentralFirmwareDataByState_NoInterfacesNoFetch verifies that an
+// empty description registry (no interfaces known yet) skips the fetch loop
+// entirely and returns nil without error.
+func TestRefreshCentralFirmwareDataByState_NoInterfacesNoFetch(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-bystate-noiface"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	w := clientpkg.NewValueWriter()
+
+	err = RefreshCentralFirmwareDataByState(context.Background(), c, w,
+		[]hmenum.DeviceFirmwareState{hmenum.DeviceFirmwareStateDeliverFirmwareImage})
+	if err != nil {
+		t.Fatalf("RefreshCentralFirmwareDataByState: %v", err)
+	}
+}
+
+// ─── modelFirmwareStateReader ────────────────────────────────────────────────
+
+// TestModelFirmwareStateReader_DeviceFirmwareStates verifies that
+// DeviceFirmwareStates returns only the devices matching the requested
+// interface, each mapped to its current firmware update state.
+func TestModelFirmwareStateReader_DeviceFirmwareStates(t *testing.T) {
+	t.Parallel()
+
+	reg := registry.NewModelRegistry()
+
+	hmipDev := device.New(device.Config{
+		Interface: hmenum.InterfaceHmIPRF,
+		Address:   "0007ABCD",
+		Firmware:  device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
+	})
+	bidcosDev := device.New(device.Config{
+		Interface: hmenum.InterfaceBidCosRF,
+		Address:   "0008ABCD",
+		Firmware:  device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateUpToDate},
+	})
+	reg.Put(hmipDev)
+	reg.Put(bidcosDev)
+
+	reader := modelFirmwareStateReader{reg: reg}
+	states := reader.DeviceFirmwareStates(hmenum.InterfaceHmIPRF)
+
+	if len(states) != 1 {
+		t.Fatalf("states = %v, want exactly 1 entry for HmIP-RF", states)
+	}
+	got, ok := states["0007ABCD"]
+	if !ok {
+		t.Fatal("expected 0007ABCD in the result")
+	}
+	if got != hmenum.DeviceFirmwareStateReadyForUpdate {
+		t.Errorf("state = %q, want READY_FOR_UPDATE", got)
+	}
+	if _, present := states["0008ABCD"]; present {
+		t.Error("BidCos device must not appear in the HmIP-RF result set")
+	}
+}

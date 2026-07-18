@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SukramJ/openccu-loom/internal/model/alarmpanel"
+
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -92,6 +94,31 @@ type InstallModeSink interface {
 		centralName, interfaceID string, seconds int) error
 }
 
+// AlarmSink is the optional domain-facing contract for the daemon-level
+// alarm engine. The composition root wires it over the alarm service's
+// engine (source "mqtt"); when nil the subscriber drops alarm commands
+// with a debug breadcrumb. Areas are daemon-level, so the command topic
+// omits the <central> segment every other command topic carries — a
+// deliberate extension of the raw command plane (docs/alarm-concept.md
+// §13.3). The reserved area segment "master" routes to the aggregate
+// arm/disarm verbs.
+type AlarmSink interface {
+	// Arm / Disarm / Silence carry the optional code parsed from the JSON
+	// command envelope (docs/alarm-concept.md §11). The sink validates it
+	// through the engine's code policy; an empty code is code-free.
+	Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error
+	Disarm(ctx context.Context, areaID, code string) error
+	Silence(ctx context.Context, areaID, code string) error
+	// Panic fires the engine's loud panic path for an area (the HA
+	// TRIGGER command, docs/alarm-concept.md §7).
+	Panic(ctx context.Context, areaID string) error
+	// Master verbs act on every area at once and stay code-free — a single
+	// code cannot express the union of per-area policies (the individual
+	// area panels carry the code prompt).
+	MasterArm(ctx context.Context, mode hmenum.AlarmMode) error
+	MasterDisarm(ctx context.Context) error
+}
+
 // CDPInvocationSink is the domain-facing contract for Custom-DP
 // operation dispatch. The composition root wires this to
 // [adapter.MQTTCommandSink] which delegates to
@@ -161,6 +188,7 @@ type CommandSubscriber struct {
 	cmbSink   CombinedDPSink         // may be nil; combined-DP commands are dropped with a debug log when nil
 	schedSink ScheduleSwitchSink     // may be nil; schedule-switch commands are dropped with a debug log when nil
 	imSink    InstallModeSink        // may be nil; install-mode button presses are dropped with a debug log when nil
+	alarmSink AlarmSink              // may be nil; alarm commands are dropped with a debug log when nil
 	// qos is the QoS level every inbound command subscription registers
 	// at. Defaults to QoS1 (at-least-once) in [NewCommandSubscriber] —
 	// matching [DefaultQoS.Commands] — and can be overridden via
@@ -275,6 +303,13 @@ func (c *CommandSubscriber) WithInstallModeSink(s InstallModeSink) *CommandSubsc
 	return c
 }
 
+// WithAlarmSink attaches the daemon-level alarm sink. Returns the
+// receiver for call-site chaining.
+func (c *CommandSubscriber) WithAlarmSink(s AlarmSink) *CommandSubscriber {
+	c.alarmSink = s
+	return c
+}
+
 // WithLifecycleContext sets the daemon-lifetime context that command handlers
 // derive each per-command context from. Wiring this — rather than reusing
 // Start's ctx, which on a hot-reload broker swap is request-scoped and dies
@@ -362,6 +397,13 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/schedule/+/set", c.qos, LegacyHandler(c.handleScheduleSwitch)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe schedule_switch: %w", err)
+	}
+	// {base}/alarm/{area}/set — the daemon-level alarm arm/disarm/silence
+	// plane. Areas are daemon-level, so the topic carries no <central>
+	// segment; the reserved <area> "master" routes to the aggregate verbs.
+	if _, err := c.sub.Subscribe(ctx, base+"/alarm/+/set", c.qos, LegacyHandler(c.handleAlarmCommand)); err != nil {
+		c.incSubscribeFailures()
+		return fmt.Errorf("subscribe alarm_command: %w", err)
 	}
 	return nil
 }
@@ -745,6 +787,143 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 				slog.String("err", err.Error()))
 		}
 	})
+}
+
+// alarmCommandPayload is the JSON envelope accepted on the alarm command
+// topic (`{"action":"ARM_AWAY","code":"1234"}`). The bare-string HA
+// payload is accepted too; a bare string carries no code.
+type alarmCommandPayload struct {
+	Action string `json:"action"`
+	Code   string `json:"code"`
+}
+
+// handleAlarmCommand routes a payload from `<base>/alarm/<area>/set` into
+// the alarm sink. The <area> segment is an area ID or the reserved
+// "master" token; the payload is either a bare HA command string
+// (ARM_HOME / ARM_AWAY / … / DISARM, plus the SILENCE extension) or the
+// JSON {"action":…,"code":…} envelope. Unknown payloads are logged and
+// dropped, matching the other command handlers.
+func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retained bool) {
+	if retained {
+		c.logger.Debug("mqtt.command.alarm.retained_drop", slog.String("topic", topic))
+		return
+	}
+	// <base>/alarm/<area>/set
+	parts := strings.Split(topic, "/")
+	if len(parts) != 4 || parts[1] != "alarm" || parts[3] != "set" {
+		c.logger.Warn("mqtt.command.alarm.unknown_topic", slog.String("topic", topic))
+		return
+	}
+	area := parts[2]
+	action, code := parseAlarmAction(body)
+	if action == "" {
+		c.logger.Warn("mqtt.command.alarm.empty_payload", slog.String("topic", topic))
+		return
+	}
+	if c.alarmSink == nil {
+		c.logger.Debug("mqtt.command.alarm.no_sink",
+			slog.String("topic", topic),
+			slog.String("detail", "AlarmSink not wired; ignoring alarm command"))
+		return
+	}
+	c.incReceivedCommands()
+	c.dispatchAlarm(topic, area, action, code)
+}
+
+// alarmCommandTrigger is the HA panic command routed onto the engine's
+// loud panic path (docs/alarm-concept.md §7). It has no master form.
+const alarmCommandTrigger = "TRIGGER"
+
+// dispatchAlarm resolves the HA command string onto the alarm verb and
+// enqueues it. The reserved "master" area routes to the aggregate verbs;
+// SILENCE and TRIGGER have no master form and are dropped for it. The
+// parsed code is threaded into the per-area verbs and validated by the
+// sink; the master verbs stay code-free.
+func (c *CommandSubscriber) dispatchAlarm(topic, area, action, code string) {
+	master := area == alarmMasterArea
+	switch action {
+	case alarmpanel.HAAlarmCommandDisarm:
+		c.dispatcher.Enqueue(topic, func() {
+			ctx, cancel := context.WithCancel(c.lifecycleCtx)
+			defer cancel()
+			var err error
+			if master {
+				err = c.alarmSink.MasterDisarm(ctx)
+			} else {
+				err = c.alarmSink.Disarm(ctx, area, code)
+			}
+			if err != nil {
+				c.logger.Warn("mqtt.command.alarm.disarm",
+					slog.String("topic", topic), slog.String("err", err.Error()))
+			}
+		})
+	case alarmpanel.HAAlarmCommandSilence:
+		if master {
+			c.logger.Debug("mqtt.command.alarm.master_silence_unsupported", slog.String("topic", topic))
+			return
+		}
+		c.dispatcher.Enqueue(topic, func() {
+			ctx, cancel := context.WithCancel(c.lifecycleCtx)
+			defer cancel()
+			if err := c.alarmSink.Silence(ctx, area, code); err != nil {
+				c.logger.Warn("mqtt.command.alarm.silence",
+					slog.String("topic", topic), slog.String("err", err.Error()))
+			}
+		})
+	case alarmCommandTrigger:
+		if master {
+			c.logger.Debug("mqtt.command.alarm.master_trigger_unsupported", slog.String("topic", topic))
+			return
+		}
+		c.dispatcher.Enqueue(topic, func() {
+			ctx, cancel := context.WithCancel(c.lifecycleCtx)
+			defer cancel()
+			if err := c.alarmSink.Panic(ctx, area); err != nil {
+				c.logger.Warn("mqtt.command.alarm.trigger",
+					slog.String("topic", topic), slog.String("err", err.Error()))
+			}
+		})
+	default:
+		mode, ok := alarmpanel.ArmModeForCommand(action)
+		if !ok {
+			c.logger.Warn("mqtt.command.alarm.unknown_action",
+				slog.String("topic", topic), slog.String("action", action))
+			return
+		}
+		c.dispatcher.Enqueue(topic, func() {
+			ctx, cancel := context.WithCancel(c.lifecycleCtx)
+			defer cancel()
+			var err error
+			if master {
+				err = c.alarmSink.MasterArm(ctx, mode)
+			} else {
+				err = c.alarmSink.Arm(ctx, area, mode, code)
+			}
+			if err != nil {
+				c.logger.Warn("mqtt.command.alarm.arm",
+					slog.String("topic", topic), slog.String("mode", string(mode)), slog.String("err", err.Error()))
+			}
+		})
+	}
+}
+
+// parseAlarmAction extracts the upper-cased HA command and the optional
+// code from an alarm command payload, accepting a bare string (no code)
+// or the JSON envelope. Returns an empty action for an empty or
+// unparseable payload.
+func parseAlarmAction(body []byte) (action, code string) {
+	s := strings.TrimSpace(string(body))
+	if s == "" {
+		return "", ""
+	}
+	if strings.HasPrefix(s, "{") {
+		var pay alarmCommandPayload
+		if err := json.Unmarshal(body, &pay); err != nil {
+			return "", ""
+		}
+		return strings.ToUpper(strings.TrimSpace(pay.Action)), pay.Code
+	}
+	return strings.ToUpper(s), ""
 }
 
 func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained bool) {

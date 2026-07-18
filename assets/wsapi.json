@@ -31,7 +31,9 @@
       "category": "alarms",
       "description": "Acknowledge (clear) a single alarm message by id.",
       "name": "alarm_messages.ack",
-      "args": { "id": "string" }
+      "args": {
+        "id": "string"
+      }
     },
     {
       "category": "alarms",
@@ -55,7 +57,10 @@
       "category": "backup",
       "description": "Trigger the create-and-download backup flow for exactly the named central (multi-CCU-correct counterpart to backup.trigger, which always targets the first registered central). Returns the backup/job id.",
       "name": "backups.trigger",
-      "result": { "id": "string", "central_name": "string" }
+      "result": {
+        "id": "string",
+        "central_name": "string"
+      }
     },
     {
       "args": {
@@ -100,13 +105,17 @@
       "category": "ccu",
       "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
       "name": "ccu.reload_channel_config",
-      "args": { "channel_address": "string" }
+      "args": {
+        "channel_address": "string"
+      }
     },
     {
       "category": "ccu",
       "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_panel_reload_device_config (websocket_api.py:2285). Closes parity_audit gap L-7002.",
       "name": "ccu.reload_device_config",
-      "args": { "device_address": "string" }
+      "args": {
+        "device_address": "string"
+      }
     },
     {
       "category": "ccu",
@@ -119,11 +128,18 @@
       "name": "central.connectivity"
     },
     {
-      "args": { "address": "string?", "device_address": "string?" },
+      "args": {
+        "address": "string?",
+        "device_address": "string?"
+      },
       "category": "central",
       "description": "Enable CCU click-event forwarding for a device's press-event channels. Mirrors Python create_central_links.",
       "name": "central.create_links",
-      "result": { "failed": "integer", "skipped": "integer", "touched": "integer" }
+      "result": {
+        "failed": "integer",
+        "skipped": "integer",
+        "touched": "integer"
+      }
     },
     {
       "category": "central",
@@ -131,11 +147,18 @@
       "name": "central.info"
     },
     {
-      "args": { "address": "string?", "device_address": "string?" },
+      "args": {
+        "address": "string?",
+        "device_address": "string?"
+      },
       "category": "central",
       "description": "Report whether a device supports central links and how many channels are eligible.",
       "name": "central.links_status",
-      "result": { "eligible_channels": "integer?", "reason": "string?", "supported": "boolean" }
+      "result": {
+        "eligible_channels": "integer?",
+        "reason": "string?",
+        "supported": "boolean"
+      }
     },
     {
       "category": "central",
@@ -143,11 +166,18 @@
       "name": "central.reconcile"
     },
     {
-      "args": { "address": "string?", "device_address": "string?" },
+      "args": {
+        "address": "string?",
+        "device_address": "string?"
+      },
       "category": "central",
       "description": "Tear down CCU click-event forwarding for a device's press-event channels. Mirrors Python remove_central_links.",
       "name": "central.remove_links",
-      "result": { "failed": "integer", "skipped": "integer", "touched": "integer" }
+      "result": {
+        "failed": "integer",
+        "skipped": "integer",
+        "touched": "integer"
+      }
     },
     {
       "category": "central",
@@ -184,7 +214,9 @@
       "category": "config",
       "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
       "name": "config.reload_channel_config",
-      "args": { "channel_address": "string" }
+      "args": {
+        "channel_address": "string"
+      }
     },
     {
       "category": "config",
@@ -299,20 +331,30 @@
       "category": "devices",
       "description": "Rename a device on the CCU.",
       "name": "device.rename",
-      "args": { "address": "string", "name": "string" },
-      "result": { "address": "string", "name": "string" }
+      "args": {
+        "address": "string",
+        "name": "string"
+      },
+      "result": {
+        "address": "string",
+        "name": "string"
+      }
     },
     {
       "category": "devices",
       "description": "Export a device definition as an aiohomematic-compatible zip (device + paramset descriptions, anonymised). Returns model, filename and base64-encoded zip data.",
       "name": "devices.export_definition",
-      "args": { "address": "string" }
+      "args": {
+        "address": "string"
+      }
     },
     {
       "category": "devices",
       "description": "Return the full detail record for a single device by address.",
       "name": "devices.get",
-      "args": { "address": "string" }
+      "args": {
+        "address": "string"
+      }
     },
     {
       "category": "devices",
@@ -558,7 +600,9 @@
         "values": "object",
         "edit_token": "string"
       },
-      "result": { "written": "integer" }
+      "result": {
+        "written": "integer"
+      }
     },
     {
       "category": "programs",
@@ -574,19 +618,25 @@
       "category": "recording",
       "description": "Start the diagnostic RPC session recorder across all centrals (clears prior data). Mirrors Python record_session (start).",
       "name": "recording.start",
-      "result": { "recording": "boolean" }
+      "result": {
+        "recording": "boolean"
+      }
     },
     {
       "category": "recording",
       "description": "Report whether the diagnostic RPC session recorder is currently capturing.",
       "name": "recording.status",
-      "result": { "recording": "boolean" }
+      "result": {
+        "recording": "boolean"
+      }
     },
     {
       "category": "recording",
       "description": "Stop the diagnostic RPC session recorder across all centrals. Mirrors Python record_session (stop).",
       "name": "recording.stop",
-      "result": { "recording": "boolean" }
+      "result": {
+        "recording": "boolean"
+      }
     },
     {
       "category": "schedules",
@@ -597,7 +647,12 @@
       "category": "schedules",
       "description": "Copy a single climate profile from a source channel/profile to a target channel/profile. Mirrors Python copy_schedule_profile.",
       "name": "schedules.climate.copy_profile",
-      "args": { "source_channel_address": "string", "source_profile": "number", "target_channel_address": "string", "target_profile": "number" }
+      "args": {
+        "source_channel_address": "string",
+        "source_profile": "number",
+        "target_channel_address": "string",
+        "target_profile": "number"
+      }
     },
     {
       "category": "schedules",
@@ -613,7 +668,10 @@
       "category": "schedules",
       "description": "Copy the whole week schedule from a source device to a target device (channels auto-resolved). Mirrors Python copy_schedule.",
       "name": "schedules.copy",
-      "args": { "source_device_address": "string", "target_device_address": "string" }
+      "args": {
+        "source_device_address": "string",
+        "target_device_address": "string"
+      }
     },
     {
       "category": "schedules",
@@ -682,7 +740,9 @@
       "category": "sysvars",
       "description": "Force re-pull the CCU system-variable catalogue into the hub model. Optional central_name scopes the refresh to one CCU. Mirrors Python fetch_system_variables.",
       "name": "sysvars.fetch",
-      "args": { "central_name": "string" }
+      "args": {
+        "central_name": "string"
+      }
     },
     {
       "category": "sysvars",
@@ -693,7 +753,10 @@
       "category": "sysvars",
       "description": "Update the value of a CCU system variable by name.",
       "name": "sysvars.set",
-      "args": { "name": "string", "value": "any" }
+      "args": {
+        "name": "string",
+        "value": "any"
+      }
     },
     {
       "category": "cdp",
@@ -767,6 +830,239 @@
       "name": "matter.endpoint_assembled",
       "topic": "matter.endpoint_assembled",
       "payload": "MatterEndpointAssembledPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Arm an alarm area. May return synchronously as `armed`, or `arming` while counting down the mode's exit delay.",
+      "name": "alarm_panel.arm",
+      "args": {
+        "area_id": "string",
+        "mode": "string",
+        "force": "boolean?",
+        "skip_delay": "boolean?",
+        "bypass": "array?",
+        "code": "string?"
+      },
+      "result": {
+        "state": "string",
+        "bypassed": "array?",
+        "exit_delay_s": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Disarm an alarm area.",
+      "name": "alarm_panel.disarm",
+      "args": {
+        "area_id": "string",
+        "code": "string?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Silence the active incident on an alarm area without disarming.",
+      "name": "alarm_panel.silence",
+      "args": {
+        "area_id": "string",
+        "code": "string?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Silence the active incident on every alarm area at once.",
+      "name": "alarm_panel.silence_all"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Acknowledge (clear) a finished incident on an alarm area.",
+      "name": "alarm_panel.acknowledge",
+      "args": {
+        "area_id": "string",
+        "code": "string?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Return the live status of every alarm area: state, mode, bypassed sensors, active incident, running countdown, per-mode readiness, and walk-test-active flag.",
+      "name": "alarm_panel.state"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Return the per-mode arm-readiness of an alarm area.",
+      "name": "alarm_panel.readiness",
+      "args": {
+        "area_id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Query the alarm engine's event journal, newest first.",
+      "name": "alarm_panel.journal",
+      "args": {
+        "area_id": "string?",
+        "class": "string?",
+        "from": "string?",
+        "to": "string?",
+        "limit": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Return the live status of a walk-test session on an alarm area.",
+      "name": "alarm_panel.walktest_status",
+      "args": {
+        "area_id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "List the alarm-control-panel entity projections (HA-state view incl. the master panel).",
+      "name": "alarm_panel.panels"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "List alarm codes (operator). Codes are security material, so even the list is operator-gated; the argon2id hash and cleartext PIN are never returned.",
+      "name": "alarm_panel.codes_list",
+      "result": {
+        "codes": "array"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Create an alarm code (operator). The cleartext PIN is write-only and hashed before persistence.",
+      "name": "alarm_panel.codes_create",
+      "args": {
+        "code": "object"
+      },
+      "result": {
+        "id": "string",
+        "name": "string",
+        "kind": "string",
+        "duress": "boolean?",
+        "perms": "object",
+        "areas": "array?",
+        "binding": "object?",
+        "valid_from_ms": "integer?",
+        "valid_until_ms": "integer?",
+        "enabled": "boolean",
+        "created_ms": "integer?",
+        "updated_ms": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Replace an alarm code (operator). An empty PIN keeps the stored hash.",
+      "name": "alarm_panel.codes_update",
+      "args": {
+        "id": "string",
+        "code": "object"
+      },
+      "result": {
+        "id": "string",
+        "name": "string",
+        "kind": "string",
+        "duress": "boolean?",
+        "perms": "object",
+        "areas": "array?",
+        "binding": "object?",
+        "valid_from_ms": "integer?",
+        "valid_until_ms": "integer?",
+        "enabled": "boolean",
+        "created_ms": "integer?",
+        "updated_ms": "integer?"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Delete an alarm code (operator).",
+      "name": "alarm_panel.codes_delete",
+      "args": {
+        "id": "string"
+      },
+      "result": {
+        "deleted": "boolean",
+        "id": "string"
+      }
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an alarm area's arm-state-machine transitioned (docs/alarm-concept.md §5).",
+      "kind": "broadcast",
+      "name": "alarm.state_changed",
+      "topic": "alarm.panel",
+      "payload": "AlarmStateChangedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: a running exit/entry delay on an alarm area ticked (once per second).",
+      "kind": "broadcast",
+      "name": "alarm.countdown",
+      "topic": "alarm.panel",
+      "payload": "AlarmCountdownPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an alarm area's per-mode arm-readiness was recomputed (docs/alarm-concept.md §6.3). Carries the full per-mode map, not a delta.",
+      "kind": "broadcast",
+      "name": "alarm.readiness_changed",
+      "topic": "alarm.panel",
+      "payload": "AlarmReadinessChangedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an alarm area entered `triggered` and an incident was opened (or re-adopted after a restart / reconnect).",
+      "kind": "broadcast",
+      "name": "alarm.triggered",
+      "topic": "alarm.panel",
+      "payload": "AlarmTriggeredPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: one enrolled notification output fired for an alarm — a deliberate, per-area, mode-filtered notification signal (one-shot at fire time, never cancelled by a later silence).",
+      "kind": "broadcast",
+      "name": "alarm.notification",
+      "topic": "alarm.panel",
+      "payload": "AlarmNotificationPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: a new entry was appended to the alarm engine's event journal. Payload carries the entry head; clients needing full detail call GET /alarm/journal.",
+      "kind": "broadcast",
+      "name": "alarm.journal_appended",
+      "topic": "alarm.panel",
+      "payload": "AlarmJournalAppendedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: a walk-test session on an alarm area recorded a sensor activation.",
+      "kind": "broadcast",
+      "name": "alarm.walktest_progress",
+      "topic": "alarm.panel",
+      "payload": "AlarmWalkTestProgressPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: the alarm subsystem's health verdict changed (siren stop-verification, service degradations).",
+      "kind": "broadcast",
+      "name": "alarm.health_changed",
+      "topic": "alarm.panel",
+      "payload": "AlarmHealthChangedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Alarm-control-panel entity projection changed (state, availability, code policy, identity, or removal).",
+      "kind": "broadcast",
+      "name": "alarm.panel_changed",
+      "topic": "alarm.panel",
+      "payload": "AlarmPanelChangedPayload"
+    },
+    {
+      "category": "alarm_panel",
+      "description": "Server-pushed: an arm schedule elapsed with auto-arm off while the area was not in the scheduled mode, so the engine notifies rather than arming (docs/alarm-concept.md §15 row 19).",
+      "kind": "broadcast",
+      "name": "alarm.reminder",
+      "topic": "alarm.panel",
+      "payload": "AlarmReminderPayload"
     }
   ]
 }
