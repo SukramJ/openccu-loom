@@ -132,7 +132,7 @@ func loggerForLevelerWithTee(opts StackOptions, leveler slog.Leveler) (*slog.Log
 		// terminal — keeps captured logfiles + journald output
 		// free of ANSI escape sequences.
 		if writerIsTTY(opts.Writer) {
-			core = tint.NewHandler(opts.Writer, &tint.Options{Level: leveler})
+			core = tint.NewTextHandler(opts.Writer, &tint.Options{Level: leveler})
 		} else {
 			core = slog.NewTextHandler(opts.Writer, hopts)
 		}
