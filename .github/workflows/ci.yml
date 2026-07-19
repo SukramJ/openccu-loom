@@ -231,5 +231,11 @@ jobs:
         run: npm audit --audit-level=high
       - name: typecheck
         run: npm run typecheck
+      # svelte-check compiles every component against the workspace
+      # TypeScript — tsc alone misses Svelte-template breakage and
+      # toolchain incompatibilities (the TypeScript-7 bump crashed
+      # svelte-check while tsc kept passing).
+      - name: svelte-check
+        run: npm run check
       - name: vitest
         run: npm run test
