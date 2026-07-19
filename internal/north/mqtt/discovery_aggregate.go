@@ -123,7 +123,7 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 	// channel's `/event` topic, so no template is needed.
 	body := map[string]any{
 		"state_topic":  stateTopic,
-		"event_types":  toAnySlice(types),
+		"event_types":  toAnySlice(MapDoorbellEventTypes(ev.Model, types)),
 		"device_class": EventDeviceClassForModel(ev.Model),
 	}
 	maps.Copy(body, base)

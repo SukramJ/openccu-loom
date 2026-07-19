@@ -985,16 +985,18 @@ func (b *Bridge) PublishEvent(ctx context.Context, centralName, iface, address s
 // `event_type` field from the JSON and advances the entity state.
 //
 // Payload shape: `{"event_type": "<press_short|press_long|…>",
-// "available": true, "modified_at": "<rfc3339>"}`.
+// "available": true, "modified_at": "<rfc3339>"}`. On the curated
+// doorbell models the press_short fires as HA's standard "ring"
+// (matching the announced event_types — HA rejects unannounced types).
 //
 // The topic is non-retained — HA event entities must receive a fresh
 // pulse per keypress, not a stale retained value.
-func (b *Bridge) PublishChannelEventState(ctx context.Context, centralName, iface, address string, channel int, pressType string) error {
+func (b *Bridge) PublishChannelEventState(ctx context.Context, centralName, iface, address string, channel int, model, pressType string) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	body := map[string]any{
-		"event_type":  strings.ToLower(pressType),
+		"event_type":  DoorbellEventType(model, pressType),
 		"available":   true,
 		"modified_at": time.Now().UTC().Format(time.RFC3339Nano),
 	}

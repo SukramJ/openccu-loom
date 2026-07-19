@@ -1,0 +1,4 @@
+{
+  "_comment": "Curated device-semantics classifications shared by downstream consumers (aiohomematic/homematicip_local and openccu-loom). doorbell_models: devices whose press/ring channel is a doorbell rather than a generic button — consumers map the ring press onto their platform's doorbell semantics (e.g. Home Assistant's 'ring' event type).",
+  "doorbell_models": ["HM-Sen-DB-PCB", "HmIP-DBB", "HmIP-DSD-PCB"]
+}

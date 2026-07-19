@@ -790,7 +790,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// with `No valid JSON event payload detected, value after
 		// processing payload 'press_long'`. Drop value_template so HA
 		// receives the raw `{"event_type":...}` envelope.
-		body["event_types"] = pressEventTypesFor(ev.Parameter)
+		body["event_types"] = MapDoorbellEventTypes(ev.Model, pressEventTypesFor(ev.Parameter))
 		body["device_class"] = EventDeviceClassForModel(ev.Model)
 		delete(body, "value_template")
 	default:

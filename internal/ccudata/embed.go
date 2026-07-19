@@ -35,6 +35,7 @@ import (
 //go:embed embedded/profiles/*.json.gz
 //go:embed embedded/profiles/_receiver_type_aliases.json
 //go:embed embedded/translation_custom/*.json
+//go:embed embedded/device_semantics.json
 //go:embed embedded/NOTICE
 //go:embed embedded/MANIFEST.json
 var embedded embed.FS

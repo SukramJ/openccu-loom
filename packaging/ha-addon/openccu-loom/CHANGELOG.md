@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.44.0
+
+- **Changed: doorbells ring properly in Home Assistant.** Doorbell
+  devices (HM-Sen-DB-PCB, HmIP-DBB, HmIP-DSD-PCB) now fire Home
+  Assistant's standard `ring` event instead of a generic short press —
+  required by HA from 2027.4 and used by its doorbell automations.
+  **Note:** automations triggering on the `press_short` event type of
+  these doorbell entities must be switched to `ring`.
+
 ## 0.43.4
 
 - **Fixed: AI clients can actually switch devices now.** MCP write

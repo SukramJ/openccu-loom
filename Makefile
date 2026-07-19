@@ -476,6 +476,7 @@ update-ccu-data: ## refresh embedded archives from an openccu-data checkout
 	cp $(OPENCCU_REPO)/openccu_data/data/profiles/_receiver_type_aliases.json \
 	   $(CCUDATA_EMBED)/profiles/
 	cp $(OPENCCU_REPO)/openccu_data/data/translation_custom/*.json   $(CCUDATA_EMBED)/translation_custom/
+	cp $(OPENCCU_REPO)/openccu_data/data/device_semantics.json       $(CCUDATA_EMBED)/
 	@echo "-- synced from $(OPENCCU_REPO) --"
 	@ls -la $(CCUDATA_EMBED)/
 

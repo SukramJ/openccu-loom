@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.0] — 2026-07-19
+
+### Changed
+
+- **Doorbells ring — with the shared curated model list** — press
+  events of the doorbell devices now follow Home Assistant's doorbell
+  contract: the discovered `event` entity announces (and the event
+  topic fires) HA's standard `ring` type instead of `press_short`
+  (mandatory for doorbell event entities from HA 2027.4; mirrors the
+  reference stack's ring-event fix). Other press types are unchanged.
+  The doorbell classification now comes from the upstream data
+  package's new curated `device_semantics` extract — one source of
+  truth shared with the reference stack — and gains the classic
+  `HM-Sen-DB-PCB` alongside `HmIP-DBB` and `HmIP-DSD-PCB`.
+  **Breaking:** consumers of the raw channel `/event` topic of these
+  three models receive `{"event_type":"ring"}` for the short press
+  now; HA automations triggering on the entity's `press_short` event
+  type must switch to `ring`.
+
 ## [0.43.4] — 2026-07-19
 
 ### Fixed
