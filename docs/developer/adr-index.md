@@ -60,6 +60,9 @@ The table below catalogues every ADR. Each links to the record on GitHub.
 | [0049](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0049-matter-one-endpoint-per-device.md) | Matter one endpoint per device | Matter exposes one endpoint per physical device by default. |
 | [0050](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0050-mqtt-transport-shared-module.md) | MQTT transport → shared go-mqtt module | The in-tree MQTT transport is extracted into the external shared `go-mqtt` module. |
 | [0051](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0051-northbound-authorization-model.md) | North-bound authorization model | Role-based MinRole gating unified across REST + WS, plus backup-at-rest sealing. |
+| [0052](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0052-daemon-level-alarm-mqtt-topics.md) | Daemon-level alarm MQTT topics | The alarm engine publishes panel state/commands on daemon-level topics, not per-central ones. |
+| [0053](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0053-go-openccu-data-module.md) | CCU metadata via go-openccu-data | Embedded OCCU extracts come from the versioned go-openccu-data module instead of a hand-synced copy. |
+| [0054](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0054-remote-ingress-proxy-addon.md) | Remote ingress proxy add-on | OpenCCU-Loom Remote: HA Ingress panel for remote instances via token injection instead of the local-only Ingress passthrough. |
 
 ## Related reading
 

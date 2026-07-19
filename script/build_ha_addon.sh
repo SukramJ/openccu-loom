@@ -19,12 +19,18 @@
 # Usage:
 #   script/build_ha_addon.sh [version]
 #   OPENCCU_LOOM_BASE_TAG=latest script/build_ha_addon.sh 0.1.0
+#   ADDON=openccu-loom-remote script/build_ha_addon.sh        # remote proxy add-on
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:-$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo dev)}"
 VERSION="${VERSION#v}"
-CTX="$ROOT/packaging/ha-addon/openccu-loom"
+ADDON="${ADDON:-openccu-loom}"
+CTX="$ROOT/packaging/ha-addon/${ADDON}"
+if [ ! -f "$CTX/config.yaml" ]; then
+  echo "unknown add-on '${ADDON}' (no ${CTX}/config.yaml)" >&2
+  exit 1
+fi
 
 # Upstream release image to COPY the binary from (override the tag for local
 # smoke tests where :$VERSION is not published yet).
@@ -54,7 +60,7 @@ case "$(uname -m)" in
   *) echo "unsupported host arch: $(uname -m)" >&2; exit 1 ;;
 esac
 
-TAG="openccu-loom-ha-${HA_ARCH}:${VERSION}"
+TAG="${ADDON}-ha-${HA_ARCH}:${VERSION}"
 echo "Building HA add-on ${TAG}"
 echo "  base image:     ${BUILD_FROM}"
 echo "  upstream image: ${UPSTREAM_IMAGE}:${BASE_TAG}"

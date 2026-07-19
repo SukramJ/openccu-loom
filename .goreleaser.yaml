@@ -46,6 +46,24 @@ builds:
     goos: [linux]
     goarch: [amd64]
 
+  # Ingress proxy for remote instances — shipped inside the release image so
+  # the openccu-loom-remote HA add-on can COPY it out (ADR 0054).
+  - id: openccu-loom-remote
+    main: ./cmd/openccu-loom-remote
+    binary: openccu-loom-remote
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/SukramJ/openccu-loom/internal/build.Version={{.Version}}
+      - -X github.com/SukramJ/openccu-loom/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/SukramJ/openccu-loom/internal/build.BuildDate={{.Date}}
+    # Restricted to linux/amd64 for dev (see the openccu-loom build above).
+    goos: [linux]
+    goarch: [amd64]
+
 archives:
   - id: openccu-loom
     ids: [openccu-loom]
@@ -72,6 +90,15 @@ archives:
     files:
       - LICENSE
       - README.md
+  - id: openccu-loom-remote
+    ids: [openccu-loom-remote]
+    formats: [tar.gz]
+    name_template: >-
+      openccu-loom-remote_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
 
 checksum:
   name_template: checksums.txt
@@ -83,7 +110,9 @@ checksum:
 # emulation at build time.
 dockers:
   - id: amd64
-    ids: [openccu-loom]
+    # openccu-loom-remote rides along so the remote HA add-on can COPY it
+    # out of this image (ADR 0054); the image entrypoint stays the daemon.
+    ids: [openccu-loom, openccu-loom-remote]
     goos: linux
     goarch: amd64
     dockerfile: Dockerfile.goreleaser

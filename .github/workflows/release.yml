@@ -117,18 +117,20 @@ jobs:
       # published. The add-on's config.yaml version IS the image tag and must
       # equal the release tag, so guard it before building (a stale version
       # would publish an image that no installed add-on can pull).
-      - name: verify HA add-on version matches the tag
+      - name: verify HA add-on versions match the tag
         if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME#v}"
-          CFG="$(sed -nE 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/p' \
-            packaging/ha-addon/openccu-loom/config.yaml | head -1)"
-          if [ "$TAG" != "$CFG" ]; then
-            echo "HA add-on config.yaml version ($CFG) != release tag ($TAG)" >&2
-            echo "Bump packaging/ha-addon/openccu-loom/config.yaml in the release commit." >&2
-            exit 1
-          fi
+          for addon in openccu-loom openccu-loom-remote; do
+            CFG="$(sed -nE 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/p' \
+              "packaging/ha-addon/${addon}/config.yaml" | head -1)"
+            if [ "$TAG" != "$CFG" ]; then
+              echo "HA add-on ${addon} config.yaml version ($CFG) != release tag ($TAG)" >&2
+              echo "Bump packaging/ha-addon/${addon}/config.yaml in the release commit." >&2
+              exit 1
+            fi
+          done
           echo "HA_VERSION=${TAG}" >> "$GITHUB_ENV"
       # Build the HA add-on image with plain buildx (same approach as the
       # working ../go-daikin2mqtt add-on) instead of the home-assistant/builder
@@ -156,6 +158,24 @@ jobs:
           tags: |
             ghcr.io/sukramj/openccu-loom-ha-amd64:${{ env.HA_VERSION }}
             ghcr.io/sukramj/openccu-loom-ha-amd64:latest
+      # Same pattern for the OpenCCU-Loom Remote add-on (ADR 0054): its thin
+      # image COPYs the openccu-loom-remote binary out of the release image.
+      - name: build & publish Home Assistant Remote add-on
+        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.0.0
+        with:
+          context: packaging/ha-addon/openccu-loom-remote
+          file: packaging/ha-addon/openccu-loom-remote/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          build-args: |
+            BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
+            OPENCCU_LOOM_IMAGE=ghcr.io/sukramj/openccu-loom
+            BUILD_VERSION=${{ env.HA_VERSION }}
+          tags: |
+            ghcr.io/sukramj/openccu-loom-remote-ha-amd64:${{ env.HA_VERSION }}
+            ghcr.io/sukramj/openccu-loom-remote-ha-amd64:latest
       # CycloneDX SBOM for the daemon module graph, attached to the run.
       - name: generate SBOM
         run: make sbom
