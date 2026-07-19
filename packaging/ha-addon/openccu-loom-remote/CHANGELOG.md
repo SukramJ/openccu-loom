@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.44.2 (2026-07-19)
+
+Fix: instance names may contain capital letters (e.g. `OttoLoom`) —
+the lowercase-only slug constraint was needlessly strict and broke
+saving the configuration.
+
 # 0.44.1 (2026-07-19)
 
 Initial release of **OpenCCU-Loom Remote** — an ingress proxy that

@@ -48,7 +48,7 @@ type Instance struct {
 
 // nameRE mirrors the add-on schema constraint: the name becomes a URL
 // path segment and a DOM id on the overview page, so it stays a slug.
-var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
 // LoadOptions reads and validates the add-on options file.
 func LoadOptions(path string) (Options, error) {

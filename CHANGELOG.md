@@ -6,6 +6,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.2] — 2026-07-19
+
+### Fixed
+
+- **OpenCCU-Loom Remote: instance names accept mixed case.** The
+  add-on schema and the proxy rejected names like `OttoLoom`
+  (lowercase-only slug); the constraint is relaxed to
+  `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` — the name stays a single URL
+  path segment, but capital letters are fine everywhere it is used
+  (mount path, tile label, DOM id, cookie scope).
+
 ## [0.44.1] — 2026-07-19
 
 ### Added

@@ -162,7 +162,7 @@ func TestOptionsValidate(t *testing.T) {
 			wantErr bool
 		}{
 			{"empty name rejected", "", true},
-			{"uppercase rejected", "PRIMARY", true},
+			{"uppercase accepted", "PrimaryLoom", false},
 			{"space rejected", "my instance", true},
 			{"leading hyphen rejected", "-primary", true},
 			{"too long rejected", strings.Repeat("a", 65), true},

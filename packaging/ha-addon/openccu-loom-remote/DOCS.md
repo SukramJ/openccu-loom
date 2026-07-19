@@ -33,7 +33,7 @@ instances:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `name` | yes | Short slug (`a-z`, `0-9`, `-`, `_`). Becomes the URL path segment and the tile label. |
+| `name` | yes | Short slug (`A-Z`, `a-z`, `0-9`, `-`, `_`). Becomes the URL path segment and the tile label. |
 | `url` | yes | Base URL of the remote instance's REST/UI port (default `8119`). `http://` for LAN, `https://` for TLS. |
 | `token` | no | API token minted on the remote instance. When set, HA admins land in the UI **without a second login**. When empty, the remote login page is shown instead. |
 | `tls_insecure` | no | Accept a self-signed certificate for this instance's `https` URL. Default `false`. |

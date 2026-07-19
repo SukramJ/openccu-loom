@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.44.2
+
+- Version ride-along with the OpenCCU-Loom Remote name-validation fix;
+  no changes to this add-on.
+
 ## 0.44.1
 
 - **New sibling add-on: OpenCCU-Loom Remote.** The store now also

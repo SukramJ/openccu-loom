@@ -1,7 +1,7 @@
 # version MUST equal the release tag and is bumped in the release commit
 # (same rule as the main add-on; release.yml guards both).
 name: OpenCCU-Loom Remote
-version: "0.44.1"
+version: "0.44.2"
 slug: openccu-loom-remote
 description: >-
   Bring the Config UI of one or more remote OpenCCU-Loom instances into the
@@ -44,7 +44,7 @@ options:
 schema:
   log_level: "list(debug|info|warn|error)?"
   instances:
-    - name: "match(^[a-z0-9][a-z0-9_-]{0,63}$)"
+    - name: "match(^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$)"
       url: url
       token: password?
       tls_insecure: bool?
