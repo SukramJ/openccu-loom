@@ -48,7 +48,7 @@ type Instance struct {
 
 // nameRE mirrors the add-on schema constraint: the name becomes a URL
 // path segment and a DOM id on the overview page, so it stays a slug.
-var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
 // LoadOptions reads and validates the add-on options file.
 func LoadOptions(path string) (Options, error) {
@@ -87,6 +87,9 @@ func (o *Options) Validate() error {
 	seen := make(map[string]struct{}, len(o.Instances))
 	for i := range o.Instances {
 		inst := &o.Instances[i]
+		// Stray surrounding whitespace is a classic paste mistake; the
+		// add-on schema tolerates it too, so trim instead of rejecting.
+		inst.Name = strings.TrimSpace(inst.Name)
 		if !nameRE.MatchString(inst.Name) {
 			return fmt.Errorf("instance %d: name %q must match %s", i, inst.Name, nameRE)
 		}

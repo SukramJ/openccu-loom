@@ -162,7 +162,7 @@ func TestOptionsValidate(t *testing.T) {
 			wantErr bool
 		}{
 			{"empty name rejected", "", true},
-			{"uppercase rejected", "PRIMARY", true},
+			{"uppercase accepted", "PrimaryLoom", false},
 			{"space rejected", "my instance", true},
 			{"leading hyphen rejected", "-primary", true},
 			{"too long rejected", strings.Repeat("a", 65), true},
@@ -262,4 +262,14 @@ func TestParseInstanceURL(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestOptionsValidateTrimsInstanceNameWhitespace(t *testing.T) {
+	opts := Options{Instances: []Instance{{Name: "  OttoLoom \t", URL: "http://127.0.0.1:8119"}}}
+	if err := opts.Validate(); err != nil {
+		t.Fatalf("Validate: unexpected error: %v", err)
+	}
+	if got := opts.Instances[0].Name; got != "OttoLoom" {
+		t.Errorf("normalized name = %q, want %q", got, "OttoLoom")
+	}
 }
