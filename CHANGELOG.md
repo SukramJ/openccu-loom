@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.4] — 2026-07-19
+
+### Fixed
+
+- **MCP write tools rejected every real write** — `set_datapoint` and
+  `write_paramset` checked device ownership by passing the raw target
+  address to the per-device lookup; real writes always target a
+  channel (`ADDR:n`), so the lookup missed and every write failed with
+  `device … belongs to central ""`. The guard now strips the channel
+  suffix before the ownership lookup — and still rejects a
+  `central_name` that does not own the device. Found live on the first
+  agent-driven switch attempt; the previous test only covered a
+  device-level address.
+
 ## [0.43.3] — 2026-07-18
 
 ### Fixed

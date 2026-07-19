@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.43.4
+
+- **Fixed: AI clients can actually switch devices now.** MCP write
+  commands (set value, write paramset) failed with a central-ownership
+  error for every real device channel; reads were unaffected.
+
 ## 0.43.3
 
 - **Fixed: MCP access works now.** The MCP endpoint (for AI clients
