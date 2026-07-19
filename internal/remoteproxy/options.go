@@ -87,6 +87,9 @@ func (o *Options) Validate() error {
 	seen := make(map[string]struct{}, len(o.Instances))
 	for i := range o.Instances {
 		inst := &o.Instances[i]
+		// Stray surrounding whitespace is a classic paste mistake; the
+		// add-on schema tolerates it too, so trim instead of rejecting.
+		inst.Name = strings.TrimSpace(inst.Name)
 		if !nameRE.MatchString(inst.Name) {
 			return fmt.Errorf("instance %d: name %q must match %s", i, inst.Name, nameRE)
 		}

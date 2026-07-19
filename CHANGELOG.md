@@ -15,7 +15,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (lowercase-only slug); the constraint is relaxed to
   `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` — the name stays a single URL
   path segment, but capital letters are fine everywhere it is used
-  (mount path, tile label, DOM id, cookie scope).
+  (mount path, tile label, DOM id, cookie scope). Surrounding
+  whitespace (a classic paste mistake) is trimmed instead of rejected,
+  by the schema and the proxy alike.
 
 ## [0.44.1] — 2026-07-19
 

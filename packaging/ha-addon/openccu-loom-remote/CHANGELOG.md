@@ -6,9 +6,9 @@ top-level CHANGELOG.md. Newest version first.
 
 # 0.44.2 (2026-07-19)
 
-Fix: instance names may contain capital letters (e.g. `OttoLoom`) —
-the lowercase-only slug constraint was needlessly strict and broke
-saving the configuration.
+Fix: instance names may contain capital letters (e.g. `OttoLoom`),
+and stray surrounding whitespace (a classic paste mistake) is trimmed
+instead of rejected — both previously broke saving the configuration.
 
 # 0.44.1 (2026-07-19)
 
