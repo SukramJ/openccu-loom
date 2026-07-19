@@ -150,6 +150,7 @@ ui-types: ## regenerate src/lib/api/types.generated.ts from assets/openapi.yaml
 build: ## build the daemon binary into ./bin/ (embeds current spa_dist/)
 	mkdir -p $(BIN_DIR)
 	$(GO) build $(GO_BUILD_FLAGS) -o $(BIN) ./cmd/openccu-loom
+	$(GO) build $(GO_BUILD_FLAGS) -o $(BIN_DIR)/openccu-loom-remote ./cmd/openccu-loom-remote
 
 .PHONY: dist
 dist: ui-build build ## full build: compile SPA first, then daemon

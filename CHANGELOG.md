@@ -6,6 +6,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.1] — 2026-07-19
+
+### Added
+
+- **New HA add-on: OpenCCU-Loom Remote** (ADR 0054) — an ingress proxy
+  that brings the Config UI of one or more **remote** OpenCCU-Loom
+  instances into the Home Assistant sidebar, without running a local
+  daemon. Multiple instances mount under one panel (overview page with
+  live status tiles — health, version — when more than one is
+  configured); an optional per-instance API token logs HA admins into
+  the remote UI without a second credential, and without a token the
+  remote login page is proxied through (session cookies are scoped per
+  instance). Upstreams may be `http://` or `https://` (per-instance
+  `tls_insecure` for self-signed certificates); WebSockets and the
+  HA theme bridge work through the proxy. Ships as
+  `ghcr.io/sukramj/openccu-loom-remote-ha-{arch}` from
+  `packaging/ha-addon/openccu-loom-remote/`; the
+  `openccu-loom-remote` binary also rides in the release image and
+  archives.
+
 ## [0.44.0] — 2026-07-19
 
 ### Changed

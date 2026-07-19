@@ -7,6 +7,9 @@
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY openccu-loom /app/openccu-loom
+# Ingress proxy for remote instances; carried in this image only so the
+# openccu-loom-remote HA add-on can COPY it out (ADR 0054).
+COPY openccu-loom-remote /app/openccu-loom-remote
 COPY assets/openapi.yaml /app/assets/openapi.yaml
 USER nonroot:nonroot
 
