@@ -32,7 +32,10 @@ const ingressPathHeader = "X-Ingress-Path"
 // a spoofed header can never steer a redirect off-origin.
 func ingressBase(r *http.Request) string {
 	p := r.Header.Get(ingressPathHeader)
-	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
+	// "//host" and "/\host" are both treated as protocol-relative URLs
+	// by browsers; reject each explicitly (the byte loop below catches
+	// backslashes anywhere, this makes the guard analyzable).
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
 		return ""
 	}
 	for i := range len(p) {

@@ -17,6 +17,7 @@ import (
 
 // InstanceStatus is one instance's last probe result, rendered on the
 // overview page and served as JSON on /-/status.
+// loom:reachable:reason="marshaled reflectively into the /-/status JSON feed and rendered by the overview html/template; reflection use is invisible to the SSA walk"
 type InstanceStatus struct {
 	Name string `json:"name"`
 	// Status is the remote daemon's composite health when reachable

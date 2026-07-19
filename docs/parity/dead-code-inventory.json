@@ -1,16 +1,18 @@
 {
-  "generated": "740ba550",
-  "head": "740ba550",
+  "generated": "1c6031ec",
+  "head": "1c6031ec",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
+    "cmd/openccu-loom-remote/main.go",
+    "cmd/openccu-loom-remote/main.go",
     "cmd/openccu-loom/main.go",
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 25644,
-    "reachable": 4540,
-    "whitelisted": 18381,
+    "total_exported": 25693,
+    "reachable": 4544,
+    "whitelisted": 18426,
     "unreachable": 2723
   },
   "by_package": [
@@ -25669,6 +25671,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/ws_session_backend_test.go",
       "line": 76
+    },
+    {
+      "package": "cmd/openccu-loom-remote",
+      "identifier": "TestLogLevel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom-remote/main_test.go",
+      "line": 14
+    },
+    {
+      "package": "cmd/openccu-loom-remote",
+      "identifier": "TestRunMissingOptionsFile",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom-remote/main_test.go",
+      "line": 42
     },
     {
       "package": "internal/alarm",
@@ -135870,6 +135886,307 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/payload/registry_test.go",
       "line": 26
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "Instance",
+      "reason": "element type of Options.Instances, decoded from the add-on options JSON and consumed by newInstanceProxy; only referenced through the Options composite",
+      "file": "internal/remoteproxy/options.go",
+      "line": 34
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "Instance",
+      "reason": "element type of Options.Instances, decoded from the add-on options JSON and consumed by newInstanceProxy; only referenced through the Options composite",
+      "file": "internal/remoteproxy/options.go",
+      "line": 34
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "InstanceStatus",
+      "reason": "marshaled reflectively into the /-/status JSON feed and rendered by the overview html/template; reflection use is invisible to the SSA walk",
+      "file": "internal/remoteproxy/poller.go",
+      "line": 21
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "InstanceStatus",
+      "reason": "marshaled reflectively into the /-/status JSON feed and rendered by the overview html/template; reflection use is invisible to the SSA walk",
+      "file": "internal/remoteproxy/poller.go",
+      "line": 21
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "Options",
+      "reason": "constructed by LoadOptions from the add-on options file and consumed by New in cmd/openccu-loom-remote; the type heuristic does not follow constructor returns of the proxy binary",
+      "file": "internal/remoteproxy/options.go",
+      "line": 25
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "Options",
+      "reason": "constructed by LoadOptions from the add-on options file and consumed by New in cmd/openccu-loom-remote; the type heuristic does not follow constructor returns of the proxy binary",
+      "file": "internal/remoteproxy/options.go",
+      "line": 25
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "Server",
+      "reason": "returned by New and driven by cmd/openccu-loom-remote via Handler and Start; the type heuristic does not follow constructor returns of the proxy binary",
+      "file": "internal/remoteproxy/server.go",
+      "line": 19
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "Server",
+      "reason": "returned by New and driven by cmd/openccu-loom-remote via Handler and Start; the type heuristic does not follow constructor returns of the proxy binary",
+      "file": "internal/remoteproxy/server.go",
+      "line": 19
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyCookiePathStripsUpstreamBase",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 502
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyForwardingHeaders",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 461
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyIngressPathHeader",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 153
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyIngressPathTabSpoofRejected",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 632
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyLocationEscapedPathAndFragmentSurvive",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 573
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyLocationRewrite",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 253
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyLocationSegmentBoundaryNotStripped",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 549
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxySetCookieRewrite",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 357
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxySetCookieUnrecognizedAttributeSurvives",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 608
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxySingleInstanceBasePathUpstreamLocation",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 593
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyTokenInjection",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 115
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyUnreachableUpstream",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_test.go",
+      "line": 481
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestInstanceProxyWebSocketUpgradePassthrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/proxy_websocket_test.go",
+      "line": 53
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestLoadOptions",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/options_test.go",
+      "line": 25
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestOptionsValidate",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/options_test.go",
+      "line": 118
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestOverviewPageGermanAcceptLanguage",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/overview_test.go",
+      "line": 102
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestOverviewPageRendersOneCardPerInstanceWithLiveStatus",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/overview_test.go",
+      "line": 71
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestParseInstanceURL",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/options_test.go",
+      "line": 219
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestPollerProbeHealthyFillsVersionAndInjectsToken",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/poller_test.go",
+      "line": 140
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestPollerProbeInfoEndpointIsBestEffort",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/poller_test.go",
+      "line": 228
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestPollerProbeNoTokenSendsNoAuthorization",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/poller_test.go",
+      "line": 182
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestPollerProbeUnhealthyStatusCodeIsIgnored",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/poller_test.go",
+      "line": 198
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestPollerProbeUnreachableUpstream",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/poller_test.go",
+      "line": 217
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestPollerSnapshotOrderAndUnknownDefault",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/poller_test.go",
+      "line": 271
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestPollerStartStopsOnContextCancel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/poller_test.go",
+      "line": 296
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServeStatusJSONPreservesConfiguredOrder",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/overview_test.go",
+      "line": 118
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServeUnreachableRendersLocalized502",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/overview_test.go",
+      "line": 156
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerBareInstanceMountRedirectPreservesQuery",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 248
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerBareInstanceMountRedirects",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 145
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerMultiInstanceRouting",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 109
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerOverviewPage",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 192
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerRootPostMethodNotAllowed",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 281
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerSingleInstanceIsTransparent",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 81
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerStrayPathRedirectsToOverview",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 231
+    },
+    {
+      "package": "internal/remoteproxy",
+      "identifier": "TestServerUnknownInstanceRedirectsToOverview",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/remoteproxy/server_test.go",
+      "line": 177
     },
     {
       "package": "internal/routingkey",

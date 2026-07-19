@@ -21,6 +21,7 @@ import (
 // Options is the add-on configuration. The Supervisor renders the
 // operator's add-on options to /data/options.json; the proxy reads that
 // file directly instead of round-tripping every field through env vars.
+// loom:reachable:reason="constructed by LoadOptions from the add-on options file and consumed by New in cmd/openccu-loom-remote; the type heuristic does not follow constructor returns of the proxy binary"
 type Options struct {
 	LogLevel  string     `json:"log_level"`
 	Instances []Instance `json:"instances"`
@@ -29,6 +30,7 @@ type Options struct {
 // Instance describes one remote OpenCCU-Loom daemon reachable from the
 // proxy. Name doubles as the URL path segment (`/i/<name>/`) when more
 // than one instance is configured, hence the strict slug constraint.
+// loom:reachable:reason="element type of Options.Instances, decoded from the add-on options JSON and consumed by newInstanceProxy; only referenced through the Options composite"
 type Instance struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`

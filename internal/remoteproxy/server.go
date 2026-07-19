@@ -15,6 +15,7 @@ import (
 // With exactly one instance it is a fully transparent proxy at "/";
 // with several, each instance mounts under "/i/<name>/" and "/" serves
 // the overview page.
+// loom:reachable:reason="returned by New and driven by cmd/openccu-loom-remote via Handler and Start; the type heuristic does not follow constructor returns of the proxy binary"
 type Server struct {
 	instances []*instanceProxy
 	poller    *poller

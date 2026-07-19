@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 740ba550
-HEAD: 740ba550
+Generated: 1c6031ec
+HEAD: 1c6031ec
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25644 |
-| Reachable | 4540 |
-| Whitelisted | 18381 |
+| Total Exported | 25693 |
+| Reachable | 4544 |
+| Whitelisted | 18426 |
 | **Unreachable** | **2723** |
 
 ## Top-20 Packages by Dead Code
