@@ -10,6 +10,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **CCU metadata now ships as the versioned go-openccu-data module**
+  (ADR 0053) — the extracts (translations, easymodes, profiles,
+  curated overlays, device semantics) come from
+  `github.com/SukramJ/go-openccu-data` instead of a hand-synced
+  `internal/ccudata/embedded/` copy. Regeneration is automated on
+  every upstream release (repository_dispatch → module PR → dependabot
+  bump); `make bump-ccudata` is the manual fallback, the old
+  `update-ccu-data`/`refresh-ccudata` targets, `MANIFEST.json` and the
+  drift-check script are gone. The migration surfaced (and upstreamed)
+  loom-only curation: the 0.42.9 BWTH parameter labels now live in the
+  shared source of truth.
+
 - **Doorbells ring — with the shared curated model list** — press
   events of the doorbell devices now follow Home Assistant's doorbell
   contract: the discovered `event` entity announces (and the event
