@@ -121,6 +121,15 @@ type getHealthOut struct {
 // parseParamsetKey accepts the two operator-facing paramset keys. LINK
 // is intentionally excluded — it needs a peer address and a different
 // tool shape.
+// deviceAddressOf strips a channel suffix (`ADDR:n` → `ADDR`): write
+// tools target channels while device ownership is tracked per device.
+func deviceAddressOf(address string) string {
+	if i := strings.IndexByte(address, ':'); i > 0 {
+		return address[:i]
+	}
+	return address
+}
+
 func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
 	switch strings.ToUpper(strings.TrimSpace(s)) {
 	case "MASTER":
@@ -406,8 +415,10 @@ func registerSetDatapoint(s *mcpsdk.Server, d Deps) {
 		}
 		// Multi-CCU safety: refuse to write to a device the named
 		// central does not own (ADR 0002 — central_name is explicit and
-		// authoritative, never an implicit fallback).
-		if owner := d.Devices.CentralOf(address); owner != central {
+		// authoritative, never an implicit fallback). Ownership is
+		// tracked per device, so the channel suffix must be stripped
+		// before the lookup — writes always target channels.
+		if owner := d.Devices.CentralOf(deviceAddressOf(address)); owner != central {
 			return nil, setDatapointOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
 		}
 		// CommandPriorityHigh mirrors the REST default for user-initiated
@@ -445,7 +456,7 @@ func registerWriteParamset(s *mcpsdk.Server, d Deps) {
 		if !ok {
 			return nil, writeParamsetOut{}, fmt.Errorf("key must be MASTER or VALUES, got %q", in.Key)
 		}
-		if owner := d.Devices.CentralOf(address); owner != central {
+		if owner := d.Devices.CentralOf(deviceAddressOf(address)); owner != central {
 			return nil, writeParamsetOut{}, fmt.Errorf("device %s belongs to central %q, not %q", address, owner, central)
 		}
 		if err := d.Paramsets.PutParamset(ctx, address, key, in.Values); err != nil {
