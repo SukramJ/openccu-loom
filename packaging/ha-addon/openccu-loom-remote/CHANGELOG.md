@@ -1,11 +1,10 @@
 <!--
 Home Assistant renders this file as the add-on changelog in its UI.
 Keep entries condensed; the full history lives in the repository's
-top-level CHANGELOG.md. Newest version first. The "Unreleased" header
-is replaced by the version number in the release commit.
+top-level CHANGELOG.md. Newest version first.
 -->
 
-# Unreleased
+# 0.44.1 (2026-07-19)
 
 Initial release of **OpenCCU-Loom Remote** — an ingress proxy that
 brings the Config UI of one or more remote OpenCCU-Loom instances into

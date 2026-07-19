@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.1] — 2026-07-19
+
 ### Added
 
 - **New HA add-on: OpenCCU-Loom Remote** (ADR 0054) — an ingress proxy

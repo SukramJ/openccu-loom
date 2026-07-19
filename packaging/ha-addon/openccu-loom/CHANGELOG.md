@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.44.1
+
+- **New sibling add-on: OpenCCU-Loom Remote.** The store now also
+  offers an ingress proxy that brings the Config UI of one or more
+  **remote** OpenCCU-Loom instances into the HA sidebar — for setups
+  where the daemon runs next to the CCU or at another site. This
+  add-on itself is unchanged.
+
 ## 0.44.0
 
 - **Changed: doorbells ring properly in Home Assistant.** Doorbell
