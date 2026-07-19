@@ -1,6 +1,6 @@
 {
-  "generated": "b3a68130",
-  "head": "b3a68130",
+  "generated": "740ba550",
+  "head": "740ba550",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 25608,
-    "reachable": 4538,
-    "whitelisted": 18349,
-    "unreachable": 2721
+    "total_exported": 25644,
+    "reachable": 4540,
+    "whitelisted": 18381,
+    "unreachable": 2723
   },
   "by_package": [
     {
@@ -72,6 +72,12 @@
       "package": "internal/auth",
       "unreachable_funcs": 2,
       "unreachable_types": 24,
+      "unreachable_other": 4
+    },
+    {
+      "package": "internal/ccudata",
+      "unreachable_funcs": 2,
+      "unreachable_types": 31,
       "unreachable_other": 4
     },
     {
@@ -175,12 +181,6 @@
       "unreachable_funcs": 0,
       "unreachable_types": 0,
       "unreachable_other": 8
-    },
-    {
-      "package": "internal/ccudata",
-      "unreachable_funcs": 0,
-      "unreachable_types": 31,
-      "unreachable_other": 4
     },
     {
       "package": "internal/central",
@@ -752,14 +752,14 @@
       "package": "internal/alarm",
       "identifier": "RemoteKeyCandidate",
       "file": "internal/alarm/candidates.go",
-      "line": 178,
+      "line": 183,
       "kind": "type"
     },
     {
       "package": "internal/alarm",
       "identifier": "RemoteKeyCandidate",
       "file": "internal/alarm/candidates.go",
-      "line": 178,
+      "line": 183,
       "kind": "type"
     },
     {
@@ -2112,6 +2112,20 @@
       "file": "internal/ccudata/easymode.go",
       "line": 45,
       "kind": "type"
+    },
+    {
+      "package": "internal/ccudata",
+      "identifier": "SnapshotVersion",
+      "file": "internal/ccudata/embed.go",
+      "line": 35,
+      "kind": "func"
+    },
+    {
+      "package": "internal/ccudata",
+      "identifier": "SnapshotVersion",
+      "file": "internal/ccudata/embed.go",
+      "line": 35,
+      "kind": "func"
     },
     {
       "package": "internal/ccudata",
@@ -13492,14 +13506,14 @@
       "package": "internal/north/mqtt",
       "identifier": "ConnectivityPublisher",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 1124,
+      "line": 1126,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "ConnectivityPublisher",
       "file": "internal/north/mqtt/bridge.go",
-      "line": 1124,
+      "line": 1126,
       "kind": "type"
     },
     {
@@ -16796,140 +16810,140 @@
       "package": "pkg/hmapi",
       "identifier": "AlarmAreaStatus",
       "file": "pkg/hmapi/alarm.go",
-      "line": 141,
+      "line": 146,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmAreaStatus",
       "file": "pkg/hmapi/alarm.go",
-      "line": 141,
+      "line": 146,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmArmAccepted",
       "file": "pkg/hmapi/alarm.go",
-      "line": 189,
+      "line": 194,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmArmAccepted",
       "file": "pkg/hmapi/alarm.go",
-      "line": 189,
+      "line": 194,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmArmRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 161,
+      "line": 166,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmArmRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 161,
+      "line": 166,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCode",
       "file": "pkg/hmapi/alarm.go",
-      "line": 283,
+      "line": 288,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCode",
       "file": "pkg/hmapi/alarm.go",
-      "line": 283,
+      "line": 288,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCodePerms",
       "file": "pkg/hmapi/alarm.go",
-      "line": 273,
+      "line": 278,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCodePerms",
       "file": "pkg/hmapi/alarm.go",
-      "line": 273,
+      "line": 278,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCodeRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 312,
+      "line": 317,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCodeRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 312,
+      "line": 317,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCountdown",
       "file": "pkg/hmapi/alarm.go",
-      "line": 119,
+      "line": 124,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmCountdown",
       "file": "pkg/hmapi/alarm.go",
-      "line": 119,
+      "line": 124,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmIncidentRef",
       "file": "pkg/hmapi/alarm.go",
-      "line": 112,
+      "line": 117,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmIncidentRef",
       "file": "pkg/hmapi/alarm.go",
-      "line": 112,
+      "line": 117,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmJournalEntry",
       "file": "pkg/hmapi/alarm.go",
-      "line": 201,
+      "line": 206,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmJournalEntry",
       "file": "pkg/hmapi/alarm.go",
-      "line": 201,
+      "line": 206,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmapi/alarm.go",
-      "line": 128,
+      "line": 133,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmModeReadiness",
       "file": "pkg/hmapi/alarm.go",
-      "line": 128,
+      "line": 133,
       "kind": "type"
     },
     {
@@ -16964,42 +16978,42 @@
       "package": "pkg/hmapi",
       "identifier": "AlarmOutputTestRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 245,
+      "line": 250,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmOutputTestRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 245,
+      "line": 250,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmPanelEntity",
       "file": "pkg/hmapi/alarm.go",
-      "line": 254,
+      "line": 259,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmPanelEntity",
       "file": "pkg/hmapi/alarm.go",
-      "line": 254,
+      "line": 259,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmRemoteKeyCandidate",
       "file": "pkg/hmapi/alarm.go",
-      "line": 97,
+      "line": 102,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmRemoteKeyCandidate",
       "file": "pkg/hmapi/alarm.go",
-      "line": 97,
+      "line": 102,
       "kind": "type"
     },
     {
@@ -17020,42 +17034,42 @@
       "package": "pkg/hmapi",
       "identifier": "AlarmVerbRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 184,
+      "line": 189,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmVerbRequest",
       "file": "pkg/hmapi/alarm.go",
-      "line": 184,
+      "line": 189,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmWalkTestSensor",
       "file": "pkg/hmapi/alarm.go",
-      "line": 227,
+      "line": 232,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmWalkTestSensor",
       "file": "pkg/hmapi/alarm.go",
-      "line": 227,
+      "line": 232,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmWalkTestStatus",
       "file": "pkg/hmapi/alarm.go",
-      "line": 238,
+      "line": 243,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "AlarmWalkTestStatus",
       "file": "pkg/hmapi/alarm.go",
-      "line": 238,
+      "line": 243,
       "kind": "type"
     },
     {
@@ -23257,6 +23271,13 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestMountMCPResolvesCredentialsBeforeRequire",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/daemon_rest_mount_test.go",
+      "line": 25
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestNewCentralOrchestratorNilBringUpReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/central_adopt_test.go",
@@ -25948,35 +25969,35 @@
       "identifier": "TestRemoteKeyCandidatesBothPressParametersDispatchOrder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/candidates_test.go",
-      "line": 813
+      "line": 809
     },
     {
       "package": "internal/alarm",
       "identifier": "TestRemoteKeyCandidatesExcludeVirtualRemoteDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/candidates_test.go",
-      "line": 855
+      "line": 851
     },
     {
       "package": "internal/alarm",
       "identifier": "TestRemoteKeyCandidatesOrderedByCentralThenDeviceThenChannelAndStampsMetadata",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/candidates_test.go",
-      "line": 875
+      "line": 871
     },
     {
       "package": "internal/alarm",
       "identifier": "TestRemoteKeyCandidatesPressShortOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/candidates_test.go",
-      "line": 788
+      "line": 784
     },
     {
       "package": "internal/alarm",
       "identifier": "TestRemoteKeyCandidatesUnrelatedEventIsNotACandidate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/candidates_test.go",
-      "line": 836
+      "line": 832
     },
     {
       "package": "internal/alarm",
@@ -26089,6 +26110,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/panels_test.go",
       "line": 200
+    },
+    {
+      "package": "internal/alarm",
+      "identifier": "TestSysvarMirrorExisting_ExportsFalseOnModeChange",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/sysvar_test.go",
+      "line": 240
+    },
+    {
+      "package": "internal/alarm",
+      "identifier": "TestSysvarMirrorExisting_ExportsTrueWhenTriggered",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/sysvar_test.go",
+      "line": 208
+    },
+    {
+      "package": "internal/alarm",
+      "identifier": "TestSysvarMirrorOnInbound_ExistingModeTargetProducesNoIntentButManagedTargetDoes",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/sysvar_test.go",
+      "line": 274
     },
     {
       "package": "internal/alarm/codes",
@@ -26288,10 +26330,38 @@
     },
     {
       "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_NilNotifySinkDoesNotPanic",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 424
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_NotificationFiresUnderSilentPolicy",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 406
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_NotificationOutputNotifiesInMode",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 363
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestFireCycle_NotificationOutputSkippedOutOfMode",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 388
+    },
+    {
+      "package": "internal/alarm/outputs",
       "identifier": "TestFireCycle_PerOutputFailureIsolatesRemainingOutputs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
-      "line": 364
+      "line": 463
     },
     {
       "package": "internal/alarm/outputs",
@@ -26320,6 +26390,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/alarm/outputs/manager_firecycle_test.go",
       "line": 304
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestOutputConfig_NotifyMQTTEnabledDefaultsToTrue",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 436
+    },
+    {
+      "package": "internal/alarm/outputs",
+      "identifier": "TestOutputConfig_NotifyWebhookEnabledDefaultsToTrue",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/alarm/outputs/manager_firecycle_test.go",
+      "line": 449
     },
     {
       "package": "internal/alarm/outputs",
@@ -27996,6 +28080,27 @@
     },
     {
       "package": "internal/ccudata",
+      "identifier": "TestDoorbellModelsCuratedSet",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/ccudata/device_semantics_test.go",
+      "line": 11
+    },
+    {
+      "package": "internal/ccudata",
+      "identifier": "TestDoorbellModelsRejectsNonCuratedModel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/ccudata/device_semantics_test.go",
+      "line": 29
+    },
+    {
+      "package": "internal/ccudata",
+      "identifier": "TestDoorbellModelsStableAcrossCalls",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/ccudata/device_semantics_test.go",
+      "line": 40
+    },
+    {
+      "package": "internal/ccudata",
       "identifier": "TestEasymodeEmbeddedHasCrossValidations",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/ccudata/easymode_visibility_test.go",
@@ -28105,20 +28210,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/ccudata/translations_test.go",
       "line": 102
-    },
-    {
-      "package": "internal/ccudata",
-      "identifier": "TestManifestHashesMatchEmbedded",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/ccudata/manifest_test.go",
-      "line": 38
-    },
-    {
-      "package": "internal/ccudata",
-      "identifier": "TestManifestWellFormed",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/ccudata/manifest_test.go",
-      "line": 87
     },
     {
       "package": "internal/ccudata",
@@ -109098,101 +109189,129 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "EntityCategoryConfig",
+      "identifier": "DoorbellEventType",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 54
+      "line": 291
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "DoorbellEventType",
+      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
+      "file": "internal/north/mqtt/entity_descriptions.go",
+      "line": 291
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "DoorbellRingType",
+      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
+      "file": "internal/north/mqtt/entity_descriptions.go",
+      "line": 268
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "DoorbellRingType",
+      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
+      "file": "internal/north/mqtt/entity_descriptions.go",
+      "line": 268
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityCategoryConfig",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 54
+      "line": 58
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "EntityCategoryConfig",
+      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
+      "file": "internal/north/mqtt/entity_descriptions.go",
+      "line": 58
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityCategoryDiagnostic",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 55
+      "line": 59
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityCategoryDiagnostic",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 55
+      "line": 59
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescription",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 13
+      "line": 17
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescription",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 13
+      "line": 17
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescriptionExtRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 87
+      "line": 91
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescriptionExtRule",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 87
+      "line": 91
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescriptionFor",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 345
+      "line": 380
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescriptionFor",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 345
+      "line": 380
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescriptionForExt",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 186
+      "line": 190
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EntityDescriptionForExt",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 186
+      "line": 190
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EventDeviceClassForModel",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 257
+      "line": 254
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "EventDeviceClassForModel",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 257
+      "line": 254
     },
     {
       "package": "internal/north/mqtt",
@@ -109367,42 +109486,42 @@
       "identifier": "LookupEvent",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 240
+      "line": 244
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupEvent",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 240
+      "line": 244
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupExtRuleForComponent",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 165
+      "line": 169
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupExtRuleForComponent",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 165
+      "line": 169
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupExtRuleInSlice",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 153
+      "line": 157
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupExtRuleInSlice",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 153
+      "line": 157
     },
     {
       "package": "internal/north/mqtt",
@@ -109507,14 +109626,14 @@
       "identifier": "LookupTextDisplayByDevice",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 279
+      "line": 314
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LookupTextDisplayByDevice",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 279
+      "line": 314
     },
     {
       "package": "internal/north/mqtt",
@@ -109529,6 +109648,20 @@
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_description_lookup.go",
       "line": 141
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "MapDoorbellEventTypes",
+      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
+      "file": "internal/north/mqtt/entity_descriptions.go",
+      "line": 273
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "MapDoorbellEventTypes",
+      "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
+      "file": "internal/north/mqtt/entity_descriptions.go",
+      "line": 273
     },
     {
       "package": "internal/north/mqtt",
@@ -109563,14 +109696,14 @@
       "identifier": "MqttEntityDescription",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 299
+      "line": 334
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "MqttEntityDescription",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/entity_descriptions.go",
-      "line": 299
+      "line": 334
     },
     {
       "package": "internal/north/mqtt",
@@ -109788,6 +109921,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/alarm_publisher_test.go",
       "line": 496
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestAlarmMQTTPublisher_NotificationOutputFallsBackToID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/alarm_publisher_test.go",
+      "line": 661
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestAlarmMQTTPublisher_NotificationRespectsMQTTFlag",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/alarm_publisher_test.go",
+      "line": 602
     },
     {
       "package": "internal/north/mqtt",
@@ -110571,21 +110718,42 @@
       "identifier": "TestBuildChannelEventButtonGenericModel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_event_doorbell_test.go",
-      "line": 75
+      "line": 76
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBuildChannelEventDoorbellDBB",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_event_doorbell_test.go",
-      "line": 65
+      "line": 66
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBuildChannelEventDoorbellDSDPCB",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_event_doorbell_test.go",
-      "line": 54
+      "line": 55
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestBuildChannelEventDoorbellHmSenDBPCB",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_event_doorbell_test.go",
+      "line": 87
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestBuildChannelEventTypesPressShortForGenericModel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_event_doorbell_test.go",
+      "line": 152
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestBuildChannelEventTypesRingForDoorbellDBB",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/discovery_event_doorbell_test.go",
+      "line": 140
     },
     {
       "package": "internal/north/mqtt",
@@ -110810,6 +110978,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/channel_event_aggregate_test.go",
       "line": 167
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestChannelEventStatePayloadDoorbellModelMapsRing",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/channel_event_aggregate_test.go",
+      "line": 263
     },
     {
       "package": "internal/north/mqtt",
@@ -111513,10 +111688,17 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestDoorbellEventType",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/entity_descriptions_test.go",
+      "line": 404
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForEventPressShort",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 177
+      "line": 178
     },
     {
       "package": "internal/north/mqtt",
@@ -111565,63 +111747,63 @@
       "identifier": "TestEntityDescriptionForLightComponentReturnsZeroValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 169
+      "line": 170
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForNumberFrequencyUnit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 161
+      "line": 162
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForSensorOperatingVoltageDiagnosticDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 151
+      "line": 152
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForSensorRSSIDeviceDiagnosticDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 141
+      "line": 142
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForSensorTemperatureMatches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 128
+      "line": 129
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupBasicMatches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 203
+      "line": 204
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupDevicePrefixMatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 290
+      "line": 291
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupReturnsNilOnMiss",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 278
+      "line": 279
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionLookupRuleCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 304
+      "line": 305
     },
     {
       "package": "internal/north/mqtt",
@@ -111663,7 +111845,7 @@
       "identifier": "TestEventDeviceClassForModel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 319
+      "line": 321
     },
     {
       "package": "internal/north/mqtt",
@@ -112055,21 +112237,21 @@
       "identifier": "TestLookupBinarySensorRuleHmIPSWDWindow",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 91
+      "line": 92
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestLookupBinarySensorRuleLowBatteryAliases",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 66
+      "line": 67
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestLookupBinarySensorRuleSabotageDisabledDiagnostic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 78
+      "line": 79
     },
     {
       "package": "internal/north/mqtt",
@@ -112083,7 +112265,7 @@
       "identifier": "TestLookupCoverRuleHmIPBBLBlind",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 112
+      "line": 113
     },
     {
       "package": "internal/north/mqtt",
@@ -112146,7 +112328,7 @@
       "identifier": "TestLookupNumberRuleHmwIo12FrequencyMHz",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 102
+      "line": 103
     },
     {
       "package": "internal/north/mqtt",
@@ -112160,28 +112342,28 @@
       "identifier": "TestLookupSensorRuleMissingParameterReportsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 60
+      "line": 61
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestLookupSensorRuleOperatingVoltageDisabledDiagnostic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 30
+      "line": 31
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestLookupSensorRuleRSSIAliasesDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 45
+      "line": 46
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestLookupSensorRuleTemperatureAliasesShareKey",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 15
+      "line": 16
     },
     {
       "package": "internal/north/mqtt",
@@ -112196,6 +112378,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/discovery_ha_schema_test.go",
       "line": 125
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestMapDoorbellEventTypesClassicModelAlsoRewrites",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/entity_descriptions_test.go",
+      "line": 372
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestMapDoorbellEventTypesNonDoorbellPassesThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/entity_descriptions_test.go",
+      "line": 386
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "TestMapDoorbellEventTypesRewritesPressShortToRing",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/entity_descriptions_test.go",
+      "line": 353
     },
     {
       "package": "internal/north/mqtt",
@@ -112391,7 +112594,7 @@
       "identifier": "TestPerParameterPressEventSuppressedForMultiPress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/channel_event_aggregate_test.go",
-      "line": 269
+      "line": 301
     },
     {
       "package": "internal/north/mqtt",
@@ -113385,7 +113588,7 @@
       "identifier": "TestUnitMicrometersIsValidUtf8",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/entity_descriptions_test.go",
-      "line": 189
+      "line": 190
     },
     {
       "package": "internal/north/mqtt",
@@ -117711,14 +117914,14 @@
       "identifier": "ListAlarmOutputCandidates",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm_output_candidates.go",
-      "line": 21
+      "line": 23
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListAlarmOutputCandidates",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm_output_candidates.go",
-      "line": 21
+      "line": 23
     },
     {
       "package": "internal/north/rest/handlers",
@@ -117739,14 +117942,14 @@
       "identifier": "ListAlarmRemoteKeyCandidates",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm_output_candidates.go",
-      "line": 63
+      "line": 79
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListAlarmRemoteKeyCandidates",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm_output_candidates.go",
-      "line": 63
+      "line": 79
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125138,7 +125341,7 @@
       "identifier": "TestPutAlarmAreaOutputs_KnownIneligibleTarget_Returns422AndLeavesStoreUntouched",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
-      "line": 227
+      "line": 277
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125146,6 +125349,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
       "line": 160
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaOutputs_SysvarMirrorWithName_Saves",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 231
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPutAlarmAreaOutputs_SysvarMirrorWithoutName_Returns422",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
+      "line": 211
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125159,7 +125376,7 @@
       "identifier": "TestPutAlarmAreaOutputs_UnknownTarget_SavesDespiteUnresolvedEligibility",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/alarm_sensors_outputs_test.go",
-      "line": 258
+      "line": 308
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130654,28 +130871,35 @@
       "identifier": "TestAlarmPanelSubscriberHealthChanged",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/alarm_events_test.go",
-      "line": 246
+      "line": 287
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestAlarmPanelSubscriberJournalAppended",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/alarm_events_test.go",
-      "line": 180
+      "line": 221
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestAlarmPanelSubscriberNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/alarm_events_test.go",
-      "line": 315
+      "line": 356
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAlarmPanelSubscriberNotification",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/alarm_events_test.go",
+      "line": 180
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestAlarmPanelSubscriberPanelChanged",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/alarm_events_test.go",
-      "line": 277
+      "line": 318
     },
     {
       "package": "internal/north/rest/ws",
@@ -130703,7 +130927,7 @@
       "identifier": "TestAlarmPanelSubscriberWalkTestProgress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/alarm_events_test.go",
-      "line": 213
+      "line": 254
     },
     {
       "package": "internal/north/rest/ws",
@@ -133489,7 +133713,7 @@
       "identifier": "TestOutboundAlarmEventTypeFilterAppliesToAlarmPlane",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/webhook/alarm_outbound_test.go",
-      "line": 185
+      "line": 238
     },
     {
       "package": "internal/north/webhook",
@@ -133525,6 +133749,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/webhook/alarm_outbound_test.go",
       "line": 133
+    },
+    {
+      "package": "internal/north/webhook",
+      "identifier": "TestOutboundForwardsAlarmNotification",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/webhook/alarm_outbound_test.go",
+      "line": 185
     },
     {
       "package": "internal/north/webhook",
@@ -133577,10 +133808,17 @@
     },
     {
       "package": "internal/north/webhook",
+      "identifier": "TestOutboundSkipsAlarmNotificationWhenWebhookDisabled",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/webhook/alarm_outbound_test.go",
+      "line": 217
+    },
+    {
+      "package": "internal/north/webhook",
       "identifier": "TestOutboundStopUnsubscribesAlarmBus",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/webhook/alarm_outbound_test.go",
-      "line": 218
+      "line": 271
     },
     {
       "package": "internal/north/webhook",
@@ -147419,7 +147657,7 @@
       "identifier": "TestWSBroadcastsHaveProductionEmitter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ws_broadcast_emitter_test.go",
-      "line": 272
+      "line": 277
     },
     {
       "package": "tests/contract",

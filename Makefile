@@ -460,32 +460,10 @@ vet: ## go vet
 pre-commit: ## run the pre-commit hook against the current working tree (no commit)
 	@./script/git/pre-commit
 
-OPENCCU_REPO     ?= ../openccu-data
-CCUDATA_EMBED    := internal/ccudata/embedded
-
-.PHONY: update-ccu-data
-update-ccu-data: ## refresh embedded archives from an openccu-data checkout
-	@if [ ! -d "$(OPENCCU_REPO)/openccu_data/data" ]; then \
-		echo "openccu-data repo not found at $(OPENCCU_REPO); set OPENCCU_REPO="; exit 1; \
-	fi
-	rm -rf $(CCUDATA_EMBED)/profiles $(CCUDATA_EMBED)/translation_custom
-	mkdir -p $(CCUDATA_EMBED)/profiles $(CCUDATA_EMBED)/translation_custom
-	cp $(OPENCCU_REPO)/openccu_data/data/translation_extract.json.gz $(CCUDATA_EMBED)/
-	cp $(OPENCCU_REPO)/openccu_data/data/easymode_extract.json.gz    $(CCUDATA_EMBED)/
-	cp $(OPENCCU_REPO)/openccu_data/data/profiles/*.json.gz          $(CCUDATA_EMBED)/profiles/
-	cp $(OPENCCU_REPO)/openccu_data/data/profiles/_receiver_type_aliases.json \
-	   $(CCUDATA_EMBED)/profiles/
-	cp $(OPENCCU_REPO)/openccu_data/data/translation_custom/*.json   $(CCUDATA_EMBED)/translation_custom/
-	@echo "-- synced from $(OPENCCU_REPO) --"
-	@ls -la $(CCUDATA_EMBED)/
-
-.PHONY: ccudata-drift
-ccudata-drift: ## Verify embedded openccu-data matches upstream (set OPENCCU_DATA_PATH= to override)
-	@OPENCCU_DATA_PATH="$(OPENCCU_REPO)" ./script/ccudata_drift.sh
-
-.PHONY: refresh-ccudata
-refresh-ccudata: update-ccu-data generate ## one-shot: pull openccu-data + regenerate Go profiles
-	@echo "-- ccudata refresh complete; run 'make test' to validate --"
+.PHONY: bump-ccudata
+bump-ccudata: ## bump the go-openccu-data data-artifact module to its latest tag
+	go get github.com/SukramJ/go-openccu-data@latest && go mod tidy
+	@echo "-- data artifact bumped; run 'make test' to validate --"
 
 MATTERJS_DIR ?= ../matter.js
 

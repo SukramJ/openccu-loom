@@ -8,9 +8,9 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"io/fs"
-	"path"
 	"strings"
+
+	openccudata "github.com/SukramJ/go-openccu-data"
 )
 
 // ProfileStore holds the receiver-profile catalogue extracted from the
@@ -109,23 +109,22 @@ func (s *ProfileStore) ResolvedProfile(receiverType string, id int, locale strin
 func LoadProfilesEmbedded() (*ProfileStore, error) {
 	store := emptyProfileStore()
 
-	aliasesRaw, err := embedded.ReadFile("embedded/profiles/_receiver_type_aliases.json")
+	aliasesRaw, err := openccudata.ReadFile("profiles/_receiver_type_aliases.json")
 	if err == nil {
 		if err := json.Unmarshal(aliasesRaw, &store.Aliases); err != nil {
 			return store, fmt.Errorf("ccudata: decode aliases: %w", err)
 		}
 	}
 
-	entries, err := fs.ReadDir(embedded, "embedded/profiles")
+	names, err := openccudata.ReadDir("profiles")
 	if err != nil {
 		return store, fmt.Errorf("ccudata: list embedded profiles: %w", err)
 	}
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".json.gz") {
+	for _, name := range names {
+		if !strings.HasSuffix(name, ".json.gz") {
 			continue
 		}
-		raw, err := decodeEmbeddedGzip(path.Join("embedded/profiles", name))
+		raw, err := decodeEmbeddedGzip("profiles/" + name)
 		if err != nil {
 			return store, fmt.Errorf("ccudata: decode profile %s: %w", name, err)
 		}
@@ -139,7 +138,7 @@ func LoadProfilesEmbedded() (*ProfileStore, error) {
 // returns the raw JSON body. Shared by the profile and (future)
 // translation loaders.
 func decodeEmbeddedGzip(name string) (json.RawMessage, error) {
-	compressed, err := embedded.ReadFile(name)
+	compressed, err := openccudata.ReadFile(name)
 	if err != nil {
 		return nil, err
 	}

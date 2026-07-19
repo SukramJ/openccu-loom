@@ -30,7 +30,7 @@ divergences live in `docs/parity/by_design.md` and are not tracked here.
 ## 1. Release / Ops
 
 - [ ] **Tag & release `v0.14.6` / current `main`** — merged, untagged. `[planned]` P2 S — operator decision.
-- [ ] **openccu-data resync after upstream releases** — `make update-ccu-data`. `[planned]` P3 S (standing).
+- [x] **openccu-data resync after upstream releases** — automated: the data ships as the versioned go-openccu-data module (regenerated via repository_dispatch on every upstream release; dependabot bumps loom). Manual fallback: `make bump-ccudata`.
 
 ## 2. North — REST / WebSocket / MQTT / SPA
 

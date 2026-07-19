@@ -57,7 +57,7 @@ func TestPublishChannelEventStateNilMQTT(t *testing.T) {
 	dev := device.New(device.Config{Address: "PRESDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-WRC2"})
 	ch := dev.AddChannel("PRESDEV001:1", 1, "KEY", hmenum.ParamsetKeyValues)
 	// nil mqtt → must not panic.
-	b.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV001", 1, "PRESS_SHORT", ch)
+	b.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV001", 1, "HmIP-WRC2", "PRESS_SHORT", ch)
 }
 
 // TestPublishChannelEventStateNotPressParameter — non-press parameter returns early.
@@ -67,7 +67,7 @@ func TestPublishChannelEventStateNotPressParameter(t *testing.T) {
 	// STATE is not a PRESS_* parameter → returns before bridge call.
 	dev := device.New(device.Config{Address: "PRESDEV002", InterfaceID: "HmIP-RF", Model: "HmIP-WRC2"})
 	ch := dev.AddChannel("PRESDEV002:1", 1, "KEY", hmenum.ParamsetKeyValues)
-	eb.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV002", 1, "STATE", ch)
+	eb.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV002", 1, "HmIP-WRC2", "STATE", ch)
 	for _, p := range pub.Published() {
 		if strings.Contains(p.Topic, "event") {
 			t.Errorf("unexpected event publish for non-press param: %s", p.Topic)
@@ -96,7 +96,7 @@ func TestPublishChannelEventStateSinglePressChannel(t *testing.T) {
 	})
 	ch.Put(dp)
 	before := len(pub.Published())
-	eb.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV003", 1, "PRESS_SHORT", ch)
+	eb.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV003", 1, "HmIP-WRC2", "PRESS_SHORT", ch)
 	// A channel-level event publish is expected (single press type is enough).
 	after := len(pub.Published())
 	if after == before {
@@ -123,7 +123,7 @@ func TestPublishChannelEventStateMultiPressChannel(t *testing.T) {
 		ch.Put(dp)
 	}
 	before := len(pub.Published())
-	eb.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV004", 1, "PRESS_SHORT", ch)
+	eb.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV004", 1, "HmIP-WRC2", "PRESS_SHORT", ch)
 	after := len(pub.Published())
 	if after == before {
 		t.Error("multi-press channel must emit at least one event publish")

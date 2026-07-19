@@ -6,6 +6,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.0] — 2026-07-19
+
+### Changed
+
+- **CCU metadata now ships as the versioned go-openccu-data module**
+  (ADR 0053) — the extracts (translations, easymodes, profiles,
+  curated overlays, device semantics) come from
+  `github.com/SukramJ/go-openccu-data` instead of a hand-synced
+  `internal/ccudata/embedded/` copy. Regeneration is automated on
+  every upstream release (repository_dispatch → module PR → dependabot
+  bump); `make bump-ccudata` is the manual fallback, the old
+  `update-ccu-data`/`refresh-ccudata` targets, `MANIFEST.json` and the
+  drift-check script are gone. The migration surfaced (and upstreamed)
+  loom-only curation: the 0.42.9 BWTH parameter labels now live in the
+  shared source of truth.
+
+- **Doorbells ring — with the shared curated model list** — press
+  events of the doorbell devices now follow Home Assistant's doorbell
+  contract: the discovered `event` entity announces (and the event
+  topic fires) HA's standard `ring` type instead of `press_short`
+  (mandatory for doorbell event entities from HA 2027.4; mirrors the
+  reference stack's ring-event fix). Other press types are unchanged.
+  The doorbell classification now comes from the upstream data
+  package's new curated `device_semantics` extract — one source of
+  truth shared with the reference stack — and gains the classic
+  `HM-Sen-DB-PCB` alongside `HmIP-DBB` and `HmIP-DSD-PCB`.
+  **Breaking:** consumers of the raw channel `/event` topic of these
+  three models receive `{"event_type":"ring"}` for the short press
+  now; HA automations triggering on the entity's `press_short` event
+  type must switch to `ring`.
+
 ## [0.43.4] — 2026-07-19
 
 ### Fixed

@@ -14,7 +14,7 @@ the license obligations travel with any redistribution. Two further notices
 cover content that actually ships inside the binary:
 
 - Embedded CCU metadata (eQ-3 HomeMatic Software License) →
-  [`internal/ccudata/embedded/NOTICE`](./internal/ccudata/embedded/NOTICE)
+  [the go-openccu-data module's `NOTICE.md`](https://github.com/SukramJ/go-openccu-data/blob/main/NOTICE.md)
   and [ADR 0003](./docs/adr/0003-embed-occu-extracts.md).
 - The narrative credits / acknowledgements →
   [`docs/attribution.md`](./docs/attribution.md).
@@ -82,7 +82,7 @@ for the integration tests.
 Single source of truth for the HomeMatic CCU metadata extracts consumed by the
 ecosystem. The *curated* MIT-licensed files (alias table, translation
 overrides) ship in the binary; the eQ-3-derived extracts are governed
-separately — see [`internal/ccudata/embedded/NOTICE`](./internal/ccudata/embedded/NOTICE).
+separately — see [the go-openccu-data module's `NOTICE.md`](https://github.com/SukramJ/go-openccu-data/blob/main/NOTICE.md).
 
 - Source: <https://github.com/SukramJ/openccu-data>
 - Copyright notice (verbatim from upstream `LICENSE`):
@@ -148,7 +148,7 @@ read are catalogued in [`docs/attribution.md`](./docs/attribution.md).
 Used as a factual API-inventory source for CCU `CONTROL` attribute names. No
 OCCU software (ReGa code, `.fn` files, images) is reproduced. The CCU data
 archives that *do* ship in the binary are addressed by
-[`internal/ccudata/embedded/NOTICE`](./internal/ccudata/embedded/NOTICE) and
+[the go-openccu-data module's `NOTICE.md`](https://github.com/SukramJ/go-openccu-data/blob/main/NOTICE.md) and
 [ADR 0003](./docs/adr/0003-embed-occu-extracts.md).
 
 - Source: <https://github.com/eq-3/occu>

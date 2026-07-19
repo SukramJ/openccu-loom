@@ -7748,7 +7748,7 @@ func TestEventBridge_PublishCustomDPConfig_NilMqtt_NoPanic(t *testing.T) {
 func TestEventBridge_PublishChannelEventState_NilMqtt_NoPanic(t *testing.T) {
 	t.Parallel()
 	b := &EventBridge{mqtt: nil}
-	b.publishChannelEventState(context.Background(), "ccu1", "HmIP-RF", "DEV001", 1, "PRESS_SHORT", nil)
+	b.publishChannelEventState(context.Background(), "ccu1", "HmIP-RF", "DEV001", 1, "HmIP-WRC2", "PRESS_SHORT", nil)
 }
 
 func TestEventBridge_PublishChannelEventDiscoverySnapshot_NilMqtt_NoPanic(t *testing.T) {

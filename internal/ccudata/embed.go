@@ -6,38 +6,33 @@ package ccudata
 import (
 	"bytes"
 	"compress/gzip"
-	"embed"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"maps"
-	"path"
 	"strings"
+
+	openccudata "github.com/SukramJ/go-openccu-data"
 )
 
-// embedded holds the CCU-metadata archives the daemon ships with.
-// Content originates from the
-// docs/adr/0003-embed-occu-extracts.md):
+// The CCU-metadata archives ship as the versioned data-artifact
+// module (see docs/adr/0003-embed-occu-extracts.md and its
+// module-consumption update):
 //
 //   - translation_extract.json.gz   — raw CCU stringtable extract
 //   - easymode_extract.json.gz      — TCL easymode extract
 //   - profiles/<RECEIVER>.json.gz   — one profile archive per receiver
 //   - translation_custom/*.json     — curated overrides (MIT)
-//   - NOTICE                        — attribution + license headline
+//   - device_semantics.json         — curated device classifications
 //
-// Licensing is split: the Python extractors in
+// The module records its upstream snapshot as SnapshotVersion; go.sum
+// pins the exact data stand. Licensing is split: module code is MIT,
 // the extracted *data* inherits the eQ-3 HomeMatic Software License
-// (free for private and non-commercial use). See NOTICE for the
-// full terms.
-//
-//go:embed embedded/translation_extract.json.gz
-//go:embed embedded/easymode_extract.json.gz
-//go:embed embedded/profiles/*.json.gz
-//go:embed embedded/profiles/_receiver_type_aliases.json
-//go:embed embedded/translation_custom/*.json
-//go:embed embedded/NOTICE
-//go:embed embedded/MANIFEST.json
-var embedded embed.FS
+// (free for private and non-commercial use) — see the NOTICE shipped
+// with the module.
+
+// SnapshotVersion reports the upstream data release the embedded
+// artifacts were generated from (diagnostics surface).
+func SnapshotVersion() string { return openccudata.SnapshotVersion }
 
 // LoadTranslationsEmbedded decodes the translation archive shipped
 // inside the binary and overlays the curated `translation_custom/`
@@ -46,7 +41,7 @@ var embedded embed.FS
 // receives [Empty] so downstream lookups gracefully fall back to the
 // raw CCU strings.
 func LoadTranslationsEmbedded() (*Translations, error) {
-	raw, err := readEmbeddedGzipJSON("embedded/translation_extract.json.gz")
+	raw, err := readEmbeddedGzipJSON("translation_extract.json.gz")
 	if err != nil {
 		return Empty(), fmt.Errorf("ccudata: decode embedded translations: %w", err)
 	}
@@ -63,12 +58,11 @@ func LoadTranslationsEmbedded() (*Translations, error) {
 // the binary. Returns an empty struct on decoding error so the
 // caller sees a non-nil value.
 func LoadEasymodeEmbedded() (*Easymode, error) {
-	f, err := embedded.Open("embedded/easymode_extract.json.gz")
+	raw, err := openccudata.ReadFile("easymode_extract.json.gz")
 	if err != nil {
 		return EmptyEasymode(), fmt.Errorf("ccudata: open embedded easymode: %w", err)
 	}
-	defer func() { _ = f.Close() }()
-	gz, err := gzip.NewReader(f)
+	gz, err := gzip.NewReader(bytes.NewReader(raw))
 	if err != nil {
 		return EmptyEasymode(), fmt.Errorf("ccudata: gunzip embedded easymode: %w", err)
 	}
@@ -84,18 +78,11 @@ func LoadEasymodeEmbedded() (*Easymode, error) {
 // the translation loader. The output map mirrors the on-disk archive
 // shape translationsFromRaw knows how to split.
 func readEmbeddedGzipJSON(name string) (map[string]map[string]string, error) {
-	f, err := embedded.Open(name)
+	blob, err := openccudata.ReadFile(name)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = f.Close() }()
-	// embed.FS does not guarantee io.Seeker on every platform; buffer
-	// the file so gzip can rewind if it needs to.
-	buf := new(bytes.Buffer)
-	if _, err := buf.ReadFrom(f); err != nil {
-		return nil, err
-	}
-	gz, err := gzip.NewReader(buf)
+	gz, err := gzip.NewReader(bytes.NewReader(blob))
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +108,7 @@ func readEmbeddedGzipJSON(name string) (map[string]map[string]string, error) {
 // Custom entries win over extract entries — the whole point of the
 // curated folder is to patch upstream gaps.
 func overlayCustomTranslations(t *Translations) error {
-	entries, err := fs.ReadDir(embedded, "embedded/translation_custom")
+	names, err := openccudata.ReadDir("translation_custom")
 	if err != nil {
 		// Directory absent is fine — custom is optional. Only a
 		// genuinely malformed embed would surface any other error
@@ -129,12 +116,11 @@ func overlayCustomTranslations(t *Translations) error {
 		// translations.
 		return nil //nolint:nilerr // optional directory
 	}
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".json") {
+	for _, name := range names {
+		if !strings.HasSuffix(name, ".json") {
 			continue
 		}
-		data, err := embedded.ReadFile(path.Join("embedded/translation_custom", name))
+		data, err := openccudata.ReadFile("translation_custom/" + name)
 		if err != nil {
 			return err
 		}

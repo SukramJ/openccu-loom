@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: b3a68130
-HEAD: b3a68130
+Generated: 740ba550
+HEAD: 740ba550
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25608 |
-| Reachable | 4538 |
-| Whitelisted | 18349 |
-| **Unreachable** | **2721** |
+| Total Exported | 25644 |
+| Reachable | 4540 |
+| Whitelisted | 18381 |
+| **Unreachable** | **2723** |
 
 ## Top-20 Packages by Dead Code
 
@@ -26,6 +26,7 @@ HEAD: b3a68130
 | pkg/hmerr | 4 | 5 | 24 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
+| internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
@@ -35,7 +36,6 @@ HEAD: b3a68130
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
-| internal/alarm | 0 | 23 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -45,6 +45,8 @@ HEAD: b3a68130
 | internal/audit | AsyncSink | internal/audit/persist.go | 291 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
+| internal/ccudata | SnapshotVersion | internal/ccudata/embed.go | 35 |
+| internal/ccudata | SnapshotVersion | internal/ccudata/embed.go | 35 |
 | internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
 | internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
 | internal/central/adapter | EncodeTimeValue | internal/central/adapter/link_param_metadata.go | 305 |
@@ -89,8 +91,6 @@ HEAD: b3a68130
 | internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
 | internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
 | internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
-| internal/payload | For | internal/payload/payload.go | 39 |
-| internal/payload | For | internal/payload/payload.go | 39 |
 
 ## Full By-Package Breakdown
 
@@ -106,6 +106,7 @@ HEAD: b3a68130
 | pkg/hmerr | 4 | 5 | 24 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
+| internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
@@ -123,7 +124,6 @@ HEAD: b3a68130
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
-| internal/ccudata | 0 | 31 | 4 |
 | internal/central | 0 | 22 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |
 | internal/central/coordinators | 0 | 119 | 4 |

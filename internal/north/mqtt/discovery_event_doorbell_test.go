@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -76,5 +77,83 @@ func TestBuildChannelEventButtonGenericModel(t *testing.T) {
 	t.Parallel()
 	if got := buildChannelEventDeviceClass(t, "HmIP-WRC2"); got != "button" {
 		t.Errorf("device_class=%q want \"button\"", got)
+	}
+}
+
+// TestBuildChannelEventDoorbellHmSenDBPCB verifies that the classic
+// wired doorbell PCB HM-Sen-DB-PCB — newly added to the curated
+// doorbell-models set — now also classifies as "doorbell" rather than
+// the generic "button".
+func TestBuildChannelEventDoorbellHmSenDBPCB(t *testing.T) {
+	t.Parallel()
+	if got := buildChannelEventDeviceClass(t, "HM-Sen-DB-PCB"); got != "doorbell" {
+		t.Errorf("device_class=%q want \"doorbell\"", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BuildChannelEvent — announced event_types for doorbell vs. button models
+// ---------------------------------------------------------------------------
+
+// buildChannelEventTypes drives BuildChannelEvent for a single-PRESS_SHORT
+// press channel on the given model and returns the `event_types` field
+// from the unmarshalled discovery payload as a string slice.
+func buildChannelEventTypes(t *testing.T, model string) []string {
+	t.Helper()
+
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	ch := singlePressChannel()
+	ev := Event{
+		Interface:     "HmIP-RF",
+		DeviceAddress: "0034WRC2",
+		DeviceName:    "Haustür",
+		ChannelNo:     1,
+		Parameter:     "PRESS_SHORT",
+		Channel:       ch,
+		Model:         model,
+	}
+
+	comp, _, _, buf, ok := db.BuildChannelEvent(ev)
+	if !ok {
+		t.Fatalf("BuildChannelEvent(model=%q) returned ok=false", model)
+	}
+	if comp != string(HAComponentEvent) {
+		t.Fatalf("BuildChannelEvent(model=%q): component=%q want %q", model, comp, HAComponentEvent)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(buf, &payload); err != nil {
+		t.Fatalf("BuildChannelEvent(model=%q): invalid JSON: %v", model, err)
+	}
+
+	raw, _ := payload["event_types"].([]any)
+	out := make([]string, len(raw))
+	for i, v := range raw {
+		out[i], _ = v.(string)
+	}
+	return out
+}
+
+// TestBuildChannelEventTypesRingForDoorbellDBB verifies that the
+// discovery-announced `event_types` for a HmIP-DBB press channel carries
+// the HA-standard "ring" type instead of the raw "press_short" parameter.
+func TestBuildChannelEventTypesRingForDoorbellDBB(t *testing.T) {
+	t.Parallel()
+	got := buildChannelEventTypes(t, "HmIP-DBB")
+	want := []string{"ring"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("event_types=%v want %v", got, want)
+	}
+}
+
+// TestBuildChannelEventTypesPressShortForGenericModel verifies that a
+// non-doorbell model keeps announcing the raw "press_short" event type
+// (no ring rewrite).
+func TestBuildChannelEventTypesPressShortForGenericModel(t *testing.T) {
+	t.Parallel()
+	got := buildChannelEventTypes(t, "HmIP-WRC2")
+	want := []string{"press_short"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("event_types=%v want %v", got, want)
 	}
 }

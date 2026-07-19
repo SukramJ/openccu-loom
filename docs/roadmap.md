@@ -129,7 +129,7 @@ One depth-parity item remains open, blocked upstream:
 
 The CCU metadata archives under `internal/ccudata/embedded/` are
 mirrored from [openccu-data](https://github.com/SukramJ/openccu-data).
-`make update-ccu-data` performs a one-shot resync; there is no longer
+`make bump-ccudata` pulls the latest go-openccu-data artifact; there is no longer
 a plan to reimplement the extractors inside OpenCCU-Loom (see
 [ADR 0003](./adr/0003-embed-occu-extracts.md)).
 
@@ -168,7 +168,7 @@ repo is hard to justify.
 1. `openccu-data-go` repo under SukramJ with a CI pipeline that rebuilds
    the embed on every openccu-data release.
 2. `openccu-loom` imports the module, removes the local mirror, drops
-   `make update-ccu-data`.
+   `make bump-ccudata`.
 
 ## Dropped: native Go re-implementation of the CCU extractors
 

@@ -322,16 +322,18 @@ The OpenCCU-Loom **source code** is licensed under the
 ecosystem (aiohomematic, aiohomematic-config, openccu-data).
 
 The **binary distribution** additionally ships CCU metadata archives
-sourced from [openccu-data](https://github.com/SukramJ/openccu-data).
-Those files (`internal/ccudata/embedded/*.json.gz`,
-`internal/ccudata/embedded/profiles/*.json.gz`) are governed by the
-**eQ-3 HomeMatic Software License** — free for private and
-non-commercial use; commercial redistribution requires written
-permission from eQ-3 AG. See
-[`internal/ccudata/embedded/NOTICE`](./internal/ccudata/embedded/NOTICE)
-for the full terms and
+sourced from [openccu-data](https://github.com/SukramJ/openccu-data)
+via the versioned
+[go-openccu-data](https://github.com/SukramJ/go-openccu-data) module.
+Those archives are governed by the **eQ-3 HomeMatic Software
+License** — free for private and non-commercial use; commercial
+redistribution requires written permission from eQ-3 AG. See
+[the go-openccu-data module's `NOTICE.md`](https://github.com/SukramJ/go-openccu-data/blob/main/NOTICE.md)
+for the full terms,
 [`docs/adr/0003-embed-occu-extracts.md`](./docs/adr/0003-embed-occu-extracts.md)
-for the rationale.
+for the embed rationale and
+[`docs/adr/0053-go-openccu-data-module.md`](./docs/adr/0053-go-openccu-data-module.md)
+for the module consumption.
 
 Operators with commercial use-cases can swap the embedded archives
 out via `cfg.CCUData.{translations_path,easymode_path}` for

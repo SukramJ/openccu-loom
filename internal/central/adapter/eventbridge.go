@@ -968,7 +968,7 @@ func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName s
 	// Best-effort — a broker error here does not roll back the main
 	// publish above.
 	if discoveryEligible {
-		b.publishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, e.Key.Parameter, ev.Channel)
+		b.publishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, ev.Model, e.Key.Parameter, ev.Channel)
 	}
 
 	// ADR 0011 phase 1b — additionally publish the per-DP slot
@@ -1718,7 +1718,7 @@ func (b *EventBridge) publishChannelEventState(
 	ctx context.Context,
 	centralName, iface, deviceAddr string,
 	channelNo int,
-	parameter string,
+	model, parameter string,
 	ch mqtt.ChannelInspector,
 ) {
 	if b.mqtt == nil {
@@ -1735,7 +1735,7 @@ func (b *EventBridge) publishChannelEventState(
 	if bridge == nil {
 		return
 	}
-	_ = bridge.PublishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, parameter)
+	_ = bridge.PublishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, model, parameter)
 }
 
 // publishChannelEventDiscoverySnapshot publishes the HA `event`
