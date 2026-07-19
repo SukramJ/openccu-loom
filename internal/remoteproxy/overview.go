@@ -25,7 +25,15 @@ func (s *Server) serveStatus(w http.ResponseWriter, r *http.Request) {
 // session uses.
 func (s *Server) serveOverview(w http.ResponseWriter, r *http.Request) {
 	loc := localeFor(r)
-	labels, err := json.Marshal(loc.statusLabels)
+	// One JSON object carries every label the refresh script needs —
+	// JSON is valid JS here, and a single injection point avoids the
+	// double-encoding that piping strings through the template's JS
+	// escaper would add.
+	labels, err := json.Marshal(struct {
+		Statuses map[string]string `json:"statuses"`
+		Version  string            `json:"version"`
+		Uptime   string            `json:"uptime"`
+	}{loc.statusLabels, loc.VersionLabel, loc.UptimeLabel})
 	if err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return
@@ -35,7 +43,7 @@ func (s *Server) serveOverview(w http.ResponseWriter, r *http.Request) {
 		Tiles:  s.poller.snapshot(),
 		// Locale-constant JSON, not user input: safe to hand to the
 		// inline refresh script verbatim.
-		StatusLabelsJSON: template.JS(labels), //nolint:gosec // G203: marshaled from compile-time locale constants only.
+		LabelsJSON: template.JS(labels), //nolint:gosec // G203: marshaled from compile-time locale constants only.
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -130,9 +138,9 @@ func localeFor(r *http.Request) locale {
 }
 
 type overviewData struct {
-	Locale           locale
-	Tiles            []InstanceStatus
-	StatusLabelsJSON template.JS
+	Locale     locale
+	Tiles      []InstanceStatus
+	LabelsJSON template.JS
 }
 
 type errorData struct {
@@ -194,7 +202,7 @@ var overviewTmpl = template.Must(template.New("overview").Parse(`<!doctype html>
 {{- end }}
 </div>
 <script>
-const statusLabels = {{.StatusLabelsJSON}};
+const labels = {{.LabelsJSON}};
 async function refreshTiles() {
   try {
     const r = await fetch('./-/status', { cache: 'no-store' });
@@ -204,11 +212,11 @@ async function refreshTiles() {
       const el = document.getElementById('inst-' + s.name);
       if (!el) continue;
       el.querySelector('.dot').className = 'dot ' + s.status;
-      el.querySelector('.status').textContent = statusLabels[s.status] || s.status;
+      el.querySelector('.status').textContent = labels.statuses[s.status] || s.status;
       let meta = '';
       if (s.version) {
-        meta = {{printf "%q" .Locale.VersionLabel}} + ' ' + s.version;
-        if (s.uptime) meta += ' · ' + {{printf "%q" .Locale.UptimeLabel}} + ' ' + s.uptime;
+        meta = labels.version + ' ' + s.version;
+        if (s.uptime) meta += ' · ' + labels.uptime + ' ' + s.uptime;
       }
       el.querySelector('.meta').innerHTML = '';
       el.querySelector('.meta').textContent = meta || ' ';

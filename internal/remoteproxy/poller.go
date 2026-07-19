@@ -6,6 +6,7 @@ package remoteproxy
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -41,6 +42,11 @@ const defaultProbeInterval = 15 * time.Second
 // probeTimeout bounds one status request; a wedged remote must not
 // stall the poll loop into the next tick.
 const probeTimeout = 5 * time.Second
+
+// maxProbeBody caps how much of a probe response is buffered for JSON
+// decoding — a compromised or broken remote must not be able to feed
+// the poller an unbounded body. Real health/info payloads are a few KB.
+const maxProbeBody = 1 << 20
 
 // poller keeps per-instance status snapshots fresh in the background.
 type poller struct {
@@ -165,5 +171,5 @@ func (ip *instanceProxy) getJSON(ctx context.Context, path string, into any) err
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	return json.NewDecoder(resp.Body).Decode(into)
+	return json.NewDecoder(io.LimitReader(resp.Body, maxProbeBody)).Decode(into)
 }
