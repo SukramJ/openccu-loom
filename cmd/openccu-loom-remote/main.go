@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"log/slog"
 	"net/http"
@@ -49,6 +48,7 @@ func run() int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	srv.Start(ctx)
 
 	httpSrv := &http.Server{
 		Addr:    *listen,
@@ -69,11 +69,14 @@ func run() int {
 		return 1
 	case <-ctx.Done():
 	}
+	// Release the signal registration before draining: a second signal
+	// during the drain window then force-quits via default handling.
+	stop()
 
 	log.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := httpSrv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		log.Warn("shutdown incomplete", "error", err)
 	}
 	return 0

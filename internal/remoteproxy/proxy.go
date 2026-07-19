@@ -27,12 +27,18 @@ const ingressPathHeader = "X-Ingress-Path"
 // ingressBase returns the sanitized browser-facing base path from the
 // Supervisor's header. Only a plain absolute path ("/api/hassio_ingress/…")
 // qualifies; anything else — protocol-relative "//host", query/fragment
-// characters, backslashes — is treated as absent, so a spoofed header can
-// never steer a redirect off-origin.
+// characters, backslashes, control bytes (browsers strip TAB/CR/LF, which
+// would turn "/<TAB>/host" back into "//host") — is treated as absent, so
+// a spoofed header can never steer a redirect off-origin.
 func ingressBase(r *http.Request) string {
 	p := r.Header.Get(ingressPathHeader)
-	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "\\?#") {
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
 		return ""
+	}
+	for i := range len(p) {
+		if c := p[i]; c <= ' ' || c == 0x7f || c == '\\' || c == '?' || c == '#' {
+			return ""
+		}
 	}
 	return strings.TrimSuffix(p, "/")
 }
@@ -46,6 +52,9 @@ type instanceProxy struct {
 	// (fully transparent) mode.
 	prefix string
 	rp     *httputil.ReverseProxy
+	// client shares the proxy transport (connection pool, TLS mode) for
+	// the poller's direct status probes.
+	client *http.Client
 	log    *slog.Logger
 }
 
@@ -71,8 +80,14 @@ func newInstanceProxy(inst Instance, prefix string, log *slog.Logger) (*instance
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		TLSHandshakeTimeout: 10 * time.Second,
-		IdleConnTimeout:     90 * time.Second,
-		MaxIdleConnsPerHost: 8,
+		// Bound the wait for response HEADERS only: a remote that accepts
+		// the TCP connection but never answers (half-dead VPN, wedged
+		// daemon) must fail into the 502 page instead of hanging the
+		// panel forever. Long-lived bodies (WebSocket, downloads, SSE)
+		// are unaffected — the timer stops once headers arrive.
+		ResponseHeaderTimeout: 60 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConnsPerHost:   8,
 		// HTTP/1.1 only: the SPA's WebSocket rides a Connection: Upgrade
 		// handshake, which the client transport does not speak over h2.
 		ForceAttemptHTTP2: false,
@@ -92,8 +107,9 @@ func newInstanceProxy(inst Instance, prefix string, log *slog.Logger) (*instance
 		// Flush every write immediately so streamed responses (SSE,
 		// long polls) traverse both proxy hops without buffering delay.
 		FlushInterval: -1,
-		ErrorLog:      slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+		ErrorLog:      slog.NewLogLogger(p.log.Handler(), slog.LevelWarn),
 	}
+	p.client = &http.Client{Transport: transport}
 	return p, nil
 }
 
@@ -125,18 +141,20 @@ func (p *instanceProxy) rewrite(pr *httputil.ProxyRequest) {
 func (p *instanceProxy) modifyResponse(resp *http.Response) error {
 	// resp.Request is the outbound request, whose header already holds
 	// ingress base + instance prefix — exactly the browser-facing base.
+	// With no base AND no upstream base path there is nothing to map.
 	base := resp.Request.Header.Get(ingressPathHeader)
-	if base == "" {
+	if base == "" && p.target.Path == "" {
 		return nil
 	}
 	p.rewriteLocation(resp, base)
-	rewriteCookiePaths(resp, base)
+	rewriteCookiePaths(resp, base, p.target.Path)
 	return nil
 }
 
-// rewriteLocation prefixes absolute-path (and same-upstream absolute)
-// Location targets with the browser-facing base. Upstream responses that
-// already honored the forwarded X-Ingress-Path pass through untouched.
+// rewriteLocation folds Location targets from upstream coordinates into
+// browser coordinates: the upstream base path is stripped (on a segment
+// boundary) and the browser-facing base is prefixed. Upstream responses
+// that already honored the forwarded X-Ingress-Path pass through.
 func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 	loc := resp.Header.Get("Location")
 	if loc == "" {
@@ -148,9 +166,14 @@ func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 		if u.Host != p.target.Host {
 			return
 		}
-		rest := strings.TrimPrefix(u.Path, p.target.Path)
+		// Keep the escaped path form and the fragment intact — a decoded
+		// %3F would silently become a real query separator.
+		rest := stripPathPrefix(u.EscapedPath(), p.target.Path)
 		if u.RawQuery != "" {
 			rest += "?" + u.RawQuery
+		}
+		if u.Fragment != "" {
+			rest += "#" + u.EscapedFragment()
 		}
 		resp.Header.Set("Location", rebase(rest, base))
 		return
@@ -158,12 +181,35 @@ func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 	if !strings.HasPrefix(loc, "/") {
 		return // relative redirect: resolves correctly as-is
 	}
-	resp.Header.Set("Location", rebase(strings.TrimPrefix(loc, p.target.Path), base))
+	resp.Header.Set("Location", rebase(stripPathPrefix(loc, p.target.Path), base))
+}
+
+// stripPathPrefix removes the upstream base path from an absolute-path
+// reference, but only on a path-segment boundary — "/apple" must not
+// lose an "/app" prefix. The result stays absolute-path shaped.
+func stripPathPrefix(ref, prefix string) string {
+	if prefix == "" || !strings.HasPrefix(ref, prefix) {
+		return ref
+	}
+	rest := ref[len(prefix):]
+	switch {
+	case rest == "":
+		return "/"
+	case rest[0] == '/':
+		return rest
+	case rest[0] == '?' || rest[0] == '#':
+		return "/" + rest
+	default:
+		return ref // not a segment boundary
+	}
 }
 
 // rebase puts an absolute-path reference under the browser-facing base,
 // leaving values that already carry the base untouched.
 func rebase(ref, base string) string {
+	if base == "" {
+		return ref
+	}
 	if ref == base || strings.HasPrefix(ref, base+"/") || strings.HasPrefix(ref, base+"?") {
 		return ref
 	}
@@ -174,9 +220,12 @@ func rebase(ref, base string) string {
 }
 
 // rewriteCookiePaths scopes every Set-Cookie path onto the browser-facing
-// base. A cookie line that fails to parse is passed through verbatim —
-// dropping it would silently break logins.
-func rewriteCookiePaths(resp *http.Response, base string) {
+// base, stripping the upstream base path first (symmetric to
+// rewriteLocation — an unstripped upstream path would scope the session
+// cookie off the browser-visible tree and break logins). A cookie line
+// that fails to parse is passed through verbatim; attributes the parser
+// does not model are re-appended from Unparsed.
+func rewriteCookiePaths(resp *http.Response, base, targetPath string) {
 	lines := resp.Header.Values("Set-Cookie")
 	if len(lines) == 0 {
 		return
@@ -192,9 +241,10 @@ func rewriteCookiePaths(resp *http.Response, base string) {
 		case "", "/":
 			c.Path = base + "/"
 		default:
-			c.Path = rebase(c.Path, base)
+			c.Path = rebase(stripPathPrefix(c.Path, targetPath), base)
 		}
-		resp.Header.Add("Set-Cookie", c.String())
+		parts := append([]string{c.String()}, c.Unparsed...)
+		resp.Header.Add("Set-Cookie", strings.Join(parts, "; "))
 	}
 }
 

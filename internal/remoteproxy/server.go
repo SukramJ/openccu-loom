@@ -4,11 +4,11 @@
 package remoteproxy
 
 import (
-	"fmt"
-	"html"
+	"context"
 	"log/slog"
 	"net/http"
-	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // Server routes browser requests to the configured remote instances.
@@ -17,6 +17,7 @@ import (
 // the overview page.
 type Server struct {
 	instances []*instanceProxy
+	poller    *poller
 	log       *slog.Logger
 }
 
@@ -38,7 +39,19 @@ func New(opts Options, log *slog.Logger) (*Server, error) {
 		}
 		s.instances = append(s.instances, p)
 	}
+	if !single {
+		s.poller = newPoller(s.instances, clock.New(), log)
+	}
 	return s, nil
+}
+
+// Start launches the background status pollers feeding the overview
+// tiles; it is a no-op in transparent single-instance mode. The workers
+// stop when ctx is canceled.
+func (s *Server) Start(ctx context.Context) {
+	if s.poller != nil {
+		s.poller.start(ctx)
+	}
 }
 
 // Handler returns the root http.Handler.
@@ -51,15 +64,30 @@ func (s *Server) Handler() http.Handler {
 		prefix := p.prefix
 		mux.Handle(prefix+"/", http.StripPrefix(prefix, p.rp))
 		// Bare /i/<name> → /i/<name>/ so the SPA's relative asset URLs
-		// resolve under the instance mount, not next to it. ingressBase
+		// resolve under the instance mount, not next to it. The query
+		// travels along (deep links encode state there). ingressBase
 		// sanitizes the header, so the target stays an absolute path on
 		// the HA origin.
 		mux.HandleFunc(prefix, func(w http.ResponseWriter, r *http.Request) {
+			target := ingressBase(r) + prefix + "/"
+			if q := r.URL.RawQuery; q != "" {
+				target += "?" + q
+			}
 			//nolint:gosec // G710: ingressBase rejects anything but a plain absolute path, so the target stays on-origin.
-			http.Redirect(w, r, ingressBase(r)+prefix+"/", http.StatusPermanentRedirect)
+			http.Redirect(w, r, target, http.StatusPermanentRedirect)
 		})
 	}
-	mux.HandleFunc("GET /{$}", s.serveOverview)
+	// All methods land here so a non-GET on "/" gets a 405 instead of
+	// falling into the catch-all's redirect-to-self loop.
+	mux.HandleFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+		s.serveOverview(w, r)
+	})
+	mux.HandleFunc("GET /-/status", s.serveStatus)
 	// Anything else is a stray path on the proxy itself (not under an
 	// instance mount): send the browser back to the overview.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -68,96 +96,3 @@ func (s *Server) Handler() http.Handler {
 	})
 	return mux
 }
-
-// serveOverview renders the instance selector. Links are relative so
-// they resolve under whatever base the Ingress session uses.
-func (s *Server) serveOverview(w http.ResponseWriter, r *http.Request) {
-	loc := localeFor(r)
-	var b strings.Builder
-	b.WriteString("<ul class=\"instances\">")
-	for _, p := range s.instances {
-		name := html.EscapeString(p.inst.Name)
-		fmt.Fprintf(&b, "<li><a href=\"i/%s/\">%s</a></li>", name, name)
-	}
-	b.WriteString("</ul>")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = fmt.Fprintf(w, pageShell, loc.lang, html.EscapeString(loc.title), b.String())
-}
-
-// serveUnreachable is the browser-facing 502 for a dead upstream.
-func serveUnreachable(w http.ResponseWriter, r *http.Request, instance string) {
-	loc := localeFor(r)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(http.StatusBadGateway)
-	body := fmt.Sprintf("<p class=\"error\">%s</p>",
-		html.EscapeString(fmt.Sprintf(loc.unreachable, instance)))
-	_, _ = fmt.Fprintf(w, pageShell, loc.lang, html.EscapeString(loc.title), body)
-}
-
-// locale carries the handful of proxy-rendered strings. The proxied SPA
-// brings its own full i18n; only the selector/error shell lives here.
-type locale struct {
-	lang        string
-	title       string
-	unreachable string
-}
-
-var (
-	localeEN = locale{
-		lang:        "en",
-		title:       "OpenCCU-Loom Remote",
-		unreachable: "The instance %q is currently unreachable.",
-	}
-	localeDE = locale{
-		lang:        "de",
-		title:       "OpenCCU-Loom Remote",
-		unreachable: "Die Instanz %q ist derzeit nicht erreichbar.",
-	}
-)
-
-// localeFor picks German when it precedes English in Accept-Language;
-// everything else falls back to English.
-func localeFor(r *http.Request) locale {
-	accept := strings.ToLower(r.Header.Get("Accept-Language"))
-	for _, part := range strings.Split(accept, ",") {
-		tag := strings.TrimSpace(strings.SplitN(part, ";", 2)[0])
-		switch {
-		case tag == "de" || strings.HasPrefix(tag, "de-"):
-			return localeDE
-		case tag == "en" || strings.HasPrefix(tag, "en-"):
-			return localeEN
-		}
-	}
-	return localeEN
-}
-
-// pageShell is the minimal shell for proxy-rendered pages. Styling is
-// intentionally tiny and theme-aware via color-scheme + light-dark().
-const pageShell = `<!doctype html>
-<html lang="%s">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>%s</title>
-<style>
-:root { color-scheme: light dark; }
-body {
-  font-family: system-ui, sans-serif;
-  margin: 2rem auto; max-width: 40rem; padding: 0 1rem;
-  background: light-dark(#fafafa, #111418);
-  color: light-dark(#1c1c1e, #e4e6eb);
-}
-a { color: light-dark(#0b57d0, #8ab4f8); text-decoration: none; }
-a:hover { text-decoration: underline; }
-ul.instances { list-style: none; padding: 0; }
-ul.instances li { margin: .5rem 0; font-size: 1.1rem; }
-p.error { color: light-dark(#b3261e, #f2b8b5); }
-</style>
-</head>
-<body>
-%s
-</body>
-</html>
-`
