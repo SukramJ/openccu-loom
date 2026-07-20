@@ -221,6 +221,100 @@ func TestBuildDataPointName_MultiChannelWithTranslation(t *testing.T) {
 	}
 }
 
+func TestBuildDataPointName_UniqueCustomNameSkipsPostfix(t *testing.T) {
+	t.Parallel()
+	// STATE exists on multiple channels, but channel 3 carries a unique
+	// custom name that already identifies it — no " chN" postfix. The
+	// derived-name sibling keeps the postfix.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch3 := d.AddChannel("000ABC:3", 3, "", hmenum.ParamsetKeyValues)
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch3.Put(newValuesDP("000ABC:3", "STATE"))
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch3.Name = "Relay Status"
+
+	nd := BuildDataPointName(ch3, "STATE", "Status")
+	if nd.ParameterName != "State" {
+		t.Errorf("unique custom name: ParameterName = %q, want %q", nd.ParameterName, "State")
+	}
+	if nd.TranslatedParameterName != "Status" {
+		t.Errorf("unique custom name: TranslatedParameterName = %q, want %q",
+			nd.TranslatedParameterName, "Status")
+	}
+	if nd.ChannelName != "Relay Status" {
+		t.Errorf("unique custom name: ChannelName = %q, want %q", nd.ChannelName, "Relay Status")
+	}
+
+	nd4 := BuildDataPointName(ch4, "STATE", "")
+	if nd4.ParameterName != "State ch4" {
+		t.Errorf("derived sibling: ParameterName = %q, want %q", nd4.ParameterName, "State ch4")
+	}
+}
+
+func TestBuildDataPointName_CustomNameWithChannelNoKeepsPostfix(t *testing.T) {
+	t.Parallel()
+	// A custom name following the <name>:<no> scheme is treated like a
+	// derived name: the :N suffix is stripped for the channel base and the
+	// " chN" postfix stays.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch5 := d.AddChannel("000ABC:5", 5, "", hmenum.ParamsetKeyValues)
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch5.Put(newValuesDP("000ABC:5", "STATE"))
+	ch5.Name = "Relay:1"
+
+	nd := BuildDataPointName(ch5, "STATE", "")
+	if nd.ChannelName != "Relay" {
+		t.Errorf("ChannelName = %q, want %q", nd.ChannelName, "Relay")
+	}
+	if nd.ParameterName != "State ch5" {
+		t.Errorf("ParameterName = %q, want %q", nd.ParameterName, "State ch5")
+	}
+}
+
+func TestBuildDataPointName_DuplicateCustomNamesKeepPostfix(t *testing.T) {
+	t.Parallel()
+	// Two channels providing the same parameter share a custom name — the
+	// name alone cannot identify either channel, so both keep the postfix.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch6 := d.AddChannel("000ABC:6", 6, "", hmenum.ParamsetKeyValues)
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch6.Put(newValuesDP("000ABC:6", "STATE"))
+	ch4.Name = "Relay Twin"
+	ch6.Name = "Relay Twin"
+
+	nd4 := BuildDataPointName(ch4, "STATE", "")
+	if nd4.ParameterName != "State ch4" {
+		t.Errorf("ch4 ParameterName = %q, want %q", nd4.ParameterName, "State ch4")
+	}
+	nd6 := BuildDataPointName(ch6, "STATE", "")
+	if nd6.ParameterName != "State ch6" {
+		t.Errorf("ch6 ParameterName = %q, want %q", nd6.ParameterName, "State ch6")
+	}
+}
+
+func TestBuildDataPointName_SameNameSiblingWithoutParameterNotAmbiguous(t *testing.T) {
+	t.Parallel()
+	// A sibling channel shares the custom name but does NOT provide the
+	// parameter — the name still uniquely identifies the parameter-carrying
+	// channel, so no postfix. The parameter is multi-channel via a third,
+	// derived-name channel.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch3 := d.AddChannel("000ABC:3", 3, "", hmenum.ParamsetKeyValues)
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch5 := d.AddChannel("000ABC:5", 5, "", hmenum.ParamsetKeyValues)
+	ch3.Put(newValuesDP("000ABC:3", "STATE"))
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch3.Name = "Status"
+	ch5.Name = "Status" // no STATE on this channel
+
+	nd := BuildDataPointName(ch3, "STATE", "")
+	if nd.ParameterName != "State" {
+		t.Errorf("ParameterName = %q, want %q", nd.ParameterName, "State")
+	}
+}
+
 func TestBuildDataPointName_ExplicitChannelName(t *testing.T) {
 	t.Parallel()
 	// Channel has a real operator-set name — no :N suffix to strip.

@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.3] — 2026-07-20
+
+### Fixed
+
+- **Multi-channel postfix no longer overrides unique custom channel
+  names.** The `ch<no>` postfix for parameters that exist on multiple
+  channels of a device is now only appended when the channel name alone
+  does not identify the channel — i.e. for device-derived names, names
+  following the `<name>:<no>` scheme, or when several channels providing
+  the same parameter share the same custom name. A channel with a unique
+  custom name (e.g. a status channel named `<sub device> Status`) keeps
+  its clean data point name. Mirrors aiohomematic 2026.7.10.
+
 ## [0.44.2] — 2026-07-19
 
 ### Fixed

@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.44.3
+
+- **Cleaner entity names for uniquely named channels.** The `ch<no>`
+  postfix on data point names is now only appended when the channel
+  name alone does not identify the channel (device-derived names,
+  `<name>:<no>` scheme, or duplicate custom names). A channel with a
+  unique custom name keeps its clean name — e.g. `Relay Status State`
+  instead of `Relay Status State ch3`.
+
 ## 0.44.2
 
 - Version ride-along with the OpenCCU-Loom Remote name-validation fix;

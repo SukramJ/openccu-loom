@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.44.3 (2026-07-20)
+
+Version ride-along with the OpenCCU-Loom data-point naming fix; no
+changes to this add-on.
+
 # 0.44.2 (2026-07-19)
 
 Fix: instance names may contain capital letters (e.g. `OttoLoom`),
