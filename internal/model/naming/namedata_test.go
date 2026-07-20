@@ -151,3 +151,41 @@ func TestNameData_UnicodePreserved(t *testing.T) {
 		t.Errorf("FullName() = %q; unicode device name must be preserved", full)
 	}
 }
+
+func TestNameData_CollapsedName(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		nd   NameData
+		want string
+	}{
+		{
+			name: "custom channel name without marker",
+			nd:   NameData{DeviceName: "Wohnzimmer", ChannelName: "Relais Status"},
+			want: "Relais Status",
+		},
+		{
+			name: "derived channel name reduces to empty",
+			nd:   NameData{DeviceName: "Wohnzimmer", ChannelName: "Wohnzimmer"},
+			want: "",
+		},
+		{
+			name: "derived channel name keeps the marker",
+			nd:   NameData{DeviceName: "Wohnzimmer", ChannelName: "Wohnzimmer", ChannelPostfix: "ch2"},
+			want: "ch2",
+		},
+		{
+			name: "custom channel name keeps the marker",
+			nd:   NameData{DeviceName: "Wohnzimmer", ChannelName: "Status", ChannelPostfix: "ch4"},
+			want: "Status ch4",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.nd.CollapsedName(); got != tc.want {
+				t.Fatalf("CollapsedName() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

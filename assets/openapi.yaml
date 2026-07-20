@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.27.0
+  version: 2.28.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6126,17 +6126,24 @@ components:
           description: |
             Locale-aware per-entity name a north-bound consumer (HA via
             MQTT discovery or the REST drop-in) assigns to this data
-            point. Identical to the MQTT discovery `name` field — both
-            resolve through the same naming primitive. The parameter
-            portion only; HA prepends the device name. Empty when
-            `label_omitted` is true.
+            point, resolved through the same naming primitives as the
+            MQTT discovery `name` field. The parameter portion only; HA
+            prepends the device name. When `label_omitted` is true it
+            instead carries the channel-level collapsed name (channel
+            name plus multi-channel `chN` marker, device prefix
+            stripped) — possibly empty when the collapse reduces to the
+            device name alone. Consumers therefore never need to
+            compose entity names themselves; the daemon is the single
+            naming authority.
         label_omitted:
           type: boolean
           description: |
             True when the parameter is flagged "primary" in the embedded
             translation_custom catalogue (translation key present, value
-            empty). Consumers then collapse the entity name to the device
-            name alone (MQTT discovery emits `name: null`).
+            empty). The entity is then named after the channel:
+            `translated_name` holds the collapsed channel-level name,
+            falling back to the device name when empty (MQTT discovery
+            instead emits `name: null`).
         control:
           type: string
           description: |

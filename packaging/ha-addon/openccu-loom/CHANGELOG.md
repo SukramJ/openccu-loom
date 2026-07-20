@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.45.0
+
+- **REST API: complete entity names for primary parameters.** The
+  data-point summary's `translated_name` now also carries the
+  channel-level collapsed name when the label is omitted, so REST
+  clients never compose entity names themselves (API 2.28.0). MQTT
+  discovery is unchanged.
+
 ## 0.44.3
 
 - **Cleaner entity names for uniquely named channels.** The `ch<no>`

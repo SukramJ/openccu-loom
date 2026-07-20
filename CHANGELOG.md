@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.0] — 2026-07-20
+
+### Changed
+
+- **REST is the single naming authority: `translated_name` now also
+  carries the collapsed name for label-omitted data points.** When
+  `label_omitted` is true (the "primary parameter" marker), the
+  data-point summary's `translated_name` no longer arrives empty — it
+  holds the channel-level collapsed name (channel name plus
+  multi-channel `chN` marker, device prefix stripped; empty only when
+  the collapse reduces to the device name alone). REST consumers such
+  as `openccu-loom-client` no longer need any client-side entity-name
+  composition. The MQTT discovery plane is unchanged (`name: null` on
+  omitted labels). REST `APIVersion` 2.28.0.
+
 ## [0.44.3] — 2026-07-20
 
 ### Fixed
