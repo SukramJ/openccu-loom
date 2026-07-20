@@ -24,8 +24,14 @@ import (
 //  2. Build the parameter-name fallback `parameter.title().
 //     replace("_", " ")` (e.g. RSSI_DEVICE → "Rssi Device").
 //  3. When the parameter exists on more than one channel of the
-//     same device AND the channel is non-zero, append `" chN"` so
-//     two STATE entities of a 2-channel switch don't collide.
+//     same device AND the channel is non-zero AND the channel name
+//     alone does not identify the channel, append `" chN"` so two
+//     STATE entities of a 2-channel switch don't collide. The name
+//     is considered ambiguous when it carries a `:N` channel suffix
+//     (device-derived or `<name>:<no>`-scheme names) or when another
+//     channel providing the same parameter resolves to the same
+//     name. A unique custom channel name keeps its clean data point
+//     name without the postfix.
 //  4. When the channel name has the `<dev>:N` shape, drop the `:N`
 //     suffix — `composeName` later strips the leftover device
 //     prefix.
@@ -56,12 +62,14 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 	}
 
 	pName := naming.TitleCaseParameter(parameter)
+	cName := stripChannelAddressSuffix(channelName)
+	nameHasChannelNo := cName != channelName
+
 	postfix := ""
-	if channel.IsParameterInMultipleChannels(parameter) && channel.Number != 0 {
+	if channel.Number != 0 && channel.IsParameterInMultipleChannels(parameter) &&
+		(nameHasChannelNo || isChannelNameAmbiguous(channel, parameter, channelName, model, deviceName)) {
 		postfix = fmt.Sprintf(" ch%d", channel.Number)
 	}
-
-	cName := stripChannelAddressSuffix(channelName)
 
 	translated := ""
 	if parameterTranslation != "" {
@@ -124,6 +132,27 @@ func TranslatedParameterLabel(
 	}
 	translation, translated := labels.ChannelTypedParameterLabelOk(channelType, parameter)
 	return translation, translated && translation == ""
+}
+
+// isChannelNameAmbiguous reports whether another channel of the same
+// device provides the given parameter AND resolves to the same channel
+// name — i.e. the name alone cannot identify the channel and the `" chN"`
+// postfix is required. Mirrors the Python reference implementation's
+// `support.py::_is_channel_name_ambiguous`.
+func isChannelNameAmbiguous(channel *Channel, parameter, channelName, model, deviceName string) bool {
+	if channel.device == nil {
+		return false
+	}
+	for _, sibling := range channel.device.Channels() {
+		if sibling.Address == channel.Address {
+			continue
+		}
+		if sibling.HasParameter(parameter) &&
+			baseChannelName(sibling, model, deviceName) == channelName {
+			return true
+		}
+	}
+	return false
 }
 
 // baseChannelName implements
