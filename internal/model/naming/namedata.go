@@ -53,6 +53,14 @@ type NameData struct {
 	// for the parameter (e.g. "Solltemperatur ch3"). Empty when no
 	// translation exists — callers fall back to [ParameterName].
 	TranslatedParameterName string
+
+	// ChannelPostfix is the bare multi-channel disambiguation marker
+	// ("ch3") when the postfix applies, empty otherwise. It is already
+	// folded into [ParameterName] / [TranslatedParameterName]; it is
+	// kept separately so the channel-level collapse
+	// ([NameData.CollapsedName]) can re-apply it without string
+	// surgery on the composed names.
+	ChannelPostfix string
 }
 
 // EmptyNameData is the zero-value sentinel returned when none of the
@@ -81,6 +89,17 @@ func (n NameData) TranslatedName() string {
 		return n.Name()
 	}
 	return composeName(n.ChannelName, n.TranslatedParameterName, n.DeviceName)
+}
+
+// CollapsedName is the channel-level entity name used when the
+// parameter's label is omitted (the "primary parameter" marker): the
+// channel name plus the multi-channel marker, with the device-name
+// prefix stripped like [NameData.Name]. It may be empty when the
+// collapse reduces to the device name alone (a derived channel name on
+// a single-channel parameter) — consumers then fall back to the device
+// name.
+func (n NameData) CollapsedName() string {
+	return composeName(n.ChannelName, n.ChannelPostfix, n.DeviceName)
 }
 
 // FullName re-prepends the device name. Returns [NameData.DeviceName]

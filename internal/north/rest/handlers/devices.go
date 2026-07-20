@@ -210,14 +210,18 @@ type DataPointSummary struct {
 	// discovery plane applies.
 	Usage string `json:"usage,omitempty"`
 	// TranslatedName is the locale-aware per-entity name HA assigns to
-	// this data point — identical to the MQTT discovery `name` field
-	// (both resolve through naming.EntityDisplayName). It is the
-	// parameter portion only; HA prepends the device name. Empty when
-	// LabelOmitted is true.
+	// this data point — resolved through the same primitives as the
+	// MQTT discovery `name` field. It is the parameter portion only;
+	// HA prepends the device name. When LabelOmitted is true it
+	// carries the channel-level collapsed name instead (channel name
+	// plus multi-channel marker, device prefix stripped) — possibly
+	// empty when the collapse reduces to the device name alone.
 	TranslatedName string `json:"translated_name,omitempty"`
 	// LabelOmitted is true when the parameter is flagged "primary" in
-	// the embedded translation_custom catalogue. Consumers then collapse
-	// the entity name to the device name alone (MQTT emits `name: null`).
+	// the embedded translation_custom catalogue. The entity is then
+	// named after the channel: TranslatedName holds the collapsed
+	// channel-level name (MQTT instead emits `name: null` and lets HA
+	// fall back to the device name).
 	LabelOmitted bool `json:"label_omitted,omitempty"`
 	// Control is the CCU paramset descriptor's CONTROL attribute,
 	// of the form WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT",
@@ -849,8 +853,8 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// naming.EntityDisplayName), so REST and MQTT consumers spawn
 	// entities with identical names.
 	if t, ok := labels.(device.ParameterTranslator); ok && ch != nil {
-		label, labelOmitted := device.TranslatedDataPointLabel(ch, s.Parameter, channelType, t)
-		s.TranslatedName, s.LabelOmitted = naming.EntityDisplayName(label, labelOmitted, s.Parameter)
+		nd, labelOmitted := device.TranslatedDataPointNameData(ch, s.Parameter, channelType, t)
+		s.TranslatedName, s.LabelOmitted = naming.ComposedEntityName(nd, labelOmitted, s.Parameter)
 	}
 	// Category + functional type let a client classify the DP declaratively.
 	// Same assertion pattern as CustomDPSummary / calculated_data_points.go:

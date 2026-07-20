@@ -81,6 +81,7 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 		ChannelName:             cName,
 		ParameterName:           strings.TrimSpace(pName + postfix),
 		TranslatedParameterName: translated,
+		ChannelPostfix:          strings.TrimSpace(postfix),
 	}
 }
 
@@ -107,9 +108,21 @@ type ParameterTranslator interface {
 func TranslatedDataPointLabel(
 	channel *Channel, parameter, channelType string, labels ParameterTranslator,
 ) (label string, labelOmitted bool) {
+	nd, labelOmitted := TranslatedDataPointNameData(channel, parameter, channelType, labels)
+	return nd.TranslatedName(), labelOmitted
+}
+
+// TranslatedDataPointNameData is the [TranslatedDataPointLabel] variant
+// that exposes the full [naming.NameData] instead of the composed
+// label. The REST data-point summary uses it to also ship the
+// channel-level collapsed name ([naming.NameData.CollapsedName]) when
+// the label is omitted, so REST consumers never re-compose entity
+// names client-side.
+func TranslatedDataPointNameData(
+	channel *Channel, parameter, channelType string, labels ParameterTranslator,
+) (nd naming.NameData, labelOmitted bool) {
 	translation, labelOmitted := TranslatedParameterLabel(parameter, channelType, labels)
-	label = BuildDataPointName(channel, parameter, translation).TranslatedName()
-	return label, labelOmitted
+	return BuildDataPointName(channel, parameter, translation), labelOmitted
 }
 
 // TranslatedParameterLabel is the channel-independent core of
