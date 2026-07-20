@@ -854,15 +854,7 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// entities with identical names.
 	if t, ok := labels.(device.ParameterTranslator); ok && ch != nil {
 		nd, labelOmitted := device.TranslatedDataPointNameData(ch, s.Parameter, channelType, t)
-		s.TranslatedName, s.LabelOmitted = naming.EntityDisplayName(nd.TranslatedName(), labelOmitted, s.Parameter)
-		if s.LabelOmitted {
-			// The "primary parameter" collapse names the entity after
-			// the channel. REST ships that collapsed name so consumers
-			// never re-compose names client-side; the MQTT plane keeps
-			// emitting `name: null` (HA prepends the device name
-			// itself).
-			s.TranslatedName = nd.CollapsedName()
-		}
+		s.TranslatedName, s.LabelOmitted = naming.ComposedEntityName(nd, labelOmitted, s.Parameter)
 	}
 	// Category + functional type let a client classify the DP declaratively.
 	// Same assertion pattern as CustomDPSummary / calculated_data_points.go:

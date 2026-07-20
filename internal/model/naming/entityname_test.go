@@ -52,3 +52,33 @@ func TestEntityDisplayName(t *testing.T) {
 		})
 	}
 }
+
+func TestComposedEntityName(t *testing.T) {
+	t.Parallel()
+	nd := NameData{DeviceName: "Wohnzimmer", ChannelName: "Relais Status", TranslatedParameterName: "Status"}
+
+	t.Run("label present behaves like EntityDisplayName", func(t *testing.T) {
+		t.Parallel()
+		name, omitted := ComposedEntityName(nd, false, "STATE")
+		if name != "Relais Status Status" || omitted {
+			t.Fatalf("got (%q, %v), want (%q, false)", name, omitted, "Relais Status Status")
+		}
+	})
+
+	t.Run("omitted label ships the collapsed name", func(t *testing.T) {
+		t.Parallel()
+		name, omitted := ComposedEntityName(nd, true, "STATE")
+		if name != "Relais Status" || !omitted {
+			t.Fatalf("got (%q, %v), want (%q, true)", name, omitted, "Relais Status")
+		}
+	})
+
+	t.Run("omitted label with device-name collapse yields empty", func(t *testing.T) {
+		t.Parallel()
+		derived := NameData{DeviceName: "Wohnzimmer", ChannelName: "Wohnzimmer"}
+		name, omitted := ComposedEntityName(derived, true, "STATE")
+		if name != "" || !omitted {
+			t.Fatalf("got (%q, %v), want (%q, true)", name, omitted, "")
+		}
+	})
+}
