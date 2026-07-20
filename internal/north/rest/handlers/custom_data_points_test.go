@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -79,7 +80,7 @@ func TestListCustomDataPoints_HappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0001"}))
 	w := httptest.NewRecorder()
-	ListCustomDataPoints(idx).ServeHTTP(w, req)
+	ListCustomDataPoints(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -108,7 +109,7 @@ func TestListCustomDataPoints_DeviceNotFound_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "MISSING"}))
 	w := httptest.NewRecorder()
-	ListCustomDataPoints(idx).ServeHTTP(w, req)
+	ListCustomDataPoints(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
@@ -124,7 +125,7 @@ func TestListCustomDataPoints_NoCustomDPs_ReturnsEmptyList(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0002"}))
 	w := httptest.NewRecorder()
-	ListCustomDataPoints(idx).ServeHTTP(w, req)
+	ListCustomDataPoints(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -493,7 +494,7 @@ func TestCdpUniqueID_UniqueID(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0201"}))
 		w := httptest.NewRecorder()
-		ListCustomDataPoints(idx).ServeHTTP(w, req)
+		ListCustomDataPoints(idx, nil).ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -515,4 +516,100 @@ func TestCdpUniqueID_UniqueID(t *testing.T) {
 			t.Errorf("unique_id = %q, want loom_ prefix", out[0].UniqueID)
 		}
 	})
+}
+
+// stubNamedCustomDP extends stubCustomDP with the optional interfaces
+// the wire-name resolution consults (HAComponent, NamePostfix).
+type stubNamedCustomDP struct {
+	stubCustomDP
+	haComponent string
+	postfix     string
+}
+
+func (s *stubNamedCustomDP) HAComponent() string { return s.haComponent }
+func (s *stubNamedCustomDP) NamePostfix() string { return s.postfix }
+
+// addNamedCustomDP attaches a stubNamedCustomDP on a fresh channel.
+func addNamedCustomDP(d *device.Device, addr string, no, groupNo int, component, postfix string) *device.Channel {
+	chAddr := fmt.Sprintf("%s:%d", addr, no)
+	ch := d.AddChannel(chAddr, no, "SWITCH", hmenum.ParamsetKeyValues)
+	ch.GroupNo = groupNo
+	ch.SetCustomDataPoint(&stubNamedCustomDP{
+		stubCustomDP: stubCustomDP{
+			key: hmtypes.DataPointKey{
+				ChannelAddress: chAddr,
+				ParamsetKey:    hmenum.ParamsetKeyValues,
+				Parameter:      "STATE",
+			},
+			category: hmenum.DataPointCategorySwitch,
+			state:    map[string]any{"on": false},
+		},
+		haComponent: component,
+		postfix:     postfix,
+	})
+	return ch
+}
+
+// TestListCustomDataPoints_WireNames pins that the summary ships the
+// daemon-composed entity names so clients never rebuild them.
+func TestListCustomDataPoints_WireNames(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0003", "HmIP-PSM")
+	addNamedCustomDP(d, "DEV0003", 3, 3, "switch", "") // single primary
+	addNamedCustomDP(d, "DEV0003", 4, 3, "switch", "") // secondary
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0003": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0003"}))
+	w := httptest.NewRecorder()
+	ListCustomDataPoints(idx, nil).ServeHTTP(w, req)
+
+	var out []CustomDPSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	byChannel := map[int]CustomDPSummary{}
+	for _, s := range out {
+		byChannel[s.ChannelNo] = s
+	}
+	// The single primary collapses to the device name: empty name parts.
+	if p := byChannel[3]; p.TranslatedName != "" || p.ParameterName != "" {
+		t.Errorf("primary: translated_name=%q parameter_name=%q, want empty/empty",
+			p.TranslatedName, p.ParameterName)
+	}
+	// The secondary carries the vch marker.
+	if s := byChannel[4]; s.TranslatedName != "vch4" || s.ParameterName != "vch4" {
+		t.Errorf("secondary: translated_name=%q parameter_name=%q, want vch4/vch4",
+			s.TranslatedName, s.ParameterName)
+	}
+}
+
+// TestListCustomDataPoints_PostfixTranslation pins the button-lock shape:
+// the postfix renders title-cased and the locale label wins for the
+// display name.
+func TestListCustomDataPoints_PostfixTranslation(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0004", "HmIP-BWTH")
+	addNamedCustomDP(d, "DEV0004", 0, 0, "lock", "BUTTON_LOCK")
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0004": d}}
+	lab := translatorLabeler{entries: map[string]string{"SWITCH|BUTTON_LOCK": "Tastensperre"}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0004"}))
+	w := httptest.NewRecorder()
+	ListCustomDataPoints(idx, lab).ServeHTTP(w, req)
+
+	var out []CustomDPSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("expected 1 CDP, got %d", len(out))
+	}
+	if out[0].TranslatedName != "Tastensperre" {
+		t.Errorf("translated_name = %q, want %q", out[0].TranslatedName, "Tastensperre")
+	}
+	if out[0].ParameterName != "Button Lock" {
+		t.Errorf("parameter_name = %q, want %q", out[0].ParameterName, "Button Lock")
+	}
 }

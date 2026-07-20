@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
@@ -81,6 +82,19 @@ type CustomDPSummary struct {
 	// it in the list lets clients seed entity state at bootstrap
 	// without one extra round-trip per CDP.
 	State payload.StatePayload `json:"state,omitempty"`
+	// TranslatedName is the channel-level entity display name, fully
+	// composed by the daemon (device.BuildCustomDataPointName): a
+	// custom channel name verbatim, the ch<no>/vch<no> group marker
+	// for derived names, or the locale-aware postfix label (button
+	// locks). Device-name prefix stripped; empty when the name
+	// collapses to the device name alone. Consumers render it
+	// verbatim — the daemon is the single naming authority.
+	TranslatedName string `json:"translated_name,omitempty"`
+	// ParameterName is the untranslated marker / postfix portion of
+	// the name ("ch6", "vch5", "Button Lock"); empty when the entity
+	// is named after the channel or device alone. Mirrors the
+	// reference schema's DataPointNameData.parameter_name.
+	ParameterName string `json:"parameter_name,omitempty"`
 }
 
 // CustomDPDetail is returned by GET .../cdps/{name}.
@@ -203,6 +217,24 @@ func lookupCustomDP(d *device.Device, name string) (device.AttachableDataPoint, 
 	return custom.FindByWireName(d, name)
 }
 
+// customDPNameData resolves a custom DP's name quadruple: the optional
+// name postfix (button locks) and its locale label feed
+// [device.BuildCustomDataPointName], which owns the channel-marker and
+// collapse rules.
+func customDPNameData(
+	dp device.AttachableDataPoint, ch *device.Channel, labels ParameterLabeler,
+) naming.NameData {
+	postfix := ""
+	if pf, ok := dp.(interface{ NamePostfix() string }); ok {
+		postfix = pf.NamePostfix()
+	}
+	translation := ""
+	if t, ok := labels.(device.ParameterTranslator); ok && postfix != "" {
+		translation, _ = device.TranslatedParameterLabel(postfix, ch.Type, t)
+	}
+	return device.BuildCustomDataPointName(ch, postfix, translation)
+}
+
 // cdpName reads the `{name}` path parameter. The router routes on the
 // percent-decoded path (the rest package's decodedPathRouting
 // middleware), so a client encoding the channel-group wire name
@@ -212,10 +244,12 @@ func cdpName(r *http.Request) string {
 	return chi.URLParam(r, "name")
 }
 
-// ListCustomDataPoints returns all custom DPs of a device.
+// ListCustomDataPoints returns all custom DPs of a device. The
+// optional labeler resolves the locale-aware postfix label feeding
+// [CustomDPSummary.TranslatedName].
 //
 //	GET /api/v1/devices/{addr}/cdps
-func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
+func ListCustomDataPoints(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
 		d, ok := idx.Device(addr)
@@ -241,6 +275,7 @@ func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
 			if cdp, ok2 := dp.(device.CategorisedDataPoint); ok2 {
 				cat = cdp.Category()
 			}
+			nd := customDPNameData(dp, ch, labels)
 			out = append(out, CustomDPSummary{
 				Name:                customDPWireName(d, dp, ch.Number),
 				UniqueID:            cdpUniqueID(dp, serial),
@@ -252,6 +287,8 @@ func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
 				Capabilities:        cdpkind.Capabilities(dp),
 				Config:              customDPConfig(dp),
 				State:               customDPState(dp),
+				TranslatedName:      nd.TranslatedName(),
+				ParameterName:       nd.ParameterName,
 			})
 		}
 		JSON(w, http.StatusOK, out)

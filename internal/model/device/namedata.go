@@ -85,6 +85,68 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 	}
 }
 
+// BuildCustomDataPointName resolves the name quadruple for a channel's
+// custom data point. It is the custom-DP sibling of
+// [BuildDataPointName], mirroring the Python reference's
+// `get_custom_data_point_name` (model/support.py):
+//
+//  1. A channel whose name carries the `:N` suffix (device-derived or
+//     `<name>:<no>` scheme) and that is the device's only primary of
+//     its kind — or whose custom DP opts out of multi-channel naming —
+//     renders the optional postfix alone (button locks). With an empty
+//     postfix the name collapses to the device name.
+//  2. Any other `:N`-suffixed channel carries the channel-group marker
+//     `ch<no>` (primary) / `vch<no>` (secondary); the digits follow
+//     the name suffix, matching the reference's name-split semantics.
+//  3. A custom channel name without the `:N` shape is used verbatim.
+//
+// `postfix` is the raw wire postfix (e.g. "BUTTON_LOCK", title-cased
+// here); `postfixTranslation` its locale label — empty when none
+// exists.
+func BuildCustomDataPointName(channel *Channel, postfix, postfixTranslation string) naming.NameData {
+	if channel == nil {
+		return naming.EmptyNameData
+	}
+	deviceName := ""
+	model := ""
+	if channel.device != nil {
+		deviceName = channel.device.Name
+		model = channel.device.Model
+	}
+	channelName := baseChannelName(channel, model, deviceName)
+	if channelName == "" {
+		return naming.EmptyNameData
+	}
+	cName := stripChannelAddressSuffix(channelName)
+	if cName == channelName {
+		return naming.NameData{DeviceName: deviceName, ChannelName: channelName}
+	}
+	// The single-primary collapse only applies ON the primary channel:
+	// HasSinglePrimaryCustomDP counts primaries and therefore returns
+	// true even when invoked from a secondary (same trap the MQTT
+	// discovery name builder documents). Mirrors the reference's
+	// per-channel `is_only_primary_channel`.
+	isOnlyPrimary := channel.IsCustomDPPrimaryChannel() && channel.HasSinglePrimaryCustomDP()
+	if isOnlyPrimary || channel.IgnoreMultipleChannelsForName() {
+		return naming.NameData{
+			DeviceName:              deviceName,
+			ChannelName:             cName,
+			ParameterName:           naming.TitleCaseParameter(postfix),
+			TranslatedParameterName: postfixTranslation,
+		}
+	}
+	marker := "vch"
+	if channel.IsCustomDPPrimaryChannel() {
+		marker = "ch"
+	}
+	pName := marker + channelName[len(cName)+1:]
+	return naming.NameData{
+		DeviceName:    deviceName,
+		ChannelName:   cName,
+		ParameterName: pName,
+	}
+}
+
 // ParameterTranslator resolves a locale-aware parameter label. The
 // (label, found) result distinguishes "no entry" from an explicit-empty
 // translation — the "primary parameter" marker in the embedded

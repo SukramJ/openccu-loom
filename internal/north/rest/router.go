@@ -652,7 +652,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					handlers.PutDataPointValue(d.Devices, d.DPWriter))
 				// Custom data points (Phase C).
 				pr.Get("/devices/{addr}/cdps",
-					handlers.ListCustomDataPoints(d.Devices))
+					handlers.ListCustomDataPoints(d.Devices, d.Labels))
 				pr.Get("/devices/{addr}/cdps/{name}",
 					handlers.GetCustomDataPoint(d.Devices))
 				pr.With(op).Post("/devices/{addr}/cdps/{name}/{operation}",

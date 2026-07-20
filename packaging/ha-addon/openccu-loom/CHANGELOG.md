@@ -5,8 +5,12 @@
 - **REST API: complete entity names for primary parameters.** The
   data-point summary's `translated_name` now also carries the
   channel-level collapsed name when the label is omitted, so REST
-  clients never compose entity names themselves (API 2.28.0). MQTT
+  clients never compose entity names themselves (API 2.29.0). MQTT
   discovery is unchanged.
+- **REST API: custom data points ship their entity names.** The CDP
+  summary gains `translated_name` and `parameter_name` — custom
+  channel names, `ch<no>`/`vch<no>` group markers, and button-lock
+  postfix labels are composed by the daemon.
 
 ## 0.44.3
 

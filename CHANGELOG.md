@@ -19,7 +19,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the collapse reduces to the device name alone). REST consumers such
   as `openccu-loom-client` no longer need any client-side entity-name
   composition. The MQTT discovery plane is unchanged (`name: null` on
-  omitted labels). REST `APIVersion` 2.28.0.
+  omitted labels). REST `APIVersion` 2.29.0 (2.28.0 + 2.29.0 across the two naming PRs).
+- **Custom data points ship their entity names too.** The CDP summary
+  gains `translated_name` (the fully composed channel-level display
+  name: custom channel names verbatim, `ch<no>`/`vch<no>` group
+  markers for derived names, locale-aware postfix labels for button
+  locks; empty on the device-name collapse) and `parameter_name` (the
+  untranslated marker/postfix portion). Composition lives in the new
+  `device.BuildCustomDataPointName`, mirroring the reference's
+  `get_custom_data_point_name` — including the marker digits following
+  the channel-name suffix and the single-primary collapse applying
+  only on the primary channel.
 
 ## [0.44.3] — 2026-07-20
 
