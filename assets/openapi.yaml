@@ -5518,6 +5518,23 @@ components:
             value the WS `custom_data_point.state_changed` payload
             carries. Lets a client build its entity registry from the
             summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+        translated_name:
+          type: string
+          description: |
+            Channel-level entity display name, fully composed by the
+            daemon: a custom channel name verbatim, the `ch<no>` /
+            `vch<no>` channel-group marker for derived names, or the
+            locale-aware postfix label (button locks). Device-name
+            prefix stripped; empty when the name collapses to the
+            device name alone. Consumers render it verbatim — the
+            daemon is the single naming authority.
+        parameter_name:
+          type: string
+          description: |
+            Untranslated marker / postfix portion of the entity name
+            (`ch6`, `vch5`, `Button Lock`); empty when the entity is
+            named after the channel or device alone. Mirrors the
+            reference schema's `DataPointNameData.parameter_name`.
     Problem:
       type: object
       description: |
