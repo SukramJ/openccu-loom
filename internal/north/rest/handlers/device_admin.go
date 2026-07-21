@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -207,7 +208,24 @@ func RefreshFirmwareData(refresher FirmwareRefresher) http.HandlerFunc {
 	}
 }
 
-// AcceptInboxDevice pairs a device that is waiting in the inbox.
+// AcceptInboxRequest is the optional body of `POST /devices/{addr}/accept`.
+// An empty or omitted body accepts the device with no first-time
+// configuration (the historical behaviour). Any supplied field is
+// applied best-effort right after the accept. Pointer fields let an
+// omitted key ("leave untouched") be told apart from an explicit empty
+// value ("clear").
+type AcceptInboxRequest struct {
+	Name *string `json:"name,omitempty"`
+	// IncludeChannels cascades the rename to every channel
+	// ("<name>:<channelNo>"). Only consulted together with Name.
+	IncludeChannels *bool     `json:"include_channels,omitempty"`
+	Rooms           *[]string `json:"rooms,omitempty"`
+	Functions       *[]string `json:"functions,omitempty"`
+}
+
+// AcceptInboxDevice pairs a device that is waiting in the inbox and,
+// when the optional body carries first-time configuration, applies the
+// name / room / function assignment right after the accept.
 func AcceptInboxDevice(admin DeviceAdmin) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if admin == nil {
@@ -215,7 +233,37 @@ func AcceptInboxDevice(admin DeviceAdmin) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Device admin unavailable", ""))
 			return
 		}
-		if err := admin.AcceptInboxDevice(r.Context(), chi.URLParam(r, "addr")); err != nil {
+		// The body is optional: an empty request stream decodes to io.EOF,
+		// which we treat as "no first-time configuration" so the endpoint
+		// stays backward compatible.
+		var req AcceptInboxRequest
+		if err := DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		opts := interfaces.AcceptInboxOptions{}
+		if req.Name != nil {
+			opts.Name = *req.Name
+		}
+		if req.IncludeChannels != nil {
+			opts.IncludeChannels = *req.IncludeChannels
+		}
+		if req.Rooms != nil {
+			opts.Rooms = *req.Rooms
+		}
+		if req.Functions != nil {
+			opts.Functions = *req.Functions
+		}
+		if err := admin.AcceptInboxDevice(r.Context(), chi.URLParam(r, "addr"), opts); err != nil {
+			if errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+				// The device WAS accepted; only the optional first-time
+				// configuration failed. Surface a distinct title so the
+				// operator re-applies the configuration instead of the accept.
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable,
+					"Device accepted but initial configuration failed", err)
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Accept failed", err)
 			return
 		}

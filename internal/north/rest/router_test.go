@@ -34,6 +34,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // ---------------------------------------------------------------------------
@@ -57,7 +58,7 @@ func (f *fakeAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) error {
 }
 
 func (f *fakeAdmin) RenameChannel(_ context.Context, _ string, _ int, _ string) error { return nil }
-func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string) error {
+func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.AcceptInboxOptions) error {
 	f.accepts++
 	return nil
 }
@@ -308,7 +309,10 @@ func (fakeDeviceAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) erro
 func (fakeDeviceAdmin) RenameChannel(_ context.Context, _ string, _ int, _ string) error {
 	return nil
 }
-func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string) error        { return nil }
+
+func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.AcceptInboxOptions) error {
+	return nil
+}
 func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }

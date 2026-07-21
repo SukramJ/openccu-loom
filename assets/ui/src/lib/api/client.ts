@@ -495,11 +495,34 @@ export const api = {
       { method: "DELETE" },
     );
   },
-  acceptInboxDevice(address: string, central: string) {
+  acceptInboxDevice(
+    address: string,
+    central: string,
+    config?: {
+      name?: string;
+      include_channels?: boolean;
+      rooms?: string[];
+      functions?: string[];
+    },
+  ) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    // Only send a body when first-time configuration was supplied; an
+    // empty body keeps the accept-only behaviour (backward compatible).
+    const hasConfig =
+      config !== undefined &&
+      (config.name !== undefined ||
+        config.include_channels !== undefined ||
+        config.rooms !== undefined ||
+        config.functions !== undefined);
     return request<void>(
       `/devices/${encodeURIComponent(address)}/accept${qs}`,
-      { method: "POST" },
+      hasConfig
+        ? {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+          }
+        : { method: "POST" },
     );
   },
   // --- Backups --------------------------------------------------

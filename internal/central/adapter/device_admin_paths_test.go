@@ -14,6 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // registerDeviceInRegistry creates a central, registers it, and adds
@@ -105,7 +106,7 @@ func TestDeviceAdminAcceptInboxDeviceNotInModelRegistry(t *testing.T) {
 	_ = reg.Register(c)
 	// No device in registry → final "not found" error
 	a := NewDeviceAdminDomain(reg, nil)
-	err = a.AcceptInboxDevice(context.Background(), "NOSUCHDEV")
+	err = a.AcceptInboxDevice(context.Background(), "NOSUCHDEV", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Fatal("AcceptInboxDevice not found must error")
 	}
@@ -122,7 +123,7 @@ func TestDeviceAdminAcceptInboxDeviceHubModelNil(t *testing.T) {
 	// Device exists in ModelRegistry but HubModel is nil → AcceptInboxDeviceRemote
 	// will fail because HubModel is nil, so the central is skipped, and we
 	// eventually reach the "not found" error.
-	err := a.AcceptInboxDevice(context.Background(), "DEV005")
+	err := a.AcceptInboxDevice(context.Background(), "DEV005", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Fatal("AcceptInboxDevice nil HubModel must error (no AcceptInboxDeviceRemote)")
 	}
@@ -153,7 +154,7 @@ func TestDeviceAdminRenameDeviceNilRegistry(t *testing.T) {
 func TestDeviceAdminAcceptInboxNilRegistry(t *testing.T) {
 	t.Parallel()
 	a := NewDeviceAdminDomain(nil, nil)
-	err := a.AcceptInboxDevice(context.Background(), "DEV001")
+	err := a.AcceptInboxDevice(context.Background(), "DEV001", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Fatal("expected error from nil registry")
 	}
@@ -210,7 +211,7 @@ func TestDeviceAdminAcceptInboxNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	a := NewDeviceAdminDomain(reg, nil)
-	err := a.AcceptInboxDevice(context.Background(), "NOSUCHDEV")
+	err := a.AcceptInboxDevice(context.Background(), "NOSUCHDEV", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Fatal("expected error when device not found")
 	}

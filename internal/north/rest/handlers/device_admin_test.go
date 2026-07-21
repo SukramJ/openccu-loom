@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // stubDeviceAdmin is an inline stub for DeviceAdmin.
@@ -34,6 +36,7 @@ type stubDeviceAdmin struct {
 	lastFunctions       []string
 	lastReset           bool
 	lastForce           bool
+	lastAcceptOpts      interfaces.AcceptInboxOptions
 }
 
 func (s *stubDeviceAdmin) UnpairDevice(_ context.Context, addr string, reset, force bool) error {
@@ -57,8 +60,9 @@ func (s *stubDeviceAdmin) RenameChannel(_ context.Context, deviceAddr string, ch
 	return s.renameChannelErr
 }
 
-func (s *stubDeviceAdmin) AcceptInboxDevice(_ context.Context, addr string) error {
+func (s *stubDeviceAdmin) AcceptInboxDevice(_ context.Context, addr string, opts interfaces.AcceptInboxOptions) error {
 	s.lastAddress = addr
+	s.lastAcceptOpts = opts
 	return s.acceptErr
 }
 
@@ -324,6 +328,185 @@ func TestAcceptInboxDevice_HappyPath(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d", w.Code)
+	}
+}
+
+// TestAcceptInboxDevice_EmptyBody_AcceptsWithoutConfig verifies the
+// backward-compatible path: an empty request stream decodes to io.EOF,
+// which the handler treats as "no first-time configuration" and forwards
+// a zero-value options struct.
+func TestAcceptInboxDevice_EmptyBody_AcceptsWithoutConfig(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastAcceptOpts.HasConfig() {
+		t.Fatalf("expected empty options for empty body, got %+v", admin.lastAcceptOpts)
+	}
+}
+
+// TestAcceptInboxDevice_BodyForwardsConfig verifies the handler parses
+// every optional field and forwards it into the AcceptInboxOptions.
+func TestAcceptInboxDevice_BodyForwardsConfig(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(
+		`{"name":"Kitchen","include_channels":true,"rooms":["Living Room"],"functions":["Lights"]}`,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	got := admin.lastAcceptOpts
+	if got.Name != "Kitchen" || !got.IncludeChannels {
+		t.Fatalf("name/include_channels not forwarded: %+v", got)
+	}
+	if len(got.Rooms) != 1 || got.Rooms[0] != "Living Room" {
+		t.Fatalf("rooms not forwarded: %+v", got.Rooms)
+	}
+	if len(got.Functions) != 1 || got.Functions[0] != "Lights" {
+		t.Fatalf("functions not forwarded: %+v", got.Functions)
+	}
+}
+
+// TestAcceptInboxDevice_PartialBody_OnlyName_RoomsAndFunctionsStayNil
+// verifies that a body naming only one field leaves the other pointer
+// fields nil end to end, so AcceptInboxOptions.Rooms/Functions stay nil
+// ("untouched") rather than turning into an empty slice.
+func TestAcceptInboxDevice_PartialBody_OnlyName_RoomsAndFunctionsStayNil(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"name":"Kitchen"}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	got := admin.lastAcceptOpts
+	if got.Name != "Kitchen" {
+		t.Fatalf("name not forwarded: %+v", got)
+	}
+	if got.Rooms != nil || got.Functions != nil {
+		t.Fatalf("expected rooms/functions to stay nil (untouched) for an omitted field, got %+v", got)
+	}
+}
+
+// TestAcceptInboxDevice_RoomsEmptyArray_ForwardsNonNilEmptySlice verifies
+// the handler preserves the "explicit empty array clears the assignment"
+// signal: `"rooms":[]` must decode to a non-nil, zero-length slice, not to
+// nil (which would mean "leave untouched").
+func TestAcceptInboxDevice_RoomsEmptyArray_ForwardsNonNilEmptySlice(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"rooms":[]}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	got := admin.lastAcceptOpts
+	if got.Rooms == nil {
+		t.Fatal("expected a non-nil empty rooms slice, got nil (would mean untouched)")
+	}
+	if len(got.Rooms) != 0 {
+		t.Fatalf("expected zero rooms, got %+v", got.Rooms)
+	}
+	if !got.HasConfig() {
+		t.Fatal("an explicit empty rooms array must still count as configuration")
+	}
+}
+
+// TestAcceptInboxDevice_RoomsWrongType_Returns400 verifies a body that is
+// syntactically valid JSON but has the wrong type for a field (a string
+// instead of an array) is rejected as a decode error, not silently coerced.
+func TestAcceptInboxDevice_RoomsWrongType_Returns400(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"rooms":"not-an-array"}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastAddress != "" {
+		t.Fatal("accept must not be attempted on a body with a type-mismatched field")
+	}
+}
+
+// TestAcceptInboxDevice_UnknownField_Returns400 verifies the decoder's
+// DisallowUnknownFields rejects a body carrying an unrecognised key rather
+// than silently ignoring it.
+func TestAcceptInboxDevice_UnknownField_Returns400(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"nickname":"Kitchen"}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestAcceptInboxDevice_InvalidJSON_Returns400 verifies a malformed body
+// is rejected before the accept is attempted.
+func TestAcceptInboxDevice_InvalidJSON_Returns400(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("NOT JSON"))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastAddress != "" {
+		t.Fatal("accept must not be attempted on a malformed body")
+	}
+}
+
+// TestAcceptInboxDevice_ConfigIncomplete_Returns502WithClearTitle verifies
+// that an ErrAcceptConfigIncomplete (accept succeeded, follow-up failed)
+// is surfaced as a 502 whose title tells the operator the accept already
+// happened.
+func TestAcceptInboxDevice_ConfigIncomplete_Returns502WithClearTitle(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{
+		acceptErr: fmt.Errorf("%w: rooms: ccu unreachable", interfaces.ErrAcceptConfigIncomplete),
+	}
+	body := strings.NewReader(`{"rooms":["Living Room"]}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "accepted") {
+		t.Fatalf("expected a title stating the device was accepted, got %s", w.Body.String())
 	}
 }
 

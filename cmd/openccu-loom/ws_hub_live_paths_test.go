@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -297,7 +298,7 @@ func TestWSHubQuery_TriggerFirmwareUpdate_LiveHub_ReturnsError(t *testing.T) {
 func TestWSHubQuery_AcceptInboxDevice_LiveHub_ReturnsError(t *testing.T) {
 	t.Parallel()
 	q, _ := buildHubQueryWithLiveHub(t)
-	err := q.AcceptInboxDevice(context.Background(), "INBOXDEV001")
+	err := q.AcceptInboxDevice(context.Background(), "INBOXDEV001", ws.InboxAcceptOptions{})
 	if err == nil {
 		t.Error("expected error when InboxAccepter is nil")
 	}

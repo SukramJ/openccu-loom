@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.31.0
+  version: 2.32.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1635,6 +1635,17 @@ paths:
     post:
       operationId: acceptInboxDevice
       summary: Promote a pending pairing into the registry
+      description: |
+        Accepts a device waiting in the inbox. The optional body applies
+        first-time configuration right after the accept: `name` renames
+        the device (persisted to the CCU), `include_channels` cascades
+        that rename to every channel (`"<name>:<channelNo>"`), and
+        `rooms` / `functions` assign the device to rooms and functions
+        (Gewerke). An empty or omitted body accepts the device with no
+        configuration (backward compatible). The follow-up steps run only
+        after the accept succeeds; if the accept succeeds but a follow-up
+        step fails the response is a 502 whose title states the device
+        was accepted so only the configuration needs re-applying.
       tags: [devices]
       security:
         - basicAuth: []
@@ -1642,9 +1653,29 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                include_channels:
+                  type: boolean
+                  description: >-
+                    Also rename each channel to "<name>:<channelNo>".
+                    Only consulted together with name. Defaults to false.
+                rooms:
+                  type: array
+                  items: { type: string }
+                functions:
+                  type: array
+                  items: { type: string }
       responses:
         "202":
           description: Accept dispatched
+        "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/firmware/refresh:

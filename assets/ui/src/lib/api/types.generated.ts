@@ -269,7 +269,15 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        /** Remove a device from the registry (admin) */
+        /**
+         * Remove a device from the registry (admin)
+         * @description Unpairs the device via the CCU `deleteDevice` call. Two optional
+         *     query flags map onto the CCU delete bitmask: `reset=true` also
+         *     factory-resets the device during removal, and `force=true` removes
+         *     an unreachable device even when the CCU cannot complete the
+         *     handshake. Both default to false (plain unpair). A backend without a
+         *     pairing concept (CUxD) answers 422.
+         */
         delete: operations["deleteDevice"];
         options?: never;
         head?: never;
@@ -1933,7 +1941,19 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Promote a pending pairing into the registry */
+        /**
+         * Promote a pending pairing into the registry
+         * @description Accepts a device waiting in the inbox. The optional body applies
+         *     first-time configuration right after the accept: `name` renames
+         *     the device (persisted to the CCU), `include_channels` cascades
+         *     that rename to every channel (`"<name>:<channelNo>"`), and
+         *     `rooms` / `functions` assign the device to rooms and functions
+         *     (Gewerke). An empty or omitted body accepts the device with no
+         *     configuration (backward compatible). The follow-up steps run only
+         *     after the accept succeeds; if the accept succeeds but a follow-up
+         *     step fails the response is a 502 whose title states the device
+         *     was accepted so only the configuration needs re-applying.
+         */
         post: operations["acceptInboxDevice"];
         delete?: never;
         options?: never;
@@ -7250,7 +7270,12 @@ export type $defs = Record<string, never>;
 export interface operations {
     deleteDevice: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also reset the device to factory defaults during removal (CCU DELETE_FLAG_RESET). */
+                reset?: boolean;
+                /** @description Force removal even when the device is unreachable (CCU DELETE_FLAG_FORCE). */
+                force?: boolean;
+            };
             header?: never;
             path: {
                 addr: components["parameters"]["Address"];
@@ -7266,6 +7291,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -8179,7 +8205,17 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
+                    include_channels?: boolean;
+                    rooms?: string[];
+                    functions?: string[];
+                };
+            };
+        };
         responses: {
             /** @description Accept dispatched */
             202: {
@@ -8188,6 +8224,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

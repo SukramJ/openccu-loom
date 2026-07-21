@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // DeviceAdminDomain is the live implementation of handlers.DeviceAdmin.
@@ -143,7 +144,16 @@ func (a *DeviceAdminDomain) RenameChannel(ctx context.Context, deviceAddr string
 // pairing up afterwards. We additionally call ListDevices once
 // here so the SPA sees the registry update without having to wait
 // for the sweep.
-func (a *DeviceAdminDomain) AcceptInboxDevice(ctx context.Context, address string) error {
+//
+// opts carries optional first-time configuration (name, rooms,
+// functions) applied best-effort against the accepting central right
+// after the promotion. Those follow-up steps run only once the accept
+// itself succeeded; if any of them fails the returned error wraps
+// [interfaces.ErrAcceptConfigIncomplete] so the caller can tell the
+// device WAS accepted and only the configuration needs to be re-applied.
+func (a *DeviceAdminDomain) AcceptInboxDevice(
+	ctx context.Context, address string, opts interfaces.AcceptInboxOptions,
+) error {
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
@@ -158,19 +168,55 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(ctx context.Context, address strin
 		// Refresh device list on the matching central. Best-effort:
 		// errors here are non-fatal because the periodic sweep will
 		// eventually pick up the new device anyway.
-		if a.writer == nil {
-			return nil
+		if a.writer != nil {
+			if dev, ok := u.ModelRegistry.Get(address); ok {
+				if backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID); ok {
+					_, _ = backend.ListDevices(ctx)
+				}
+			}
 		}
-		dev, ok := u.ModelRegistry.Get(address)
-		if !ok {
-			return nil
-		}
-		if backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID); ok {
-			_, _ = backend.ListDevices(ctx)
+		// Apply the optional first-time configuration on the same central
+		// that accepted the device. The accept has already happened, so a
+		// follow-up failure is wrapped (never swallowed) to signal a
+		// partial success.
+		if err := applyInitialConfig(ctx, u, address, opts); err != nil {
+			return fmt.Errorf("%w: %w", interfaces.ErrAcceptConfigIncomplete, err)
 		}
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// applyInitialConfig runs the optional first-time configuration steps
+// (rename, rooms, functions) against the central that just accepted an
+// inbox device. Every requested step is attempted even when an earlier
+// one fails, and every error is joined into the return value so a
+// partial failure is neither hidden nor short-circuits the remaining
+// steps. The rooms / functions writes go straight to the hub remotes
+// (Rega `set_device_rooms` / `set_device_functions`) rather than the
+// [DeviceAdminDomain.SetRooms] wrapper: a freshly accepted device may
+// not have materialised in the model registry yet, and the Rega scripts
+// address the device on the CCU directly.
+func applyInitialConfig(
+	ctx context.Context, u *central.Unit, address string, opts interfaces.AcceptInboxOptions,
+) error {
+	var errs []error
+	if opts.Name != "" {
+		if err := u.RenameDeviceWithChannels(ctx, address, opts.Name, opts.IncludeChannels); err != nil {
+			errs = append(errs, fmt.Errorf("rename: %w", err))
+		}
+	}
+	if opts.Rooms != nil && u.HubModel != nil {
+		if err := u.HubModel.SetDeviceRoomsRemote(ctx, address, opts.Rooms); err != nil {
+			errs = append(errs, fmt.Errorf("rooms: %w", err))
+		}
+	}
+	if opts.Functions != nil && u.HubModel != nil {
+		if err := u.HubModel.SetDeviceFunctionsRemote(ctx, address, opts.Functions); err != nil {
+			errs = append(errs, fmt.Errorf("functions: %w", err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // UpdateFirmware triggers an OTA update on the CCU. Maps to

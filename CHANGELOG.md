@@ -8,6 +8,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **First-time configuration when accepting an inbox device.**
+  `POST /devices/{addr}/accept` (and the WebSocket command
+  `inbox.accept`) now take an optional body — `name`,
+  `include_channels`, `rooms`, `functions` — applied to the device right
+  after it is accepted out of the inbox: the name is persisted to the
+  CCU (optionally cascading to every channel), and the room / function
+  (Gewerk) assignments go through the ReGa hub-writer. An empty or
+  omitted body keeps the plain accept-only behaviour, so the change is
+  backward compatible. The follow-up steps are best-effort but never
+  swallow errors: if the accept succeeds and a follow-up step fails the
+  response is a 502 whose title states the device was already accepted,
+  so only the configuration needs re-applying. The SPA's "Accept" action
+  now opens a dialog with a name field, room and function multi-selects
+  (populated from `GET /rooms` and `GET /functions`) and a
+  "rename channels" toggle; leaving everything blank just accepts. REST
+  `APIVersion` 2.32.0.
 - **Channel rename over REST + WebSocket.** A new
   `PATCH /devices/{addr}/channels/{no}` endpoint (and WebSocket command
   `device.rename_channel`) renames a single channel; the SPA exposes it

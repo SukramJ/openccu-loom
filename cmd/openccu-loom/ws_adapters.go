@@ -34,6 +34,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // wsCommandWiring bundles every domain adapter + auxiliary deps the
@@ -106,7 +107,7 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		Health:           w.health, // *adapter.HealthAdapter directly satisfies ws.HealthSnapshotProvider
 		Devices:          deviceQuery,
 		DefinitionExport: w.definitionExport,
-		Hub:              &wsHubQuery{hub: w.hub, registry: w.registry},
+		Hub:              &wsHubQuery{hub: w.hub, registry: w.registry, deviceAdmin: w.deviceAdmin},
 		Links:            &wsLinkQuery{domain: w.linksDomain, registry: w.registry},
 		// ScheduleQueryAdapter already satisfies ws.ScheduleQuery — no wrapper needed.
 		Schedules: schedQueryAdapter,
@@ -350,6 +351,12 @@ func (w *wsLinkQuery) PutLinkParamset(ctx context.Context, channelAddress, peerA
 type wsHubQuery struct {
 	hub      *adapter.HubAdapter
 	registry *central.Registry
+	// deviceAdmin drives the inbox.accept follow-up orchestration
+	// (accept + optional rename/rooms/functions) through the same
+	// multi-CCU-safe path the REST accept endpoint uses. Left nil in
+	// minimal wirings, in which case AcceptInboxDevice falls back to a
+	// plain accept via the first central's hub.
+	deviceAdmin *adapter.DeviceAdminDomain
 }
 
 func (w *wsHubQuery) ListPrograms(_ context.Context) ([]map[string]any, error) {
@@ -647,7 +654,22 @@ func (w *wsHubQuery) InboxDevices(_ context.Context) ([]map[string]any, error) {
 	return out, nil
 }
 
-func (w *wsHubQuery) AcceptInboxDevice(ctx context.Context, deviceAddress string) error {
+func (w *wsHubQuery) AcceptInboxDevice(
+	ctx context.Context, deviceAddress string, opts ws.InboxAcceptOptions,
+) error {
+	// Preferred path: delegate to the device-admin domain so the WS
+	// accept walks every central (multi-CCU-safe) and runs the same
+	// first-time-configuration orchestration as the REST endpoint.
+	if w.deviceAdmin != nil {
+		return w.deviceAdmin.AcceptInboxDevice(ctx, deviceAddress, interfaces.AcceptInboxOptions{
+			Name:            opts.Name,
+			IncludeChannels: opts.IncludeChannels,
+			Rooms:           opts.Rooms,
+			Functions:       opts.Functions,
+		})
+	}
+	// Fallback for minimal wirings without a device-admin domain: a plain
+	// accept via the first central's hub, no follow-up configuration.
 	h := w.hub.Hub()
 	if h == nil {
 		return errors.New("ws: hub not available")

@@ -482,8 +482,15 @@
     },
     {
       "category": "inbox",
-      "description": "Promote a paired-but-unconfigured inbox device into the active device set.",
-      "name": "inbox.accept"
+      "description": "Promote a paired-but-unconfigured inbox device into the active device set. Optional first-time configuration (name, include_channels, rooms, functions) is applied best-effort right after the accept; omit them to only accept.",
+      "name": "inbox.accept",
+      "args": {
+        "device_address": "string",
+        "name": "string?",
+        "include_channels": "boolean?",
+        "rooms": "array?",
+        "functions": "array?"
+      }
     },
     {
       "category": "inbox",
