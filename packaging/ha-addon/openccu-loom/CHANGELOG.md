@@ -51,6 +51,12 @@
   (symbolic operators, CCU object names) — alongside a Last-executed
   column. REST clients get the same via new `condition_summary` and
   `activity_summary` fields on `GET /api/v1/programs` (API 2.34.0).
+- **Show system programs on demand.** The program table gains a "Show
+  system programs" toggle (off by default) that reveals CCU-internal
+  programs (`Tmp_*`, `prgEnergyCounter_*`) without changing the config.
+  REST/WS clients get the same via an optional `include_internal`
+  parameter; without it the `include_internal_programs` setting still
+  governs the default (API 2.34.0).
 
 ## 0.45.0
 

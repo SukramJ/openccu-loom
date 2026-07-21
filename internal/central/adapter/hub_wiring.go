@@ -776,6 +776,12 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 	if !opts.enableProgramScan {
 		return nil
 	}
+	// The fetch is complete: internal (Tmp_*, prgEnergyCounter_*) programs
+	// are always loaded into the hub so the daemon knows them. The
+	// include_internal_programs config only steers the *delivery* default,
+	// recorded here so northbound list responses that omit an explicit
+	// override reproduce the historical (hide-by-default) behaviour.
+	h.SetIncludeInternalProgramsDefault(opts.includeInternalPrograms)
 	var programs []programEntry
 	if err := jc.Call(ctx, "Program.getAll", nil, &programs); err != nil {
 		return err
@@ -785,9 +791,6 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 	freshIDs := make(map[string]struct{}, len(programs))
 	for _, p := range programs {
 		if p.ID == "" {
-			continue
-		}
-		if p.IsInternal && !opts.includeInternalPrograms {
 			continue
 		}
 		meta := metaByID[p.ID]
@@ -820,7 +823,8 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 		}
 	}
 	// Remove programs that are no longer present on the CCU or no longer
-	// pass the internal / marker filters.
+	// pass the marker filter. Internal programs are kept unconditionally;
+	// their visibility is a delivery-time concern, not a fetch one.
 	for _, existing := range h.Programs() {
 		if _, ok := freshIDs[existing.ID]; !ok {
 			h.RemoveProgram(existing.ID)

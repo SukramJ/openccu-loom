@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/svelte";
+import { render, cleanup, waitFor, fireEvent } from "@testing-library/svelte";
 
 const mockListPrograms = vi.fn();
 vi.mock("$lib/api/client", () => ({
@@ -47,6 +47,29 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+describe("ProgramList system-programs toggle", () => {
+  it("requests programs with include_internal=false on first load", async () => {
+    render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+    expect(mockListPrograms.mock.calls[0][0]).toBe(false);
+  });
+
+  it("reloads with include_internal=true when the system-programs switch is turned on", async () => {
+    const { getByRole } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+    // The switch is disabled while the initial load() is in flight; the mock
+    // call above resolves synchronously before that promise settles, so wait
+    // for the switch to re-enable before interacting with it — otherwise the
+    // click is a no-op (bits-ui's Switch ignores clicks while disabled).
+    await waitFor(() => expect(getByRole("switch")).not.toBeDisabled());
+
+    await fireEvent.click(getByRole("switch"));
+
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(2));
+    expect(mockListPrograms.mock.calls[1][0]).toBe(true);
+  });
+});
 
 describe("ProgramList rule-summary columns", () => {
   it("renders the condition and activity summaries and a formatted last-executed timestamp", async () => {

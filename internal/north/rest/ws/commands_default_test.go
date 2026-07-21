@@ -449,14 +449,15 @@ func TestParamsetGetSurfacesBackendError(t *testing.T) {
 // --- programs.* / sysvars.* ---
 
 type stubHub struct {
-	programs   []map[string]any
-	executedID string
-	executeErr error
-	sysvars    []map[string]any
-	listErr    error
-	setName    string
-	setValue   any
-	setErr     error
+	programs           []map[string]any
+	executedID         string
+	executeErr         error
+	sysvars            []map[string]any
+	listErr            error
+	setName            string
+	setValue           any
+	setErr             error
+	gotIncludeInternal *bool // captures the override ListPrograms last received
 
 	fetchCentral string
 	fetchErr     error
@@ -488,7 +489,8 @@ type stubHub struct {
 	inboxErr          error
 }
 
-func (h *stubHub) ListPrograms(context.Context) ([]map[string]any, error) {
+func (h *stubHub) ListPrograms(_ context.Context, includeInternal *bool) ([]map[string]any, error) {
+	h.gotIncludeInternal = includeInternal
 	return h.programs, h.listErr
 }
 
@@ -613,6 +615,69 @@ func TestProgramsExecuteRequiresID(t *testing.T) {
 	res := r.Dispatch(opCtx(), "programs.execute", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+// TestProgramsListOmittedArgsPassesNilOverride verifies that dispatching
+// programs.list with no args body at all leaves the include_internal
+// override unset, so the underlying HubQuery applies its own default.
+func TestProgramsListOmittedArgsPassesNilOverride(t *testing.T) {
+	hub := &stubHub{programs: []map[string]any{{"id": "P1"}}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "programs.list", nil)
+	if res.Error != nil {
+		t.Fatalf("list err: %+v", res.Error)
+	}
+	if hub.gotIncludeInternal != nil {
+		t.Fatalf("expected nil override for omitted args, got %v", *hub.gotIncludeInternal)
+	}
+}
+
+// TestProgramsListForwardsIncludeInternal verifies both explicit
+// include_internal values decode and reach the HubQuery unchanged.
+func TestProgramsListForwardsIncludeInternal(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		hub := &stubHub{programs: []map[string]any{{"id": "P1"}}}
+		r := NewRouter()
+		RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+		args, _ := json.Marshal(map[string]any{"include_internal": want})
+		res := r.Dispatch(context.Background(), "programs.list", args)
+		if res.Error != nil {
+			t.Fatalf("include_internal=%v: list err: %+v", want, res.Error)
+		}
+		if hub.gotIncludeInternal == nil || *hub.gotIncludeInternal != want {
+			t.Fatalf("include_internal=%v: HubQuery received %v", want, hub.gotIncludeInternal)
+		}
+	}
+}
+
+// TestProgramsListRejectsNonBooleanIncludeInternal exercises the parsing
+// edge case of a wrong-typed include_internal value (a string instead of
+// a bool): decodeOrEmpty must surface it as bad_request, not panic or
+// silently coerce.
+func TestProgramsListRejectsNonBooleanIncludeInternal(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+
+	res := r.Dispatch(context.Background(), "programs.list", json.RawMessage(`{"include_internal":"yes"}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request for a non-boolean include_internal, got %+v", res.Error)
+	}
+}
+
+// TestProgramsListPropagatesHubError checks that a HubQuery/CCU-side
+// failure surfaces as a command error instead of a silently empty list.
+func TestProgramsListPropagatesHubError(t *testing.T) {
+	hub := &stubHub{listErr: errors.New("rega: program list unavailable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "programs.list", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
 	}
 }
 

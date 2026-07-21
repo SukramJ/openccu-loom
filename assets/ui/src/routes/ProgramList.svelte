@@ -11,6 +11,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -31,6 +32,11 @@
   let loadError = $state<string | null>(null);
   let centralFilter = $state(loadLS("programs:central"));
   $effect(() => saveLS("programs:central", centralFilter));
+  // showInternal reveals CCU-internal (Tmp_*, prgEnergyCounter_*) programs,
+  // mirroring the CCU WebUI's "show system programs" footer toggle. Off by
+  // default; the choice is persisted locally like the central filter.
+  let showInternal = $state(loadLS("programs:show_internal") === "1");
+  $effect(() => saveLS("programs:show_internal", showInternal ? "1" : "0"));
   let runningId = $state<string | null>(null);
   let togglingId = $state<string | null>(null);
 
@@ -38,12 +44,17 @@
     loading = true;
     loadError = null;
     try {
-      programs = await api.listPrograms();
+      programs = await api.listPrograms(showInternal);
     } catch (err) {
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
       loading = false;
     }
+  }
+
+  function toggleShowInternal(next: boolean) {
+    showInternal = next;
+    void load();
   }
 
   async function execute(id: string, name: string, central?: string) {
@@ -142,6 +153,18 @@
     subtitle={loading ? t("common.loading") : t("programs.count", { count: programs.length })}
   >
     {#snippet actions()}
+      <label
+        for="programs-show-internal"
+        class="inline-flex cursor-pointer items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]"
+      >
+        <Switch
+          id="programs-show-internal"
+          checked={showInternal}
+          disabled={loading}
+          onCheckedChange={toggleShowInternal}
+        />
+        <span>{t("programs.show_internal")}</span>
+      </label>
       {#if centrals.length > 1}
         <Select
           class="w-auto"

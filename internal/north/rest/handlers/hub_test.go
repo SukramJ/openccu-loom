@@ -1011,32 +1011,175 @@ func TestListServiceMessages_NilHub_ReturnsEmptyArray(t *testing.T) {
 	}
 }
 
-// --- ListPrograms with IsInternal flag ---
+// --- ListPrograms internal-program delivery filter ---
 
-func TestListPrograms_InternalFlag(t *testing.T) {
-	t.Parallel()
-	h := hub.NewHub("ccu01")
-	p := hub.NewProgram("ccu01", "Tmp_001", "Tmp_001", "", false, nil)
-	p.IsInternal = true
-	h.PutProgram(p)
-	idx := &testHubIndex{h: h}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+// listProgramsBody drives ListPrograms with the given query string and
+// returns the decoded body plus the HTTP status code.
+func listProgramsBody(t *testing.T, idx HubIndex, query string) (int, []ProgramSummary) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs"+query, http.NoBody)
 	w := httptest.NewRecorder()
 	ListPrograms(idx).ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
 	var body []ProgramSummary
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if w.Code == http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+	}
+	return w.Code, body
+}
+
+// hubWithInternalProgram builds a hub carrying one normal and one internal
+// program, with the given per-central default for internal visibility.
+func hubWithInternalProgram(t *testing.T, includeDefault bool) *hub.Hub {
+	t.Helper()
+	h := hub.NewHub("ccu01")
+	h.SetIncludeInternalProgramsDefault(includeDefault)
+	h.PutProgram(hub.NewProgram("ccu01", "P-Normal", "Normal", "", false, nil))
+	internal := hub.NewProgram("ccu01", "Tmp_001", "Tmp_001", "", false, nil)
+	internal.IsInternal = true
+	h.PutProgram(internal)
+	return h
+}
+
+func TestListPrograms_InternalHiddenByDefault(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, body := listProgramsBody(t, idx, "")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
 	}
 	if len(body) != 1 {
-		t.Fatalf("expected 1 program, got %d", len(body))
+		t.Fatalf("expected only the non-internal program, got %d", len(body))
 	}
-	if !body[0].IsInternal {
-		t.Error("expected is_internal=true for Tmp_ programs")
+	if body[0].IsInternal {
+		t.Error("the surviving program must be the non-internal one")
+	}
+}
+
+func TestListPrograms_InternalShownWhenConfigDefaultsOn(t *testing.T) {
+	t.Parallel()
+	// No query parameter → the central's include_internal_programs default
+	// (true) governs delivery: both programs are listed.
+	idx := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	code, body := listProgramsBody(t, idx, "")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected both programs, got %d", len(body))
+	}
+}
+
+func TestListPrograms_IncludeInternalQueryOverridesDefault(t *testing.T) {
+	t.Parallel()
+	// include_internal=true reveals internal programs even when the central
+	// default hides them; the is_internal flag still propagates.
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, body := listProgramsBody(t, idx, "?include_internal=true")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected both programs, got %d", len(body))
+	}
+	var sawInternal bool
+	for _, p := range body {
+		if p.IsInternal {
+			sawInternal = true
+		}
+	}
+	if !sawInternal {
+		t.Error("expected is_internal=true program in the include_internal=true response")
+	}
+
+	// include_internal=false hides internal programs even when the central
+	// default would show them.
+	idxOn := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	code, body = listProgramsBody(t, idxOn, "?include_internal=false")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 1 || body[0].IsInternal {
+		t.Fatalf("include_internal=false must hide internal programs, got %d", len(body))
+	}
+}
+
+func TestListPrograms_InvalidIncludeInternalIsBadRequest(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, _ := listProgramsBody(t, idx, "?include_internal=maybe")
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a non-boolean include_internal, got %d", code)
+	}
+}
+
+// --- parseOptionalBoolQuery / effectiveBool unit tests ---
+
+func TestParseOptionalBoolQuery_AbsentReturnsNil(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	got, err := parseOptionalBoolQuery(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for an absent parameter, got %v", *got)
+	}
+}
+
+func TestParseOptionalBoolQuery_ParsesRecognisedLiterals(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		raw  string
+		want bool
+	}{
+		{"true", true},
+		{"false", false},
+		{"1", true},
+		{"0", false},
+		{"True", true},
+		{"FALSE", false},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs?include_internal="+tc.raw, http.NoBody)
+		got, err := parseOptionalBoolQuery(req)
+		if err != nil {
+			t.Fatalf("include_internal=%q: unexpected error: %v", tc.raw, err)
+		}
+		if got == nil || *got != tc.want {
+			t.Fatalf("include_internal=%q: got %v, want %v", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestParseOptionalBoolQuery_InvalidLiteralErrors(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{"maybe", "yes", "on", "2"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs?include_internal="+raw, http.NoBody)
+		if _, err := parseOptionalBoolQuery(req); err == nil {
+			t.Fatalf("include_internal=%q: expected a parse error, got none", raw)
+		}
+	}
+}
+
+func TestEffectiveBool_OverrideWinsOverDefault(t *testing.T) {
+	t.Parallel()
+	yes, no := true, false
+	if got := effectiveBool(&yes, false); !got {
+		t.Fatal("override=true, def=false: expected true")
+	}
+	if got := effectiveBool(&no, true); got {
+		t.Fatal("override=false, def=true: expected false")
+	}
+}
+
+func TestEffectiveBool_NilOverrideFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	if got := effectiveBool(nil, true); !got {
+		t.Fatal("nil override, def=true: expected true")
+	}
+	if got := effectiveBool(nil, false); got {
+		t.Fatal("nil override, def=false: expected false")
 	}
 }
 

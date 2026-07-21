@@ -520,6 +520,16 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
+        - name: include_internal
+          in: query
+          required: false
+          description: |
+            Overrides whether internal (Tmp_*, prgEnergyCounter_*) programs
+            are listed. When omitted, each central applies its
+            `include_internal_programs` config default (hidden by default,
+            mirroring the CCU WebUI's "show system programs" toggle). The
+            daemon always knows every program; this only steers delivery.
+          schema: { type: boolean }
       responses:
         "200":
           description: OK

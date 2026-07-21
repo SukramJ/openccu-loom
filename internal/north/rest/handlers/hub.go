@@ -305,13 +305,26 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 			JSON(w, http.StatusOK, []ProgramSummary{})
 			return
 		}
+		includeInternal, err := parseOptionalBoolQuery(r)
+		if err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid include_internal", err.Error()))
+			return
+		}
 		var out []ProgramSummary
 		for _, nh := range idx.Hubs() {
 			if nh.Hub == nil {
 				continue
 			}
 			serial := idx.SerialSuffix(nh.Central)
+			// The hub always holds internal programs; whether they are served
+			// is resolved per central: an explicit include_internal wins,
+			// otherwise the central's include_internal_programs config default.
+			include := effectiveBool(includeInternal, nh.Hub.IncludeInternalProgramsDefault())
 			for _, p := range nh.Hub.Programs() {
+				if p.IsInternal && !include {
+					continue
+				}
 				out = append(out, toProgramSummary(p, nh.Central, serial))
 			}
 		}
@@ -321,6 +334,31 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
 	}
+}
+
+// parseOptionalBoolQuery reads the include_internal query parameter. It
+// returns (nil, nil) when the parameter is absent or empty so callers can
+// fall back to a per-request default, and a parse error (surfaced as 400)
+// when a non-empty value is not a recognised boolean literal.
+func parseOptionalBoolQuery(r *http.Request) (*bool, error) {
+	raw := r.URL.Query().Get("include_internal")
+	if raw == "" {
+		return nil, nil
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+// effectiveBool resolves an optional override against a default: the
+// override wins when present, otherwise def is used.
+func effectiveBool(override *bool, def bool) bool {
+	if override != nil {
+		return *override
+	}
+	return def
 }
 
 // toProgramSummary maps a hub program onto its REST DTO, tagging it with the

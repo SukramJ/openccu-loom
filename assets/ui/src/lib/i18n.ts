@@ -1747,6 +1747,7 @@ const EN: Catalog = {
   "programs.inactive": "inactive",
   "programs.count": "{count} programs",
   "programs.confirm_run": 'Execute program "{name}"?',
+  "programs.show_internal": "Show system programs",
   // --- Direct Links ---
   "links.title": "Direct links",
   "links.empty": "No direct links.",
@@ -4473,6 +4474,7 @@ const DE: Catalog = {
   "programs.inactive": "inaktiv",
   "programs.count": "{count} Programme",
   "programs.confirm_run": "Programm \"{name}\" ausführen?",
+  "programs.show_internal": "Systemprogramme anzeigen",
   "links.title": "Direktverknüpfungen",
   "links.empty": "Keine Direktverknüpfungen.",
   "links.add": "Verknüpfung hinzufügen",

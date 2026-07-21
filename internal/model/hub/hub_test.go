@@ -6,6 +6,7 @@ package hub
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -391,6 +392,47 @@ func TestProgramOnRemovedFiresFromHubRemove(t *testing.T) {
 	if fired != 1 {
 		t.Fatalf("OnRemoved fired %d times after second Remove, want 1", fired)
 	}
+}
+
+// --- IncludeInternalProgramsDefault ---
+
+func TestIncludeInternalProgramsDefault_DefaultsFalse(t *testing.T) {
+	h := NewHub("ccu01")
+	if got := h.IncludeInternalProgramsDefault(); got {
+		t.Fatalf("fresh hub IncludeInternalProgramsDefault=%v, want false", got)
+	}
+}
+
+func TestIncludeInternalProgramsDefault_SetRoundTrips(t *testing.T) {
+	h := NewHub("ccu01")
+	h.SetIncludeInternalProgramsDefault(true)
+	if got := h.IncludeInternalProgramsDefault(); !got {
+		t.Fatal("after SetIncludeInternalProgramsDefault(true), expected true")
+	}
+	h.SetIncludeInternalProgramsDefault(false)
+	if got := h.IncludeInternalProgramsDefault(); got {
+		t.Fatal("after SetIncludeInternalProgramsDefault(false), expected false")
+	}
+}
+
+// TestIncludeInternalProgramsDefault_ConcurrentAccess exercises the
+// atomic.Bool under concurrent readers/writers, matching the "lock-free
+// read path" contract documented on the field.
+func TestIncludeInternalProgramsDefault_ConcurrentAccess(t *testing.T) {
+	h := NewHub("ccu01")
+	var wg sync.WaitGroup
+	for i := range 50 {
+		wg.Add(2)
+		go func(v bool) {
+			defer wg.Done()
+			h.SetIncludeInternalProgramsDefault(v)
+		}(i%2 == 0)
+		go func() {
+			defer wg.Done()
+			_ = h.IncludeInternalProgramsDefault()
+		}()
+	}
+	wg.Wait()
 }
 
 func TestInstallModeIsActiveAndRemaining(t *testing.T) {

@@ -74,7 +74,7 @@ func TestWSHubMessageCounts_LiveHub_ReturnsCounts(t *testing.T) {
 func TestWSHubQuery_ListPrograms_NilHub_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	q := nilHubQuery()
-	got, err := q.ListPrograms(context.Background())
+	got, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestWSHubQuery_ListPrograms_NilHub_ReturnsEmpty(t *testing.T) {
 func TestWSHubQuery_ListPrograms_LiveHub_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	q, _ := liveHubQuery(t)
-	got, err := q.ListPrograms(context.Background())
+	got, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

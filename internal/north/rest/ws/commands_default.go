@@ -145,8 +145,11 @@ type ScheduleQuery interface {
 // supplies the concrete implementation against `internal/model/hub`;
 // tests use a stub.
 type HubQuery interface {
-	// ListPrograms returns one entry per CCU program.
-	ListPrograms(ctx context.Context) ([]map[string]any, error)
+	// ListPrograms returns one entry per CCU program. includeInternal
+	// overrides the per-central default for internal (Tmp_*) programs:
+	// nil applies the central's include_internal_programs config default,
+	// a non-nil value forces the choice.
+	ListPrograms(ctx context.Context, includeInternal *bool) ([]map[string]any, error)
 	// ExecuteProgram runs a CCU program by id.
 	ExecuteProgram(ctx context.Context, id string) error
 	// ListSysvars returns one entry per system variable.
@@ -514,14 +517,25 @@ type programIDArgs struct {
 	ID string `json:"id"`
 }
 
+// programsListArgs carries the optional include_internal override for
+// programs.list. A nil pointer (field absent) applies the central's
+// configured default; a non-nil value forces the choice.
+type programsListArgs struct {
+	IncludeInternal *bool `json:"include_internal"`
+}
+
 type sysvarSetArgs struct {
 	Name  string `json:"name"`
 	Value any    `json:"value"`
 }
 
 func programsListHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		progs, err := q.ListPrograms(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args programsListArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		progs, err := q.ListPrograms(ctx, args.IncludeInternal)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_programs: "+err.Error())
 		}

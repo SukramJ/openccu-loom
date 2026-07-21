@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
@@ -182,6 +183,17 @@ type Hub struct {
 	// Populated via [Hub.SetConnectivity] once the adapter layer creates it.
 	connectivity *Connectivity
 
+	// includeInternalDefault is the per-central northbound default that
+	// governs whether internal (Tmp_*, prgEnergyCounter_*) programs appear
+	// in list responses that omit an explicit include_internal parameter.
+	// The hub always holds the full program set (internal ones included);
+	// this flag only steers the default delivery filter, mirroring the
+	// CCU WebUI's footerBtnShowSystemPrograms default. Set during hub
+	// wiring from the central's include_internal_programs config; read on
+	// every programs-list request, so it is atomic for the lock-free read
+	// path.
+	includeInternalDefault atomic.Bool
+
 	// Registration observers. The HubMQTTPublisher subscribes once at
 	// daemon start and reacts to every later PutSysvar/PutProgram so
 	// sysvars/programs loaded by the first ReGa refresh — which runs
@@ -207,6 +219,20 @@ func NewHub(centralName string) *Hub {
 		sysvars:         make(map[string]*Sysvar),
 		installModeDPs:  make(map[string]*InstallMode),
 	}
+}
+
+// SetIncludeInternalProgramsDefault records the per-central northbound
+// default for internal-program visibility. The hub keeps every program;
+// this only governs list responses that omit an explicit override.
+func (h *Hub) SetIncludeInternalProgramsDefault(v bool) {
+	h.includeInternalDefault.Store(v)
+}
+
+// IncludeInternalProgramsDefault reports whether internal programs are
+// exposed by default in list responses that omit an explicit
+// include_internal parameter (default false, matching the CCU WebUI).
+func (h *Hub) IncludeInternalProgramsDefault() bool {
+	return h.includeInternalDefault.Load()
 }
 
 // --- Programs ---

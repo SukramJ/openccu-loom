@@ -539,7 +539,7 @@ func TestWSHubQuery_ListPrograms_LiveHub_WithProgram(t *testing.T) {
 	q, h := buildHubQueryWithLiveHub(t)
 	h.PutProgram(hubmodel.NewProgram("ccu-01", "prog-list-1", "List Test", "desc", false, nil))
 
-	out, err := q.ListPrograms(context.Background())
+	out, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestWSHubQuery_ListPrograms_LiveHub_WithExecutedProgram(t *testing.T) {
 	prog.OnExecution(true, hmenum.ProgramTriggerUser)
 	h.PutProgram(prog)
 
-	out, err := q.ListPrograms(context.Background())
+	out, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}

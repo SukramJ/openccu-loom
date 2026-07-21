@@ -630,9 +630,11 @@ export const api = {
       body: JSON.stringify({ rooms }),
     });
   },
-  listPrograms() {
+  listPrograms(includeInternal = false) {
     return fetchAllPages<ProgramEntry>((page, perPage) =>
-      request<ProgramEntry[]>(`/programs?page=${page}&per_page=${perPage}`),
+      request<ProgramEntry[]>(
+        `/programs?page=${page}&per_page=${perPage}&include_internal=${includeInternal}`,
+      ),
     );
   },
   executeProgram(id: string, central?: string) {

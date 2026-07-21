@@ -353,6 +353,28 @@ func TestSnapshotPrograms_RuleSummary(t *testing.T) {
 	}
 }
 
+// TestSnapshotPrograms_InternalFilter verifies the snapshot mirrors the
+// list endpoint's internal-program delivery default: hidden unless the
+// central's include_internal_programs config opted in.
+func TestSnapshotPrograms_InternalFilter(t *testing.T) {
+	t.Parallel()
+
+	idxHidden := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	out := snapshotPrograms(idxHidden)
+	if len(out) != 1 {
+		t.Fatalf("default hide: expected 1 program, got %d", len(out))
+	}
+	if out[0].IsInternal {
+		t.Error("default hide: the surviving program must be the non-internal one")
+	}
+
+	idxShown := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	out = snapshotPrograms(idxShown)
+	if len(out) != 2 {
+		t.Fatalf("config default on: expected both programs, got %d", len(out))
+	}
+}
+
 // --- snapshotSysvars with nil hub ---
 
 func TestSnapshotSysvars_NilHub(t *testing.T) {

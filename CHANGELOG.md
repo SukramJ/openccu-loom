@@ -151,6 +151,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an ellipsis). The Config UI program table adds Condition and Activity
   columns (collapsible on narrow viewports) plus a Last-executed column.
   REST `APIVersion` 2.34.0.
+- **Reveal system-internal programs at runtime — no config change
+  needed.** The daemon now always loads internal programs (`Tmp_*`,
+  `prgEnergyCounter_*`) into the hub and filters them at delivery, so
+  they can be shown on demand. `GET /api/v1/programs` and the WS
+  `programs.list` command gain an optional `include_internal` override;
+  when omitted the central's `include_internal_programs` config remains
+  the default (hidden), preserving existing behaviour for MQTT and other
+  clients. The Config UI program table adds a "Show system programs"
+  toggle (off by default, persisted locally), mirroring the CCU WebUI's
+  footer button. REST `APIVersion` 2.34.0.
 
 ## [0.45.0] — 2026-07-20
 

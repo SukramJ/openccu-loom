@@ -654,8 +654,11 @@
     },
     {
       "category": "programs",
-      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card.",
-      "name": "programs.list"
+      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card. `include_internal` overrides whether internal (Tmp_*) programs are listed; when omitted the central's include_internal_programs config default applies.",
+      "name": "programs.list",
+      "args": {
+        "include_internal": "boolean?"
+      }
     },
     {
       "category": "recording",
