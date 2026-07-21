@@ -764,6 +764,34 @@ func wireInterface(
 			})
 		}
 		ccuBackend.SetDownloadFirmwareTransport(ccuBaseURLFor(cc), hc, sessionIDFn)
+
+		// Persist device / channel renames to the CCU. The hook resolves
+		// the address to its ReGa ISE-ID, then dispatches to Device.setName
+		// for a device address or Channel.setName for a channel address
+		// (one carrying a ":" channel suffix), both over JSON-RPC. Without
+		// this hook a rename would only mutate the in-memory model and be
+		// lost on the next device reload. Wired on the CCU backend because
+		// the ReGa ISE-ID lookup and setName calls require JSON-RPC.
+		renameBackend := ccuBackend
+		unit.SetRenameDeviceFn(func(ctx context.Context, address, name string) error {
+			iseID, err := renameBackend.GetIseIDByAddress(ctx, address)
+			if err != nil {
+				return fmt.Errorf("rename: resolve ise-id for %s: %w", address, err)
+			}
+			if iseID <= 0 {
+				return fmt.Errorf("rename: address %s not found on CCU", address)
+			}
+			if strings.Contains(address, ":") {
+				if _, err := renameBackend.RenameChannel(ctx, iseID, name); err != nil {
+					return fmt.Errorf("rename channel %s: %w", address, err)
+				}
+				return nil
+			}
+			if _, err := renameBackend.RenameDevice(ctx, iseID, name); err != nil {
+				return fmt.Errorf("rename device %s: %w", address, err)
+			}
+			return nil
+		})
 	}
 
 	// Register the backend so REST / MQTT command paths can dispatch.

@@ -263,7 +263,16 @@ func TestWSParamsetWriter_NilDomain_Errors(t *testing.T) {
 func TestWSDeviceWriter_NilAdmin_Rename_Errors(t *testing.T) {
 	t.Parallel()
 	w := &wsDeviceWriter{admin: nil}
-	err := w.Rename(nil, "DEV", "newname") //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	err := w.Rename(nil, "DEV", "newname", false) //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	if err == nil {
+		t.Fatal("expected error when admin is nil")
+	}
+}
+
+func TestWSDeviceWriter_NilAdmin_RenameChannel_Errors(t *testing.T) {
+	t.Parallel()
+	w := &wsDeviceWriter{admin: nil}
+	err := w.RenameChannel(nil, "DEV", 1, "newname") //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
 	if err == nil {
 		t.Fatal("expected error when admin is nil")
 	}

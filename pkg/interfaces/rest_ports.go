@@ -94,7 +94,13 @@ type DataPointWriter interface {
 // can leave it nil.
 type DeviceAdmin interface {
 	UnpairDevice(ctx context.Context, address string) error
-	RenameDevice(ctx context.Context, address, name string) error
+	// RenameDevice persists the device name to the CCU. When
+	// includeChannels is true every channel is renamed along with the
+	// pattern "<name>:<channelNo>", matching the CCU WebUI behaviour.
+	RenameDevice(ctx context.Context, address, name string, includeChannels bool) error
+	// RenameChannel persists a single channel name to the CCU. The
+	// channel address is resolved as deviceAddr + ":" + channelNo.
+	RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error
 	AcceptInboxDevice(ctx context.Context, address string) error
 	UpdateFirmware(ctx context.Context, address string) error
 	SetRooms(ctx context.Context, address string, rooms []string) error

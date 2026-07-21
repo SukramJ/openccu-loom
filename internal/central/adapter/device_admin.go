@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
@@ -14,10 +15,10 @@ import (
 )
 
 // DeviceAdminDomain is the live implementation of handlers.DeviceAdmin.
-// It walks the central registry, locates the device's owning backend
+// It walks the central registry, locates the device's owning central
 // and dispatches the operation. Most calls are XML-RPC bound; the
-// renaming path is handled in-memory until the JSON-RPC bridge for
-// `Interface.setName` lands
+// renaming path persists through the central's JSON-RPC rename hook
+// (Device.setName / Channel.setName) wired in ccu_wiring.go.
 type DeviceAdminDomain struct {
 	registry *central.Registry
 	writer   *client.ValueWriter
@@ -90,22 +91,40 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string) er
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
 }
 
-// RenameDevice updates the device name. The CCU stores names via
-// `Interface.setMetadata` (XML-RPC) — until that wire surface lands
-// the rename is in-memory only and bubbles through the device model.
-func (a *DeviceAdminDomain) RenameDevice(ctx context.Context, address, name string) error {
+// RenameDevice updates the device name and persists it to the CCU via
+// the central's rename hook (JSON-RPC `Device.setName`). When
+// includeChannels is true every channel is renamed along with the
+// "<name>:<channelNo>" pattern. The persistent call's error is
+// propagated — a failed CCU rename is not silently swallowed.
+func (a *DeviceAdminDomain) RenameDevice(ctx context.Context, address, name string, includeChannels bool) error {
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
 	for _, u := range a.registry.List() {
-		dev, ok := u.ModelRegistry.Get(address)
-		if !ok {
+		if _, ok := u.ModelRegistry.Get(address); !ok {
 			continue
 		}
-		dev.Name = name
-		return nil
+		return u.RenameDeviceWithChannels(ctx, address, name, includeChannels)
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// RenameChannel updates a single channel name and persists it to the
+// CCU via the central's rename hook (JSON-RPC `Channel.setName`). The
+// channel address is resolved as deviceAddr + ":" + channelNo. The
+// persistent call's error is propagated.
+func (a *DeviceAdminDomain) RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	channelAddress := deviceAddr + ":" + strconv.Itoa(channelNo)
+	for _, u := range a.registry.List() {
+		if _, ok := u.ModelRegistry.Get(deviceAddr); !ok {
+			continue
+		}
+		return u.RenameChannel(ctx, channelAddress, name)
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)
 }
 
 // AcceptInboxDevice promotes a pending device from the hub inbox

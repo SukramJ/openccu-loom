@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.29.0
+  version: 2.30.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -180,6 +180,13 @@ paths:
     patch:
       operationId: patchDevice
       summary: Update mutable device metadata (name, room assignment)
+      description: |
+        Renames persist to the CCU (JSON-RPC `Device.setName`). Set
+        `include_channels: true` to also rename every channel with the
+        `"<name>:<channelNo>"` pattern the CCU WebUI applies. Omitted, it
+        defaults to false (device name only). Room / function assignment
+        is applied via the Rega hub-writer. A backend without JSON-RPC
+        (Homegear, CUxD) answers 422.
       tags: [devices]
       security:
         - basicAuth: []
@@ -195,6 +202,17 @@ paths:
               type: object
               properties:
                 name: { type: string }
+                include_channels:
+                  type: boolean
+                  description: >-
+                    Also rename each channel to "<name>:<channelNo>".
+                    Only consulted together with name. Defaults to false.
+                rooms:
+                  type: array
+                  items: { type: string }
+                functions:
+                  type: array
+                  items: { type: string }
       responses:
         "202":
           description: Update accepted
@@ -257,6 +275,37 @@ paths:
               schema: { $ref: "#/components/schemas/ChannelSummary" }
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchChannel
+      summary: Rename a single channel
+      description: |
+        Renames a single channel (JSON-RPC `Channel.setName`). Only the
+        name is patchable here — per-channel room / function assignment is
+        a later addition. A backend without JSON-RPC (Homegear, CUxD)
+        answers 422.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        "202":
+          description: Update accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/channels/{no}/event-groups:
     get:

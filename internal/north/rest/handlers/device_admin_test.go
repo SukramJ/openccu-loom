@@ -13,20 +13,25 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 )
 
 // stubDeviceAdmin is an inline stub for DeviceAdmin.
 type stubDeviceAdmin struct {
-	unpairErr       error
-	renameErr       error
-	acceptErr       error
-	updateFWErr     error
-	setRoomsErr     error
-	setFunctionsErr error
-	lastAddress     string
-	lastNewName     string
-	lastRooms       []string
-	lastFunctions   []string
+	unpairErr           error
+	renameErr           error
+	renameChannelErr    error
+	acceptErr           error
+	updateFWErr         error
+	setRoomsErr         error
+	setFunctionsErr     error
+	lastAddress         string
+	lastNewName         string
+	lastIncludeChannels bool
+	lastChannelNo       int
+	lastRooms           []string
+	lastFunctions       []string
 }
 
 func (s *stubDeviceAdmin) UnpairDevice(_ context.Context, addr string) error {
@@ -34,10 +39,18 @@ func (s *stubDeviceAdmin) UnpairDevice(_ context.Context, addr string) error {
 	return s.unpairErr
 }
 
-func (s *stubDeviceAdmin) RenameDevice(_ context.Context, addr, name string) error {
+func (s *stubDeviceAdmin) RenameDevice(_ context.Context, addr, name string, includeChannels bool) error {
 	s.lastAddress = addr
 	s.lastNewName = name
+	s.lastIncludeChannels = includeChannels
 	return s.renameErr
+}
+
+func (s *stubDeviceAdmin) RenameChannel(_ context.Context, deviceAddr string, channelNo int, name string) error {
+	s.lastAddress = deviceAddr
+	s.lastChannelNo = channelNo
+	s.lastNewName = name
+	return s.renameChannelErr
 }
 
 func (s *stubDeviceAdmin) AcceptInboxDevice(_ context.Context, addr string) error {
@@ -349,6 +362,135 @@ func TestPatchDevice_SetFunctionsError_Returns502(t *testing.T) {
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestPatchDevice_RenameIncludeChannels_ForwardsFlag(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"name":"New","include_channels":true}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	PatchDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !admin.lastIncludeChannels {
+		t.Fatal("expected include_channels flag to be forwarded as true")
+	}
+}
+
+func TestPatchDevice_RenameDefaultsIncludeChannelsFalse(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"name":"New"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	PatchDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastIncludeChannels {
+		t.Fatal("expected include_channels to default to false when omitted")
+	}
+}
+
+func TestPatchDevice_RenameUnsupported_Returns422(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{renameErr: backends.ErrUnsupported}
+	body := strings.NewReader(`{"name":"New"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	PatchDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestPatchChannel_HappyPath(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"name":"Kitchen Light"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastChannelNo != 3 || admin.lastNewName != "Kitchen Light" {
+		t.Fatalf("channel rename not applied: no=%d name=%q", admin.lastChannelNo, admin.lastNewName)
+	}
+}
+
+func TestPatchChannel_NilAdmin_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
+	w := httptest.NewRecorder()
+	PatchChannel(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestPatchChannel_NoName_Returns422(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", w.Code)
+	}
+}
+
+func TestPatchChannel_InvalidChannelNo_Returns400(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "abc"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestPatchChannel_Unsupported_Returns422(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{renameChannelErr: backends.ErrUnsupported}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d", w.Code)
+	}
+}
+
+func TestPatchChannel_Error_Returns502(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{renameChannelErr: errors.New("ccu unreachable")}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", w.Code)
 	}
 }
 

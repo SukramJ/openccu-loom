@@ -26,6 +26,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
 
   type Props = {
     address: string;
@@ -122,6 +123,15 @@
   let renaming = $state(false);
   let renameValue = $state("");
   let renameBusy = $state(false);
+  // Whether the device rename also cascades to every channel
+  // ("<name>:<channelNo>"). Default on, matching the CCU WebUI.
+  let renameIncludeChannels = $state(true);
+
+  // Per-channel rename workflow state. renameChannelNo is the channel
+  // number currently being edited (null = no dialog open).
+  let renameChannelNo = $state<number | null>(null);
+  let renameChannelValue = $state("");
+  let renameChannelBusy = $state(false);
   let deleting = $state(false);
   let updatingFw = $state(false);
   let exportingDef = $state(false);
@@ -220,6 +230,7 @@
 
   function startRename() {
     renameValue = detail?.name ?? "";
+    renameIncludeChannels = true;
     renaming = true;
   }
 
@@ -232,7 +243,7 @@
     }
     renameBusy = true;
     try {
-      await api.renameDevice(address, next);
+      await api.renameDevice(address, next, renameIncludeChannels);
       toastStore.success(t("device.renamed"));
       renaming = false;
       await load();
@@ -240,6 +251,36 @@
       toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       renameBusy = false;
+    }
+  }
+
+  function startRenameChannel(no: number, currentName: string) {
+    renameChannelNo = no;
+    renameChannelValue = currentName;
+  }
+
+  function cancelRenameChannel() {
+    renameChannelNo = null;
+    renameChannelValue = "";
+  }
+
+  async function commitRenameChannel() {
+    if (renameChannelNo === null) return;
+    const next = renameChannelValue.trim();
+    if (!next) {
+      cancelRenameChannel();
+      return;
+    }
+    renameChannelBusy = true;
+    try {
+      await api.renameChannel(address, renameChannelNo, next);
+      toastStore.success(t("channel.renamed"));
+      cancelRenameChannel();
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      renameChannelBusy = false;
     }
   }
 
@@ -430,34 +471,48 @@
       >
         <div class="min-w-0 flex-1">
           {#if renaming}
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="w-full sm:w-64">
-                <Input
-                  type="text"
-                  bind:value={renameValue}
-                  onkeydown={(e) => {
-                    if (e.key === "Enter") void commitRename();
-                    else if (e.key === "Escape") renaming = false;
-                  }}
-                />
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="w-full sm:w-64">
+                  <Input
+                    type="text"
+                    aria-label={t("device.rename")}
+                    bind:value={renameValue}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter") void commitRename();
+                      else if (e.key === "Escape") renaming = false;
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => void commitRename()}
+                  disabled={renameBusy}
+                >
+                  {t("common.save")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => (renaming = false)}
+                  disabled={renameBusy}
+                >
+                  {t("common.cancel")}
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                onclick={() => void commitRename()}
-                disabled={renameBusy}
+              <label
+                for="rename-include-channels"
+                class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
               >
-                {t("common.save")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => (renaming = false)}
-                disabled={renameBusy}
-              >
-                {t("common.cancel")}
-              </Button>
+                <Switch
+                  id="rename-include-channels"
+                  bind:checked={renameIncludeChannels}
+                  disabled={renameBusy}
+                />
+                <span>{t("device.rename_include_channels")}</span>
+              </label>
             </div>
           {:else}
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
@@ -781,6 +836,56 @@
                 </div>
               </Card>
             {:else}
+              <!-- Per-channel rename affordance. The pencil opens an inline
+                   editor; the CCU stores the channel name via Channel.setName. -->
+              <div class="mb-3 flex flex-wrap items-center gap-2">
+                {#if renameChannelNo === ch.number}
+                  <div class="w-full sm:w-64">
+                    <Input
+                      type="text"
+                      aria-label={t("channel.rename")}
+                      bind:value={renameChannelValue}
+                      onkeydown={(e) => {
+                        if (e.key === "Enter") void commitRenameChannel();
+                        else if (e.key === "Escape") cancelRenameChannel();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onclick={() => void commitRenameChannel()}
+                    disabled={renameChannelBusy}
+                  >
+                    {t("common.save")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onclick={cancelRenameChannel}
+                    disabled={renameChannelBusy}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                {:else}
+                  <h3 class="font-medium text-slate-900 dark:text-white">
+                    {ch.name?.trim() ||
+                      ch.type_label ||
+                      t("device.channel_n", { n: ch.number })}
+                  </h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t("channel.rename")}
+                    title={t("channel.rename")}
+                    onclick={() => startRenameChannel(ch.number, ch.name ?? "")}
+                  >
+                    <Icon name="mdi:pencil" size={16} />
+                  </Button>
+                {/if}
+              </div>
               <ChannelPanel
                 address={detail.address}
                 channel={ch.number}

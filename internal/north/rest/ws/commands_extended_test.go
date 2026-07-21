@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -17,12 +18,14 @@ import (
 )
 
 type stubDevices struct {
-	renamed       map[string]string
-	installModes  map[string]int
-	failOnAddress string
+	renamed         map[string]string
+	renamedChannels map[string]string
+	lastInclude     bool
+	installModes    map[string]int
+	failOnAddress   string
 }
 
-func (s *stubDevices) Rename(_ context.Context, address, name string) error {
+func (s *stubDevices) Rename(_ context.Context, address, name string, includeChannels bool) error {
 	if address == s.failOnAddress {
 		return errors.New("device offline")
 	}
@@ -30,6 +33,18 @@ func (s *stubDevices) Rename(_ context.Context, address, name string) error {
 		s.renamed = map[string]string{}
 	}
 	s.renamed[address] = name
+	s.lastInclude = includeChannels
+	return nil
+}
+
+func (s *stubDevices) RenameChannel(_ context.Context, deviceAddr string, channelNo int, name string) error {
+	if deviceAddr == s.failOnAddress {
+		return errors.New("device offline")
+	}
+	if s.renamedChannels == nil {
+		s.renamedChannels = map[string]string{}
+	}
+	s.renamedChannels[deviceAddr+":"+strconv.Itoa(channelNo)] = name
 	return nil
 }
 
@@ -161,11 +176,24 @@ func dispatchExpectErr(t *testing.T, r *Router, name string, params any, contain
 
 func TestExtendedDeviceRenameHandler(t *testing.T) {
 	r, devs, _, _, _, _ := newRouterWithExtended()
-	dispatch(t, r, "device.rename", map[string]any{"address": "ABC0001", "name": "Wohnzimmer"})
+	dispatch(t, r, "device.rename", map[string]any{"address": "ABC0001", "name": "Wohnzimmer", "include_channels": true})
 	if devs.renamed["ABC0001"] != "Wohnzimmer" {
 		t.Fatalf("rename not applied: %v", devs.renamed)
 	}
+	if !devs.lastInclude {
+		t.Fatal("include_channels flag not forwarded")
+	}
 	dispatchExpectErr(t, r, "device.rename", map[string]any{"address": "", "name": "X"}, "address is required")
+}
+
+func TestExtendedDeviceRenameChannelHandler(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+	dispatch(t, r, "device.rename_channel", map[string]any{"address": "ABC0001", "channel": 2, "name": "Licht"})
+	if devs.renamedChannels["ABC0001:2"] != "Licht" {
+		t.Fatalf("channel rename not applied: %v", devs.renamedChannels)
+	}
+	dispatchExpectErr(t, r, "device.rename_channel", map[string]any{"address": "", "channel": 1, "name": "X"}, "address is required")
+	dispatchExpectErr(t, r, "device.rename_channel", map[string]any{"address": "ABC0001", "channel": 1, "name": ""}, "name is required")
 }
 
 func TestExtendedDeviceInstallMode(t *testing.T) {
@@ -340,7 +368,7 @@ func TestExtendedRouterCountsNewCommands(t *testing.T) {
 	r, _, _, _, _, _ := newRouterWithExtended()
 	names := r.Commands()
 	want := []string{
-		"device.rename", "device.install_mode",
+		"device.rename", "device.rename_channel", "device.install_mode",
 		"paramset.put",
 		"master_profiles.list", "master_profiles.get", "master_profiles.apply",
 		"master_profiles.match",
@@ -348,8 +376,8 @@ func TestExtendedRouterCountsNewCommands(t *testing.T) {
 		"central.info", "central.connectivity", "central.system_health", "central.reconcile",
 		"service_messages.disable",
 	}
-	if len(want) != 13 {
-		t.Fatalf("expected 13 new commands, got %d", len(want))
+	if len(want) != 14 {
+		t.Fatalf("expected 14 new commands, got %d", len(want))
 	}
 	registered := make(map[string]bool, len(names))
 	for _, n := range names {

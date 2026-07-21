@@ -273,7 +273,15 @@ export interface paths {
         delete: operations["deleteDevice"];
         options?: never;
         head?: never;
-        /** Update mutable device metadata (name, room assignment) */
+        /**
+         * Update mutable device metadata (name, room assignment)
+         * @description Renames persist to the CCU (JSON-RPC `Device.setName`). Set
+         *     `include_channels: true` to also rename every channel with the
+         *     `"<name>:<channelNo>"` pattern the CCU WebUI applies. Omitted, it
+         *     defaults to false (device name only). Room / function assignment
+         *     is applied via the Rega hub-writer. A backend without JSON-RPC
+         *     (Homegear, CUxD) answers 422.
+         */
         patch: operations["patchDevice"];
         trace?: never;
     };
@@ -371,7 +379,14 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename a single channel
+         * @description Renames a single channel (JSON-RPC `Channel.setName`). Only the
+         *     name is patchable here — per-channel room / function assignment is
+         *     a later addition. A backend without JSON-RPC (Homegear, CUxD)
+         *     answers 422.
+         */
+        patch: operations["patchChannel"];
         trace?: never;
     };
     "/devices/{addr}/channels/{no}/event-groups": {
@@ -4408,6 +4423,23 @@ export interface components {
              *     summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
              */
             unique_id: string;
+            /**
+             * @description Channel-level entity display name, fully composed by the
+             *     daemon: a custom channel name verbatim, the `ch<no>` /
+             *     `vch<no>` channel-group marker for derived names, or the
+             *     locale-aware postfix label (button locks). Device-name
+             *     prefix stripped; empty when the name collapses to the
+             *     device name alone. Consumers render it verbatim — the
+             *     daemon is the single naming authority.
+             */
+            translated_name?: string;
+            /**
+             * @description Untranslated marker / postfix portion of the entity name
+             *     (`ch6`, `vch5`, `Button Lock`); empty when the entity is
+             *     named after the channel or device alone. Mirrors the
+             *     reference schema's `DataPointNameData.parameter_name`.
+             */
+            parameter_name?: string;
         };
         /**
          * @description RFC 9457 problem detail. The `type` URI selects one of the
@@ -4959,17 +4991,24 @@ export interface components {
             /**
              * @description Locale-aware per-entity name a north-bound consumer (HA via
              *     MQTT discovery or the REST drop-in) assigns to this data
-             *     point. Identical to the MQTT discovery `name` field — both
-             *     resolve through the same naming primitive. The parameter
-             *     portion only; HA prepends the device name. Empty when
-             *     `label_omitted` is true.
+             *     point, resolved through the same naming primitives as the
+             *     MQTT discovery `name` field. The parameter portion only; HA
+             *     prepends the device name. When `label_omitted` is true it
+             *     instead carries the channel-level collapsed name (channel
+             *     name plus multi-channel `chN` marker, device prefix
+             *     stripped) — possibly empty when the collapse reduces to the
+             *     device name alone. Consumers therefore never need to
+             *     compose entity names themselves; the daemon is the single
+             *     naming authority.
              */
             translated_name?: string;
             /**
              * @description True when the parameter is flagged "primary" in the embedded
              *     translation_custom catalogue (translation key present, value
-             *     empty). Consumers then collapse the entity name to the device
-             *     name alone (MQTT discovery emits `name: null`).
+             *     empty). The entity is then named after the channel:
+             *     `translated_name` holds the collapsed channel-level name,
+             *     falling back to the device name when empty (MQTT discovery
+             *     instead emits `name: null`).
              */
             label_omitted?: boolean;
             /**
@@ -7244,6 +7283,10 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
+                    /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
+                    include_channels?: boolean;
+                    rooms?: string[];
+                    functions?: string[];
                 };
             };
         };
@@ -7282,6 +7325,37 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    patchChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Update accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getParamset: {

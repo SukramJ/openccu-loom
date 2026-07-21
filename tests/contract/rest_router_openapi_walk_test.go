@@ -158,12 +158,13 @@ type fakeFirmwareRefresher struct{}
 
 func (fakeFirmwareRefresher) RefreshFirmwareData(context.Context) error { return nil }
 
-func (fakeDeviceAdmin) UnpairDevice(context.Context, string) error           { return nil }
-func (fakeDeviceAdmin) RenameDevice(context.Context, string, string) error   { return nil }
-func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string) error      { return nil }
-func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { return nil }
-func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }
-func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error { return nil }
+func (fakeDeviceAdmin) UnpairDevice(context.Context, string) error               { return nil }
+func (fakeDeviceAdmin) RenameDevice(context.Context, string, string, bool) error { return nil }
+func (fakeDeviceAdmin) RenameChannel(context.Context, string, int, string) error { return nil }
+func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string) error          { return nil }
+func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error             { return nil }
+func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error         { return nil }
+func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error     { return nil }
 
 type fakeDeviceInstallMode struct{}
 

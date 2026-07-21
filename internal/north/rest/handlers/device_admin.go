@@ -5,10 +5,13 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -34,12 +37,22 @@ func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {
 
 // DevicePatchRequest is the body of `PATCH /devices/{addr}`.
 type DevicePatchRequest struct {
-	Name      *string   `json:"name,omitempty"`
-	Rooms     *[]string `json:"rooms,omitempty"`
-	Functions *[]string `json:"functions,omitempty"`
+	Name *string `json:"name,omitempty"`
+	// IncludeChannels, when true, also renames every channel to
+	// "<name>:<channelNo>" (the CCU WebUI convention). Only consulted
+	// together with Name. Omitted defaults to false (device name only).
+	IncludeChannels *bool     `json:"include_channels,omitempty"`
+	Rooms           *[]string `json:"rooms,omitempty"`
+	Functions       *[]string `json:"functions,omitempty"`
 }
 
-// PatchDevice applies partial updates. The MVP supports renaming;
+// ChannelPatchRequest is the body of `PATCH /devices/{addr}/channels/{no}`.
+type ChannelPatchRequest struct {
+	Name *string `json:"name,omitempty"`
+}
+
+// PatchDevice applies partial updates. The MVP supports renaming
+// (optionally cascading to channels), room and function assignment;
 // additional fields are added as the admin surface grows.
 func PatchDevice(admin DeviceAdmin) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -61,8 +74,9 @@ func PatchDevice(admin DeviceAdmin) http.HandlerFunc {
 		}
 		addr := chi.URLParam(r, "addr")
 		if req.Name != nil {
-			if err := admin.RenameDevice(r.Context(), addr, *req.Name); err != nil {
-				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Rename failed", err)
+			includeChannels := req.IncludeChannels != nil && *req.IncludeChannels
+			if err := admin.RenameDevice(r.Context(), addr, *req.Name, includeChannels); err != nil {
+				writeRenameError(w, r, err)
 				return
 			}
 		}
@@ -80,6 +94,53 @@ func PatchDevice(admin DeviceAdmin) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusAccepted)
 	}
+}
+
+// PatchChannel renames a single channel. Room and function assignment
+// per channel is out of scope here — only the name is patchable.
+func PatchChannel(admin DeviceAdmin) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if admin == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Device admin unavailable", ""))
+			return
+		}
+		var req ChannelPatchRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.Name == nil {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "No patchable field supplied", ""))
+			return
+		}
+		no, err := strconv.Atoi(chi.URLParam(r, "no"))
+		if err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid channel number", ""))
+			return
+		}
+		if err := admin.RenameChannel(r.Context(), chi.URLParam(r, "addr"), no, *req.Name); err != nil {
+			writeRenameError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// writeRenameError maps a rename failure to its HTTP response: a backend
+// that cannot rename (no JSON-RPC — Homegear, CUxD) surfaces
+// [backends.ErrUnsupported] and becomes 422, every other failure (CCU
+// unreachable, ISE-ID not found) becomes 502.
+func writeRenameError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, backends.ErrUnsupported) {
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Rename not supported by this backend", ""))
+		return
+	}
+	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Rename failed", err)
 }
 
 // UpdateDeviceFirmware kicks off a firmware update for the device.

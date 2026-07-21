@@ -35,6 +35,30 @@ func TestPin_CcuBackend_SetDownloadFirmwareTransport_CalledInWiring(t *testing.T
 	)
 }
 
+// TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring pins that
+// ccu_wiring.go wires the per-central rename hook via SetRenameDeviceFn.
+// Without this call, device and channel renames only mutate the in-memory
+// model and are lost on the next device reload — never reaching the CCU's
+// Device.setName / Channel.setName JSON-RPC surface.
+func TestPin_CcuBackend_SetRenameDeviceFn_WiredInCCUWiring(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"unit", "SetRenameDeviceFn",
+	)
+}
+
+// TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring pins that the rename
+// hook resolves the ReGa ISE-ID before calling setName. Skipping the lookup
+// would pass a raw wire address where the CCU expects a numeric ISE-ID.
+func TestPin_CcuBackend_GetIseIDByAddress_UsedInCCUWiring(t *testing.T) {
+	contract.MustFindMethodCall(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"renameBackend", "GetIseIDByAddress",
+	)
+}
+
 // TestPin_wireCUxDInterface_CalledInCCUWiring pins that ccu_wiring.go calls
 // wireCUxDInterface for CUxD interfaces.  Removing this call would silently
 // fall through to the XML-RPC path, violating the CUxD-must-use-BIN-RPC

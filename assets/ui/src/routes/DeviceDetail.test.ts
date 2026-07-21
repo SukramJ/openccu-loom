@@ -1,15 +1,26 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, screen, waitFor } from "@testing-library/svelte";
+import { render, cleanup, screen, waitFor, fireEvent } from "@testing-library/svelte";
 
-const { mockGetDevice, mockGetDeviceSchedule, mockGetPreference, mockPutPreference } = vi.hoisted(
-  () => ({
-    mockGetDevice: vi.fn(),
-    mockGetDeviceSchedule: vi.fn(),
-    mockGetPreference: vi.fn(),
-    mockPutPreference: vi.fn(),
-  }),
-);
+const {
+  mockGetDevice,
+  mockGetDeviceSchedule,
+  mockGetPreference,
+  mockPutPreference,
+  mockRenameDevice,
+  mockRenameChannel,
+  mockToastSuccess,
+  mockToastError,
+} = vi.hoisted(() => ({
+  mockGetDevice: vi.fn(),
+  mockGetDeviceSchedule: vi.fn(),
+  mockGetPreference: vi.fn(),
+  mockPutPreference: vi.fn(),
+  mockRenameDevice: vi.fn(),
+  mockRenameChannel: vi.fn(),
+  mockToastSuccess: vi.fn(),
+  mockToastError: vi.fn(),
+}));
 
 vi.mock("$lib/api/client", () => ({
   api: {
@@ -17,7 +28,8 @@ vi.mock("$lib/api/client", () => ({
     getDeviceSchedule: (...args: unknown[]) => mockGetDeviceSchedule(...args),
     getPreference: (...args: unknown[]) => mockGetPreference(...args),
     putPreference: (...args: unknown[]) => mockPutPreference(...args),
-    renameDevice: vi.fn(),
+    renameDevice: (...args: unknown[]) => mockRenameDevice(...args),
+    renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
     deleteDevice: vi.fn(),
     updateFirmware: vi.fn(),
     setDeviceRooms: vi.fn(),
@@ -38,7 +50,10 @@ vi.mock("$lib/i18n", () => ({
 }));
 
 vi.mock("$lib/stores/toast.svelte", () => ({
-  toastStore: { success: vi.fn(), error: vi.fn() },
+  toastStore: {
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
 }));
 
 vi.mock("$lib/stores/confirm.svelte", () => ({
@@ -85,6 +100,8 @@ beforeEach(() => {
   mockGetDeviceSchedule.mockRejectedValue(
     Object.assign(new Error("not found"), { status: 404 }),
   );
+  mockRenameDevice.mockResolvedValue(undefined);
+  mockRenameChannel.mockResolvedValue(undefined);
 });
 
 afterEach(() => cleanup());
@@ -167,5 +184,160 @@ describe("DeviceDetail — happy path", () => {
       expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
     });
     expect(screen.queryByText("device.no_channels")).not.toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — device rename dialog", () => {
+  async function openRenameDialog() {
+    mockGetDevice.mockResolvedValue(baseDevice());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.rename" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("device.rename")).toBeInTheDocument();
+    });
+  }
+
+  it("opens with the include-channels switch checked by default and the name prefilled", async () => {
+    await openRenameDialog();
+    const input = screen.getByLabelText("device.rename") as HTMLInputElement;
+    expect(input.value).toBe("Wohnzimmer Thermostat");
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("commits the rename with include_channels=true by default and reloads", async () => {
+    await openRenameDialog();
+    await fireEvent.input(screen.getByLabelText("device.rename"), {
+      target: { value: "New Name" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockRenameDevice).toHaveBeenCalledWith("0001ABCD", "New Name", true);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.renamed");
+    await waitFor(() => expect(mockGetDevice).toHaveBeenCalledTimes(2));
+  });
+
+  it("forwards include_channels=false when the switch is toggled off", async () => {
+    await openRenameDialog();
+    await fireEvent.click(screen.getByRole("switch"));
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false");
+
+    await fireEvent.input(screen.getByLabelText("device.rename"), {
+      target: { value: "New Name" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockRenameDevice).toHaveBeenCalledWith("0001ABCD", "New Name", false);
+    });
+  });
+
+  it("shows an error toast and keeps the dialog open when the CCU rename fails", async () => {
+    mockRenameDevice.mockRejectedValueOnce(new Error("ccu unreachable"));
+    await openRenameDialog();
+    await fireEvent.input(screen.getByLabelText("device.rename"), {
+      target: { value: "New Name" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+    // Dialog stays open on failure — no silent fallback / no silent close.
+    expect(screen.getByLabelText("device.rename")).toBeInTheDocument();
+    expect(mockGetDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes without calling the API when the name is unchanged", async () => {
+    await openRenameDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("device.rename")).not.toBeInTheDocument();
+    });
+    expect(mockRenameDevice).not.toHaveBeenCalled();
+  });
+});
+
+describe("DeviceDetail — channel rename", () => {
+  function deviceWithChannel(overrides: Record<string, unknown> = {}) {
+    return baseDevice({
+      channels: [
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "Kanal 1", data_points_count: 0 },
+      ],
+      channels_count: 1,
+      ...overrides,
+    });
+  }
+
+  async function openChannelEditor() {
+    mockGetDevice.mockResolvedValue(deviceWithChannel());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "device.toptab.configure" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "channel.rename" })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "channel.rename" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("channel.rename")).toBeInTheDocument();
+    });
+  }
+
+  it("opens an inline editor prefilled with the current channel name", async () => {
+    await openChannelEditor();
+    const input = screen.getByLabelText("channel.rename") as HTMLInputElement;
+    expect(input.value).toBe("Kanal 1");
+  });
+
+  it("commits the channel rename on save and shows a toast", async () => {
+    await openChannelEditor();
+    await fireEvent.input(screen.getByLabelText("channel.rename"), {
+      target: { value: "Kitchen Light" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockRenameChannel).toHaveBeenCalledWith("0001ABCD", 1, "Kitchen Light");
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("channel.renamed");
+    // The pencil button and the inline editor share the same "channel.rename"
+    // label, so assert on the textbox role specifically — the pencil button
+    // (also labelled "channel.rename") is expected to reappear.
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox", { name: "channel.rename" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "channel.rename" })).toBeInTheDocument();
+  });
+
+  it("cancels on Escape without calling the API", async () => {
+    await openChannelEditor();
+    await fireEvent.keyDown(screen.getByLabelText("channel.rename"), { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox", { name: "channel.rename" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "channel.rename" })).toBeInTheDocument();
+    expect(mockRenameChannel).not.toHaveBeenCalled();
+  });
+
+  it("shows an error toast and keeps the editor open when the CCU rename fails", async () => {
+    mockRenameChannel.mockRejectedValueOnce(new Error("ccu unreachable"));
+    await openChannelEditor();
+    await fireEvent.input(screen.getByLabelText("channel.rename"), {
+      target: { value: "Kitchen Light" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+    expect(screen.getByLabelText("channel.rename")).toBeInTheDocument();
   });
 });

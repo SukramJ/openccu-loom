@@ -461,12 +461,22 @@ export const api = {
     );
   },
   // --- Device lifecycle -----------------------------------------
-  renameDevice(address: string, name: string) {
+  renameDevice(address: string, name: string, includeChannels = false) {
     return request<void>(`/devices/${encodeURIComponent(address)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, include_channels: includeChannels }),
     });
+  },
+  renameChannel(address: string, channelNo: number, name: string) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      },
+    );
   },
   deleteDevice(address: string) {
     return request<void>(`/devices/${encodeURIComponent(address)}`, {

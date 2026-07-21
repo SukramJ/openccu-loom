@@ -573,7 +573,7 @@ func TestDevicesAdapter_Devices_PopulatedRegistry(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_HappyPath(t *testing.T) {
 	t.Parallel()
 	admin, _, _, _ := buildBoost9Fixture(t)
-	err := admin.RenameDevice(context.Background(), "DEV004", "NewName")
+	err := admin.RenameDevice(context.Background(), "DEV004", "NewName", false)
 	if err != nil {
 		t.Fatalf("RenameDevice: %v", err)
 	}
@@ -582,7 +582,7 @@ func TestDeviceAdminDomain_RenameDevice_HappyPath(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_UnknownDevice_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin, _, _, _ := buildBoost9Fixture(t)
-	err := admin.RenameDevice(context.Background(), "UNKNOWN", "NewName")
+	err := admin.RenameDevice(context.Background(), "UNKNOWN", "NewName", false)
 	if err == nil {
 		t.Error("expected error for unknown device in RenameDevice")
 	}
@@ -591,9 +591,61 @@ func TestDeviceAdminDomain_RenameDevice_UnknownDevice_ReturnsErr(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin := &DeviceAdminDomain{registry: nil}
-	err := admin.RenameDevice(context.Background(), "DEV004", "NewName")
+	err := admin.RenameDevice(context.Background(), "DEV004", "NewName", false)
 	if err == nil {
 		t.Error("expected error for nil registry in RenameDevice")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DeviceAdminDomain.RenameChannel
+// ---------------------------------------------------------------------------
+
+func TestDeviceAdminDomain_RenameChannel_HappyPath(t *testing.T) {
+	t.Parallel()
+	admin, c, dev, _ := buildBoost9Fixture(t)
+	var gotAddr, gotName string
+	c.SetRenameDeviceFn(func(_ context.Context, address, name string) error {
+		gotAddr, gotName = address, name
+		return nil
+	})
+	if err := admin.RenameChannel(context.Background(), "DEV004", 1, "Kitchen Light"); err != nil {
+		t.Fatalf("RenameChannel: %v", err)
+	}
+	if gotAddr != "DEV004:1" || gotName != "Kitchen Light" {
+		t.Errorf("hook got (%q, %q), want (%q, %q)", gotAddr, gotName, "DEV004:1", "Kitchen Light")
+	}
+	if got := dev.Channel("DEV004:1").Name; got != "Kitchen Light" {
+		t.Errorf("in-memory channel name = %q, want %q", got, "Kitchen Light")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_UnknownDevice_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	admin, _, _, _ := buildBoost9Fixture(t)
+	err := admin.RenameChannel(context.Background(), "UNKNOWN", 1, "NewName")
+	if err == nil {
+		t.Error("expected error for unknown device in RenameChannel")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_NilRegistry_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	admin := &DeviceAdminDomain{registry: nil}
+	err := admin.RenameChannel(context.Background(), "DEV004", 1, "NewName")
+	if err == nil {
+		t.Error("expected error for nil registry in RenameChannel")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_HookError_Propagates(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	boom := errors.New("ccu unreachable")
+	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error { return boom })
+	err := admin.RenameChannel(context.Background(), "DEV004", 1, "NewName")
+	if !errors.Is(err, boom) {
+		t.Errorf("expected propagated hook error, got %v", err)
 	}
 }
 

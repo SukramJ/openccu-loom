@@ -2234,6 +2234,19 @@ func TestExtendedDeviceRenameError(t *testing.T) {
 	}
 }
 
+// TestExtendedDeviceRenameChannelError exercises the error path in
+// deviceRenameChannelHandler — a failed persistent rename must surface as
+// a command error, not a silent success.
+func TestExtendedDeviceRenameChannelError(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+	devs.failOnAddress = "FAIL0001"
+	raw, _ := json.Marshal(map[string]any{"address": "FAIL0001", "channel": 1, "name": "X"})
+	res := r.Dispatch(opCtx(), "device.rename_channel", raw)
+	if res.Error == nil {
+		t.Fatalf("expected error, got %+v", res.Data)
+	}
+}
+
 // TestExtendedDeviceInstallModeError exercises the error path.
 func TestExtendedDeviceInstallModeError(t *testing.T) {
 	r, devs, _, _, _, _ := newRouterWithExtended()
@@ -2250,7 +2263,11 @@ func TestExtendedDeviceInstallModeError(t *testing.T) {
 // failOnInstallDevice always fails SetInstallMode.
 type failOnInstallDevice struct{}
 
-func (f *failOnInstallDevice) Rename(_ context.Context, _, _ string) error { return nil }
+func (f *failOnInstallDevice) Rename(_ context.Context, _, _ string, _ bool) error { return nil }
+func (f *failOnInstallDevice) RenameChannel(_ context.Context, _ string, _ int, _ string) error {
+	return nil
+}
+
 func (f *failOnInstallDevice) SetInstallMode(_ context.Context, _ string, _ int) error {
 	return errors.New("install mode failed")
 }

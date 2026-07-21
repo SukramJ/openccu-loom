@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -904,7 +905,7 @@ func (u *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name stri
 
 // RenameDeviceWithChannels renames a device and, when includeChannels
 // is true, renames every channel using the pattern "{name}:{no}" (the
-// Colon-separated channel number suffix that Each
+// colon-separated channel-number suffix the CCU WebUI applies). Each
 // channel rename is delegated to the same persistent `RenameDeviceFn`
 // hook so the store stays consistent.
 //
@@ -937,6 +938,34 @@ func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name strin
 		}
 	}
 	return firstErr
+}
+
+// RenameChannel changes the operator-visible name of a single channel.
+// Updates both the in-memory channel model and persists the new name
+// through the configured `RenameDeviceFn` hook (the hook dispatches to
+// Channel.setName for a colon-suffixed channel address). channelAddress
+// must be a full channel address ("<device>:<no>").
+func (u *Unit) RenameChannel(ctx context.Context, channelAddress, name string) error {
+	if channelAddress == "" {
+		return errors.New("central: RenameChannel: empty address")
+	}
+	u.services.mu.RLock()
+	fn := u.services.renameDeviceFn
+	u.services.mu.RUnlock()
+	// In-memory rename — always applied so the UI reflects the change
+	// even when no persistent backend is wired (e.g. tests).
+	if u.ModelRegistry != nil {
+		base, _, _ := strings.Cut(channelAddress, ":")
+		if dev, ok := u.ModelRegistry.Get(base); ok && dev != nil {
+			if ch := dev.Channel(channelAddress); ch != nil {
+				ch.Name = name
+			}
+		}
+	}
+	if fn == nil {
+		return nil
+	}
+	return fn(ctx, channelAddress, name)
 }
 
 // LoadAndRefreshDataPointData triggers a fetch of every readable VALUES data

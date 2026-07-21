@@ -832,11 +832,20 @@ type wsDeviceWriter struct {
 	admin *adapter.DeviceAdminDomain
 }
 
-func (w *wsDeviceWriter) Rename(ctx context.Context, address, name string) error {
+func (w *wsDeviceWriter) Rename(ctx context.Context, address, name string, includeChannels bool) error {
 	if w.admin == nil {
 		return errors.New("ws: device admin not wired")
 	}
-	return w.admin.RenameDevice(ctx, address, name)
+	return w.admin.RenameDevice(ctx, address, name, includeChannels)
+}
+
+// RenameChannel renames a single channel via
+// DeviceAdminDomain.RenameChannel (CCU JSON-RPC `Channel.setName`).
+func (w *wsDeviceWriter) RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.RenameChannel(ctx, deviceAddr, channelNo, name)
 }
 
 // SetInstallMode opens a per-device pairing window via

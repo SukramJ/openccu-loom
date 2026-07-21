@@ -46,8 +46,13 @@ type fakeAdmin struct {
 	accepts int
 }
 
-func (f *fakeAdmin) UnpairDevice(_ context.Context, _ string) error    { f.unpairs++; return nil }
-func (f *fakeAdmin) RenameDevice(_ context.Context, _, _ string) error { f.renames++; return nil }
+func (f *fakeAdmin) UnpairDevice(_ context.Context, _ string) error { f.unpairs++; return nil }
+func (f *fakeAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) error {
+	f.renames++
+	return nil
+}
+
+func (f *fakeAdmin) RenameChannel(_ context.Context, _ string, _ int, _ string) error { return nil }
 func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string) error {
 	f.accepts++
 	return nil
@@ -294,8 +299,11 @@ func (fakeConfigExportService) WriteParamset(_ context.Context, _, _, _ string, 
 
 type fakeDeviceAdmin struct{}
 
-func (fakeDeviceAdmin) UnpairDevice(_ context.Context, _ string) error             { return nil }
-func (fakeDeviceAdmin) RenameDevice(_ context.Context, _, _ string) error          { return nil }
+func (fakeDeviceAdmin) UnpairDevice(_ context.Context, _ string) error            { return nil }
+func (fakeDeviceAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) error { return nil }
+func (fakeDeviceAdmin) RenameChannel(_ context.Context, _ string, _ int, _ string) error {
+	return nil
+}
 func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string) error        { return nil }
 func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
@@ -1231,6 +1239,18 @@ func TestPatchDeviceRename(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusAccepted || admin.renames != 1 {
 		t.Fatalf("code=%d renames=%d", rr.Code, admin.renames)
+	}
+}
+
+func TestPatchDeviceChannelRename(t *testing.T) {
+	admin := &fakeAdmin{}
+	r := NewRouter(Deps{DeviceAdmin: admin})
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/devices/0001ABCD/channels/1",
+		strings.NewReader(`{"name":"Kitchen Light"}`))
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("code=%d", rr.Code)
 	}
 }
 

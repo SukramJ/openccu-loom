@@ -41,7 +41,7 @@ func TestDeviceAdminRenameDeviceFound(t *testing.T) {
 	t.Parallel()
 	reg := registerDeviceInRegistry(t, "ccu-rename", "DEV001", "HmIP-RF")
 	a := NewDeviceAdminDomain(reg, nil)
-	err := a.RenameDevice(context.Background(), "DEV001", "MyNewName")
+	err := a.RenameDevice(context.Background(), "DEV001", "MyNewName", false)
 	if err != nil {
 		t.Fatalf("RenameDevice found device: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestDeviceAdminResolveNilRegistry(t *testing.T) {
 func TestDeviceAdminRenameDeviceNilRegistry(t *testing.T) {
 	t.Parallel()
 	a := NewDeviceAdminDomain(nil, nil)
-	err := a.RenameDevice(context.Background(), "DEV001", "NewName")
+	err := a.RenameDevice(context.Background(), "DEV001", "NewName", false)
 	if err == nil {
 		t.Fatal("expected error from nil registry")
 	}
@@ -200,7 +200,7 @@ func TestDeviceAdminRenameDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	a := NewDeviceAdminDomain(reg, nil)
-	err := a.RenameDevice(context.Background(), "NOSUCHDEV", "NewName")
+	err := a.RenameDevice(context.Background(), "NOSUCHDEV", "NewName", false)
 	if err == nil {
 		t.Fatal("expected error when device not found")
 	}

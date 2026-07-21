@@ -6,6 +6,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Channel rename over REST + WebSocket.** A new
+  `PATCH /devices/{addr}/channels/{no}` endpoint (and WebSocket command
+  `device.rename_channel`) renames a single channel; the SPA exposes it
+  via a pencil affordance on each channel in the device detail view.
+
+### Fixed
+
+- **Device and channel renames now persist to the CCU.** A rename used
+  to mutate only the in-memory model and was silently lost on the next
+  device reload. `PATCH /devices/{addr}` and the WebSocket
+  `device.rename` command now dispatch to the CCU's `Device.setName` /
+  `Channel.setName` JSON-RPC methods (resolving the ReGa ISE-ID first),
+  and propagate the CCU error instead of swallowing it. A backend
+  without JSON-RPC (Homegear, CUxD) answers 422 rather than pretending
+  success. `PATCH /devices/{addr}` and `device.rename` gain an optional
+  `include_channels` flag that also renames every channel with the
+  `"<name>:<channelNo>"` pattern (the CCU WebUI convention); the SPA
+  rename dialog offers it as a toggle, on by default. REST `APIVersion`
+  2.30.0.
+
 ## [0.45.0] — 2026-07-20
 
 ### Changed
