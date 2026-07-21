@@ -42,6 +42,7 @@ const (
 	RegaScriptAcceptDeviceInInbox   RegaScript = "accept_device_in_inbox"
 	RegaScriptGetInboxDevices       RegaScript = "get_inbox_devices"
 	RegaScriptTriggerFirmwareUpdate RegaScript = "trigger_firmware_update"
+	RegaScriptRebootCCU             RegaScript = "reboot_ccu"
 	RegaScriptCreateBackupStart     RegaScript = "create_backup_start"
 	RegaScriptCreateBackupStatus    RegaScript = "create_backup_status"
 )
@@ -77,6 +78,7 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptAcceptDeviceInInbox,
 	RegaScriptGetInboxDevices,
 	RegaScriptTriggerFirmwareUpdate,
+	RegaScriptRebootCCU,
 	RegaScriptCreateBackupStart,
 	RegaScriptCreateBackupStatus,
 }

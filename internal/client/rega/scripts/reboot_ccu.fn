@@ -1,0 +1,22 @@
+!# name: reboot_ccu.fn
+!#
+!# This script reboots the CCU.
+!#
+!# It first persists the current runtime state (system.Save) so the
+!# reboot is clean, then triggers the reboot.
+!#
+!# The reboot is started with nohup in the background so this script can
+!# return its JSON acknowledgement before the box goes down — otherwise
+!# the HTTP response carrying the result would be lost mid-reboot.
+!#
+
+string sResult = "";
+
+!# Persist runtime state before the reboot.
+system.Save();
+
+!# Trigger the reboot in the background so the acknowledgement below is
+!# flushed to the caller before the network stack shuts down.
+system.Exec("nohup /sbin/reboot >/dev/null 2>&1 &", &sResult);
+
+Write('{"success":true,"message":"CCU reboot triggered"}');

@@ -56,6 +56,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `"<name>:<channelNo>"` pattern (the CCU WebUI convention); the SPA
   rename dialog offers it as a toggle, on by default. REST `APIVersion`
   2.30.0.
+- **Reboot a CCU from the daemon.** A new admin-only endpoint
+  `POST /api/v1/system/ccu/{central}/reboot` reboots one CCU host: it runs
+  a ReGa script (`reboot_ccu`) that persists the CCU's state
+  (`system.Save()`) and then triggers `/sbin/reboot`. The southbound
+  connection to that central drops for the duration of the reboot and
+  recovers automatically once the CCU is back (the readiness gate re-runs
+  the bring-up). The SPA surfaces this as a new **CCU maintenance** card
+  under Settings → System with a per-central reboot button behind the
+  shared destructive-confirm dialog and a toast result. This reboots the
+  CCU hardware — distinct from `POST /system/restart`, which restarts the
+  OpenCCU-Loom daemon itself. REST `APIVersion` 2.33.0.
 
 ## [0.45.0] — 2026-07-20
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.32.0
+  version: 2.33.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -974,6 +974,39 @@ paths:
                   entries:
                     type: array
                     items: { $ref: "#/components/schemas/SystemCCUEntry" }
+
+  /system/ccu/{central}/reboot:
+    post:
+      operationId: rebootSystemCCU
+      summary: Reboot one CCU (admin-only)
+      description: |
+        Reboots the named CCU. The daemon runs a ReGa script that
+        persists the CCU's state (`system.Save()`) and then triggers
+        `/sbin/reboot`. The southbound connection to that central drops
+        for the duration of the reboot and recovers automatically once
+        the CCU is back (the readiness gate re-runs the bring-up).
+
+        Unrelated to `POST /system/restart`, which restarts the
+        OpenCCU-Loom daemon itself — this reboots the CCU hardware.
+      tags: [system]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: central
+          in: path
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Reboot triggered
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /system/restart-pending:
     get:

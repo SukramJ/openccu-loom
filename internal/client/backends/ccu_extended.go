@@ -688,6 +688,29 @@ func (b *CcuBackend) TriggerFirmwareUpdate(ctx context.Context) (bool, error) {
 	return err == nil, err
 }
 
+// --- reboot CCU --------------------------------------------------------
+
+// RebootCCU reboots the CCU. It runs the reboot_ccu ReGa script, which
+// persists runtime state (system.Save) and then triggers /sbin/reboot in
+// the background. Requires a wired ScriptRunner (via
+// [CcuBackend.SetScriptRunner]); without one it returns [ErrUnsupported]
+// because no JSON-RPC method reboots the box.
+//
+// Modelled on [CcuBackend.TriggerFirmwareUpdate].
+func (b *CcuBackend) RebootCCU(ctx context.Context) (bool, error) {
+	if b.rega == nil {
+		return false, ErrUnsupported
+	}
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptRebootCCU, nil, &resp); err != nil {
+		return false, err
+	}
+	return resp.Success, nil
+}
+
 // --- system variable deletion ------------------------------------------
 
 // DeleteSystemVariable implements Operations. Deletes a CCU system variable
