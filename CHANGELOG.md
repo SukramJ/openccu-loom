@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.46.0] — unreleased
+
 ### Added
 
 - **First-time configuration when accepting an inbox device.**
