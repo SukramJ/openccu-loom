@@ -1915,6 +1915,10 @@ const EN: Catalog = {
   "channel.save_n": "Save ({count})",
   "channel.unsaved": "Unsaved changes",
   "channel.saved_short": "Saved.",
+  // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
+  "channel.brightness.apply": "Use brightness {value}",
+  "channel.brightness.apply_tooltip":
+    "Take the motion sender's current brightness ({value}) as this threshold.",
   // --- DST sub-group headers (channel/dst-groups.ts) ---
   "channel.dst.start_header": "Start of daylight saving time",
   "channel.dst.end_header": "End of daylight saving time",
@@ -4635,6 +4639,10 @@ const DE: Catalog = {
   "channel.save_n": "Speichern ({count})",
   "channel.unsaved": "Ungespeicherte Änderungen",
   "channel.saved_short": "Gespeichert.",
+  // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
+  "channel.brightness.apply": "Helligkeit {value} übernehmen",
+  "channel.brightness.apply_tooltip":
+    "Aktuelle Helligkeit des Bewegungsmelders ({value}) als diesen Schwellwert übernehmen.",
   // --- DST sub-group headers (channel/dst-groups.ts) ---
   "channel.dst.start_header": "Beginn der Sommerzeit",
   "channel.dst.end_header": "Ende der Sommerzeit",

@@ -22,6 +22,11 @@
     undo,
     type ChangeStackState,
   } from "$lib/channel/change-stack";
+  import {
+    coerceNumber,
+    isBrightnessDataPoint,
+    pickBrightnessReading,
+  } from "$lib/channel/brightness-helper";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { subscribe } from "$lib/stores/events.svelte";
@@ -180,6 +185,67 @@
         values = { ...values, [p.parameter]: p.value };
       }
     });
+  });
+
+  // Motion-detector brightness helper (LINK only). When the peer (the
+  // link's sender channel) exposes a brightness / illuminance reading,
+  // we surface it so the receiver's SHORT_/LONG_ COND_VALUE_LO/_HI
+  // threshold fields can be filled with one click. Mirrors the CCU
+  // WebUI's config/ic_md.cgi, which drops the sender's current
+  // BRIGHTNESS into SHORT_COND_VALUE_LO/_HI. We read the peer channel's
+  // data points once, then follow its live pushes so the value stays
+  // current. Null hides the helper (no reading yet, or not a LINK).
+  let senderBrightness = $state<{
+    parameter: string;
+    value: number;
+    unit: string | null;
+  } | null>(null);
+  const brightnessSource = $derived(
+    senderBrightness
+      ? { value: senderBrightness.value, unit: senderBrightness.unit }
+      : null,
+  );
+  $effect(() => {
+    if (paramset !== "LINK" || !peer) {
+      senderBrightness = null;
+      return;
+    }
+    const senderAddress = peer;
+    const [senderDev, senderChStr] = senderAddress.split(":");
+    const senderCh = Number(senderChStr ?? 0);
+    let cancelled = false;
+    (async () => {
+      try {
+        const dps = await api.listDataPoints(senderDev, senderCh);
+        if (!cancelled) senderBrightness = pickBrightnessReading(dps);
+      } catch {
+        // Sender data points are optional context; a fetch failure just
+        // means the helper stays hidden. The link editor works without it.
+        if (!cancelled) senderBrightness = null;
+      }
+    })();
+    // Follow live brightness pushes from the sender channel so the
+    // one-click value reflects the current reading, not a boot snapshot.
+    const unsub = subscribe((ev) => {
+      if (ev.type !== "data_point") return;
+      const p = ev.payload as DataPointChangedEvent;
+      if (p.channel_address !== senderAddress) return;
+      if (!isBrightnessDataPoint(p.parameter)) return;
+      // Ignore a second brightness DP once we have locked onto one, so a
+      // channel with both BRIGHTNESS and ILLUMINATION does not flip.
+      if (senderBrightness && senderBrightness.parameter !== p.parameter) return;
+      const n = coerceNumber(p.value);
+      if (n === null) return;
+      senderBrightness = {
+        parameter: p.parameter,
+        value: n,
+        unit: senderBrightness?.unit ?? null,
+      };
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   });
 
   // MASTER reload after CONFIG_PENDING / UPDATE_PENDING resolves on
@@ -818,6 +884,7 @@
               errors={crossErrors}
               {locale}
               locked={lockedParams}
+              brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
             />
@@ -847,6 +914,7 @@
             errors={crossErrors}
             {locale}
             locked={lockedParams}
+            brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
           />
@@ -873,6 +941,7 @@
               errors={crossErrors}
               {locale}
               locked={lockedParams}
+              brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
             />
@@ -898,6 +967,7 @@
             errors={crossErrors}
             {locale}
             locked={lockedParams}
+            brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
           />
@@ -911,6 +981,7 @@
         errors={crossErrors}
         {locale}
         locked={lockedParams}
+        brightnessSource={brightnessSource}
         {onParamChange}
         onAction={runAction}
       />

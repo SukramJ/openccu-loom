@@ -114,6 +114,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (pencil) in the SPA device-links view with a small name/description
   editor. Name and description are written verbatim, so either field
   can be cleared with an empty string. REST `APIVersion` 2.35.0.
+- **Take the sender's current brightness into a motion-detector link
+  threshold.** When a direct link's sender channel reports a brightness
+  or illuminance reading (`BRIGHTNESS`, `ILLUMINATION`, …), the LINK
+  paramset editor now shows a one-click helper on the
+  `SHORT_COND_VALUE_LO`/`_HI` (and `LONG_` variant) condition-threshold
+  fields that fills them with the sender's live value — so the operator
+  no longer has to read the brightness off elsewhere and type it in.
+  The value follows the sender's live pushes, and the edit is tracked
+  and undoable like any manual change. SPA-only, mirroring the CCU
+  WebUI's `config/ic_md.cgi` "Aktuelle Helligkeit übernehmen" helper.
 
 ## [0.45.0] — 2026-07-20
 

@@ -32,6 +32,12 @@
   via the new pencil action in the device links view, the REST
   endpoint `PATCH /devices/{addr}/links`, or the `links.set_info`
   WebSocket command (API 2.35.0).
+- **Motion-detector brightness helper in the link editor.** When a
+  direct link's sender is a motion detector that reports a brightness
+  reading, the LINK paramset editor now offers a one-click button on
+  the brightness condition thresholds (`SHORT_COND_VALUE_LO`/`_HI` and
+  the `LONG_` variants) that takes the sender's current brightness —
+  no more reading the value off elsewhere and typing it in.
 
 ## 0.45.0
 
