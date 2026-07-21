@@ -179,6 +179,35 @@ func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddres
 	return nil
 }
 
+// SetLinkInfo updates the human-readable name and description of an
+// existing direct link between two channels. The sender's device
+// resolves the owning central and interface (mirrors [ListLinks] /
+// [AddLink]); the interface id is forwarded to the JSON-RPC
+// Interface.setLinkInfo call. name and description are written verbatim
+// so an operator can also clear either field by passing an empty string.
+func (d *LinksDomain) SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error {
+	senderDev := deviceAddressOf(senderAddress)
+	c, dev, err := d.lookupDevice(senderDev)
+	if err != nil {
+		return err
+	}
+	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	if !ok {
+		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
+	}
+	if _, err := backend.SetLinkInfo(ctx, dev.InterfaceID, senderAddress, receiverAddress, name, description); err != nil {
+		return err
+	}
+	d.audit.Record(audit.Entry{
+		Action:        audit.ActionLinkUpdate,
+		DeviceAddress: deviceAddressOf(senderAddress),
+		ChannelNo:     channelNumberOf(senderAddress),
+		Peer:          receiverAddress,
+		Note:          name,
+	})
+	return nil
+}
+
 // RemoveLink deletes a link.
 func (d *LinksDomain) RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error {
 	senderDev := deviceAddressOf(senderAddress)

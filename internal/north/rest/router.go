@@ -119,6 +119,7 @@ type Deps struct {
 	// Links backs the direct-link (Direktverknüpfung) endpoints:
 	//   GET    /api/v1/devices/{addr}/links
 	//   POST   /api/v1/devices/{addr}/links
+	//   PATCH  /api/v1/devices/{addr}/links
 	//   DELETE /api/v1/devices/{addr}/links?sender=…&receiver=…
 	//   GET    /api/v1/devices/{addr}/channels/{no}/linkable-channels
 	Links handlers.LinksService
@@ -704,6 +705,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Links != nil {
 				pr.Get("/devices/{addr}/links", handlers.ListLinks(d.Links))
 				pr.With(op).Post("/devices/{addr}/links", handlers.AddLink(d.Links))
+				pr.With(op).Patch("/devices/{addr}/links", handlers.UpdateLink(d.Links))
 				pr.With(op).Delete("/devices/{addr}/links", handlers.RemoveLink(d.Links))
 				pr.Get("/devices/{addr}/channels/{no}/linkable-channels",
 					handlers.LinkableChannels(d.Links))

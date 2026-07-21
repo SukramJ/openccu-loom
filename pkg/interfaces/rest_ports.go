@@ -173,6 +173,7 @@ type IncidentsReader interface {
 type LinksService interface {
 	ListLinks(ctx context.Context, deviceAddress, locale string) ([]hmapi.Link, error)
 	AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error
+	SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error
 	LinkableChannels(
 		ctx context.Context,

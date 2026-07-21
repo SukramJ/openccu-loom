@@ -194,6 +194,15 @@ func TestWSLinkQuery_NilDomain_AddLink_Errors(t *testing.T) {
 	}
 }
 
+func TestWSLinkQuery_NilDomain_SetLinkInfo_Errors(t *testing.T) {
+	t.Parallel()
+	q := &wsLinkQuery{domain: nil, registry: nil}
+	err := q.SetLinkInfo(nil, "A:0", "B:0", "name", "desc") //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	if err == nil {
+		t.Fatal("expected error when domain is nil")
+	}
+}
+
 func TestWSLinkQuery_NilDomain_RemoveLink_Errors(t *testing.T) {
 	t.Parallel()
 	q := &wsLinkQuery{domain: nil, registry: nil}

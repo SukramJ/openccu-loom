@@ -27,6 +27,11 @@
   were acknowledged. New `POST /service-messages/ack-all` and
   `POST /alarm-messages/ack-all` REST endpoints and the matching
   `*.ack_all` WebSocket commands back it (API 2.32.0).
+- **Rename direct links.** The name and description of an existing
+  direct link (Direktverknüpfung) can now be changed after creation —
+  via the new pencil action in the device links view, the REST
+  endpoint `PATCH /devices/{addr}/links`, or the `links.set_info`
+  WebSocket command (API 2.35.0).
 
 ## 0.45.0
 

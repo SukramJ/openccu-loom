@@ -562,6 +562,17 @@
     },
     {
       "category": "links",
+      "args": {
+        "sender": "string",
+        "receiver": "string",
+        "name": "string?",
+        "description": "string?"
+      },
+      "description": "Change the name and/or description of an existing direct link.",
+      "name": "links.set_info"
+    },
+    {
+      "category": "links",
       "description": "Temporarily apply a link profile's default values to a link paramset for preview. Mirrors Python ws_test_link_profile (websocket_api.py:2643). Stub until Phase-11.",
       "name": "links.test_profile"
     },

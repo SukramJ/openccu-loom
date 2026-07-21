@@ -23,6 +23,7 @@ const (
 	ActionLinkParamsetWrite Action = "link_paramset_write"
 	ActionLinkAdd           Action = "link_add"
 	ActionLinkRemove        Action = "link_remove"
+	ActionLinkUpdate        Action = "link_update"
 	ActionScheduleWrite     Action = "schedule_write"
 	ActionActiveProfile     Action = "active_profile"
 	ActionDataPointWrite    Action = "data_point_write"

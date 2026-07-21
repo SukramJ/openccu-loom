@@ -89,6 +89,8 @@ type LinkQuery interface {
 	ListLinks(ctx context.Context, deviceAddress string) ([]map[string]any, error)
 	// AddLink creates a new direct link.
 	AddLink(ctx context.Context, sender, receiver, name, description string) error
+	// SetLinkInfo updates the name and description of an existing link.
+	SetLinkInfo(ctx context.Context, sender, receiver, name, description string) error
 	// RemoveLink deletes an existing link.
 	RemoveLink(ctx context.Context, sender, receiver string) error
 	// LinkableChannels reports the channels eligible to be linked
@@ -355,6 +357,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 	if cfg.Links != nil {
 		router.Register("links.list", linksListHandler(cfg.Links))
 		router.Register("links.add", linksAddHandler(cfg.Links))
+		router.Register("links.set_info", linksSetInfoHandler(cfg.Links))
 		router.Register("links.remove", linksRemoveHandler(cfg.Links))
 		router.Register("links.linkable_channels", linksLinkableChannelsHandler(cfg.Links))
 		router.Register("links.get_paramset", linksGetParamsetHandler(cfg.Links))
@@ -847,6 +850,13 @@ type linkRemoveArgs struct {
 	Receiver string `json:"receiver"`
 }
 
+type linkSetInfoArgs struct {
+	Sender      string `json:"sender"`
+	Receiver    string `json:"receiver"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 func linksListHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linksDeviceArgs
@@ -877,6 +887,22 @@ func linksAddHandler(q LinkQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "add_link: "+err.Error())
 		}
 		return map[string]any{"added": true, "sender": args.Sender, "receiver": args.Receiver}, nil
+	}
+}
+
+func linksSetInfoHandler(q LinkQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args linkSetInfoArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.Sender == "" || args.Receiver == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "sender and receiver required")
+		}
+		if err := q.SetLinkInfo(ctx, args.Sender, args.Receiver, args.Name, args.Description); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "set_link_info: "+err.Error())
+		}
+		return map[string]any{"updated": true, "sender": args.Sender, "receiver": args.Receiver}, nil
 	}
 }
 

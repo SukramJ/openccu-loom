@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.34.0
+  version: 2.35.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2355,6 +2355,26 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/AddLinkRequest" }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    patch:
+      operationId: updateLink
+      summary: Rename a direct link (change name / description)
+      tags: [links]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateLinkRequest" }
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -8686,6 +8706,18 @@ components:
       type: object
       required: [sender_address, receiver_address]
       description: Create a direct link between a sender and a receiver channel.
+      properties:
+        sender_address: { type: string }
+        receiver_address: { type: string }
+        name: { type: string }
+        description: { type: string }
+    UpdateLinkRequest:
+      type: object
+      required: [sender_address, receiver_address]
+      description: >-
+        Change the name and/or description of an existing direct link. The
+        two channel addresses identify the link; name and description are
+        written verbatim, so an empty string clears that field on the CCU.
       properties:
         sender_address: { type: string }
         receiver_address: { type: string }

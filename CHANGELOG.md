@@ -103,6 +103,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shown only when acknowledgeable messages exist, guarded by a confirm
   dialog and reporting the acknowledged count via a toast. REST
   `APIVersion` 2.32.0.
+- **Rename a direct link after it has been created.** A link's name
+  and description were previously settable only at creation time. The
+  daemon now exposes the CCU's `Interface.setLinkInfo` call end to end:
+  a new `LinksDomain.SetLinkInfo` (interface resolved from the sender
+  device, like `ListLinks`/`AddLink`, with an audit `link_update`
+  entry), the REST endpoint `PATCH /api/v1/devices/{addr}/links`
+  (body `{sender_address, receiver_address, name, description}`), the
+  WebSocket command `links.set_info`, and a per-row rename action
+  (pencil) in the SPA device-links view with a small name/description
+  editor. Name and description are written verbatim, so either field
+  can be cleared with an empty string. REST `APIVersion` 2.35.0.
 
 ## [0.45.0] — 2026-07-20
 

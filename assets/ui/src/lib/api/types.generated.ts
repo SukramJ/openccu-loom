@@ -2516,7 +2516,8 @@ export interface paths {
         delete: operations["removeLink"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename a direct link (change name / description) */
+        patch: operations["updateLink"];
         trace?: never;
     };
     "/devices/{addr}/link-ps/{peer}": {
@@ -6908,6 +6909,13 @@ export interface components {
             name?: string;
             description?: string;
         };
+        /** @description Change the name and/or description of an existing direct link. The two channel addresses identify the link; name and description are written verbatim, so an empty string clears that field on the CCU. */
+        UpdateLinkRequest: {
+            sender_address: string;
+            receiver_address: string;
+            name?: string;
+            description?: string;
+        };
         /** @description PRESS-event (central click) forwarding status for a device. */
         CentralLinksStatus: {
             supported: boolean;
@@ -9185,6 +9193,33 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLinkRequest"];
+            };
+        };
         responses: {
             /** @description Scheduled */
             202: {

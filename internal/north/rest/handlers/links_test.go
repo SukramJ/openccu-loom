@@ -20,9 +20,16 @@ type stubLinksService struct {
 	listResult     []Link
 	listErr        error
 	addErr         error
+	setInfoErr     error
 	removeErr      error
 	linkableResult []LinkableChannel
 	linkableErr    error
+
+	// Captured arguments of the most recent SetLinkInfo call.
+	setSender      string
+	setReceiver    string
+	setName        string
+	setDescription string
 }
 
 func (s *stubLinksService) ListLinks(_ context.Context, _, _ string) ([]Link, error) {
@@ -31,6 +38,14 @@ func (s *stubLinksService) ListLinks(_ context.Context, _, _ string) ([]Link, er
 
 func (s *stubLinksService) AddLink(_ context.Context, _, _, _, _ string) error {
 	return s.addErr
+}
+
+func (s *stubLinksService) SetLinkInfo(_ context.Context, sender, receiver, name, description string) error {
+	s.setSender = sender
+	s.setReceiver = receiver
+	s.setName = name
+	s.setDescription = description
+	return s.setInfoErr
 }
 
 func (s *stubLinksService) RemoveLink(_ context.Context, _, _ string) error {
@@ -223,6 +238,82 @@ func TestAddLink_NilService_Returns503(t *testing.T) {
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
 	AddLink(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+// --- UpdateLink (rename) paths ---
+
+func TestUpdateLink_HappyPath_Returns202AndForwardsArgs(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{}
+	body := strings.NewReader(`{"sender_address":"DEV001:1","receiver_address":"DEV002:1","name":"Stairs","description":"auto"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateLink(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.setSender != "DEV001:1" || svc.setReceiver != "DEV002:1" {
+		t.Errorf("addresses forwarded wrong: sender=%q receiver=%q", svc.setSender, svc.setReceiver)
+	}
+	if svc.setName != "Stairs" || svc.setDescription != "auto" {
+		t.Errorf("name/description forwarded wrong: name=%q desc=%q", svc.setName, svc.setDescription)
+	}
+}
+
+func TestUpdateLink_MissingAddresses_Returns400(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{}
+	body := strings.NewReader(`{"name":"Stairs"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateLink(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestUpdateLink_InvalidJSON_Returns400(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader("NOT JSON"))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateLink(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestUpdateLink_ServiceError_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{setInfoErr: errors.New("CCU error")}
+	body := strings.NewReader(`{"sender_address":"DEV001:1","receiver_address":"DEV002:1","name":"x"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateLink(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateLink_NilService_Returns503(t *testing.T) {
+	t.Parallel()
+	body := strings.NewReader(`{"sender_address":"DEV001:1","receiver_address":"DEV002:1"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateLink(nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
