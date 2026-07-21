@@ -27,6 +27,7 @@ const {
 }));
 
 vi.mock("$lib/api/client", () => ({
+  setUnauthorizedHandler: vi.fn(),
   api: {
     getConfigSchema: (...args: unknown[]) => mockGetConfigSchema(...args),
     getEffectiveConfig: (...args: unknown[]) => mockGetEffectiveConfig(...args),
