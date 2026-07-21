@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { AlarmMessage, ServiceMessage } from "$lib/api/types";
+  import type {
+    AlarmMessage,
+    ServiceMessage,
+    SuppressedServiceMessage,
+  } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -19,11 +23,18 @@
 
   let alarms = $state<AlarmMessage[]>([]);
   let services = $state<ServiceMessage[]>([]);
+  let suppressed = $state<SuppressedServiceMessage[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let tab = $state<"alarm" | "service">("alarm");
+  let tab = $state<"alarm" | "service" | "suppressed">("alarm");
   let acking = $state<string | null>(null);
   let ackingAll = $state(false);
+  let suppressingId = $state<string | null>(null);
+  let unsuppressingKey = $state<string | null>(null);
+
+  function suppressedKey(s: SuppressedServiceMessage): string {
+    return `${s.central ?? ""}/${s.interface ?? ""}/${s.channel}/${s.parameter ?? ""}`;
+  }
   let typeFilter = $state<string>("");
   let onlyQuittable = $state(false);
   let centralFilter = $state(loadLS("messages:central"));
@@ -45,16 +56,63 @@
     loading = true;
     loadError = null;
     try {
-      const [a, s] = await Promise.all([
+      const [a, s, sup] = await Promise.all([
         api.listAlarmMessages(),
         api.listServiceMessages(),
+        api.listSuppressedServices(),
       ]);
       alarms = a;
       services = s;
+      suppressed = sup;
     } catch (err) {
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
       loading = false;
+    }
+  }
+
+  async function suppressService(s: ServiceMessage) {
+    const ok = await confirmStore.ask({
+      title: t("messages.suppress.confirm"),
+      confirmLabel: t("messages.suppress.button"),
+      destructive: true,
+    });
+    if (!ok) return;
+    suppressingId = s.id;
+    try {
+      await api.disableService(s.id, s.central ?? undefined);
+      toastStore.success(t("messages.suppressed"));
+      await load();
+    } catch (err) {
+      ackError(err);
+    } finally {
+      suppressingId = null;
+    }
+  }
+
+  async function unsuppressService(s: SuppressedServiceMessage) {
+    const ok = await confirmStore.ask({
+      title: t("messages.unsuppress.confirm"),
+      confirmLabel: t("messages.unsuppress.button"),
+      destructive: false,
+    });
+    if (!ok) return;
+    unsuppressingKey = suppressedKey(s);
+    try {
+      await api.unsuppressService(
+        {
+          interface: s.interface ?? undefined,
+          channel: s.channel,
+          parameter: s.parameter ?? undefined,
+        },
+        s.central ?? undefined,
+      );
+      toastStore.success(t("messages.unsuppressed"));
+      await load();
+    } catch (err) {
+      ackError(err);
+    } finally {
+      unsuppressingKey = null;
     }
   }
 
@@ -189,6 +247,27 @@
     return Array.from(set).sort();
   });
 
+  const suppressedCentrals = $derived.by(() => {
+    const set = new Set<string>();
+    for (const s of suppressed) if (s.central) set.add(s.central);
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" }),
+    );
+  });
+
+  const suppressedRows = $derived(
+    suppressed.filter((s) => !centralFilter || s.central === centralFilter),
+  );
+
+  // Central-filter options for the currently active tab.
+  const tabCentrals = $derived(
+    tab === "alarm"
+      ? alarmCentrals
+      : tab === "service"
+        ? serviceCentrals
+        : suppressedCentrals,
+  );
+
   // Bulk-acknowledge scope: how many messages the "acknowledge all"
   // button would clear given the current central filter (the type /
   // quittable-only view filters do not narrow the CCU-side bulk pass).
@@ -262,6 +341,34 @@
       cellClass: "reflow-actions",
     },
   ]);
+
+  const suppressedColumns: DataColumn<SuppressedServiceMessage>[] = $derived([
+    {
+      key: "parameter",
+      label: t("messages.suppressed.col.parameter"),
+      sortable: true,
+      title: true,
+      get: (s) => s.parameter ?? "",
+    },
+    {
+      key: "device",
+      label: t("messages.col.device"),
+      sortable: true,
+      get: (s) => s.device_name ?? "",
+    },
+    {
+      key: "channel",
+      label: t("messages.suppressed.col.channel"),
+      sortable: true,
+      get: (s) => s.channel,
+    },
+    {
+      key: "actions",
+      label: t("messages.col.actions"),
+      align: "right",
+      cellClass: "reflow-actions",
+    },
+  ]);
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -270,13 +377,13 @@
     subtitle={t("messages.summary", { alarms: alarms.length, services: services.length })}
   >
     {#snippet actions()}
-      {#if (tab === "alarm" ? alarmCentrals : serviceCentrals).length > 1}
+      {#if tabCentrals.length > 1}
         <Select
           class="w-auto"
           bind:value={centralFilter}
           options={[
             { value: "", label: t("common.all_ccus") },
-            ...(tab === "alarm" ? alarmCentrals : serviceCentrals).map((c) => ({
+            ...tabCentrals.map((c) => ({
               value: c,
               label: c,
             })),
@@ -330,6 +437,16 @@
     >
       {t("messages.service")}
       <Badge variant="muted">{services.length}</Badge>
+    </button>
+    <button
+      type="button"
+      class="border-b-2 px-3 py-2 text-sm transition {tab === 'suppressed'
+        ? 'border-brand-500 text-brand-700 dark:text-brand-400'
+        : 'border-transparent text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400'}"
+      onclick={() => (tab = "suppressed")}
+    >
+      {t("messages.suppressed.tab")}
+      <Badge variant="muted">{suppressed.length}</Badge>
     </button>
   </nav>
 
@@ -394,7 +511,7 @@
         {/snippet}
       </DataTable>
     </Card>
-  {:else}
+  {:else if tab === "service"}
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
       <Select
         class="w-auto"
@@ -460,18 +577,85 @@
           {:else if col.key === "time"}
             <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(s.timestamp)}</span>
           {:else if col.key === "actions"}
-            {#if s.quittable}
+            <div class="inline-flex flex-wrap justify-end gap-1">
+              {#if s.quittable}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => void ackService(s.id, s.central)}
+                  disabled={acking === s.id}
+                  title={t("common.acknowledge")}
+                >
+                  {acking === s.id ? "…" : t("common.acknowledge")}
+                </Button>
+              {/if}
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onclick={() => void ackService(s.id, s.central)}
-                disabled={acking === s.id}
-                title={t("common.acknowledge")}
+                onclick={() => void suppressService(s)}
+                disabled={suppressingId === s.id}
+                title={t("messages.suppress")}
               >
-                {acking === s.id ? "…" : t("common.acknowledge")}
+                {suppressingId === s.id ? "…" : t("messages.suppress")}
               </Button>
+            </div>
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
+  {:else}
+    <Card class="p-4">
+      <DataTable
+        rows={suppressedRows}
+        columns={suppressedColumns}
+        rowKey={(s) => suppressedKey(s)}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="messages-suppressed"
+        initialSort={{ key: "channel", asc: true }}
+        emptyMessage={t("messages.suppressed.empty")}
+        emptyDescription={t("messages.suppressed.empty.description")}
+        emptyIcon="mdi:bell-off"
+      >
+        {#snippet cell(s, col)}
+          {#if col.key === "parameter"}
+            {#if s.parameter}
+              <span class="font-mono font-semibold">{s.parameter}</span>
+            {:else}
+              <span class="italic text-slate-500 dark:text-slate-400"
+                >{t("messages.suppressed.all_parameters")}</span
+              >
             {/if}
+            {#if suppressedCentrals.length > 1 && s.central}
+              <Badge variant="muted">{s.central}</Badge>
+            {/if}
+            {#if s.name}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{s.name}</span>
+            {/if}
+          {:else if col.key === "device"}
+            {#if s.device_name}
+              <span class="text-sm">{s.device_name}</span>
+            {/if}
+            {#if s.interface}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{s.interface}</span>
+            {/if}
+          {:else if col.key === "channel"}
+            <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{s.channel}</span>
+          {:else if col.key === "actions"}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => void unsuppressService(s)}
+              disabled={unsuppressingKey === suppressedKey(s)}
+              title={t("messages.unsuppress.button")}
+            >
+              {unsuppressingKey === suppressedKey(s)
+                ? "…"
+                : t("messages.unsuppress.button")}
+            </Button>
           {/if}
         {/snippet}
       </DataTable>

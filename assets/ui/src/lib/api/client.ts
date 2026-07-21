@@ -47,6 +47,7 @@ import type {
   RSSIMatrix,
   RpcRecordingStatus,
   ServiceMessage,
+  SuppressedServiceMessage,
   SysvarEntry,
   SystemCCUEntry,
   UISchema,
@@ -1028,6 +1029,28 @@ export const api = {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<{ acknowledged: number }>(`/service-messages/ack-all${qs}`, {
       method: "POST",
+    });
+  },
+  // --- Service messages: permanent suppression ------------------
+  disableService(id: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(
+      `/service-messages/${encodeURIComponent(id)}/disable${qs}`,
+      { method: "POST" },
+    );
+  },
+  listSuppressedServices() {
+    return request<SuppressedServiceMessage[]>(`/service-messages/suppressed`);
+  },
+  unsuppressService(
+    body: { interface?: string; channel: string; parameter?: string },
+    central?: string,
+  ) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/service-messages/unsuppress${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
   },
   // --- Backup restore ------------------------------------------

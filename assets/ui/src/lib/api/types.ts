@@ -279,6 +279,11 @@ export type AlarmMessage = components["schemas"]["AlarmMessage"];
 // key as (s.central ?? "") + "/" + s.id.
 export type ServiceMessage = components["schemas"]["ServiceMessage"];
 
+// SuppressedServiceMessage re-exported from generated schema — one
+// permanently-suppressed channel parameter (`GET /service-messages/suppressed`).
+export type SuppressedServiceMessage =
+  components["schemas"]["SuppressedServiceMessage"];
+
 // InterfaceInfo re-exported from generated InterfaceState — same shape.
 export type InterfaceInfo = components["schemas"]["InterfaceState"];
 

@@ -2776,14 +2776,16 @@ paths:
   /service-messages/{id}/disable:
     post:
       operationId: disableServiceMessage
-      summary: Disable (suppress) a service message
+      summary: Disable (permanently suppress) a service message
       description: |
-        The CCU exposes exactly one dismiss primitive for service
-        messages — there is no separate wire-level "disable/suppress
-        forever" operation — so this shares the same domain call as
-        `POST .../ack` (`hub.ServiceMessages.Disable` delegates to
-        `Acknowledge`). Exposed as its own operation (rather than an
-        alias) so callers can name the intent, and shares the domain
+        Durably suppresses the service message's channel parameter on the
+        CCU via `Interface.suppressServiceMessages`. Unlike `POST .../ack`
+        (a one-shot dismiss that returns as soon as the condition
+        re-triggers), the CCU stops raising service messages for the
+        resolved channel + service parameter until it is unsuppressed via
+        `POST /service-messages/unsuppress`. The channel and parameter are
+        resolved from the stored message; the suppression is recorded and
+        surfaced by `GET /service-messages/suppressed`. Shares the domain
         call with the WS `service_messages.disable` command.
       tags: [hub]
       security:
@@ -2794,6 +2796,81 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
         "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /service-messages/suppressed:
+    get:
+      operationId: listSuppressedServiceMessages
+      summary: List permanently suppressed service messages
+      description: |
+        Returns the service-message channel parameters that have been
+        durably suppressed via `POST /service-messages/{id}/disable`,
+        aggregated across every central. The list is reconciled against
+        each CCU's live `Interface.getSuppressedServiceMessages`, so an
+        entry cleared elsewhere (e.g. the CCU WebUI) drops out. Each entry
+        can be cleared via `POST /service-messages/unsuppress`.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: Suppressed service messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SuppressedServiceMessage"
+
+  /service-messages/unsuppress:
+    post:
+      operationId: unsuppressServiceMessage
+      summary: Clear a permanent service-message suppression
+      description: |
+        Clears a durable suppression for a channel parameter via
+        `Interface.suppressServiceMessages` (suppress=false). The optional
+        `central` query parameter selects the target central (required
+        when more than one CCU is registered). The request body names the
+        channel (required) and the service parameter (omit or empty to
+        clear every service parameter of the channel); the interface is
+        optional and resolved from the stored suppression when omitted.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                interface:
+                  type: string
+                  description: >
+                    CCU interface the channel lives on (e.g. "HmIP-RF").
+                    Optional — resolved from the stored suppression when
+                    omitted.
+                channel:
+                  type: string
+                  description: Channel address ("ADDR:chn").
+                parameter:
+                  type: string
+                  description: >
+                    Service parameter to unsuppress (e.g. "LOWBAT"). Omit
+                    or empty to clear every service parameter of the
+                    channel.
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -6826,6 +6903,30 @@ components:
         display_name:
           type: string
           description: Human-readable translation of the message code.
+    SuppressedServiceMessage:
+      type: object
+      required: [channel]
+      properties:
+        central:
+          type: string
+          description: CCU this suppression belongs to (multi-central grouping).
+        interface:
+          type: string
+          description: CCU interface the channel lives on (e.g. "HmIP-RF").
+        channel:
+          type: string
+          description: Suppressed channel address ("ADDR:chn").
+        parameter:
+          type: string
+          description: >
+            Suppressed service parameter (e.g. "LOWBAT"). Empty means every
+            service parameter of the channel is suppressed.
+        device_name:
+          type: string
+          description: Human-readable channel/device name, when known.
+        name:
+          type: string
+          description: Raw CCU message name that was suppressed, when known.
     AckAllResult:
       type: object
       required: [acknowledged]

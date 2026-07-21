@@ -11,16 +11,22 @@ import { render, cleanup, waitFor, screen, fireEvent } from "@testing-library/sv
 const {
   mockListAlarmMessages,
   mockListServiceMessages,
+  mockListSuppressedServices,
   mockAckAllAlarms,
   mockAckAllServices,
+  mockDisableService,
+  mockUnsuppressService,
   mockToastSuccess,
   mockToastError,
   mockConfirmAsk,
 } = vi.hoisted(() => ({
   mockListAlarmMessages: vi.fn(),
   mockListServiceMessages: vi.fn(),
+  mockListSuppressedServices: vi.fn(),
   mockAckAllAlarms: vi.fn(),
   mockAckAllServices: vi.fn(),
+  mockDisableService: vi.fn(),
+  mockUnsuppressService: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
   mockConfirmAsk: vi.fn(),
@@ -30,8 +36,12 @@ vi.mock("$lib/api/client", () => ({
   api: {
     listAlarmMessages: (...args: unknown[]) => mockListAlarmMessages(...args),
     listServiceMessages: (...args: unknown[]) => mockListServiceMessages(...args),
+    listSuppressedServices: (...args: unknown[]) =>
+      mockListSuppressedServices(...args),
     ackAlarm: vi.fn().mockResolvedValue(undefined),
     ackService: vi.fn().mockResolvedValue(undefined),
+    disableService: (...args: unknown[]) => mockDisableService(...args),
+    unsuppressService: (...args: unknown[]) => mockUnsuppressService(...args),
     ackAllAlarms: (...args: unknown[]) => mockAckAllAlarms(...args),
     ackAllServices: (...args: unknown[]) => mockAckAllServices(...args),
   },
@@ -78,6 +88,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockListAlarmMessages.mockResolvedValue([]);
   mockListServiceMessages.mockResolvedValue([]);
+  mockListSuppressedServices.mockResolvedValue([]);
+  mockDisableService.mockResolvedValue(undefined);
+  mockUnsuppressService.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(true);
 });
 
@@ -88,6 +101,20 @@ function findAckAllButton(container: HTMLElement): HTMLButtonElement | undefined
     (b) => b.textContent?.trim() === "messages.ack_all.button",
   ) as HTMLButtonElement | undefined;
 }
+
+function findButtonByText(container: HTMLElement, text: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll("button")].find(
+    (b) => b.textContent?.trim() === text,
+  ) as HTMLButtonElement | undefined;
+}
+
+const SUPPRESSED_ENTRY = {
+  central: "ccu-alpha",
+  interface: "HmIP-RF",
+  channel: "ABC123:1",
+  parameter: "LOWBAT",
+  device_name: "Flur Sensor",
+};
 
 describe("MessageList — acknowledge-all button visibility", () => {
   it("is hidden on the alarm tab when there are no alarm messages", async () => {
@@ -186,5 +213,104 @@ describe("MessageList — acknowledge-all flow", () => {
     // (bulk-ack across every registered central) rather than a stale value.
     expect(mockAckAllServices).toHaveBeenCalledWith(undefined);
     expect(mockAckAllAlarms).not.toHaveBeenCalled();
+  });
+});
+
+// Permanent-suppression coverage: "Hide permanently" on a service message
+// confirms, calls the disable-service API, and reloads (including the
+// suppressed list); the "Restore" action on the Suppressed tab clears a
+// suppression the same way. Both surface failures via the shared error
+// toast instead of failing silently, matching the ack-all conventions
+// above.
+describe("MessageList — permanent suppression flow", () => {
+  it("confirms, calls disableService, and reloads on success", async () => {
+    mockListServiceMessages.mockResolvedValue([
+      { ...QUITTABLE_SERVICE, central: "ccu-alpha" },
+    ]);
+    const { container } = render(MessageList);
+    await fireEvent.click(screen.getByText("messages.service"));
+    await waitFor(() => expect(findButtonByText(container, "messages.suppress")).toBeDefined());
+
+    await fireEvent.click(findButtonByText(container, "messages.suppress")!);
+
+    await waitFor(() => expect(mockConfirmAsk).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mockDisableService).toHaveBeenCalledWith(QUITTABLE_SERVICE.id, "ccu-alpha"),
+    );
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith("messages.suppressed"),
+    );
+    // A successful suppression reloads every list, including the
+    // suppressed-messages tab.
+    await waitFor(() => expect(mockListSuppressedServices).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not call disableService when the operator declines the confirm dialog", async () => {
+    mockListServiceMessages.mockResolvedValue([QUITTABLE_SERVICE]);
+    mockConfirmAsk.mockResolvedValue(false);
+    const { container } = render(MessageList);
+    await fireEvent.click(screen.getByText("messages.service"));
+    await waitFor(() => expect(findButtonByText(container, "messages.suppress")).toBeDefined());
+
+    await fireEvent.click(findButtonByText(container, "messages.suppress")!);
+
+    await waitFor(() => expect(mockConfirmAsk).toHaveBeenCalledTimes(1));
+    expect(mockDisableService).not.toHaveBeenCalled();
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a CCU-side suppression failure via the error toast", async () => {
+    mockListServiceMessages.mockResolvedValue([QUITTABLE_SERVICE]);
+    mockDisableService.mockRejectedValue(new Error("rega down"));
+    const { container } = render(MessageList);
+    await fireEvent.click(screen.getByText("messages.service"));
+    await waitFor(() => expect(findButtonByText(container, "messages.suppress")).toBeDefined());
+
+    await fireEvent.click(findButtonByText(container, "messages.suppress")!);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith("rega down"));
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("restores a suppressed message via unsuppressService and reloads", async () => {
+    mockListSuppressedServices.mockResolvedValue([SUPPRESSED_ENTRY]);
+    const { container } = render(MessageList);
+    await fireEvent.click(screen.getByText("messages.suppressed.tab"));
+    await waitFor(() =>
+      expect(findButtonByText(container, "messages.unsuppress.button")).toBeDefined(),
+    );
+
+    await fireEvent.click(findButtonByText(container, "messages.unsuppress.button")!);
+
+    await waitFor(() => expect(mockConfirmAsk).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mockUnsuppressService).toHaveBeenCalledWith(
+        {
+          interface: SUPPRESSED_ENTRY.interface,
+          channel: SUPPRESSED_ENTRY.channel,
+          parameter: SUPPRESSED_ENTRY.parameter,
+        },
+        SUPPRESSED_ENTRY.central,
+      ),
+    );
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith("messages.unsuppressed"),
+    );
+    await waitFor(() => expect(mockListSuppressedServices).toHaveBeenCalledTimes(2));
+  });
+
+  it("surfaces a CCU-side restore failure via the error toast", async () => {
+    mockListSuppressedServices.mockResolvedValue([SUPPRESSED_ENTRY]);
+    mockUnsuppressService.mockRejectedValue(new Error("rega down"));
+    const { container } = render(MessageList);
+    await fireEvent.click(screen.getByText("messages.suppressed.tab"));
+    await waitFor(() =>
+      expect(findButtonByText(container, "messages.unsuppress.button")).toBeDefined(),
+    );
+
+    await fireEvent.click(findButtonByText(container, "messages.unsuppress.button")!);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith("rega down"));
+    expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 });

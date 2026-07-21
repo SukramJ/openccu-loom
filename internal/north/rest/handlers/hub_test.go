@@ -1296,7 +1296,11 @@ func TestDisableServiceMessage_HappyPath_Returns202(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	h.ServiceMessages = hub.NewServiceMessages(okMessageAcknowledger{})
-	h.ServiceMessages.Replace([]hub.ServiceMessage{{ID: "S1", Timestamp: time.Now()}})
+	h.ServiceMessages.SetSuppressor(noopSuppressor{})
+	h.ServiceMessages.Replace([]hub.ServiceMessage{{
+		ID: "S1", Address: "ABC:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
 	idx := &testHubIndex{h: h}
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"id": "S1"}))

@@ -906,10 +906,14 @@ func ackAllMessagesHandler(idx HubIndex, ackAll func(context.Context, *hub.Hub) 
 	}
 }
 
-// DisableServiceMessage suppresses a single service message, routing to
-// the central named by the `?central=` query parameter. Reuses the same
-// domain call as the WS `service_messages.disable` command
-// ([hub.ServiceMessages.Disable]).
+// DisableServiceMessage durably suppresses a single service message,
+// routing to the central named by the `?central=` query parameter. It
+// resolves the message's channel + service parameter and calls the CCU's
+// Interface.suppressServiceMessages so the parameter stops raising
+// service messages until it is unsuppressed
+// ([UnsuppressServiceMessage]). Shares the domain call
+// ([hub.ServiceMessages.Disable]) with the WS `service_messages.disable`
+// command.
 func DisableServiceMessage(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h, ok := requireMutationHub(w, r, idx)
@@ -919,6 +923,92 @@ func DisableServiceMessage(idx HubIndex) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		if err := h.ServiceMessages.Disable(r.Context(), id); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Disable failed", err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// SuppressedServiceMessageDTO is one entry in the suppressed-messages
+// management list (`GET /api/v1/service-messages/suppressed`).
+type SuppressedServiceMessageDTO struct {
+	// Central is the CCU this suppression belongs to.
+	Central string `json:"central,omitempty"`
+	// Interface is the CCU interface the channel lives on (e.g. "HmIP-RF").
+	Interface string `json:"interface,omitempty"`
+	// Channel is the suppressed channel address ("ADDR:chn").
+	Channel string `json:"channel"`
+	// Parameter is the suppressed service parameter (e.g. "LOWBAT");
+	// empty means every service parameter of the channel is suppressed.
+	Parameter string `json:"parameter,omitempty"`
+	// DeviceName is the human-readable channel/device name, when known.
+	DeviceName string `json:"device_name,omitempty"`
+	// Name is the raw CCU message name that was suppressed, when known.
+	Name string `json:"name,omitempty"`
+}
+
+// ListSuppressedServiceMessages renders the durably-suppressed service
+// messages aggregated across all centrals. The list is reconciled against
+// each CCU's live Interface.getSuppressedServiceMessages so entries
+// cleared elsewhere drop out. Returns an empty array when nothing is
+// suppressed or no hub is wired.
+func ListSuppressedServiceMessages(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if idx == nil {
+			JSON(w, http.StatusOK, []SuppressedServiceMessageDTO{})
+			return
+		}
+		out := []SuppressedServiceMessageDTO{}
+		for _, nh := range idx.Hubs() {
+			if nh.Hub == nil || nh.Hub.ServiceMessages == nil {
+				continue
+			}
+			for _, s := range nh.Hub.ServiceMessages.Suppressed(r.Context()) {
+				out = append(out, SuppressedServiceMessageDTO{
+					Central:    nh.Central,
+					Interface:  s.InterfaceID,
+					Channel:    s.Channel,
+					Parameter:  s.Parameter,
+					DeviceName: s.DeviceName,
+					Name:       s.Name,
+				})
+			}
+		}
+		JSON(w, http.StatusOK, out)
+	}
+}
+
+// UnsuppressRequest is the body of `POST /service-messages/unsuppress`.
+type UnsuppressRequest struct {
+	Interface string `json:"interface,omitempty"`
+	Channel   string `json:"channel"`
+	Parameter string `json:"parameter,omitempty"`
+}
+
+// UnsuppressServiceMessage clears a durable suppression, routing to the
+// central named by the `?central=` query parameter. The body names the
+// channel (required) and the service parameter (empty = all parameters of
+// the channel); the interface is optional and resolved from the stored
+// suppression when omitted.
+func UnsuppressServiceMessage(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
+			return
+		}
+		var req UnsuppressRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.Channel == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "channel is required", ""))
+			return
+		}
+		if err := h.ServiceMessages.Unsuppress(r.Context(), req.Interface, req.Channel, req.Parameter); err != nil {
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Unsuppress failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
