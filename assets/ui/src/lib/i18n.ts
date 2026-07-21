@@ -793,6 +793,18 @@ const EN: Catalog = {
   "inbox.accepted": "{name} accepted.",
   "inbox.serial": "S/N",
   "inbox.first_seen": "First seen",
+  "inbox.accept_dialog.title": "Accept device",
+  "inbox.accept_dialog.subtitle":
+    "Optionally configure {address} before it joins the registry. Leave everything blank to just accept.",
+  "inbox.accept_dialog.name_label": "Name",
+  "inbox.accept_dialog.name_placeholder": "Device name (optional)",
+  "inbox.accept_dialog.include_channels": "Also rename channels",
+  "inbox.accept_dialog.rooms_label": "Rooms",
+  "inbox.accept_dialog.functions_label": "Functions",
+  "inbox.accept_dialog.no_rooms": "No rooms available.",
+  "inbox.accept_dialog.no_functions": "No functions available.",
+  "inbox.accept_dialog.submit": "Accept",
+  "inbox.accept_dialog.catalog_error": "Could not load rooms and functions.",
   "messages.title": "Messages",
   "messages.alarms": "Alarms",
   "messages.service": "Service messages",
@@ -1648,6 +1660,9 @@ const EN: Catalog = {
     'Trigger firmware update for "{name}"? The device will be briefly unreachable during the update.',
   "device.removed": "Device removed.",
   "device.renamed": "Device renamed.",
+  "device.rename_include_channels": "Rename channels along",
+  "channel.rename": "Rename channel",
+  "channel.renamed": "Channel renamed.",
   "device.rooms_updated": "Rooms updated.",
   "device.functions_updated": "Functions updated.",
   "device.rooms": "Rooms",
@@ -2142,6 +2157,21 @@ const EN: Catalog = {
   "device.confirm_remove_title": "Remove device?",
   "device.confirm_remove_body":
     'Remove "{name}"? The CCU pairing will be dropped and cannot be undone.',
+  "device.delete.mode_label": "Removal mode",
+  "device.delete.mode_unpair": "Unregister only",
+  "device.delete.mode_unpair_hint": "Drop the CCU pairing (default).",
+  "device.delete.mode_reset": "Reset to factory defaults",
+  "device.delete.mode_reset_hint":
+    "Also reset the device to factory settings while removing it.",
+  "device.delete.force": "Force removal (device unreachable)",
+  "device.delete.force_hint":
+    "Remove the device even when it no longer responds to the CCU.",
+  "device.delete.checking": "Checking dependencies…",
+  "device.delete.warning_title": "This device is still referenced",
+  "device.delete.warning_links":
+    "{count} direct link(s) reference this device and will stop working.",
+  "device.delete.warning_programs":
+    "{count} program(s) reference this device.",
   "device.confirm_firmware_body":
     'Trigger firmware update for "{name}"? The device will be briefly unreachable.',
   "device.status.paramset_pick": "Read source",
@@ -3446,6 +3476,18 @@ const DE: Catalog = {
   "inbox.accepted": "{name} übernommen.",
   "inbox.serial": "SN",
   "inbox.first_seen": "Erstmals",
+  "inbox.accept_dialog.title": "Gerät übernehmen",
+  "inbox.accept_dialog.subtitle":
+    "Optional {address} konfigurieren, bevor es in die Registry aufgenommen wird. Alles leer lassen, um nur zu übernehmen.",
+  "inbox.accept_dialog.name_label": "Name",
+  "inbox.accept_dialog.name_placeholder": "Gerätename (optional)",
+  "inbox.accept_dialog.include_channels": "Kanäle mitbenennen",
+  "inbox.accept_dialog.rooms_label": "Räume",
+  "inbox.accept_dialog.functions_label": "Gewerke",
+  "inbox.accept_dialog.no_rooms": "Keine Räume verfügbar.",
+  "inbox.accept_dialog.no_functions": "Keine Gewerke verfügbar.",
+  "inbox.accept_dialog.submit": "Übernehmen",
+  "inbox.accept_dialog.catalog_error": "Räume und Gewerke konnten nicht geladen werden.",
   "messages.title": "Meldungen",
   "messages.alarms": "Alarme",
   "messages.service": "Service-Meldungen",
@@ -4294,6 +4336,9 @@ const DE: Catalog = {
     "Firmware-Update für \"{name}\" jetzt anstoßen? Das Gerät bleibt während des Updates kurzzeitig nicht erreichbar.",
   "device.removed": "Gerät entfernt.",
   "device.renamed": "Gerät umbenannt.",
+  "device.rename_include_channels": "Kanäle mitbenennen",
+  "channel.rename": "Kanal umbenennen",
+  "channel.renamed": "Kanal umbenannt.",
   "device.rooms_updated": "Räume aktualisiert.",
   "device.functions_updated": "Gewerke aktualisiert.",
   "device.rooms": "Räume",
@@ -4789,6 +4834,22 @@ const DE: Catalog = {
   "device.confirm_remove_title": "Gerät entfernen?",
   "device.confirm_remove_body":
     'Gerät "{name}" entfernen? Die CCU-Kopplung wird aufgehoben und kann nicht rückgängig gemacht werden.',
+  "device.delete.mode_label": "Art der Entfernung",
+  "device.delete.mode_unpair": "Nur abmelden",
+  "device.delete.mode_unpair_hint":
+    "Die CCU-Kopplung wird aufgehoben (Standard).",
+  "device.delete.mode_reset": "Ab Werk zurücksetzen",
+  "device.delete.mode_reset_hint":
+    "Das Gerät wird beim Entfernen zusätzlich auf Werkseinstellungen zurückgesetzt.",
+  "device.delete.force": "Löschen erzwingen (Gerät unerreichbar)",
+  "device.delete.force_hint":
+    "Das Gerät auch dann entfernen, wenn es nicht mehr auf die CCU reagiert.",
+  "device.delete.checking": "Abhängigkeiten werden geprüft…",
+  "device.delete.warning_title": "Dieses Gerät wird noch verwendet",
+  "device.delete.warning_links":
+    "{count} Direktverknüpfung(en) verweisen auf dieses Gerät und funktionieren danach nicht mehr.",
+  "device.delete.warning_programs":
+    "{count} Programm(e) verweisen auf dieses Gerät.",
   "device.confirm_firmware_body":
     'Firmware-Update für "{name}" starten? Das Gerät ist während des Updates kurz nicht erreichbar.',
   "device.status.paramset_pick": "Quelle",

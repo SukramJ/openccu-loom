@@ -24,8 +24,14 @@ import (
 // and the channel-level paramset-copy flow — see
 // docs/parity/by_design.md (entry "ws-rest-split").
 type DeviceWriter interface {
-	// Rename renames the device (CCU JSON-RPC `Device.setName`).
-	Rename(ctx context.Context, address, name string) error
+	// Rename renames the device (CCU JSON-RPC `Device.setName`). When
+	// includeChannels is true every channel is renamed along with the
+	// "<name>:<channelNo>" pattern.
+	Rename(ctx context.Context, address, name string, includeChannels bool) error
+	// RenameChannel renames a single channel (CCU JSON-RPC
+	// `Channel.setName`). The channel address is resolved as
+	// deviceAddr + ":" + channelNo.
+	RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error
 	// SetInstallMode toggles a single device into install mode for the
 	// given duration. Used by `device.install_mode`.
 	SetInstallMode(ctx context.Context, address string, durationSeconds int) error
@@ -229,6 +235,7 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	// --- Schreibpfad zuerst (priorisiert) ---
 	if cfg.Devices != nil {
 		router.Register("device.rename", deviceRenameHandler(cfg.Devices))
+		router.Register("device.rename_channel", deviceRenameChannelHandler(cfg.Devices))
 		router.Register("device.install_mode", deviceInstallModeHandler(cfg.Devices))
 	}
 	if cfg.Paramsets != nil {
@@ -318,7 +325,35 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 func deviceRenameHandler(d DeviceWriter) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
+			Address         string `json:"address"`
+			Name            string `json:"name"`
+			IncludeChannels bool   `json:"include_channels"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Name == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "name is required")
+		}
+		if err := d.Rename(ctx, p.Address, p.Name, p.IncludeChannels); err != nil {
+			return nil, fmt.Errorf("device.rename: %w", err)
+		}
+		return map[string]any{
+			"address":          p.Address,
+			"name":             p.Name,
+			"include_channels": p.IncludeChannels,
+		}, nil
+	}
+}
+
+func deviceRenameChannelHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
 			Address string `json:"address"`
+			Channel int    `json:"channel"`
 			Name    string `json:"name"`
 		}
 		if err := decodeOrEmpty(raw, &p); err != nil {
@@ -330,10 +365,14 @@ func deviceRenameHandler(d DeviceWriter) CommandHandler {
 		if p.Name == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "name is required")
 		}
-		if err := d.Rename(ctx, p.Address, p.Name); err != nil {
-			return nil, fmt.Errorf("device.rename: %w", err)
+		if err := d.RenameChannel(ctx, p.Address, p.Channel, p.Name); err != nil {
+			return nil, fmt.Errorf("device.rename_channel: %w", err)
 		}
-		return map[string]any{"address": p.Address, "name": p.Name}, nil
+		return map[string]any{
+			"address": p.Address,
+			"channel": p.Channel,
+			"name":    p.Name,
+		}, nil
 	}
 }
 

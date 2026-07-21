@@ -138,6 +138,105 @@ describe("api endpoint paths", () => {
   });
 });
 
+describe("api — deleteDevice reset/force query flags", () => {
+  it("DELETEs without a query string when no options are given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD");
+    expect((init.method ?? "GET").toUpperCase()).toBe("DELETE");
+  });
+
+  it("omits the query string when reset and force are both explicitly false", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: false, force: false });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD");
+  });
+
+  it("appends only reset=true when force is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?reset=true");
+  });
+
+  it("appends only force=true when reset is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { force: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?force=true");
+  });
+
+  it("appends both flags when reset and force are true", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: true, force: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?reset=true&force=true");
+  });
+
+  it("percent-encodes the address ahead of the query flags", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001:2", { reset: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2?reset=true");
+  });
+});
+
+// acceptInboxDevice's config body is optional and must stay backward
+// compatible: an empty/omitted config keeps the historical "accept only"
+// POST with no body, so the daemon's `io.EOF` fast-path is exercised. Only
+// a config with at least one defined field switches to a JSON body.
+describe("api — acceptInboxDevice optional config body", () => {
+  it("POSTs with no body when config is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0009ABCD/accept");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+    expect(init.body).toBeUndefined();
+  });
+
+  it("POSTs with no body when config is an empty object", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "", {});
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBeUndefined();
+  });
+
+  it("scopes to ?central= when a central is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "alpha");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0009ABCD/accept?central=alpha");
+  });
+
+  it("sends a JSON body with only the name when just a name is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "", { name: "Kitchen Switch" });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ name: "Kitchen Switch" });
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  it("sends every supplied field, including an explicit empty rooms array", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "", {
+      name: "Kitchen Switch",
+      include_channels: true,
+      rooms: [],
+      functions: ["Lights"],
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "Kitchen Switch",
+      include_channels: true,
+      rooms: [],
+      functions: ["Lights"],
+    });
+  });
+});
+
 describe("api — reliability + values-cache admin wrappers", () => {
   it("getReliability GETs /diagnostics/reliability with no central filter", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse([]));

@@ -6,6 +6,57 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.46.0] — unreleased
+
+### Added
+
+- **First-time configuration when accepting an inbox device.**
+  `POST /devices/{addr}/accept` (and the WebSocket command
+  `inbox.accept`) now take an optional body — `name`,
+  `include_channels`, `rooms`, `functions` — applied to the device right
+  after it is accepted out of the inbox: the name is persisted to the
+  CCU (optionally cascading to every channel), and the room / function
+  (Gewerk) assignments go through the ReGa hub-writer. An empty or
+  omitted body keeps the plain accept-only behaviour, so the change is
+  backward compatible. The follow-up steps are best-effort but never
+  swallow errors: if the accept succeeds and a follow-up step fails the
+  response is a 502 whose title states the device was already accepted,
+  so only the configuration needs re-applying. The SPA's "Accept" action
+  now opens a dialog with a name field, room and function multi-selects
+  (populated from `GET /rooms` and `GET /functions`) and a
+  "rename channels" toggle; leaving everything blank just accepts. REST
+  `APIVersion` 2.32.0.
+- **Channel rename over REST + WebSocket.** A new
+  `PATCH /devices/{addr}/channels/{no}` endpoint (and WebSocket command
+  `device.rename_channel`) renames a single channel; the SPA exposes it
+  via a pencil affordance on each channel in the device detail view.
+- **Delete device with factory-reset / force options and a dependency
+  warning.** `DELETE /devices/{addr}` gains optional `reset` and `force`
+  query flags that map onto the CCU `deleteDevice` delete bitmask —
+  `reset` also factory-resets the device during removal, `force` removes
+  an unreachable device even when the CCU cannot complete the handshake
+  (both default to off, preserving the plain-unpair behaviour). The SPA
+  remove action becomes a small options dialog (unregister-only vs.
+  factory-reset radio plus a force checkbox) that warns up front when
+  direct links or CCU programs still reference the device. A backend
+  without a pairing concept (CUxD) now answers 422 instead of 502. REST
+  `APIVersion` 2.31.0.
+
+### Fixed
+
+- **Device and channel renames now persist to the CCU.** A rename used
+  to mutate only the in-memory model and was silently lost on the next
+  device reload. `PATCH /devices/{addr}` and the WebSocket
+  `device.rename` command now dispatch to the CCU's `Device.setName` /
+  `Channel.setName` JSON-RPC methods (resolving the ReGa ISE-ID first),
+  and propagate the CCU error instead of swallowing it. A backend
+  without JSON-RPC (Homegear, CUxD) answers 422 rather than pretending
+  success. `PATCH /devices/{addr}` and `device.rename` gain an optional
+  `include_channels` flag that also renames every channel with the
+  `"<name>:<channelNo>"` pattern (the CCU WebUI convention); the SPA
+  rename dialog offers it as a toggle, on by default. REST `APIVersion`
+  2.30.0.
+
 ## [0.45.0] — 2026-07-20
 
 ### Changed

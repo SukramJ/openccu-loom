@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 1c6031ec
-HEAD: 1c6031ec
+Generated: a2750ce7
+HEAD: a2750ce7
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25693 |
-| Reachable | 4544 |
-| Whitelisted | 18426 |
-| **Unreachable** | **2723** |
+| Total Exported | 25788 |
+| Reachable | 4555 |
+| Whitelisted | 18507 |
+| **Unreachable** | **2726** |
 
 ## Top-20 Packages by Dead Code
 
@@ -196,4 +196,4 @@ HEAD: 1c6031ec
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
-| pkg/interfaces | 0 | 78 | 0 |
+| pkg/interfaces | 0 | 79 | 2 |

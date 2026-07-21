@@ -1,15 +1,32 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, screen, waitFor } from "@testing-library/svelte";
+import { render, cleanup, screen, waitFor, fireEvent } from "@testing-library/svelte";
 
-const { mockGetDevice, mockGetDeviceSchedule, mockGetPreference, mockPutPreference } = vi.hoisted(
-  () => ({
-    mockGetDevice: vi.fn(),
-    mockGetDeviceSchedule: vi.fn(),
-    mockGetPreference: vi.fn(),
-    mockPutPreference: vi.fn(),
-  }),
-);
+const {
+  mockGetDevice,
+  mockGetDeviceSchedule,
+  mockGetPreference,
+  mockPutPreference,
+  mockRenameDevice,
+  mockRenameChannel,
+  mockDeleteDevice,
+  mockListLinks,
+  mockListPrograms,
+  mockToastSuccess,
+  mockToastError,
+} = vi.hoisted(() => ({
+  mockGetDevice: vi.fn(),
+  mockGetDeviceSchedule: vi.fn(),
+  mockGetPreference: vi.fn(),
+  mockPutPreference: vi.fn(),
+  mockRenameDevice: vi.fn(),
+  mockRenameChannel: vi.fn(),
+  mockDeleteDevice: vi.fn(),
+  mockListLinks: vi.fn(),
+  mockListPrograms: vi.fn(),
+  mockToastSuccess: vi.fn(),
+  mockToastError: vi.fn(),
+}));
 
 vi.mock("$lib/api/client", () => ({
   api: {
@@ -17,8 +34,11 @@ vi.mock("$lib/api/client", () => ({
     getDeviceSchedule: (...args: unknown[]) => mockGetDeviceSchedule(...args),
     getPreference: (...args: unknown[]) => mockGetPreference(...args),
     putPreference: (...args: unknown[]) => mockPutPreference(...args),
-    renameDevice: vi.fn(),
-    deleteDevice: vi.fn(),
+    renameDevice: (...args: unknown[]) => mockRenameDevice(...args),
+    renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
+    deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
+    listLinks: (...args: unknown[]) => mockListLinks(...args),
+    listPrograms: (...args: unknown[]) => mockListPrograms(...args),
     updateFirmware: vi.fn(),
     setDeviceRooms: vi.fn(),
     setDeviceFunctions: vi.fn(),
@@ -38,7 +58,10 @@ vi.mock("$lib/i18n", () => ({
 }));
 
 vi.mock("$lib/stores/toast.svelte", () => ({
-  toastStore: { success: vi.fn(), error: vi.fn() },
+  toastStore: {
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
 }));
 
 vi.mock("$lib/stores/confirm.svelte", () => ({
@@ -85,6 +108,11 @@ beforeEach(() => {
   mockGetDeviceSchedule.mockRejectedValue(
     Object.assign(new Error("not found"), { status: 404 }),
   );
+  mockRenameDevice.mockResolvedValue(undefined);
+  mockRenameChannel.mockResolvedValue(undefined);
+  mockDeleteDevice.mockResolvedValue(undefined);
+  mockListLinks.mockResolvedValue([]);
+  mockListPrograms.mockResolvedValue([]);
 });
 
 afterEach(() => cleanup());
@@ -167,5 +195,260 @@ describe("DeviceDetail — happy path", () => {
       expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
     });
     expect(screen.queryByText("device.no_channels")).not.toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — device rename dialog", () => {
+  async function openRenameDialog() {
+    mockGetDevice.mockResolvedValue(baseDevice());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.rename" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("device.rename")).toBeInTheDocument();
+    });
+  }
+
+  it("opens with the include-channels switch checked by default and the name prefilled", async () => {
+    await openRenameDialog();
+    const input = screen.getByLabelText("device.rename") as HTMLInputElement;
+    expect(input.value).toBe("Wohnzimmer Thermostat");
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("commits the rename with include_channels=true by default and reloads", async () => {
+    await openRenameDialog();
+    await fireEvent.input(screen.getByLabelText("device.rename"), {
+      target: { value: "New Name" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockRenameDevice).toHaveBeenCalledWith("0001ABCD", "New Name", true);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.renamed");
+    await waitFor(() => expect(mockGetDevice).toHaveBeenCalledTimes(2));
+  });
+
+  it("forwards include_channels=false when the switch is toggled off", async () => {
+    await openRenameDialog();
+    await fireEvent.click(screen.getByRole("switch"));
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false");
+
+    await fireEvent.input(screen.getByLabelText("device.rename"), {
+      target: { value: "New Name" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockRenameDevice).toHaveBeenCalledWith("0001ABCD", "New Name", false);
+    });
+  });
+
+  it("shows an error toast and keeps the dialog open when the CCU rename fails", async () => {
+    mockRenameDevice.mockRejectedValueOnce(new Error("ccu unreachable"));
+    await openRenameDialog();
+    await fireEvent.input(screen.getByLabelText("device.rename"), {
+      target: { value: "New Name" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+    // Dialog stays open on failure — no silent fallback / no silent close.
+    expect(screen.getByLabelText("device.rename")).toBeInTheDocument();
+    expect(mockGetDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes without calling the API when the name is unchanged", async () => {
+    await openRenameDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("device.rename")).not.toBeInTheDocument();
+    });
+    expect(mockRenameDevice).not.toHaveBeenCalled();
+  });
+});
+
+describe("DeviceDetail — channel rename", () => {
+  function deviceWithChannel(overrides: Record<string, unknown> = {}) {
+    return baseDevice({
+      channels: [
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "Kanal 1", data_points_count: 0 },
+      ],
+      channels_count: 1,
+      ...overrides,
+    });
+  }
+
+  async function openChannelEditor() {
+    mockGetDevice.mockResolvedValue(deviceWithChannel());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "device.toptab.configure" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "channel.rename" })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "channel.rename" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("channel.rename")).toBeInTheDocument();
+    });
+  }
+
+  it("opens an inline editor prefilled with the current channel name", async () => {
+    await openChannelEditor();
+    const input = screen.getByLabelText("channel.rename") as HTMLInputElement;
+    expect(input.value).toBe("Kanal 1");
+  });
+
+  it("commits the channel rename on save and shows a toast", async () => {
+    await openChannelEditor();
+    await fireEvent.input(screen.getByLabelText("channel.rename"), {
+      target: { value: "Kitchen Light" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockRenameChannel).toHaveBeenCalledWith("0001ABCD", 1, "Kitchen Light");
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("channel.renamed");
+    // The pencil button and the inline editor share the same "channel.rename"
+    // label, so assert on the textbox role specifically — the pencil button
+    // (also labelled "channel.rename") is expected to reappear.
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox", { name: "channel.rename" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "channel.rename" })).toBeInTheDocument();
+  });
+
+  it("cancels on Escape without calling the API", async () => {
+    await openChannelEditor();
+    await fireEvent.keyDown(screen.getByLabelText("channel.rename"), { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox", { name: "channel.rename" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "channel.rename" })).toBeInTheDocument();
+    expect(mockRenameChannel).not.toHaveBeenCalled();
+  });
+
+  it("shows an error toast and keeps the editor open when the CCU rename fails", async () => {
+    mockRenameChannel.mockRejectedValueOnce(new Error("ccu unreachable"));
+    await openChannelEditor();
+    await fireEvent.input(screen.getByLabelText("channel.rename"), {
+      target: { value: "Kitchen Light" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+    expect(screen.getByLabelText("channel.rename")).toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — remove device options dialog", () => {
+  async function openDeleteDialog(overrides: Record<string, unknown> = {}) {
+    mockGetDevice.mockResolvedValue(baseDevice(overrides));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.remove" }));
+    await waitFor(() => {
+      expect(screen.getByText("device.delete.mode_label")).toBeInTheDocument();
+    });
+  }
+
+  it("opens an options dialog and probes links + programs", async () => {
+    await openDeleteDialog();
+    expect(mockListLinks).toHaveBeenCalledWith("0001ABCD", "en");
+    expect(mockListPrograms).toHaveBeenCalled();
+    expect(screen.getByText("device.delete.mode_unpair")).toBeInTheDocument();
+    expect(screen.getByText("device.delete.force")).toBeInTheDocument();
+  });
+
+  it("removes with reset=false force=false by default", async () => {
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockDeleteDevice).toHaveBeenCalledWith("0001ABCD", {
+        reset: false,
+        force: false,
+      });
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.removed");
+  });
+
+  it("forwards reset + force when the factory-reset radio and force box are set", async () => {
+    await openDeleteDialog();
+    await fireEvent.click(
+      screen.getByRole("radio", { name: /device\.delete\.mode_reset/ }),
+    );
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockDeleteDevice).toHaveBeenCalledWith("0001ABCD", {
+        reset: true,
+        force: true,
+      });
+    });
+  });
+
+  it("warns when direct links or programs reference the device", async () => {
+    mockListLinks.mockResolvedValue([
+      { sender_address: "0001ABCD:1", receiver_address: "X:1" },
+    ]);
+    mockListPrograms.mockResolvedValue([
+      { name: "Prog", device_address: "0001ABCD" },
+      { name: "Other", device_address: "9999" },
+    ]);
+    await openDeleteDialog();
+    await waitFor(() => {
+      expect(screen.getByText("device.delete.warning_title")).toBeInTheDocument();
+    });
+  });
+
+  it("shows an error toast and keeps the dialog open on failure", async () => {
+    mockDeleteDevice.mockRejectedValueOnce(new Error("CCU refused"));
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("CCU refused");
+    });
+    // Dialog stays open on failure — no silent fallback / no silent close.
+    expect(screen.getByText("device.delete.mode_label")).toBeInTheDocument();
+  });
+
+  it("closes the dialog on cancel without calling deleteDevice", async () => {
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByText("device.delete.mode_label")).not.toBeInTheDocument();
+    });
+    expect(mockDeleteDevice).not.toHaveBeenCalled();
+  });
+
+  it("suppresses the dependency warning and stays usable when the link/program probe fails", async () => {
+    mockListLinks.mockRejectedValue(new Error("network error"));
+    mockListPrograms.mockRejectedValue(new Error("network error"));
+    await openDeleteDialog();
+    // Best-effort probe: a failed read must not block the dialog or surface
+    // an error toast — it just falls back to "no known dependencies".
+    expect(screen.queryByText("device.delete.warning_title")).not.toBeInTheDocument();
+    expect(mockToastError).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockDeleteDevice).toHaveBeenCalledWith("0001ABCD", {
+        reset: false,
+        force: false,
+      });
+    });
   });
 });

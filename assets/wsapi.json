@@ -329,14 +329,31 @@
     },
     {
       "category": "devices",
-      "description": "Rename a device on the CCU.",
+      "description": "Rename a device on the CCU. When include_channels is true every channel is renamed along with the '<name>:<channelNo>' pattern.",
       "name": "device.rename",
       "args": {
         "address": "string",
+        "name": "string",
+        "include_channels": "boolean?"
+      },
+      "result": {
+        "address": "string",
+        "name": "string",
+        "include_channels": "boolean"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Rename a single channel on the CCU.",
+      "name": "device.rename_channel",
+      "args": {
+        "address": "string",
+        "channel": "integer",
         "name": "string"
       },
       "result": {
         "address": "string",
+        "channel": "integer",
         "name": "string"
       }
     },
@@ -465,8 +482,15 @@
     },
     {
       "category": "inbox",
-      "description": "Promote a paired-but-unconfigured inbox device into the active device set.",
-      "name": "inbox.accept"
+      "description": "Promote a paired-but-unconfigured inbox device into the active device set. Optional first-time configuration (name, include_channels, rooms, functions) is applied best-effort right after the accept; omit them to only accept.",
+      "name": "inbox.accept",
+      "args": {
+        "device_address": "string",
+        "name": "string?",
+        "include_channels": "boolean?",
+        "rooms": "array?",
+        "functions": "array?"
+      }
     },
     {
       "category": "inbox",

@@ -590,6 +590,147 @@ func TestRenameDeviceWithChannels_ChannelRenameError(t *testing.T) {
 	}
 }
 
+// TestRenameChannel_EmptyAddressErrors verifies an empty channel address
+// is rejected before touching the model or the persistent hook.
+func TestRenameChannel_EmptyAddressErrors(t *testing.T) {
+	c := newTestCentral(t)
+	if err := c.RenameChannel(context.Background(), "", "X"); err == nil {
+		t.Fatal("expected error for empty channel address")
+	}
+}
+
+// TestRenameChannel_UpdatesInMemoryAndPersists verifies the in-memory
+// Channel.Name is updated and the persistent hook receives the full
+// channel address (device + ":" + number).
+func TestRenameChannel_UpdatesInMemoryAndPersists(t *testing.T) {
+	c := newTestCentral(t)
+	addr := "RCH001"
+	d := device.New(device.Config{
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     addr,
+		Model:       "HmIP-Test",
+		InterfaceID: "test-iface",
+	})
+	d.AddChannel(addr+":1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+
+	var gotAddr, gotName string
+	c.SetRenameDeviceFn(func(_ context.Context, address, name string) error {
+		gotAddr, gotName = address, name
+		return nil
+	})
+
+	if err := c.RenameChannel(context.Background(), addr+":1", "Kitchen Light"); err != nil {
+		t.Fatalf("RenameChannel: %v", err)
+	}
+	if gotAddr != addr+":1" || gotName != "Kitchen Light" {
+		t.Errorf("hook got (%q, %q), want (%q, %q)", gotAddr, gotName, addr+":1", "Kitchen Light")
+	}
+	if got := d.Channel(addr + ":1").Name; got != "Kitchen Light" {
+		t.Errorf("in-memory channel name = %q, want %q", got, "Kitchen Light")
+	}
+}
+
+// TestRenameChannel_NoFn_InMemoryOnlySucceeds verifies that without a
+// persistent hook wired the in-memory rename still applies and no error
+// is returned — mirrors RenameDevice's own no-hook behaviour.
+func TestRenameChannel_NoFn_InMemoryOnlySucceeds(t *testing.T) {
+	c := newTestCentral(t)
+	addr := "RCH002"
+	d := device.New(device.Config{
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     addr,
+		Model:       "HmIP-Test",
+		InterfaceID: "test-iface",
+	})
+	d.AddChannel(addr+":1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+
+	if err := c.RenameChannel(context.Background(), addr+":1", "Living Room"); err != nil {
+		t.Fatalf("RenameChannel with no hook: %v", err)
+	}
+	if got := d.Channel(addr + ":1").Name; got != "Living Room" {
+		t.Errorf("in-memory channel name = %q, want %q", got, "Living Room")
+	}
+}
+
+// TestRenameChannel_UnknownDeviceIsNoop verifies an address whose device
+// is not in the ModelRegistry does not panic and still dispatches to the
+// persistent hook (the hook itself resolves the ISE-ID and fails there).
+func TestRenameChannel_UnknownDeviceIsNoop(t *testing.T) {
+	c := newTestCentral(t)
+	called := false
+	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error {
+		called = true
+		return nil
+	})
+	if err := c.RenameChannel(context.Background(), "UNKNOWN:1", "X"); err != nil {
+		t.Fatalf("RenameChannel unknown device: %v", err)
+	}
+	if !called {
+		t.Error("expected persistent hook to still be invoked for an unknown device")
+	}
+}
+
+// TestRenameChannel_UnknownChannelOnKnownDevice_SkipsInMemory verifies
+// that a channel number the device doesn't have (e.g. a malformed or
+// out-of-range channel number reaching this far) is skipped in-memory —
+// no panic on a nil *Channel — while the persistent hook still receives
+// the raw address to resolve against the CCU.
+func TestRenameChannel_UnknownChannelOnKnownDevice_SkipsInMemory(t *testing.T) {
+	c := newTestCentral(t)
+	addr := "RCH004"
+	d := device.New(device.Config{
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     addr,
+		Model:       "HmIP-Test",
+		InterfaceID: "test-iface",
+	})
+	d.AddChannel(addr+":1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+
+	var gotAddr string
+	c.SetRenameDeviceFn(func(_ context.Context, address, _ string) error {
+		gotAddr = address
+		return nil
+	})
+
+	// Channel 99 does not exist on this device.
+	if err := c.RenameChannel(context.Background(), addr+":99", "X"); err != nil {
+		t.Fatalf("RenameChannel unknown channel: %v", err)
+	}
+	if gotAddr != addr+":99" {
+		t.Errorf("hook address = %q, want %q", gotAddr, addr+":99")
+	}
+	// The real channel must be untouched.
+	if got := d.Channel(addr + ":1").Name; got != "" {
+		t.Errorf("unrelated channel name mutated: %q", got)
+	}
+}
+
+// TestRenameChannel_FnErrorPropagates verifies a persistent-hook failure
+// is returned to the caller — no silent fallback to in-memory-only.
+func TestRenameChannel_FnErrorPropagates(t *testing.T) {
+	c := newTestCentral(t)
+	addr := "RCH003"
+	d := device.New(device.Config{
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     addr,
+		Model:       "HmIP-Test",
+		InterfaceID: "test-iface",
+	})
+	d.AddChannel(addr+":1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+
+	boom := errors.New("rename channel failed")
+	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error { return boom })
+
+	err := c.RenameChannel(context.Background(), addr+":1", "X")
+	if !errors.Is(err, boom) {
+		t.Errorf("expected propagated error, got %v", err)
+	}
+}
+
 // TestResolveDeviceName_ReturnsDeviceName verifies the device name is
 // returned when populated.
 func TestResolveDeviceName_ReturnsDeviceName(t *testing.T) {

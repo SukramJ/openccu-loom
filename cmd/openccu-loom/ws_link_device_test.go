@@ -154,9 +154,20 @@ func TestWSDeviceWriter_Rename_NonNilAdmin_Errors(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	admin := adapter.NewDeviceAdminDomain(reg, nil)
 	w := &wsDeviceWriter{admin: admin}
-	err := w.Rename(context.Background(), "NONEXISTENT:1", "new name")
+	err := w.Rename(context.Background(), "NONEXISTENT:1", "new name", false)
 	// No device → error; must not panic.
 	_ = err
+}
+
+func TestWSDeviceWriter_RenameChannel_NonNilAdmin_Errors(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-01")
+	admin := adapter.NewDeviceAdminDomain(reg, nil)
+	w := &wsDeviceWriter{admin: admin}
+	err := w.RenameChannel(context.Background(), "NONEXISTENT", 1, "new name")
+	if err == nil {
+		t.Fatal("expected error: device not found in empty registry")
+	}
 }
 
 func TestWSDeviceWriter_SetInstallMode_NonNilAdmin_Errors(t *testing.T) {

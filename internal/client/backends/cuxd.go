@@ -158,7 +158,7 @@ func (*CuxdBackend) ReportValueUsage(context.Context, string, string, int) error
 // owned by the CUxD daemon; openccu-loom does not pair / unpair them.
 // Returning ErrUnsupported is the right answer — the SPA renders a
 // 422 / 501 instead of trying.
-func (*CuxdBackend) DeleteDevice(context.Context, string) error {
+func (*CuxdBackend) DeleteDevice(context.Context, string, int) error {
 	return ErrUnsupported
 }
 

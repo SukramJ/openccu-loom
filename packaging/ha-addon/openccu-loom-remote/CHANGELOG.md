@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.46.0 (unreleased)
+
+Version ride-along with the OpenCCU-Loom device-admin wave; no
+changes to this add-on.
+
 # 0.45.0 (2026-07-20)
 
 Version ride-along with the OpenCCU-Loom REST naming extension; no

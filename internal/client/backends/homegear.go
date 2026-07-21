@@ -285,13 +285,14 @@ func (b *HomegearBackend) ReportValueUsage(ctx context.Context, channelAddress, 
 }
 
 // DeleteDevice implements Operations. Homegear's wire surface mirrors
-// the CCU's `deleteDevice(address, flags)` — flags=0 keeps the
-// bidirectional unpair handshake.
-func (b *HomegearBackend) DeleteDevice(ctx context.Context, address string) error {
+// the CCU's `deleteDevice(address, flags)`. flags is the CCU delete bitmask
+// ([DeleteFlagReset], [DeleteFlagForce]); 0 keeps the bidirectional unpair
+// handshake.
+func (b *HomegearBackend) DeleteDevice(ctx context.Context, address string, flags int) error {
 	if b.xml == nil {
 		return ErrNotWired
 	}
-	_, err := b.xml.Call(ctx, "deleteDevice", address, 0)
+	_, err := b.xml.Call(ctx, "deleteDevice", address, flags)
 	return err
 }
 

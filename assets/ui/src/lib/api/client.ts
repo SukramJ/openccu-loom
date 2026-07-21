@@ -461,23 +461,68 @@ export const api = {
     );
   },
   // --- Device lifecycle -----------------------------------------
-  renameDevice(address: string, name: string) {
+  renameDevice(address: string, name: string, includeChannels = false) {
     return request<void>(`/devices/${encodeURIComponent(address)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, include_channels: includeChannels }),
     });
   },
-  deleteDevice(address: string) {
-    return request<void>(`/devices/${encodeURIComponent(address)}`, {
-      method: "DELETE",
-    });
+  renameChannel(address: string, channelNo: number, name: string) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      },
+    );
   },
-  acceptInboxDevice(address: string, central: string) {
+  // deleteDevice unpairs a device. reset additionally factory-resets the
+  // device during removal; force removes an unreachable device even when the
+  // CCU cannot complete the handshake. Both map onto the CCU delete bitmask
+  // via the `reset` / `force` query flags.
+  deleteDevice(
+    address: string,
+    opts: { reset?: boolean; force?: boolean } = {},
+  ) {
+    const qs = new URLSearchParams();
+    if (opts.reset) qs.set("reset", "true");
+    if (opts.force) qs.set("force", "true");
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}${suffix}`,
+      { method: "DELETE" },
+    );
+  },
+  acceptInboxDevice(
+    address: string,
+    central: string,
+    config?: {
+      name?: string;
+      include_channels?: boolean;
+      rooms?: string[];
+      functions?: string[];
+    },
+  ) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    // Only send a body when first-time configuration was supplied; an
+    // empty body keeps the accept-only behaviour (backward compatible).
+    const hasConfig =
+      config !== undefined &&
+      (config.name !== undefined ||
+        config.include_channels !== undefined ||
+        config.rooms !== undefined ||
+        config.functions !== undefined);
     return request<void>(
       `/devices/${encodeURIComponent(address)}/accept${qs}`,
-      { method: "POST" },
+      hasConfig
+        ? {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+          }
+        : { method: "POST" },
     );
   },
   // --- Backups --------------------------------------------------

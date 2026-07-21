@@ -481,6 +481,7 @@ type stubHub struct {
 	firmwareErr       error
 	inboxDevices      []map[string]any
 	inboxAccepted     string
+	inboxAcceptOpts   InboxAcceptOptions
 	inboxErr          error
 }
 
@@ -560,8 +561,9 @@ func (h *stubHub) InboxDevices(context.Context) ([]map[string]any, error) {
 	return h.inboxDevices, h.inboxErr
 }
 
-func (h *stubHub) AcceptInboxDevice(_ context.Context, address string) error {
+func (h *stubHub) AcceptInboxDevice(_ context.Context, address string, opts InboxAcceptOptions) error {
 	h.inboxAccepted = address
+	h.inboxAcceptOpts = opts
 	return h.inboxErr
 }
 
@@ -1235,6 +1237,83 @@ func TestInboxAcceptRequiresAddress(t *testing.T) {
 	res := r.Dispatch(opCtx(), "inbox.accept", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("missing address: %+v", res.Error)
+	}
+}
+
+// TestInboxAccept_HubError_ReturnsCommandError verifies that a failing
+// AcceptInboxDevice call (e.g. the CCU rejects the accept, or a follow-up
+// configuration step failed) surfaces as a CommandErrorInternal rather than
+// a silent success — the WS caller must be able to tell the accept did not
+// go through cleanly.
+func TestInboxAccept_HubError_ReturnsCommandError(t *testing.T) {
+	hub := &stubHub{inboxErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"device_address": "0009ABCD"})
+	res := r.Dispatch(opCtx(), "inbox.accept", args)
+	if res.Error == nil {
+		t.Fatal("expected a command error when AcceptInboxDevice fails")
+	}
+	if res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected CommandErrorInternal, got %+v", res.Error)
+	}
+	// The address must still have reached the hub before the failure —
+	// this is not a parsing rejection.
+	if hub.inboxAccepted != "0009ABCD" {
+		t.Fatalf("expected the accept to have been attempted, got %q", hub.inboxAccepted)
+	}
+}
+
+// TestInboxAcceptForwardsConfigOptions verifies the WS handler parses the
+// optional first-time-configuration fields and forwards them into the
+// InboxAcceptOptions passed to the hub.
+func TestInboxAcceptForwardsConfigOptions(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{
+		"device_address":   "0009ABCD",
+		"name":             "Kitchen",
+		"include_channels": true,
+		"rooms":            []string{"Living Room"},
+		"functions":        []string{"Lights"},
+	})
+	res := r.Dispatch(opCtx(), "inbox.accept", args)
+	if res.Error != nil {
+		t.Fatalf("accept err: %+v", res.Error)
+	}
+	got := hub.inboxAcceptOpts
+	if got.Name != "Kitchen" || !got.IncludeChannels {
+		t.Fatalf("name/include_channels not forwarded: %+v", got)
+	}
+	if len(got.Rooms) != 1 || got.Rooms[0] != "Living Room" {
+		t.Fatalf("rooms not forwarded: %+v", got.Rooms)
+	}
+	if len(got.Functions) != 1 || got.Functions[0] != "Lights" {
+		t.Fatalf("functions not forwarded: %+v", got.Functions)
+	}
+}
+
+// TestInboxAcceptEmptyOptionsAcceptOnly verifies a bare address accepts
+// with a zero-value options struct (no first-time configuration).
+func TestInboxAcceptEmptyOptionsAcceptOnly(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"device_address": "0009ABCD"})
+	res := r.Dispatch(opCtx(), "inbox.accept", args)
+	if res.Error != nil {
+		t.Fatalf("accept err: %+v", res.Error)
+	}
+	if hub.inboxAccepted != "0009ABCD" {
+		t.Fatalf("accepted=%q want 0009ABCD", hub.inboxAccepted)
+	}
+	got := hub.inboxAcceptOpts
+	if got.Name != "" || got.IncludeChannels || got.Rooms != nil || got.Functions != nil {
+		t.Fatalf("expected zero options, got %+v", got)
 	}
 }
 

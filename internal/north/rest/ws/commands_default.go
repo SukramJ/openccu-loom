@@ -193,8 +193,21 @@ type HubQuery interface {
 	// but that have not yet been accepted into the configuration.
 	InboxDevices(ctx context.Context) ([]map[string]any, error)
 	// AcceptInboxDevice promotes a paired-but-unconfigured device
-	// into the active set.
-	AcceptInboxDevice(ctx context.Context, deviceAddress string) error
+	// into the active set. opts carries the optional first-time
+	// configuration (name, rooms, functions) applied best-effort right
+	// after the accept; a zero-value opts accepts only.
+	AcceptInboxDevice(ctx context.Context, deviceAddress string, opts InboxAcceptOptions) error
+}
+
+// InboxAcceptOptions is the WS-side mirror of the REST accept body: the
+// optional first-time configuration applied to a device right after it
+// is promoted out of the inbox. Every field is optional — a zero value
+// accepts only.
+type InboxAcceptOptions struct {
+	Name            string
+	IncludeChannels bool
+	Rooms           []string
+	Functions       []string
 }
 
 // BackupsService is the minimal contract the `backups.trigger` command
@@ -685,6 +698,12 @@ func installModeDisableHandler(q HubQuery) CommandHandler {
 
 type inboxAcceptArgs struct {
 	DeviceAddress string `json:"device_address"`
+	// Optional first-time configuration, mirroring the REST accept body.
+	// Omitted fields leave the corresponding step untouched.
+	Name            string   `json:"name,omitempty"`
+	IncludeChannels bool     `json:"include_channels,omitempty"`
+	Rooms           []string `json:"rooms,omitempty"`
+	Functions       []string `json:"functions,omitempty"`
 }
 
 func backupTriggerHandler(q HubQuery) CommandHandler {
@@ -769,7 +788,13 @@ func inboxAcceptHandler(q HubQuery) CommandHandler {
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
 		}
-		if err := q.AcceptInboxDevice(ctx, args.DeviceAddress); err != nil {
+		opts := InboxAcceptOptions{
+			Name:            args.Name,
+			IncludeChannels: args.IncludeChannels,
+			Rooms:           args.Rooms,
+			Functions:       args.Functions,
+		}
+		if err := q.AcceptInboxDevice(ctx, args.DeviceAddress, opts); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "inbox_accept: "+err.Error())
 		}
 		return map[string]any{"accepted": true, "device_address": args.DeviceAddress}, nil

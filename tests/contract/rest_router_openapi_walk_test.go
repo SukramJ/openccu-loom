@@ -35,6 +35,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // ---------------------------------------------------------------------------
@@ -158,9 +159,12 @@ type fakeFirmwareRefresher struct{}
 
 func (fakeFirmwareRefresher) RefreshFirmwareData(context.Context) error { return nil }
 
-func (fakeDeviceAdmin) UnpairDevice(context.Context, string) error           { return nil }
-func (fakeDeviceAdmin) RenameDevice(context.Context, string, string) error   { return nil }
-func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string) error      { return nil }
+func (fakeDeviceAdmin) UnpairDevice(context.Context, string, bool, bool) error   { return nil }
+func (fakeDeviceAdmin) RenameDevice(context.Context, string, string, bool) error { return nil }
+func (fakeDeviceAdmin) RenameChannel(context.Context, string, int, string) error { return nil }
+func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string, interfaces.AcceptInboxOptions) error {
+	return nil
+}
 func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { return nil }
 func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error { return nil }

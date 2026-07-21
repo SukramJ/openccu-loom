@@ -5,12 +5,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
 // nilHubQuery returns a wsHubQuery backed by an empty registry so hub.Hub()
@@ -277,9 +279,107 @@ func TestWSHubQuery_InboxDevices_LiveHub_NilInbox_ReturnsEmpty(t *testing.T) {
 func TestWSHubQuery_AcceptInboxDevice_NilHub_Errors(t *testing.T) {
 	t.Parallel()
 	q := nilHubQuery()
-	err := q.AcceptInboxDevice(context.Background(), "DEV001")
+	err := q.AcceptInboxDevice(context.Background(), "DEV001", ws.InboxAcceptOptions{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// stubWSInboxAccepter is a minimal hub.InboxAccepter for the
+// deviceAdmin-delegation tests below.
+type stubWSInboxAccepter struct{ err error }
+
+func (s *stubWSInboxAccepter) AcceptDeviceInInbox(_ context.Context, _ string) error {
+	return s.err
+}
+
+// buildWSHubQueryWithDeviceAdmin wires a wsHubQuery whose deviceAdmin field
+// is non-nil, exercising the preferred multi-CCU-safe delegation path
+// (rather than the single-central hub-direct fallback).
+func buildWSHubQueryWithDeviceAdmin(t *testing.T, acceptErr error) (*wsHubQuery, *central.Registry) {
+	t.Helper()
+	reg := central.NewRegistry()
+	cu, err := central.New(central.Config{Name: "ccu-ws-deviceadmin"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	cu.HubModel.InboxAccepter = &stubWSInboxAccepter{err: acceptErr}
+	if err := reg.Register(cu); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	admin := adapter.NewDeviceAdminDomain(reg, nil)
+	return &wsHubQuery{hub: adapter.NewHubAdapter(reg), registry: reg, deviceAdmin: admin}, reg
+}
+
+// TestWSHubQuery_AcceptInboxDevice_DeviceAdmin_HappyPath verifies that a
+// wired deviceAdmin is preferred over the hub-direct fallback and that the
+// options (name/rooms/functions) reach the accept orchestration.
+func TestWSHubQuery_AcceptInboxDevice_DeviceAdmin_HappyPath(t *testing.T) {
+	t.Parallel()
+	q, reg := buildWSHubQueryWithDeviceAdmin(t, nil)
+
+	opts := ws.InboxAcceptOptions{Name: "Kitchen Switch"}
+	if err := q.AcceptInboxDevice(context.Background(), "DEV777", opts); err != nil {
+		t.Fatalf("AcceptInboxDevice via deviceAdmin: %v", err)
+	}
+	// The rename step is a no-op when the device is not in the model
+	// registry (nothing to rename in-memory), so a missing device must not
+	// turn into an error — it just means there is nothing local to update.
+	if _, ok := reg.Get("ccu-ws-deviceadmin"); !ok {
+		t.Fatal("expected the fixture central to remain registered")
+	}
+}
+
+// TestWSHubQuery_AcceptInboxDevice_DeviceAdmin_PropagatesError verifies a
+// wired deviceAdmin's error (e.g. the CCU rejected the accept) is returned
+// to the WS caller rather than swallowed.
+func TestWSHubQuery_AcceptInboxDevice_DeviceAdmin_PropagatesError(t *testing.T) {
+	t.Parallel()
+	q, _ := buildWSHubQueryWithDeviceAdmin(t, errors.New("ccu rejected accept"))
+
+	err := q.AcceptInboxDevice(context.Background(), "DEV777", ws.InboxAcceptOptions{})
+	if err == nil {
+		t.Fatal("expected the deviceAdmin error to propagate")
+	}
+}
+
+// TestWSHubQuery_AcceptInboxDevice_DeviceAdmin_MultiCentral_FindsDeviceOnSecondCentral
+// proves the multi-CCU fix this wiring exists for: the plain hub-direct
+// fallback ([adapter.HubAdapter.Hub]) only ever resolves the first
+// registered central, so an inbox device paired on a later central would
+// have been unreachable. A wired deviceAdmin instead walks every central
+// (matching [DeviceAdminDomain.AcceptInboxDevice]'s registry loop), so the
+// accept succeeds even when the first central's InboxAccepter fails.
+func TestWSHubQuery_AcceptInboxDevice_DeviceAdmin_MultiCentral_FindsDeviceOnSecondCentral(t *testing.T) {
+	t.Parallel()
+	reg := central.NewRegistry()
+
+	// Registry.List() returns centrals sorted by name — "ccu-a" resolves
+	// first and does NOT have the device; the hub-direct fallback would
+	// stop here and report failure.
+	first, err := central.New(central.Config{Name: "ccu-a-no-device"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	first.HubModel.InboxAccepter = &stubWSInboxAccepter{err: errors.New("unknown device")}
+	if err := reg.Register(first); err != nil {
+		t.Fatalf("reg.Register(first): %v", err)
+	}
+
+	second, err := central.New(central.Config{Name: "ccu-b-has-device"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	second.HubModel.InboxAccepter = &stubWSInboxAccepter{err: nil}
+	if err := reg.Register(second); err != nil {
+		t.Fatalf("reg.Register(second): %v", err)
+	}
+
+	admin := adapter.NewDeviceAdminDomain(reg, nil)
+	q := &wsHubQuery{hub: adapter.NewHubAdapter(reg), registry: reg, deviceAdmin: admin}
+
+	if err := q.AcceptInboxDevice(context.Background(), "DEV777", ws.InboxAcceptOptions{}); err != nil {
+		t.Fatalf("expected the accept to succeed via the second central, got %v", err)
 	}
 }
 

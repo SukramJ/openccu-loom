@@ -101,7 +101,7 @@ func (f *paramsetFakeOps) PutLinkParamset(_ context.Context, _, _ string, _ map[
 
 func (f *paramsetFakeOps) ReportValueUsage(_ context.Context, _, _ string, _ int) error { return nil }
 
-func (f *paramsetFakeOps) DeleteDevice(_ context.Context, _ string) error { return nil }
+func (f *paramsetFakeOps) DeleteDevice(_ context.Context, _ string, _ int) error { return nil }
 
 func (f *paramsetFakeOps) GetAllPrograms(_ context.Context) ([]map[string]any, error) {
 	return nil, nil

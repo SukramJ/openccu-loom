@@ -44,6 +44,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // loadTr is a package-level helper that loads embedded translations once.
@@ -573,7 +574,7 @@ func TestDevicesAdapter_Devices_PopulatedRegistry(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_HappyPath(t *testing.T) {
 	t.Parallel()
 	admin, _, _, _ := buildBoost9Fixture(t)
-	err := admin.RenameDevice(context.Background(), "DEV004", "NewName")
+	err := admin.RenameDevice(context.Background(), "DEV004", "NewName", false)
 	if err != nil {
 		t.Fatalf("RenameDevice: %v", err)
 	}
@@ -582,7 +583,7 @@ func TestDeviceAdminDomain_RenameDevice_HappyPath(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_UnknownDevice_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin, _, _, _ := buildBoost9Fixture(t)
-	err := admin.RenameDevice(context.Background(), "UNKNOWN", "NewName")
+	err := admin.RenameDevice(context.Background(), "UNKNOWN", "NewName", false)
 	if err == nil {
 		t.Error("expected error for unknown device in RenameDevice")
 	}
@@ -591,9 +592,61 @@ func TestDeviceAdminDomain_RenameDevice_UnknownDevice_ReturnsErr(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin := &DeviceAdminDomain{registry: nil}
-	err := admin.RenameDevice(context.Background(), "DEV004", "NewName")
+	err := admin.RenameDevice(context.Background(), "DEV004", "NewName", false)
 	if err == nil {
 		t.Error("expected error for nil registry in RenameDevice")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DeviceAdminDomain.RenameChannel
+// ---------------------------------------------------------------------------
+
+func TestDeviceAdminDomain_RenameChannel_HappyPath(t *testing.T) {
+	t.Parallel()
+	admin, c, dev, _ := buildBoost9Fixture(t)
+	var gotAddr, gotName string
+	c.SetRenameDeviceFn(func(_ context.Context, address, name string) error {
+		gotAddr, gotName = address, name
+		return nil
+	})
+	if err := admin.RenameChannel(context.Background(), "DEV004", 1, "Kitchen Light"); err != nil {
+		t.Fatalf("RenameChannel: %v", err)
+	}
+	if gotAddr != "DEV004:1" || gotName != "Kitchen Light" {
+		t.Errorf("hook got (%q, %q), want (%q, %q)", gotAddr, gotName, "DEV004:1", "Kitchen Light")
+	}
+	if got := dev.Channel("DEV004:1").Name; got != "Kitchen Light" {
+		t.Errorf("in-memory channel name = %q, want %q", got, "Kitchen Light")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_UnknownDevice_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	admin, _, _, _ := buildBoost9Fixture(t)
+	err := admin.RenameChannel(context.Background(), "UNKNOWN", 1, "NewName")
+	if err == nil {
+		t.Error("expected error for unknown device in RenameChannel")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_NilRegistry_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	admin := &DeviceAdminDomain{registry: nil}
+	err := admin.RenameChannel(context.Background(), "DEV004", 1, "NewName")
+	if err == nil {
+		t.Error("expected error for nil registry in RenameChannel")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_HookError_Propagates(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	boom := errors.New("ccu unreachable")
+	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error { return boom })
+	err := admin.RenameChannel(context.Background(), "DEV004", 1, "NewName")
+	if !errors.Is(err, boom) {
+		t.Errorf("expected propagated hook error, got %v", err)
 	}
 }
 
@@ -10574,7 +10627,7 @@ func TestDeviceAdminUnpairDevice_DeviceFoundNoBackend(t *testing.T) {
 	t.Parallel()
 	reg, w := buildDeviceWithNoBackend(t, "ccu-b40-unpair-nobackend", "B40UNPAIRDEV")
 	a := NewDeviceAdminDomain(reg, w)
-	err := a.UnpairDevice(context.Background(), "B40UNPAIRDEV")
+	err := a.UnpairDevice(context.Background(), "B40UNPAIRDEV", false, false)
 	if err == nil {
 		t.Fatal("expected ErrNoDeviceBackend from UnpairDevice when no backend for interface")
 	}
@@ -10602,7 +10655,7 @@ func TestDeviceAdminAcceptInboxDevice_HubModelNilContinue(t *testing.T) {
 	a := NewDeviceAdminDomain(reg, nil)
 	// AcceptInboxDevice: finds c in registry → c.HubModel == nil → continue →
 	// exhausts loop → ErrNoDeviceBackend.
-	err = a.AcceptInboxDevice(context.Background(), "ANYDEV")
+	err = a.AcceptInboxDevice(context.Background(), "ANYDEV", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Fatal("expected error from AcceptInboxDevice with nil HubModel")
 	}
@@ -13142,7 +13195,7 @@ func (f *configFakeOperations) PutLinkParamset(_ context.Context, _, _ string, _
 func (f *configFakeOperations) ReportValueUsage(_ context.Context, _, _ string, _ int) error {
 	return nil
 }
-func (f *configFakeOperations) DeleteDevice(_ context.Context, _ string) error { return nil }
+func (f *configFakeOperations) DeleteDevice(_ context.Context, _ string, _ int) error { return nil }
 func (f *configFakeOperations) GetAllPrograms(_ context.Context) ([]map[string]any, error) {
 	return nil, nil
 }
@@ -13720,7 +13773,7 @@ func TestDeviceAdminDomain_SetFunctions_UnknownDevice_ReturnsErr(t *testing.T) {
 func TestDeviceAdminDomain_AcceptInboxDevice_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin := &DeviceAdminDomain{registry: nil, writer: nil}
-	err := admin.AcceptInboxDevice(context.Background(), "DEV003")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV003", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Error("expected error for nil registry in AcceptInboxDevice")
 	}
@@ -13733,7 +13786,7 @@ func TestDeviceAdminDomain_AcceptInboxDevice_UnknownDevice_ReturnsErr(t *testing
 	// Device is not in the inbox (HubModel.AcceptInboxDeviceRemote requires InboxAccepter).
 	// Since InboxAccepter is nil, it returns ErrNoInboxAccepter.
 	// The loop continues without finding a match → returns ErrNoDeviceBackend.
-	err := admin.AcceptInboxDevice(context.Background(), "UNKNOWN")
+	err := admin.AcceptInboxDevice(context.Background(), "UNKNOWN", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Error("expected error for unknown device in AcceptInboxDevice")
 	}
@@ -13888,7 +13941,7 @@ func TestDeviceAdminDomain_AcceptInboxDevice_SuccessPath_NilWriter(t *testing.T)
 	c.HubModel.InboxAccepter = &fakeInboxAccepter{err: nil}
 	// Use nil writer so the early return at "writer == nil" fires.
 	admin.writer = nil
-	err := admin.AcceptInboxDevice(context.Background(), "DEV004")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", interfaces.AcceptInboxOptions{})
 	if err != nil {
 		t.Fatalf("AcceptInboxDevice with nil writer: %v", err)
 	}
@@ -13898,7 +13951,7 @@ func TestDeviceAdminDomain_AcceptInboxDevice_SuccessPath_DeviceInRegistry(t *tes
 	t.Parallel()
 	admin, c, _, _ := buildBoost9Fixture(t)
 	c.HubModel.InboxAccepter = &fakeInboxAccepter{err: nil}
-	err := admin.AcceptInboxDevice(context.Background(), "DEV004")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", interfaces.AcceptInboxOptions{})
 	if err != nil {
 		t.Fatalf("AcceptInboxDevice with device in registry: %v", err)
 	}
@@ -13909,11 +13962,253 @@ func TestDeviceAdminDomain_AcceptInboxDevice_SuccessPath_DeviceNotInRegistry(t *
 	admin, c, _, _ := buildBoost9Fixture(t)
 	c.HubModel.InboxAccepter = &fakeInboxAccepter{err: nil}
 	// DEV999 is NOT in the model registry — exercises the "ok=false" branch.
-	err := admin.AcceptInboxDevice(context.Background(), "DEV999")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV999", interfaces.AcceptInboxOptions{})
 	// Loops through all centrals. InboxAccepter succeeds for DEV999 (it doesn't check).
 	// After success: c.ModelRegistry.Get("DEV999") → false → return nil.
 	if err != nil {
 		t.Fatalf("AcceptInboxDevice DEV999 not in registry: %v", err)
+	}
+}
+
+// captureRoomFuncMutator records room / function assignment calls so the
+// accept-orchestration tests can assert the follow-up steps ran and, on
+// error, that the remaining steps are still attempted (best-effort).
+type captureRoomFuncMutator struct {
+	rooms     []string
+	functions []string
+	roomsErr  error
+	funcsErr  error
+	roomCalls int
+	funcCalls int
+}
+
+func (c *captureRoomFuncMutator) SetDeviceRooms(_ context.Context, _ string, rooms []string) error {
+	c.roomCalls++
+	c.rooms = rooms
+	return c.roomsErr
+}
+
+func (c *captureRoomFuncMutator) SetDeviceFunctions(_ context.Context, _ string, functions []string) error {
+	c.funcCalls++
+	c.functions = functions
+	return c.funcsErr
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_AppliesInitialConfig verifies the
+// accept runs the optional first-time configuration (rename + rooms +
+// functions) against the accepting central.
+func TestDeviceAdminDomain_AcceptInboxDevice_AppliesInitialConfig(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Name:      "Kitchen Switch",
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts); err != nil {
+		t.Fatalf("AcceptInboxDevice with config: %v", err)
+	}
+	if m.roomCalls != 1 || m.funcCalls != 1 {
+		t.Fatalf("expected one room + one function write, got rooms=%d funcs=%d", m.roomCalls, m.funcCalls)
+	}
+	if len(m.rooms) != 1 || m.rooms[0] != "Kitchen" {
+		t.Fatalf("rooms not forwarded: %+v", m.rooms)
+	}
+	if dev, ok := c.ModelRegistry.Get("DEV004"); !ok || dev.Name != "Kitchen Switch" {
+		t.Fatalf("rename not applied in-memory: %+v", dev)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_ConfigError_WrapsIncomplete verifies
+// that a failing follow-up step (rooms) does not swallow the error: the
+// accept already succeeded, so the returned error wraps
+// ErrAcceptConfigIncomplete, and the remaining step (functions) is still
+// attempted.
+func TestDeviceAdminDomain_AcceptInboxDevice_ConfigError_WrapsIncomplete(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{roomsErr: errors.New("ccu unreachable")}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if err == nil {
+		t.Fatal("expected error when a follow-up config step fails")
+	}
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if m.funcCalls != 1 {
+		t.Fatalf("functions must still be attempted after a rooms failure, got %d calls", m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_RenameError_WrapsIncomplete_StillAppliesRoomsAndFunctions
+// mirrors the rooms-failure case above for the rename step: a failing
+// persistent rename must still wrap ErrAcceptConfigIncomplete and must not
+// short-circuit the remaining rooms/functions steps.
+func TestDeviceAdminDomain_AcceptInboxDevice_RenameError_WrapsIncomplete_StillAppliesRoomsAndFunctions(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	c.SetRenameDeviceFn(func(context.Context, string, string) error {
+		return errors.New("ccu rejected rename")
+	})
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Name:      "Kitchen Switch",
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if err == nil {
+		t.Fatal("expected error when the rename step fails")
+	}
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if m.roomCalls != 1 || m.funcCalls != 1 {
+		t.Fatalf("rooms/functions must still be attempted after a rename failure, got rooms=%d funcs=%d",
+			m.roomCalls, m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_FunctionsError_RoomsStillApplied is
+// the mirror image of the rooms-failure case: a failing functions write must
+// not prevent the rooms write from being attempted.
+func TestDeviceAdminDomain_AcceptInboxDevice_FunctionsError_RoomsStillApplied(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{funcsErr: errors.New("ccu unreachable")}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if err == nil {
+		t.Fatal("expected error when the functions step fails")
+	}
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if m.roomCalls != 1 {
+		t.Fatalf("rooms must still be attempted despite the functions error, got %d calls", m.roomCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_BothRoomsAndFunctionsFail_JoinsBothErrors
+// verifies that neither follow-up failure swallows the other: errors.Join
+// keeps both underlying causes discoverable via errors.Is on the returned,
+// ErrAcceptConfigIncomplete-wrapped error.
+func TestDeviceAdminDomain_AcceptInboxDevice_BothRoomsAndFunctionsFail_JoinsBothErrors(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	roomsErr := errors.New("rooms ccu unreachable")
+	funcsErr := errors.New("functions ccu unreachable")
+	m := &captureRoomFuncMutator{roomsErr: roomsErr, funcsErr: funcsErr}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if !errors.Is(err, roomsErr) {
+		t.Errorf("expected the rooms error to survive the join: %v", err)
+	}
+	if !errors.Is(err, funcsErr) {
+		t.Errorf("expected the functions error to survive the join: %v", err)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_ZeroValueOpts_MutatorsNotCalled
+// guards the "untouched" contract: even when RoomMutator/FunctionMutator are
+// wired, a zero-value opts (plain accept) must not invoke either of them.
+func TestDeviceAdminDomain_AcceptInboxDevice_ZeroValueOpts_MutatorsNotCalled(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", interfaces.AcceptInboxOptions{}); err != nil {
+		t.Fatalf("plain accept must not error: %v", err)
+	}
+	if m.roomCalls != 0 || m.funcCalls != 0 {
+		t.Fatalf("a zero-value opts must leave rooms/functions untouched, got rooms=%d funcs=%d",
+			m.roomCalls, m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_EmptyRoomsSlice_ClearsAssignment
+// locks in the documented distinction between a nil Rooms slice ("leave
+// untouched") and an explicit empty slice ("clear the assignment"): the
+// latter must still reach the hub write with a zero-length slice.
+func TestDeviceAdminDomain_AcceptInboxDevice_EmptyRoomsSlice_ClearsAssignment(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{Rooms: []string{}}
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts); err != nil {
+		t.Fatalf("accept with empty rooms slice must not error: %v", err)
+	}
+	if m.roomCalls != 1 {
+		t.Fatalf("expected the empty rooms slice to still trigger a write, got %d calls", m.roomCalls)
+	}
+	if len(m.rooms) != 0 {
+		t.Fatalf("expected an empty rooms write, got %+v", m.rooms)
+	}
+	if m.funcCalls != 0 {
+		t.Fatalf("functions must stay untouched when opts.Functions is nil, got %d calls", m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_IncludeChannels_RenamesChannelsToo
+// verifies the accept-time orchestration forwards IncludeChannels into
+// RenameDeviceWithChannels so every channel picks up the "<name>:<no>"
+// cascade, not just the device itself.
+func TestDeviceAdminDomain_AcceptInboxDevice_IncludeChannels_RenamesChannelsToo(t *testing.T) {
+	t.Parallel()
+	admin, c, dev, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+
+	opts := interfaces.AcceptInboxOptions{Name: "Kitchen Switch", IncludeChannels: true}
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts); err != nil {
+		t.Fatalf("AcceptInboxDevice with include_channels: %v", err)
+	}
+	ch := dev.Channel("DEV004:1")
+	if ch == nil {
+		t.Fatal("channel DEV004:1 not found")
+	}
+	if ch.Name != "Kitchen Switch:1" {
+		t.Fatalf("expected channel rename cascade, got %q", ch.Name)
 	}
 }
 

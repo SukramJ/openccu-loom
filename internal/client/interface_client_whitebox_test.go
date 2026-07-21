@@ -462,7 +462,7 @@ func (b *orchBackendStub) PutLinkParamset(context.Context, string, string, map[s
 
 func (b *orchBackendStub) ReportValueUsage(context.Context, string, string, int) error { return nil }
 
-func (b *orchBackendStub) DeleteDevice(context.Context, string) error { return nil }
+func (b *orchBackendStub) DeleteDevice(context.Context, string, int) error { return nil }
 
 func (b *orchBackendStub) GetAllPrograms(context.Context) ([]map[string]any, error) {
 	return nil, nil

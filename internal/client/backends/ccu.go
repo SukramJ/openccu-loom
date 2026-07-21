@@ -377,13 +377,14 @@ func (b *CcuBackend) ReportValueUsage(ctx context.Context, channelAddress, value
 }
 
 // DeleteDevice implements Operations. Maps to the CCU's XML-RPC
-// `deleteDevice(address, flags)` with flags=0 — let the CCU run the regular
+// `deleteDevice(address, flags)`. flags is the CCU delete bitmask
+// ([DeleteFlagReset], [DeleteFlagForce]); 0 lets the CCU run the regular
 // un-pair handshake.
-func (b *CcuBackend) DeleteDevice(ctx context.Context, address string) error {
+func (b *CcuBackend) DeleteDevice(ctx context.Context, address string, flags int) error {
 	if b.xml == nil {
 		return ErrNotWired
 	}
-	_, err := b.xml.Call(ctx, "deleteDevice", address, 0)
+	_, err := b.xml.Call(ctx, "deleteDevice", address, flags)
 	return err
 }
 

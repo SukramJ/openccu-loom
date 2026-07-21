@@ -182,7 +182,7 @@ func TestCcuBackendDeleteDeviceDispatchesXMLRPC(t *testing.T) {
 	t.Parallel()
 	x := &fakeCaller{reply: nil}
 	b := NewCcuBackend(x, nil, nil)
-	if err := b.DeleteDevice(context.Background(), "0001ABCD"); err != nil {
+	if err := b.DeleteDevice(context.Background(), "0001ABCD", 0); err != nil {
 		t.Fatalf("DeleteDevice: %v", err)
 	}
 	got, _ := x.lastArg.Load().([]any)
@@ -198,10 +198,27 @@ func TestCcuBackendDeleteDeviceDispatchesXMLRPC(t *testing.T) {
 	}
 }
 
+// TestCcuBackendDeleteDeviceForwardsFlags verifies the reset|force delete
+// bitmask reaches the CCU on the wire rather than a hard-coded 0.
+func TestCcuBackendDeleteDeviceForwardsFlags(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: nil}
+	b := NewCcuBackend(x, nil, nil)
+	flags := DeleteFlagReset | DeleteFlagForce
+	if err := b.DeleteDevice(context.Background(), "0001ABCD", flags); err != nil {
+		t.Fatalf("DeleteDevice: %v", err)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	args, _ := got[1].([]any)
+	if len(args) != 2 || args[0] != "0001ABCD" || args[1] != flags {
+		t.Fatalf("args=%v, want [0001ABCD %d]", args, flags)
+	}
+}
+
 func TestCcuBackendDeleteDeviceWithoutXMLRPCErrors(t *testing.T) {
 	t.Parallel()
 	b := NewCcuBackend(nil, nil, nil)
-	if err := b.DeleteDevice(context.Background(), "0001ABCD"); !errors.Is(err, ErrNotWired) {
+	if err := b.DeleteDevice(context.Background(), "0001ABCD", 0); !errors.Is(err, ErrNotWired) {
 		t.Fatalf("expected ErrNotWired, got %v", err)
 	}
 }
@@ -209,7 +226,7 @@ func TestCcuBackendDeleteDeviceWithoutXMLRPCErrors(t *testing.T) {
 func TestCuxdBackendDeleteDeviceUnsupported(t *testing.T) {
 	t.Parallel()
 	b := NewCuxdBackend(&fakeCaller{}, nil)
-	if err := b.DeleteDevice(context.Background(), "CUX0001"); !errors.Is(err, ErrUnsupported) {
+	if err := b.DeleteDevice(context.Background(), "CUX0001", 0); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("expected ErrUnsupported, got %v", err)
 	}
 }

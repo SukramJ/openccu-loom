@@ -5,6 +5,7 @@ package interfaces
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -93,13 +94,56 @@ type DataPointWriter interface {
 // operations. Separate from DeviceIndex so read-only deployments
 // can leave it nil.
 type DeviceAdmin interface {
-	UnpairDevice(ctx context.Context, address string) error
-	RenameDevice(ctx context.Context, address, name string) error
-	AcceptInboxDevice(ctx context.Context, address string) error
+	// UnpairDevice removes the device from the CCU. reset additionally
+	// factory-resets the device during removal; force removes an unreachable
+	// device even when the CCU cannot reach it for the handshake. Both map to
+	// the CCU `deleteDevice` delete bitmask.
+	UnpairDevice(ctx context.Context, address string, reset, force bool) error
+	// RenameDevice persists the device name to the CCU. When
+	// includeChannels is true every channel is renamed along with the
+	// pattern "<name>:<channelNo>", matching the CCU WebUI behaviour.
+	RenameDevice(ctx context.Context, address, name string, includeChannels bool) error
+	// RenameChannel persists a single channel name to the CCU. The
+	// channel address is resolved as deviceAddr + ":" + channelNo.
+	RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error
+	// AcceptInboxDevice promotes a pending inbox device into the active
+	// registry. opts carries the optional first-time configuration
+	// (name, rooms, functions) applied best-effort right after the
+	// accept; a zero-value opts accepts only. When a follow-up step
+	// fails the accept has already happened, so the returned error wraps
+	// [ErrAcceptConfigIncomplete].
+	AcceptInboxDevice(ctx context.Context, address string, opts AcceptInboxOptions) error
 	UpdateFirmware(ctx context.Context, address string) error
 	SetRooms(ctx context.Context, address string, rooms []string) error
 	SetFunctions(ctx context.Context, address string, functions []string) error
 }
+
+// AcceptInboxOptions carries the optional first-time configuration
+// applied to an inbox device immediately after it is accepted. Every
+// field is optional: an empty Name skips the rename, and nil Rooms /
+// Functions leave those assignments untouched (an explicit empty slice
+// clears them). IncludeChannels only matters together with Name and
+// mirrors the device-rename cascade ("<name>:<channelNo>").
+type AcceptInboxOptions struct {
+	Name            string
+	IncludeChannels bool
+	Rooms           []string
+	Functions       []string
+}
+
+// HasConfig reports whether any optional first-time configuration was
+// requested. When false the accept is a plain promotion with no
+// follow-up steps.
+func (o AcceptInboxOptions) HasConfig() bool {
+	return o.Name != "" || o.Rooms != nil || o.Functions != nil
+}
+
+// ErrAcceptConfigIncomplete signals that an inbox device was accepted
+// successfully but one or more of the optional first-time configuration
+// steps (rename, rooms, functions) failed afterwards. The accept itself
+// is durable — callers should surface this so the operator re-applies
+// only the configuration rather than re-accepting the device.
+var ErrAcceptConfigIncomplete = errors.New("device accepted but initial configuration incomplete")
 
 // DiagnosticsIntrospectService is the facade the live-introspection
 // diagnostics endpoints depend on. It exposes read-only daemon internals

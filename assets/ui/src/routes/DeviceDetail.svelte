@@ -26,6 +26,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
 
   type Props = {
     address: string;
@@ -122,9 +123,33 @@
   let renaming = $state(false);
   let renameValue = $state("");
   let renameBusy = $state(false);
+  // Whether the device rename also cascades to every channel
+  // ("<name>:<channelNo>"). Default on, matching the CCU WebUI.
+  let renameIncludeChannels = $state(true);
+
+  // Per-channel rename workflow state. renameChannelNo is the channel
+  // number currently being edited (null = no dialog open).
+  let renameChannelNo = $state<number | null>(null);
+  let renameChannelValue = $state("");
+  let renameChannelBusy = $state(false);
   let deleting = $state(false);
   let updatingFw = $state(false);
   let exportingDef = $state(false);
+
+  // Delete-with-options dialog. The plain confirm becomes a small options
+  // dialog: a mode radio (plain unpair / factory reset) plus a "force
+  // removal" checkbox for unreachable devices. Before the dialog is usable
+  // the direct links and programs that reference the device are loaded so a
+  // dependency warning can be shown.
+  let deleteDialogOpen = $state(false);
+  let deleteMode = $state<"unpair" | "reset">("unpair");
+  let deleteForce = $state(false);
+  let deleteDepsLoading = $state(false);
+  let deleteLinkCount = $state(0);
+  let deleteProgramNames = $state<string[]>([]);
+  const deleteHasDeps = $derived(
+    deleteLinkCount > 0 || deleteProgramNames.length > 0,
+  );
 
   let editingRooms = $state(false);
   let roomsDraft = $state("");
@@ -220,6 +245,7 @@
 
   function startRename() {
     renameValue = detail?.name ?? "";
+    renameIncludeChannels = true;
     renaming = true;
   }
 
@@ -232,7 +258,7 @@
     }
     renameBusy = true;
     try {
-      await api.renameDevice(address, next);
+      await api.renameDevice(address, next, renameIncludeChannels);
       toastStore.success(t("device.renamed"));
       renaming = false;
       await load();
@@ -243,21 +269,83 @@
     }
   }
 
-  async function onDelete() {
+  function startRenameChannel(no: number, currentName: string) {
+    renameChannelNo = no;
+    renameChannelValue = currentName;
+  }
+
+  function cancelRenameChannel() {
+    renameChannelNo = null;
+    renameChannelValue = "";
+  }
+
+  async function commitRenameChannel() {
+    if (renameChannelNo === null) return;
+    const next = renameChannelValue.trim();
+    if (!next) {
+      cancelRenameChannel();
+      return;
+    }
+    renameChannelBusy = true;
+    try {
+      await api.renameChannel(address, renameChannelNo, next);
+      toastStore.success(t("channel.renamed"));
+      cancelRenameChannel();
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      renameChannelBusy = false;
+    }
+  }
+
+  function onDelete() {
     if (!detail) return;
-    const ok = await confirmStore.ask({
-      title: t("device.confirm_remove_title"),
-      body: t("device.confirm_remove_body", {
-        name: detail.name || detail.address,
-      }),
-      confirmLabel: t("common.delete"),
-      destructive: true,
-    });
-    if (!ok) return;
+    deleteMode = "unpair";
+    deleteForce = false;
+    deleteDialogOpen = true;
+    void loadDeleteDependencies();
+  }
+
+  // Load the dependencies that a removal would orphan: direct links on the
+  // device and CCU programs that reference it. Best-effort — a failed probe
+  // must not block the delete flow, so both fall back to an empty list and
+  // simply suppress the corresponding warning.
+  async function loadDeleteDependencies() {
+    if (!detail) return;
+    const addr = detail.address;
+    deleteDepsLoading = true;
+    deleteLinkCount = 0;
+    deleteProgramNames = [];
+    try {
+      const [links, programs] = await Promise.all([
+        api.listLinks(addr, locale).catch(() => []),
+        api.listPrograms().catch(() => []),
+      ]);
+      deleteLinkCount = links.length;
+      deleteProgramNames = programs
+        .filter((p) => p.device_address === addr)
+        .map((p) => p.name);
+    } finally {
+      deleteDepsLoading = false;
+    }
+  }
+
+  function cancelDelete() {
+    if (deleting) return;
+    deleteDialogOpen = false;
+  }
+
+  async function confirmDelete() {
+    if (!detail) return;
     deleting = true;
     try {
-      await api.deleteDevice(address);
+      await api.deleteDevice(address, {
+        reset: deleteMode === "reset",
+        force: deleteForce,
+      });
       toastStore.success(t("device.removed"));
+      deleteDialogOpen = false;
       location.hash = "#/devices";
     } catch (err) {
       toastStore.error(err instanceof Error ? err.message : String(err));
@@ -430,34 +518,48 @@
       >
         <div class="min-w-0 flex-1">
           {#if renaming}
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="w-full sm:w-64">
-                <Input
-                  type="text"
-                  bind:value={renameValue}
-                  onkeydown={(e) => {
-                    if (e.key === "Enter") void commitRename();
-                    else if (e.key === "Escape") renaming = false;
-                  }}
-                />
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="w-full sm:w-64">
+                  <Input
+                    type="text"
+                    aria-label={t("device.rename")}
+                    bind:value={renameValue}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter") void commitRename();
+                      else if (e.key === "Escape") renaming = false;
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => void commitRename()}
+                  disabled={renameBusy}
+                >
+                  {t("common.save")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => (renaming = false)}
+                  disabled={renameBusy}
+                >
+                  {t("common.cancel")}
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                onclick={() => void commitRename()}
-                disabled={renameBusy}
+              <label
+                for="rename-include-channels"
+                class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
               >
-                {t("common.save")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => (renaming = false)}
-                disabled={renameBusy}
-              >
-                {t("common.cancel")}
-              </Button>
+                <Switch
+                  id="rename-include-channels"
+                  bind:checked={renameIncludeChannels}
+                  disabled={renameBusy}
+                />
+                <span>{t("device.rename_include_channels")}</span>
+              </label>
             </div>
           {:else}
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
@@ -606,7 +708,7 @@
               type="button"
               variant="outline-destructive"
               size="sm"
-              onclick={() => void onDelete()}
+              onclick={onDelete}
               disabled={deleting}
             >
               <Icon name="mdi:trash-can" size={14} />
@@ -781,6 +883,56 @@
                 </div>
               </Card>
             {:else}
+              <!-- Per-channel rename affordance. The pencil opens an inline
+                   editor; the CCU stores the channel name via Channel.setName. -->
+              <div class="mb-3 flex flex-wrap items-center gap-2">
+                {#if renameChannelNo === ch.number}
+                  <div class="w-full sm:w-64">
+                    <Input
+                      type="text"
+                      aria-label={t("channel.rename")}
+                      bind:value={renameChannelValue}
+                      onkeydown={(e) => {
+                        if (e.key === "Enter") void commitRenameChannel();
+                        else if (e.key === "Escape") cancelRenameChannel();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onclick={() => void commitRenameChannel()}
+                    disabled={renameChannelBusy}
+                  >
+                    {t("common.save")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onclick={cancelRenameChannel}
+                    disabled={renameChannelBusy}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                {:else}
+                  <h3 class="font-medium text-slate-900 dark:text-white">
+                    {ch.name?.trim() ||
+                      ch.type_label ||
+                      t("device.channel_n", { n: ch.number })}
+                  </h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t("channel.rename")}
+                    title={t("channel.rename")}
+                    onclick={() => startRenameChannel(ch.number, ch.name ?? "")}
+                  >
+                    <Icon name="mdi:pencil" size={16} />
+                  </Button>
+                {/if}
+              </div>
               <ChannelPanel
                 address={detail.address}
                 channel={ch.number}
@@ -860,6 +1012,155 @@
       {/if}
     {:else}
       <EmptyState message={t("device.no_channels")} />
+    {/if}
+
+    <!-- Remove-device options dialog. Follows the shared ConfirmDialog
+         visual pattern (overlay + card tokens + destructive confirm) but
+         hosts the removal-mode radio, force checkbox, and dependency
+         warning the plain confirm dialog cannot carry. -->
+    {#if deleteDialogOpen}
+      <div
+        class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
+        style="background-color: rgb(0 0 0 / 0.45);"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("device.confirm_remove_title")}
+        tabindex="-1"
+        onclick={(e) => {
+          if (e.target === e.currentTarget) cancelDelete();
+        }}
+        onkeydown={(e) => {
+          if (e.key === "Escape") cancelDelete();
+        }}
+      >
+        <div
+          class="w-full max-w-md p-5"
+          style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
+        >
+          <h2 class="mb-2 text-lg font-semibold">
+            {t("device.confirm_remove_title")}
+          </h2>
+          <p class="mb-4 text-sm" style="color: var(--ha-secondary-text-color);">
+            {t("device.confirm_remove_body", {
+              name: detail.name || detail.address,
+            })}
+          </p>
+
+          {#if deleteDepsLoading}
+            <p
+              class="mb-4 text-sm"
+              style="color: var(--ha-secondary-text-color);"
+            >
+              {t("device.delete.checking")}
+            </p>
+          {:else if deleteHasDeps}
+            <div
+              class="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
+              role="alert"
+            >
+              <p class="font-semibold">{t("device.delete.warning_title")}</p>
+              <ul class="mt-1 list-inside list-disc space-y-0.5">
+                {#if deleteLinkCount > 0}
+                  <li>
+                    {t("device.delete.warning_links", {
+                      count: deleteLinkCount,
+                    })}
+                  </li>
+                {/if}
+                {#if deleteProgramNames.length > 0}
+                  <li>
+                    {t("device.delete.warning_programs", {
+                      count: deleteProgramNames.length,
+                    })}
+                  </li>
+                {/if}
+              </ul>
+            </div>
+          {/if}
+
+          <fieldset class="mb-4">
+            <legend class="mb-2 text-sm font-medium">
+              {t("device.delete.mode_label")}
+            </legend>
+            <label class="flex items-start gap-2 py-1 text-sm">
+              <input
+                type="radio"
+                name="delete-mode"
+                value="unpair"
+                bind:group={deleteMode}
+                class="mt-0.5 accent-brand-600"
+              />
+              <span>
+                <span class="font-medium">{t("device.delete.mode_unpair")}</span>
+                <span
+                  class="block text-xs"
+                  style="color: var(--ha-secondary-text-color);"
+                >
+                  {t("device.delete.mode_unpair_hint")}
+                </span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 py-1 text-sm">
+              <input
+                type="radio"
+                name="delete-mode"
+                value="reset"
+                bind:group={deleteMode}
+                class="mt-0.5 accent-brand-600"
+              />
+              <span>
+                <span class="font-medium">{t("device.delete.mode_reset")}</span>
+                <span
+                  class="block text-xs"
+                  style="color: var(--ha-secondary-text-color);"
+                >
+                  {t("device.delete.mode_reset_hint")}
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
+          <label class="mb-4 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              bind:checked={deleteForce}
+              class="mt-0.5 accent-brand-600"
+            />
+            <span>
+              <span class="font-medium">{t("device.delete.force")}</span>
+              <span
+                class="block text-xs"
+                style="color: var(--ha-secondary-text-color);"
+              >
+                {t("device.delete.force_hint")}
+              </span>
+            </span>
+          </label>
+
+          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              class="w-full sm:w-auto"
+              onclick={cancelDelete}
+              disabled={deleting}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="md"
+              class="w-full sm:w-auto"
+              onclick={() => void confirmDelete()}
+              disabled={deleting}
+            >
+              {t("common.delete")}
+            </Button>
+          </div>
+        </div>
+      </div>
     {/if}
   {/if}
 </section>

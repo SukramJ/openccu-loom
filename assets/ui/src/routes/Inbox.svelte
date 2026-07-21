@@ -6,6 +6,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
@@ -103,11 +104,104 @@
     }
   }
 
-  async function accept(addr: string, central: string) {
-    accepting = addr;
+  // Accept dialog — first-time configuration (name, rooms, functions)
+  // applied right after the CCU accepts the device out of the inbox.
+  // A null target means the dialog is closed; leaving every field empty
+  // and confirming performs a plain accept.
+  let acceptTarget = $state<{ address: string; central: string } | null>(null);
+  let acceptName = $state("");
+  let acceptIncludeChannels = $state(false);
+  let acceptRooms = $state<Set<string>>(new Set());
+  let acceptFunctions = $state<Set<string>>(new Set());
+  let acceptSubmitting = $state(false);
+
+  // Room / function catalogues for the multi-selects. Loaded lazily the
+  // first time the dialog opens; a load failure leaves the lists empty so
+  // the operator can still accept + rename.
+  let roomOptions = $state<string[]>([]);
+  let functionOptions = $state<string[]>([]);
+  let catalogsLoaded = $state(false);
+
+  async function loadCatalogs() {
+    if (catalogsLoaded) return;
     try {
-      await api.acceptInboxDevice(addr, central);
-      toastStore.success(t("inbox.accepted", { name: addr }));
+      const [rooms, functions] = await Promise.all([
+        api.listRooms(),
+        api.listFunctions(),
+      ]);
+      roomOptions = rooms.map((r) => r.name).sort((a, b) => a.localeCompare(b));
+      functionOptions = functions
+        .map((f) => f.name)
+        .sort((a, b) => a.localeCompare(b));
+      catalogsLoaded = true;
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError
+          ? `${err.status}: ${t("inbox.accept_dialog.catalog_error")}`
+          : t("inbox.accept_dialog.catalog_error"),
+      );
+    }
+  }
+
+  function openAccept(addr: string, central: string) {
+    acceptTarget = { address: addr, central };
+    acceptName = "";
+    acceptIncludeChannels = false;
+    acceptRooms = new Set();
+    acceptFunctions = new Set();
+    void loadCatalogs();
+  }
+
+  function closeAccept() {
+    acceptTarget = null;
+  }
+
+  // Set mutations must reassign so the rune re-tracks the value.
+  function toggleRoom(name: string) {
+    const next = new Set(acceptRooms);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    acceptRooms = next;
+  }
+
+  function toggleFunction(name: string) {
+    const next = new Set(acceptFunctions);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    acceptFunctions = next;
+  }
+
+  async function confirmAccept() {
+    if (!acceptTarget) return;
+    const { address, central } = acceptTarget;
+    const name = acceptName.trim();
+    const rooms = Array.from(acceptRooms);
+    const functions = Array.from(acceptFunctions);
+    // Build a config object carrying only the fields the operator set,
+    // so an untouched field stays untouched on the CCU.
+    const config: {
+      name?: string;
+      include_channels?: boolean;
+      rooms?: string[];
+      functions?: string[];
+    } = {};
+    if (name) {
+      config.name = name;
+      if (acceptIncludeChannels) config.include_channels = true;
+    }
+    if (rooms.length > 0) config.rooms = rooms;
+    if (functions.length > 0) config.functions = functions;
+
+    accepting = address;
+    acceptSubmitting = true;
+    try {
+      await api.acceptInboxDevice(
+        address,
+        central,
+        Object.keys(config).length > 0 ? config : undefined,
+      );
+      toastStore.success(t("inbox.accepted", { name: name || address }));
+      acceptTarget = null;
       await load();
     } catch (err) {
       toastStore.error(
@@ -118,6 +212,7 @@
             : String(err),
       );
     } finally {
+      acceptSubmitting = false;
       accepting = null;
     }
   }
@@ -322,7 +417,7 @@
             <Button
               type="button"
               size="sm"
-              onclick={() => void accept(d.address, d.central ?? "")}
+              onclick={() => openAccept(d.address, d.central ?? "")}
               disabled={accepting === d.address}
             >
               {accepting === d.address ? "…" : t("inbox.accept")}
@@ -333,3 +428,130 @@
     </Card>
   {/if}
 </section>
+
+{#if acceptTarget}
+  <!-- Accept dialog: optional first-time configuration before the device
+       joins the running registry. Confirming with everything blank is a
+       plain accept. -->
+  <div
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
+    style="background-color: rgb(0 0 0 / 0.45);"
+    role="dialog"
+    aria-modal="true"
+    aria-label={t("inbox.accept_dialog.title")}
+    tabindex="-1"
+    onclick={(e) => {
+      if (e.target === e.currentTarget && !acceptSubmitting) closeAccept();
+    }}
+    onkeydown={(e) => {
+      if (e.key === "Escape" && !acceptSubmitting) closeAccept();
+    }}
+  >
+    <div
+      class="max-h-[90vh] w-full max-w-lg overflow-y-auto p-5"
+      style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
+    >
+      <h2 class="mb-1 text-lg font-semibold">{t("inbox.accept_dialog.title")}</h2>
+      <p class="mb-4 text-sm" style="color: var(--ha-secondary-text-color);">
+        {t("inbox.accept_dialog.subtitle", { address: acceptTarget.address })}
+      </p>
+
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          void confirmAccept();
+        }}
+      >
+        <div class="mb-4">
+          <label
+            class="mb-1 block text-sm font-medium"
+            for="accept-name"
+          >
+            {t("inbox.accept_dialog.name_label")}
+          </label>
+          <Input
+            id="accept-name"
+            bind:value={acceptName}
+            placeholder={t("inbox.accept_dialog.name_placeholder")}
+            disabled={acceptSubmitting}
+          />
+          <label
+            class="mt-2 flex items-center gap-2 text-sm"
+            class:opacity-50={acceptName.trim() === ""}
+          >
+            <input
+              type="checkbox"
+              bind:checked={acceptIncludeChannels}
+              disabled={acceptSubmitting || acceptName.trim() === ""}
+              class="h-4 w-4 rounded border-[var(--ha-divider-color)] text-brand-600 focus:ring-brand-500"
+            />
+            {t("inbox.accept_dialog.include_channels")}
+          </label>
+        </div>
+
+        <div class="mb-4">
+          <span class="mb-1 block text-sm font-medium">{t("inbox.accept_dialog.rooms_label")}</span>
+          {#if roomOptions.length === 0}
+            <p class="text-sm" style="color: var(--ha-secondary-text-color);">
+              {t("inbox.accept_dialog.no_rooms")}
+            </p>
+          {:else}
+            <div class="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border border-[var(--ha-divider-color)] p-2">
+              {#each roomOptions as room (room)}
+                <label class="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={acceptRooms.has(room)}
+                    onchange={() => toggleRoom(room)}
+                    disabled={acceptSubmitting}
+                    class="h-4 w-4 rounded border-[var(--ha-divider-color)] text-brand-600 focus:ring-brand-500"
+                  />
+                  {room}
+                </label>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="mb-5">
+          <span class="mb-1 block text-sm font-medium">{t("inbox.accept_dialog.functions_label")}</span>
+          {#if functionOptions.length === 0}
+            <p class="text-sm" style="color: var(--ha-secondary-text-color);">
+              {t("inbox.accept_dialog.no_functions")}
+            </p>
+          {:else}
+            <div class="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border border-[var(--ha-divider-color)] p-2">
+              {#each functionOptions as fn (fn)}
+                <label class="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={acceptFunctions.has(fn)}
+                    onchange={() => toggleFunction(fn)}
+                    disabled={acceptSubmitting}
+                    class="h-4 w-4 rounded border-[var(--ha-divider-color)] text-brand-600 focus:ring-brand-500"
+                  />
+                  {fn}
+                </label>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            class="w-full sm:w-auto"
+            onclick={closeAccept}
+            disabled={acceptSubmitting}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" class="w-full sm:w-auto" disabled={acceptSubmitting}>
+            {acceptSubmitting ? "…" : t("inbox.accept_dialog.submit")}
+          </Button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}

@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.46.0
+
+- **Device admin from the UI.** Renaming a device now persists to the
+  CCU (optionally renaming all channels along), single channels can be
+  renamed, removing a device offers factory-reset / force options with
+  a warning when direct links or programs still reference it, and
+  accepting a new device from the inbox can set its name, rooms, and
+  functions in one step.
+
 ## 0.45.0
 
 - **REST API: complete entity names for primary parameters.** The
