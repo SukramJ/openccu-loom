@@ -89,7 +89,7 @@ func (b *countingBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[
 
 func (b *countingBackend) ReportValueUsage(_ context.Context, _, _ string, _ int) error { return nil }
 
-func (b *countingBackend) DeleteDevice(_ context.Context, _ string) error { return nil }
+func (b *countingBackend) DeleteDevice(_ context.Context, _ string, _ int) error { return nil }
 
 func (b *countingBackend) GetAllPrograms(_ context.Context) ([]map[string]any, error) {
 	return nil, nil

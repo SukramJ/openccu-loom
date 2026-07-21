@@ -19,7 +19,11 @@ import (
 // DeviceAdmin is an alias for the canonical interface in pkg/interfaces.
 type DeviceAdmin = interfaces.DeviceAdmin
 
-// DeleteDevice removes a device (unpair via CCU).
+// DeleteDevice removes a device (unpair via CCU). The optional query flags
+// `reset` and `force` map onto the CCU delete bitmask: reset factory-resets
+// the device during removal, force removes an unreachable device even when the
+// CCU cannot complete the handshake. A backend without a pairing concept
+// (CUxD) surfaces [backends.ErrUnsupported] and becomes 422.
 func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if admin == nil {
@@ -27,12 +31,27 @@ func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Device admin unavailable", ""))
 			return
 		}
-		if err := admin.UnpairDevice(r.Context(), chi.URLParam(r, "addr")); err != nil {
+		reset := queryBool(r, "reset")
+		force := queryBool(r, "force")
+		if err := admin.UnpairDevice(r.Context(), chi.URLParam(r, "addr"), reset, force); err != nil {
+			if errors.Is(err, backends.ErrUnsupported) {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "Unpair not supported by this backend", ""))
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Unpair failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
 	}
+}
+
+// queryBool parses a boolean query flag. A missing or malformed value is
+// treated as false, matching the "flag defaults off" contract of the delete
+// options.
+func queryBool(r *http.Request, name string) bool {
+	v, err := strconv.ParseBool(r.URL.Query().Get(name))
+	return err == nil && v
 }
 
 // DevicePatchRequest is the body of `PATCH /devices/{addr}`.

@@ -478,10 +478,22 @@ export const api = {
       },
     );
   },
-  deleteDevice(address: string) {
-    return request<void>(`/devices/${encodeURIComponent(address)}`, {
-      method: "DELETE",
-    });
+  // deleteDevice unpairs a device. reset additionally factory-resets the
+  // device during removal; force removes an unreachable device even when the
+  // CCU cannot complete the handshake. Both map onto the CCU delete bitmask
+  // via the `reset` / `force` query flags.
+  deleteDevice(
+    address: string,
+    opts: { reset?: boolean; force?: boolean } = {},
+  ) {
+    const qs = new URLSearchParams();
+    if (opts.reset) qs.set("reset", "true");
+    if (opts.force) qs.set("force", "true");
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}${suffix}`,
+      { method: "DELETE" },
+    );
   },
   acceptInboxDevice(address: string, central: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";

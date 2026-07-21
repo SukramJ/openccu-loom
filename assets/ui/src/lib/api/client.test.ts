@@ -138,6 +138,51 @@ describe("api endpoint paths", () => {
   });
 });
 
+describe("api — deleteDevice reset/force query flags", () => {
+  it("DELETEs without a query string when no options are given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD");
+    expect((init.method ?? "GET").toUpperCase()).toBe("DELETE");
+  });
+
+  it("omits the query string when reset and force are both explicitly false", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: false, force: false });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD");
+  });
+
+  it("appends only reset=true when force is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?reset=true");
+  });
+
+  it("appends only force=true when reset is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { force: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?force=true");
+  });
+
+  it("appends both flags when reset and force are true", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: true, force: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?reset=true&force=true");
+  });
+
+  it("percent-encodes the address ahead of the query flags", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001:2", { reset: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2?reset=true");
+  });
+});
+
 describe("api — reliability + values-cache admin wrappers", () => {
   it("getReliability GETs /diagnostics/reliability with no central filter", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse([]));

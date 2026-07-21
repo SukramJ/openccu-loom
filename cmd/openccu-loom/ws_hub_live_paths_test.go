@@ -88,7 +88,7 @@ func (t *testBackendOps) PutLinkParamset(_ context.Context, _, _ string, _ map[s
 
 func (t *testBackendOps) ReportValueUsage(_ context.Context, _, _ string, _ int) error { return nil }
 
-func (t *testBackendOps) DeleteDevice(_ context.Context, _ string) error { return nil }
+func (t *testBackendOps) DeleteDevice(_ context.Context, _ string, _ int) error { return nil }
 
 func (t *testBackendOps) GetAllPrograms(_ context.Context) ([]map[string]any, error) { return nil, nil }
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.30.0
+  version: 2.31.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -165,6 +165,13 @@ paths:
     delete:
       operationId: deleteDevice
       summary: Remove a device from the registry (admin)
+      description: |
+        Unpairs the device via the CCU `deleteDevice` call. Two optional
+        query flags map onto the CCU delete bitmask: `reset=true` also
+        factory-resets the device during removal, and `force=true` removes
+        an unreachable device even when the CCU cannot complete the
+        handshake. Both default to false (plain unpair). A backend without a
+        pairing concept (CUxD) answers 422.
       tags: [devices]
       security:
         - basicAuth: []
@@ -172,9 +179,24 @@ paths:
         - openIdConnect: [admin]
       parameters:
         - $ref: "#/components/parameters/Address"
+        - name: reset
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: >-
+            Also reset the device to factory defaults during removal
+            (CCU DELETE_FLAG_RESET).
+        - name: force
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: >-
+            Force removal even when the device is unreachable
+            (CCU DELETE_FLAG_FORCE).
       responses:
         "202":
           description: Unpair dispatched asynchronously
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     patch:

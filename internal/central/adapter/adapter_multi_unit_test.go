@@ -10626,7 +10626,7 @@ func TestDeviceAdminUnpairDevice_DeviceFoundNoBackend(t *testing.T) {
 	t.Parallel()
 	reg, w := buildDeviceWithNoBackend(t, "ccu-b40-unpair-nobackend", "B40UNPAIRDEV")
 	a := NewDeviceAdminDomain(reg, w)
-	err := a.UnpairDevice(context.Background(), "B40UNPAIRDEV")
+	err := a.UnpairDevice(context.Background(), "B40UNPAIRDEV", false, false)
 	if err == nil {
 		t.Fatal("expected ErrNoDeviceBackend from UnpairDevice when no backend for interface")
 	}
@@ -13194,7 +13194,7 @@ func (f *configFakeOperations) PutLinkParamset(_ context.Context, _, _ string, _
 func (f *configFakeOperations) ReportValueUsage(_ context.Context, _, _ string, _ int) error {
 	return nil
 }
-func (f *configFakeOperations) DeleteDevice(_ context.Context, _ string) error { return nil }
+func (f *configFakeOperations) DeleteDevice(_ context.Context, _ string, _ int) error { return nil }
 func (f *configFakeOperations) GetAllPrograms(_ context.Context) ([]map[string]any, error) {
 	return nil, nil
 }

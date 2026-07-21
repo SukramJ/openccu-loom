@@ -2145,6 +2145,21 @@ const EN: Catalog = {
   "device.confirm_remove_title": "Remove device?",
   "device.confirm_remove_body":
     'Remove "{name}"? The CCU pairing will be dropped and cannot be undone.',
+  "device.delete.mode_label": "Removal mode",
+  "device.delete.mode_unpair": "Unregister only",
+  "device.delete.mode_unpair_hint": "Drop the CCU pairing (default).",
+  "device.delete.mode_reset": "Reset to factory defaults",
+  "device.delete.mode_reset_hint":
+    "Also reset the device to factory settings while removing it.",
+  "device.delete.force": "Force removal (device unreachable)",
+  "device.delete.force_hint":
+    "Remove the device even when it no longer responds to the CCU.",
+  "device.delete.checking": "Checking dependencies…",
+  "device.delete.warning_title": "This device is still referenced",
+  "device.delete.warning_links":
+    "{count} direct link(s) reference this device and will stop working.",
+  "device.delete.warning_programs":
+    "{count} program(s) reference this device.",
   "device.confirm_firmware_body":
     'Trigger firmware update for "{name}"? The device will be briefly unreachable.',
   "device.status.paramset_pick": "Read source",
@@ -4795,6 +4810,22 @@ const DE: Catalog = {
   "device.confirm_remove_title": "Gerät entfernen?",
   "device.confirm_remove_body":
     'Gerät "{name}" entfernen? Die CCU-Kopplung wird aufgehoben und kann nicht rückgängig gemacht werden.',
+  "device.delete.mode_label": "Art der Entfernung",
+  "device.delete.mode_unpair": "Nur abmelden",
+  "device.delete.mode_unpair_hint":
+    "Die CCU-Kopplung wird aufgehoben (Standard).",
+  "device.delete.mode_reset": "Ab Werk zurücksetzen",
+  "device.delete.mode_reset_hint":
+    "Das Gerät wird beim Entfernen zusätzlich auf Werkseinstellungen zurückgesetzt.",
+  "device.delete.force": "Löschen erzwingen (Gerät unerreichbar)",
+  "device.delete.force_hint":
+    "Das Gerät auch dann entfernen, wenn es nicht mehr auf die CCU reagiert.",
+  "device.delete.checking": "Abhängigkeiten werden geprüft…",
+  "device.delete.warning_title": "Dieses Gerät wird noch verwendet",
+  "device.delete.warning_links":
+    "{count} Direktverknüpfung(en) verweisen auf dieses Gerät und funktionieren danach nicht mehr.",
+  "device.delete.warning_programs":
+    "{count} Programm(e) verweisen auf dieses Gerät.",
   "device.confirm_firmware_body":
     'Firmware-Update für "{name}" starten? Das Gerät ist während des Updates kurz nicht erreichbar.',
   "device.status.paramset_pick": "Quelle",

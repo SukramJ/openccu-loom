@@ -49,6 +49,19 @@ type LifecycleOps interface {
 	Ping(ctx context.Context, interfaceID string) error
 }
 
+// Device-delete flags form the bitmask passed to [DeviceOps.DeleteDevice].
+// They mirror the CCU's XML-RPC `deleteDevice` flag constants and may be
+// OR-combined.
+const (
+	// DeleteFlagReset resets the device to factory defaults as part of the
+	// unpair (CCU DELETE_FLAG_RESET = 1).
+	DeleteFlagReset = 1
+	// DeleteFlagForce forces the delete even when the device is unreachable,
+	// so the CCU drops it without the bidirectional handshake
+	// (CCU DELETE_FLAG_FORCE = 2).
+	DeleteFlagForce = 2
+)
+
 // DeviceOps covers device enumeration, discovery helpers, firmware
 // management, pairing lifecycle, and bulk device-data retrieval.
 type DeviceOps interface {
@@ -61,10 +74,12 @@ type DeviceOps interface {
 	UpdateFirmware(ctx context.Context, address string) error
 
 	// DeleteDevice unpairs the device from the CCU. Maps to the CCU's
-	// `deleteDevice(address, flags)` XML-RPC call (flags=0 — keep the
-	// bidirectional handshake clean). Backends without a pairing concept (CUxD
-	// virtual devices) return [ErrUnsupported].
-	DeleteDevice(ctx context.Context, address string) error
+	// `deleteDevice(address, flags)` XML-RPC call. flags is the CCU delete
+	// bitmask ([DeleteFlagReset] resets the device to factory defaults,
+	// [DeleteFlagForce] forces removal of an unreachable device); pass 0 for a
+	// plain unpair that keeps the bidirectional handshake clean. Backends
+	// without a pairing concept (CUxD virtual devices) return [ErrUnsupported].
+	DeleteDevice(ctx context.Context, address string, flags int) error
 
 	// GetAllDeviceData returns all current parameter values for all devices on
 	// the interface in one call (where supported). Used during discovery to

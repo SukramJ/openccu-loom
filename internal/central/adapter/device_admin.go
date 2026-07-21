@@ -54,8 +54,11 @@ func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, 
 }
 
 // UnpairDevice asks the CCU to unpair the device. Maps to the CCU's
-// XML-RPC `deleteDevice(address, 0)` call via the backend's
-// [backends.Operations.DeleteDevice].
+// XML-RPC `deleteDevice(address, flags)` call via the backend's
+// [backends.Operations.DeleteDevice]. reset factory-resets the device as
+// part of the removal ([backends.DeleteFlagReset]); force removes an
+// unreachable device even when the CCU cannot complete the handshake
+// ([backends.DeleteFlagForce]).
 //
 // On success the in-memory caches (paramset, description, model
 // registry) drop the device so the SPA does not see a stale entry
@@ -63,9 +66,16 @@ func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, 
 // backends do not expose unpair (CUxD, JSON-only) — they surface
 // ErrUnsupported through the underlying Operations contract; the
 // handler returns 422 in that case.
-func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string) error {
+func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string, reset, force bool) error {
 	if a.registry == nil || a.writer == nil {
 		return ErrNoDeviceBackend
+	}
+	flags := 0
+	if reset {
+		flags |= backends.DeleteFlagReset
+	}
+	if force {
+		flags |= backends.DeleteFlagForce
 	}
 	for _, u := range a.registry.List() {
 		dev, ok := u.ModelRegistry.Get(address)
@@ -76,7 +86,7 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string) er
 		if !ok {
 			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
-		if err := backend.DeleteDevice(ctx, address); err != nil {
+		if err := backend.DeleteDevice(ctx, address, flags); err != nil {
 			return err
 		}
 		// Drop the local caches. The CCU's `deleteDevices` callback

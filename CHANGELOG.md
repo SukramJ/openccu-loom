@@ -12,6 +12,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `PATCH /devices/{addr}/channels/{no}` endpoint (and WebSocket command
   `device.rename_channel`) renames a single channel; the SPA exposes it
   via a pencil affordance on each channel in the device detail view.
+- **Delete device with factory-reset / force options and a dependency
+  warning.** `DELETE /devices/{addr}` gains optional `reset` and `force`
+  query flags that map onto the CCU `deleteDevice` delete bitmask —
+  `reset` also factory-resets the device during removal, `force` removes
+  an unreachable device even when the CCU cannot complete the handshake
+  (both default to off, preserving the plain-unpair behaviour). The SPA
+  remove action becomes a small options dialog (unregister-only vs.
+  factory-reset radio plus a force checkbox) that warns up front when
+  direct links or CCU programs still reference the device. A backend
+  without a pairing concept (CUxD) now answers 422 instead of 502. REST
+  `APIVersion` 2.31.0.
 
 ### Fixed
 

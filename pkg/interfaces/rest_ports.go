@@ -93,7 +93,11 @@ type DataPointWriter interface {
 // operations. Separate from DeviceIndex so read-only deployments
 // can leave it nil.
 type DeviceAdmin interface {
-	UnpairDevice(ctx context.Context, address string) error
+	// UnpairDevice removes the device from the CCU. reset additionally
+	// factory-resets the device during removal; force removes an unreachable
+	// device even when the CCU cannot reach it for the handshake. Both map to
+	// the CCU `deleteDevice` delete bitmask.
+	UnpairDevice(ctx context.Context, address string, reset, force bool) error
 	// RenameDevice persists the device name to the CCU. When
 	// includeChannels is true every channel is renamed along with the
 	// pattern "<name>:<channelNo>", matching the CCU WebUI behaviour.

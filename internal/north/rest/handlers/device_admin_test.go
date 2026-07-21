@@ -32,10 +32,14 @@ type stubDeviceAdmin struct {
 	lastChannelNo       int
 	lastRooms           []string
 	lastFunctions       []string
+	lastReset           bool
+	lastForce           bool
 }
 
-func (s *stubDeviceAdmin) UnpairDevice(_ context.Context, addr string) error {
+func (s *stubDeviceAdmin) UnpairDevice(_ context.Context, addr string, reset, force bool) error {
 	s.lastAddress = addr
+	s.lastReset = reset
+	s.lastForce = force
 	return s.unpairErr
 }
 
@@ -88,6 +92,106 @@ func TestDeleteDevice_HappyPath(t *testing.T) {
 	}
 	if admin.lastAddress != "DEV001" {
 		t.Fatalf("expected lastAddress=DEV001, got %q", admin.lastAddress)
+	}
+}
+
+func TestDeleteDevice_DefaultFlagsFalse(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/devices/DEV001", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	DeleteDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastReset || admin.lastForce {
+		t.Fatalf("expected reset=false force=false when flags omitted, got reset=%v force=%v",
+			admin.lastReset, admin.lastForce)
+	}
+}
+
+func TestDeleteDevice_ParsesResetAndForceFlags(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodDelete,
+		"/api/v1/devices/DEV001?reset=true&force=true", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	DeleteDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !admin.lastReset || !admin.lastForce {
+		t.Fatalf("expected reset=true force=true, got reset=%v force=%v",
+			admin.lastReset, admin.lastForce)
+	}
+}
+
+func TestDeleteDevice_ParsesAsymmetricFlags(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		query     string
+		wantReset bool
+		wantForce bool
+	}{
+		{name: "reset only", query: "?reset=true", wantReset: true, wantForce: false},
+		{name: "force only", query: "?force=true", wantReset: false, wantForce: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			admin := &stubDeviceAdmin{}
+			req := httptest.NewRequest(http.MethodDelete, "/api/v1/devices/DEV001"+tt.query, http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+			w := httptest.NewRecorder()
+			DeleteDevice(admin).ServeHTTP(w, req)
+
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+			}
+			if admin.lastReset != tt.wantReset || admin.lastForce != tt.wantForce {
+				t.Fatalf("reset=%v force=%v, want reset=%v force=%v",
+					admin.lastReset, admin.lastForce, tt.wantReset, tt.wantForce)
+			}
+		})
+	}
+}
+
+// TestDeleteDevice_MalformedFlag_DefaultsFalse verifies that a query flag
+// which does not parse as a bool (neither "true"/"false" nor "1"/"0") is
+// treated as absent rather than rejected with a 400 — the delete-options
+// contract degrades to the safe default instead of failing the request.
+func TestDeleteDevice_MalformedFlag_DefaultsFalse(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/devices/DEV001?reset=yes&force=nope", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	DeleteDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastReset || admin.lastForce {
+		t.Fatalf("expected reset=false force=false for malformed values, got reset=%v force=%v",
+			admin.lastReset, admin.lastForce)
+	}
+}
+
+func TestDeleteDevice_Unsupported_Returns422(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{unpairErr: backends.ErrUnsupported}
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/devices/DEV001", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	DeleteDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

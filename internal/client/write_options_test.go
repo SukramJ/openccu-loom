@@ -66,12 +66,12 @@ func (s *stubBackend) PutParamset(_ context.Context, ch string, key hmenum.Param
 // behavior; everything else is a quiet no-op so the tests don't have
 // to wire a real CCU transport.
 
-func (s *stubBackend) Kind() backends.Kind                        { return backends.KindCCU }
-func (s *stubBackend) DeleteDevice(context.Context, string) error { return nil }
-func (s *stubBackend) Capabilities() backends.Capabilities        { return backends.Capabilities{} }
-func (s *stubBackend) Init(context.Context, string, string) error { return nil }
-func (s *stubBackend) Deinit(context.Context, string) error       { return nil }
-func (s *stubBackend) Ping(context.Context, string) error         { return nil }
+func (s *stubBackend) Kind() backends.Kind                             { return backends.KindCCU }
+func (s *stubBackend) DeleteDevice(context.Context, string, int) error { return nil }
+func (s *stubBackend) Capabilities() backends.Capabilities             { return backends.Capabilities{} }
+func (s *stubBackend) Init(context.Context, string, string) error      { return nil }
+func (s *stubBackend) Deinit(context.Context, string) error            { return nil }
+func (s *stubBackend) Ping(context.Context, string) error              { return nil }
 func (s *stubBackend) ListDevices(context.Context) ([]hmproto.DeviceDescription, error) {
 	return nil, nil
 }

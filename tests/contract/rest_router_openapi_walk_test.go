@@ -158,7 +158,7 @@ type fakeFirmwareRefresher struct{}
 
 func (fakeFirmwareRefresher) RefreshFirmwareData(context.Context) error { return nil }
 
-func (fakeDeviceAdmin) UnpairDevice(context.Context, string) error               { return nil }
+func (fakeDeviceAdmin) UnpairDevice(context.Context, string, bool, bool) error   { return nil }
 func (fakeDeviceAdmin) RenameDevice(context.Context, string, string, bool) error { return nil }
 func (fakeDeviceAdmin) RenameChannel(context.Context, string, int, string) error { return nil }
 func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string) error          { return nil }

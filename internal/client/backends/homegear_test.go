@@ -403,7 +403,7 @@ func TestHomegearDeleteDevice(t *testing.T) {
 	t.Parallel()
 	x := &recordingCaller{}
 	b := NewHomegearBackend(x, nil)
-	if err := b.DeleteDevice(context.Background(), "ABCD1234"); err != nil {
+	if err := b.DeleteDevice(context.Background(), "ABCD1234", 0); err != nil {
 		t.Fatalf("DeleteDevice: %v", err)
 	}
 	last := x.lastCall()
@@ -415,10 +415,26 @@ func TestHomegearDeleteDevice(t *testing.T) {
 	}
 }
 
+// TestHomegearDeleteDeviceForwardsFlags verifies the delete bitmask reaches
+// Homegear on the wire rather than a hard-coded 0.
+func TestHomegearDeleteDeviceForwardsFlags(t *testing.T) {
+	t.Parallel()
+	x := &recordingCaller{}
+	b := NewHomegearBackend(x, nil)
+	flags := DeleteFlagReset | DeleteFlagForce
+	if err := b.DeleteDevice(context.Background(), "ABCD1234", flags); err != nil {
+		t.Fatalf("DeleteDevice: %v", err)
+	}
+	last := x.lastCall()
+	if len(last.Args) != 2 || last.Args[0] != "ABCD1234" || last.Args[1] != flags {
+		t.Fatalf("args=%v, want [ABCD1234 %d]", last.Args, flags)
+	}
+}
+
 func TestHomegearDeleteDeviceWithoutXMLRPC(t *testing.T) {
 	t.Parallel()
 	b := NewHomegearBackend(nil, nil)
-	if err := b.DeleteDevice(context.Background(), "ABCD1234"); !errors.Is(err, ErrNotWired) {
+	if err := b.DeleteDevice(context.Background(), "ABCD1234", 0); !errors.Is(err, ErrNotWired) {
 		t.Fatalf("expected ErrNotWired, got %v", err)
 	}
 }

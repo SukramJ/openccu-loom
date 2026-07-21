@@ -46,7 +46,11 @@ type fakeAdmin struct {
 	accepts int
 }
 
-func (f *fakeAdmin) UnpairDevice(_ context.Context, _ string) error { f.unpairs++; return nil }
+func (f *fakeAdmin) UnpairDevice(_ context.Context, _ string, _, _ bool) error {
+	f.unpairs++
+	return nil
+}
+
 func (f *fakeAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) error {
 	f.renames++
 	return nil
@@ -299,7 +303,7 @@ func (fakeConfigExportService) WriteParamset(_ context.Context, _, _, _ string, 
 
 type fakeDeviceAdmin struct{}
 
-func (fakeDeviceAdmin) UnpairDevice(_ context.Context, _ string) error            { return nil }
+func (fakeDeviceAdmin) UnpairDevice(_ context.Context, _ string, _, _ bool) error { return nil }
 func (fakeDeviceAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) error { return nil }
 func (fakeDeviceAdmin) RenameChannel(_ context.Context, _ string, _ int, _ string) error {
 	return nil

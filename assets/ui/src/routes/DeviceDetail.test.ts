@@ -9,6 +9,9 @@ const {
   mockPutPreference,
   mockRenameDevice,
   mockRenameChannel,
+  mockDeleteDevice,
+  mockListLinks,
+  mockListPrograms,
   mockToastSuccess,
   mockToastError,
 } = vi.hoisted(() => ({
@@ -18,6 +21,9 @@ const {
   mockPutPreference: vi.fn(),
   mockRenameDevice: vi.fn(),
   mockRenameChannel: vi.fn(),
+  mockDeleteDevice: vi.fn(),
+  mockListLinks: vi.fn(),
+  mockListPrograms: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
 }));
@@ -30,7 +36,9 @@ vi.mock("$lib/api/client", () => ({
     putPreference: (...args: unknown[]) => mockPutPreference(...args),
     renameDevice: (...args: unknown[]) => mockRenameDevice(...args),
     renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
-    deleteDevice: vi.fn(),
+    deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
+    listLinks: (...args: unknown[]) => mockListLinks(...args),
+    listPrograms: (...args: unknown[]) => mockListPrograms(...args),
     updateFirmware: vi.fn(),
     setDeviceRooms: vi.fn(),
     setDeviceFunctions: vi.fn(),
@@ -102,6 +110,9 @@ beforeEach(() => {
   );
   mockRenameDevice.mockResolvedValue(undefined);
   mockRenameChannel.mockResolvedValue(undefined);
+  mockDeleteDevice.mockResolvedValue(undefined);
+  mockListLinks.mockResolvedValue([]);
+  mockListPrograms.mockResolvedValue([]);
 });
 
 afterEach(() => cleanup());
@@ -339,5 +350,105 @@ describe("DeviceDetail — channel rename", () => {
       expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
     });
     expect(screen.getByLabelText("channel.rename")).toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — remove device options dialog", () => {
+  async function openDeleteDialog(overrides: Record<string, unknown> = {}) {
+    mockGetDevice.mockResolvedValue(baseDevice(overrides));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.remove" }));
+    await waitFor(() => {
+      expect(screen.getByText("device.delete.mode_label")).toBeInTheDocument();
+    });
+  }
+
+  it("opens an options dialog and probes links + programs", async () => {
+    await openDeleteDialog();
+    expect(mockListLinks).toHaveBeenCalledWith("0001ABCD", "en");
+    expect(mockListPrograms).toHaveBeenCalled();
+    expect(screen.getByText("device.delete.mode_unpair")).toBeInTheDocument();
+    expect(screen.getByText("device.delete.force")).toBeInTheDocument();
+  });
+
+  it("removes with reset=false force=false by default", async () => {
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockDeleteDevice).toHaveBeenCalledWith("0001ABCD", {
+        reset: false,
+        force: false,
+      });
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.removed");
+  });
+
+  it("forwards reset + force when the factory-reset radio and force box are set", async () => {
+    await openDeleteDialog();
+    await fireEvent.click(
+      screen.getByRole("radio", { name: /device\.delete\.mode_reset/ }),
+    );
+    await fireEvent.click(screen.getByRole("checkbox"));
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockDeleteDevice).toHaveBeenCalledWith("0001ABCD", {
+        reset: true,
+        force: true,
+      });
+    });
+  });
+
+  it("warns when direct links or programs reference the device", async () => {
+    mockListLinks.mockResolvedValue([
+      { sender_address: "0001ABCD:1", receiver_address: "X:1" },
+    ]);
+    mockListPrograms.mockResolvedValue([
+      { name: "Prog", device_address: "0001ABCD" },
+      { name: "Other", device_address: "9999" },
+    ]);
+    await openDeleteDialog();
+    await waitFor(() => {
+      expect(screen.getByText("device.delete.warning_title")).toBeInTheDocument();
+    });
+  });
+
+  it("shows an error toast and keeps the dialog open on failure", async () => {
+    mockDeleteDevice.mockRejectedValueOnce(new Error("CCU refused"));
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("CCU refused");
+    });
+    // Dialog stays open on failure — no silent fallback / no silent close.
+    expect(screen.getByText("device.delete.mode_label")).toBeInTheDocument();
+  });
+
+  it("closes the dialog on cancel without calling deleteDevice", async () => {
+    await openDeleteDialog();
+    await fireEvent.click(screen.getByRole("button", { name: "common.cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByText("device.delete.mode_label")).not.toBeInTheDocument();
+    });
+    expect(mockDeleteDevice).not.toHaveBeenCalled();
+  });
+
+  it("suppresses the dependency warning and stays usable when the link/program probe fails", async () => {
+    mockListLinks.mockRejectedValue(new Error("network error"));
+    mockListPrograms.mockRejectedValue(new Error("network error"));
+    await openDeleteDialog();
+    // Best-effort probe: a failed read must not block the dialog or surface
+    // an error toast — it just falls back to "no known dependencies".
+    expect(screen.queryByText("device.delete.warning_title")).not.toBeInTheDocument();
+    expect(mockToastError).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "common.delete" }));
+    await waitFor(() => {
+      expect(mockDeleteDevice).toHaveBeenCalledWith("0001ABCD", {
+        reset: false,
+        force: false,
+      });
+    });
   });
 });
