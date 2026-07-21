@@ -15,6 +15,7 @@
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
 
   let alarms = $state<AlarmMessage[]>([]);
   let services = $state<ServiceMessage[]>([]);
@@ -22,6 +23,7 @@
   let loadError = $state<string | null>(null);
   let tab = $state<"alarm" | "service">("alarm");
   let acking = $state<string | null>(null);
+  let ackingAll = $state(false);
   let typeFilter = $state<string>("");
   let onlyQuittable = $state(false);
   let centralFilter = $state(loadLS("messages:central"));
@@ -94,6 +96,54 @@
     }
   }
 
+  function ackError(err: unknown): void {
+    toastStore.error(
+      err instanceof ApiError
+        ? `${err.status}: ${err.message}`
+        : err instanceof Error
+          ? err.message
+          : String(err),
+    );
+  }
+
+  async function ackAllAlarms() {
+    const ok = await confirmStore.ask({
+      title: t("messages.ack_all.confirm_alarms"),
+      confirmLabel: t("messages.ack_all.button"),
+      destructive: false,
+    });
+    if (!ok) return;
+    ackingAll = true;
+    try {
+      const res = await api.ackAllAlarms(centralFilter || undefined);
+      toastStore.success(t("messages.ack_all.done", { count: res.acknowledged }));
+      await load();
+    } catch (err) {
+      ackError(err);
+    } finally {
+      ackingAll = false;
+    }
+  }
+
+  async function ackAllServices() {
+    const ok = await confirmStore.ask({
+      title: t("messages.ack_all.confirm_services"),
+      confirmLabel: t("messages.ack_all.button"),
+      destructive: false,
+    });
+    if (!ok) return;
+    ackingAll = true;
+    try {
+      const res = await api.ackAllServices(centralFilter || undefined);
+      toastStore.success(t("messages.ack_all.done", { count: res.acknowledged }));
+      await load();
+    } catch (err) {
+      ackError(err);
+    } finally {
+      ackingAll = false;
+    }
+  }
+
   onMount(load);
 
   function formatDate(iso: string): string {
@@ -138,6 +188,18 @@
     for (const s of services) if (s.type) set.add(s.type);
     return Array.from(set).sort();
   });
+
+  // Bulk-acknowledge scope: how many messages the "acknowledge all"
+  // button would clear given the current central filter (the type /
+  // quittable-only view filters do not narrow the CCU-side bulk pass).
+  const alarmAckAllCount = $derived(
+    alarms.filter((a) => !centralFilter || a.central === centralFilter).length,
+  );
+  const serviceAckAllCount = $derived(
+    services.filter(
+      (s) => (!centralFilter || s.central === centralFilter) && s.quittable,
+    ).length,
+  );
 
   const alarmColumns: DataColumn<AlarmMessage>[] = $derived([
     {
@@ -220,6 +282,27 @@
             })),
           ]}
         />
+      {/if}
+      {#if tab === "alarm" && alarmAckAllCount > 0}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onclick={() => void ackAllAlarms()}
+          disabled={ackingAll || loading}
+        >
+          {ackingAll ? "…" : t("messages.ack_all.button")}
+        </Button>
+      {:else if tab === "service" && serviceAckAllCount > 0}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onclick={() => void ackAllServices()}
+          disabled={ackingAll || loading}
+        >
+          {ackingAll ? "…" : t("messages.ack_all.button")}
+        </Button>
       {/if}
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}

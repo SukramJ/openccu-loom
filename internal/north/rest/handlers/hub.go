@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -841,6 +842,67 @@ func AckServiceMessage(idx HubIndex) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// AckAllResult is the response body for the bulk acknowledge endpoints:
+// the total number of messages acknowledged across the scoped centrals.
+type AckAllResult struct {
+	Acknowledged int `json:"acknowledged"`
+}
+
+// AckAllAlarmMessages acknowledges every active alarm message. An optional
+// `?central=` query parameter scopes the operation to one CCU; when omitted
+// every registered central is acknowledged. Returns the total count.
+func AckAllAlarmMessages(idx HubIndex) http.HandlerFunc {
+	return ackAllMessagesHandler(idx, func(ctx context.Context, h *hub.Hub) (int, error) {
+		return h.Messages.AcknowledgeAll(ctx)
+	})
+}
+
+// AckAllServiceMessages acknowledges every quittable service message across
+// the scoped centrals. Central scoping matches [AckAllAlarmMessages].
+func AckAllServiceMessages(idx HubIndex) http.HandlerFunc {
+	return ackAllMessagesHandler(idx, func(ctx context.Context, h *hub.Hub) (int, error) {
+		return h.ServiceMessages.AcknowledgeAll(ctx)
+	})
+}
+
+// ackAllMessagesHandler is the shared body of the two bulk-acknowledge
+// endpoints. It iterates the hubs the request targets (all registered
+// centrals, or the single one named by `?central=`), sums the acknowledged
+// counts, and returns them. A named-but-unknown central is a 400.
+func ackAllMessagesHandler(idx HubIndex, ackAll func(context.Context, *hub.Hub) (int, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if idx == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
+			return
+		}
+		central := r.URL.Query().Get("central")
+		total := 0
+		matched := false
+		for _, nh := range idx.Hubs() {
+			if nh.Hub == nil {
+				continue
+			}
+			if central != "" && nh.Central != central {
+				continue
+			}
+			matched = true
+			n, err := ackAll(r.Context(), nh.Hub)
+			if err != nil {
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Acknowledge failed", err)
+				return
+			}
+			total += n
+		}
+		if central != "" && !matched {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "central unknown", ""))
+			return
+		}
+		JSON(w, http.StatusOK, AckAllResult{Acknowledged: total})
 	}
 }
 

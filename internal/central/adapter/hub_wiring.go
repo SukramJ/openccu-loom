@@ -154,6 +154,11 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// recovery can re-apply these without racing a concurrent hub write.
 	unit.HubModel.SetMutator(writer)
 	unit.HubModel.Update.SetFirmwareUpdater(writer)
+	// Wire the single- and bulk-message acknowledgers so REST/WS/MQTT
+	// acknowledge and acknowledge-all calls reach the CCU ReGa engine.
+	msgAck := hubMessageAck{runner: runner}
+	unit.HubModel.Messages.SetAcknowledgers(msgAck, msgAck)
+	unit.HubModel.ServiceMessages.SetAcknowledgers(msgAck, msgAck)
 	// Post-install progress monitor: after a triggered CCU system update, watch
 	// the firmware version and clear the in-progress flag once it changes.
 	// See launchSystemUpdateProgressMonitor.
@@ -1443,6 +1448,29 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 	}
 	// Fallback: preserve as string so the caller at least sees something.
 	return hmtypes.StringValue(s), true
+}
+
+// hubMessageAck adapts the ReGa [rega.Runner] to the model's
+// [hub.MessageAcknowledger] and [hub.BulkMessageAcknowledger] contracts.
+// Single-message acknowledge drops the runner's confirmation boolean —
+// a false with no error means the message was already gone, which the
+// model treats as success. The bulk methods forward the acknowledged
+// count unchanged.
+type hubMessageAck struct {
+	runner *rega.Runner
+}
+
+func (a hubMessageAck) AcknowledgeMessage(ctx context.Context, id string) error {
+	_, err := a.runner.AcknowledgeMessage(ctx, id)
+	return err
+}
+
+func (a hubMessageAck) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
+	return a.runner.AcknowledgeAllServiceMessages(ctx)
+}
+
+func (a hubMessageAck) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
+	return a.runner.AcknowledgeAllAlarmMessages(ctx)
 }
 
 // hubJSONRPCWriter implements [hub.ProgramWriter] + [hub.SysvarWriter]

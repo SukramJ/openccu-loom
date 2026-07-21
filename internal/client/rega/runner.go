@@ -134,6 +134,33 @@ func (r *Runner) AcknowledgeMessage(ctx context.Context, messageID string) (bool
 	return resp.Success, nil
 }
 
+// AcknowledgeAllServiceMessages acknowledges every quittable service message
+// on the CCU in a single ReGa pass and returns the number acknowledged. Only
+// messages whose trigger data point is writable are acknowledged; the rest are
+// left untouched (mirroring the single-message writability gate).
+func (r *Runner) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
+	var resp struct {
+		Acknowledged int `json:"acknowledged"`
+	}
+	if err := r.RunJSON(ctx, hmenum.RegaScriptAcknowledgeAllServiceMessages, nil, &resp); err != nil {
+		return 0, fmt.Errorf("rega.AcknowledgeAllServiceMessages: %w", err)
+	}
+	return resp.Acknowledged, nil
+}
+
+// AcknowledgeAllAlarmMessages acknowledges every active alarm message on the
+// CCU in a single ReGa pass and returns the number acknowledged. Alarm
+// messages are acknowledged unconditionally.
+func (r *Runner) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
+	var resp struct {
+		Acknowledged int `json:"acknowledged"`
+	}
+	if err := r.RunJSON(ctx, hmenum.RegaScriptAcknowledgeAllAlarmMessages, nil, &resp); err != nil {
+		return 0, fmt.Errorf("rega.AcknowledgeAllAlarmMessages: %w", err)
+	}
+	return resp.Acknowledged, nil
+}
+
 // SetProgramState activates or deactivates the CCU automation program
 // identified by its ISE-ID (pid). state=true enables the program, false
 // disables it. Returns without error when the CCU accepted the change.

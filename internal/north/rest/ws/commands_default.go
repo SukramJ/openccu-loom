@@ -161,11 +161,17 @@ type HubQuery interface {
 	ListAlarmMessages(ctx context.Context) ([]map[string]any, error)
 	// AcknowledgeAlarmMessage clears one alarm message by id.
 	AcknowledgeAlarmMessage(ctx context.Context, id string) error
+	// AcknowledgeAllAlarmMessages clears every active alarm message and
+	// returns the number acknowledged.
+	AcknowledgeAllAlarmMessages(ctx context.Context) (int, error)
 	// ListServiceMessages returns active CCU service messages
 	// (UNREACH, low-battery, config-pending, …).
 	ListServiceMessages(ctx context.Context) ([]map[string]any, error)
 	// AcknowledgeServiceMessage clears one service message by id.
 	AcknowledgeServiceMessage(ctx context.Context, id string) error
+	// AcknowledgeAllServiceMessages clears every quittable service message
+	// and returns the number acknowledged.
+	AcknowledgeAllServiceMessages(ctx context.Context) (int, error)
 
 	// InstallModeStatus reports the current pairing-mode state per
 	// interface.
@@ -327,8 +333,10 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		router.Register("sysvars.fetch", sysvarsFetchHandler(cfg.Hub))
 		router.Register("alarm_messages.list", alarmMessagesListHandler(cfg.Hub))
 		router.Register("alarm_messages.ack", alarmMessagesAckHandler(cfg.Hub))
+		router.Register("alarm_messages.ack_all", alarmMessagesAckAllHandler(cfg.Hub))
 		router.Register("service_messages.list", serviceMessagesListHandler(cfg.Hub))
 		router.Register("service_messages.ack", serviceMessagesAckHandler(cfg.Hub))
+		router.Register("service_messages.ack_all", serviceMessagesAckAllHandler(cfg.Hub))
 		router.Register("install_mode.status", installModeStatusHandler(cfg.Hub))
 		router.Register("install_mode.enable", installModeEnableHandler(cfg.Hub))
 		router.Register("install_mode.disable", installModeDisableHandler(cfg.Hub))
@@ -635,6 +643,26 @@ func serviceMessagesAckHandler(q HubQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "ack_service: "+err.Error())
 		}
 		return map[string]any{"acknowledged": true, "id": args.ID}, nil
+	}
+}
+
+func alarmMessagesAckAllHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		n, err := q.AcknowledgeAllAlarmMessages(ctx)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "ack_all_alarm: "+err.Error())
+		}
+		return map[string]any{"acknowledged": n}, nil
+	}
+}
+
+func serviceMessagesAckAllHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		n, err := q.AcknowledgeAllServiceMessages(ctx)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "ack_all_service: "+err.Error())
+		}
+		return map[string]any{"acknowledged": n}, nil
 	}
 }
 

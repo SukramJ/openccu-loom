@@ -820,6 +820,11 @@ const EN: Catalog = {
   "messages.acknowledged": "Acknowledged.",
   "messages.summary": "{alarms} alarms · {services} service messages",
   "messages.ackable": "ackable",
+  "messages.ack_all.button": "Acknowledge all",
+  "messages.ack_all.confirm_alarms": "Acknowledge all alarm messages?",
+  "messages.ack_all.confirm_services":
+    "Acknowledge all quittable service messages?",
+  "messages.ack_all.done": "{count} messages acknowledged.",
   "messages.type.generic": "Generic",
   "messages.type.sticky": "Sticky",
   "messages.type.config_pending": "Config pending",
@@ -3514,6 +3519,11 @@ const DE: Catalog = {
   "messages.acknowledged": "Quittiert.",
   "messages.summary": "{alarms} Alarme · {services} Service-Meldungen",
   "messages.ackable": "quittierbar",
+  "messages.ack_all.button": "Alle bestätigen",
+  "messages.ack_all.confirm_alarms": "Alle Alarmmeldungen quittieren?",
+  "messages.ack_all.confirm_services":
+    "Alle quittierbaren Service-Meldungen quittieren?",
+  "messages.ack_all.done": "{count} Meldungen quittiert.",
   "messages.type.generic": "Allgemein",
   "messages.type.sticky": "Sticky",
   "messages.type.config_pending": "Config ausstehend",

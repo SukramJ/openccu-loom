@@ -188,6 +188,85 @@ func TestWSHubQuery_AcknowledgeAlarmMessage_NilHub_Errors(t *testing.T) {
 	}
 }
 
+// stubQueryBulkAck implements hub.BulkMessageAcknowledger with independent,
+// fixed counts for the alarm and service passes.
+type stubQueryBulkAck struct {
+	serviceCount int
+	alarmCount   int
+}
+
+func (b stubQueryBulkAck) AcknowledgeAllServiceMessages(context.Context) (int, error) {
+	return b.serviceCount, nil
+}
+
+func (b stubQueryBulkAck) AcknowledgeAllAlarmMessages(context.Context) (int, error) {
+	return b.alarmCount, nil
+}
+
+func TestWSHubQuery_AcknowledgeAllAlarmMessages_NilHub_Errors(t *testing.T) {
+	t.Parallel()
+	q := nilHubQuery()
+	_, err := q.AcknowledgeAllAlarmMessages(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestWSHubQuery_AcknowledgeAllAlarmMessages_LiveHub_Delegates verifies that
+// the adapter forwards to the hub's AlarmMessages aggregate and returns the
+// count the wired bulk acknowledger reports, rather than a hard-coded value.
+func TestWSHubQuery_AcknowledgeAllAlarmMessages_LiveHub_Delegates(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	h.Messages.SetAcknowledgers(nil, stubQueryBulkAck{alarmCount: 4, serviceCount: 9})
+
+	n, err := q.AcknowledgeAllAlarmMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllAlarmMessages: %v", err)
+	}
+	if n != 4 {
+		t.Fatalf("count=%d, want 4 (the alarm count, not the service count)", n)
+	}
+}
+
+func TestWSHubQuery_AcknowledgeAllServiceMessages_NilHub_Errors(t *testing.T) {
+	t.Parallel()
+	q := nilHubQuery()
+	_, err := q.AcknowledgeAllServiceMessages(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+// TestWSHubQuery_AcknowledgeAllServiceMessages_LiveHub_Delegates mirrors the
+// alarm-side delegation test for the service-messages aggregate.
+func TestWSHubQuery_AcknowledgeAllServiceMessages_LiveHub_Delegates(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	h.ServiceMessages.SetAcknowledgers(nil, stubQueryBulkAck{alarmCount: 4, serviceCount: 9})
+
+	n, err := q.AcknowledgeAllServiceMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllServiceMessages: %v", err)
+	}
+	if n != 9 {
+		t.Fatalf("count=%d, want 9 (the service count, not the alarm count)", n)
+	}
+}
+
+// TestWSHubQuery_AcknowledgeAllAlarmMessages_LiveHub_NoAckerConfigured
+// verifies that a live hub without a wired bulk acknowledger (the default
+// state of a freshly constructed hub.Hub) surfaces the model-level error
+// instead of silently reporting zero.
+func TestWSHubQuery_AcknowledgeAllAlarmMessages_LiveHub_NoAckerConfigured(t *testing.T) {
+	t.Parallel()
+	q, _ := liveHubQuery(t)
+	_, err := q.AcknowledgeAllAlarmMessages(context.Background())
+	if err == nil {
+		t.Fatal("expected error when no bulk acknowledger is wired")
+	}
+}
+
 func TestWSHubQuery_ListServiceMessages_NilHub_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	q := nilHubQuery()

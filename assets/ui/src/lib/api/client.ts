@@ -1018,6 +1018,18 @@ export const api = {
       { method: "POST" },
     );
   },
+  ackAllAlarms(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<{ acknowledged: number }>(`/alarm-messages/ack-all${qs}`, {
+      method: "POST",
+    });
+  },
+  ackAllServices(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<{ acknowledged: number }>(`/service-messages/ack-all${qs}`, {
+      method: "POST",
+    });
+  },
   // --- Backup restore ------------------------------------------
   restoreBackup(id: string) {
     return request<{ id: string }>(

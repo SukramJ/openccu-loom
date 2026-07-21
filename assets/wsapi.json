@@ -37,6 +37,14 @@
     },
     {
       "category": "alarms",
+      "description": "Acknowledge (clear) every active alarm message in one pass. The response carries the number acknowledged.",
+      "name": "alarm_messages.ack_all",
+      "result": {
+        "acknowledged": "integer"
+      }
+    },
+    {
+      "category": "alarms",
       "description": "List all active CCU alarm messages.",
       "name": "alarm_messages.list"
     },
@@ -731,6 +739,14 @@
       "category": "alarms",
       "description": "Acknowledge (clear) a single service message by id.",
       "name": "service_messages.ack"
+    },
+    {
+      "category": "alarms",
+      "description": "Acknowledge (clear) every quittable service message in one pass. The response carries the number acknowledged.",
+      "name": "service_messages.ack_all",
+      "result": {
+        "acknowledged": "integer"
+      }
     },
     {
       "category": "alarms",

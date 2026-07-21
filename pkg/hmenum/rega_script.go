@@ -14,6 +14,8 @@ type RegaScript string
 // will land alongside the coordinators that use them.
 const (
 	RegaScriptAcknowledgeMessage            RegaScript = "acknowledge_message"
+	RegaScriptAcknowledgeAllServiceMessages RegaScript = "acknowledge_all_service_messages"
+	RegaScriptAcknowledgeAllAlarmMessages   RegaScript = "acknowledge_all_alarm_messages"
 	RegaScriptFetchAllDeviceData            RegaScript = "fetch_all_device_data"
 	RegaScriptGetAlarmMessages              RegaScript = "get_alarm_messages"
 	RegaScriptGetBackendInfo                RegaScript = "get_backend_info"
@@ -54,6 +56,8 @@ func (s RegaScript) String() string { return string(s) }
 // over this slice.
 var AllRegaScripts = []RegaScript{
 	RegaScriptAcknowledgeMessage,
+	RegaScriptAcknowledgeAllServiceMessages,
+	RegaScriptAcknowledgeAllAlarmMessages,
 	RegaScriptFetchAllDeviceData,
 	RegaScriptGetAlarmMessages,
 	RegaScriptGetBackendInfo,

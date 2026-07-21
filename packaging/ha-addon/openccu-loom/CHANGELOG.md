@@ -13,6 +13,12 @@
   Rebooting persists the CCU's state and restarts it; the connection drops
   briefly and recovers on its own. This restarts the CCU hardware, not the
   add-on (API 2.33.0).
+- **"Acknowledge all" for messages.** The Messages view gains a per-tab
+  "Acknowledge all" button that clears every quittable service message
+  or every active alarm message in one CCU pass and reports how many
+  were acknowledged. New `POST /service-messages/ack-all` and
+  `POST /alarm-messages/ack-all` REST endpoints and the matching
+  `*.ack_all` WebSocket commands back it (API 2.32.0).
 
 ## 0.45.0
 

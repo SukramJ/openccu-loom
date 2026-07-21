@@ -67,6 +67,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shared destructive-confirm dialog and a toast result. This reboots the
   CCU hardware — distinct from `POST /system/restart`, which restarts the
   OpenCCU-Loom daemon itself. REST `APIVersion` 2.33.0.
+- **Bulk acknowledge for service and alarm messages ("Acknowledge
+  all").** New `POST /api/v1/service-messages/ack-all` and
+  `POST /api/v1/alarm-messages/ack-all` endpoints (and the matching
+  `service_messages.ack_all` / `alarm_messages.ack_all` WebSocket
+  commands) clear every quittable message of a class in a single CCU
+  pass and return the number acknowledged (`{"acknowledged": n}`). Both
+  accept an optional `central` query parameter to scope the operation to
+  one CCU; when omitted every registered central is acknowledged. Two
+  new ReGa scripts drive the wire pass — service messages honour the
+  per-message writability gate, alarm messages are acknowledged
+  unconditionally, mirroring the CCU WebUI's "acknowledge all" loop. The
+  Config UI Messages view gains an "Acknowledge all" button per tab,
+  shown only when acknowledgeable messages exist, guarded by a confirm
+  dialog and reporting the acknowledged count via a toast. REST
+  `APIVersion` 2.32.0.
 
 ## [0.45.0] — 2026-07-20
 

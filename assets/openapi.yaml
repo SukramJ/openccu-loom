@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.33.0
+  version: 2.34.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2718,6 +2718,59 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
         "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /alarm-messages/ack-all:
+    post:
+      operationId: ackAllAlarmMessages
+      summary: Acknowledge all alarm messages
+      description: |
+        Acknowledges every active alarm message in a single CCU pass.
+        An optional `central` query parameter scopes the operation to
+        one CCU; when omitted the acknowledge runs across every
+        registered central. The response carries the total number of
+        messages acknowledged.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AckAllResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /service-messages/ack-all:
+    post:
+      operationId: ackAllServiceMessages
+      summary: Acknowledge all quittable service messages
+      description: |
+        Acknowledges every quittable service message in a single CCU
+        pass (non-quittable messages are left untouched, mirroring the
+        single-message writability gate). An optional `central` query
+        parameter scopes the operation to one CCU; when omitted the
+        acknowledge runs across every registered central. The response
+        carries the total number of messages acknowledged.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AckAllResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /service-messages/{id}/disable:
@@ -6773,6 +6826,14 @@ components:
         display_name:
           type: string
           description: Human-readable translation of the message code.
+    AckAllResult:
+      type: object
+      required: [acknowledged]
+      properties:
+        acknowledged:
+          type: integer
+          description: |
+            Number of messages acknowledged across the scoped centrals.
     InstallModeInterfaceEntry:
       type: object
       required: [interface, active, seconds, observed]

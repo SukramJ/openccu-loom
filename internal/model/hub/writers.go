@@ -42,3 +42,12 @@ type DeviceInstallModeWriter interface {
 type MessageAcknowledger interface {
 	AcknowledgeMessage(ctx context.Context, id string) error
 }
+
+// BulkMessageAcknowledger acknowledges every quittable message of a
+// class on the CCU in a single pass, returning the number of messages
+// that were acknowledged. The two methods back [ServiceMessages.AcknowledgeAll]
+// and [AlarmMessages.AcknowledgeAll] respectively.
+type BulkMessageAcknowledger interface {
+	AcknowledgeAllServiceMessages(ctx context.Context) (int, error)
+	AcknowledgeAllAlarmMessages(ctx context.Context) (int, error)
+}

@@ -53,7 +53,12 @@ type AlarmMessage struct {
 type AlarmMessages struct {
 	datapoint.BaseDataPointFields
 
-	Ack MessageAcknowledger
+	// Ack acknowledges a single alarm message by id. BulkAck acknowledges
+	// every active alarm message in one CCU pass. Both are set at
+	// construction (nil for tests / single-CCU convenience) or re-wired
+	// under the aggregate mutex via [AlarmMessages.SetAcknowledgers].
+	Ack     MessageAcknowledger
+	BulkAck BulkMessageAcknowledger
 
 	// ServiceRegistry implements the write-half of [payload.Source].
 	// Each AlarmMessages instance gets its own registry so the dismiss
@@ -158,13 +163,38 @@ func (a *AlarmMessages) Replace(messages []AlarmMessage) {
 	}
 }
 
+// SetAcknowledgers wires (or re-wires) the single- and bulk-message
+// acknowledgers under the aggregate mutex. Use this from the hub-wiring
+// adapter so a background WireHub recovery can re-apply them without
+// racing a concurrent [AlarmMessages.Acknowledge] / [AlarmMessages.AcknowledgeAll]
+// call.
+func (a *AlarmMessages) SetAcknowledgers(single MessageAcknowledger, bulk BulkMessageAcknowledger) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Ack = single
+	a.BulkAck = bulk
+}
+
+func (a *AlarmMessages) acker() MessageAcknowledger {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.Ack
+}
+
+func (a *AlarmMessages) bulkAcker() BulkMessageAcknowledger {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.BulkAck
+}
+
 // Acknowledge dispatches an acknowledge for id through the writer and
 // removes the entry from the local set.
 func (a *AlarmMessages) Acknowledge(ctx context.Context, id string) error {
-	if a.Ack == nil {
+	ack := a.acker()
+	if ack == nil {
 		return errors.New("alarm messages: no acknowledger configured")
 	}
-	if err := a.Ack.AcknowledgeMessage(ctx, id); err != nil {
+	if err := ack.AcknowledgeMessage(ctx, id); err != nil {
 		return err
 	}
 	a.mu.Lock()
@@ -183,6 +213,36 @@ func (a *AlarmMessages) Acknowledge(ctx context.Context, id string) error {
 		}
 	}
 	return nil
+}
+
+// AcknowledgeAll acknowledges every active alarm message on the CCU in one
+// pass and returns the number acknowledged. On success the local set is
+// cleared (all alarm messages are unconditionally acknowledgeable) and the
+// change callbacks fire once. A nil bulk acknowledger yields an error.
+func (a *AlarmMessages) AcknowledgeAll(ctx context.Context) (int, error) {
+	bulk := a.bulkAcker()
+	if bulk == nil {
+		return 0, errors.New("alarm messages: no bulk acknowledger configured")
+	}
+	n, err := bulk.AcknowledgeAllAlarmMessages(ctx)
+	if err != nil {
+		return 0, err
+	}
+	a.mu.Lock()
+	changed := len(a.messages) > 0
+	a.messages = map[string]AlarmMessage{}
+	cbs := make([]func(messages []AlarmMessage), len(a.callbacks))
+	copy(cbs, a.callbacks)
+	a.mu.Unlock()
+	if changed {
+		snapshot := a.List()
+		for _, cb := range cbs {
+			if cb != nil {
+				cb(snapshot)
+			}
+		}
+	}
+	return n, nil
 }
 
 // LegacyName returns the original pre-slug name stored on the CCU.
@@ -245,7 +305,12 @@ type ServiceMessage struct {
 type ServiceMessages struct {
 	datapoint.BaseDataPointFields
 
-	Ack MessageAcknowledger
+	// Ack acknowledges a single service message by id. BulkAck acknowledges
+	// every quittable service message in one CCU pass. Both are set at
+	// construction (nil for tests / single-CCU convenience) or re-wired
+	// under the aggregate mutex via [ServiceMessages.SetAcknowledgers].
+	Ack     MessageAcknowledger
+	BulkAck BulkMessageAcknowledger
 
 	// ServiceRegistry implements the write-half of [payload.Source].
 	// Each ServiceMessages instance gets its own registry so the dismiss
@@ -342,12 +407,37 @@ func (s *ServiceMessages) Replace(messages []ServiceMessage) {
 	}
 }
 
+// SetAcknowledgers wires (or re-wires) the single- and bulk-message
+// acknowledgers under the aggregate mutex. Use this from the hub-wiring
+// adapter so a background WireHub recovery can re-apply them without
+// racing a concurrent [ServiceMessages.Acknowledge] / [ServiceMessages.AcknowledgeAll]
+// call.
+func (s *ServiceMessages) SetAcknowledgers(single MessageAcknowledger, bulk BulkMessageAcknowledger) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Ack = single
+	s.BulkAck = bulk
+}
+
+func (s *ServiceMessages) acker() MessageAcknowledger {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Ack
+}
+
+func (s *ServiceMessages) bulkAcker() BulkMessageAcknowledger {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.BulkAck
+}
+
 // Acknowledge dispatches an acknowledge.
 func (s *ServiceMessages) Acknowledge(ctx context.Context, id string) error {
-	if s.Ack == nil {
+	ack := s.acker()
+	if ack == nil {
 		return errors.New("service messages: no acknowledger configured")
 	}
-	if err := s.Ack.AcknowledgeMessage(ctx, id); err != nil {
+	if err := ack.AcknowledgeMessage(ctx, id); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -366,6 +456,42 @@ func (s *ServiceMessages) Acknowledge(ctx context.Context, id string) error {
 		}
 	}
 	return nil
+}
+
+// AcknowledgeAll acknowledges every quittable service message on the CCU in
+// one pass and returns the number acknowledged. On success the quittable
+// entries are removed from the local set and the change callbacks fire once.
+// Non-quittable messages are left in place (the CCU leaves them untouched
+// too). A nil bulk acknowledger yields an error.
+func (s *ServiceMessages) AcknowledgeAll(ctx context.Context) (int, error) {
+	bulk := s.bulkAcker()
+	if bulk == nil {
+		return 0, errors.New("service messages: no bulk acknowledger configured")
+	}
+	n, err := bulk.AcknowledgeAllServiceMessages(ctx)
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	changed := false
+	for id := range s.messages {
+		if s.messages[id].Quittable {
+			delete(s.messages, id)
+			changed = true
+		}
+	}
+	cbs := make([]func(messages []ServiceMessage), len(s.callbacks))
+	copy(cbs, s.callbacks)
+	s.mu.Unlock()
+	if changed {
+		snapshot := s.List()
+		for _, cb := range cbs {
+			if cb != nil {
+				cb(snapshot)
+			}
+		}
+	}
+	return n, nil
 }
 
 // Disable suppresses a single service message by id. The CCU exposes

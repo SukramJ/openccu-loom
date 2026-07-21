@@ -2727,6 +2727,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm-messages/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge all alarm messages
+         * @description Acknowledges every active alarm message in a single CCU pass.
+         *     An optional `central` query parameter scopes the operation to
+         *     one CCU; when omitted the acknowledge runs across every
+         *     registered central. The response carries the total number of
+         *     messages acknowledged.
+         */
+        post: operations["ackAllAlarmMessages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-messages/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge all quittable service messages
+         * @description Acknowledges every quittable service message in a single CCU
+         *     pass (non-quittable messages are left untouched, mirroring the
+         *     single-message writability gate). An optional `central` query
+         *     parameter scopes the operation to one CCU; when omitted the
+         *     acknowledge runs across every registered central. The response
+         *     carries the total number of messages acknowledged.
+         */
+        post: operations["ackAllServiceMessages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/service-messages/{id}/disable": {
         parameters: {
             query?: never;
@@ -5445,6 +5494,10 @@ export interface components {
             quittable: boolean;
             /** @description Human-readable translation of the message code. */
             display_name?: string;
+        };
+        AckAllResult: {
+            /** @description Number of messages acknowledged across the scoped centrals. */
+            acknowledged: number;
         };
         InstallModeInterfaceEntry: {
             /** @description CCU the interface belongs to. */
@@ -9543,6 +9596,56 @@ export interface operations {
                 };
                 content?: never;
             };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    ackAllAlarmMessages: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AckAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    ackAllServiceMessages: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AckAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
