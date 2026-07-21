@@ -44,14 +44,16 @@ type Program struct {
 	// Nil means no notification is sent (default until wired).
 	ExecuteNotifier func(ctx context.Context, id string, trigger hmenum.ProgramTrigger, success bool)
 
-	mu              sync.RWMutex
-	active          bool
-	hasActive       bool
-	lastExecute     time.Time
-	lastResult      bool
-	hasResult       bool
-	callbacks       []func(event ProgramEvent)
-	removedHandlers []func()
+	mu               sync.RWMutex
+	active           bool
+	hasActive        bool
+	lastExecute      time.Time
+	lastResult       bool
+	hasResult        bool
+	conditionSummary string
+	activitySummary  string
+	callbacks        []func(event ProgramEvent)
+	removedHandlers  []func()
 }
 
 // NewProgram constructs a [Program] with a fully initialised
@@ -158,6 +160,25 @@ func (p *Program) LastResult() (success, observed bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.lastResult, p.hasResult
+}
+
+// RuleSummary returns the compact, language-neutral summaries of the
+// program's root rule: the trigger conditions and the resulting
+// activities. Both are empty until [SetRuleSummary] has been called with
+// non-empty values (the program has no rule, or rule scanning found none).
+func (p *Program) RuleSummary() (condition, activity string) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.conditionSummary, p.activitySummary
+}
+
+// SetRuleSummary records the compact rule summaries resolved by the hub
+// scan. Safe to call on every refresh; the latest values win.
+func (p *Program) SetRuleSummary(condition, activity string) {
+	p.mu.Lock()
+	p.conditionSummary = condition
+	p.activitySummary = activity
+	p.mu.Unlock()
 }
 
 // UpdateMetadata refreshes the mutable CCU-side fields on an existing

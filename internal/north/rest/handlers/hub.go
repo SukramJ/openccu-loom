@@ -128,6 +128,15 @@ type ProgramSummary struct {
 	// LastExecuted is the RFC3339 timestamp of the most recent execution,
 	// omitted when no execution has been observed yet. Closes H-032.
 	LastExecuted string `json:"last_executed,omitempty"`
+	// ConditionSummary is a compact, language-neutral rendering of the
+	// program's root-rule trigger conditions (object names joined by the
+	// symbolic operators ==, >=, <=, >, <, &&, ||). Omitted when the
+	// program has no rule or the CCU-side scan produced nothing.
+	ConditionSummary string `json:"condition_summary,omitempty"`
+	// ActivitySummary is a compact, language-neutral rendering of the
+	// program's root-rule activities (object name := value, joined by
+	// "; "). Omitted when the program has no rule.
+	ActivitySummary string `json:"activity_summary,omitempty"`
 	// IsInternal is true for Tmp_*-programs created internally by the CCU.
 	IsInternal bool `json:"is_internal,omitempty"`
 	// EnabledDefault is true when the program matched a configured description
@@ -339,6 +348,7 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 	e.EnabledDefault = p.EnabledByDefault()
 	e.Channel = p.Channel()
 	e.DeviceAddress = p.DeviceAddress()
+	e.ConditionSummary, e.ActivitySummary = p.RuleSummary()
 	return e
 }
 

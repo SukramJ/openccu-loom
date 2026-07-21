@@ -22,6 +22,10 @@ export type DataColumn<Row> = {
   title?: boolean;
   // Extra classes applied to this column's <td> cells.
   cellClass?: string;
+  // Extra classes applied to this column's <th> header cell. Use together
+  // with cellClass (e.g. the shared `hide-narrow` utility) to collapse a
+  // whole column away on narrow viewports without leaving a dangling header.
+  headClass?: string;
 };
 
 export type DataTableSort = { key: string; asc: boolean };

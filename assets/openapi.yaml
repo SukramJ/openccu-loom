@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.35.0
+  version: 2.34.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6631,6 +6631,21 @@ components:
         last_executed:
           type: string
           description: RFC3339 timestamp of the most recent execution.
+        condition_summary:
+          type: string
+          description: |
+            Compact, language-neutral rendering of the program's root-rule
+            trigger conditions — object names from the ReGa DOM joined by
+            symbolic operators (==, >=, <=, >, <, &&, ||). Capped at ~200
+            characters with an ellipsis. Absent when the program has no rule
+            or the CCU-side scan produced nothing.
+        activity_summary:
+          type: string
+          description: |
+            Compact, language-neutral rendering of the program's root-rule
+            activities (object name := value, joined by "; "). Capped at
+            ~200 characters with an ellipsis. Absent when the program has no
+            rule.
         is_internal:
           type: boolean
           description: |

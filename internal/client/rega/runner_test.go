@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -453,6 +454,100 @@ func TestGetInboxDevicesEmpty(t *testing.T) {
 	}
 	if len(devices) != 0 {
 		t.Errorf("len(devices)=%d, want 0", len(devices))
+	}
+}
+
+// TestGetProgramDescriptionsParsesRuleSummaries is a golden parse of the
+// get_program_descriptions.fn output: every string field (description,
+// condition_summary, activity_summary) is URL-encoded on the wire, and the
+// runner surfaces them verbatim for the caller to decode. The encoded
+// summaries here mirror what the ReGa traversal emits: symbolic operators
+// (>=, :=) and a multibyte channel name.
+func TestGetProgramDescriptionsParsesRuleSummaries(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	// condition_summary decodes to "Wohnzimmer >= 20.00 && Flur == 1.00"
+	// activity_summary  decodes to "Bücherregal := 1.00"
+	payload := `[{"id":"1234","description":"HAHM%20lamp",` +
+		`"condition_summary":"Wohnzimmer%20%3E%3D%2020.00%20%26%26%20Flur%20%3D%3D%201.00",` +
+		`"activity_summary":"B%C3%BCcherregal%20%3A%3D%201.00"}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	descs, err := r.GetProgramDescriptions(context.Background())
+	if err != nil {
+		t.Fatalf("GetProgramDescriptions: %v", err)
+	}
+	if len(descs) != 1 {
+		t.Fatalf("len(descs)=%d, want 1", len(descs))
+	}
+	d := descs[0]
+	if d.ID != "1234" {
+		t.Errorf("ID=%q, want 1234", d.ID)
+	}
+	// Fields arrive URL-encoded; decoding them yields the human strings.
+	for _, tc := range []struct {
+		field, encoded, wantDecoded string
+	}{
+		{"description", d.Description, "HAHM lamp"},
+		{"condition_summary", d.ConditionSummary, "Wohnzimmer >= 20.00 && Flur == 1.00"},
+		{"activity_summary", d.ActivitySummary, "Bücherregal := 1.00"},
+	} {
+		got, derr := url.QueryUnescape(tc.encoded)
+		if derr != nil {
+			t.Fatalf("decode %s (%q): %v", tc.field, tc.encoded, derr)
+		}
+		if got != tc.wantDecoded {
+			t.Errorf("%s decoded = %q, want %q", tc.field, got, tc.wantDecoded)
+		}
+	}
+}
+
+// TestGetProgramDescriptionsHandlesMissingSummaries verifies a program with
+// no rule (empty summary fields) parses without error and yields empty
+// summaries.
+func TestGetProgramDescriptionsHandlesMissingSummaries(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	payload := `[{"id":"9","description":"","condition_summary":"","activity_summary":""}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	descs, err := r.GetProgramDescriptions(context.Background())
+	if err != nil {
+		t.Fatalf("GetProgramDescriptions: %v", err)
+	}
+	if len(descs) != 1 {
+		t.Fatalf("len(descs)=%d, want 1", len(descs))
+	}
+	if descs[0].ConditionSummary != "" || descs[0].ActivitySummary != "" {
+		t.Errorf("expected empty summaries, got cond=%q act=%q",
+			descs[0].ConditionSummary, descs[0].ActivitySummary)
+	}
+}
+
+// TestGetProgramDescriptionsPropagatesCCUError verifies a malformed script
+// result (e.g. a truncated or degraded ReGa run) surfaces as an error
+// instead of silently returning an empty slice, so callers (programMetadata)
+// can distinguish "the script failed" from "there are no programs".
+func TestGetProgramDescriptionsPropagatesCCUError(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "not json")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	descs, err := r.GetProgramDescriptions(context.Background())
+	if err == nil {
+		t.Fatal("expected error for malformed script output")
+	}
+	if descs != nil {
+		t.Errorf("expected nil descriptions on error, got %+v", descs)
+	}
+	if !errors.Is(err, hmerr.ErrClientException) {
+		t.Errorf("error should classify as ErrClientException, got %v", err)
 	}
 }
 

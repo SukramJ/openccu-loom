@@ -15,6 +15,16 @@
   import { loadLS, saveLS } from "$lib/utils";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { prefs } from "$lib/stores/preferences.svelte";
+
+  function formatDate(iso: string | null | undefined): string {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US");
+    } catch {
+      return iso;
+    }
+  }
 
   let programs = $state<ProgramEntry[]>([]);
   let loading = $state(true);
@@ -102,6 +112,26 @@
   const columns: DataColumn<ProgramEntry>[] = $derived([
     { key: "name", label: t("programs.col.name"), sortable: true, title: true, get: (p) => p.name },
     { key: "status", label: t("programs.col.status"), sortable: true, get: (p) => (p.active === true ? 1 : p.active === false ? 0 : -1) },
+    {
+      key: "condition",
+      label: t("programs.col.condition"),
+      get: (p) => p.condition_summary ?? "",
+      headClass: "hide-narrow",
+      cellClass: "hide-narrow",
+    },
+    {
+      key: "activity",
+      label: t("programs.col.activity"),
+      get: (p) => p.activity_summary ?? "",
+      headClass: "hide-narrow",
+      cellClass: "hide-narrow",
+    },
+    {
+      key: "last_executed",
+      label: t("programs.col.last_executed"),
+      sortable: true,
+      get: (p) => p.last_executed ?? "",
+    },
     { key: "actions", label: t("programs.col.actions"), align: "right", cellClass: "reflow-actions" },
   ]);
 </script>
@@ -166,6 +196,30 @@
               <Badge variant="muted">{t("programs.inactive")}</Badge>
             {:else}
               <span class="text-[var(--ha-secondary-text-color)]">—</span>
+            {/if}
+          {:else if col.key === "condition"}
+            {#if p.condition_summary}
+              <span
+                class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
+                title={p.condition_summary}>{p.condition_summary}</span>
+            {:else}
+              <span class="text-[var(--ha-secondary-text-color)]">—</span>
+            {/if}
+          {:else if col.key === "activity"}
+            {#if p.activity_summary}
+              <span
+                class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
+                title={p.activity_summary}>{p.activity_summary}</span>
+            {:else}
+              <span class="text-[var(--ha-secondary-text-color)]">—</span>
+            {/if}
+          {:else if col.key === "last_executed"}
+            {#if p.last_executed}
+              <span class="text-xs text-slate-600 dark:text-slate-300" title={p.last_executed}>
+                {formatDate(p.last_executed)}
+              </span>
+            {:else}
+              <span class="text-[var(--ha-secondary-text-color)]">{t("programs.never_executed")}</span>
             {/if}
           {:else if col.key === "actions"}
             <span class="inline-flex items-center justify-end gap-2">

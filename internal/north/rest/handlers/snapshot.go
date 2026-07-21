@@ -458,6 +458,7 @@ func snapshotPrograms(idx HubIndex) []ProgramSummary {
 			v := active
 			entry.Active = &v
 		}
+		entry.ConditionSummary, entry.ActivitySummary = p.RuleSummary()
 		out = append(out, entry)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

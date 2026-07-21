@@ -311,6 +311,68 @@ func TestListPrograms_NoExecution_LastExecutedOmitted(t *testing.T) {
 	}
 }
 
+// TestListPrograms_RuleSummary verifies the DTO mapping surfaces the
+// condition and activity summaries set on the hub program.
+func TestListPrograms_RuleSummary(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	prog := hub.NewProgram("test-ccu", "P-RULE", "Heater", "", false, nil)
+	prog.SetRuleSummary("Wohnzimmer >= 20.00", "Bücherregal := 1.00")
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []ProgramSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 program, got %d", len(body))
+	}
+	if body[0].ConditionSummary != "Wohnzimmer >= 20.00" {
+		t.Errorf("condition_summary = %q, want %q", body[0].ConditionSummary, "Wohnzimmer >= 20.00")
+	}
+	if body[0].ActivitySummary != "Bücherregal := 1.00" {
+		t.Errorf("activity_summary = %q, want %q", body[0].ActivitySummary, "Bücherregal := 1.00")
+	}
+}
+
+// TestListPrograms_NoRuleSummary_Omitted pins that a program without a
+// resolved rule summary omits both summary fields from the JSON.
+func TestListPrograms_NoRuleSummary_Omitted(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.PutProgram(hub.NewProgram("test-ccu", "P-BARE", "Bare", "", false, nil))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var raw []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("expected 1 program, got %d", len(raw))
+	}
+	if _, present := raw[0]["condition_summary"]; present {
+		t.Error("condition_summary must be omitted when no rule summary was resolved")
+	}
+	if _, present := raw[0]["activity_summary"]; present {
+		t.Error("activity_summary must be omitted when no rule summary was resolved")
+	}
+}
+
 // ── H-033 SysvarSummary.min / max ──────────────────────────────────────────
 
 // TestListSysvars_MinMaxExposed pins H-033: a sysvar with declared bounds

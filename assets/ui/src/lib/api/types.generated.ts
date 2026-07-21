@@ -5323,6 +5323,21 @@ export interface components {
             /** @description RFC3339 timestamp of the most recent execution. */
             last_executed?: string;
             /**
+             * @description Compact, language-neutral rendering of the program's root-rule
+             *     trigger conditions — object names from the ReGa DOM joined by
+             *     symbolic operators (==, >=, <=, >, <, &&, ||). Capped at ~200
+             *     characters with an ellipsis. Absent when the program has no rule
+             *     or the CCU-side scan produced nothing.
+             */
+            condition_summary?: string;
+            /**
+             * @description Compact, language-neutral rendering of the program's root-rule
+             *     activities (object name := value, joined by "; "). Capped at
+             *     ~200 characters with an ellipsis. Absent when the program has no
+             *     rule.
+             */
+            activity_summary?: string;
+            /**
              * @description True for CCU-internal helper programs (prgEnergyCounter_…,
              *     Tmp_…). Clients skip these for HA entities, mirroring
              *     aiohomematic's DEFAULT_INCLUDE_INTERNAL_PROGRAMS=false.

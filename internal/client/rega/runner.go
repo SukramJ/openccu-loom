@@ -320,11 +320,21 @@ func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 type ProgramDescription struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
+	// ConditionSummary is a compact, language-neutral rendering of the
+	// program's root-rule trigger conditions (object names joined by the
+	// symbolic operators ==, >=, <=, >, <, &&, ||). Empty when the program
+	// has no rule. URL-encoded on the wire.
+	ConditionSummary string `json:"condition_summary"`
+	// ActivitySummary is a compact, language-neutral rendering of the
+	// program's root-rule activities (object name := value, joined by "; ").
+	// Empty when the program has no rule. URL-encoded on the wire.
+	ActivitySummary string `json:"activity_summary"`
 }
 
-// GetProgramDescriptions returns the URI-encoded description string for every
-// CCU automation program by running the get_program_descriptions.fn ReGa
-// script. The Description field values are URL-encoded; callers should apply
+// GetProgramDescriptions returns the URI-encoded description string and the
+// compact rule summaries for every CCU automation program by running the
+// get_program_descriptions.fn ReGa script. The Description, ConditionSummary,
+// and ActivitySummary field values are URL-encoded; callers should apply
 // url.QueryUnescape before display.
 func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescription, error) {
 	var descs []ProgramDescription

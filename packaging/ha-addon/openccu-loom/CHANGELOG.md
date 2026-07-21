@@ -45,6 +45,12 @@
   the next time the device wakes up (e.g. on a button press) — instead
   of a plain "saved" confirmation. Mains devices keep the immediate
   confirmation.
+- **Program list shows condition, activity and last execution.** The
+  program table now renders a compact, language-neutral summary of each
+  program's root rule — its trigger conditions and resulting activities
+  (symbolic operators, CCU object names) — alongside a Last-executed
+  column. REST clients get the same via new `condition_summary` and
+  `activity_summary` fields on `GET /api/v1/programs` (API 2.34.0).
 
 ## 0.45.0
 

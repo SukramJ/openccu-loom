@@ -137,6 +137,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   next wakeup. Mirrors the CCU WebUI's
   `config/ic_ifacecmd.cgi` `cmd_ShowConfigPendingMsg`. REST `APIVersion`
   2.35.0.
+- **Program list shows the rule at a glance: condition + activity
+  summary and last execution.** `GET /api/v1/programs` (and the single
+  `GET /api/v1/programs/{id}`) gain two nullable fields,
+  `condition_summary` and `activity_summary` — a compact,
+  language-neutral rendering of each program's root rule. Object names
+  come from the CCU (channel and system-variable names); comparison and
+  logical operators render as symbols (`==`, `>=`, `<=`, `>`, `<`,
+  `&&`, `||`) and activities as `name := value`, so the strings need no
+  translation. They are built by extending the
+  `get_program_descriptions` ReGa script with a bounded root-rule
+  traversal (one extra ReGa round-trip, capped at ~200 characters with
+  an ellipsis). The Config UI program table adds Condition and Activity
+  columns (collapsible on narrow viewports) plus a Last-executed column.
+  REST `APIVersion` 2.34.0.
 
 ## [0.45.0] — 2026-07-20
 
