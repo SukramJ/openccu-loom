@@ -12825,7 +12825,7 @@ func TestHubJSONRPCWriter_CreateSysvar_BoolType_Success(t *testing.T) {
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	w := &hubJSONRPCWriter{json: jc, rega: nil}
-	err := w.CreateSysvar(context.Background(), "myBool", "BOOL", "", "", "", nil)
+	err := w.CreateSysvar(context.Background(), "myBool", "BOOL", "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("CreateSysvar BOOL: %v", err)
 	}
@@ -12838,7 +12838,7 @@ func TestHubJSONRPCWriter_CreateSysvar_FloatType_Success(t *testing.T) {
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	w := &hubJSONRPCWriter{json: jc, rega: nil}
-	err := w.CreateSysvar(context.Background(), "myFloat", "FLOAT", "", "0", "100", nil)
+	err := w.CreateSysvar(context.Background(), "myFloat", "FLOAT", "", "0", "100", "", nil)
 	if err != nil {
 		t.Fatalf("CreateSysvar FLOAT: %v", err)
 	}
@@ -12851,7 +12851,7 @@ func TestHubJSONRPCWriter_CreateSysvar_EnumType_Success(t *testing.T) {
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	w := &hubJSONRPCWriter{json: jc, rega: nil}
-	err := w.CreateSysvar(context.Background(), "myEnum", "ENUM", "", "", "", []string{"A", "B", "C"})
+	err := w.CreateSysvar(context.Background(), "myEnum", "ENUM", "", "", "", "", []string{"A", "B", "C"})
 	if err != nil {
 		t.Fatalf("CreateSysvar ENUM: %v", err)
 	}
@@ -12901,7 +12901,7 @@ func TestHubJSONRPCWriter_UpdateSysvar_Success(t *testing.T) {
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	r := newBoost6RegaRunner(t, jc)
 	w := &hubJSONRPCWriter{json: jc, rega: r}
-	err := w.UpdateSysvar(context.Background(), "MyVar", "°C", "0", "100", "desc", nil)
+	err := w.UpdateSysvar(context.Background(), "MyVar", "", "°C", "0", "100", "desc", nil)
 	if err != nil {
 		t.Fatalf("UpdateSysvar: %v", err)
 	}
@@ -13005,7 +13005,7 @@ func TestHubJSONRPCWriter_CreateSysvar_StringType_UsesRega(t *testing.T) {
 	r := newBoost6RegaRunner(t, jc)
 	w := &hubJSONRPCWriter{json: jc, rega: r}
 	// STRING type goes through the rega path.
-	err := w.CreateSysvar(context.Background(), "myStr", "STRING", "", "", "", nil)
+	err := w.CreateSysvar(context.Background(), "myStr", "STRING", "", "", "", "", nil)
 	if err != nil {
 		t.Fatalf("CreateSysvar STRING: %v", err)
 	}
@@ -13020,7 +13020,7 @@ func TestHubJSONRPCWriter_CreateSysvar_WithUnit_UsesRega(t *testing.T) {
 	r := newBoost6RegaRunner(t, jc)
 	w := &hubJSONRPCWriter{json: jc, rega: r}
 	// Any type with a non-empty unit falls back to rega.
-	err := w.CreateSysvar(context.Background(), "myTemp", "FLOAT", "°C", "0", "100", nil)
+	err := w.CreateSysvar(context.Background(), "myTemp", "FLOAT", "°C", "0", "100", "", nil)
 	if err != nil {
 		t.Fatalf("CreateSysvar with unit: %v", err)
 	}

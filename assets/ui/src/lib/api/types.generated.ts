@@ -1000,7 +1000,7 @@ export interface paths {
         delete: operations["deleteSysvar"];
         options?: never;
         head?: never;
-        /** Update the sysvar metadata (description, unit, value_list, min, max). Triggers the Rega update_system_variable script via JSON-RPC. All fields are optional — omitted fields leave CCU metadata unchanged. Type changes are not supported; delete and recreate the sysvar instead. */
+        /** Update the sysvar metadata (name, description, unit, value_list, min, max). Triggers the Rega update_system_variable script via JSON-RPC. All fields are optional — omitted fields leave CCU metadata unchanged. A non-empty name renames the variable in place. Type changes are not supported; delete and recreate the sysvar instead. */
         patch: operations["patchSysvar"];
         trace?: never;
     };
@@ -7656,7 +7656,29 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Name of the new system variable. */
+                    name: string;
+                    /**
+                     * @description Value kind of the new variable.
+                     * @enum {string}
+                     */
+                    value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM";
+                    /** @description Physical unit string (e.g. "°C", "%"). */
+                    unit?: string;
+                    /** @description Minimum value (as string, CCU convention). */
+                    min?: string;
+                    /** @description Maximum value (as string, CCU convention). */
+                    max?: string;
+                    /** @description Human-readable label shown in the CCU UI. When set, creation routes through the Rega script (the native JSON-RPC create methods carry no description parameter). */
+                    description?: string;
+                    /** @description Ordered list of enum labels for ENUM-type sysvars. */
+                    value_list?: string[];
+                };
+            };
+        };
         responses: {
             /** @description Scheduled */
             202: {
@@ -7774,6 +7796,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description New name for the variable. When present and non-empty the sysvar is renamed in place (the path {name} stays the current name). Omit or leave empty to keep the name. */
+                    name?: string;
                     /** @description Human-readable label shown in the CCU UI. */
                     description?: string;
                     /** @description Physical unit string (e.g. "°C", "%"). */
@@ -7782,7 +7806,7 @@ export interface operations {
                     min?: string;
                     /** @description Maximum value (as string, CCU convention). */
                     max?: string;
-                    /** @description Ordered list of enum labels for ENUM-type sysvars. */
+                    /** @description Ordered list of enum labels for LIST/ENUM-type sysvars. */
                     value_list?: string[];
                 };
             };

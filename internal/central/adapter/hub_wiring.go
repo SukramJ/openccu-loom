@@ -1631,18 +1631,19 @@ func (w *hubJSONRPCWriter) SetSysvar(ctx context.Context, name string, value any
 
 // CreateSysvar provisions a new sysvar.
 //
-// BOOL/FLOAT/ENUM without a custom unit go through the CCU's native
-// JSON-RPC methods (`SysVar.createBool` / `createFloat` / `createEnum`)
-// This matches what
-// surface (UTF-8/BOM, escape rules). INTEGER, STRING and any sysvar
-// that needs a `ValueUnit` fall back to the `create_system_variable`
-// Rega script because the CCU's JSON-RPC has no equivalent for those.
+// BOOL/FLOAT/ENUM without a custom unit or description go through the
+// CCU's native JSON-RPC methods (`SysVar.createBool` / `createFloat` /
+// `createEnum`), which own the exact CCU surface (UTF-8/BOM, escape
+// rules). INTEGER, STRING and any sysvar that needs a `ValueUnit` or a
+// description fall back to the `create_system_variable` Rega script
+// because the CCU's JSON-RPC has no equivalent for those (createBool /
+// createFloat / createEnum carry no description parameter).
 func (w *hubJSONRPCWriter) CreateSysvar(
 	ctx context.Context,
-	name, valueType, unit, vmin, vmax string,
+	name, valueType, unit, vmin, vmax, description string,
 	valueList []string,
 ) error {
-	if unit == "" {
+	if unit == "" && description == "" {
 		switch valueType {
 		case "BOOL":
 			return w.json.Call(ctx, "SysVar.createBool", map[string]any{
@@ -1674,12 +1675,13 @@ func (w *hubJSONRPCWriter) CreateSysvar(
 		}
 	}
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptCreateSystemVariable, map[string]string{
-		"name":   name,
-		"type":   valueType,
-		"unit":   unit,
-		"min":    vmin,
-		"max":    vmax,
-		"values": strings.Join(valueList, ";"),
+		"name":        name,
+		"type":        valueType,
+		"unit":        unit,
+		"min":         vmin,
+		"max":         vmax,
+		"values":      strings.Join(valueList, ";"),
+		"description": description,
 	})
 	return err
 }
@@ -1694,16 +1696,19 @@ func (w *hubJSONRPCWriter) DeleteSysvar(ctx context.Context, name string) error 
 	}, nil)
 }
 
-// UpdateSysvar patches the sysvar's metadata (unit, bounds, value
-// list, description) without touching its type. Empty strings on
-// the input map leave the corresponding CCU field untouched.
+// UpdateSysvar patches the sysvar's metadata (name, unit, bounds,
+// value list, description) without touching its type. Empty strings on
+// the input map leave the corresponding CCU field untouched; a
+// non-empty newName renames the variable in place. Type changes are
+// unsafe at the CCU level — callers wanting that must delete + recreate.
 func (w *hubJSONRPCWriter) UpdateSysvar(
 	ctx context.Context,
-	name, unit, vmin, vmax, description string,
+	name, newName, unit, vmin, vmax, description string,
 	valueList []string,
 ) error {
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptUpdateSystemVariable, map[string]string{
 		"name":        name,
+		"newname":     newName,
 		"unit":        unit,
 		"min":         vmin,
 		"max":         vmax,

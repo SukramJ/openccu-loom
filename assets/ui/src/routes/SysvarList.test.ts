@@ -30,7 +30,8 @@ vi.mock("$lib/api/client", () => ({
 }));
 
 import { toastStore } from "$lib/stores/toast.svelte";
-import { ApiError } from "$lib/api/client";
+import { ApiError, api } from "$lib/api/client";
+import { t } from "$lib/i18n";
 import SysvarList from "./SysvarList.svelte";
 
 const alarmStatus = {
@@ -191,5 +192,123 @@ describe("SysvarList reload", () => {
       expect(mockListSysvars).toHaveBeenCalledTimes(2);
       expect(errorSpy).toHaveBeenCalledWith("502: ccu unreachable");
     });
+  });
+});
+
+// findByLabel locates the <input> whose enclosing <label> carries the
+// given (localized) label span text. Both the create card and the edit
+// dialog wrap each Input in a `<label><span>…</span><Input/></label>`.
+function findByLabel(scope: HTMLElement, labelText: string): HTMLInputElement {
+  const label = [...scope.querySelectorAll("label")].find(
+    (l) => l.querySelector("span")?.textContent?.trim() === labelText,
+  );
+  const input = label?.querySelector("input");
+  if (!input) throw new Error(`input for label "${labelText}" not found`);
+  return input as HTMLInputElement;
+}
+
+function buttonByText(scope: HTMLElement, re: RegExp): HTMLButtonElement {
+  const btn = [...scope.querySelectorAll("button")].find((b) =>
+    re.test(b.textContent ?? ""),
+  );
+  if (!btn) throw new Error(`button matching ${re} not found`);
+  return btn as HTMLButtonElement;
+}
+
+describe("SysvarList edit dialog dispatch", () => {
+  const listVar = {
+    name: "Mode",
+    central: "ccu1",
+    value_type: "LIST",
+    value: 1,
+    value_list: ["Off", "Home", "Away"],
+    unit: "",
+    is_internal: false,
+    is_extended: false,
+  };
+
+  async function openEditDialog(sv: Record<string, unknown>): Promise<{
+    container: HTMLElement;
+    dialog: HTMLElement;
+  }> {
+    mockListSysvars.mockResolvedValue([sv]);
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(container.querySelector("tbody tr")).not.toBeNull());
+    // The gear button (⚙) opens the metadata edit dialog for the row.
+    await fireEvent.click(buttonByText(container, /^⚙$/));
+    await waitFor(() =>
+      expect(container.querySelector('[role="dialog"]')).not.toBeNull(),
+    );
+    return { container, dialog: container.querySelector('[role="dialog"]') as HTMLElement };
+  }
+
+  it("renders the value-list field for a LIST sysvar (wire type, not ENUM)", async () => {
+    const { dialog } = await openEditDialog(listVar);
+    // The bug: the dialog gated the value-list field on value_type ===
+    // "ENUM", but the daemon delivers "LIST" — so a real CCU list
+    // variable never got the field. It must show, pre-filled.
+    const valuesInput = findByLabel(dialog, t("sysvars.create.values"));
+    expect(valuesInput.value).toBe("Off;Home;Away");
+  });
+
+  it("patches the value_list of a LIST sysvar on save", async () => {
+    const { dialog } = await openEditDialog(listVar);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    expect(api.patchSysvar).toHaveBeenCalledWith(
+      "Mode",
+      expect.objectContaining({ value_list: ["Off", "Home", "Away"] }),
+      "ccu1",
+    );
+  });
+
+  it("sends the new name in the patch body when the operator renames", async () => {
+    const { dialog } = await openEditDialog(listVar);
+    const nameInput = findByLabel(dialog, t("sysvars.edit.name"));
+    nameInput.value = "RenamedMode";
+    await fireEvent.input(nameInput);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    expect(api.patchSysvar).toHaveBeenCalledWith(
+      "Mode",
+      expect.objectContaining({ name: "RenamedMode" }),
+      "ccu1",
+    );
+  });
+
+  it("omits the name field when the name is unchanged", async () => {
+    const { dialog } = await openEditDialog(listVar);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(api.patchSysvar).mock.calls[0][1] as Record<string, unknown>;
+    expect(body.name).toBeUndefined();
+  });
+});
+
+describe("SysvarList create dialog dispatch", () => {
+  it("includes the description in the create body", async () => {
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(mockListSysvars).toHaveBeenCalledTimes(1));
+    // Toggle the create card open.
+    await fireEvent.click(buttonByText(container, /\+\s*(new|neu)/i));
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll("label")].some(
+          (l) => l.querySelector("span")?.textContent?.trim() === t("sysvars.create.name"),
+        ),
+      ).toBe(true),
+    );
+    const nameInput = findByLabel(container, t("sysvars.create.name"));
+    nameInput.value = "NewVar";
+    await fireEvent.input(nameInput);
+    const descInput = findByLabel(container, t("sysvars.edit.description"));
+    descInput.value = "a helpful note";
+    await fireEvent.input(descInput);
+    await fireEvent.click(buttonByText(container, /^(add|hinzufügen)$/i));
+    await waitFor(() => expect(api.createSysvar).toHaveBeenCalledTimes(1));
+    expect(api.createSysvar).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "NewVar", description: "a helpful note" }),
+      "",
+    );
   });
 });

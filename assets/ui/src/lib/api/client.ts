@@ -588,6 +588,7 @@ export const api = {
       unit?: string;
       min?: string;
       max?: string;
+      description?: string;
       value_list?: string[];
     },
     central: string,
@@ -602,6 +603,7 @@ export const api = {
   patchSysvar(
     name: string,
     body: {
+      name?: string;
       unit?: string;
       min?: string;
       max?: string;

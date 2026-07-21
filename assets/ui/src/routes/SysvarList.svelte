@@ -15,7 +15,12 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
-  import { sysvarWidget, sysvarNumberStep } from "$lib/sysvar-widget";
+  import {
+    sysvarWidget,
+    sysvarNumberStep,
+    isListSysvar,
+    isNumberSysvar,
+  } from "$lib/sysvar-widget";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -37,8 +42,11 @@
     value_list: string;
   }>({ name: "", value_type: "BOOL", unit: "", min: "", max: "", value_list: "" });
 
+  let createDescription = $state("");
+
   let editing = $state<SysvarEntry | null>(null);
   let editForm = $state({
+    name: "",
     unit: "",
     min: "",
     max: "",
@@ -49,6 +57,7 @@
   function startEdit(sv: SysvarEntry) {
     editing = sv;
     editForm = {
+      name: sv.name,
       unit: sv.unit ?? "",
       min: "",
       max: "",
@@ -62,18 +71,22 @@
     savingName = editing.name;
     try {
       const body: Record<string, unknown> = {};
+      const newName = editForm.name.trim();
+      if (newName && newName !== editing.name) body.name = newName;
       if (editForm.unit) body.unit = editForm.unit;
       if (editForm.min) body.min = editForm.min;
       if (editForm.max) body.max = editForm.max;
       if (editForm.description) body.description = editForm.description;
-      if (editForm.value_list && editing.value_type === "ENUM") {
+      if (editForm.value_list && isListSysvar(editing.value_type)) {
         body.value_list = editForm.value_list
           .split(";")
           .map((s) => s.trim())
           .filter(Boolean);
       }
       await api.patchSysvar(editing.name, body, editing.central);
-      toastStore.success(t("sysvars.updated", { name: editing.name }));
+      toastStore.success(
+        t("sysvars.updated", { name: (body.name as string) ?? editing.name }),
+      );
       editing = null;
       await load();
     } catch (err) {
@@ -167,6 +180,7 @@
           unit: createForm.unit || undefined,
           min: createForm.min || undefined,
           max: createForm.max || undefined,
+          description: createDescription || undefined,
           value_list: createForm.value_type === "ENUM" && createForm.value_list
             ? createForm.value_list.split(";").map((s) => s.trim()).filter(Boolean)
             : undefined,
@@ -176,6 +190,7 @@
       toastStore.success(t("sysvars.created"));
       creating = false;
       createForm = { name: "", value_type: "BOOL", unit: "", min: "", max: "", value_list: "" };
+      createDescription = "";
       await load();
     } catch (err) {
       toastStore.error(
@@ -319,6 +334,10 @@
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={createForm.unit} />
         </label>
+        <label class="text-sm md:col-span-2">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.description")}</span>
+          <Input bind:value={createDescription} />
+        </label>
         {#if createForm.value_type === "INTEGER" || createForm.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
@@ -457,6 +476,10 @@
       <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.note")}</p>
       <div class="space-y-2">
         <label class="block text-sm">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.name")}</span>
+          <Input bind:value={editForm.name} placeholder={editing.name} />
+        </label>
+        <label class="block text-sm">
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.description")}</span>
           <Input bind:value={editForm.description} />
         </label>
@@ -464,7 +487,7 @@
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={editForm.unit} />
         </label>
-        {#if editing.value_type === "INTEGER" || editing.value_type === "FLOAT"}
+        {#if isNumberSysvar(editing.value_type)}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
               <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.min")}</span>
@@ -476,7 +499,7 @@
             </label>
           </div>
         {/if}
-        {#if editing.value_type === "ENUM"}
+        {#if isListSysvar(editing.value_type)}
           <label class="block text-sm">
             <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.values")}</span>
             <Input bind:value={editForm.value_list} />

@@ -188,7 +188,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   clients. The Config UI program table adds a "Show system programs"
   toggle (off by default, persisted locally), mirroring the CCU WebUI's
   footer button. REST `APIVersion` 2.34.0.
+- **System variables can be renamed, and carry a description from
+  creation.** `PATCH /sysvars/{name}` now accepts an optional `name`
+  field that renames the variable in place (the CCU-side rename runs
+  through the `update_system_variable` Rega script; the local cache is
+  re-keyed the moment the call lands so the new name shows before the
+  next periodic refresh). `POST /sysvars` gained an optional
+  `description` field, so a variable's help text can be set at creation
+  instead of only via a follow-up patch. The system-variable editor
+  surfaces both: the edit dialog has a rename field, the create form a
+  description field.
+
 ### Fixed
+
+- **The system-variable edit dialog now patches the value list of real
+  CCU list variables.** The dialog gated its value-list field on
+  `value_type === "ENUM"`, but the daemon delivers the CCU wire type
+  `LIST` — so editing the options of an existing list variable silently
+  did nothing. The dialog now keys off the real wire types
+  (`LOGIC`/`LIST`/`FLOAT`/`INTEGER`/`STRING`/`ALARM`), showing the
+  value-list field for `LIST` and the min/max fields for the numeric
+  types.
 
 - **Logic and alarm system variables are now flipped with a switch.**
   The system-variable list and the favorites view rendered a switch

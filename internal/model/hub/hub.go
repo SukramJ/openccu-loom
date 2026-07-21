@@ -79,12 +79,12 @@ var (
 type SysvarMutator interface {
 	CreateSysvar(
 		ctx context.Context,
-		name, valueType, unit, vmin, vmax string,
+		name, valueType, unit, vmin, vmax, description string,
 		valueList []string,
 	) error
 	UpdateSysvar(
 		ctx context.Context,
-		name, unit, vmin, vmax, description string,
+		name, newName, unit, vmin, vmax, description string,
 		valueList []string,
 	) error
 	DeleteSysvar(ctx context.Context, name string) error
@@ -446,6 +446,32 @@ func (h *Hub) RemoveSysvar(name string) bool {
 	return true
 }
 
+// RenameSysvar re-keys a cached sysvar from oldName to newName and
+// updates the entry's Name field, preserving the same pointer so
+// subscribers wired via OnSysvarRegistered stay valid. It reports
+// whether an entry existed under oldName. Local-only: the CCU-side
+// rename runs through UpdateSysvarRemote. A no-op when the names match,
+// oldName is unknown, or newName is already taken (the periodic refresh
+// reconciles any residual state).
+func (h *Hub) RenameSysvar(oldName, newName string) bool {
+	if oldName == newName || newName == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s, ok := h.sysvars[oldName]
+	if !ok {
+		return false
+	}
+	if _, taken := h.sysvars[newName]; taken {
+		return false
+	}
+	delete(h.sysvars, oldName)
+	s.Name = newName
+	h.sysvars[newName] = s
+	return true
+}
+
 // Mutator bundles every CCU-side write interface the hub exposes. The
 // hub-wiring adapter wires a single object (the JSON-RPC writer) that
 // implements all of them via [Hub.SetMutator].
@@ -497,14 +523,14 @@ func (h *Hub) inboxMut() InboxAccepter { h.mu.RLock(); defer h.mu.RUnlock(); ret
 // returns 202 once the call lands.
 func (h *Hub) CreateSysvarRemote(
 	ctx context.Context,
-	name, valueType, unit, vmin, vmax string,
+	name, valueType, unit, vmin, vmax, description string,
 	valueList []string,
 ) error {
 	m := h.sysvarMut()
 	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	return m.CreateSysvar(ctx, name, valueType, unit, vmin, vmax, valueList)
+	return m.CreateSysvar(ctx, name, valueType, unit, vmin, vmax, description, valueList)
 }
 
 // DeleteSysvarRemote removes a sysvar on the CCU and drops it from
@@ -521,20 +547,28 @@ func (h *Hub) DeleteSysvarRemote(ctx context.Context, name string) error {
 	return nil
 }
 
-// UpdateSysvarRemote patches a sysvar's metadata (unit, bounds,
-// value list, description) without changing its type. Type
-// changes are unsafe at the CCU level — callers wanting that
-// must delete + recreate.
+// UpdateSysvarRemote patches a sysvar's metadata (name, unit, bounds,
+// value list, description) without changing its type. A non-empty
+// newName that differs from name renames the variable; the local
+// cache is re-keyed once the CCU call lands so the new name is visible
+// before the next periodic refresh reconciles it. Type changes are
+// unsafe at the CCU level — callers wanting that must delete + recreate.
 func (h *Hub) UpdateSysvarRemote(
 	ctx context.Context,
-	name, unit, vmin, vmax, description string,
+	name, newName, unit, vmin, vmax, description string,
 	valueList []string,
 ) error {
 	m := h.sysvarMut()
 	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	return m.UpdateSysvar(ctx, name, unit, vmin, vmax, description, valueList)
+	if err := m.UpdateSysvar(ctx, name, newName, unit, vmin, vmax, description, valueList); err != nil {
+		return err
+	}
+	if newName != "" && newName != name {
+		h.RenameSysvar(name, newName)
+	}
+	return nil
 }
 
 // SetDeviceRoomsRemote replaces the device's room assignments via

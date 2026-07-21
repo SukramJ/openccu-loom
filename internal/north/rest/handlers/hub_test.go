@@ -1340,11 +1340,11 @@ func TestToSysvarSummary_WithValue(t *testing.T) {
 // errSysvarMutator implements hub.SysvarMutator and always returns an error.
 type errSysvarMutator struct{ err error }
 
-func (e *errSysvarMutator) CreateSysvar(_ context.Context, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) CreateSysvar(_ context.Context, _, _, _, _, _, _ string, _ []string) error {
 	return e.err
 }
 
-func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _, _, _, _, _, _ string, _ []string) error {
 	return e.err
 }
 
@@ -1441,6 +1441,94 @@ func TestPatchSysvar_HappyPath_Returns202(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// recordingSysvarMutator captures the arguments of the last UpdateSysvar
+// call so a handler test can assert the request body threaded through.
+type recordingSysvarMutator struct {
+	name          string
+	newName       string
+	createName    string
+	createDescrip string
+}
+
+func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, name, _, _, _, _, description string, _ []string) error {
+	r.createName = name
+	r.createDescrip = description
+	return nil
+}
+
+func (r *recordingSysvarMutator) UpdateSysvar(_ context.Context, name, newName, _, _, _, _ string, _ []string) error {
+	r.name = name
+	r.newName = newName
+	return nil
+}
+
+func (r *recordingSysvarMutator) DeleteSysvar(_ context.Context, _ string) error { return nil }
+
+// A `name` field in the PATCH body reaches the mutator as the rename
+// target while the path {name} stays the current name.
+func TestPatchSysvar_Rename_PassesNewName(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"NewName"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "OldName"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "OldName" || mut.newName != "NewName" {
+		t.Fatalf("mutator got name=%q newName=%q, want OldName/NewName", mut.name, mut.newName)
+	}
+}
+
+// Omitting `name` from the PATCH body (the common case: only unit/min/max/
+// description/value_list change) must not synthesize a rename — the
+// mutator's newName parameter stays empty so UpdateSysvar's ##newname##
+// slot resolves to "" and the CCU leaves the variable's name untouched.
+func TestPatchSysvar_NameOmitted_DoesNotRename(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "OldName"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "OldName" || mut.newName != "" {
+		t.Fatalf("mutator got name=%q newName=%q, want OldName/\"\"", mut.name, mut.newName)
+	}
+}
+
+// A `description` in the POST body reaches CreateSysvar so the variable
+// carries its help text from creation.
+func TestCreateSysvar_Description_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","description":"a helpful note"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createName != "Flag" || mut.createDescrip != "a helpful note" {
+		t.Fatalf("mutator got name=%q description=%q", mut.createName, mut.createDescrip)
 	}
 }
 

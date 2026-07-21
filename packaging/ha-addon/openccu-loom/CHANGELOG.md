@@ -68,6 +68,14 @@
   REST/WS clients get the same via an optional `include_internal`
   parameter; without it the `include_internal_programs` setting still
   governs the default (API 2.34.0).
+- **Rename system variables and describe them at creation.** The
+  system-variable editor can now rename a variable, and the create form
+  accepts a description up front (previously the name was fixed and the
+  description could only be added afterwards).
+- **List variables can be edited again.** The edit dialog now shows the
+  value-list field for the CCU's real `LIST`-type variables (it
+  previously only appeared for the create-time `ENUM` alias), so the
+  options of an existing list variable can be changed.
 - **Logic/alarm system variables toggle with a switch.** In the
   system-variable list and the favorites view, boolean sysvars of the
   CCU types `LOGIC` and `ALARM` (the most common kind) now render as an

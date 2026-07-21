@@ -1649,6 +1649,7 @@ const EN: Catalog = {
   "sysvars.create.unit": "Unit",
   "sysvars.create.values": "Values (semicolon-separated)",
   "sysvars.edit.title": "Edit",
+  "sysvars.edit.name": "Name (rename)",
   "sysvars.edit.description": "Description",
   "sysvars.edit.note":
     "Type changes require delete + recreate. This dialog only updates metadata.",
@@ -4384,6 +4385,7 @@ const DE: Catalog = {
   "sysvars.create.unit": "Einheit",
   "sysvars.create.values": "Werte (Semikolon-getrennt)",
   "sysvars.edit.title": "Bearbeiten",
+  "sysvars.edit.name": "Name (umbenennen)",
   "sysvars.edit.description": "Beschreibung",
   "sysvars.edit.note":
     "Typ-Änderungen erfordern Löschen + Neuanlegen. Hier werden nur Metadaten aktualisiert.",

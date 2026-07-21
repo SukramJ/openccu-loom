@@ -459,12 +459,13 @@ func SetProgramEnabled(idx HubIndex) http.HandlerFunc {
 
 // SysvarCreateRequest is the body for `POST /sysvars`.
 type SysvarCreateRequest struct {
-	Name      string   `json:"name"`
-	ValueType string   `json:"value_type"` // BOOL|INTEGER|FLOAT|STRING|ENUM
-	Unit      string   `json:"unit,omitempty"`
-	Min       string   `json:"min,omitempty"`
-	Max       string   `json:"max,omitempty"`
-	ValueList []string `json:"value_list,omitempty"`
+	Name        string   `json:"name"`
+	ValueType   string   `json:"value_type"` // BOOL|INTEGER|FLOAT|STRING|ENUM
+	Unit        string   `json:"unit,omitempty"`
+	Min         string   `json:"min,omitempty"`
+	Max         string   `json:"max,omitempty"`
+	Description string   `json:"description,omitempty"`
+	ValueList   []string `json:"value_list,omitempty"`
 }
 
 // CreateSysvar provisions a new sysvar on the CCU via the Rega
@@ -488,7 +489,7 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 			return
 		}
 		if err := h.CreateSysvarRemote(r.Context(),
-			req.Name, req.ValueType, req.Unit, req.Min, req.Max, req.ValueList); err != nil {
+			req.Name, req.ValueType, req.Unit, req.Min, req.Max, req.Description, req.ValueList); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar create failed", err)
 			return
 		}
@@ -498,9 +499,11 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 
 // SysvarPatchRequest is the body for `PATCH /sysvars/{name}`.
 // Every field is optional — empty/missing fields leave the CCU's
-// existing metadata untouched. Type changes are not supported via
-// this endpoint; rebuild the sysvar (DELETE + POST) instead.
+// existing metadata untouched. A non-empty Name renames the variable.
+// Type changes are not supported via this endpoint; rebuild the sysvar
+// (DELETE + POST) instead.
 type SysvarPatchRequest struct {
+	Name        *string   `json:"name,omitempty"`
 	Unit        *string   `json:"unit,omitempty"`
 	Min         *string   `json:"min,omitempty"`
 	Max         *string   `json:"max,omitempty"`
@@ -523,8 +526,11 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		unit, vmin, vmax, desc := "", "", "", ""
+		newName, unit, vmin, vmax, desc := "", "", "", "", ""
 		var valueList []string
+		if req.Name != nil {
+			newName = *req.Name
+		}
 		if req.Unit != nil {
 			unit = *req.Unit
 		}
@@ -541,7 +547,7 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 			valueList = *req.ValueList
 		}
 		if err := h.UpdateSysvarRemote(
-			r.Context(), name, unit, vmin, vmax, desc, valueList,
+			r.Context(), name, newName, unit, vmin, vmax, desc, valueList,
 		); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar update failed", err)
 			return

@@ -28,9 +28,27 @@ export interface SysvarWidgetInput {
   value_list?: string[] | null;
 }
 
+/**
+ * Value types whose value is an index into a label list. The CCU
+ * reports these as LIST on the wire; ENUM is the alias the create
+ * dialog offers before the variable exists, kept here so a freshly
+ * created variable still matches before the first refresh re-reads it.
+ */
+const LIST_VALUE_TYPES = new Set(["LIST", "ENUM"]);
+
 /** True for a boolean-flavoured sysvar (BOOL / LOGIC / ALARM). */
 export function isBoolSysvar(valueType: string | null | undefined): boolean {
   return BOOL_VALUE_TYPES.has((valueType ?? "").toUpperCase());
+}
+
+/** True for a label-list sysvar (wire type LIST, or the ENUM alias). */
+export function isListSysvar(valueType: string | null | undefined): boolean {
+  return LIST_VALUE_TYPES.has((valueType ?? "").toUpperCase());
+}
+
+/** True for a numeric sysvar (INTEGER / FLOAT / NUMBER). */
+export function isNumberSysvar(valueType: string | null | undefined): boolean {
+  return NUMBER_VALUE_TYPES.has((valueType ?? "").toUpperCase());
 }
 
 /**

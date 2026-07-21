@@ -2,6 +2,7 @@
 !# Params: ##name## (sysvar name), ##type## (BOOL|FLOAT|INTEGER|STRING|ENUM),
 !#         ##unit## (optional unit string), ##min## / ##max## (FLOAT/INTEGER bounds)
 !#         ##values## (semicolon-separated ENUM keys, ignored otherwise)
+!#         ##description## (optional description text; "" leaves it empty)
 !# Output: the new sysvar's serial id, or an empty string on failure.
 !#
 !# Creates a system variable on the CCU. Silent no-op if a sysvar with
@@ -14,6 +15,7 @@ string sUnit = "##unit##";
 string sMin = "##min##";
 string sMax = "##max##";
 string sValues = "##values##";
+string sDescription = "##description##";
 
 object oSv = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
 if (oSv) {
@@ -52,6 +54,7 @@ if (oNew) {
         oNew.ValueList(sValues);
     }
     if (sUnit != "") { oNew.ValueUnit(sUnit); }
+    if (sDescription != "") { oNew.DPInfo(sDescription); }
     oNew.Internal(false);
     oNew.Visible(true);
     dom.GetObject(ID_SYSTEM_VARIABLES).Add(oNew.ID());

@@ -3,6 +3,8 @@ import {
   sysvarWidget,
   sysvarNumberStep,
   isBoolSysvar,
+  isListSysvar,
+  isNumberSysvar,
   type SysvarWidgetInput,
 } from "./sysvar-widget";
 
@@ -106,5 +108,40 @@ describe("isBoolSysvar", () => {
   it("is false for an empty or undefined value_type", () => {
     expect(isBoolSysvar("")).toBe(false);
     expect(isBoolSysvar(undefined)).toBe(false);
+  });
+});
+
+describe("isListSysvar", () => {
+  it("is true for the LIST wire type and the ENUM create alias", () => {
+    // The daemon delivers LIST on the wire; the create dialog offers
+    // ENUM as an alias before the variable exists. Both must match so
+    // the edit dialog shows the value-list field for either shape.
+    expect(isListSysvar("LIST")).toBe(true);
+    expect(isListSysvar("ENUM")).toBe(true);
+    expect(isListSysvar("list")).toBe(true);
+  });
+
+  it("is false for non-list types", () => {
+    expect(isListSysvar("LOGIC")).toBe(false);
+    expect(isListSysvar("INTEGER")).toBe(false);
+    expect(isListSysvar("STRING")).toBe(false);
+    expect(isListSysvar(null)).toBe(false);
+    expect(isListSysvar(undefined)).toBe(false);
+  });
+});
+
+describe("isNumberSysvar", () => {
+  it("is true for INTEGER / FLOAT / NUMBER", () => {
+    expect(isNumberSysvar("INTEGER")).toBe(true);
+    expect(isNumberSysvar("FLOAT")).toBe(true);
+    expect(isNumberSysvar("NUMBER")).toBe(true);
+    expect(isNumberSysvar("float")).toBe(true);
+  });
+
+  it("is false for non-numeric types", () => {
+    expect(isNumberSysvar("LOGIC")).toBe(false);
+    expect(isNumberSysvar("LIST")).toBe(false);
+    expect(isNumberSysvar("STRING")).toBe(false);
+    expect(isNumberSysvar(null)).toBe(false);
   });
 });

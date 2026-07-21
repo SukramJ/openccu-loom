@@ -1,10 +1,23 @@
 [
   {
     "name": "TestVar",
+    "unique_id": "ccu1/sysvar/TestVar",
     "value": true,
-    "value_type": "BOOL",
+    "value_type": "LOGIC",
     "unit": "",
     "central": "ccu1",
+    "observed": true,
     "description": "A test sysvar"
+  },
+  {
+    "name": "Mode",
+    "unique_id": "ccu1/sysvar/Mode",
+    "value": 1,
+    "value_type": "LIST",
+    "unit": "",
+    "central": "ccu1",
+    "observed": true,
+    "value_list": ["Off", "Home", "Away"],
+    "description": "A test list sysvar"
   }
 ]

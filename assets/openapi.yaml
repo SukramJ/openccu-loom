@@ -669,6 +669,40 @@ paths:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, value_type]
+              properties:
+                name:
+                  type: string
+                  description: Name of the new system variable.
+                value_type:
+                  type: string
+                  enum: [BOOL, INTEGER, FLOAT, STRING, ENUM]
+                  description: Value kind of the new variable.
+                unit:
+                  type: string
+                  description: Physical unit string (e.g. "°C", "%").
+                min:
+                  type: string
+                  description: Minimum value (as string, CCU convention).
+                max:
+                  type: string
+                  description: Maximum value (as string, CCU convention).
+                description:
+                  type: string
+                  description: >
+                    Human-readable label shown in the CCU UI. When set,
+                    creation routes through the Rega script (the native
+                    JSON-RPC create methods carry no description parameter).
+                value_list:
+                  type: array
+                  items: { type: string }
+                  description: Ordered list of enum labels for ENUM-type sysvars.
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -749,9 +783,10 @@ paths:
     patch:
       operationId: patchSysvar
       summary: >
-        Update the sysvar metadata (description, unit, value_list, min, max).
+        Update the sysvar metadata (name, description, unit, value_list, min, max).
         Triggers the Rega update_system_variable script via JSON-RPC.
         All fields are optional — omitted fields leave CCU metadata unchanged.
+        A non-empty name renames the variable in place.
         Type changes are not supported; delete and recreate the sysvar instead.
       tags: [hub]
       security:
@@ -765,6 +800,12 @@ paths:
             schema:
               type: object
               properties:
+                name:
+                  type: string
+                  description: >
+                    New name for the variable. When present and non-empty
+                    the sysvar is renamed in place (the path {name} stays
+                    the current name). Omit or leave empty to keep the name.
                 description:
                   type: string
                   description: Human-readable label shown in the CCU UI.
@@ -780,7 +821,7 @@ paths:
                 value_list:
                   type: array
                   items: { type: string }
-                  description: Ordered list of enum labels for ENUM-type sysvars.
+                  description: Ordered list of enum labels for LIST/ENUM-type sysvars.
       responses:
         "202":
           description: Accepted — Rega script dispatched asynchronously.

@@ -1,18 +1,22 @@
 !# openccu-loom — update_system_variable
 !# Params: ##name##  (target sysvar name)
+!#         ##newname## (optional new name; "" leaves the name unchanged)
 !#         ##unit##  (optional unit string; "" leaves untouched)
 !#         ##min##   / ##max## (FLOAT/INTEGER bounds; "" untouched)
 !#         ##values## (semicolon-separated ENUM keys; "" untouched)
 !#         ##description## (optional description text; "" untouched)
 !# Output: "ok" once the metadata patch landed, "" otherwise.
 !#
-!# Updates an existing sysvar's metadata in place. Type changes are
-!# unsafe at the CCU level — callers wanting to change the type
-!# should delete (JSON-RPC `SysVar.deleteSysVarByName`) and recreate
-!# (JSON-RPC `SysVar.createBool/createFloat/createEnum` or the
+!# Updates an existing sysvar's metadata in place. A non-empty newname
+!# renames the variable (mirrors the CCU WebUI's ::changeName via
+!# rega/esp/system.fn). Type changes are unsafe at the CCU level —
+!# callers wanting to change the type should delete (JSON-RPC
+!# `SysVar.deleteSysVarByName`) and recreate (JSON-RPC
+!# `SysVar.createBool/createFloat/createEnum` or the
 !# create_system_variable Rega script for INTEGER/STRING/Unit).
 
 string sName = "##name##";
+string sNewName = "##newname##";
 string sUnit = "##unit##";
 string sMin = "##min##";
 string sMax = "##max##";
@@ -26,5 +30,6 @@ if (oSv) {
     if (sMax != "") { oSv.ValueMax(sMax); }
     if (sValues != "") { oSv.ValueList(sValues); }
     if (sDescription != "") { oSv.DPInfo(sDescription); }
+    if (sNewName != "") { oSv.Name(sNewName); }
     Write("ok");
 }
