@@ -15,6 +15,7 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
+  import { sysvarWidget, sysvarNumberStep } from "$lib/sysvar-widget";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -389,18 +390,19 @@
             <Badge variant="muted">{sv.value_type}</Badge>
             {#if sv.unit}<span class="ml-1 text-xs text-slate-500 dark:text-slate-400">{sv.unit}</span>{/if}
           {:else if col.key === "value"}
-            {#if sv.value_type === "BOOL"}
+            {@const widget = sysvarWidget(sv)}
+            {#if widget === "switch"}
               <Switch checked={Boolean(currentValue(sv))} onCheckedChange={(v) => setDraft(sv, v)} />
-            {:else if sv.value_list && sv.value_list.length > 0}
+            {:else if widget === "select"}
               <Select
-                options={sv.value_list.map((label, i) => ({ value: String(i), label }))}
+                options={(sv.value_list ?? []).map((label, i) => ({ value: String(i), label }))}
                 value={currentValue(sv) != null ? String(currentValue(sv)) : ""}
                 onValueChange={(v) => setDraft(sv, Number(v))}
               />
-            {:else if sv.value_type === "INTEGER" || sv.value_type === "FLOAT"}
+            {:else if widget === "number"}
               <Input
                 type="number"
-                step={sv.value_type === "FLOAT" ? "any" : "1"}
+                step={sysvarNumberStep(sv.value_type)}
                 value={currentValue(sv) as number | null}
                 oninput={(e) => {
                   const n = Number((e.target as HTMLInputElement).value);

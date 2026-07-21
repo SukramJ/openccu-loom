@@ -188,6 +188,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   clients. The Config UI program table adds a "Show system programs"
   toggle (off by default, persisted locally), mirroring the CCU WebUI's
   footer button. REST `APIVersion` 2.34.0.
+### Fixed
+
+- **Logic and alarm system variables are now flipped with a switch.**
+  The system-variable list and the favorites view rendered a switch
+  only for the `BOOL` alias, so the CCU's real boolean sysvar types —
+  `LOGIC` (a plain logic value) and `ALARM` (an alarm flag), by far the
+  most common — fell through to the free-text field and could only be
+  changed by typing `true`/`false`. Both views now derive the inline
+  control from one shared dispatch: `BOOL`/`LOGIC`/`ALARM` render a
+  switch (a two-entry label list on an alarm variable no longer hides
+  the toggle), a labelled `LIST` renders a dropdown, and a label-less
+  `LIST` renders a numeric-index field. Read/write path only — the
+  edit dialog is unchanged. REST `APIVersion` 2.31.0.
 
 ## [0.45.0] — 2026-07-20
 

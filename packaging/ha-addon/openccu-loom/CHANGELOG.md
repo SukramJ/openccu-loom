@@ -68,6 +68,11 @@
   REST/WS clients get the same via an optional `include_internal`
   parameter; without it the `include_internal_programs` setting still
   governs the default (API 2.34.0).
+- **Logic/alarm system variables toggle with a switch.** In the
+  system-variable list and the favorites view, boolean sysvars of the
+  CCU types `LOGIC` and `ALARM` (the most common kind) now render as an
+  on/off switch instead of a free-text field, so they can be flipped
+  with one click. Labelled list variables keep their dropdown.
 
 ## 0.45.0
 

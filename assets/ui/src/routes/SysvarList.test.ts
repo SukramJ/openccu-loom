@@ -61,6 +61,101 @@ function findReloadButton(container: HTMLElement): HTMLButtonElement {
   return btn as HTMLButtonElement;
 }
 
+describe("SysvarList value widget", () => {
+  // The daemon passes the CCU wire type straight through, so LOGIC and
+  // ALARM (the most common boolean sysvars) must render as a switch —
+  // the same control the BOOL alias gets — not the free-text fallback.
+  async function renderWith(sv: Record<string, unknown>): Promise<HTMLElement> {
+    mockListSysvars.mockResolvedValue([sv]);
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(mockListSysvars).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(container.querySelector("tbody tr")).not.toBeNull(),
+    );
+    return container;
+  }
+
+  it("renders a switch for a LOGIC sysvar", async () => {
+    const c = await renderWith({
+      name: "S_Light",
+      central: "",
+      value_type: "LOGIC",
+      value: false,
+      value_list: [],
+      unit: "",
+    });
+    expect(c.querySelector('[role="switch"]')).not.toBeNull();
+    expect(c.querySelector('input[type="text"]')).toBeNull();
+  });
+
+  it("renders a switch for an ALARM sysvar even with a label list", async () => {
+    const c = await renderWith({
+      name: "S_Alarm",
+      central: "",
+      value_type: "ALARM",
+      value: true,
+      value_list: ["nicht ausgelöst", "ausgelöst"],
+      unit: "",
+    });
+    expect(c.querySelector('[role="switch"]')).not.toBeNull();
+    expect(c.querySelector('[aria-haspopup="listbox"]')).toBeNull();
+  });
+
+  it("renders a dropdown for a labelled LIST sysvar", async () => {
+    const c = await renderWith({
+      name: "S_Alarm_System_Status",
+      central: "",
+      value_type: "LIST",
+      value: 0,
+      value_list: ["Aus", "Aktivierung", "Vollschutz"],
+      unit: "",
+    });
+    expect(c.querySelector('[aria-haspopup="listbox"]')).not.toBeNull();
+    expect(c.querySelector('[role="switch"]')).toBeNull();
+  });
+
+  it("renders a number input for an INTEGER sysvar with no value_list", async () => {
+    const c = await renderWith({
+      name: "S_Counter",
+      central: "",
+      value_type: "INTEGER",
+      value: 3,
+      value_list: [],
+      unit: "",
+    });
+    expect(c.querySelector('input[type="number"]')).not.toBeNull();
+    expect(c.querySelector('[role="switch"]')).toBeNull();
+    expect(c.querySelector('[aria-haspopup="listbox"]')).toBeNull();
+  });
+
+  it("renders a text input for a STRING sysvar", async () => {
+    const c = await renderWith({
+      name: "S_Note",
+      central: "",
+      value_type: "STRING",
+      value: "hello",
+      value_list: [],
+      unit: "",
+    });
+    expect(c.querySelector('input[type="text"]')).not.toBeNull();
+    expect(c.querySelector('input[type="number"]')).toBeNull();
+    expect(c.querySelector('[role="switch"]')).toBeNull();
+  });
+
+  it("prefers the dropdown over a number input for an INTEGER sysvar that still ships a label list", async () => {
+    const c = await renderWith({
+      name: "S_Mode",
+      central: "",
+      value_type: "INTEGER",
+      value: 1,
+      value_list: ["Off", "On"],
+      unit: "",
+    });
+    expect(c.querySelector('[aria-haspopup="listbox"]')).not.toBeNull();
+    expect(c.querySelector('input[type="number"]')).toBeNull();
+  });
+});
+
 describe("SysvarList reload", () => {
   it("forces a CCU re-pull before re-reading the list", async () => {
     const { container } = render(SysvarList);
