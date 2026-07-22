@@ -24,19 +24,21 @@ type stubSysvarMutator struct {
 	mu        sync.Mutex
 	created   []string
 	updated   []string
+	renamedTo []string
 	deleted   []string
 }
 
-func (s *stubSysvarMutator) CreateSysvar(_ context.Context, name, _, _, _, _ string, _ []string) error {
+func (s *stubSysvarMutator) CreateSysvar(_ context.Context, spec SysvarCreateSpec) error {
 	s.mu.Lock()
-	s.created = append(s.created, name)
+	s.created = append(s.created, spec.Name)
 	s.mu.Unlock()
 	return s.createErr
 }
 
-func (s *stubSysvarMutator) UpdateSysvar(_ context.Context, name, _, _, _, _ string, _ []string) error {
+func (s *stubSysvarMutator) UpdateSysvar(_ context.Context, spec SysvarUpdateSpec) error {
 	s.mu.Lock()
-	s.updated = append(s.updated, name)
+	s.updated = append(s.updated, spec.Name)
+	s.renamedTo = append(s.renamedTo, spec.NewName)
 	s.mu.Unlock()
 	return s.updateErr
 }
@@ -119,7 +121,7 @@ func TestHubRemoveSysvar(t *testing.T) {
 
 func TestHubCreateSysvarRemote_noMutator(t *testing.T) {
 	h := NewHub("ccu")
-	err := h.CreateSysvarRemote(context.Background(), "X", "integer", "", "0", "100", nil)
+	err := h.CreateSysvarRemote(context.Background(), SysvarCreateSpec{Name: "X", ValueType: "integer", Min: "0", Max: "100"})
 	if !errors.Is(err, ErrNoSysvarMutator) {
 		t.Fatalf("want ErrNoSysvarMutator, got %v", err)
 	}
@@ -129,7 +131,7 @@ func TestHubCreateSysvarRemote_withMutator(t *testing.T) {
 	h := NewHub("ccu")
 	mut := &stubSysvarMutator{}
 	h.SysvarMutator = mut
-	if err := h.CreateSysvarRemote(context.Background(), "MyVar", "integer", "°C", "0", "100", nil); err != nil {
+	if err := h.CreateSysvarRemote(context.Background(), SysvarCreateSpec{Name: "MyVar", ValueType: "integer", Unit: "°C", Min: "0", Max: "100"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(mut.created) != 1 || mut.created[0] != "MyVar" {
@@ -178,7 +180,7 @@ func TestHubUpdateSysvarRemote(t *testing.T) {
 	h := NewHub("ccu")
 	mut := &stubSysvarMutator{}
 	h.SysvarMutator = mut
-	if err := h.UpdateSysvarRemote(context.Background(), "X", "°C", "0", "50", "desc", nil); err != nil {
+	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "X", Unit: "°C", Min: "0", Max: "50", Description: "desc"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(mut.updated) != 1 || mut.updated[0] != "X" {
@@ -188,8 +190,151 @@ func TestHubUpdateSysvarRemote(t *testing.T) {
 
 func TestHubUpdateSysvarRemote_noMutator(t *testing.T) {
 	h := NewHub("ccu")
-	if !errors.Is(h.UpdateSysvarRemote(context.Background(), "X", "", "", "", "", nil), ErrNoSysvarMutator) {
+	if !errors.Is(h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "X"}), ErrNoSysvarMutator) {
 		t.Fatal("want ErrNoSysvarMutator")
+	}
+}
+
+// A non-empty newName renames the cached entry once the CCU-side patch
+// succeeds, so the new name is visible before the next periodic refresh.
+func TestHubUpdateSysvarRemote_renamesCacheKey(t *testing.T) {
+	h := NewHub("ccu")
+	mut := &stubSysvarMutator{}
+	h.SysvarMutator = mut
+	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Old"}})
+	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "Old", NewName: "New"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(mut.renamedTo) != 1 || mut.renamedTo[0] != "New" {
+		t.Fatalf("renamedTo=%v", mut.renamedTo)
+	}
+	if _, ok := h.Sysvar("Old"); ok {
+		t.Fatal("old key must be dropped from the cache after rename")
+	}
+	sv, ok := h.Sysvar("New")
+	if !ok {
+		t.Fatal("new key must be present in the cache after rename")
+	}
+	if sv.Name != "New" {
+		t.Fatalf("entry Name = %q, want New", sv.Name)
+	}
+}
+
+// A failed CCU-side patch must not re-key the local cache.
+func TestHubUpdateSysvarRemote_renameSkippedOnError(t *testing.T) {
+	h := NewHub("ccu")
+	sentinel := errors.New("rega error")
+	h.SysvarMutator = &stubSysvarMutator{updateErr: sentinel}
+	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Old"}})
+	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "Old", NewName: "New"}); !errors.Is(err, sentinel) {
+		t.Fatalf("want sentinel, got %v", err)
+	}
+	if _, ok := h.Sysvar("Old"); !ok {
+		t.Fatal("old key must survive a failed rename")
+	}
+	if _, ok := h.Sysvar("New"); ok {
+		t.Fatal("new key must not appear after a failed rename")
+	}
+}
+
+// TestHubRenameSysvar exercises [Hub.RenameSysvar] directly (rather than
+// through UpdateSysvarRemote) so every no-op branch — same name, empty
+// target, unknown source, and a name collision — is covered in isolation.
+func TestHubRenameSysvar(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		seed        []string // sysvar names to pre-populate
+		oldName     string
+		newName     string
+		wantOK      bool
+		wantOldGone bool
+		wantNewName string // name to expect present after the call; empty = don't check
+	}{
+		{
+			name:    "same name is a no-op",
+			seed:    []string{"Same"},
+			oldName: "Same",
+			newName: "Same",
+			wantOK:  false,
+		},
+		{
+			name:    "empty target name is a no-op",
+			seed:    []string{"Old"},
+			oldName: "Old",
+			newName: "",
+			wantOK:  false,
+		},
+		{
+			name:    "unknown source name is a no-op",
+			seed:    []string{"Other"},
+			oldName: "Ghost",
+			newName: "Fresh",
+			wantOK:  false,
+		},
+		{
+			name:    "target name already taken is a no-op",
+			seed:    []string{"Old", "Taken"},
+			oldName: "Old",
+			newName: "Taken",
+			wantOK:  false,
+		},
+		{
+			name:        "successful rename re-keys the cache",
+			seed:        []string{"Old"},
+			oldName:     "Old",
+			newName:     "New",
+			wantOK:      true,
+			wantOldGone: true,
+			wantNewName: "New",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := NewHub("ccu")
+			var original *Sysvar
+			for _, n := range tc.seed {
+				sv := &Sysvar{HubDataPoint: HubDataPoint{Name: n}}
+				h.PutSysvar(sv)
+				if n == tc.oldName {
+					original = sv
+				}
+			}
+
+			got := h.RenameSysvar(tc.oldName, tc.newName)
+			if got != tc.wantOK {
+				t.Fatalf("RenameSysvar(%q, %q) = %v, want %v", tc.oldName, tc.newName, got, tc.wantOK)
+			}
+
+			if !tc.wantOK {
+				// A rejected rename must leave every seeded entry untouched.
+				for _, n := range tc.seed {
+					if _, ok := h.Sysvar(n); !ok {
+						t.Fatalf("seeded sysvar %q must survive a rejected rename", n)
+					}
+				}
+				return
+			}
+
+			if tc.wantOldGone {
+				if _, ok := h.Sysvar(tc.oldName); ok {
+					t.Fatalf("old key %q must be dropped after a successful rename", tc.oldName)
+				}
+			}
+			sv, ok := h.Sysvar(tc.wantNewName)
+			if !ok {
+				t.Fatalf("new key %q must be present after a successful rename", tc.wantNewName)
+			}
+			if sv.Name != tc.wantNewName {
+				t.Fatalf("renamed entry Name = %q, want %q", sv.Name, tc.wantNewName)
+			}
+			if sv != original {
+				t.Fatal("rename must preserve the original *Sysvar pointer so subscribers stay valid")
+			}
+		})
 	}
 }
 

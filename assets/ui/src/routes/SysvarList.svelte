@@ -13,8 +13,16 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import SysvarChannelPicker from "$lib/components/SysvarChannelPicker.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
+  import {
+    sysvarWidget,
+    sysvarNumberStep,
+    isListSysvar,
+    isNumberSysvar,
+    isBoolSysvar,
+  } from "$lib/sysvar-widget";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -34,25 +42,57 @@
     min: string;
     max: string;
     value_list: string;
-  }>({ name: "", value_type: "BOOL", unit: "", min: "", max: "", value_list: "" });
+    value_name_0: string;
+    value_name_1: string;
+  }>({
+    name: "",
+    value_type: "BOOL",
+    unit: "",
+    min: "",
+    max: "",
+    value_list: "",
+    value_name_0: "",
+    value_name_1: "",
+  });
+
+  let createDescription = $state("");
+  // Channel assignment ("Kanalzuordnung") for the create form; empty = none.
+  let createChannel = $state("");
 
   let editing = $state<SysvarEntry | null>(null);
+  // Channel assignment for the edit dialog. editChannelDirty gates whether a
+  // save sends channel_address at all, so an untouched picker never rewrites
+  // a name-derived channel into an explicit CCU assignment.
+  let editChannel = $state("");
+  let editChannelDirty = $state(false);
   let editForm = $state({
+    name: "",
     unit: "",
     min: "",
     max: "",
     value_list: "",
     description: "",
+    value_name_0: "",
+    value_name_1: "",
+    is_visible: true,
+    is_logged: false,
   });
 
   function startEdit(sv: SysvarEntry) {
     editing = sv;
+    editChannel = sv.channel ?? "";
+    editChannelDirty = false;
     editForm = {
+      name: sv.name,
       unit: sv.unit ?? "",
       min: "",
       max: "",
       value_list: (sv.value_list ?? []).join(";"),
       description: sv.description ?? "",
+      value_name_0: sv.value_name_0 ?? "",
+      value_name_1: sv.value_name_1 ?? "",
+      is_visible: sv.is_visible ?? true,
+      is_logged: sv.is_logged ?? false,
     };
   }
 
@@ -61,18 +101,39 @@
     savingName = editing.name;
     try {
       const body: Record<string, unknown> = {};
+      const newName = editForm.name.trim();
+      if (newName && newName !== editing.name) body.name = newName;
       if (editForm.unit) body.unit = editForm.unit;
       if (editForm.min) body.min = editForm.min;
       if (editForm.max) body.max = editForm.max;
       if (editForm.description) body.description = editForm.description;
-      if (editForm.value_list && editing.value_type === "ENUM") {
+      if (editForm.value_list && isListSysvar(editing.value_type)) {
         body.value_list = editForm.value_list
           .split(";")
           .map((s) => s.trim())
           .filter(Boolean);
       }
+      if (isBoolSysvar(editing.value_type)) {
+        // A blank label leaves the CCU value untouched; only send a
+        // genuinely changed, non-empty label.
+        const vn0 = editForm.value_name_0.trim();
+        const vn1 = editForm.value_name_1.trim();
+        if (vn0 && vn0 !== (editing.value_name_0 ?? "")) body.value_name_0 = vn0;
+        if (vn1 && vn1 !== (editing.value_name_1 ?? "")) body.value_name_1 = vn1;
+      }
+      // Visibility / archive flags: send only when the operator changed
+      // them, so an unrelated edit does not re-toggle the CCU flag.
+      if (editForm.is_visible !== (editing.is_visible ?? true))
+        body.is_visible = editForm.is_visible;
+      if (editForm.is_logged !== (editing.is_logged ?? false))
+        body.is_logged = editForm.is_logged;
+      // Channel assignment: only when the operator touched the picker. An
+      // empty string clears the assignment; a channel address assigns it.
+      if (editChannelDirty) body.channel_address = editChannel;
       await api.patchSysvar(editing.name, body, editing.central);
-      toastStore.success(t("sysvars.updated", { name: editing.name }));
+      toastStore.success(
+        t("sysvars.updated", { name: (body.name as string) ?? editing.name }),
+      );
       editing = null;
       await load();
     } catch (err) {
@@ -159,6 +220,8 @@
     if (!createForm.name) return;
     savingName = "__create__";
     try {
+      const binary =
+        createForm.value_type === "BOOL" || createForm.value_type === "ALARM";
       await api.createSysvar(
         {
           name: createForm.name,
@@ -166,15 +229,30 @@
           unit: createForm.unit || undefined,
           min: createForm.min || undefined,
           max: createForm.max || undefined,
+          description: createDescription || undefined,
           value_list: createForm.value_type === "ENUM" && createForm.value_list
             ? createForm.value_list.split(";").map((s) => s.trim()).filter(Boolean)
             : undefined,
+          value_name_0: binary && createForm.value_name_0 ? createForm.value_name_0 : undefined,
+          value_name_1: binary && createForm.value_name_1 ? createForm.value_name_1 : undefined,
+          channel_address: createChannel || undefined,
         },
         createCentral,
       );
       toastStore.success(t("sysvars.created"));
       creating = false;
-      createForm = { name: "", value_type: "BOOL", unit: "", min: "", max: "", value_list: "" };
+      createForm = {
+        name: "",
+        value_type: "BOOL",
+        unit: "",
+        min: "",
+        max: "",
+        value_list: "",
+        value_name_0: "",
+        value_name_1: "",
+      };
+      createDescription = "";
+      createChannel = "";
       await load();
     } catch (err) {
       toastStore.error(
@@ -312,11 +390,33 @@
             <option value="FLOAT">FLOAT</option>
             <option value="STRING">STRING</option>
             <option value="ENUM">ENUM</option>
+            <option value="ALARM">ALARM</option>
           </select>
         </label>
+        {#if createForm.value_type === "ALARM"}
+          <p class="text-xs text-slate-500 md:col-span-2 dark:text-slate-400">
+            {t("sysvars.create.alarm_hint")}
+          </p>
+        {/if}
+        {#if createForm.value_type === "BOOL" || createForm.value_type === "ALARM"}
+          <div class="grid grid-cols-2 gap-2 md:col-span-2">
+            <label class="text-sm">
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value0")}</span>
+              <Input bind:value={createForm.value_name_0} placeholder="false" />
+            </label>
+            <label class="text-sm">
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value1")}</span>
+              <Input bind:value={createForm.value_name_1} placeholder="true" />
+            </label>
+          </div>
+        {/if}
         <label class="text-sm">
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={createForm.unit} />
+        </label>
+        <label class="text-sm md:col-span-2">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.description")}</span>
+          <Input bind:value={createDescription} />
         </label>
         {#if createForm.value_type === "INTEGER" || createForm.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
@@ -336,6 +436,15 @@
             <Input bind:value={createForm.value_list} placeholder={t("sysvars.create.values_placeholder")} />
           </label>
         {/if}
+        <div class="text-sm md:col-span-2">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.label")}</span>
+          <SysvarChannelPicker
+            value={createChannel}
+            central={createCentral || undefined}
+            onChange={(v) => (createChannel = v)}
+          />
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.hint")}</p>
+        </div>
       </div>
       <div class="mt-3 flex justify-end gap-2">
         <Button
@@ -389,18 +498,27 @@
             <Badge variant="muted">{sv.value_type}</Badge>
             {#if sv.unit}<span class="ml-1 text-xs text-slate-500 dark:text-slate-400">{sv.unit}</span>{/if}
           {:else if col.key === "value"}
-            {#if sv.value_type === "BOOL"}
-              <Switch checked={Boolean(currentValue(sv))} onCheckedChange={(v) => setDraft(sv, v)} />
-            {:else if sv.value_list && sv.value_list.length > 0}
+            {@const widget = sysvarWidget(sv)}
+            {#if widget === "switch"}
+              {@const on = Boolean(currentValue(sv))}
+              <span class="inline-flex items-center gap-2">
+                <Switch checked={on} onCheckedChange={(v) => setDraft(sv, v)} />
+                {#if sv.value_name_0 || sv.value_name_1}
+                  <span class="text-xs text-slate-500 dark:text-slate-400">
+                    {on ? (sv.value_name_1 ?? "") : (sv.value_name_0 ?? "")}
+                  </span>
+                {/if}
+              </span>
+            {:else if widget === "select"}
               <Select
-                options={sv.value_list.map((label, i) => ({ value: String(i), label }))}
+                options={(sv.value_list ?? []).map((label, i) => ({ value: String(i), label }))}
                 value={currentValue(sv) != null ? String(currentValue(sv)) : ""}
                 onValueChange={(v) => setDraft(sv, Number(v))}
               />
-            {:else if sv.value_type === "INTEGER" || sv.value_type === "FLOAT"}
+            {:else if widget === "number"}
               <Input
                 type="number"
-                step={sv.value_type === "FLOAT" ? "any" : "1"}
+                step={sysvarNumberStep(sv.value_type)}
                 value={currentValue(sv) as number | null}
                 oninput={(e) => {
                   const n = Number((e.target as HTMLInputElement).value);
@@ -455,6 +573,10 @@
       <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.note")}</p>
       <div class="space-y-2">
         <label class="block text-sm">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.name")}</span>
+          <Input bind:value={editForm.name} placeholder={editing.name} />
+        </label>
+        <label class="block text-sm">
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.description")}</span>
           <Input bind:value={editForm.description} />
         </label>
@@ -462,7 +584,7 @@
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={editForm.unit} />
         </label>
-        {#if editing.value_type === "INTEGER" || editing.value_type === "FLOAT"}
+        {#if isNumberSysvar(editing.value_type)}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
               <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.min")}</span>
@@ -474,12 +596,48 @@
             </label>
           </div>
         {/if}
-        {#if editing.value_type === "ENUM"}
+        {#if isListSysvar(editing.value_type)}
           <label class="block text-sm">
             <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.values")}</span>
             <Input bind:value={editForm.value_list} />
           </label>
         {/if}
+        {#if isBoolSysvar(editing.value_type)}
+          <fieldset class="rounded-md border border-slate-200 p-2 dark:border-slate-700">
+            <legend class="px-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.title")}</legend>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value0")}</span>
+                <Input bind:value={editForm.value_name_0} />
+              </label>
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value1")}</span>
+                <Input bind:value={editForm.value_name_1} />
+              </label>
+            </div>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.hint")}</p>
+          </fieldset>
+        {/if}
+        <label class="flex items-center justify-between gap-2 text-sm">
+          <span class="text-xs text-slate-500 dark:text-slate-400">{t("sysvars.flags.visible")}</span>
+          <Switch checked={editForm.is_visible} onCheckedChange={(v) => (editForm.is_visible = v)} />
+        </label>
+        <label class="flex items-center justify-between gap-2 text-sm">
+          <span class="text-xs text-slate-500 dark:text-slate-400">{t("sysvars.flags.logged")}</span>
+          <Switch checked={editForm.is_logged} onCheckedChange={(v) => (editForm.is_logged = v)} />
+        </label>
+        <div class="block text-sm">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.label")}</span>
+          <SysvarChannelPicker
+            value={editChannel}
+            central={editing.central || undefined}
+            onChange={(v) => {
+              editChannel = v;
+              editChannelDirty = true;
+            }}
+          />
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.hint")}</p>
+        </div>
       </div>
       <div class="mt-4 flex justify-end gap-2">
         <Button

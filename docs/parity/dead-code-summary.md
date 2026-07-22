@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 1c385c5d
-HEAD: 1c385c5d
+Generated: 419a7f10
+HEAD: 419a7f10
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26048 |
+| Total Exported | 26102 |
 | Reachable | 4576 |
-| Whitelisted | 18729 |
-| **Unreachable** | **2743** |
+| Whitelisted | 18777 |
+| **Unreachable** | **2749** |
 
 ## Top-20 Packages by Dead Code
 
@@ -31,7 +31,7 @@ HEAD: 1c385c5d
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 49 | 34 |
+| internal/model/hub | 2 | 53 | 36 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -111,7 +111,7 @@ HEAD: 1c385c5d
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 49 | 34 |
+| internal/model/hub | 2 | 53 | 36 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |

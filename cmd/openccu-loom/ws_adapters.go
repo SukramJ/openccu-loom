@@ -449,6 +449,16 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 			"unit":        s.Unit,
 			"value_type":  string(s.ValueType),
 			"value_list":  s.ValueList,
+			"is_visible":  s.IsVisible,
+			"is_logged":   s.IsLogged,
+		}
+		// Binary value labels are present only for LOGIC/ALARM variables;
+		// mirror the REST SysvarSummary by omitting them when empty.
+		if s.ValueName0 != "" {
+			e["value_name_0"] = s.ValueName0
+		}
+		if s.ValueName1 != "" {
+			e["value_name_1"] = s.ValueName1
 		}
 		if v, ok := s.Value(); ok {
 			e["value"] = v.Unwrap()

@@ -1648,7 +1648,10 @@ const EN: Catalog = {
   "sysvars.create.type": "Type",
   "sysvars.create.unit": "Unit",
   "sysvars.create.values": "Values (semicolon-separated)",
+  "sysvars.create.alarm_hint":
+    "Creates a binary, acknowledgeable alarm line on the CCU.",
   "sysvars.edit.title": "Edit",
+  "sysvars.edit.name": "Name (rename)",
   "sysvars.edit.description": "Description",
   "sysvars.edit.note":
     "Type changes require delete + recreate. This dialog only updates metadata.",
@@ -1662,6 +1665,21 @@ const EN: Catalog = {
   "sysvars.count": "{count} variables",
   "sysvars.edit.tooltip": "Edit metadata",
   "sysvars.remove.tooltip": "Remove variable",
+  "sysvars.labels.title": "Value labels",
+  "sysvars.labels.value0": "Label for “false”",
+  "sysvars.labels.value1": "Label for “true”",
+  "sysvars.labels.hint":
+    "Operator-visible text for each state of a binary (BOOL/ALARM) variable.",
+  "sysvars.flags.visible": "Visible in CCU WebUI",
+  "sysvars.flags.logged": "Log value changes",
+  "sysvars.channel.label": "Channel assignment",
+  "sysvars.channel.hint":
+    "Bind the variable to a device channel (the CCU “Kanalzuordnung”). Optional — leave unassigned to attach it to the hub.",
+  "sysvars.channel.none": "Not assigned",
+  "sysvars.channel.clear": "Clear",
+  "sysvars.channel.search": "Search device…",
+  "sysvars.channel.no_devices": "No devices",
+  "sysvars.channel.load_failed": "Could not load channels",
   // --- DeviceDetail ---
   "device.tab.control": "Control",
   "device.tab.values": "Values",
@@ -4383,7 +4401,10 @@ const DE: Catalog = {
   "sysvars.create.type": "Typ",
   "sysvars.create.unit": "Einheit",
   "sysvars.create.values": "Werte (Semikolon-getrennt)",
+  "sysvars.create.alarm_hint":
+    "Legt eine binäre, quittierbare Alarmlinie auf der CCU an.",
   "sysvars.edit.title": "Bearbeiten",
+  "sysvars.edit.name": "Name (umbenennen)",
   "sysvars.edit.description": "Beschreibung",
   "sysvars.edit.note":
     "Typ-Änderungen erfordern Löschen + Neuanlegen. Hier werden nur Metadaten aktualisiert.",
@@ -4397,6 +4418,21 @@ const DE: Catalog = {
   "sysvars.count": "{count} Variablen",
   "sysvars.edit.tooltip": "Metadaten bearbeiten",
   "sysvars.remove.tooltip": "Variable entfernen",
+  "sysvars.labels.title": "Wertelabels",
+  "sysvars.labels.value0": "Bezeichnung für „falsch“",
+  "sysvars.labels.value1": "Bezeichnung für „wahr“",
+  "sysvars.labels.hint":
+    "Für den Bediener sichtbarer Text je Zustand einer binären (BOOL/ALARM) Variable.",
+  "sysvars.flags.visible": "Im CCU-WebUI sichtbar",
+  "sysvars.flags.logged": "Werteänderungen protokollieren",
+  "sysvars.channel.label": "Kanalzuordnung",
+  "sysvars.channel.hint":
+    "Variable an einen Gerätekanal binden (die CCU-„Kanalzuordnung“). Optional — ohne Zuordnung hängt sie am Hub.",
+  "sysvars.channel.none": "Nicht zugeordnet",
+  "sysvars.channel.clear": "Aufheben",
+  "sysvars.channel.search": "Gerät suchen…",
+  "sysvars.channel.no_devices": "Keine Geräte",
+  "sysvars.channel.load_failed": "Kanäle konnten nicht geladen werden",
   "device.tab.control": "Bedienen",
   "device.tab.values": "Werte",
   "device.tab.master": "Konfiguration",

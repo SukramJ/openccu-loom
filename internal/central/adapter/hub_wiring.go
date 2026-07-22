@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -836,16 +837,24 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 // sysvarEntry mirrors SysVar.getAll. The CCU sends numeric values as
 // strings so we keep Value as RawMessage and coerce per-variable.
 type sysvarEntry struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Type        string          `json:"type"`
-	Value       json.RawMessage `json:"value"`
-	Unit        string          `json:"unit"`
-	ValueList   string          `json:"valueList"`
-	MaxValue    json.RawMessage `json:"maxValue"`
-	MinValue    json.RawMessage `json:"minValue"`
-	IsInternal  bool            `json:"isInternal"`
-	Description string          `json:"description"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Value      json.RawMessage `json:"value"`
+	Unit       string          `json:"unit"`
+	ValueList  string          `json:"valueList"`
+	MaxValue   json.RawMessage `json:"maxValue"`
+	MinValue   json.RawMessage `json:"minValue"`
+	IsInternal bool            `json:"isInternal"`
+	// IsVisible / IsLogged mirror the CCU-WebUI visibility and archive
+	// flags. IsLogged is backed by the CCU-side DPArchive setting.
+	IsVisible bool `json:"isVisible"`
+	IsLogged  bool `json:"isLogged"`
+	// ValueName0 / ValueName1 are the false / true value labels the CCU
+	// reports for LOGIC and ALARM variables only.
+	ValueName0  string `json:"valueName0"`
+	ValueName1  string `json:"valueName1"`
+	Description string `json:"description"`
 }
 
 // sysvarDescriptionMarker is the CCU-side marker that indicates a
@@ -994,6 +1003,10 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	existing.Writer = writer
 	existing.IsExtended = isExtended
 	existing.IsInternal = v.IsInternal
+	existing.IsVisible = v.IsVisible
+	existing.IsLogged = v.IsLogged
+	existing.ValueName0 = v.ValueName0
+	existing.ValueName1 = v.ValueName1
 	existing.Description = desc
 	existing.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
 	if haveDescs || !ok {
@@ -1631,57 +1644,116 @@ func (w *hubJSONRPCWriter) SetSysvar(ctx context.Context, name string, value any
 
 // CreateSysvar provisions a new sysvar.
 //
-// BOOL/FLOAT/ENUM without a custom unit go through the CCU's native
-// JSON-RPC methods (`SysVar.createBool` / `createFloat` / `createEnum`)
-// This matches what
-// surface (UTF-8/BOM, escape rules). INTEGER, STRING and any sysvar
-// that needs a `ValueUnit` fall back to the `create_system_variable`
-// Rega script because the CCU's JSON-RPC has no equivalent for those.
-func (w *hubJSONRPCWriter) CreateSysvar(
-	ctx context.Context,
-	name, valueType, unit, vmin, vmax string,
-	valueList []string,
-) error {
-	if unit == "" {
-		switch valueType {
+// BOOL/FLOAT/ENUM without a custom unit, description or value labels go
+// through the CCU's native JSON-RPC methods (`SysVar.createBool` /
+// `createFloat` / `createEnum`), which own the exact CCU surface
+// (UTF-8/BOM, escape rules). INTEGER, STRING, ALARM and any sysvar that
+// needs a `ValueUnit`, a description or custom binary value labels fall
+// back to the `create_system_variable` Rega script because the CCU's
+// JSON-RPC has no equivalent for those (createBool / createFloat /
+// createEnum carry no description or value-name parameters, and there is
+// no native createAlarm — the script backs an ALARM line with an
+// OT_ALARMDP object so it stays acknowledgeable).
+func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCreateSpec) error {
+	// A channel address binds the variable to a device channel; -1 leaves it
+	// unassigned. The address is resolved to the channel's ReGa ise id (the
+	// value SysVar.create* and oNew.Channel() expect) before it hits the CCU.
+	chnID := -1
+	if spec.Channel != "" {
+		id, err := w.resolveChannelISEID(ctx, spec.Channel)
+		if err != nil {
+			return err
+		}
+		chnID = id
+	}
+	// Custom binary value labels only apply to BOOL/ALARM and force the
+	// Rega path — the native createBool has no value-name parameter.
+	customLabels := spec.ValueName0 != "" || spec.ValueName1 != ""
+	if spec.Unit == "" && spec.Description == "" && !customLabels {
+		switch spec.ValueType {
 		case "BOOL":
 			return w.json.Call(ctx, "SysVar.createBool", map[string]any{
-				"name":     name,
+				"name":     spec.Name,
 				"init_val": 0,
 				"internal": 0,
-				"chn_id":   -1,
+				"chn_id":   chnID,
 			}, nil)
 		case "FLOAT":
 			params := map[string]any{
-				"name":     name,
+				"name":     spec.Name,
 				"internal": 0,
-				"chn_id":   -1,
+				"chn_id":   chnID,
 			}
-			if vmin != "" {
-				params["min_value"] = vmin
+			if spec.Min != "" {
+				params["min_value"] = spec.Min
 			}
-			if vmax != "" {
-				params["max_value"] = vmax
+			if spec.Max != "" {
+				params["max_value"] = spec.Max
 			}
 			return w.json.Call(ctx, "SysVar.createFloat", params, nil)
 		case "ENUM":
 			return w.json.Call(ctx, "SysVar.createEnum", map[string]any{
-				"name":       name,
-				"value_list": strings.Join(valueList, ";"),
+				"name":       spec.Name,
+				"value_list": strings.Join(spec.ValueList, ";"),
 				"internal":   0,
-				"chn_id":     -1,
+				"chn_id":     chnID,
 			}, nil)
 		}
 	}
+	// The Rega script sets ValueName0/1 for BOOL and ALARM; supply the
+	// CCU's own "false"/"true" defaults when the caller left a label empty
+	// so the script never writes a blank label over the default.
+	vn0, vn1 := spec.ValueName0, spec.ValueName1
+	if spec.ValueType == "BOOL" || spec.ValueType == "ALARM" {
+		if vn0 == "" {
+			vn0 = "false"
+		}
+		if vn1 == "" {
+			vn1 = "true"
+		}
+	}
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptCreateSystemVariable, map[string]string{
-		"name":   name,
-		"type":   valueType,
-		"unit":   unit,
-		"min":    vmin,
-		"max":    vmax,
-		"values": strings.Join(valueList, ";"),
+		"name":        spec.Name,
+		"type":        spec.ValueType,
+		"unit":        spec.Unit,
+		"min":         spec.Min,
+		"max":         spec.Max,
+		"values":      strings.Join(spec.ValueList, ";"),
+		"description": spec.Description,
+		"valuename0":  vn0,
+		"valuename1":  vn1,
+		"channel":     strconv.Itoa(chnID),
 	})
 	return err
+}
+
+// resolveChannelISEID resolves a device or channel address to its ReGa ise
+// id via the canonical Interface.getIseIDByAddress JSON-RPC method — the
+// numeric id oSv.Channel() / SysVar.create* bind for the "Kanalzuordnung".
+// A CCU-side fault or a non-positive id means the address does not name a
+// channel on this CCU; both surface as [hub.ErrSysvarChannelUnknown] so the
+// REST handler answers 422 (bad channel address) rather than 502. A genuine
+// transport failure propagates unchanged.
+func (w *hubJSONRPCWriter) resolveChannelISEID(ctx context.Context, address string) (int, error) {
+	var raw any
+	if err := w.json.Call(ctx, "Interface.getIseIDByAddress", map[string]any{"address": address}, &raw); err != nil {
+		var rpcErr *hmerr.JSONRPCError
+		if errors.As(err, &rpcErr) {
+			return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
+		}
+		return 0, err
+	}
+	id := 0
+	switch v := raw.(type) {
+	case float64:
+		id = int(v)
+	case string:
+		id, _ = strconv.Atoi(strings.TrimSpace(v))
+	}
+	if id <= 0 {
+		return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
+	}
+	return id, nil
 }
 
 // DeleteSysvar removes a sysvar via the CCU's native JSON-RPC method
@@ -1694,23 +1766,58 @@ func (w *hubJSONRPCWriter) DeleteSysvar(ctx context.Context, name string) error 
 	}, nil)
 }
 
-// UpdateSysvar patches the sysvar's metadata (unit, bounds, value
-// list, description) without touching its type. Empty strings on
-// the input map leave the corresponding CCU field untouched.
-func (w *hubJSONRPCWriter) UpdateSysvar(
-	ctx context.Context,
-	name, unit, vmin, vmax, description string,
-	valueList []string,
-) error {
+// UpdateSysvar patches the sysvar's metadata (name, unit, bounds, value
+// list, description, binary value labels, visibility and archive flags)
+// without touching its type. Empty strings on the input map leave the
+// corresponding CCU field untouched; a non-empty newname renames the
+// variable in place. The visibility / archive flags are tri-state: an
+// empty string leaves the flag as-is, "true"/"false" sets it. Type
+// changes are unsafe at the CCU level — callers wanting that must delete
+// + recreate.
+func (w *hubJSONRPCWriter) UpdateSysvar(ctx context.Context, spec hub.SysvarUpdateSpec) error {
+	// Channel assignment is tri-state: nil leaves it untouched (""), an empty
+	// string clears it (ise id -1), an address resolves to the channel's ise
+	// id. The update script's `if (sChannel != "")` guard skips the "" case.
+	channelParam := ""
+	if spec.Channel != nil {
+		if *spec.Channel == "" {
+			channelParam = "-1"
+		} else {
+			id, err := w.resolveChannelISEID(ctx, *spec.Channel)
+			if err != nil {
+				return err
+			}
+			channelParam = strconv.Itoa(id)
+		}
+	}
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptUpdateSystemVariable, map[string]string{
-		"name":        name,
-		"unit":        unit,
-		"min":         vmin,
-		"max":         vmax,
-		"values":      strings.Join(valueList, ";"),
-		"description": description,
+		"name":        spec.Name,
+		"newname":     spec.NewName,
+		"unit":        spec.Unit,
+		"min":         spec.Min,
+		"max":         spec.Max,
+		"values":      strings.Join(spec.ValueList, ";"),
+		"description": spec.Description,
+		"valuename0":  spec.ValueName0,
+		"valuename1":  spec.ValueName1,
+		"visible":     boolFlagParam(spec.Visible),
+		"logged":      boolFlagParam(spec.Logged),
+		"channel":     channelParam,
 	})
 	return err
+}
+
+// boolFlagParam renders a tri-state flag for a Rega script parameter:
+// "" when the pointer is nil (leave the CCU value untouched), otherwise
+// "true"/"false".
+func boolFlagParam(b *bool) string {
+	if b == nil {
+		return ""
+	}
+	if *b {
+		return "true"
+	}
+	return "false"
 }
 
 // SetDeviceRooms replaces the device's room assignments. `rooms` is

@@ -1340,11 +1340,11 @@ func TestToSysvarSummary_WithValue(t *testing.T) {
 // errSysvarMutator implements hub.SysvarMutator and always returns an error.
 type errSysvarMutator struct{ err error }
 
-func (e *errSysvarMutator) CreateSysvar(_ context.Context, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) CreateSysvar(_ context.Context, _ hub.SysvarCreateSpec) error {
 	return e.err
 }
 
-func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _ hub.SysvarUpdateSpec) error {
 	return e.err
 }
 
@@ -1441,6 +1441,410 @@ func TestPatchSysvar_HappyPath_Returns202(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// recordingSysvarMutator captures the arguments of the last UpdateSysvar
+// call so a handler test can assert the request body threaded through.
+type recordingSysvarMutator struct {
+	name          string
+	newName       string
+	createName    string
+	createType    string
+	createDescrip string
+	createVN0     string
+	createVN1     string
+	createChannel string
+	updateVN0     string
+	updateVN1     string
+	updateVisible *bool
+	updateLogged  *bool
+	updateChannel *string
+}
+
+func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, spec hub.SysvarCreateSpec) error {
+	r.createName = spec.Name
+	r.createType = spec.ValueType
+	r.createDescrip = spec.Description
+	r.createVN0 = spec.ValueName0
+	r.createVN1 = spec.ValueName1
+	r.createChannel = spec.Channel
+	return nil
+}
+
+func (r *recordingSysvarMutator) UpdateSysvar(_ context.Context, spec hub.SysvarUpdateSpec) error {
+	r.name = spec.Name
+	r.newName = spec.NewName
+	r.updateVN0 = spec.ValueName0
+	r.updateVN1 = spec.ValueName1
+	r.updateVisible = spec.Visible
+	r.updateLogged = spec.Logged
+	r.updateChannel = spec.Channel
+	return nil
+}
+
+func (r *recordingSysvarMutator) DeleteSysvar(_ context.Context, _ string) error { return nil }
+
+// A `name` field in the PATCH body reaches the mutator as the rename
+// target while the path {name} stays the current name.
+func TestPatchSysvar_Rename_PassesNewName(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"NewName"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "OldName"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "OldName" || mut.newName != "NewName" {
+		t.Fatalf("mutator got name=%q newName=%q, want OldName/NewName", mut.name, mut.newName)
+	}
+}
+
+// Omitting `name` from the PATCH body (the common case: only unit/min/max/
+// description/value_list change) must not synthesize a rename — the
+// mutator's newName parameter stays empty so UpdateSysvar's ##newname##
+// slot resolves to "" and the CCU leaves the variable's name untouched.
+func TestPatchSysvar_NameOmitted_DoesNotRename(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "OldName"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "OldName" || mut.newName != "" {
+		t.Fatalf("mutator got name=%q newName=%q, want OldName/\"\"", mut.name, mut.newName)
+	}
+}
+
+// A `description` in the POST body reaches CreateSysvar so the variable
+// carries its help text from creation.
+func TestCreateSysvar_Description_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","description":"a helpful note"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createName != "Flag" || mut.createDescrip != "a helpful note" {
+		t.Fatalf("mutator got name=%q description=%q", mut.createName, mut.createDescrip)
+	}
+}
+
+// An ALARM value_type is accepted and reaches the mutator unchanged so
+// the Rega create script can provision a binary alarm line.
+func TestCreateSysvar_Alarm_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Einbruch","value_type":"ALARM"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createName != "Einbruch" || mut.createType != "ALARM" {
+		t.Fatalf("mutator got name=%q type=%q, want Einbruch/ALARM", mut.createName, mut.createType)
+	}
+}
+
+// A channel_address in the POST body reaches CreateSysvar as the channel to
+// bind the new variable to.
+func TestCreateSysvar_ChannelAddress_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","channel_address":"ABC0000001:3"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createChannel != "ABC0000001:3" {
+		t.Fatalf("mutator got channel=%q, want ABC0000001:3", mut.createChannel)
+	}
+}
+
+// An unresolvable channel address on create surfaces as 422 (bad request
+// field), not 502 — the fault is the caller's address, not the CCU.
+func TestCreateSysvar_ChannelUnknown_Returns422(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: hub.ErrSysvarChannelUnknown}
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","channel_address":"BAD:9"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// A channel_address in the PATCH body reaches UpdateSysvar as a non-nil
+// pointer so the tri-state assign/clear/untouched semantics survive.
+func TestPatchSysvar_ChannelAddress_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":"ABC0000001:3"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel == nil || *mut.updateChannel != "ABC0000001:3" {
+		t.Fatalf("mutator got channel=%v, want ABC0000001:3", mut.updateChannel)
+	}
+}
+
+// An empty-string channel_address is the explicit "clear the assignment"
+// signal — it must reach the mutator as a non-nil pointer to "".
+func TestPatchSysvar_ChannelClear_PassesEmptyPointer(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":""}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel == nil || *mut.updateChannel != "" {
+		t.Fatalf("clear must pass a non-nil empty pointer, got %v", mut.updateChannel)
+	}
+}
+
+// Omitting channel_address must leave the mutator's Channel pointer nil so the
+// CCU assignment is left untouched.
+func TestPatchSysvar_ChannelOmitted_LeavesPointerNil(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel != nil {
+		t.Fatalf("omitted channel_address must leave the pointer nil, got %v", *mut.updateChannel)
+	}
+}
+
+// An unresolvable channel address on PATCH surfaces as 422, not 502.
+func TestPatchSysvar_ChannelUnknown_Returns422(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: hub.ErrSysvarChannelUnknown}
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":"BAD:9"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// Binary value labels in the POST body reach CreateSysvar so a new
+// BOOL/ALARM variable can carry operator-chosen state text from creation.
+func TestCreateSysvar_ValueLabels_PassThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Tuer","value_type":"BOOL","value_name_0":"zu","value_name_1":"offen"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createVN0 != "zu" || mut.createVN1 != "offen" {
+		t.Fatalf("mutator got labels %q/%q, want zu/offen", mut.createVN0, mut.createVN1)
+	}
+}
+
+// The PATCH body's value labels and visibility / archive flags reach
+// UpdateSysvar. The flags are tri-state pointers so an explicit true/false
+// survives, and an omitted flag stays nil (leave the CCU value untouched).
+func TestPatchSysvar_LabelsAndFlags_PassThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"value_name_0":"zu","value_name_1":"offen","is_visible":true,"is_logged":false}`
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(body))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "Tuer"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "Tuer" || mut.updateVN0 != "zu" || mut.updateVN1 != "offen" {
+		t.Fatalf("mutator got name=%q labels=%q/%q", mut.name, mut.updateVN0, mut.updateVN1)
+	}
+	if mut.updateVisible == nil || !*mut.updateVisible {
+		t.Fatalf("is_visible not threaded through as true: %v", mut.updateVisible)
+	}
+	if mut.updateLogged == nil || *mut.updateLogged {
+		t.Fatalf("is_logged not threaded through as false: %v", mut.updateLogged)
+	}
+}
+
+// Omitting the flags entirely from the PATCH body leaves the mutator's
+// tri-state pointers nil so UpdateSysvar's script slots resolve to "" and
+// the CCU flags stay as-is.
+func TestPatchSysvar_FlagsOmitted_StayNil(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "Tuer"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateVisible != nil || mut.updateLogged != nil {
+		t.Fatalf("omitted flags must stay nil, got visible=%v logged=%v", mut.updateVisible, mut.updateLogged)
+	}
+}
+
+// An unknown value_type is rejected with 422 before any CCU call, so a
+// garbage type never reaches the Rega script (which would silently
+// create a type-less variable). LOGIC/NUMBER/LIST are read-side codes,
+// not create codes, and are rejected too; the check is case-sensitive
+// and does not trim surrounding whitespace.
+func TestCreateSysvar_InvalidType_Returns422(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		valueType string
+	}{
+		{"read_side_logic", "LOGIC"},
+		{"read_side_number", "NUMBER"},
+		{"read_side_list", "LIST"},
+		{"lowercase_alarm", "alarm"},
+		{"mixed_case_alarm", "Alarm"},
+		{"trailing_space", "BOOL "},
+		{"leading_space", " BOOL"},
+		{"unknown_garbage", "NOT_A_TYPE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := hub.NewHub("test-ccu")
+			mut := &recordingSysvarMutator{}
+			h.SysvarMutator = mut
+			idx := &testHubIndex{h: h}
+			body := `{"name":"Flag","value_type":"` + tc.valueType + `"}`
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			CreateSysvar(idx).ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("value_type=%q: expected 422, got %d body=%s", tc.valueType, w.Code, w.Body.String())
+			}
+			if mut.createName != "" {
+				t.Fatalf("value_type=%q: mutator was called with name=%q despite invalid type", tc.valueType, mut.createName)
+			}
+		})
+	}
+}
+
+// Every accepted value_type — including ALARM — reaches the mutator
+// unchanged and yields 202. This table complements the single-case
+// TestCreateSysvar_Alarm_PassesThrough by pinning the full accepted
+// vocabulary in one place.
+func TestCreateSysvar_ValidTypes_Returns202(t *testing.T) {
+	t.Parallel()
+	for _, vt := range []string{"BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"} {
+		t.Run(vt, func(t *testing.T) {
+			t.Parallel()
+			h := hub.NewHub("test-ccu")
+			mut := &recordingSysvarMutator{}
+			h.SysvarMutator = mut
+			idx := &testHubIndex{h: h}
+			body := `{"name":"Flag","value_type":"` + vt + `"}`
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			CreateSysvar(idx).ServeHTTP(w, req)
+
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("value_type=%q: expected 202, got %d body=%s", vt, w.Code, w.Body.String())
+			}
+			if mut.createType != vt {
+				t.Fatalf("value_type=%q: mutator got type=%q", vt, mut.createType)
+			}
+		})
+	}
+}
+
+// A CCU-side error on the ALARM create path (e.g. the Rega script
+// failed to create the OT_ALARMDP object) must surface as 502, exactly
+// like every other value_type's error path.
+func TestCreateSysvar_Alarm_MutatorError_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: errors.New("rega down")}
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Einbruch","value_type":"ALARM"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -1968,7 +2372,7 @@ func TestCreateSysvar_MutatorError_Returns502(t *testing.T) {
 	h := hub.NewHub("test-ccu")
 	h.SysvarMutator = &errSysvarMutator{err: errors.New("rega down")}
 	idx := &testHubIndex{h: h}
-	body := `{"name":"Flag","value_type":"LOGIC"}`
+	body := `{"name":"Flag","value_type":"BOOL"}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	CreateSysvar(idx).ServeHTTP(w, req)
@@ -2227,6 +2631,30 @@ func TestToSysvarSummary_UniqueID(t *testing.T) {
 	}
 	if !strings.HasPrefix(s.UniqueID, "loom_") {
 		t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
+	}
+}
+
+// TestToSysvarSummary_LabelsAndFlags verifies that toSysvarSummary carries
+// the CCU value labels and the visibility/archive flags from the model
+// Sysvar onto the wire SysvarSummary unchanged, including the false/false
+// case (the DTO must not default the flags to true).
+func TestToSysvarSummary_LabelsAndFlags(t *testing.T) {
+	t.Parallel()
+	sv := hub.NewSysvar("ccu01", "Tuer", "", hmenum.HubValueTypeLogic, nil)
+	sv.IsVisible = true
+	sv.IsLogged = false
+	sv.ValueName0 = "zu"
+	sv.ValueName1 = "offen"
+
+	s := toSysvarSummary(sv, "vccu0000000")
+	if !s.IsVisible {
+		t.Error("IsVisible = false, want true")
+	}
+	if s.IsLogged {
+		t.Error("IsLogged = true, want false")
+	}
+	if s.ValueName0 != "zu" || s.ValueName1 != "offen" {
+		t.Fatalf("labels = %q/%q, want zu/offen", s.ValueName0, s.ValueName1)
 	}
 }
 

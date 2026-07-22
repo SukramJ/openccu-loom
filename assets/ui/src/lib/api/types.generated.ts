@@ -1000,7 +1000,7 @@ export interface paths {
         delete: operations["deleteSysvar"];
         options?: never;
         head?: never;
-        /** Update the sysvar metadata (description, unit, value_list, min, max). Triggers the Rega update_system_variable script via JSON-RPC. All fields are optional — omitted fields leave CCU metadata unchanged. Type changes are not supported; delete and recreate the sysvar instead. */
+        /** Update the sysvar metadata (name, description, unit, value_list, min, max). Triggers the Rega update_system_variable script via JSON-RPC. All fields are optional — omitted fields leave CCU metadata unchanged. A non-empty name renames the variable in place. Type changes are not supported; delete and recreate the sysvar instead. */
         patch: operations["patchSysvar"];
         trace?: never;
     };
@@ -5438,6 +5438,30 @@ export interface components {
              */
             is_internal?: boolean;
             /**
+             * @description Mirrors the CCU's isVisible flag — whether the variable is
+             *     shown in the CCU WebUI. Always present (a real CCU reports it
+             *     for every variable).
+             */
+            is_visible?: boolean;
+            /**
+             * @description Mirrors the CCU's isLogged flag (backed by the CCU-side
+             *     DPArchive setting) — whether value changes are recorded to the
+             *     measurement archive. Always present.
+             */
+            is_logged?: boolean;
+            /**
+             * @description False-state value label for a binary (LOGIC/ALARM) variable —
+             *     the operator-visible text for value 0. Absent for non-binary
+             *     variables.
+             */
+            value_name_0?: string;
+            /**
+             * @description True-state value label for a binary (LOGIC/ALARM) variable —
+             *     the operator-visible text for value 1. Absent for non-binary
+             *     variables.
+             */
+            value_name_1?: string;
+            /**
              * @description True when the variable's description carried the extended
              *     marker — clients expose the writable entity flavour
              *     (switch/number/select/text) instead of the read-only default.
@@ -7656,7 +7680,35 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Name of the new system variable. */
+                    name: string;
+                    /**
+                     * @description Value kind of the new variable. ALARM provisions a binary, acknowledgeable alarm line (backed by an OT_ALARMDP on the CCU) and always routes through the Rega create script.
+                     * @enum {string}
+                     */
+                    value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM" | "ALARM";
+                    /** @description Physical unit string (e.g. "°C", "%"). */
+                    unit?: string;
+                    /** @description Minimum value (as string, CCU convention). */
+                    min?: string;
+                    /** @description Maximum value (as string, CCU convention). */
+                    max?: string;
+                    /** @description Human-readable label shown in the CCU UI. When set, creation routes through the Rega script (the native JSON-RPC create methods carry no description parameter). */
+                    description?: string;
+                    /** @description Ordered list of enum labels for ENUM-type sysvars. */
+                    value_list?: string[];
+                    /** @description False-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "false" default. Setting a custom label routes creation through the Rega script. */
+                    value_name_0?: string;
+                    /** @description True-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "true" default. */
+                    value_name_1?: string;
+                    /** @description Bind the new variable to a device channel ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves it unassigned. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+                    channel_address?: string;
+                };
+            };
+        };
         responses: {
             /** @description Scheduled */
             202: {
@@ -7774,6 +7826,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description New name for the variable. When present and non-empty the sysvar is renamed in place (the path {name} stays the current name). Omit or leave empty to keep the name. */
+                    name?: string;
                     /** @description Human-readable label shown in the CCU UI. */
                     description?: string;
                     /** @description Physical unit string (e.g. "°C", "%"). */
@@ -7782,8 +7836,18 @@ export interface operations {
                     min?: string;
                     /** @description Maximum value (as string, CCU convention). */
                     max?: string;
-                    /** @description Ordered list of enum labels for ENUM-type sysvars. */
+                    /** @description Ordered list of enum labels for LIST/ENUM-type sysvars. */
                     value_list?: string[];
+                    /** @description New false-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+                    value_name_0?: string;
+                    /** @description New true-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+                    value_name_1?: string;
+                    /** @description Toggle the CCU WebUI-visibility flag. Omit to leave it unchanged. */
+                    is_visible?: boolean;
+                    /** @description Toggle the archive flag (CCU DPArchive) that records value changes to the measurement history. Omit to leave it unchanged. */
+                    is_logged?: boolean;
+                    /** @description Reassign the CCU "Kanalzuordnung". Tri-state: omit to leave the assignment untouched, send an empty string to clear it, or a channel address ("ADDR:idx") to assign it. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+                    channel_address?: string;
                 };
             };
         };
@@ -7796,6 +7860,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

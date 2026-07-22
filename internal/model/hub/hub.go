@@ -73,20 +73,59 @@ var (
 	ErrCentralNotFound  = errors.New("hub: central not found")
 )
 
+// SysvarCreateSpec carries every field `POST /sysvars` can set on a new
+// CCU system variable. Empty string fields adopt the CCU default; the
+// value-label fields (ValueName0/1) apply to binary (BOOL/ALARM)
+// variables only and default to the CCU's own "false"/"true" text when
+// left empty.
+type SysvarCreateSpec struct {
+	Name        string
+	ValueType   string
+	Unit        string
+	Min         string
+	Max         string
+	Description string
+	ValueList   []string
+	ValueName0  string
+	ValueName1  string
+	// Channel optionally binds the new variable to a device channel
+	// ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves the variable
+	// unassigned. The adapter resolves the address to the channel's ReGa
+	// ise id before it reaches the CCU.
+	Channel string
+}
+
+// SysvarUpdateSpec carries every field `PATCH /sysvars/{name}` can change
+// on an existing variable without altering its type. Empty string fields
+// leave the corresponding CCU metadata untouched; a non-empty NewName
+// renames the variable. Visible and Logged are tri-state: nil leaves the
+// flag as-is, a non-nil pointer sets it.
+type SysvarUpdateSpec struct {
+	Name        string // current (target) sysvar name
+	NewName     string
+	Unit        string
+	Min         string
+	Max         string
+	Description string
+	ValueList   []string
+	ValueName0  string
+	ValueName1  string
+	Visible     *bool
+	Logged      *bool
+	// Channel is the tri-state channel-assignment control ("Kanalzuordnung").
+	// nil leaves the assignment untouched; a non-nil pointer sets it — an
+	// empty string clears the assignment (ise id -1), a channel address
+	// ("ADDR:idx") assigns it. The adapter resolves the address to the
+	// channel's ReGa ise id before it reaches the CCU.
+	Channel *string
+}
+
 // SysvarMutator is the optional CCU-side write-path for sysvars.
 // Implementations dispatch ReGa scripts; nil leaves the hub in
 // in-memory-only mode (Create/Delete return ErrNoSysvarMutator).
 type SysvarMutator interface {
-	CreateSysvar(
-		ctx context.Context,
-		name, valueType, unit, vmin, vmax string,
-		valueList []string,
-	) error
-	UpdateSysvar(
-		ctx context.Context,
-		name, unit, vmin, vmax, description string,
-		valueList []string,
-	) error
+	CreateSysvar(ctx context.Context, spec SysvarCreateSpec) error
+	UpdateSysvar(ctx context.Context, spec SysvarUpdateSpec) error
 	DeleteSysvar(ctx context.Context, name string) error
 }
 
@@ -95,6 +134,12 @@ type SysvarMutator interface {
 // 503 so the SPA can show "feature not configured" instead of a
 // generic upstream error.
 var ErrNoSysvarMutator = errors.New("hub: no sysvar mutator configured")
+
+// ErrSysvarChannelUnknown is returned when a sysvar create/patch carries a
+// channel address that the CCU cannot resolve to a ReGa ise id. The REST
+// handler surfaces it as a 422 (bad request field) rather than a 502, since
+// the fault is the caller's channel address, not the upstream CCU.
+var ErrSysvarChannelUnknown = errors.New("hub: sysvar channel address not resolvable")
 
 // ErrNoRoomMutator is the room-side analogue.
 var ErrNoRoomMutator = errors.New("hub: no room mutator configured")
@@ -446,6 +491,32 @@ func (h *Hub) RemoveSysvar(name string) bool {
 	return true
 }
 
+// RenameSysvar re-keys a cached sysvar from oldName to newName and
+// updates the entry's Name field, preserving the same pointer so
+// subscribers wired via OnSysvarRegistered stay valid. It reports
+// whether an entry existed under oldName. Local-only: the CCU-side
+// rename runs through UpdateSysvarRemote. A no-op when the names match,
+// oldName is unknown, or newName is already taken (the periodic refresh
+// reconciles any residual state).
+func (h *Hub) RenameSysvar(oldName, newName string) bool {
+	if oldName == newName || newName == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s, ok := h.sysvars[oldName]
+	if !ok {
+		return false
+	}
+	if _, taken := h.sysvars[newName]; taken {
+		return false
+	}
+	delete(h.sysvars, oldName)
+	s.Name = newName
+	h.sysvars[newName] = s
+	return true
+}
+
 // Mutator bundles every CCU-side write interface the hub exposes. The
 // hub-wiring adapter wires a single object (the JSON-RPC writer) that
 // implements all of them via [Hub.SetMutator].
@@ -495,16 +566,12 @@ func (h *Hub) inboxMut() InboxAccepter { h.mu.RLock(); defer h.mu.RUnlock(); ret
 // CreateSysvarRemote provisions a sysvar on the CCU. The hub mirror
 // is updated lazily by the periodic sysvar refresh; the REST handler
 // returns 202 once the call lands.
-func (h *Hub) CreateSysvarRemote(
-	ctx context.Context,
-	name, valueType, unit, vmin, vmax string,
-	valueList []string,
-) error {
+func (h *Hub) CreateSysvarRemote(ctx context.Context, spec SysvarCreateSpec) error {
 	m := h.sysvarMut()
 	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	return m.CreateSysvar(ctx, name, valueType, unit, vmin, vmax, valueList)
+	return m.CreateSysvar(ctx, spec)
 }
 
 // DeleteSysvarRemote removes a sysvar on the CCU and drops it from
@@ -521,20 +588,25 @@ func (h *Hub) DeleteSysvarRemote(ctx context.Context, name string) error {
 	return nil
 }
 
-// UpdateSysvarRemote patches a sysvar's metadata (unit, bounds,
-// value list, description) without changing its type. Type
-// changes are unsafe at the CCU level — callers wanting that
-// must delete + recreate.
-func (h *Hub) UpdateSysvarRemote(
-	ctx context.Context,
-	name, unit, vmin, vmax, description string,
-	valueList []string,
-) error {
+// UpdateSysvarRemote patches a sysvar's metadata (name, unit, bounds,
+// value list, description, value labels, visibility and archive flags)
+// without changing its type. A non-empty NewName that differs from Name
+// renames the variable; the local cache is re-keyed once the CCU call
+// lands so the new name is visible before the next periodic refresh
+// reconciles it. Type changes are unsafe at the CCU level — callers
+// wanting that must delete + recreate.
+func (h *Hub) UpdateSysvarRemote(ctx context.Context, spec SysvarUpdateSpec) error {
 	m := h.sysvarMut()
 	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	return m.UpdateSysvar(ctx, name, unit, vmin, vmax, description, valueList)
+	if err := m.UpdateSysvar(ctx, spec); err != nil {
+		return err
+	}
+	if spec.NewName != "" && spec.NewName != spec.Name {
+		h.RenameSysvar(spec.Name, spec.NewName)
+	}
+	return nil
 }
 
 // SetDeviceRoomsRemote replaces the device's room assignments via

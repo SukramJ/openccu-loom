@@ -1,6 +1,6 @@
 {
-  "generated": "1c385c5d",
-  "head": "1c385c5d",
+  "generated": "419a7f10",
+  "head": "419a7f10",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 26048,
+    "total_exported": 26102,
     "reachable": 4576,
-    "whitelisted": 18729,
-    "unreachable": 2743
+    "whitelisted": 18777,
+    "unreachable": 2749
   },
   "by_package": [
     {
@@ -109,8 +109,8 @@
     {
       "package": "internal/model/hub",
       "unreachable_funcs": 2,
-      "unreachable_types": 49,
-      "unreachable_other": 34
+      "unreachable_types": 53,
+      "unreachable_other": 36
     },
     {
       "package": "internal/model/optimistic",
@@ -2350,14 +2350,14 @@
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 475,
+      "line": 476,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 475,
+      "line": 476,
       "kind": "type"
     },
     {
@@ -2847,28 +2847,28 @@
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2006,
+      "line": 2113,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2006,
+      "line": 2113,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 1885,
+      "line": 1992,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 1885,
+      "line": 1992,
       "kind": "var"
     },
     {
@@ -2931,14 +2931,14 @@
       "package": "internal/central/adapter",
       "identifier": "HubData",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 50,
+      "line": 51,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "HubData",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 50,
+      "line": 51,
       "kind": "type"
     },
     {
@@ -2987,14 +2987,14 @@
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 467,
+      "line": 468,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 467,
+      "line": 468,
       "kind": "type"
     },
     {
@@ -3092,14 +3092,14 @@
       "package": "internal/central/adapter",
       "identifier": "NameMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 43,
+      "line": 44,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "NameMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 43,
+      "line": 44,
       "kind": "type"
     },
     {
@@ -8986,14 +8986,14 @@
       "package": "internal/model/hub",
       "identifier": "BackupTrigger",
       "file": "internal/model/hub/hub.go",
-      "line": 130,
+      "line": 175,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "BackupTrigger",
       "file": "internal/model/hub/hub.go",
-      "line": 130,
+      "line": 175,
       "kind": "type"
     },
     {
@@ -9028,14 +9028,14 @@
       "package": "internal/model/hub",
       "identifier": "DataFetcher",
       "file": "internal/model/hub/hub.go",
-      "line": 149,
+      "line": 194,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "DataFetcher",
       "file": "internal/model/hub/hub.go",
-      "line": 149,
+      "line": 194,
       "kind": "type"
     },
     {
@@ -9126,84 +9126,84 @@
       "package": "internal/model/hub",
       "identifier": "ErrNoBackupTrigger",
       "file": "internal/model/hub/hub.go",
-      "line": 107,
+      "line": 152,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoBackupTrigger",
       "file": "internal/model/hub/hub.go",
-      "line": 107,
+      "line": 152,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoFirmwareUpdater",
       "file": "internal/model/hub/hub.go",
-      "line": 111,
+      "line": 156,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoFirmwareUpdater",
       "file": "internal/model/hub/hub.go",
-      "line": 111,
+      "line": 156,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoFunctionMutator",
       "file": "internal/model/hub/hub.go",
-      "line": 103,
+      "line": 148,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoFunctionMutator",
       "file": "internal/model/hub/hub.go",
-      "line": 103,
+      "line": 148,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoInboxAccepter",
       "file": "internal/model/hub/hub.go",
-      "line": 115,
+      "line": 160,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoInboxAccepter",
       "file": "internal/model/hub/hub.go",
-      "line": 115,
+      "line": 160,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoRoomMutator",
       "file": "internal/model/hub/hub.go",
-      "line": 100,
+      "line": 145,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoRoomMutator",
       "file": "internal/model/hub/hub.go",
-      "line": 100,
+      "line": 145,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoSysvarMutator",
       "file": "internal/model/hub/hub.go",
-      "line": 97,
+      "line": 136,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrNoSysvarMutator",
       "file": "internal/model/hub/hub.go",
-      "line": 97,
+      "line": 136,
       "kind": "var"
     },
     {
@@ -9224,28 +9224,28 @@
       "package": "internal/model/hub",
       "identifier": "ErrProgramDeleteUnsupported",
       "file": "internal/model/hub/hub.go",
-      "line": 126,
+      "line": 171,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrProgramDeleteUnsupported",
       "file": "internal/model/hub/hub.go",
-      "line": 126,
+      "line": 171,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrProgramNotFound",
       "file": "internal/model/hub/hub.go",
-      "line": 121,
+      "line": 166,
       "kind": "var"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ErrProgramNotFound",
       "file": "internal/model/hub/hub.go",
-      "line": 121,
+      "line": 166,
       "kind": "var"
     },
     {
@@ -9274,6 +9274,20 @@
       "identifier": "ErrRoomNotFound",
       "file": "internal/model/hub/hub.go",
       "line": 65,
+      "kind": "var"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "ErrSysvarChannelUnknown",
+      "file": "internal/model/hub/hub.go",
+      "line": 142,
+      "kind": "var"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "ErrSysvarChannelUnknown",
+      "file": "internal/model/hub/hub.go",
+      "line": 142,
       "kind": "var"
     },
     {
@@ -9294,14 +9308,14 @@
       "package": "internal/model/hub",
       "identifier": "FirmwareUpdater",
       "file": "internal/model/hub/hub.go",
-      "line": 137,
+      "line": 182,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "FirmwareUpdater",
       "file": "internal/model/hub/hub.go",
-      "line": 137,
+      "line": 182,
       "kind": "type"
     },
     {
@@ -9350,14 +9364,14 @@
       "package": "internal/model/hub",
       "identifier": "InboxAccepter",
       "file": "internal/model/hub/hub.go",
-      "line": 142,
+      "line": 187,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "InboxAccepter",
       "file": "internal/model/hub/hub.go",
-      "line": 142,
+      "line": 187,
       "kind": "type"
     },
     {
@@ -9413,14 +9427,14 @@
       "package": "internal/model/hub",
       "identifier": "Mutator",
       "file": "internal/model/hub/hub.go",
-      "line": 452,
+      "line": 523,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "Mutator",
       "file": "internal/model/hub/hub.go",
-      "line": 452,
+      "line": 523,
       "kind": "type"
     },
     {
@@ -9509,16 +9523,44 @@
     },
     {
       "package": "internal/model/hub",
-      "identifier": "SysvarMutator",
+      "identifier": "SysvarCreateSpec",
       "file": "internal/model/hub/hub.go",
-      "line": 79,
+      "line": 81,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "SysvarCreateSpec",
+      "file": "internal/model/hub/hub.go",
+      "line": 81,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "SysvarMutator",
       "file": "internal/model/hub/hub.go",
-      "line": 79,
+      "line": 126,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "SysvarMutator",
+      "file": "internal/model/hub/hub.go",
+      "line": 126,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "SysvarUpdateSpec",
+      "file": "internal/model/hub/hub.go",
+      "line": 103,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "SysvarUpdateSpec",
+      "file": "internal/model/hub/hub.go",
+      "line": 103,
       "kind": "type"
     },
     {
@@ -30952,6 +30994,13 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestBoolFlagParam",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 778
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestBoundWriterSetValueNilWriterPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/adapter_multi_unit_test.go",
@@ -32716,38 +32765,122 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarAlarmFallsBackToRega",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 242
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarAlarmPropagatesCCUError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 489
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestCreateSysvarBoolUsesJSONRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 145
+      "line": 167
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCreateSysvarBoolWithUnitFallsBackToRega",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 323
+      "line": 415
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarChannelResolvesIntoNativeChnID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 832
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarChannelUnknownAddressReturnsSentinel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 897
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarChannelViaRegaBindsResolvedID",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 857
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarChannelZeroIDReturnsSentinel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 915
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarCustomLabelsFallBackToRega",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 534
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCreateSysvarEnumUsesJSONRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 180
+      "line": 202
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCreateSysvarFloatUsesJSONRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 164
+      "line": 186
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCreateSysvarIntegerFallsBackToRega",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 197
+      "line": 219
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarNativePathPropagatesCCUError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 458
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarNoChannelKeepsUnassigned",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 879
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarRegaFillsDefaultLabels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 562
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarRegaPathPropagatesCCUError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 473
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCreateSysvarWithDescriptionFallsBackToRega",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 265
     },
     {
       "package": "internal/central/adapter",
@@ -32919,10 +33052,17 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestDeleteSysvarPropagatesCCUError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 518
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestDeleteSysvarUsesJSONRPC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 127
+      "line": 149
     },
     {
       "package": "internal/central/adapter",
@@ -38659,6 +38799,13 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestLoadSysvarsAlarmTypeParsesLabels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 717
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestLoadSysvarsExplicitChannelAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_channel_test.go",
@@ -38684,6 +38831,27 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_scan_toggles_test.go",
       "line": 148
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestLoadSysvarsParsesFlagsFalseAndNoLabels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 677
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestLoadSysvarsParsesLabelsAndFlags",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 635
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestLoadSysvarsPropagatesCCUError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 758
     },
     {
       "package": "internal/central/adapter",
@@ -43373,42 +43541,42 @@
       "identifier": "TestSetSysvarBoolUsesSetBool",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 258
+      "line": 350
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestSetSysvarEmptyStringAllowed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 309
+      "line": 401
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestSetSysvarEnumIndexUsesSetFloat",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 221
+      "line": 313
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestSetSysvarFloatUsesSetFloat",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 242
+      "line": 334
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestSetSysvarStringDeclinedSurfacesError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 298
+      "line": 390
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestSetSysvarStringUsesRega",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
-      "line": 278
+      "line": 370
     },
     {
       "package": "internal/central/adapter",
@@ -44445,6 +44613,69 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/device_admin_unpair_test.go",
       "line": 270
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarChannelClearMarshalsMinusOne",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 950
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarChannelNilLeavesSlotEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 969
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarChannelResolvesAndMarshals",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 930
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarChannelUnknownAddressReturnsSentinel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 987
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarIndependentFlags",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 800
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarMarshalsNewName",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 286
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarNilFlagsLeaveScriptSlotsEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 616
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarPassesLabelsAndFlags",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 584
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestUpdateSysvarPropagatesCCUError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_sysvar_test.go",
+      "line": 504
     },
     {
       "package": "internal/central/adapter",
@@ -55438,6 +55669,13 @@
     },
     {
       "package": "internal/client/rega",
+      "identifier": "TestCreateSystemVariableScriptHasAlarmBranch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/rega/scripts_test.go",
+      "line": 172
+    },
+    {
+      "package": "internal/client/rega",
       "identifier": "TestEscapeStringBackslashOnly",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/runner_test.go",
@@ -55756,7 +55994,7 @@
       "identifier": "TestScriptsWithoutPlaceholdersAreParamFree",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/rega/scripts_test.go",
-      "line": 171
+      "line": 196
     },
     {
       "package": "internal/client/rega",
@@ -87382,28 +87620,28 @@
       "identifier": "CleanSysvarNames",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 152
+      "line": 166
     },
     {
       "package": "internal/model/hub",
       "identifier": "CleanSysvarNames",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 152
+      "line": 166
     },
     {
       "package": "internal/model/hub",
       "identifier": "IsExcludedSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 135
+      "line": 149
     },
     {
       "package": "internal/model/hub",
       "identifier": "IsExcludedSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 135
+      "line": 149
     },
     {
       "package": "internal/model/hub",
@@ -87732,14 +87970,14 @@
       "identifier": "NewSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 93
+      "line": 107
     },
     {
       "package": "internal/model/hub",
       "identifier": "NewSysvar",
       "reason": "auto-whitelist:pattern=hub-factory-wrapper",
       "file": "internal/model/hub/sysvar.go",
-      "line": 93
+      "line": 107
     },
     {
       "package": "internal/model/hub",
@@ -87858,21 +88096,21 @@
       "identifier": "TestAlarmMessagesAcknowledge_noAcker",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 547
+      "line": 692
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestAlarmMessagesAcknowledge_nonExistent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 564
+      "line": 709
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestAlarmMessagesAcknowledge_writerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 555
+      "line": 700
     },
     {
       "package": "internal/model/hub",
@@ -87935,14 +88173,14 @@
       "identifier": "TestAlarmMessagesObserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 523
+      "line": 668
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestAlarmMessagesOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 534
+      "line": 679
     },
     {
       "package": "internal/model/hub",
@@ -88005,14 +88243,14 @@
       "identifier": "TestConnectivityAllReachable_allUp",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 760
+      "line": 905
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestConnectivityAllReachable_empty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 752
+      "line": 897
     },
     {
       "package": "internal/model/hub",
@@ -88033,7 +88271,7 @@
       "identifier": "TestConnectivityConcurrentOnState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 770
+      "line": 915
     },
     {
       "package": "internal/model/hub",
@@ -88089,7 +88327,7 @@
       "identifier": "TestConnectivityList",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 729
+      "line": 874
     },
     {
       "package": "internal/model/hub",
@@ -88103,7 +88341,7 @@
       "identifier": "TestConnectivityOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 739
+      "line": 884
     },
     {
       "package": "internal/model/hub",
@@ -88117,7 +88355,7 @@
       "identifier": "TestConnectivityReachable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 716
+      "line": 861
     },
     {
       "package": "internal/model/hub",
@@ -88229,7 +88467,7 @@
       "identifier": "TestHubAcceptInboxDeviceRemote",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 253
+      "line": 398
     },
     {
       "package": "internal/model/hub",
@@ -88243,7 +88481,7 @@
       "identifier": "TestHubBackupStatusRemote",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 229
+      "line": 374
     },
     {
       "package": "internal/model/hub",
@@ -88264,14 +88502,14 @@
       "identifier": "TestHubCreateSysvarRemote_noMutator",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 120
+      "line": 122
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestHubCreateSysvarRemote_withMutator",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 128
+      "line": 130
     },
     {
       "package": "internal/model/hub",
@@ -88432,21 +88670,21 @@
       "identifier": "TestHubDeleteSysvarRemote_noMutator",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 140
+      "line": 142
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestHubDeleteSysvarRemote_ok",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 147
+      "line": 149
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestHubDeleteSysvarRemote_propagatesError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 163
+      "line": 165
     },
     {
       "package": "internal/model/hub",
@@ -88509,7 +88747,7 @@
       "identifier": "TestHubMutatorConcurrentSetAndRead",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/mutator_race_test.go",
-      "line": 35
+      "line": 31
     },
     {
       "package": "internal/model/hub",
@@ -88537,7 +88775,14 @@
       "identifier": "TestHubRemoveSysvar",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 109
+      "line": 111
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "TestHubRenameSysvar",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/hub_remote_operations_test.go",
+      "line": 243
     },
     {
       "package": "internal/model/hub",
@@ -88551,28 +88796,28 @@
       "identifier": "TestHubSetDeviceFunctionsRemote",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 207
+      "line": 352
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestHubSetDeviceRoomsRemote",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 196
+      "line": 341
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestHubTriggerBackupRemote",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 218
+      "line": 363
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestHubTriggerFirmwareUpdateRemote",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 242
+      "line": 387
     },
     {
       "package": "internal/model/hub",
@@ -88586,21 +88831,35 @@
       "identifier": "TestHubUpdateSysvarRemote",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 177
+      "line": 179
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestHubUpdateSysvarRemote_noMutator",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 189
+      "line": 191
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "TestHubUpdateSysvarRemote_renameSkippedOnError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/hub_remote_operations_test.go",
+      "line": 224
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "TestHubUpdateSysvarRemote_renamesCacheKey",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/hub/hub_remote_operations_test.go",
+      "line": 200
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestInboxConcurrentReplace",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 450
+      "line": 595
     },
     {
       "package": "internal/model/hub",
@@ -88614,14 +88873,14 @@
       "identifier": "TestInboxObserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 418
+      "line": 563
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestInboxOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 429
+      "line": 574
     },
     {
       "package": "internal/model/hub",
@@ -88684,14 +88943,14 @@
       "identifier": "TestInstallModeDisable_noWriter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 486
+      "line": 631
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestInstallModeDisable_writerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 493
+      "line": 638
     },
     {
       "package": "internal/model/hub",
@@ -88719,7 +88978,7 @@
       "identifier": "TestInstallModeEnable_writerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 478
+      "line": 623
     },
     {
       "package": "internal/model/hub",
@@ -88733,7 +88992,7 @@
       "identifier": "TestInstallModeOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 465
+      "line": 610
     },
     {
       "package": "internal/model/hub",
@@ -88768,7 +89027,7 @@
       "identifier": "TestInstallModeStateAfterExpiry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 501
+      "line": 646
     },
     {
       "package": "internal/model/hub",
@@ -88957,14 +89216,14 @@
       "identifier": "TestMetricsOnAnyUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 693
+      "line": 838
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestMetricsOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 680
+      "line": 825
     },
     {
       "package": "internal/model/hub",
@@ -88992,7 +89251,7 @@
       "identifier": "TestMetricsValue_unknownKind",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 706
+      "line": 851
     },
     {
       "package": "internal/model/hub",
@@ -89132,7 +89391,7 @@
       "identifier": "TestProgramConcurrentExecution",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 340
+      "line": 485
     },
     {
       "package": "internal/model/hub",
@@ -89342,21 +89601,21 @@
       "identifier": "TestProgramLastExecution",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 266
+      "line": 411
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestProgramLastResult",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 279
+      "line": 424
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestProgramNotifyRemovedClearsHandlers",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 329
+      "line": 474
     },
     {
       "package": "internal/model/hub",
@@ -89377,14 +89636,14 @@
       "identifier": "TestProgramOnRemovedUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 318
+      "line": 463
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestProgramOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 305
+      "line": 450
     },
     {
       "package": "internal/model/hub",
@@ -89405,7 +89664,7 @@
       "identifier": "TestProgramSetEnabled_writerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 292
+      "line": 437
     },
     {
       "package": "internal/model/hub",
@@ -89489,28 +89748,28 @@
       "identifier": "TestSameAlarmSet_timestampMismatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 579
+      "line": 724
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestSameInbox_differentValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 442
+      "line": 587
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestSameServiceSet_missingKey",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 655
+      "line": 800
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestSameServiceSet_timestampMismatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 645
+      "line": 790
     },
     {
       "package": "internal/model/hub",
@@ -89559,21 +89818,21 @@
       "identifier": "TestServiceMessagesAcknowledge_noAcker",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 615
+      "line": 760
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestServiceMessagesAcknowledge_nonExistent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 632
+      "line": 777
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestServiceMessagesAcknowledge_writerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 623
+      "line": 768
     },
     {
       "package": "internal/model/hub",
@@ -89636,14 +89895,14 @@
       "identifier": "TestServiceMessagesObserved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 591
+      "line": 736
     },
     {
       "package": "internal/model/hub",
       "identifier": "TestServiceMessagesOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 602
+      "line": 747
     },
     {
       "package": "internal/model/hub",
@@ -89678,7 +89937,7 @@
       "identifier": "TestServiceMessagesReplace_noChangeNoFire",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 664
+      "line": 809
     },
     {
       "package": "internal/model/hub",
@@ -89762,7 +90021,7 @@
       "identifier": "TestSysvarConcurrentOnValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 405
+      "line": 550
     },
     {
       "package": "internal/model/hub",
@@ -90049,7 +90308,7 @@
       "identifier": "TestSysvarOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 384
+      "line": 529
     },
     {
       "package": "internal/model/hub",
@@ -90182,7 +90441,7 @@
       "identifier": "TestSysvarSet_writerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 397
+      "line": 542
     },
     {
       "package": "internal/model/hub",
@@ -90203,7 +90462,7 @@
       "identifier": "TestSysvarToWireAllKinds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 355
+      "line": 500
     },
     {
       "package": "internal/model/hub",
@@ -90308,7 +90567,7 @@
       "identifier": "TestUpdateConcurrentOnInfo",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 816
+      "line": 961
     },
     {
       "package": "internal/model/hub",
@@ -90329,7 +90588,7 @@
       "identifier": "TestUpdateInfo",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 786
+      "line": 931
     },
     {
       "package": "internal/model/hub",
@@ -90406,7 +90665,7 @@
       "identifier": "TestUpdateOnUpdateUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/hub/hub_remote_operations_test.go",
-      "line": 803
+      "line": 948
     },
     {
       "package": "internal/model/hub",
@@ -115809,70 +116068,70 @@
       "identifier": "AckAlarmMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 952
+      "line": 1052
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAlarmMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 952
+      "line": 1052
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 993
+      "line": 1093
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 993
+      "line": 1093
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllResult",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 986
+      "line": 1086
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllResult",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 986
+      "line": 1086
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1001
+      "line": 1101
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckAllServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1001
+      "line": 1101
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 969
+      "line": 1069
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AckServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 969
+      "line": 1069
     },
     {
       "package": "internal/north/rest/handlers",
@@ -115949,14 +116208,14 @@
       "identifier": "AlarmMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 235
+      "line": 247
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "AlarmMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 235
+      "line": 247
     },
     {
       "package": "internal/north/rest/handlers",
@@ -116901,14 +117160,14 @@
       "identifier": "CreateSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 473
+      "line": 509
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CreateSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 473
+      "line": 509
     },
     {
       "package": "internal/north/rest/handlers",
@@ -117251,14 +117510,14 @@
       "identifier": "DeleteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 652
+      "line": 748
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DeleteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 652
+      "line": 748
     },
     {
       "package": "internal/north/rest/handlers",
@@ -117279,14 +117538,14 @@
       "identifier": "DeleteSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 555
+      "line": 651
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DeleteSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 555
+      "line": 651
     },
     {
       "package": "internal/north/rest/handlers",
@@ -117629,14 +117888,14 @@
       "identifier": "DisableServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1053
+      "line": 1153
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "DisableServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1053
+      "line": 1153
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118035,14 +118294,14 @@
       "identifier": "ExecuteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 612
+      "line": 708
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ExecuteProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 612
+      "line": 708
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118077,14 +118336,14 @@
       "identifier": "FetchSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 574
+      "line": 670
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "FetchSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 574
+      "line": 670
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118469,14 +118728,14 @@
       "identifier": "GetInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1174
+      "line": 1274
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1174
+      "line": 1274
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118539,14 +118798,14 @@
       "identifier": "GetProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 400
+      "line": 412
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetProgram",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 400
+      "line": 412
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118623,14 +118882,14 @@
       "identifier": "GetSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 735
+      "line": 831
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 735
+      "line": 831
     },
     {
       "package": "internal/north/rest/handlers",
@@ -118945,14 +119204,14 @@
       "identifier": "InboxDeviceDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 224
+      "line": 236
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InboxDeviceDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 224
+      "line": 236
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119071,28 +119330,28 @@
       "identifier": "InterfaceIndex",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1160
+      "line": 1260
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InterfaceIndex",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1160
+      "line": 1260
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InterfaceState",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1157
+      "line": 1257
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InterfaceState",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1157
+      "line": 1257
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119267,14 +119526,14 @@
       "identifier": "ListAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 869
+      "line": 969
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListAlarmMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 869
+      "line": 969
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119505,14 +119764,14 @@
       "identifier": "ListInbox",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 833
+      "line": 933
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListInbox",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 833
+      "line": 933
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119533,14 +119792,14 @@
       "identifier": "ListInterfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1163
+      "line": 1263
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListInterfaces",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1163
+      "line": 1263
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119603,14 +119862,14 @@
       "identifier": "ListPrograms",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 304
+      "line": 316
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListPrograms",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 304
+      "line": 316
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119645,28 +119904,28 @@
       "identifier": "ListServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 912
+      "line": 1012
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 912
+      "line": 1012
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSuppressedServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1091
+      "line": 1191
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSuppressedServiceMessages",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1091
+      "line": 1191
     },
     {
       "package": "internal/north/rest/handlers",
@@ -119687,14 +119946,14 @@
       "identifier": "ListSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 705
+      "line": 801
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListSysvars",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 705
+      "line": 801
     },
     {
       "package": "internal/north/rest/handlers",
@@ -120779,14 +121038,14 @@
       "identifier": "PatchSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 513
+      "line": 587
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PatchSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 513
+      "line": 587
     },
     {
       "package": "internal/north/rest/handlers",
@@ -120919,42 +121178,42 @@
       "identifier": "ProgramExecuteRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 592
+      "line": 688
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramExecuteRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 592
+      "line": 688
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramExecuteResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 601
+      "line": 697
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramExecuteResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 601
+      "line": 697
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramSetEnabledRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 428
+      "line": 440
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ProgramSetEnabledRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 428
+      "line": 440
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121171,14 +121430,14 @@
       "identifier": "PutSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 764
+      "line": 860
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "PutSysvar",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 764
+      "line": 860
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121255,14 +121514,14 @@
       "identifier": "ReconnectInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1192
+      "line": 1292
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ReconnectInterface",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1192
+      "line": 1292
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121633,14 +121892,14 @@
       "identifier": "ServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 255
+      "line": 267
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 255
+      "line": 267
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121675,14 +121934,14 @@
       "identifier": "SetProgramEnabled",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 433
+      "line": 445
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SetProgramEnabled",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 433
+      "line": 445
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121969,14 +122228,14 @@
       "identifier": "SuppressedServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1070
+      "line": 1170
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SuppressedServiceMessageDTO",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1070
+      "line": 1170
     },
     {
       "package": "internal/north/rest/handlers",
@@ -122095,56 +122354,56 @@
       "identifier": "SysvarCreateRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 461
+      "line": 473
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarCreateRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 461
+      "line": 473
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarPatchRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 503
+      "line": 561
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarPatchRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 503
+      "line": 561
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarRefreshService",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 221
+      "line": 233
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarRefreshService",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 221
+      "line": 233
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarSetRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 216
+      "line": 228
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SysvarSetRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 216
+      "line": 228
     },
     {
       "package": "internal/north/rest/handlers",
@@ -122291,77 +122550,77 @@
       "identifier": "TestAckAllAlarmMessages_Error_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1818
+      "line": 2222
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllAlarmMessages_HappyPath_ReturnsCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1797
+      "line": 2201
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllAlarmMessages_HubNil_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1787
+      "line": 2191
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllAlarmMessages_MultiCentral_SumsAcrossHubs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1896
+      "line": 2300
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllAlarmMessages_UnknownCentral_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1880
+      "line": 2284
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllServiceMessages_Error_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1852
+      "line": 2256
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllServiceMessages_HappyPath_ReturnsCount",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1831
+      "line": 2235
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllServiceMessages_ScopedCentral_OnlyActsOnNamedHub",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1927
+      "line": 2331
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckAllServiceMessages_UnknownCentral_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1865
+      "line": 2269
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckServiceMessage_Error_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1699
+      "line": 2103
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestAckServiceMessage_HappyPath_Returns202",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1714
+      "line": 2118
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123100,10 +123359,52 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_Alarm_MutatorError_Returns502",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1836
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_Alarm_PassesThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1555
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_ChannelAddress_PassesThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1576
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_ChannelUnknown_Returns422",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1597
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_Description_PassesThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1534
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestCreateSysvar_HappyPath_Returns202",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
       "line": 1083
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_InvalidType_Returns422",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1768
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123117,7 +123418,7 @@
       "identifier": "TestCreateSysvar_MutatorError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1966
+      "line": 2370
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123125,6 +123426,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
       "line": 206
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_ValidTypes_Returns202",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1809
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateSysvar_ValueLabels_PassThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1693
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123593,7 +123908,7 @@
       "identifier": "TestDeleteSysvar_HappyPath_Returns202",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1466
+      "line": 1870
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123607,7 +123922,7 @@
       "identifier": "TestDeleteSysvar_MutatorError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1451
+      "line": 1855
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123691,21 +124006,21 @@
       "identifier": "TestDisableServiceMessage_Error_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1745
+      "line": 2149
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestDisableServiceMessage_HappyPath_Returns202",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1760
+      "line": 2164
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestDisableServiceMessage_HubNil_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1733
+      "line": 2137
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123831,35 +124146,35 @@
       "identifier": "TestExecuteProgram_CheckConditions_ConditionMet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1592
+      "line": 1996
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestExecuteProgram_CheckConditions_ConditionNotMet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1622
+      "line": 2026
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestExecuteProgram_CheckConditions_WriterError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1651
+      "line": 2055
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestExecuteProgram_ExecuteError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1524
+      "line": 1928
     },
     {
       "package": "internal/north/rest/handlers",
-      "identifier": "TestExecuteProgram_HappyPath_Returns200Executed",
+      "identifier": "TestExecuteProgram_HappyPath_ReturnsAcceptedExecuted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1541
+      "line": 1945
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123873,7 +124188,7 @@
       "identifier": "TestExecuteProgram_InvalidJSONBody_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1675
+      "line": 2079
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123978,21 +124293,21 @@
       "identifier": "TestFetchSysvars_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2174
+      "line": 2578
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestFetchSysvars_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2190
+      "line": 2594
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestFetchSysvars_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2203
+      "line": 2607
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124804,7 +125119,7 @@
       "identifier": "TestGetSysvar_AmbiguousRequiresCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2112
+      "line": 2516
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124825,7 +125140,7 @@
       "identifier": "TestGetSysvar_SingleCentralUnambiguous",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2078
+      "line": 2482
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125903,7 +126218,7 @@
       "identifier": "TestListPrograms_DeviceLinkExposed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2306
+      "line": 2734
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125980,7 +126295,7 @@
       "identifier": "TestListPrograms_WithObservedActive",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2026
+      "line": 2430
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126057,7 +126372,7 @@
       "identifier": "TestListSysvars_DeviceLinkExposed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2255
+      "line": 2683
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126957,6 +127272,41 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_ChannelAddress_PassesThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1614
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_ChannelClear_PassesEmptyPointer",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1635
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_ChannelOmitted_LeavesPointerNil",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1656
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_ChannelUnknown_Returns422",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1676
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_FlagsOmitted_StayNil",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1744
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestPatchSysvar_HappyPath_Returns202",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
@@ -126978,10 +127328,31 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_LabelsAndFlags_PassThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1715
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestPatchSysvar_MutatorError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
       "line": 1416
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_NameOmitted_DoesNotRename",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1513
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestPatchSysvar_Rename_PassesNewName",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 1490
     },
     {
       "package": "internal/north/rest/handlers",
@@ -127730,7 +128101,7 @@
       "identifier": "TestPutSysvar_HappyPath_Returns202",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1503
+      "line": 1907
     },
     {
       "package": "internal/north/rest/handlers",
@@ -127744,7 +128115,7 @@
       "identifier": "TestPutSysvar_InvalidValue_Returns422",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2139
+      "line": 2543
     },
     {
       "package": "internal/north/rest/handlers",
@@ -127758,7 +128129,7 @@
       "identifier": "TestPutSysvar_WriterError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1486
+      "line": 1890
     },
     {
       "package": "internal/north/rest/handlers",
@@ -128192,7 +128563,7 @@
       "identifier": "TestSetProgramEnabled_SetEnabledError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 1985
+      "line": 2389
     },
     {
       "package": "internal/north/rest/handlers",
@@ -128325,7 +128696,7 @@
       "identifier": "TestSnapshotPrograms_WithObservedActive",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2006
+      "line": 2410
     },
     {
       "package": "internal/north/rest/handlers",
@@ -128759,14 +129130,21 @@
       "identifier": "TestToProgramSummary_UniqueID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2236
+      "line": 2664
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestToSysvarSummary_LabelsAndFlags",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/hub_test.go",
+      "line": 2641
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestToSysvarSummary_UniqueID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/hub_test.go",
-      "line": 2220
+      "line": 2624
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129732,28 +130110,28 @@
       "identifier": "UnsuppressRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1118
+      "line": 1218
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UnsuppressRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1118
+      "line": 1218
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UnsuppressServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1129
+      "line": 1229
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "UnsuppressServiceMessage",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
-      "line": 1129
+      "line": 1229
     },
     {
       "package": "internal/north/rest/handlers",

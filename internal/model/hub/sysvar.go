@@ -56,6 +56,20 @@ type Sysvar struct {
 	// them for HA entities unless explicitly opted in (the reference stack's
 	// INTERNAL description marker).
 	IsInternal bool
+	// IsVisible mirrors the CCU's isVisible flag from SysVar.getAll — whether
+	// the variable is shown in the CCU WebUI. IsLogged mirrors isLogged
+	// (backed by the CCU-side DPArchive setting) — whether the CCU records
+	// value changes to its measurement archive.
+	IsVisible bool
+	IsLogged  bool
+
+	// ValueName0 / ValueName1 are the CCU-side value labels for a binary
+	// (LOGIC / ALARM) sysvar: the operator-visible text for the false / true
+	// state, reported by SysVar.getAll only for those two types. The CCU
+	// defaults them to "false" / "true"; operators may rename them (e.g.
+	// "closed" / "open"). Empty for non-binary variables.
+	ValueName0 string
+	ValueName1 string
 
 	// ServiceRegistry implements the write-half of [payload.Source].
 	// Each Sysvar instance gets its own registry so service methods are

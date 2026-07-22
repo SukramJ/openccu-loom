@@ -188,6 +188,77 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   clients. The Config UI program table adds a "Show system programs"
   toggle (off by default, persisted locally), mirroring the CCU WebUI's
   footer button. REST `APIVersion` 2.34.0.
+- **A system variable's channel assignment is writable.** `POST /sysvars`
+  and `PATCH /sysvars/{name}` now accept an optional `channel_address`
+  ("ADDR:idx", the CCU "Kanalzuordnung"). The address is resolved to the
+  channel's ReGa ise id via `Interface.getIseIDByAddress` before it reaches
+  the CCU; `CreateSysvar` no longer hard-codes `chn_id: -1`, and the
+  `update_system_variable` Rega script gained `oSv.Channel()`. On PATCH the
+  field is tri-state (omit = leave untouched, empty string = clear the
+  assignment, an address = assign it); an address the CCU cannot resolve is
+  rejected with 422. The system-variable create and edit dialogs offer a
+  searchable device/channel picker to set or clear the assignment. REST
+  `APIVersion` 2.31.0.
+
+- **Alarm system variables can be created.** `POST /sysvars` now accepts
+  `value_type: "ALARM"`, provisioning a binary, acknowledgeable alarm
+  line on the CCU. The Rega `create_system_variable` script backs it
+  with an `OT_ALARMDP` object (not the `OT_VARDP` every other type uses)
+  and wires up the binary alarm condition, so the new variable reads,
+  writes and acknowledges like any hand-created CCU alarm. The
+  system-variable create form offers ALARM in its type dropdown, and the
+  handler now validates `value_type` against the known create set
+  (rejecting read-side wire codes such as `LOGIC`/`NUMBER`/`LIST`).
+
+- **System variables can be renamed, and carry a description from
+  creation.** `PATCH /sysvars/{name}` now accepts an optional `name`
+  field that renames the variable in place (the CCU-side rename runs
+  through the `update_system_variable` Rega script; the local cache is
+  re-keyed the moment the call lands so the new name shows before the
+  next periodic refresh). `POST /sysvars` gained an optional
+  `description` field, so a variable's help text can be set at creation
+  instead of only via a follow-up patch. The system-variable editor
+  surfaces both: the edit dialog has a rename field, the create form a
+  description field.
+
+- **System variables expose their value labels and visibility / logging
+  flags.** The sysvar catalogue read from the CCU (`SysVar.getAll`) now
+  parses the fields it already ships — the binary `valueName0`/
+  `valueName1` state labels (for `LOGIC`/`ALARM` variables) and the
+  `isVisible` / `isLogged` flags. They surface as `value_name_0`,
+  `value_name_1`, `is_visible` and `is_logged` on `SysvarSummary` (REST
+  `GET /sysvars` and the WS `sysvars.list`). `POST /sysvars` accepts the
+  two value labels (empty adopts the CCU's own `false`/`true` defaults; a
+  custom label routes creation through the Rega script since the native
+  `SysVar.createBool` has no label parameter), and `PATCH /sysvars/{name}`
+  accepts the two labels plus tri-state `is_visible` / `is_logged`
+  toggles (backed by the CCU-side `Visible()` / `DPArchive()` settings).
+  In the SPA, a boolean sysvar's switch now shows the operator-visible
+  state label instead of a bare toggle, and the edit and create dialogs
+  offer the value-label fields plus the visibility and logging switches.
+
+### Fixed
+
+- **The system-variable edit dialog now patches the value list of real
+  CCU list variables.** The dialog gated its value-list field on
+  `value_type === "ENUM"`, but the daemon delivers the CCU wire type
+  `LIST` — so editing the options of an existing list variable silently
+  did nothing. The dialog now keys off the real wire types
+  (`LOGIC`/`LIST`/`FLOAT`/`INTEGER`/`STRING`/`ALARM`), showing the
+  value-list field for `LIST` and the min/max fields for the numeric
+  types.
+
+- **Logic and alarm system variables are now flipped with a switch.**
+  The system-variable list and the favorites view rendered a switch
+  only for the `BOOL` alias, so the CCU's real boolean sysvar types —
+  `LOGIC` (a plain logic value) and `ALARM` (an alarm flag), by far the
+  most common — fell through to the free-text field and could only be
+  changed by typing `true`/`false`. Both views now derive the inline
+  control from one shared dispatch: `BOOL`/`LOGIC`/`ALARM` render a
+  switch (a two-entry label list on an alarm variable no longer hides
+  the toggle), a labelled `LIST` renders a dropdown, and a label-less
+  `LIST` renders a numeric-index field. Read/write path only — the
+  edit dialog is unchanged. REST `APIVersion` 2.31.0.
 
 ## [0.45.0] — 2026-07-20
 

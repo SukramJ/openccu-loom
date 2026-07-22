@@ -588,7 +588,11 @@ export const api = {
       unit?: string;
       min?: string;
       max?: string;
+      description?: string;
       value_list?: string[];
+      value_name_0?: string;
+      value_name_1?: string;
+      channel_address?: string;
     },
     central: string,
   ) {
@@ -602,11 +606,17 @@ export const api = {
   patchSysvar(
     name: string,
     body: {
+      name?: string;
       unit?: string;
       min?: string;
       max?: string;
       value_list?: string[];
       description?: string;
+      value_name_0?: string;
+      value_name_1?: string;
+      is_visible?: boolean;
+      is_logged?: boolean;
+      channel_address?: string;
     },
     central?: string,
   ) {

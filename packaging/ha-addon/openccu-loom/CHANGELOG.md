@@ -68,6 +68,33 @@
   REST/WS clients get the same via an optional `include_internal`
   parameter; without it the `include_internal_programs` setting still
   governs the default (API 2.34.0).
+- **Assign a system variable to a device channel.** The system-variable
+  create and edit dialogs now offer a searchable device/channel picker to
+  set (or clear) a variable's channel assignment ("Kanalzuordnung"), just
+  like the CCU's own WebUI. An unresolvable channel is rejected.
+- **Create alarm system variables.** The system-variable create form
+  now offers an ALARM type, provisioning a binary, acknowledgeable alarm
+  line on the CCU (just like an alarm variable created in the CCU's own
+  WebUI).
+- **Rename system variables and describe them at creation.** The
+  system-variable editor can now rename a variable, and the create form
+  accepts a description up front (previously the name was fixed and the
+  description could only be added afterwards).
+- **List variables can be edited again.** The edit dialog now shows the
+  value-list field for the CCU's real `LIST`-type variables (it
+  previously only appeared for the create-time `ENUM` alias), so the
+  options of an existing list variable can be changed.
+- **Logic/alarm system variables toggle with a switch.** In the
+  system-variable list and the favorites view, boolean sysvars of the
+  CCU types `LOGIC` and `ALARM` (the most common kind) now render as an
+  on/off switch instead of a free-text field, so they can be flipped
+  with one click. Labelled list variables keep their dropdown.
+- **System-variable state labels, visibility and logging.** A boolean
+  variable's switch now shows the CCU state labels (e.g. "closed" /
+  "open") instead of a bare toggle, and the edit and create dialogs let
+  you set those two labels along with whether the variable is visible in
+  the CCU WebUI and whether its value changes are logged to the
+  measurement archive.
 
 ## 0.45.0
 

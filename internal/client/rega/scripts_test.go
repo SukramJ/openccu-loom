@@ -164,6 +164,31 @@ func TestRebootCCUScriptBody(t *testing.T) {
 	}
 }
 
+// TestCreateSystemVariableScriptHasAlarmBranch pins the ALARM branch of
+// the create_system_variable script. An alarm line must be backed by an
+// OT_ALARMDP object (not the OT_VARDP every other type uses), wire up the
+// binary alarm condition, and be marked a system alarm — otherwise the
+// created variable is not a real, acknowledgeable alarm on the CCU.
+func TestCreateSystemVariableScriptHasAlarmBranch(t *testing.T) {
+	t.Parallel()
+	body, err := loadScript(hmenum.RegaScriptCreateSystemVariable)
+	if err != nil {
+		t.Fatalf("loadScript(create_system_variable): %v", err)
+	}
+	for _, token := range []string{
+		"##type##",
+		"OT_ALARMDP",
+		"AlSetBinaryCondition()",
+		"ValueSubType(istAlarm)",
+		"AlType(atSystem)",
+		"AlArm(true)",
+	} {
+		if !strings.Contains(body, token) {
+			t.Errorf("create_system_variable script missing ALARM-branch token %q", token)
+		}
+	}
+}
+
 // TestScriptsWithoutPlaceholdersAreParamFree verifies that scripts
 // known to have no template parameters can be loaded and contain no
 // ##NAME## tokens — protecting against accidental placeholder insertion
