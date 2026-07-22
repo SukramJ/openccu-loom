@@ -22,16 +22,19 @@ test.describe('Device detail — virtual-remote key simulation', () => {
     await page.goto(`http://localhost:5173/app/#/devices/${VIRTUAL_REMOTE_ADDRESS}`);
     await page.waitForSelector('#main');
 
-    await expect(page.getByText('Key simulation')).toBeVisible();
-    await expect(page.getByText('Key 1')).toBeVisible();
-    await expect(page.getByText('Key 3')).toBeVisible();
+    // Scope to the key-grid region so the labels don't collide with the
+    // same channel names rendered elsewhere on the device-detail page.
+    const grid = page.getByRole('region', { name: 'Key simulation' });
+    await expect(grid).toBeVisible();
+    await expect(grid.getByText('Key 1')).toBeVisible();
+    await expect(grid.getByText('Key 3')).toBeVisible();
     // Channel 2 carries no CCU name — falls back to the "Key {n}" label.
-    await expect(page.getByText('Key 2')).toBeVisible();
+    await expect(grid.getByText('Key 2')).toBeVisible();
 
     // Three keys x (short + long) = six press buttons; the maintenance
     // channel (0) must not contribute any.
-    await expect(page.getByRole('button', { name: /Press key \d short/ })).toHaveCount(3);
-    await expect(page.getByRole('button', { name: /Press key \d long/ })).toHaveCount(3);
+    await expect(grid.getByRole('button', { name: /Press key \d short/ })).toHaveCount(3);
+    await expect(grid.getByRole('button', { name: /Press key \d long/ })).toHaveCount(3);
   });
 
   test('a short press writes PRESS_SHORT=true for the clicked channel', async ({ page }) => {
