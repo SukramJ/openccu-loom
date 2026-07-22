@@ -11,7 +11,9 @@ re-doing the reconnaissance.
 
 Related:
 [ADR 0055 — heating groups via CCU jpages proxy](./adr/0055-groups-jpages-proxy.md),
-[gap analysis](./ccu-webui-gap-analysis.md) (A3, GR01–GR05, §7 wave plan).
+[gap analysis](./ccu-webui-gap-analysis.md) (A3, GR01–GR05, §7 wave plan),
+[wave runbook & continuation guide](./ccu-webui-wave-runbook.md) (how to
+execute a wave, CI traps, resuming on another device).
 
 ---
 
