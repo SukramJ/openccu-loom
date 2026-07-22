@@ -42,14 +42,31 @@ func (a *InterfacesAdapter) Interfaces() []hmapi.InterfaceState {
 	var out []hmapi.InterfaceState
 	for _, u := range a.registry.List() {
 		for _, e := range u.Clients.List() {
-			out = append(out, hmapi.InterfaceState{
+			state := hmapi.InterfaceState{
 				ID:        e.InterfaceID,
 				Name:      e.InterfaceID,
 				Connected: e.Connected(),
 				Interface: string(e.Interface),
 				CentralID: u.Name(),
 				Host:      e.Host,
-			})
+			}
+			// Surface per-interface radio utilisation for BidCos interfaces
+			// from the HubCoordinator's listBidcosInterfaces poll cache.
+			// HmIP interfaces carry no cache entry — the fields stay absent
+			// and their device-level DUTY_CYCLE data points cover them.
+			if u.Hub != nil {
+				if info, ok := u.Hub.BidcosInterface(e.InterfaceID); ok {
+					if info.DutyCycle >= 0 {
+						dc := info.DutyCycle
+						state.DutyCycle = &dc
+					}
+					if info.CarrierSense >= 0 {
+						cs := info.CarrierSense
+						state.CarrierSense = &cs
+					}
+				}
+			}
+			out = append(out, state)
 		}
 	}
 	return out

@@ -233,6 +233,26 @@ func (b *CcuBackend) GetAlarmMessages(ctx context.Context) ([]map[string]any, er
 	return out, nil
 }
 
+// --- BidCos interfaces --------------------------------------------------
+
+// ListBidcosInterfaces returns the BidCos gateways attached to the named
+// interface together with their radio-utilisation state. It is a
+// read-only JSON-RPC query and generates no radio traffic. Each returned
+// map carries the CCU-defined keys "address", "description", "dutyCycle",
+// "isConnected", "isDefault", "fwVersion", and "type".
+//
+// Wire: Interface.listBidcosInterfaces, params: {interface: iface}.
+func (b *CcuBackend) ListBidcosInterfaces(ctx context.Context, iface string) ([]map[string]any, error) {
+	if b.json == nil {
+		return nil, ErrUnsupported
+	}
+	raw, err := b.json.Call(ctx, "Interface.listBidcosInterfaces", map[string]any{"interface": iface})
+	if err != nil {
+		return nil, err
+	}
+	return toSliceOfMaps(raw, "ListBidcosInterfaces")
+}
+
 // --- rooms / functions --------------------------------------------------
 
 // GetAllRooms implements Operations. Returns a map of roomName →

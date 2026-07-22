@@ -51,16 +51,17 @@ func (s *refreshSlot) run(ctx context.Context, rec observability.Recorder, op st
 	return observability.Instrument(ctx, rec, "hub_coordinator."+op, observability.ScopeCoordinator, fn)
 }
 
-// hubRefreshSet bundles the nine per-type refresh slots for HubCoordinator.
+// hubRefreshSet bundles the per-type refresh slots for HubCoordinator.
 // Each field corresponds to one CCU hub data category.
 type hubRefreshSet struct {
-	programs        refreshSlot
-	sysvars         refreshSlot
-	inbox           refreshSlot
-	serviceMessages refreshSlot
-	alarmMessages   refreshSlot
-	systemUpdate    refreshSlot
-	installMode     refreshSlot
-	metrics         refreshSlot
-	connectivity    refreshSlot
+	programs         refreshSlot
+	sysvars          refreshSlot
+	inbox            refreshSlot
+	serviceMessages  refreshSlot
+	alarmMessages    refreshSlot
+	systemUpdate     refreshSlot
+	installMode      refreshSlot
+	metrics          refreshSlot
+	connectivity     refreshSlot
+	bidcosInterfaces refreshSlot
 }

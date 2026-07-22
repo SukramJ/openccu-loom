@@ -25,6 +25,25 @@ type SysvarSnapshot struct {
 	ValueType hmenum.HubValueType
 }
 
+// BidcosInterfaceInfo is the cached radio-utilisation snapshot for one
+// BidCos interface, populated by the periodic listBidcosInterfaces poll.
+// DutyCycle and CarrierSense are percentages in the 0..100 range, or -1
+// when the CCU did not report the value.
+type BidcosInterfaceInfo struct {
+	// Address is the primary gateway serial (e.g. "OEQ1234567").
+	Address string
+	// Type is the gateway type string.
+	Type string
+	// DutyCycle is the transmit duty cycle in percent (0..100), or -1
+	// when unknown.
+	DutyCycle int
+	// CarrierSense is the receive carrier-sense load in percent (0..100),
+	// or -1 when unknown.
+	CarrierSense int
+	// Connected reports whether the primary gateway is reachable.
+	Connected bool
+}
+
 // HubCoordinator owns the central's view of CCU "hub" entities:
 // system variables, programs, alarm messages, service messages, and
 // install-mode toggles. It re-emits changes on the internal bus.
@@ -39,6 +58,12 @@ type HubCoordinator struct {
 
 	mu      sync.RWMutex
 	sysvars map[string]SysvarSnapshot
+
+	// bidcos caches the per-interface BidCos radio-utilisation snapshot,
+	// keyed by interface ID (e.g. "BidCos-RF"). Populated by the periodic
+	// listBidcosInterfaces poll and read by the north-bound interface
+	// index to surface duty-cycle / carrier-sense per radio interface.
+	bidcos map[string]BidcosInterfaceInfo
 
 	// refresh holds the nine per-type periodic-refresh slots. Each slot
 	// owns its hook and its per-type serialisation semaphore; see
@@ -90,6 +115,7 @@ func NewHubCoordinator(centralName string, bus *events.Bus) *HubCoordinator {
 func (h *HubCoordinator) Clear() {
 	h.mu.Lock()
 	h.sysvars = make(map[string]SysvarSnapshot)
+	h.bidcos = nil
 	m := h.hubModel
 	h.mu.Unlock()
 
@@ -170,6 +196,7 @@ func (h *HubCoordinator) SetRefreshHooks(hooks RefreshHooks) {
 	h.refresh.installMode.set(hooks.InstallMode)
 	h.refresh.metrics.set(hooks.Metrics)
 	h.refresh.connectivity.set(hooks.Connectivity)
+	h.refresh.bidcosInterfaces.set(hooks.BidcosInterfaces)
 }
 
 // RefreshHooks bundles the optional periodic-refresh callbacks.
@@ -191,6 +218,10 @@ type RefreshHooks struct {
 	// Connectivity refreshes the binary-sensor connectivity data points
 	// for all registered interfaces. Mirrors hub.fetch_connectivity_data.
 	Connectivity func(ctx context.Context) error
+	// BidcosInterfaces polls the CCU's listBidcosInterfaces method for
+	// every BidCos radio interface and refreshes the per-interface
+	// duty-cycle / carrier-sense cache. Nil disables.
+	BidcosInterfaces func(ctx context.Context) error
 }
 
 // RefreshPrograms invokes the program-refresh hook (if any) and
@@ -244,6 +275,42 @@ func (h *HubCoordinator) RefreshInstallMode(ctx context.Context) error {
 // connectivity data points. Concurrent callers are serialised per fetch type.
 func (h *HubCoordinator) RefreshConnectivity(ctx context.Context) error {
 	return h.refresh.connectivity.run(ctx, h.recorder, "refresh_connectivity")
+}
+
+// RefreshBidcosInterfaces invokes the BidCos-interface refresh hook (if any).
+// The hook polls the CCU's listBidcosInterfaces method for every BidCos radio
+// interface and updates the per-interface duty-cycle / carrier-sense cache.
+// Concurrent callers are serialised per fetch type.
+func (h *HubCoordinator) RefreshBidcosInterfaces(ctx context.Context) error {
+	return h.refresh.bidcosInterfaces.run(ctx, h.recorder, "refresh_bidcos_interfaces")
+}
+
+// SetBidcosInterfaces replaces the cached per-interface BidCos
+// radio-utilisation snapshot. Passing an empty or nil map clears the cache.
+// Safe for concurrent use.
+func (h *HubCoordinator) SetBidcosInterfaces(m map[string]BidcosInterfaceInfo) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(m) == 0 {
+		h.bidcos = nil
+		return
+	}
+	next := make(map[string]BidcosInterfaceInfo, len(m))
+	for k, v := range m {
+		next[k] = v
+	}
+	h.bidcos = next
+}
+
+// BidcosInterface returns the cached radio-utilisation snapshot for the
+// interface identified by id. The bool is false when no snapshot has been
+// polled for that interface (e.g. HmIP interfaces, which carry no BidCos
+// gateway). Safe for concurrent use.
+func (h *HubCoordinator) BidcosInterface(id string) (BidcosInterfaceInfo, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	info, ok := h.bidcos[id]
+	return info, ok
 }
 
 // ServiceMessageSuppressor is the south-bound contract for suppressing or

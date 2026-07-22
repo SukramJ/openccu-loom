@@ -166,6 +166,94 @@ describe("Diagnostics — reliability panel", () => {
   });
 });
 
+describe("Diagnostics — interfaces panel", () => {
+  it("renders duty cycle as a percentage badge and blanks unknown values", async () => {
+    mockListInterfaces.mockResolvedValue([
+      {
+        id: "BidCos-RF",
+        name: "BidCos-RF",
+        connected: true,
+        interface: "BidCos-RF",
+        duty_cycle: 85,
+      },
+      {
+        id: "HmIP-RF",
+        name: "HmIP-RF",
+        connected: true,
+        interface: "HmIP-RF",
+      },
+    ]);
+    render(Diagnostics);
+
+    await waitFor(() => expect(mockListInterfaces).toHaveBeenCalled());
+    await waitFor(() => {
+      // BidCos-RF surfaces its duty cycle as a percentage badge.
+      expect(screen.getByText("85%")).toBeInTheDocument();
+    });
+    // HmIP-RF has no radio-utilisation data → the placeholder is shown.
+    // Both duty_cycle and carrier_sense columns fall back to "—", and
+    // BidCos-RF's carrier_sense is unknown too, so at least two appear.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("renders a legitimate 0% duty cycle rather than treating it as unknown", async () => {
+    mockListInterfaces.mockResolvedValue([
+      {
+        id: "BidCos-RF",
+        name: "BidCos-RF",
+        connected: true,
+        interface: "BidCos-RF",
+        duty_cycle: 0,
+      },
+    ]);
+    render(Diagnostics);
+
+    await waitFor(() => expect(mockListInterfaces).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(screen.getByText("0%")).toBeInTheDocument();
+    });
+  });
+
+  it("renders carrier_sense as its own percentage badge", async () => {
+    mockListInterfaces.mockResolvedValue([
+      {
+        id: "BidCos-RF",
+        name: "BidCos-RF",
+        connected: true,
+        interface: "BidCos-RF",
+        carrier_sense: 33,
+      },
+    ]);
+    render(Diagnostics);
+
+    await waitFor(() => expect(mockListInterfaces).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(screen.getByText("33%")).toBeInTheDocument();
+    });
+  });
+
+  it("colors the utilisation badge by threshold: green below 60, yellow 60-79, red at 80+", async () => {
+    mockListInterfaces.mockResolvedValue([
+      { id: "A", name: "A", connected: true, interface: "BidCos-RF", duty_cycle: 59 },
+      { id: "B", name: "B", connected: true, interface: "BidCos-RF", duty_cycle: 60 },
+      { id: "C", name: "C", connected: true, interface: "BidCos-RF", duty_cycle: 79 },
+      { id: "D", name: "D", connected: true, interface: "BidCos-RF", duty_cycle: 80 },
+    ]);
+    render(Diagnostics);
+
+    await waitFor(() => expect(mockListInterfaces).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText("59%")).toBeInTheDocument());
+
+    // Below 60 → success (green).
+    expect(screen.getByText("59%").className).toContain("ha-success-color");
+    // 60..79 → warning (yellow), inclusive of both boundary values.
+    expect(screen.getByText("60%").className).toContain("ha-warning-color");
+    expect(screen.getByText("79%").className).toContain("ha-warning-color");
+    // 80 and above → danger (red).
+    expect(screen.getByText("80%").className).toContain("ha-error-color");
+  });
+});
+
 describe("Diagnostics — values-cache panel", () => {
   it("renders the cache row count from getValuesCacheStats", async () => {
     mockGetValuesCacheStats.mockResolvedValue({

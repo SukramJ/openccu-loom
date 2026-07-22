@@ -362,6 +362,9 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			Connectivity: func(ctx context.Context) error {
 				return loadConnectivity(ctx, unit)
 			},
+			BidcosInterfaces: func(ctx context.Context) error {
+				return loadBidcosInterfaces(ctx, jc, unit)
+			},
 		})
 		// Initial system-update fetch. The reference stack's scheduler
 		// runs every job immediately at start (next_run = now), so the
@@ -1457,6 +1460,77 @@ func loadConnectivity(ctx context.Context, unit *central.Unit) error {
 		return nil
 	}
 	return unit.Reconciler.Reconcile(ctx)
+}
+
+// bidcosInterfaceLister is the south-bound read surface loadBidcosInterfaces
+// depends on. [jsonrpc.Client] satisfies it; tests supply a fake.
+type bidcosInterfaceLister interface {
+	ListBidcosInterfaces(ctx context.Context, iface string) ([]jsonrpc.BidcosInterface, error)
+}
+
+// loadBidcosInterfaces polls the CCU's listBidcosInterfaces method for every
+// BidCos radio interface the central owns and refreshes the HubCoordinator's
+// per-interface duty-cycle / carrier-sense cache. It is a read-only JSON-RPC
+// query (no radio traffic). HmIP and wired interfaces carry no BidCos gateway
+// and are skipped; their device-level DUTY_CYCLE data points cover them.
+//
+// When a BidCos interface reports several gateways (the CCU antenna plus LAN
+// gateways), the default gateway wins; absent a default, the highest duty
+// cycle is chosen so the north-bound warning reflects the worst case.
+func loadBidcosInterfaces(ctx context.Context, lister bidcosInterfaceLister, unit *central.Unit) error {
+	if unit == nil || unit.Hub == nil || unit.Clients == nil || lister == nil {
+		return nil
+	}
+	snapshot := make(map[string]coordinators.BidcosInterfaceInfo)
+	var firstErr error
+	for _, e := range unit.Clients.List() {
+		if e == nil || e.Interface != hmenum.InterfaceBidCosRF {
+			continue
+		}
+		gateways, err := lister.ListBidcosInterfaces(ctx, e.InterfaceID)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("loadBidcosInterfaces %s: %w", e.InterfaceID, err)
+			}
+			continue
+		}
+		if info, ok := aggregateBidcosGateways(gateways); ok {
+			snapshot[e.InterfaceID] = info
+		}
+	}
+	unit.Hub.SetBidcosInterfaces(snapshot)
+	return firstErr
+}
+
+// aggregateBidcosGateways collapses the gateway list of one BidCos interface
+// into a single utilisation snapshot. The default gateway is preferred; when
+// none is flagged default, the gateway with the highest duty cycle wins.
+// Returns false when the list is empty.
+func aggregateBidcosGateways(gateways []jsonrpc.BidcosInterface) (coordinators.BidcosInterfaceInfo, bool) {
+	var (
+		chosen jsonrpc.BidcosInterface
+		found  bool
+	)
+	for _, g := range gateways {
+		switch {
+		case !found:
+			chosen, found = g, true
+		case g.Default && !chosen.Default:
+			chosen = g
+		case g.Default == chosen.Default && g.DutyCycle > chosen.DutyCycle:
+			chosen = g
+		}
+	}
+	if !found {
+		return coordinators.BidcosInterfaceInfo{}, false
+	}
+	return coordinators.BidcosInterfaceInfo{
+		Address:      chosen.Address,
+		Type:         chosen.Type,
+		DutyCycle:    chosen.DutyCycle,
+		CarrierSense: chosen.CarrierSense,
+		Connected:    chosen.Connected,
+	}, true
 }
 
 // stringField extracts a string value from a raw map[string]any. Returns ""

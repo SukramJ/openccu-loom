@@ -5766,6 +5766,19 @@ export interface components {
             central_id?: string;
             host?: string;
             note?: string;
+            /**
+             * @description Transmit duty cycle in percent (0..100) for BidCos radio
+             *     interfaces, sourced from the CCU's listBidcosInterfaces poll.
+             *     Absent when unknown or when the interface carries no BidCos
+             *     gateway (e.g. HmIP-RF, covered by device-level DUTY_CYCLE
+             *     data points).
+             */
+            duty_cycle?: number;
+            /**
+             * @description Receive carrier-sense load in percent (0..100). Absent when
+             *     the CCU does not report it (the common case over JSON-RPC).
+             */
+            carrier_sense?: number;
         };
         Snapshot: {
             /** Format: date-time */

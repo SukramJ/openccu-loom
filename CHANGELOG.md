@@ -28,6 +28,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list (address, number, eligibility). The device-detail Links tab keeps
   the device-wide switch and adds a per-channel switch for each eligible
   channel. REST `APIVersion` 2.36.0.
+- **Per-radio-interface duty cycle and carrier sense on the Diagnostics
+  page.** BidCos radio interfaces now surface their transmit duty cycle
+  and receive carrier-sense load directly in the interface table, so
+  pure-BidCos installations and radio-LAN gateways — which have no
+  device that exposes `DUTY_CYCLE` — finally show their radio budget.
+  A new per-central poll (60 s, pure JSON-RPC, no radio traffic) reads
+  the CCU's `Interface.listBidcosInterfaces` and caches the result;
+  `GET /api/v1/interfaces` gains optional `duty_cycle` and
+  `carrier_sense` fields (percent, absent when the CCU does not report
+  them, e.g. for HmIP-RF, which the device-level data points still
+  cover). The SPA renders each as a threshold badge — green, yellow
+  from 60 %, red from 80 %. REST `APIVersion` 2.39.0.
 - **First-time configuration when accepting an inbox device.**
   `POST /devices/{addr}/accept` (and the WebSocket command
   `inbox.accept`) now take an optional body — `name`,

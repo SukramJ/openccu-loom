@@ -177,6 +177,16 @@ type InterfaceState struct {
 	CentralID string `json:"central_id,omitempty"`
 	Host      string `json:"host,omitempty"`
 	Note      string `json:"note,omitempty"`
+	// DutyCycle is the interface's transmit duty cycle in percent (0..100)
+	// for BidCos radio interfaces, sourced from the CCU's
+	// listBidcosInterfaces poll. Nil (absent) when unknown or when the
+	// interface carries no BidCos gateway (e.g. HmIP-RF, whose device-level
+	// DUTY_CYCLE data points provide the value instead).
+	DutyCycle *int `json:"duty_cycle,omitempty"`
+	// CarrierSense is the interface's receive carrier-sense load in percent
+	// (0..100). Nil (absent) when the CCU does not report it, which is the
+	// common case over the JSON-RPC surface.
+	CarrierSense *int `json:"carrier_sense,omitempty"`
 }
 
 // --- Links ---

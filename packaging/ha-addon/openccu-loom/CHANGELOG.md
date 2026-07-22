@@ -24,6 +24,13 @@
   the CCU WebUI's own behaviour — previously a long-press counter could
   linger and keep the device sending long-press events to the CCU after
   you switched the link off.
+- **Radio load per interface on the Diagnostics page.** BidCos radio
+  interfaces now show their transmit duty cycle and receive carrier
+  sense right in the interface table — so a pure-BidCos setup or a
+  radio-LAN gateway finally shows how close it is to its transmit budget,
+  not just individual devices. The value updates every minute and is
+  colour-coded (green, yellow from 60 %, red from 80 %). HmIP interfaces,
+  where the CCU reports this per device instead, stay blank here.
 - **Device admin from the UI.** Renaming a device now persists to the
   CCU (optionally renaming all channels along), single channels can be
   renamed, removing a device offers factory-reset / force options with

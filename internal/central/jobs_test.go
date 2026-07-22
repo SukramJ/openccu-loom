@@ -120,6 +120,23 @@ func TestRegisterStandardJobsRegistersInstallModeSlot(t *testing.T) {
 	}
 }
 
+func TestRegisterStandardJobsRegistersBidcosInterfacesSlot(t *testing.T) {
+	c, err := New(Config{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := StandardJobs{
+		BidcosInterfacesRefresh: func(context.Context) error { return nil },
+	}
+	names, err := RegisterStandardJobs(c, cfg)
+	if err != nil {
+		t.Fatalf("RegisterStandardJobs: %v", err)
+	}
+	if !slices.Contains(names, "hub.bidcos_interfaces_refresh") {
+		t.Fatalf("bidcos_interfaces_refresh slot missing in %v", names)
+	}
+}
+
 func TestRegisterStandardJobsRejectsNilUnit(t *testing.T) {
 	if _, err := RegisterStandardJobs(nil, StandardJobs{}); err == nil {
 		t.Fatal("nil unit must fail")

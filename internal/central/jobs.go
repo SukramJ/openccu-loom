@@ -34,6 +34,13 @@ type StandardJobs struct {
 	HubConnectivityRefresh  func(ctx context.Context) error
 	HubConnectivityInterval time.Duration
 
+	// BidcosInterfacesRefresh polls the CCU's listBidcosInterfaces method
+	// per BidCos radio interface and refreshes the per-interface
+	// duty-cycle / carrier-sense cache. Pure JSON-RPC read, no radio
+	// traffic. Nil disables.
+	BidcosInterfacesRefresh  func(ctx context.Context) error
+	BidcosInterfacesInterval time.Duration
+
 	// HubMetricsRefresh pulls the system-health/metrics block from the
 	// CCU. Nil disables.
 	HubMetricsRefresh  func(ctx context.Context) error
@@ -158,6 +165,7 @@ type StandardJobs struct {
 const (
 	defaultHealthHeartbeat       = 60 * time.Second
 	defaultHubConnectivity       = 2 * time.Minute
+	defaultBidcosInterfaces      = 60 * time.Second
 	defaultHubMetrics            = 5 * time.Minute
 	defaultLastEventAge          = 30 * time.Second
 	defaultFirmwareCheckSlot     = 60 * time.Minute
@@ -529,6 +537,21 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 			return registered, fmt.Errorf("central: register connectivity job: %w", err)
 		}
 		registered = append(registered, "hub.connectivity_refresh")
+	}
+
+	if cfg.BidcosInterfacesRefresh != nil {
+		interval := cfg.BidcosInterfacesInterval
+		if interval <= 0 {
+			interval = defaultBidcosInterfaces
+		}
+		if err := unit.Scheduler.Add(scheduler.Job{
+			Name:     "hub.bidcos_interfaces_refresh",
+			Interval: interval,
+			Run:      gatedRunWithDevicesCreatedGate(unit, true, cfg.BidcosInterfacesRefresh),
+		}); err != nil {
+			return registered, fmt.Errorf("central: register bidcos_interfaces job: %w", err)
+		}
+		registered = append(registered, "hub.bidcos_interfaces_refresh")
 	}
 
 	if cfg.HubMetricsRefresh != nil {
