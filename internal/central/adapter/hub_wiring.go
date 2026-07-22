@@ -1587,6 +1587,20 @@ func (w *hubJSONRPCWriter) SetProgramEnabled(ctx context.Context, id string, ena
 	return err
 }
 
+// DeleteProgram removes the program from the CCU via the delete_program
+// ReGa script. The CCU exposes Program.deleteProgramByName (by name) over
+// JSON-RPC but no delete-by-id, so the ID-keyed ReGa route is the portable
+// choice — the same reason SetProgramEnabled goes through ReGa. A "0"
+// script result (id no longer resolves to a program) maps to
+// [hub.ErrProgramNotFound].
+func (w *hubJSONRPCWriter) DeleteProgram(ctx context.Context, id string) error {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptDeleteProgram, map[string]string{"id": id})
+	if err != nil {
+		return err
+	}
+	return parseMutateResult(out, hub.ErrProgramNotFound)
+}
+
 // SetSysvar writes the sysvar with per-type wire dispatch, mirroring
 // the reference JSON-RPC client: bool → SysVar.setBool, numeric values
 // (including enum/list indices) → SysVar.setFloat, and only strings go

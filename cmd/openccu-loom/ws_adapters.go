@@ -427,6 +427,14 @@ func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditi
 	return true, nil
 }
 
+func (w *wsHubQuery) DeleteProgram(ctx context.Context, id string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	return h.DeleteProgramRemote(ctx, id)
+}
+
 func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {

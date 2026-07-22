@@ -41,6 +41,10 @@ const (
 	// the operation and target name.
 	ActionRoomFunction Action = "room_function"
 
+	// ActionProgramDelete records deletion of a CCU program. The Note
+	// carries the program name and id.
+	ActionProgramDelete Action = "program_delete"
+
 	// ActionTLSCertUpload records a runtime replacement of the daemon's
 	// TLS server certificate.
 	ActionTLSCertUpload Action = "tls_cert_upload"

@@ -2737,6 +2737,27 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteProgram
+      summary: Delete a program from the CCU (admin)
+      description: >-
+        Removes the program from the CCU (dom.DeleteObject) and drops the
+        local mirror once the call lands. Irreversible, therefore admin-gated
+        like DELETE /devices/{addr}. The optional `central` query parameter
+        scopes the target to one CCU when several are configured.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: query, name: central, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /alarm-messages/{id}/ack:
     post:
       operationId: ackAlarm

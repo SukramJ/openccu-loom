@@ -13,13 +13,14 @@ func TestAllRegaScriptsUnique(t *testing.T) {
 		}
 		seen[s] = struct{}{}
 	}
-	// 31 = MVP subset + fetch_all_device_data + lifecycle scripts +
+	// 32 = MVP subset + fetch_all_device_data + lifecycle scripts +
 	// room/function entity CRUD (create/rename/delete × 2) + get_user_level
 	// + reboot_ccu + the two bulk message-acknowledge scripts (service +
-	// alarm) + execute_program_conditional. delete_system_variable was
-	// dropped in favor of the JSON-RPC SysVar.deleteSysVarByName call.
-	if len(AllRegaScripts) != 31 {
-		t.Errorf("AllRegaScripts has %d entries, want 31", len(AllRegaScripts))
+	// alarm) + execute_program_conditional + delete_program.
+	// delete_system_variable was dropped in favor of the JSON-RPC
+	// SysVar.deleteSysVarByName call.
+	if len(AllRegaScripts) != 32 {
+		t.Errorf("AllRegaScripts has %d entries, want 32", len(AllRegaScripts))
 	}
 }
 

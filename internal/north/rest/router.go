@@ -948,6 +948,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/programs/{id}", handlers.GetProgram(d.Hub))
 				pr.With(op).Post("/programs/{id}/execute", handlers.ExecuteProgram(d.Hub))
 				pr.With(op).Patch("/programs/{id}", handlers.SetProgramEnabled(d.Hub))
+				pr.With(admin).Delete("/programs/{id}", handlers.DeleteProgram(d.Hub, d.AuditRecorder))
 				pr.Get("/sysvars", handlers.ListSysvars(d.Hub))
 				pr.With(op).Post("/sysvars", handlers.CreateSysvar(d.Hub))
 				pr.Get("/sysvars/{name}", handlers.GetSysvar(d.Hub))

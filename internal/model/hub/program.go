@@ -284,6 +284,22 @@ func (p *Program) SetEnabled(ctx context.Context, enabled bool) error {
 	return nil
 }
 
+// Delete removes the program from the CCU via the configured writer. The
+// writer must implement [ProgramDeleter]; otherwise Delete returns
+// [ErrProgramDeleteUnsupported]. Delete does not touch the hub cache — the
+// owning [Hub.DeleteProgramRemote] drops the entry (and fires
+// [Program.NotifyRemoved]) only after the CCU round-trip succeeds.
+func (p *Program) Delete(ctx context.Context) error {
+	if p.Writer == nil {
+		return fmt.Errorf("program %q: no writer configured", p.ID)
+	}
+	d, ok := p.Writer.(ProgramDeleter)
+	if !ok {
+		return ErrProgramDeleteUnsupported
+	}
+	return d.DeleteProgram(ctx, p.ID)
+}
+
 // OnUpdate registers a subscription for execution events. Returns an
 // idempotent unsubscribe closure.
 func (p *Program) OnUpdate(fn func(ProgramEvent)) func() {

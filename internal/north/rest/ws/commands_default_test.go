@@ -454,6 +454,8 @@ type stubHub struct {
 	executeChecked     bool
 	executeExecuted    bool
 	executeErr         error
+	deletedProgramID   string
+	deleteProgramErr   error
 	sysvars            []map[string]any
 	listErr            error
 	setName            string
@@ -508,6 +510,11 @@ func (h *stubHub) ExecuteProgram(_ context.Context, id string, checkConditions b
 		return h.executeExecuted, nil
 	}
 	return true, nil
+}
+
+func (h *stubHub) DeleteProgram(_ context.Context, id string) error {
+	h.deletedProgramID = id
+	return h.deleteProgramErr
 }
 
 func (h *stubHub) ListSysvars(context.Context) ([]map[string]any, error) {
@@ -680,6 +687,46 @@ func TestProgramsExecuteErrorMapsToInternal(t *testing.T) {
 	res = r.Dispatch(opCtx(), "programs.execute", args)
 	if res.Error == nil || res.Error.Code != CommandErrorInternal {
 		t.Fatalf("expected internal error (checked), got %+v", res.Error)
+	}
+}
+
+func TestProgramsDeleteRequiresID(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+	res := r.Dispatch(adminCtx(), "programs.delete", json.RawMessage(`{}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+func TestProgramsDeleteForwardsID(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(adminCtx(), "programs.delete", args)
+	if res.Error != nil {
+		t.Fatalf("delete err: %+v", res.Error)
+	}
+	if hub.deletedProgramID != "P1" {
+		t.Fatalf("deleted id=%q want P1", hub.deletedProgramID)
+	}
+	data := res.Data.(map[string]any)
+	if data["deleted"] != true || data["id"] != "P1" {
+		t.Fatalf("unexpected result: %+v", data)
+	}
+}
+
+func TestProgramsDeleteErrorMapsToInternal(t *testing.T) {
+	hub := &stubHub{deleteProgramErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(adminCtx(), "programs.delete", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
 	}
 }
 

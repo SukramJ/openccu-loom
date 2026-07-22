@@ -662,6 +662,18 @@
     },
     {
       "category": "programs",
+      "description": "Delete a CCU program by id. Removes the program from the CCU (dom.DeleteObject) and drops it from the hub mirror. Admin-gated, mirroring the REST DELETE /programs/{id} route (deletion is irreversible).",
+      "name": "programs.delete",
+      "args": {
+        "id": "string"
+      },
+      "result": {
+        "deleted": "boolean",
+        "id": "string"
+      }
+    },
+    {
+      "category": "programs",
       "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card. `include_internal` overrides whether internal (Tmp_*) programs are listed; when omitted the central's include_internal_programs config default applies.",
       "name": "programs.list",
       "args": {

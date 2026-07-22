@@ -4,10 +4,12 @@ import { render, cleanup, waitFor, fireEvent } from "@testing-library/svelte";
 
 const mockListPrograms = vi.fn();
 const mockExecuteProgram = vi.fn();
+const mockDeleteProgram = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
     executeProgram: (...args: unknown[]) => mockExecuteProgram(...args),
+    deleteProgram: (...args: unknown[]) => mockDeleteProgram(...args),
     setProgramEnabled: vi.fn(),
   },
   ApiError: class ApiError extends Error {
@@ -202,5 +204,56 @@ describe("ProgramList run — check_conditions wiring", () => {
     // asserting its absence.
     await new Promise((r) => setTimeout(r, 0));
     expect(mockExecuteProgram).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProgramList delete", () => {
+  async function clickFirstDeleteButton(container: HTMLElement) {
+    let btn: HTMLButtonElement | undefined;
+    await waitFor(() => {
+      btn = [...container.querySelectorAll("button")].find((b) =>
+        /^(Remove|Entfernen)$/.test(b.textContent?.trim() ?? ""),
+      );
+      expect(btn).toBeTruthy();
+    });
+    await fireEvent.click(btn!);
+  }
+
+  it("deletes the program after confirmation, shows a success toast and reloads", async () => {
+    mockDeleteProgram.mockResolvedValue(undefined);
+    const { container } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+
+    await clickFirstDeleteButton(container);
+
+    await waitFor(() => expect(mockDeleteProgram).toHaveBeenCalledTimes(1));
+    // The table sorts by name ascending, so "Bare" (P-BARE) is the first row.
+    expect(mockDeleteProgram.mock.calls[0][0]).toBe("P-BARE");
+    await waitFor(() => expect(toastStore.items.length).toBe(1));
+    expect(toastStore.items[0].severity).toBe("success");
+    // A reload runs after a successful delete.
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not call the API when the destructive confirm is cancelled", async () => {
+    confirmStore.ask = vi.fn().mockResolvedValue(false);
+    const { container } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+
+    await clickFirstDeleteButton(container);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockDeleteProgram).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an error toast when the delete request fails", async () => {
+    mockDeleteProgram.mockRejectedValue(new Error("boom"));
+    const { container } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+
+    await clickFirstDeleteButton(container);
+
+    await waitFor(() => expect(toastStore.items.length).toBe(1));
+    expect(toastStore.items[0].severity).toBe("error");
   });
 });

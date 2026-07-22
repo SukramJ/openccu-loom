@@ -2983,6 +2983,10 @@
           "wire_value": "delete_function"
         },
         {
+          "go_name": "RegaScriptDeleteProgram",
+          "wire_value": "delete_program"
+        },
+        {
           "go_name": "RegaScriptDeleteRoom",
           "wire_value": "delete_room"
         },

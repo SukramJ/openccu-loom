@@ -122,6 +122,10 @@ func TestScriptBodyContainsExpectedPlaceholders(t *testing.T) {
 			script:      hmenum.RegaScriptSetProgramState,
 			mustContain: []string{"##id##", "##state##"},
 		},
+		{
+			script:      hmenum.RegaScriptDeleteProgram,
+			mustContain: []string{"##id##"},
+		},
 	}
 
 	for _, tc := range cases {

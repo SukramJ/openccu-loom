@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -663,6 +664,128 @@ func TestExecuteProgram_NotFound_Returns404(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// --- DeleteProgram ---
+
+// deletableProgramWriter implements hub.ProgramDeleter. deleteErr, when set,
+// is returned by DeleteProgram so tests can drive the upstream-failure path.
+type deletableProgramWriter struct {
+	deleteErr  error
+	deleteCall int
+}
+
+func (d *deletableProgramWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (d *deletableProgramWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
+
+func (d *deletableProgramWriter) DeleteProgram(_ context.Context, _ string) error {
+	d.deleteCall++
+	return d.deleteErr
+}
+
+// executeOnlyProgramWriter implements hub.ProgramWriter but NOT
+// hub.ProgramDeleter, so Program.Delete surfaces ErrProgramDeleteUnsupported.
+type executeOnlyProgramWriter struct{}
+
+func (executeOnlyProgramWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (executeOnlyProgramWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
+
+func TestDeleteProgram_HubNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestDeleteProgram_NotFound_Returns404(t *testing.T) {
+	t.Parallel()
+	idx, _ := newTestHubWithProgram(t)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/NOTFOUND", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "NOTFOUND"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteProgram_HappyPath_Returns204AndRemovesAndAudits(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &deletableProgramWriter{}
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, writer))
+	idx := &testHubIndex{h: h}
+	rec := &captureRecorder{}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.deleteCall != 1 {
+		t.Fatalf("expected exactly one CCU delete call, got %d", writer.deleteCall)
+	}
+	if _, ok := h.Program("P1"); ok {
+		t.Fatal("program still present in hub cache after delete")
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionProgramDelete {
+		t.Fatalf("expected one program_delete audit entry, got %+v", rec.entries)
+	}
+	if !strings.Contains(rec.entries[0].Note, "P1") || !strings.Contains(rec.entries[0].Note, "Morning Routine") {
+		t.Fatalf("audit note missing id/name: %q", rec.entries[0].Note)
+	}
+}
+
+func TestDeleteProgram_WriterUnsupported_Returns503(t *testing.T) {
+	t.Parallel()
+	// The default fakeProgramWriter (execute + set-enabled) does NOT implement
+	// hub.ProgramDeleter, so Delete must surface as 503 and never drop the entry.
+	h := hub.NewHub("test-ccu")
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, executeOnlyProgramWriter{}))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := h.Program("P1"); !ok {
+		t.Fatal("program dropped from cache despite failed delete")
+	}
+}
+
+func TestDeleteProgram_UpstreamFailure_Returns502AndKeepsEntry(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &deletableProgramWriter{deleteErr: errors.New("ccu unreachable")}
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, writer))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := h.Program("P1"); !ok {
+		t.Fatal("program dropped from cache despite upstream failure")
 	}
 }
 

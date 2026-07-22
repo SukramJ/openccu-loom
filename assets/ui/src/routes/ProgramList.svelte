@@ -39,6 +39,7 @@
   $effect(() => saveLS("programs:show_internal", showInternal ? "1" : "0"));
   let runningId = $state<string | null>(null);
   let togglingId = $state<string | null>(null);
+  let deletingId = $state<string | null>(null);
 
   async function load() {
     loading = true;
@@ -109,6 +110,31 @@
       );
     } finally {
       togglingId = null;
+    }
+  }
+
+  async function remove(id: string, name: string, central?: string) {
+    const ok = await confirmStore.ask({
+      title: t("programs.confirm_delete", { name }),
+      confirmLabel: t("common.remove"),
+      destructive: true,
+    });
+    if (!ok) return;
+    deletingId = id;
+    try {
+      await api.deleteProgram(id, central);
+      toastStore.success(t("programs.deleted", { name }));
+      await load();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError
+          ? `${err.status}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
+    } finally {
+      deletingId = null;
     }
   }
 
@@ -271,6 +297,16 @@
                 disabled={runningId === p.id}
               >
                 {runningId === p.id ? t("programs.running") : t("programs.run")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onclick={() => void remove(p.id, p.name, p.central)}
+                disabled={deletingId === p.id}
+                title={t("programs.delete.tooltip")}
+              >
+                {deletingId === p.id ? "…" : t("common.remove")}
               </Button>
             </span>
           {/if}

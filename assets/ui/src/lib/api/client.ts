@@ -659,6 +659,12 @@ export const api = {
       },
     );
   },
+  deleteProgram(id: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/programs/${encodeURIComponent(id)}${qs}`, {
+      method: "DELETE",
+    });
+  },
   listAlarmMessages() {
     return request<AlarmMessage[]>(`/alarm-messages`);
   },

@@ -5,12 +5,14 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/restapi"
@@ -640,6 +642,56 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 			return
 		}
 		JSON(w, http.StatusOK, ProgramExecuteResponse{Executed: true})
+	}
+}
+
+// DeleteProgram removes a program from the CCU and drops the local mirror
+// once the call lands. Admin-gated (parity with DELETE /devices) because
+// deletion is irreversible. Returns 404 when the program is unknown, 204
+// on success. Records an audit entry on success.
+func DeleteProgram(idx HubIndex, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
+			return
+		}
+		id := chi.URLParam(r, "id")
+		p, ok := h.Program(id)
+		if !ok {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Program not found", id))
+			return
+		}
+		name := p.Name
+		if err := h.DeleteProgramRemote(r.Context(), id); err != nil {
+			writeProgramDeleteError(w, r, err)
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
+				Action: audit.ActionProgramDelete,
+				Note:   "delete program " + name + " (" + id + ")",
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// writeProgramDeleteError maps the hub sentinels a program delete can
+// return onto HTTP problem responses: an unknown / already-gone program is
+// 404, an execute-only writer is 503, and any other CCU-side failure is a
+// 502 upstream error.
+func writeProgramDeleteError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, hub.ErrProgramNotFound):
+		problem.Write(w, http.StatusNotFound,
+			problem.New(problem.TypeNotFound, r, "Program not found", err.Error()))
+	case errors.Is(err, hub.ErrProgramDeleteUnsupported):
+		problem.Write(w, http.StatusServiceUnavailable,
+			problem.New(problem.TypeServiceUnready, r, "Program deletion unavailable", err.Error()))
+	default:
+		writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Program delete failed", err)
 	}
 }
 

@@ -137,6 +137,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   next wakeup. Mirrors the CCU WebUI's
   `config/ic_ifacecmd.cgi` `cmd_ShowConfigPendingMsg`. REST `APIVersion`
   2.35.0.
+- **Delete a CCU program.** `DELETE /api/v1/programs/{id}` removes a
+  program from the CCU (`dom.DeleteObject`, via a new `delete_program`
+  ReGa script) and drops the local mirror once the call lands. It is
+  admin-gated and irreversible — parity with `DELETE /devices/{addr}` —
+  returns 204 on success, 404 for an unknown id, and records an audit
+  entry (`program_delete`). The optional `central` query parameter scopes
+  the target when several CCUs are configured. The WS `programs.delete`
+  command (admin role) exposes the same operation, and the Config UI's
+  program table gains a Delete action guarded by the shared destructive
+  confirm dialog with a result toast. REST `APIVersion` 2.34.0.
+
 - **Run a program only when its condition is met.**
   `POST /api/v1/programs/{id}/execute` gains an optional body field
   `check_conditions` (boolean, default false). When true the CCU

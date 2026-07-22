@@ -156,6 +156,9 @@ type HubQuery interface {
 	// executed. When checkConditions is false the program runs
 	// unconditionally and the bool is always true on a clean round-trip.
 	ExecuteProgram(ctx context.Context, id string, checkConditions bool) (executed bool, err error)
+	// DeleteProgram removes a CCU program by id and drops it from the hub
+	// mirror. Returns a not-found error when the id is unknown.
+	DeleteProgram(ctx context.Context, id string) error
 	// ListSysvars returns one entry per system variable.
 	ListSysvars(ctx context.Context) ([]map[string]any, error)
 	// SetSysvar updates a system variable's value.
@@ -337,6 +340,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 	if cfg.Hub != nil {
 		router.Register("programs.list", programsListHandler(cfg.Hub))
 		router.Register("programs.execute", programsExecuteHandler(cfg.Hub))
+		router.Register("programs.delete", programsDeleteHandler(cfg.Hub))
 		router.Register("sysvars.list", sysvarsListHandler(cfg.Hub))
 		router.Register("sysvars.set", sysvarsSetHandler(cfg.Hub))
 		router.Register("sysvars.fetch", sysvarsFetchHandler(cfg.Hub))
@@ -564,6 +568,22 @@ func programsExecuteHandler(q HubQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "execute_program: "+err.Error())
 		}
 		return map[string]any{"executed": executed, "id": args.ID}, nil
+	}
+}
+
+func programsDeleteHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args programIDArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.ID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "id required")
+		}
+		if err := q.DeleteProgram(ctx, args.ID); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "delete_program: "+err.Error())
+		}
+		return map[string]any{"deleted": true, "id": args.ID}, nil
 	}
 }
 

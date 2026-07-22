@@ -163,6 +163,78 @@ func TestWSHubQuery_ExecuteProgram_LiveHub_CheckConditions_RoutesConditional(t *
 	}
 }
 
+func TestWSHubQuery_DeleteProgram_NilHub_Errors(t *testing.T) {
+	t.Parallel()
+	q := nilHubQuery()
+	err := q.DeleteProgram(context.Background(), "prog-1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestWSHubQuery_DeleteProgram_LiveHub_UnknownID_Errors(t *testing.T) {
+	t.Parallel()
+	q, _ := liveHubQuery(t)
+	err := q.DeleteProgram(context.Background(), "nonexistent-prog")
+	if err == nil {
+		t.Fatal("expected error for unknown program, got nil")
+	}
+}
+
+// stubDeleterWriter implements hub.ProgramDeleter so
+// TestWSHubQuery_DeleteProgram_LiveHub_Success can verify DeleteProgram
+// reaches the CCU-side writer and drops the entry from the hub cache.
+type stubDeleterWriter struct {
+	deleteErr  error
+	deleteCall int
+}
+
+func (s *stubDeleterWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (s *stubDeleterWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
+
+func (s *stubDeleterWriter) DeleteProgram(_ context.Context, _ string) error {
+	s.deleteCall++
+	return s.deleteErr
+}
+
+// TestWSHubQuery_DeleteProgram_LiveHub_Success verifies the happy path:
+// the writer's DeleteProgram is invoked exactly once and the program is
+// dropped from the hub cache.
+func TestWSHubQuery_DeleteProgram_LiveHub_Success(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	writer := &stubDeleterWriter{}
+	h.PutProgram(hub.NewProgram("test-ccu", "prog-del", "Deletable", "", false, writer))
+
+	if err := q.DeleteProgram(context.Background(), "prog-del"); err != nil {
+		t.Fatalf("DeleteProgram: %v", err)
+	}
+	if writer.deleteCall != 1 {
+		t.Fatalf("expected one CCU delete call, got %d", writer.deleteCall)
+	}
+	if _, ok := h.Program("prog-del"); ok {
+		t.Fatal("program still present in hub cache after DeleteProgram")
+	}
+}
+
+// TestWSHubQuery_DeleteProgram_LiveHub_WriterError_KeepsEntry verifies a
+// CCU-side delete failure propagates the error and leaves the cache mirror
+// untouched instead of silently dropping the entry.
+func TestWSHubQuery_DeleteProgram_LiveHub_WriterError_KeepsEntry(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	writer := &stubDeleterWriter{deleteErr: errors.New("ccu unreachable")}
+	h.PutProgram(hub.NewProgram("test-ccu", "prog-keep", "Stubborn", "", false, writer))
+
+	if err := q.DeleteProgram(context.Background(), "prog-keep"); err == nil {
+		t.Fatal("expected the writer error to propagate")
+	}
+	if _, ok := h.Program("prog-keep"); !ok {
+		t.Fatal("program removed from cache despite writer failure")
+	}
+}
+
 func TestWSHubQuery_ListSysvars_NilHub_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	q := nilHubQuery()

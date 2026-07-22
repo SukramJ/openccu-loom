@@ -24,6 +24,16 @@ type ConditionalProgramWriter interface {
 	ExecuteProgramConditional(ctx context.Context, id string) (executed bool, err error)
 }
 
+// ProgramDeleter is the optional extension of [ProgramWriter] that removes
+// a program from the CCU entirely (dom.DeleteObject). Writers that do not
+// implement this interface make [Program.Delete] fail with
+// [ErrProgramDeleteUnsupported]. The CCU has no JSON-RPC method that deletes
+// a program by id, so implementations dispatch the delete_program ReGa script.
+type ProgramDeleter interface {
+	ProgramWriter
+	DeleteProgram(ctx context.Context, id string) error
+}
+
 // SysvarWriter is the contract for writing a system variable.
 type SysvarWriter interface {
 	SetSysvar(ctx context.Context, name string, value any) error

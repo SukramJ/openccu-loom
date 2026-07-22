@@ -2710,7 +2710,11 @@ export interface paths {
         get: operations["getProgram"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a program from the CCU (admin)
+         * @description Removes the program from the CCU (dom.DeleteObject) and drops the local mirror once the call lands. Irreversible, therefore admin-gated like DELETE /devices/{addr}. The optional `central` query parameter scopes the target to one CCU when several are configured.
+         */
+        delete: operations["deleteProgram"];
         options?: never;
         head?: never;
         /** Toggle program active flag */
@@ -9703,6 +9707,32 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteProgram: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
