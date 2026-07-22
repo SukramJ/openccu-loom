@@ -292,6 +292,37 @@ func TestReplaceDeviceUnknownOldDeviceReturnsErrNoDeviceBackend(t *testing.T) {
 	}
 }
 
+// TestReplaceDeviceSucceedsWhenEagerRefreshFails verifies that a failure
+// of the best-effort eager model refresh does NOT surface the
+// already-committed (irreversible) CCU swap as an error. The old device is
+// present in the ModelRegistry (so the pre-checks pass) but absent from the
+// coordinator's device registry, so coordinators.ReplaceDevice returns
+// "old device not found" — which must be logged and swallowed, not
+// returned. The backend swap must still have been issued.
+func TestReplaceDeviceSucceedsWhenEagerRefreshFails(t *testing.T) {
+	t.Parallel()
+	unit, reg := newReplaceUnit(t, "ccu-01")
+
+	dev := device.New(device.Config{
+		InterfaceID: "BidCos-RF", Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC",
+	})
+	unit.ModelRegistry.Put(dev)
+	// Deliberately do NOT register OLD001 in unit.DeviceRegistry, so the
+	// coordinator's eager ReplaceDevice fails to find the old device.
+
+	fake := &replaceRecordingOperations{fakeOperations: &fakeOperations{kind: backends.KindCCU}}
+	w := client.NewValueWriter()
+	w.Register("ccu-01", "BidCos-RF", fake)
+
+	domain := NewDeviceAdminDomain(reg, w)
+	if err := domain.ReplaceDevice(context.Background(), "", "OLD001", "NEW001"); err != nil {
+		t.Fatalf("ReplaceDevice must succeed despite eager-refresh failure, got: %v", err)
+	}
+	if len(fake.replaceCalls) != 1 || fake.replaceCalls[0] != [2]string{"OLD001", "NEW001"} {
+		t.Fatalf("backend swap must still fire: replaceCalls=%v, want [[OLD001 NEW001]]", fake.replaceCalls)
+	}
+}
+
 // TestReplaceDeviceNilRegistryReturnsErrNoDeviceBackend verifies both
 // ReplaceCandidates and ReplaceDevice guard against an un-wired registry.
 func TestReplaceDeviceNilRegistryReturnsErrNoDeviceBackend(t *testing.T) {

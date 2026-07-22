@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -94,9 +95,20 @@ func (a *DeviceAdminDomain) ReplaceDevice(ctx context.Context, centralName, oldA
 	if unit.Devices != nil {
 		fetcher := &callbackDescFetcher{ops: backend}
 		if rerr := unit.Devices.ReplaceDevice(ctx, fetcher, dev.Interface, oldAddress, newAddress); rerr != nil {
-			// The CCU swap already succeeded; the eager model refresh is
-			// best-effort and the replaceDevice callback catches up.
-			return fmt.Errorf("replace device: model refresh (swap already applied): %w", rerr)
+			// The CCU swap already happened and is irreversible; the eager
+			// model refresh is best-effort. The CCU's own replaceDevice
+			// callback reconciles the model authoritatively (and treats the
+			// same error as non-fatal — see CallbackHandlers.ReplaceDevice),
+			// and it can even win the race and evict the old device before
+			// this runs, so a "old device not found" or a transient
+			// post-swap ListDevices error here must NOT surface the
+			// already-committed swap as a failure. Log and report success.
+			slog.Default().Warn("device_replace.eager_refresh_failed",
+				slog.String("central", unit.Name()),
+				slog.String("interface", string(dev.Interface)),
+				slog.String("old", oldAddress),
+				slog.String("new", newAddress),
+				slog.String("err", rerr.Error()))
 		}
 	}
 	return nil
