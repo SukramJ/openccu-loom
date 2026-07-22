@@ -623,6 +623,32 @@ which the existing sentinel path handles without writing a placeholder. Tests:
 `internal/model/device/value_cache_test.go`
 (`TestLoadValueValuesParamsetSiblingGuard`).
 
+### BD-CCU-CentralLinkTeardownZeroesPressLong — deactivating a central link zeroes PRESS_LONG in addition to PRESS_SHORT
+
+aiohomematic's `Channel.remove_central_link` (`model/device.py`) — like its
+`create_central_link` — only ever touches a single value-id,
+`REPORT_VALUE_USAGE_VALUE_ID = "PRESS_SHORT"` (`const.py`): it calls
+`report_value_usage(value_id="PRESS_SHORT", ref_counter=0)` on teardown and
+`ref_counter=1` on setup. OpenCCU-Loom mirrors that on the **setup** path
+(`CreateCentralLinks` raises only `PRESS_SHORT`), but on the **teardown** path
+(`RemoveCentralLinks`, `internal/central/adapter/central_links.go`) it issues a
+**second** `reportValueUsage(value_id="PRESS_LONG", ref_counter=0)` per channel.
+Both wire calls together mark the channel done; the first error marks it failed.
+
+**Rationale.** The reference zeroes only `PRESS_SHORT`, but the CCU WebUI's own
+`removeCentralLink` (OpenCCU firmware patch
+`0171-WebUI-Add-HmIPKeyTransceiverCentralLinkConfiguration.patch`) zeroes
+`PRESS_SHORT` **and** `PRESS_LONG` — for both HmIP-RF and BidCos-RF — so the
+device-internal direct link is reliably torn down; a lingering non-zero
+`PRESS_LONG` ref-counter can leave the device forwarding long-press events to
+the CCU after the user deactivated the link. OpenCCU-Loom follows the CCU WebUI
+here rather than the reference. Activation stays `PRESS_SHORT`-only, matching
+both the WebUI's `createCentralLink` and the reference, because a fresh link only
+needs the primary counter raised. Tests:
+`internal/central/adapter/central_links_test.go`
+(`TestCentralLinksRemoveZeroesPressShortAndLong`,
+`TestCentralLinksCreateOnlyRaisesPressShort`).
+
 ### BD-North-CustomDPCompositionMap — the Custom-DP field→parameter composition map is deliberately not on the wire
 
 External-client ask **K1** (`docs/external-clients/asks.md`) proposed exposing,

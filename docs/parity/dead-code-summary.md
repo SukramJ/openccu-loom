@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 419a7f10
-HEAD: 419a7f10
+Generated: 0eb54fd1
+HEAD: 0eb54fd1
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26102 |
+| Total Exported | 26131 |
 | Reachable | 4576 |
-| Whitelisted | 18777 |
-| **Unreachable** | **2749** |
+| Whitelisted | 18802 |
+| **Unreachable** | **2753** |
 
 ## Top-20 Packages by Dead Code
 
@@ -192,7 +192,7 @@ HEAD: 419a7f10
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 84 | 22 |
-| pkg/hmapi | 0 | 117 | 14 |
+| pkg/hmapi | 0 | 119 | 16 |
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

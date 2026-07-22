@@ -103,8 +103,11 @@ type ExtendedHub interface {
 // [adapter.CentralLinksDomain]; the same facade backs the REST
 // `/devices/{addr}/central-links` endpoints.
 type CentralLinksManager interface {
-	CreateCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
-	RemoveCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
+	// CreateCentralLinks / RemoveCentralLinks toggle click-event routing.
+	// An empty channelAddress scopes the call to the whole device; a
+	// non-empty channelAddress scopes it to that single channel.
+	CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
+	RemoveCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
 	CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error)
 }
 
@@ -874,36 +877,47 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter) CommandHandler {
 // or its `address` alias. The two names coexist so SPA and external WS callers
 // can use whichever matches their REST-path convention.
 func centralLinksAddress(raw json.RawMessage) (string, error) {
+	addr, _, err := centralLinksTarget(raw)
+	return addr, err
+}
+
+// centralLinksTarget decodes the device address (see centralLinksAddress)
+// plus the optional `channel` channel address. An empty channel scopes the
+// call to the whole device; a non-empty channel scopes it to that single
+// channel, mirroring the CCU channel-config dialog.
+func centralLinksTarget(raw json.RawMessage) (address, channel string, err error) {
 	var p struct {
 		DeviceAddress string `json:"device_address"`
 		Address       string `json:"address"`
+		Channel       string `json:"channel"`
 	}
-	if err := decodeOrEmpty(raw, &p); err != nil {
-		return "", err
+	if decErr := decodeOrEmpty(raw, &p); decErr != nil {
+		return "", "", decErr
 	}
 	addr := p.DeviceAddress
 	if addr == "" {
 		addr = p.Address
 	}
 	if addr == "" {
-		return "", NewCommandError(CommandErrorBadRequest, "device_address is required")
+		return "", "", NewCommandError(CommandErrorBadRequest, "device_address is required")
 	}
-	return addr, nil
+	return addr, p.Channel, nil
 }
 
 // centralCreateLinksHandler implements `central.create_links`.
-// Enables CCU click-event forwarding for every press-event channel of the
-// device. Mirrors Python create_central_links.
+// Enables CCU click-event forwarding. Without `channel` every press-event
+// channel of the device is switched on; with `channel` only that single
+// channel is touched. Mirrors Python create_central_links.
 //
-// Request: { "device_address": str } (alias "address").
+// Request: { "device_address": str (alias "address"), "channel"?: str }.
 // Response: { "touched": int, "skipped": int, "failed": int }
 func centralCreateLinksHandler(m CentralLinksManager) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		addr, err := centralLinksAddress(raw)
+		addr, channel, err := centralLinksTarget(raw)
 		if err != nil {
 			return nil, err
 		}
-		report, err := m.CreateCentralLinks(ctx, addr)
+		report, err := m.CreateCentralLinks(ctx, addr, channel)
 		if err != nil {
 			return nil, fmt.Errorf("central.create_links: %w", err)
 		}
@@ -912,18 +926,19 @@ func centralCreateLinksHandler(m CentralLinksManager) CommandHandler {
 }
 
 // centralRemoveLinksHandler implements `central.remove_links`.
-// Tears down CCU click-event forwarding for the device. Mirrors Python
-// remove_central_links.
+// Tears down CCU click-event forwarding. Without `channel` the whole device
+// is switched off; with `channel` only that single channel is touched.
+// Mirrors Python remove_central_links.
 //
-// Request: { "device_address": str } (alias "address").
+// Request: { "device_address": str (alias "address"), "channel"?: str }.
 // Response: { "touched": int, "skipped": int, "failed": int }
 func centralRemoveLinksHandler(m CentralLinksManager) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		addr, err := centralLinksAddress(raw)
+		addr, channel, err := centralLinksTarget(raw)
 		if err != nil {
 			return nil, err
 		}
-		report, err := m.RemoveCentralLinks(ctx, addr)
+		report, err := m.RemoveCentralLinks(ctx, addr, channel)
 		if err != nil {
 			return nil, fmt.Errorf("central.remove_links: %w", err)
 		}

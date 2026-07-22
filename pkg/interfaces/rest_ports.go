@@ -42,8 +42,12 @@ type SysvarRefreshService interface {
 // on. The implementation lives in central/adapter and routes the request to
 // the per-CCU client backend.
 type CentralLinksService interface {
-	CreateCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
-	RemoveCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
+	// CreateCentralLinks / RemoveCentralLinks toggle click-event routing.
+	// An empty channelAddress scopes the call to the whole device (every
+	// eligible channel); a non-empty channelAddress scopes it to that
+	// single channel.
+	CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
+	RemoveCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
 	CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error)
 }
 

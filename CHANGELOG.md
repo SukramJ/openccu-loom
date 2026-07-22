@@ -10,6 +10,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Collapsible help on the central-link (press-event forwarding) panel.**
+  The device-detail Links tab now carries an expandable info hint that
+  explains why an HmIP button can look dead — without press-event
+  forwarding many buttons never send their events to the CCU or
+  OpenCCU-Loom — and that enabling forwarding raises the device's radio
+  duty cycle and battery consumption. Mirrors the CCU channel-config
+  "info" dialog. Fully localized (de + en); no API change.
+- **Central-link (press-event forwarding) toggle can now target a single
+  channel.** `POST` / `DELETE /devices/{addr}/central-links` (and the
+  WebSocket commands `central.create_links` / `central.remove_links`)
+  accept an optional `channel` (a channel address such as `ABC0000001:4`);
+  without it the whole device is switched as before, with it only that one
+  channel is touched — mirroring the CCU channel-config dialog, which
+  scopes the switch to the opened channel. `GET /devices/{addr}/central-links`
+  (and `central.links_status`) now also return a per-channel `channels`
+  list (address, number, eligibility). The device-detail Links tab keeps
+  the device-wide switch and adds a per-channel switch for each eligible
+  channel. REST `APIVersion` 2.36.0.
 - **First-time configuration when accepting an inbox device.**
   `POST /devices/{addr}/accept` (and the WebSocket command
   `inbox.accept`) now take an optional body — `name`,
@@ -42,8 +60,32 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   without a pairing concept (CUxD) now answers 422 instead of 502. REST
   `APIVersion` 2.31.0.
 
+### Changed
+
+- **Toggling press-event forwarding now asks for confirmation and reports
+  through a toast.** The device-detail Links tab used to enable/disable the
+  central-link forwarding immediately and show the result in an inline
+  banner. Every toggle (device-wide and per-channel, enable and disable)
+  now runs through the shared confirm dialog first — disable uses the
+  destructive variant and warns that CCU-side programs may consume the
+  press events and that after disabling neither CCU programs nor
+  OpenCCU-Loom will receive them — matching the CCU WebUI's yes/no safety
+  question in both directions. The touched/skipped/failed result is now a
+  toast (a warning toast when any channel failed), and the inline banner is
+  gone. SPA-only; no REST surface change.
+
 ### Fixed
 
+- **Deactivating a central link now clears PRESS_LONG too.** Removing the
+  press-event forwarding for a channel (`DELETE /devices/{addr}/central-links`
+  and the `central.remove_links` WebSocket command) used to zero only the
+  `PRESS_SHORT` usage counter, leaving a lingering `PRESS_LONG` counter that
+  could keep the device forwarding long-press events to the CCU after the
+  user switched the link off. Teardown now issues a second
+  `Interface.reportValueUsage` for `PRESS_LONG` (ref-counter 0) per channel,
+  matching the CCU WebUI's own deactivate behaviour so the device-internal
+  direct link is fully removed. Activation is unchanged (it still raises only
+  `PRESS_SHORT`). No REST surface change.
 - **Device and channel renames now persist to the CCU.** A rename used
   to mutate only the in-memory model and was silently lost on the next
   device reload. `PATCH /devices/{addr}` and the WebSocket

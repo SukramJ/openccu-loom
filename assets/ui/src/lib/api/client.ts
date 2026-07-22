@@ -1103,15 +1103,17 @@ export const api = {
       `/devices/${encodeURIComponent(address)}/central-links`,
     );
   },
-  createCentralLinks(address: string) {
+  createCentralLinks(address: string, channel?: string) {
+    const qs = channel ? `?channel=${encodeURIComponent(channel)}` : "";
     return request<CentralLinksReport>(
-      `/devices/${encodeURIComponent(address)}/central-links`,
+      `/devices/${encodeURIComponent(address)}/central-links${qs}`,
       { method: "POST" },
     );
   },
-  removeCentralLinks(address: string) {
+  removeCentralLinks(address: string, channel?: string) {
+    const qs = channel ? `?channel=${encodeURIComponent(channel)}` : "";
     return request<CentralLinksReport>(
-      `/devices/${encodeURIComponent(address)}/central-links`,
+      `/devices/${encodeURIComponent(address)}/central-links${qs}`,
       { method: "DELETE" },
     );
   },

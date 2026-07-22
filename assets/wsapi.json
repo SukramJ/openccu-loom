@@ -138,10 +138,11 @@
     {
       "args": {
         "address": "string?",
+        "channel": "string?",
         "device_address": "string?"
       },
       "category": "central",
-      "description": "Enable CCU click-event forwarding for a device's press-event channels. Mirrors Python create_central_links.",
+      "description": "Enable CCU click-event forwarding. Without channel every press-event channel of the device is switched on; with channel (a channel address) only that single channel is touched. Mirrors Python create_central_links.",
       "name": "central.create_links",
       "result": {
         "failed": "integer",
@@ -160,9 +161,10 @@
         "device_address": "string?"
       },
       "category": "central",
-      "description": "Report whether a device supports central links and how many channels are eligible.",
+      "description": "Report whether a device supports central links, how many channels are eligible, and which channels (address, number, eligible) can drive central click events.",
       "name": "central.links_status",
       "result": {
+        "channels": "array?",
         "eligible_channels": "integer?",
         "reason": "string?",
         "supported": "boolean"
@@ -176,10 +178,11 @@
     {
       "args": {
         "address": "string?",
+        "channel": "string?",
         "device_address": "string?"
       },
       "category": "central",
-      "description": "Tear down CCU click-event forwarding for a device's press-event channels. Mirrors Python remove_central_links.",
+      "description": "Tear down CCU click-event forwarding. Without channel the whole device is switched off; with channel (a channel address) only that single channel is touched. Mirrors Python remove_central_links.",
       "name": "central.remove_links",
       "result": {
         "failed": "integer",

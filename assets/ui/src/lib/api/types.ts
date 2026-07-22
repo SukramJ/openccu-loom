@@ -372,10 +372,17 @@ export type DiagnosticsEnvelope = {
   log_levels?: LogLevelsResponse;
 };
 
+export type CentralLinksChannelStatus = {
+  address: string;
+  number: number;
+  eligible: boolean;
+};
+
 export type CentralLinksStatus = {
   supported: boolean;
   reason?: string;
   eligible_channels?: number;
+  channels?: CentralLinksChannelStatus[];
 };
 
 export type CentralLinksReport = {

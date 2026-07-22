@@ -205,11 +205,11 @@ func (fakeReloaderService) ReloadChannelConfig(context.Context, string) error { 
 
 type fakeCentralLinksService struct{}
 
-func (fakeCentralLinksService) CreateCentralLinks(context.Context, string) (handlers.CentralLinksReport, error) {
+func (fakeCentralLinksService) CreateCentralLinks(context.Context, string, string) (handlers.CentralLinksReport, error) {
 	return handlers.CentralLinksReport{}, nil
 }
 
-func (fakeCentralLinksService) RemoveCentralLinks(context.Context, string) (handlers.CentralLinksReport, error) {
+func (fakeCentralLinksService) RemoveCentralLinks(context.Context, string, string) (handlers.CentralLinksReport, error) {
 	return handlers.CentralLinksReport{}, nil
 }
 

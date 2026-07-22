@@ -6850,7 +6850,7 @@ func TestRunReport_UnsupportedInterface(t *testing.T) {
 	w := client.NewValueWriter()
 	w.Register("ccu-b27-rr1", "CUxD", &paramsetFakeOps{})
 	domain := NewCentralLinksDomain(reg, w)
-	_, err = domain.CreateCentralLinks(context.Background(), "RR1DEV01B27")
+	_, err = domain.CreateCentralLinks(context.Background(), "RR1DEV01B27", "")
 	if err == nil {
 		t.Fatal("expected error for unsupported interface, got nil")
 	}
@@ -6880,7 +6880,7 @@ func TestRunReport_NoBackend(t *testing.T) {
 	// No backend for BidCos-RF.
 	w := client.NewValueWriter()
 	domain := NewCentralLinksDomain(reg, w)
-	_, err = domain.CreateCentralLinks(context.Background(), "RR2DEV01B27")
+	_, err = domain.CreateCentralLinks(context.Background(), "RR2DEV01B27", "")
 	if !errors.Is(err, ErrNoCentralLinkBackend) {
 		t.Errorf("expected ErrNoCentralLinkBackend, got %v", err)
 	}
@@ -6928,7 +6928,7 @@ func TestRunReport_ReportValueUsageError(t *testing.T) {
 	w := client.NewValueWriter()
 	w.Register("ccu-b27-rr3", "BidCos-RF", b)
 	domain := NewCentralLinksDomain(reg, w)
-	report, runErr := domain.CreateCentralLinks(context.Background(), "RR3DEV01B27")
+	report, runErr := domain.CreateCentralLinks(context.Background(), "RR3DEV01B27", "")
 	if runErr == nil {
 		t.Fatal("expected error from CreateCentralLinks, got nil")
 	}
@@ -11344,7 +11344,7 @@ func TestCentralLinksCreateTouchedCount(t *testing.T) {
 	w.Register("ccu-b45-cl-touched", "BidCos-RF", b)
 
 	domain := NewCentralLinksDomain(reg, w)
-	report, err := domain.CreateCentralLinks(context.Background(), "B45CLDEV01")
+	report, err := domain.CreateCentralLinks(context.Background(), "B45CLDEV01", "")
 	if err != nil {
 		t.Fatalf("CreateCentralLinks: unexpected error: %v", err)
 	}
@@ -14391,7 +14391,7 @@ func buildCentralLinksBoost9Fixture(t *testing.T) *CentralLinksDomain {
 func TestCentralLinksDomain_CreateCentralLinks_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := &CentralLinksDomain{registry: nil, writer: nil}
-	_, err := d.CreateCentralLinks(context.Background(), "DEV006")
+	_, err := d.CreateCentralLinks(context.Background(), "DEV006", "")
 	if err == nil {
 		t.Error("expected error for nil registry")
 	}
@@ -14400,7 +14400,7 @@ func TestCentralLinksDomain_CreateCentralLinks_NilRegistry_ReturnsErr(t *testing
 func TestCentralLinksDomain_CreateCentralLinks_UnknownDevice_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	_, err := d.CreateCentralLinks(context.Background(), "UNKNOWN")
+	_, err := d.CreateCentralLinks(context.Background(), "UNKNOWN", "")
 	if err == nil {
 		t.Error("expected error for unknown device in CreateCentralLinks")
 	}
@@ -14432,7 +14432,7 @@ func TestCentralLinksDomain_CreateCentralLinks_DeviceFound_UnsupportedInterface_
 	w.Register("ccu-cl9b", "VirtualDevices", fake)
 
 	d := NewCentralLinksDomain(reg, w)
-	_, err = d.CreateCentralLinks(context.Background(), "DEV007")
+	_, err = d.CreateCentralLinks(context.Background(), "DEV007", "")
 	if err == nil {
 		t.Error("expected error for unsupported interface in CreateCentralLinks")
 	}
@@ -14461,7 +14461,7 @@ func TestCentralLinksDomain_CreateCentralLinks_DeviceFound_NoBackend_ReturnsErr(
 	// No backend registered → writer.Backend returns false.
 	w := client.NewValueWriter()
 	d := NewCentralLinksDomain(reg, w)
-	_, err = d.CreateCentralLinks(context.Background(), "DEV008")
+	_, err = d.CreateCentralLinks(context.Background(), "DEV008", "")
 	if err == nil {
 		t.Error("expected error when no backend registered")
 	}
@@ -14474,7 +14474,7 @@ func TestCentralLinksDomain_CreateCentralLinks_BackendNotCentralLinkBackend_Retu
 	// ReportValueUsage (so it IS a centralLinkBackend). Channels have no
 	// PRESS_SHORT/PRESS_LONG DPs → all channels skipped → report.Skipped > 0
 	// → returns successfully with no error.
-	report, err := d.CreateCentralLinks(context.Background(), "DEV006")
+	report, err := d.CreateCentralLinks(context.Background(), "DEV006", "")
 	if err != nil {
 		t.Fatalf("CreateCentralLinks: %v", err)
 	}
@@ -14485,7 +14485,7 @@ func TestCentralLinksDomain_CreateCentralLinks_BackendNotCentralLinkBackend_Retu
 func TestCentralLinksDomain_RemoveCentralLinks_HappyPath(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	report, err := d.RemoveCentralLinks(context.Background(), "DEV006")
+	report, err := d.RemoveCentralLinks(context.Background(), "DEV006", "")
 	if err != nil {
 		t.Fatalf("RemoveCentralLinks: %v", err)
 	}

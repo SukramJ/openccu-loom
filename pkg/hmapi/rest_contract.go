@@ -33,11 +33,25 @@ type CentralLinksReport struct {
 }
 
 // CentralLinksStatus describes whether the device is eligible for
-// central click-event routing.
+// central click-event routing. Channels enumerates the eligible
+// channels so the SPA can offer a per-channel toggle next to the
+// device-wide one — mirroring the CCU channel-config dialog, which
+// scopes the switch to the single opened channel.
 type CentralLinksStatus struct {
-	Supported        bool   `json:"supported"`
-	Reason           string `json:"reason,omitempty"`
-	EligibleChannels int    `json:"eligible_channels,omitempty"`
+	Supported        bool                        `json:"supported"`
+	Reason           string                      `json:"reason,omitempty"`
+	EligibleChannels int                         `json:"eligible_channels,omitempty"`
+	Channels         []CentralLinksChannelStatus `json:"channels,omitempty"`
+}
+
+// CentralLinksChannelStatus describes one channel's suitability for
+// central click-event routing. Eligible is true when the channel
+// exposes PRESS_SHORT / PRESS_LONG and can therefore drive central
+// click events.
+type CentralLinksChannelStatus struct {
+	Address  string `json:"address"`
+	Number   int    `json:"number"`
+	Eligible bool   `json:"eligible"`
 }
 
 // ErrCentralLinksUnsupported is returned by adapters when the device
@@ -45,6 +59,12 @@ type CentralLinksStatus struct {
 // (CUxD, virtual devices, …). Surfaced as 422 to make the SPA show
 // "not applicable on this device" instead of a generic upstream error.
 var ErrCentralLinksUnsupported = errors.New("central-links: device interface does not support central links")
+
+// ErrCentralLinksChannelNotFound is returned when a channel-scoped
+// create/remove/status request names a channel address that the device
+// does not carry. Surfaced as 422 so the SPA shows a targeted
+// validation error rather than a generic upstream failure.
+var ErrCentralLinksChannelNotFound = errors.New("central-links: channel not found on device")
 
 // --- Config ---
 

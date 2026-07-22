@@ -1,6 +1,6 @@
 {
-  "generated": "419a7f10",
-  "head": "419a7f10",
+  "generated": "0eb54fd1",
+  "head": "0eb54fd1",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 26102,
+    "total_exported": 26131,
     "reachable": 4576,
-    "whitelisted": 18777,
-    "unreachable": 2749
+    "whitelisted": 18802,
+    "unreachable": 2753
   },
   "by_package": [
     {
@@ -595,8 +595,8 @@
     {
       "package": "pkg/hmapi",
       "unreachable_funcs": 0,
-      "unreachable_types": 117,
-      "unreachable_other": 14
+      "unreachable_types": 119,
+      "unreachable_other": 16
     },
     {
       "package": "pkg/hmenum",
@@ -17251,6 +17251,20 @@
     },
     {
       "package": "pkg/hmapi",
+      "identifier": "CentralLinksChannelStatus",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 51,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "CentralLinksChannelStatus",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 51,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
       "identifier": "CentralLinksReport",
       "file": "pkg/hmapi/rest_contract.go",
       "line": 29,
@@ -17267,126 +17281,126 @@
       "package": "pkg/hmapi",
       "identifier": "CentralLinksStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 37,
+      "line": 40,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CentralLinksStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 37,
+      "line": 40,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 323,
+      "line": 343,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 323,
+      "line": 343,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 310,
+      "line": 330,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 310,
+      "line": 330,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateSchedule",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 214,
+      "line": 234,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateSchedule",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 214,
+      "line": 234,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 317,
+      "line": 337,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 317,
+      "line": 337,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigCentral",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 73,
+      "line": 93,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigCentral",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 73,
+      "line": 93,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigPorts",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 80,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigPorts",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 80,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigSnapshot",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 55,
+      "line": 75,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigSnapshot",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 55,
+      "line": 75,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "DiagnosticsEvent",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 117,
+      "line": 137,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "DiagnosticsEvent",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 117,
+      "line": 137,
       "kind": "type"
     },
     {
@@ -17407,28 +17421,42 @@
       "package": "pkg/hmapi",
       "identifier": "ErrBadParam",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 92,
+      "line": 112,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrBadParam",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 92,
+      "line": 112,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "ErrCentralLinksChannelNotFound",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 67,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "ErrCentralLinksChannelNotFound",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 67,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrCentralLinksUnsupported",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 47,
+      "line": 61,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrCentralLinksUnsupported",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 47,
+      "line": 61,
       "kind": "var"
     },
     {
@@ -17463,28 +17491,28 @@
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 332,
+      "line": 352,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 332,
+      "line": 352,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUnknownOperation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 89,
+      "line": 109,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUnknownOperation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 89,
+      "line": 109,
       "kind": "var"
     },
     {
@@ -17498,68 +17526,75 @@
       "package": "pkg/hmapi",
       "identifier": "Incident",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 140,
+      "line": 160,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Incident",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 140,
+      "line": 160,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "InterfaceState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 152,
+      "line": 172,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "InterfaceState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 152,
+      "line": 172,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Link",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 165,
+      "line": 185,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Link",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 165,
+      "line": 185,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "LinkableChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 189,
+      "line": 209,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "LinkableChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 189,
+      "line": 209,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "RPCRecordingStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 124,
+      "line": 144,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "RPCRecordingStatus",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 144,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "ReliabilityState",
       "file": "pkg/hmapi/rest_contract.go",
       "line": 124,
       "kind": "type"
@@ -17568,252 +17603,245 @@
       "package": "pkg/hmapi",
       "identifier": "ReliabilityState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 104,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "ReliabilityState",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 104,
+      "line": 124,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleChannelRef",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 301,
+      "line": 321,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleChannelRef",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 301,
+      "line": 321,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "SimpleScheduleEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 243,
+      "line": 263,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "SimpleScheduleEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 243,
+      "line": 263,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 351,
+      "line": 371,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 351,
+      "line": 371,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 393,
+      "line": 413,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 393,
+      "line": 413,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaCrossValidation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 512,
+      "line": 532,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaCrossValidation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 512,
+      "line": 532,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 404,
+      "line": 424,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 404,
+      "line": 424,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameter",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 419,
+      "line": 439,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameter",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 419,
+      "line": 439,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterFlags",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 489,
+      "line": 509,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterFlags",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 489,
+      "line": 509,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterOps",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 482,
+      "line": 502,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaParameterOps",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 482,
+      "line": 502,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaPreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 460,
+      "line": 480,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaPreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 460,
+      "line": 480,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 533,
+      "line": 553,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 533,
+      "line": 553,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaRequest",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 338,
+      "line": 358,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaRequest",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 338,
+      "line": 358,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 376,
+      "line": 396,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 376,
+      "line": 396,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 385,
+      "line": 405,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 385,
+      "line": 405,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 467,
+      "line": 487,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 467,
+      "line": 487,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 475,
+      "line": 495,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 475,
+      "line": 495,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 498,
+      "line": 518,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 498,
+      "line": 518,
       "kind": "type"
     },
     {
@@ -19304,7 +19332,7 @@
       "package": "pkg/interfaces",
       "identifier": "AcceptInboxOptions",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 127,
+      "line": 131,
       "kind": "type"
     },
     {
@@ -19339,84 +19367,84 @@
       "package": "pkg/interfaces",
       "identifier": "ConfigReader",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 51,
+      "line": 55,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "ConfigReader",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 51,
+      "line": 55,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "CustomDPWriter",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 63,
+      "line": 67,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "CustomDPWriter",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 63,
+      "line": 67,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "DataPointWriter",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 83,
+      "line": 87,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "DataPointWriter",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 83,
+      "line": 87,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "DeviceAdmin",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 96,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "DeviceAdmin",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 96,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "DiagnosticsIntrospectService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 152,
+      "line": 156,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "DiagnosticsIntrospectService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 152,
+      "line": 156,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "ErrAcceptConfigIncomplete",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 146,
+      "line": 150,
       "kind": "var"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "ErrAcceptConfigIncomplete",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 146,
+      "line": 150,
       "kind": "var"
     },
     {
@@ -19437,28 +19465,28 @@
       "package": "pkg/interfaces",
       "identifier": "IncidentsReader",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 168,
+      "line": 172,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "IncidentsReader",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 168,
+      "line": 172,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "LinksService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 173,
+      "line": 177,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "LinksService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 173,
+      "line": 177,
       "kind": "type"
     },
     {
@@ -19731,42 +19759,42 @@
       "package": "pkg/interfaces",
       "identifier": "ParameterLabeler",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 188,
+      "line": 192,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "ParameterLabeler",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 188,
+      "line": 192,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "ParamsetService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 200,
+      "line": 204,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "ParamsetService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 200,
+      "line": 204,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "RPCRecorderService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 211,
+      "line": 215,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "RPCRecorderService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 211,
+      "line": 215,
       "kind": "type"
     },
     {
@@ -19815,14 +19843,14 @@
       "package": "pkg/interfaces",
       "identifier": "ScheduleService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 231,
+      "line": 235,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "ScheduleService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 231,
+      "line": 235,
       "kind": "type"
     },
     {
@@ -19857,14 +19885,14 @@
       "package": "pkg/interfaces",
       "identifier": "UISchemaService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 259,
+      "line": 263,
       "kind": "type"
     },
     {
       "package": "pkg/interfaces",
       "identifier": "UISchemaService",
       "file": "pkg/interfaces/rest_ports.go",
-      "line": 259,
+      "line": 263,
       "kind": "type"
     }
   ],
@@ -31743,17 +31771,38 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksCreateAllChannels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 378
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestCentralLinksCreateDeviceNotFound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 261
+      "line": 264
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksCreateNilRegistryError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 241
+      "line": 244
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksCreateOnlyRaisesPressShort",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 465
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksCreateSingleChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 395
     },
     {
       "package": "internal/central/adapter",
@@ -31834,38 +31883,108 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksNamedChannelWithoutPressEvents",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 597
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksRemoveFailureCountsChannelsNotCalls",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 505
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksRemoveMixedChannelFailureContinuesToNextChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 783
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveNilRegistryError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 251
+      "line": 254
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksRemoveNoBackendRegistered",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 683
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksRemovePartialValueIDFailureStillIssuesBoth",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 757
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksRemoveSingleChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 413
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksRemoveUnsupportedInterface",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 670
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksRemoveZeroesPressShortAndLong",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 437
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksStatusDeviceNotFound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 142
+      "line": 145
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksStatusListsChannels",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 617
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksStatusNilRegistryError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 131
+      "line": 134
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksStatusSupportedDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 192
+      "line": 195
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksStatusUnsupportedInterface",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 160
+      "line": 163
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksUnknownChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 524
     },
     {
       "package": "internal/central/adapter",
@@ -31879,28 +31998,28 @@
       "identifier": "TestChannelHasPressEventsNilChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 54
+      "line": 57
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestChannelHasPressEventsWithPressLong",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 82
+      "line": 85
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestChannelHasPressEventsWithPressShort",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 61
+      "line": 64
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestChannelHasPressEventsWithoutPressParams",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 103
+      "line": 106
     },
     {
       "package": "internal/central/adapter",
@@ -37829,14 +37948,14 @@
       "identifier": "TestIsCentralLinkInterfaceEligible",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 23
+      "line": 26
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestIsCentralLinkInterfaceIneligible",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 37
+      "line": 40
     },
     {
       "package": "internal/central/adapter",
@@ -122946,17 +123065,24 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestCentralLinksError_ChannelNotFound_Returns422",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/central_links_test.go",
+      "line": 225
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestCentralLinksError_Generic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 146
+      "line": 155
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestCentralLinksError_UnsupportedError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 136
+      "line": 145
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123212,38 +123338,52 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateCentralLinks_ForwardsChannelQueryParam",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/central_links_test.go",
+      "line": 167
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestCreateCentralLinks_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 84
+      "line": 93
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestCreateCentralLinks_HappyPath_Returns202",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 223
+      "line": 302
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestCreateCentralLinks_NilSvc_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 198
+      "line": 277
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestCreateCentralLinks_NoChannelForwardsEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/central_links_test.go",
+      "line": 199
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestCreateCentralLinks_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 210
+      "line": 289
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestCreateCentralLinks_UnsupportedError_Returns422",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 106
+      "line": 115
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123660,31 +123800,45 @@
     },
     {
       "package": "internal/north/rest/handlers",
-      "identifier": "TestDeleteCentralLinks_HappyPath",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 119
-    },
-    {
-      "package": "internal/north/rest/handlers",
-      "identifier": "TestDeleteCentralLinks_HappyPath_Returns202",
+      "identifier": "TestDeleteCentralLinks_ForwardsChannelQueryParam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
       "line": 183
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestDeleteCentralLinks_HappyPath",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/central_links_test.go",
+      "line": 128
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestDeleteCentralLinks_HappyPath_Returns202",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/central_links_test.go",
+      "line": 262
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestDeleteCentralLinks_NilService_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 158
+      "line": 237
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "TestDeleteCentralLinks_NoChannelForwardsEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/central_links_test.go",
+      "line": 212
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestDeleteCentralLinks_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 170
+      "line": 249
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124503,21 +124657,21 @@
       "identifier": "TestGetCentralLinksStatus_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 37
+      "line": 46
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetCentralLinksStatus_ServiceError_Returns502",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 71
+      "line": 80
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetCentralLinksStatus_ServiceNil_Returns503",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/central_links_test.go",
-      "line": 59
+      "line": 68
     },
     {
       "package": "internal/north/rest/handlers",
@@ -131629,14 +131783,14 @@
       "identifier": "CacheClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 138
+      "line": 141
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CacheClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 138
+      "line": 141
     },
     {
       "package": "internal/north/rest/ws",
@@ -131727,14 +131881,14 @@
       "identifier": "ChangeHistoryClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 160
+      "line": 163
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ChangeHistoryClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 160
+      "line": 163
     },
     {
       "package": "internal/north/rest/ws",
@@ -132147,14 +132301,14 @@
       "identifier": "DeviceStatisticsQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 146
+      "line": 149
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "DeviceStatisticsQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 146
+      "line": 149
     },
     {
       "package": "internal/north/rest/ws",
@@ -132245,14 +132399,14 @@
       "identifier": "ExtendedCommandsConfig",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 197
+      "line": 200
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ExtendedCommandsConfig",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 197
+      "line": 200
     },
     {
       "package": "internal/north/rest/ws",
@@ -132273,14 +132427,14 @@
       "identifier": "FirmwareRefresher",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 153
+      "line": 156
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "FirmwareRefresher",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 153
+      "line": 156
     },
     {
       "package": "internal/north/rest/ws",
@@ -132455,28 +132609,28 @@
       "identifier": "IncidentClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 167
+      "line": 170
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "IncidentClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 167
+      "line": 170
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "IncidentLister",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 175
+      "line": 178
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "IncidentLister",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 175
+      "line": 178
     },
     {
       "package": "internal/north/rest/ws",
@@ -132903,14 +133057,14 @@
       "identifier": "RegisterExtendedCommands",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 240
+      "line": 243
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "RegisterExtendedCommands",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 240
+      "line": 243
     },
     {
       "package": "internal/north/rest/ws",
@@ -133043,14 +133197,14 @@
       "identifier": "SessionRecorder",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 117
+      "line": 120
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "SessionRecorder",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 117
+      "line": 120
     },
     {
       "package": "internal/north/rest/ws",
@@ -133565,38 +133719,87 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "TestCentralCreateLinks_ForwardsChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_services_test.go",
+      "line": 185
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "TestCentralCreateLinks_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 106
+      "line": 117
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCentralCreateLinks_ManagerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 140
+      "line": 151
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCentralCreateLinks_MissingAddress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 127
+      "line": 138
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestCentralCreateLinks_NoChannelForwardsEmpty",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_services_test.go",
+      "line": 218
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCentralLinksStatus_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 174
+      "line": 289
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestCentralLinksStatus_ManagerError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_services_test.go",
+      "line": 274
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestCentralLinksStatus_MissingAddress",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_services_test.go",
+      "line": 261
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCentralRemoveLinks_AddressAlias",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 155
+      "line": 166
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestCentralRemoveLinks_ForwardsChannel",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_services_test.go",
+      "line": 203
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestCentralRemoveLinks_ManagerError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_services_test.go",
+      "line": 246
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestCentralRemoveLinks_MissingAddress",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_services_test.go",
+      "line": 233
     },
     {
       "package": "internal/north/rest/ws",
@@ -135514,21 +135717,21 @@
       "identifier": "TestRecordingStart",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 217
+      "line": 342
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestRecordingStatus_ReflectsState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 253
+      "line": 378
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestRecordingStop_AfterStart",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_services_test.go",
-      "line": 234
+      "line": 359
     },
     {
       "package": "internal/north/rest/ws",
@@ -136151,28 +136354,28 @@
       "identifier": "ThrottleStats",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 130
+      "line": 133
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ThrottleStats",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 130
+      "line": 133
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "UISchemaQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 185
+      "line": 188
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "UISchemaQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 185
+      "line": 188
     },
     {
       "package": "internal/north/rest/ws",

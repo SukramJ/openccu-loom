@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.38.0
+  version: 2.40.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2575,6 +2575,11 @@ paths:
     post:
       operationId: createCentralLinks
       summary: Enable central click-event forwarding
+      description: |
+        Enables CCU click-event forwarding. Without `channel` every
+        eligible (press-event) channel of the device is switched on;
+        with `channel` (a channel address such as ABC0000001:4) only
+        that single channel is touched.
       tags: [links]
       security:
         - basicAuth: []
@@ -2582,6 +2587,11 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+        - in: query
+          name: channel
+          required: false
+          schema: { type: string }
+          description: Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device.
       responses:
         "202": { description: Report }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -2590,6 +2600,10 @@ paths:
     delete:
       operationId: removeCentralLinks
       summary: Disable central click-event forwarding
+      description: |
+        Disables CCU click-event forwarding. Without `channel` the whole
+        device is switched off; with `channel` (a channel address such as
+        ABC0000001:4) only that single channel is touched.
       tags: [links]
       security:
         - basicAuth: []
@@ -2597,6 +2611,11 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+        - in: query
+          name: channel
+          required: false
+          schema: { type: string }
+          description: Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device.
       responses:
         "202": { description: Report }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -8959,6 +8978,22 @@ components:
         supported: { type: boolean }
         reason: { type: string }
         eligible_channels: { type: integer }
+        channels:
+          type: array
+          description: |
+            Per-channel suitability for central click-event routing. One
+            entry per eligible (press-event) channel, letting clients
+            offer a per-channel toggle alongside the device-wide one.
+          items: { $ref: "#/components/schemas/CentralLinksChannelStatus" }
+
+    CentralLinksChannelStatus:
+      type: object
+      required: [address, number, eligible]
+      description: One channel's suitability for central click-event routing.
+      properties:
+        address: { type: string }
+        number: { type: integer }
+        eligible: { type: boolean }
 
     # ---- Calculated data points ----
     CalculatedDPSummary:

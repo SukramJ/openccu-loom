@@ -1791,6 +1791,11 @@ const EN: Catalog = {
   "central.title": "Press events to central",
   "central.subtitle":
     "Controls whether the CCU forwards press events (PRESS_SHORT/LONG) to OpenCCU-Loom.",
+  "central.help.summary": "Why a button seems to do nothing, and what enabling costs",
+  "central.help.no_link":
+    "Without forwarding enabled, many HmIP buttons never send their press events to the CCU or OpenCCU-Loom — this is the most common reason a button appears to do nothing.",
+  "central.help.duty_cycle":
+    "Enabling forwarding creates an internal link that raises the device's radio duty cycle and battery consumption.",
   "central.unsupported":
     "This interface has no concept of central event routing.",
   "central.eligible": "press channels",
@@ -1801,6 +1806,16 @@ const EN: Catalog = {
     "Enabled: {touched} channel(s), {skipped} skipped, {failed} failed.",
   "central.report.disabled":
     "Disabled: {touched} channel(s), {skipped} skipped, {failed} failed.",
+  "central.device_wide": "Whole device",
+  "central.per_channel": "Per channel",
+  "central.channel_label": "Channel {number}",
+  "central.confirm.enable_title": "Enable press-event forwarding?",
+  "central.confirm.enable_body":
+    "The CCU will forward this channel's press events (PRESS_SHORT/PRESS_LONG) to OpenCCU-Loom and to CCU-side programs. This raises the device's radio duty cycle and battery use.",
+  "central.confirm.disable_title": "Disable press-event forwarding?",
+  "central.confirm.disable_body":
+    "CCU-side programs may rely on these press events. After disabling, neither CCU programs nor OpenCCU-Loom will receive press events from this channel.",
+  "central.action_failed": "Could not change press-event forwarding",
   // --- Schedules ---
   "schedule.loading": "Loading schedule…",
   "schedule.unsupported":
@@ -4539,6 +4554,11 @@ const DE: Catalog = {
   "central.title": "Tastendruck an Zentrale",
   "central.subtitle":
     "Steuert, ob die CCU Tastendruck-Ereignisse (PRESS_SHORT/LONG) an OpenCCU-Loom weiterleitet.",
+  "central.help.summary": "Warum ein Taster scheinbar nichts tut und was das Aktivieren kostet",
+  "central.help.no_link":
+    "Ohne aktivierte Weiterleitung senden viele HmIP-Taster ihre Tasterevents gar nicht an die CCU oder OpenCCU-Loom — das ist die häufigste Ursache dafür, dass ein Taster scheinbar nichts tut.",
+  "central.help.duty_cycle":
+    "Das Aktivieren legt eine interne Verknüpfung an und erhöht den Funk-DutyCycle sowie den Batterieverbrauch des Geräts.",
   "central.unsupported":
     "Diese Schnittstelle unterstützt kein Event-Routing zur Zentrale.",
   "central.eligible": "Tasten-Kanäle",
@@ -4549,6 +4569,16 @@ const DE: Catalog = {
     "Aktiviert: {touched} Kanal/Kanäle, {skipped} übersprungen, {failed} fehlgeschlagen.",
   "central.report.disabled":
     "Deaktiviert: {touched} Kanal/Kanäle, {skipped} übersprungen, {failed} fehlgeschlagen.",
+  "central.device_wide": "Ganzes Gerät",
+  "central.per_channel": "Pro Kanal",
+  "central.channel_label": "Kanal {number}",
+  "central.confirm.enable_title": "Tasterevent-Weiterleitung aktivieren?",
+  "central.confirm.enable_body":
+    "Die CCU leitet die Tasterevents (PRESS_SHORT/PRESS_LONG) dieses Kanals an OpenCCU-Loom und an CCU-Programme weiter. Das erhöht den Funk-DutyCycle und den Batterieverbrauch des Geräts.",
+  "central.confirm.disable_title": "Tasterevent-Weiterleitung deaktivieren?",
+  "central.confirm.disable_body":
+    "CCU-seitige Programme könnten diese Tasterevents nutzen. Nach dem Deaktivieren erhalten weder CCU-Programme noch OpenCCU-Loom Tasterevents dieses Kanals.",
+  "central.action_failed": "Tasterevent-Weiterleitung konnte nicht geändert werden",
   "schedule.loading": "Lade Zeitplan…",
   "schedule.unsupported": "Dieses Gerät unterstützt keinen Zeitplan.",
   "schedule.unsupported_channel":

@@ -2,6 +2,28 @@
 
 ## 0.46.0
 
+- **New help hint on the press-event forwarding panel.** The device-detail
+  Links tab now has an expandable note explaining why an HmIP button can
+  seem to do nothing (without forwarding, many buttons never send their
+  press events) and that turning forwarding on increases the device's
+  radio duty cycle and battery use.
+- **Toggling press-event forwarding now asks first and reports as a
+  toast.** Enabling or disabling the central-link forwarding (whole device
+  or a single channel) opens a confirmation dialog before it acts —
+  disabling warns that CCU-side programs may use these press events and
+  that afterwards neither CCU programs nor OpenCCU-Loom will receive them.
+  The result appears as a toast instead of an inline banner.
+- **Central-link toggle per channel.** The device-detail Links tab keeps
+  the whole-device press-event forwarding switch and now adds a
+  per-channel switch for each eligible channel, so you can route the
+  clicks of a single button to OpenCCU-Loom without touching the rest of
+  the device (API 2.36.0).
+- **Turning a central link off now clears long-press forwarding too.**
+  Deactivating the press-event forwarding for a channel now clears both
+  the short-press and long-press usage counters on the device, matching
+  the CCU WebUI's own behaviour — previously a long-press counter could
+  linger and keep the device sending long-press events to the CCU after
+  you switched the link off.
 - **Device admin from the UI.** Renaming a device now persists to the
   CCU (optionally renaming all channels along), single channels can be
   renamed, removing a device offers factory-reset / force options with
