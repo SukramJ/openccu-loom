@@ -19,6 +19,7 @@ import (
 )
 
 type stubDevices struct {
+	testedDevices    map[string]bool
 	renamed          map[string]string
 	renamedChannels  map[string]string
 	lastInclude      bool
@@ -124,6 +125,14 @@ func (s *stubDevices) ReplaceDevice(_ context.Context, central, oldAddress, newA
 	}
 	s.replaceCalls = append(s.replaceCalls, replaceCall{central: central, oldAddress: oldAddress, newAddress: newAddress})
 	return nil
+}
+
+func (s *stubDevices) TestDeviceCommunication(_ context.Context, address string) (hmapi.CommunicationTestResult, error) {
+	if s.testedDevices == nil {
+		s.testedDevices = map[string]bool{}
+	}
+	s.testedDevices[address] = true
+	return hmapi.CommunicationTestResult{Passed: true}, nil
 }
 
 type stubParamsetWriter struct {

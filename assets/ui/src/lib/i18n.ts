@@ -2300,6 +2300,11 @@ const EN: Catalog = {
   "device.confirm_restore_config_body":
     'Re-transmit the stored configuration (all channel settings and direct links) to "{name}"? Use this after a factory reset — the transfer runs over the radio and may take a while.',
   "device.restore_config_triggered": "Configuration transfer started.",
+  "device.communication_test": "Test",
+  "device.communication_test.tooltip": "Send a radio test frame and check the device answers",
+  "device.communication_test_running": "Testing…",
+  "device.communication_test_passed": "Communication OK",
+  "device.communication_test_failed": "No response",
   "device.status.paramset_pick": "Read source",
   // --- Maintenance grid ---
   "device.maintenance.title": "Maintenance",
@@ -2666,6 +2671,11 @@ const EN: Catalog = {
     "Local teach-in started — press the pairing button on the device.",
   "inbox.install_mode_local_hint":
     "Works without internet access: only the device matching SGTIN and key can pair.",
+  "inbox.search_wired": "Search wired bus",
+  "inbox.search_wired_title": "Scan the BidCos-Wired bus for newly connected devices",
+  "inbox.search_wired_hint": "Scans the wired bus; found devices appear in the inbox.",
+  "inbox.search_wired_running": "Scanning…",
+  "inbox.search_wired_done": "Found {count} device(s) — check the inbox.",
   "inbox.replace.button": "Replace device",
   "inbox.replace.title": "Replace an existing device",
   "inbox.replace.intro":
@@ -5162,6 +5172,11 @@ const DE: Catalog = {
   "device.confirm_restore_config_body":
     'Die gespeicherte Konfiguration (alle Kanaleinstellungen und Direktverknüpfungen) erneut an "{name}" übertragen? Nach einem Werksreset verwenden — die Übertragung läuft über Funk und kann etwas dauern.',
   "device.restore_config_triggered": "Konfigurationsübertragung gestartet.",
+  "device.communication_test": "Test",
+  "device.communication_test.tooltip": "Ein Funk-Testtelegramm senden und prüfen, ob das Gerät antwortet",
+  "device.communication_test_running": "Test läuft…",
+  "device.communication_test_passed": "Kommunikation OK",
+  "device.communication_test_failed": "Keine Antwort",
   "device.status.paramset_pick": "Quelle",
   // --- Wartungs-Grid ---
   "device.maintenance.title": "Wartung",
@@ -5503,6 +5518,11 @@ const DE: Catalog = {
     "Lokales Anlernen gestartet — Anlerntaste am Gerät drücken.",
   "inbox.install_mode_local_hint":
     "Funktioniert ohne Internetzugang: Nur das Gerät mit passender SGTIN und Key kann sich anmelden.",
+  "inbox.search_wired": "Draht-Bus durchsuchen",
+  "inbox.search_wired_title": "Den BidCos-Wired-Bus nach neu angeschlossenen Geräten durchsuchen",
+  "inbox.search_wired_hint": "Durchsucht den Draht-Bus; gefundene Geräte erscheinen im Posteingang.",
+  "inbox.search_wired_running": "Suche läuft…",
+  "inbox.search_wired_done": "{count} Gerät(e) gefunden — siehe Posteingang.",
   "inbox.replace.button": "Gerät tauschen",
   "inbox.replace.title": "Vorhandenes Gerät tauschen",
   "inbox.replace.intro":

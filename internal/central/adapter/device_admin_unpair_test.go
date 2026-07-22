@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -134,6 +135,14 @@ func (*fakeOperations) ListReplaceableDevices(context.Context, string) ([]hmprot
 
 func (*fakeOperations) ReplaceDevice(context.Context, string, string) error {
 	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (*fakeOperations) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (*fakeOperations) GetServiceMessages(context.Context, string) ([]map[string]any, error) {

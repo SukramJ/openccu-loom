@@ -53,6 +53,9 @@ type DeviceWriter interface {
 	// ReplaceDevice swaps a paired device for a new one. Used by
 	// `device.replace`.
 	ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error
+	// TestDeviceCommunication runs the CCU's per-device communication
+	// test. Used by `device.test`.
+	TestDeviceCommunication(ctx context.Context, address string) (hmapi.CommunicationTestResult, error)
 }
 
 // ParamsetWriter mutates a paramset in one shot. Used by `paramset.put`
@@ -272,6 +275,7 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("device.set_channel_rooms", deviceSetChannelRoomsHandler(cfg.Devices))
 		router.Register("device.set_channel_functions", deviceSetChannelFunctionsHandler(cfg.Devices))
 		router.Register("device.restore_config", deviceRestoreConfigHandler(cfg.Devices))
+		router.Register("device.test", deviceTestHandler(cfg.Devices))
 		router.Register("device.replace_candidates", deviceReplaceCandidatesHandler(cfg.Devices))
 		router.Register("device.replace", deviceReplaceHandler(cfg.Devices))
 	}
@@ -489,6 +493,25 @@ func deviceRestoreConfigHandler(d DeviceWriter) CommandHandler {
 			return nil, fmt.Errorf("device.restore_config: %w", err)
 		}
 		return map[string]any{"address": p.Address}, nil
+	}
+}
+
+func deviceTestHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		result, err := d.TestDeviceCommunication(ctx, p.Address)
+		if err != nil {
+			return nil, fmt.Errorf("device.test: %w", err)
+		}
+		return result, nil
 	}
 }
 

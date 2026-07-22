@@ -6,6 +6,7 @@ package backends
 import (
 	"context"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -110,6 +111,18 @@ func (b *CuxdBackend) UpdateFirmware(context.Context, string) error {
 // re-transmit; always returns [ErrUnsupported].
 func (b *CuxdBackend) RestoreConfigToDevice(context.Context, string) error {
 	return ErrUnsupported
+}
+
+// SearchDevices implements Operations. CUxD has no wired bus; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) SearchDevices(context.Context) (int, error) {
+	return 0, ErrUnsupported
+}
+
+// TestDevice implements Operations. CUxD has no radio com-test; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, ErrUnsupported
 }
 
 // ListReplaceableDevices implements Operations. CUxD has no

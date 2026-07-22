@@ -1188,6 +1188,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/install-mode/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan the wired bus for new devices (BidCos-Wired)
+         * @description Triggers a synchronous wired-bus scan (`searchDevices`) on the
+         *     given BidCos-Wired interface and returns the count of devices
+         *     found. The found devices join the inbox (not yet accepted) for
+         *     the operator to accept. Only BidCos-Wired supports it; other
+         *     interfaces answer 422.
+         */
+        post: operations["installModeSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/update": {
         parameters: {
             query?: never;
@@ -2120,6 +2144,32 @@ export interface paths {
          *     action.
          */
         post: operations["restoreDeviceConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the per-device communication / function test
+         * @description Asks the CCU to send a radio test frame to the device and reports
+         *     whether the device answered within the poll window (the same test
+         *     the CCU inbox runs). Blocks until the test completes or the window
+         *     elapses. Supported on the radio interfaces (HmIP-RF, BidCos-RF,
+         *     BidCos-Wired); VirtualDevices and CUxD answer 422. Consult
+         *     `DeviceSummary.communication_test_supported` before offering the
+         *     action.
+         */
+        post: operations["testDeviceCommunication"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5097,6 +5147,12 @@ export interface components {
              */
             config_restore_supported?: boolean;
             /**
+             * @description True when the device's interface can run the CCU's per-device
+             *     communication test (radio interfaces). The SPA gates the "test"
+             *     action on it. False for VirtualDevices and CUxD.
+             */
+            communication_test_supported?: boolean;
+            /**
              * @description True when the device should be split into multiple logical
              *     sub-devices for northbound presentation. The SPA's CdpTilesPanel
              *     uses this flag to switch from a flat tile grid to per-group
@@ -7395,6 +7451,22 @@ export interface components {
             /** @description True when the candidate's model equals the new device's (an exact swap rather than a compatible cross-type one). */
             model_matches: boolean;
         };
+        /**
+         * @description Outcome of a per-device communication / function test
+         *     (POST /devices/{addr}/test).
+         */
+        CommunicationTestResult: {
+            /** @description True when the device answered the radio test frame within the poll window. */
+            passed: boolean;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: int64 */
+            duration_ms: number;
+            /** @description True when the poll window elapsed before the device answered. */
+            timed_out: boolean;
+        };
         /** @description One candidate returned by GET /channels/{no}/linkable-channels. */
         LinkableChannel: {
             address: string;
@@ -8201,6 +8273,43 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    installModeSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The BidCos-Wired interface to scan. */
+                    interface: string;
+                    /** @description Disambiguates the CCU; optional for single-CCU setups. */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        central?: string;
+                        interface: string;
+                        /** @description Number of devices the bus scan found. */
+                        found: number;
+                    };
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     listSystemCCU: {
         parameters: {
             query?: never;
@@ -8978,6 +9087,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    testDeviceCommunication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationTestResult"];
+                };
             };
             400: components["responses"]["BadRequest"];
             422: components["responses"]["UnprocessableEntity"];

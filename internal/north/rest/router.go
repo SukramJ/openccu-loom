@@ -62,6 +62,12 @@ type Deps struct {
 	// DeviceInstallMode opens a targeted (per-device / serial) pairing
 	// window at POST /devices/{addr}/install-mode. Nil disables the route.
 	DeviceInstallMode handlers.DeviceInstallModePort
+	// InstallModeSearch triggers a wired-bus device scan at POST
+	// /install-mode/search. Nil serves the route as 503.
+	InstallModeSearch handlers.DeviceSearchPort
+	// DeviceCommunicationTest runs the per-device communication test at
+	// POST /devices/{addr}/test. Nil serves the route as 503.
+	DeviceCommunicationTest handlers.DeviceCommunicationTestPort
 	// DeviceIcons proxies device-type icon images from the CCU for the
 	// device list. Optional — nil answers 404 (SPA uses a glyph).
 	DeviceIcons handlers.DeviceIconProxy
@@ -784,6 +790,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
 				pr.With(admin).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))
 			}
+			if d.DeviceCommunicationTest != nil {
+				pr.With(op).Post("/devices/{addr}/test", handlers.TestDeviceCommunication(d.DeviceCommunicationTest, d.AuditRecorder))
+			}
 			if d.FirmwareRefresher != nil {
 				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))
 			}
@@ -1015,6 +1024,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
 				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
 				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub, d.AuditRecorder))
+				pr.With(op).Post("/install-mode/search", handlers.PostInstallModeSearch(d.InstallModeSearch, d.AuditRecorder))
 			}
 			if d.Interfaces != nil {
 				pr.Get("/interfaces", handlers.ListInterfaces(d.Interfaces))

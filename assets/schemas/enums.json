@@ -3035,6 +3035,10 @@
           "wire_value": "get_user_level"
         },
         {
+          "go_name": "RegaScriptPollComTest",
+          "wire_value": "poll_com_test"
+        },
+        {
           "go_name": "RegaScriptRebootCCU",
           "wire_value": "reboot_ccu"
         },
@@ -3061,6 +3065,10 @@
         {
           "go_name": "RegaScriptSetSystemVariable",
           "wire_value": "set_system_variable"
+        },
+        {
+          "go_name": "RegaScriptStartComTest",
+          "wire_value": "start_com_test"
         },
         {
           "go_name": "RegaScriptTriggerFirmwareUpdate",

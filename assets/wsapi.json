@@ -398,6 +398,20 @@
     },
     {
       "category": "devices",
+      "description": "Run the CCU's per-device communication / function test (radio test frame + ACK). Blocks until complete or the poll window elapses. Radio interfaces only.",
+      "name": "device.test",
+      "args": {
+        "address": "string"
+      },
+      "result": {
+        "passed": "boolean",
+        "started_at": "string",
+        "duration_ms": "integer",
+        "timed_out": "boolean"
+      }
+    },
+    {
+      "category": "devices",
       "description": "Re-transmit the centrally stored configuration (all channels' MASTER paramsets + link peerings) to a device after a factory reset. Supported on HmIP-RF and BidCos-RF only.",
       "name": "device.restore_config",
       "args": {
@@ -589,6 +603,19 @@
       "category": "install_mode",
       "description": "Close the pairing window for the named interface.",
       "name": "install_mode.disable"
+    },
+    {
+      "category": "install_mode",
+      "description": "Scan the wired bus (BidCos-Wired) for new devices; returns the count found (they join the inbox for acceptance).",
+      "name": "install_mode.search",
+      "args": {
+        "interface_id": "string",
+        "central": "string?"
+      },
+      "result": {
+        "interface_id": "string",
+        "found": "integer"
+      }
     },
     {
       "category": "install_mode",

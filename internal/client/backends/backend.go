@@ -6,6 +6,7 @@ package backends
 import (
 	"context"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -103,6 +104,25 @@ type DeviceOps interface {
 	// [Capabilities.ReplaceDevice]; an incompatible pair surfaces as an
 	// upstream fault.
 	ReplaceDevice(ctx context.Context, oldDeviceAddress, newDeviceAddress string) error
+
+	// SearchDevices triggers a wired-bus scan for new devices via the
+	// XML-RPC `searchDevices()` call (no arguments) and returns the count
+	// of devices found. The daemon additionally pushes newDevices
+	// callbacks; the found devices surface in the inbox (ReadyConfig
+	// false) for the operator to accept. Only hs485d (BidCos-Wired)
+	// implements it — every other backend/interface returns
+	// [ErrUnsupported]; the caller additionally gates on
+	// [hmenum.Interface.SupportsDeviceSearch].
+	SearchDevices(ctx context.Context) (int, error)
+
+	// TestDevice runs the CCU's per-device communication/function test
+	// (ReGa DevStartComTest) and polls for completion up to maxWaitSecs
+	// (poll every pollIntervalSecs). The CCU sends a radio test frame and
+	// waits for the device's ACK; a pass means the device answered.
+	// Requires the ReGa runner — returns [ErrUnsupported] on backends
+	// without [Capabilities.CommunicationTest]; the caller additionally
+	// gates on the interface.
+	TestDevice(ctx context.Context, address string, maxWaitSecs, pollIntervalSecs float64) (hmapi.CommunicationTestResult, error)
 
 	// DeleteDevice unpairs the device from the CCU. Maps to the CCU's
 	// `deleteDevice(address, flags)` XML-RPC call. flags is the CCU delete

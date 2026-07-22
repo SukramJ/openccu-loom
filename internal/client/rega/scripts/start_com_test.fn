@@ -1,0 +1,40 @@
+!# openccu-loom — start_com_test
+!# Params: ##address## (device or channel address)
+!# Output: JSON { "success": bool, "started": "<Y-m-d H:M:S>", "error": "..." }
+!#
+!# Starts the CCU's communication/function test for the device: the
+!# interface process sends a radio test frame to the device and awaits an
+!# ACK. Resolution is rename-proof (name lookup, then an address scan over
+!# devices), like set_device_rooms.fn.
+
+string sAddress = "##address##";
+string sTargetId = "";
+
+object oByName = dom.GetObject(sAddress);
+if (oByName) {
+    if (oByName.Address() == sAddress) {
+        sTargetId = oByName.ID();
+    }
+}
+if (sTargetId == "") {
+    object oDevices = dom.GetObject(ID_DEVICES);
+    if (oDevices) {
+        string sDevId;
+        foreach (sDevId, oDevices.EnumIDs()) {
+            object oDev = dom.GetObject(sDevId);
+            if (oDev) {
+                if (oDev.Address() == sAddress) {
+                    sTargetId = oDev.ID();
+                }
+            }
+        }
+    }
+}
+if (sTargetId == "") {
+    Write("{\"success\":false,\"error\":\"device not found\"}");
+} else {
+    object oDev = dom.GetObject(sTargetId);
+    string sStarted = system.Date("%Y-%m-%d %H:%M:%S");
+    oDev.DevStartComTest();
+    Write("{\"success\":true,\"started\":\"" # sStarted # "\"}");
+}

@@ -196,6 +196,9 @@ type HubQuery interface {
 	EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSeconds int, sgtin, key string) error
 	// DisableInstallMode closes the pairing window.
 	DisableInstallMode(ctx context.Context, interfaceID string) error
+	// SearchWiredDevices triggers a wired-bus scan on interfaceID of the
+	// (optionally named) central and returns the count of devices found.
+	SearchWiredDevices(ctx context.Context, interfaceID, central string) (int, error)
 
 	// TriggerBackup kicks off a CCU configuration backup (OpenCCU
 	// only). Returns immediately — callers poll `backup.status`.
@@ -763,6 +766,28 @@ func installModeDisableHandler(q HubQuery) CommandHandler {
 	}
 }
 
+type installModeSearchArgs struct {
+	InterfaceID string `json:"interface_id"`
+	Central     string `json:"central,omitempty"`
+}
+
+func installModeSearchHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args installModeSearchArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.InterfaceID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "interface_id required")
+		}
+		found, err := q.SearchWiredDevices(ctx, args.InterfaceID, args.Central)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "search_devices: "+err.Error())
+		}
+		return map[string]any{"interface_id": args.InterfaceID, "found": found}, nil
+	}
+}
+
 // --- backup.* / firmware.* / inbox.* ---
 
 type inboxAcceptArgs struct {
@@ -1072,6 +1097,7 @@ func registerHubCommands(router *Router, q HubQuery) {
 	router.Register("install_mode.status", installModeStatusHandler(q))
 	router.Register("install_mode.enable", installModeEnableHandler(q))
 	router.Register("install_mode.disable", installModeDisableHandler(q))
+	router.Register("install_mode.search", installModeSearchHandler(q))
 	router.Register("backup.trigger", backupTriggerHandler(q))
 	router.Register("backup.status", backupStatusHandler(q))
 	router.Register("firmware.info", firmwareInfoHandler(q))

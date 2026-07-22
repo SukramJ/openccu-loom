@@ -58,6 +58,14 @@ const (
 	// device; the Note the new device address.
 	ActionDeviceReplace Action = "device_replace"
 
+	// ActionDeviceSearch records a wired-bus device scan. The Note
+	// carries the scanned interface.
+	ActionDeviceSearch Action = "device_search"
+
+	// ActionDeviceCommunicationTest records a per-device communication /
+	// function test. The Entry's DeviceAddress carries the target.
+	ActionDeviceCommunicationTest Action = "device_communication_test"
+
 	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"

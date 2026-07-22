@@ -120,6 +120,27 @@
   let localKey = $state("");
   let localBusy = $state(false);
   const selectedIsHmIP = $derived(selectedInterface.startsWith("HmIP"));
+  const selectedIsWired = $derived(selectedInterface === "BidCos-Wired");
+  let searchingWired = $state(false);
+  async function searchWiredBus() {
+    searchingWired = true;
+    try {
+      const r = await api.searchWiredDevices(
+        selectedInterface,
+        centralFilter || undefined,
+      );
+      toastStore.success(t("inbox.search_wired_done", { count: r.found }));
+      // Give ReGa a moment to surface the found (not-yet-accepted)
+      // devices in the inbox, then refetch.
+      setTimeout(() => void load(), 1500);
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
+      );
+    } finally {
+      searchingWired = false;
+    }
+  }
   const localSgtinInvalid = $derived(
     localSgtin.trim() !== "" && normalizeSgtin(localSgtin) === null,
   );
@@ -524,6 +545,24 @@
         {t("inbox.install_mode_local_hint")}
       </span>
     </form>
+  {/if}
+
+  {#if selectedIsWired}
+    <!-- BidCos-Wired: scan the bus for new devices (no pairing window). -->
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        onclick={() => void searchWiredBus()}
+        disabled={searchingWired}
+        title={t("inbox.search_wired_title")}
+      >
+        {searchingWired ? t("inbox.search_wired_running") : t("inbox.search_wired")}
+      </Button>
+      <span class="text-xs text-slate-400 dark:text-slate-500">
+        {t("inbox.search_wired_hint")}
+      </span>
+    </div>
   {/if}
 
   {#if installModeStore.active}

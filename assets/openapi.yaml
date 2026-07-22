@@ -1028,6 +1028,47 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /install-mode/search:
+    post:
+      operationId: installModeSearch
+      summary: Scan the wired bus for new devices (BidCos-Wired)
+      description: |
+        Triggers a synchronous wired-bus scan (`searchDevices`) on the
+        given BidCos-Wired interface and returns the count of devices
+        found. The found devices join the inbox (not yet accepted) for
+        the operator to accept. Only BidCos-Wired supports it; other
+        interfaces answer 422.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [interface]
+              properties:
+                interface: { type: string, description: The BidCos-Wired interface to scan. }
+                central: { type: string, description: Disambiguates the CCU; optional for single-CCU setups. }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [interface, found]
+                properties:
+                  central: { type: string }
+                  interface: { type: string }
+                  found: { type: integer, description: Number of devices the bus scan found. }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /system/update:
     get:
       tags: [hub]
@@ -1984,6 +2025,35 @@ paths:
           description: |
             Restore dispatched; the configuration transfer continues
             asynchronously (watch CONFIG_PENDING).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/test:
+    post:
+      operationId: testDeviceCommunication
+      summary: Run the per-device communication / function test
+      description: |
+        Asks the CCU to send a radio test frame to the device and reports
+        whether the device answered within the poll window (the same test
+        the CCU inbox runs). Blocks until the test completes or the window
+        elapses. Supported on the radio interfaces (HmIP-RF, BidCos-RF,
+        BidCos-Wired); VirtualDevices and CUxD answer 422. Consult
+        `DeviceSummary.communication_test_supported` before offering the
+        action.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommunicationTestResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -6652,6 +6722,12 @@ components:
             True when the device's interface exposes `restoreConfigToDevice`
             (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
             it. False for BidCos-Wired, CUxD and VirtualDevices.
+        communication_test_supported:
+          type: boolean
+          description: |
+            True when the device's interface can run the CCU's per-device
+            communication test (radio interfaces). The SPA gates the "test"
+            action on it. False for VirtualDevices and CUxD.
         has_sub_devices:
           type: boolean
           description: |
@@ -9495,6 +9571,23 @@ components:
         model_matches:
           type: boolean
           description: True when the candidate's model equals the new device's (an exact swap rather than a compatible cross-type one).
+
+    CommunicationTestResult:
+      type: object
+      required: [passed, started_at, duration_ms, timed_out]
+      description: |
+        Outcome of a per-device communication / function test
+        (POST /devices/{addr}/test).
+      properties:
+        passed:
+          type: boolean
+          description: True when the device answered the radio test frame within the poll window.
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+        duration_ms: { type: integer, format: int64 }
+        timed_out:
+          type: boolean
+          description: True when the poll window elapsed before the device answered.
 
     LinkableChannel:
       type: object

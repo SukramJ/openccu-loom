@@ -48,6 +48,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"restoreConfigToDevice":   true,
 		"listReplaceableDevices":  true,
 		"replaceDevice":           true,
+		"searchDevices":           true,
 		"getLinks":                true,
 		"getLinkPeers":            true,
 		"addLink":                 true,

@@ -72,6 +72,17 @@ type Capabilities struct {
 	// (BidCos-Wired) implement it.
 	ReplaceDevice bool
 
+	// SearchDevices is true when the backend exposes the wired-bus scan
+	// `searchDevices`. CCU only; the caller additionally gates on the
+	// interface, since only hs485d (BidCos-Wired) implements it.
+	SearchDevices bool
+
+	// CommunicationTest is true when the backend can run the CCU's
+	// per-device communication/function test (ReGa DevStartComTest +
+	// poll). Requires the ReGa runner, so CCU only; the caller
+	// additionally gates on the radio interface.
+	CommunicationTest bool
+
 	// RequiresPeriodicRefresh is true for backends that cannot push
 	// events and need the periodic-refresh coordinator.
 	RequiresPeriodicRefresh bool
@@ -179,6 +190,8 @@ func CapabilityFor(kind Kind) Capabilities {
 			FirmwareUpdate:         true,
 			ConfigRestore:          true,
 			ReplaceDevice:          true,
+			SearchDevices:          true,
+			CommunicationTest:      true,
 			AlarmMessages:          true,
 			Backup:                 true,
 			CreateSystemVariable:   true,

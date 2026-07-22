@@ -34,6 +34,7 @@ import type {
   CustomDPSummary,
   DataPointSummary,
   DeviceDetail,
+  CommunicationTestResult,
   DeviceSummary,
   CaptureSummary,
   DiagnosticsEnvelope,
@@ -1226,6 +1227,14 @@ export const api = {
       { method: "POST" },
     );
   },
+  // Run the CCU's per-device communication / function test (radio test
+  // frame + ACK); blocks until complete or the poll window elapses.
+  testDeviceCommunication(address: string) {
+    return request<CommunicationTestResult>(
+      `/devices/${encodeURIComponent(address)}/test`,
+      { method: "POST" },
+    );
+  },
   // Ask a CCU to fetch a firmware image onto the central (admin-only).
   // central is optional for single-CCU deployments.
   downloadSystemFirmware(url: string, central?: string) {
@@ -1323,6 +1332,21 @@ export const api = {
   // `deviceAddress` requests targeted pairing (e.g. by serial).
   async listInstallModeInterfaces() {
     return request<InstallModeInterfaceEntry[]>(`/install-mode/interfaces`);
+  },
+  // Scan the wired bus (BidCos-Wired) for new devices; the found
+  // devices join the inbox for acceptance.
+  async searchWiredDevices(iface: string, central?: string) {
+    return request<{ central: string; interface: string; found: number }>(
+      `/install-mode/search`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interface: iface,
+          ...(central ? { central } : {}),
+        }),
+      },
+    );
   },
   async setInstallModeInterface(
     iface: string,

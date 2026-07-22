@@ -135,6 +135,8 @@
   let deleting = $state(false);
   let updatingFw = $state(false);
   let restoringConfig = $state(false);
+  let testingComm = $state(false);
+  let commTestResult = $state<import("$lib/api/types").CommunicationTestResult | null>(null);
   let exportingDef = $state(false);
 
   // Delete-with-options dialog. The plain confirm becomes a small options
@@ -402,6 +404,25 @@
       toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       restoringConfig = false;
+    }
+  }
+
+  async function onTestCommunication() {
+    if (!detail) return;
+    testingComm = true;
+    commTestResult = null;
+    try {
+      const r = await api.testDeviceCommunication(address);
+      commTestResult = r;
+      if (r.passed) {
+        toastStore.success(t("device.communication_test_passed"));
+      } else {
+        toastStore.warn(t("device.communication_test_failed"));
+      }
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      testingComm = false;
     }
   }
 
@@ -784,6 +805,28 @@
                 <Icon name="mdi:backup-restore" size={14} />
                 {restoringConfig ? "…" : t("device.restore_config")}
               </Button>
+            {/if}
+            {#if detail.communication_test_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onTestCommunication()}
+                disabled={testingComm}
+                title={t("device.communication_test.tooltip")}
+              >
+                <Icon name="mdi:radio-tower" size={14} />
+                {testingComm
+                  ? t("device.communication_test_running")
+                  : t("device.communication_test")}
+              </Button>
+              {#if commTestResult}
+                <Badge variant={commTestResult.passed ? "success" : "warning"}>
+                  {commTestResult.passed
+                    ? t("device.communication_test_passed")
+                    : t("device.communication_test_failed")}
+                </Badge>
+              {/if}
             {/if}
             <Button
               type="button"

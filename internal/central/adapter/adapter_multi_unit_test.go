@@ -13351,6 +13351,14 @@ func (*configFakeOperations) ReplaceDevice(context.Context, string, string) erro
 	return backends.ErrUnsupported
 }
 
+func (*configFakeOperations) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (*configFakeOperations) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
+}
+
 func (*configFakeOperations) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

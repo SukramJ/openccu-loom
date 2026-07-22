@@ -409,6 +409,29 @@ func (b *CcuBackend) ReportValueUsage(ctx context.Context, channelAddress, value
 	return err
 }
 
+// SearchDevices implements Operations. Triggers the hs485d wired-bus
+// scan via the XML-RPC `searchDevices()` call (no args) and returns the
+// count of devices found. Only the BidCos-Wired interface exposes it.
+func (b *CcuBackend) SearchDevices(ctx context.Context) (int, error) {
+	if !b.ifaceType.SupportsDeviceSearch() {
+		return 0, ErrUnsupported
+	}
+	if b.xml == nil {
+		return 0, ErrNotWired
+	}
+	raw, err := b.xml.Call(ctx, "searchDevices")
+	if err != nil {
+		return 0, err
+	}
+	switch v := raw.(type) {
+	case int:
+		return v, nil
+	case float64:
+		return int(v), nil
+	}
+	return 0, nil
+}
+
 // DeleteDevice implements Operations. Maps to the CCU's XML-RPC
 // `deleteDevice(address, flags)`. flags is the CCU delete bitmask
 // ([DeleteFlagReset], [DeleteFlagForce]); 0 lets the CCU run the regular

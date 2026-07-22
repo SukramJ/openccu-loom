@@ -95,6 +95,23 @@ func TestCapabilityFor_ReplaceDevice(t *testing.T) {
 	}
 }
 
+// TestCapabilityFor_SearchDevices verifies that the wired-bus scan
+// capability is advertised only for KindCCU — CUxD and Homegear have no
+// searchDevices wire method (and the interface-level gate on top of it
+// restricts KindCCU further, to BidCos-Wired only).
+func TestCapabilityFor_SearchDevices(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).SearchDevices {
+		t.Error("KindCCU: SearchDevices should be true")
+	}
+	if CapabilityFor(KindCUxD).SearchDevices {
+		t.Error("KindCUxD: SearchDevices should be false")
+	}
+	if CapabilityFor(KindHomegear).SearchDevices {
+		t.Error("KindHomegear: SearchDevices should be false")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Homegear capability profile
 // ---------------------------------------------------------------------------

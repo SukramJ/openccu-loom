@@ -674,3 +674,29 @@ describe("api.setInstallModeInterface — LOCAL teach-in body shape", () => {
     expect(body).not.toHaveProperty("key");
   });
 });
+
+describe("api.searchWiredDevices — wired-bus scan request", () => {
+  it("POSTs interface + central and returns the found count", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ central: "ccu", interface: "BidCos-Wired", found: 2 }),
+    );
+    const result = await api.searchWiredDevices("BidCos-Wired", "ccu");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/install-mode/search");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ interface: "BidCos-Wired", central: "ccu" });
+    expect(result).toEqual({ central: "ccu", interface: "BidCos-Wired", found: 2 });
+  });
+
+  it("omits central from the body when not provided", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ central: "", interface: "BidCos-Wired", found: 0 }),
+    );
+    await api.searchWiredDevices("BidCos-Wired");
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ interface: "BidCos-Wired" });
+    expect(body).not.toHaveProperty("central");
+  });
+});

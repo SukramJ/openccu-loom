@@ -588,3 +588,18 @@ type ReplaceCandidate struct {
 	Central      string `json:"central,omitempty"`
 	ModelMatches bool   `json:"model_matches"`
 }
+
+// --- Device communication test ---
+
+// CommunicationTestResult is the outcome of a per-device communication /
+// function test (POST /devices/{addr}/test): the CCU sends a radio test
+// frame to the device and waits for its ACK. Passed is true when the
+// device's last-completed-test time advanced past the test start within
+// the poll window; TimedOut is true when the window elapsed first.
+type CommunicationTestResult struct {
+	Passed      bool      `json:"passed"`
+	StartedAt   time.Time `json:"started_at"`
+	CompletedAt time.Time `json:"completed_at,omitempty"`
+	DurationMs  int64     `json:"duration_ms"`
+	TimedOut    bool      `json:"timed_out"`
+}

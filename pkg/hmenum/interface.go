@@ -84,6 +84,23 @@ func (i Interface) SupportsReplace() bool {
 	return ok
 }
 
+// SupportsDeviceSearch reports whether a wired-bus scan (`searchDevices`)
+// can be triggered on this interface. True for BidCos-Wired (hs485d)
+// only; false for every RF / HmIP / CUxD / VirtualDevices interface.
+func (i Interface) SupportsDeviceSearch() bool {
+	_, ok := InterfacesSupportingDeviceSearch[i]
+	return ok
+}
+
+// SupportsCommunicationTest reports whether the CCU's per-device
+// communication/function test can run on this interface. True for the
+// radio interfaces (HmIP-RF, BidCos-RF, BidCos-Wired); false for
+// VirtualDevices and CUxD.
+func (i Interface) SupportsCommunicationTest() bool {
+	_, ok := InterfacesSupportingCommunicationTest[i]
+	return ok
+}
+
 // PushesConfigPending reports whether this interface — taken on its
 // own — delivers reliable CONFIG_PENDING events on MASTER writes.
 // True for HmIP-*; false for BidCos-* (CONFIG_PENDING is unreliable;
@@ -185,6 +202,25 @@ var (
 	// have no such concept — the CCU WebUI hides "replace device" for
 	// HmIP for the same reason.
 	InterfacesSupportingReplace = map[Interface]struct{}{
+		InterfaceBidCosRF:    {},
+		InterfaceBidCosWired: {},
+	}
+
+	// InterfacesSupportingDeviceSearch lists the interfaces whose daemon
+	// exposes the wired-bus scan `searchDevices`. Only hs485d
+	// (BidCos-Wired) implements it — RF pairing uses setInstallMode +
+	// addDevice, not a bus scan, and HmIP / CUxD / VirtualDevices have no
+	// bus to scan.
+	InterfacesSupportingDeviceSearch = map[Interface]struct{}{
+		InterfaceBidCosWired: {},
+	}
+
+	// InterfacesSupportingCommunicationTest lists the radio interfaces on
+	// which the CCU's per-device communication test can run. HmIP-RF,
+	// BidCos-RF and BidCos-Wired reach real devices over the bus/radio;
+	// VirtualDevices (aggregated groups, no radio) and CUxD are excluded.
+	InterfacesSupportingCommunicationTest = map[Interface]struct{}{
+		InterfaceHmIPRF:      {},
 		InterfaceBidCosRF:    {},
 		InterfaceBidCosWired: {},
 	}

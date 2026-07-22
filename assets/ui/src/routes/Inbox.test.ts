@@ -12,6 +12,7 @@ const mockListFunctions = vi.fn();
 const mockAcceptInboxDevice = vi.fn();
 const mockListReplaceCandidates = vi.fn();
 const mockReplaceDevice = vi.fn();
+const mockSearchWiredDevices = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 const mockConfirmAsk = vi.fn();
@@ -28,6 +29,7 @@ vi.mock("$lib/api/client", () => ({
     acceptInboxDevice: (...args: unknown[]) => mockAcceptInboxDevice(...args),
     listReplaceCandidates: (...args: unknown[]) => mockListReplaceCandidates(...args),
     replaceDevice: (...args: unknown[]) => mockReplaceDevice(...args),
+    searchWiredDevices: (...args: unknown[]) => mockSearchWiredDevices(...args),
     listInstallModeInterfaces: vi.fn().mockResolvedValue([]),
     setInstallModeInterface: vi.fn(),
     pairDeviceInstallMode: vi.fn(),
@@ -87,6 +89,19 @@ vi.mock("$lib/stores/installMode.svelte", () => ({
 // ---------------------------------------------------------------------------
 
 import Inbox from "./Inbox.svelte";
+// installModeStore is mocked above as a plain object; importing it here
+// (module cache dedup gives the same reference the component sees) lets
+// individual tests populate .interfaces before render so selectedInterface
+// defaults to a chosen interface via the component's own $effect. The real
+// store type exposes `interfaces` as a read-only getter, so writes go
+// through this cast — the mock backing it is a plain writable object.
+import { installModeStore } from "$lib/stores/installMode.svelte";
+import type { InstallModeInterfaceEntry } from "$lib/api/types";
+
+function setStoreInterfaces(list: InstallModeInterfaceEntry[]) {
+  (installModeStore as unknown as { interfaces: InstallModeInterfaceEntry[] }).interfaces =
+    list;
+}
 
 const ONE_DEVICE = [{ address: "0009ABCD", model: "HmIP-STH", central: "" }];
 
@@ -106,6 +121,9 @@ beforeEach(() => {
   mockListReplaceCandidates.mockResolvedValue([]);
   mockReplaceDevice.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(true);
+  // Reset the plain-object store mock's mutable state: individual tests in
+  // the "wired bus search" block below populate .interfaces before render.
+  setStoreInterfaces([]);
 });
 
 afterEach(() => {
@@ -326,5 +344,74 @@ describe("Inbox — replace workflow", () => {
       expect(mockConfirmAsk).toHaveBeenCalled();
     });
     expect(mockReplaceDevice).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wired-bus device search (BidCos-Wired scan button)
+// ---------------------------------------------------------------------------
+// searchWiredBus (Inbox.svelte) is offered only when the operator has the
+// BidCos-Wired interface selected — install mode itself doesn't apply to
+// the wired bus, a scan does. installModeStore.interfaces seeds
+// selectedInterface via the component's own $effect (defaults to the
+// first entry in the list), so each test below sets it before render.
+
+function installModeInterfaces(iface: string) {
+  return [{ interface: iface, active: false, seconds: 0, observed: true, central: "" }];
+}
+
+describe("Inbox — wired bus search", () => {
+  it("shows the search-wired-bus button when BidCos-Wired is selected", async () => {
+    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
+    });
+  });
+
+  it("hides the search-wired-bus button for a non-wired interface", async () => {
+    setStoreInterfaces(installModeInterfaces("HmIP-RF"));
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.accept")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("inbox.search_wired")).toBeNull();
+  });
+
+  it("clicking the button scans the bus and shows the found count", async () => {
+    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
+    mockSearchWiredDevices.mockResolvedValue({
+      central: "",
+      interface: "BidCos-Wired",
+      found: 2,
+    });
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.search_wired"));
+
+    await waitFor(() => {
+      expect(mockSearchWiredDevices).toHaveBeenCalledWith("BidCos-Wired", undefined);
+      expect(mockToastSuccess).toHaveBeenCalled();
+    });
+  });
+
+  it("surfaces a toast error when the scan fails", async () => {
+    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
+    mockSearchWiredDevices.mockRejectedValue(new Error("hs485d unreachable"));
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.search_wired"));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalled();
+    });
   });
 });

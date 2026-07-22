@@ -2282,6 +2282,9 @@ func (f *failOnInstallDevice) SetChannelFunctions(_ context.Context, _ string, _
 }
 
 func (f *failOnInstallDevice) RestoreConfig(_ context.Context, _ string) error { return nil }
+func (f *failOnInstallDevice) TestDeviceCommunication(_ context.Context, _ string) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, nil
+}
 
 func (f *failOnInstallDevice) ReplaceCandidates(_ context.Context, _, _ string) ([]hmapi.ReplaceCandidate, error) {
 	return nil, nil

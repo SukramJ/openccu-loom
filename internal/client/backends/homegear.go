@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -148,6 +149,18 @@ func (b *HomegearBackend) UpdateFirmware(_ context.Context, _ string) error {
 // CCU-style stored-config re-transmit; always returns [ErrUnsupported].
 func (b *HomegearBackend) RestoreConfigToDevice(_ context.Context, _ string) error {
 	return ErrUnsupported
+}
+
+// SearchDevices implements Operations. Homegear has no wired-bus scan;
+// always returns [ErrUnsupported].
+func (b *HomegearBackend) SearchDevices(_ context.Context) (int, error) {
+	return 0, ErrUnsupported
+}
+
+// TestDevice implements Operations. Homegear has no CCU com-test;
+// always returns [ErrUnsupported].
+func (b *HomegearBackend) TestDevice(_ context.Context, _ string, _, _ float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, ErrUnsupported
 }
 
 // ListReplaceableDevices implements Operations. Homegear has no

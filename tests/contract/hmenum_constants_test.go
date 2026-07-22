@@ -207,6 +207,47 @@ func TestReplaceClassification(t *testing.T) {
 	}
 }
 
+// TestDeviceSearchClassification pins InterfacesSupportingDeviceSearch to
+// exactly {BidCos-Wired}: only hs485d implements the wired-bus scan
+// `searchDevices`. RF pairing (HmIP-RF, BidCos-RF) uses setInstallMode +
+// addDevice instead of a bus scan, and CUxD / VirtualDevices have no bus
+// to scan at all.
+func TestDeviceSearchClassification(t *testing.T) {
+	t.Parallel()
+
+	wantTrue := []hmenum.Interface{
+		hmenum.InterfaceBidCosWired,
+	}
+	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceBidCosRF,
+		hmenum.InterfaceHmIPRF,
+		hmenum.InterfaceCUxD,
+		hmenum.InterfaceVirtualDevices,
+	}
+
+	if got := len(hmenum.InterfacesSupportingDeviceSearch); got != 1 {
+		t.Fatalf("InterfacesSupportingDeviceSearch len=%d, want 1", got)
+	}
+
+	for _, iface := range wantTrue {
+		if _, ok := hmenum.InterfacesSupportingDeviceSearch[iface]; !ok {
+			t.Errorf("%s missing from InterfacesSupportingDeviceSearch", iface)
+		}
+		if !iface.SupportsDeviceSearch() {
+			t.Errorf("%s.SupportsDeviceSearch() = false, want true", iface)
+		}
+	}
+
+	for _, iface := range wantFalse {
+		if _, ok := hmenum.InterfacesSupportingDeviceSearch[iface]; ok {
+			t.Errorf("%s must not be in InterfacesSupportingDeviceSearch", iface)
+		}
+		if iface.SupportsDeviceSearch() {
+			t.Errorf("%s.SupportsDeviceSearch() = true, want false", iface)
+		}
+	}
+}
+
 // TestCategoryToTypeCovers ensures every real DataPointCategory maps to
 // a DataPointType. UNDEFINED is intentionally omitted.
 func TestCategoryToTypeCovers(t *testing.T) {

@@ -451,6 +451,8 @@ func TestParamsetGetSurfacesBackendError(t *testing.T) {
 
 type stubHub struct {
 	localCalls         map[string]string
+	wiredSearches      map[string]string
+	wiredFound         int
 	programs           []map[string]any
 	executedID         string
 	executeChecked     bool
@@ -578,6 +580,14 @@ func (h *stubHub) EnableInstallModeLocal(_ context.Context, ifaceID string, dura
 	}
 	h.localCalls[ifaceID] = sgtin + "/" + key + "/" + strconv.Itoa(durationSecs)
 	return nil
+}
+
+func (h *stubHub) SearchWiredDevices(_ context.Context, ifaceID, central string) (int, error) {
+	if h.wiredSearches == nil {
+		h.wiredSearches = map[string]string{}
+	}
+	h.wiredSearches[ifaceID] = central
+	return h.wiredFound, nil
 }
 
 func (h *stubHub) DisableInstallMode(_ context.Context, ifaceID string) error {
@@ -956,6 +966,54 @@ func TestInstallModeFullCycle(t *testing.T) {
 	}
 	if hub.installDisabledID != "HmIP-RF" {
 		t.Fatalf("disabled=%q want HmIP-RF", hub.installDisabledID)
+	}
+}
+
+// TestInstallModeSearchDispatchesToHubQueryAndReturnsFound verifies
+// "install_mode.search" forwards interface_id/central to
+// HubQuery.SearchWiredDevices and echoes the found count back in the
+// result, keyed as {interface_id, found}.
+func TestInstallModeSearchDispatchesToHubQueryAndReturnsFound(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{wiredFound: 4}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"interface_id": "BidCos-Wired", "central": "ccu-01"})
+	res := r.Dispatch(opCtx(), "install_mode.search", args)
+	if res.Error != nil {
+		t.Fatalf("install_mode.search: %+v", res.Error)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("result not a map: %T", res.Data)
+	}
+	if data["interface_id"] != "BidCos-Wired" {
+		t.Fatalf("interface_id=%v, want BidCos-Wired", data["interface_id"])
+	}
+	if found, _ := data["found"].(int); found != 4 {
+		t.Fatalf("found=%v, want 4", data["found"])
+	}
+	got, ok := hub.wiredSearches["BidCos-Wired"]
+	if !ok || got != "ccu-01" {
+		t.Fatalf("wiredSearches[BidCos-Wired]=%q ok=%v, want (ccu-01, true)", got, ok)
+	}
+}
+
+// TestInstallModeSearchRequiresInterfaceID verifies a missing interface_id
+// is rejected as bad_request before HubQuery.SearchWiredDevices is called.
+func TestInstallModeSearchRequiresInterfaceID(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{wiredFound: 4}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(opCtx(), "install_mode.search", json.RawMessage(`{}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+	if len(hub.wiredSearches) != 0 {
+		t.Fatalf("HubQuery.SearchWiredDevices must not be called without interface_id, got %v", hub.wiredSearches)
 	}
 }
 

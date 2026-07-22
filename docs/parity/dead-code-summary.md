@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: e8aa0a53
-HEAD: e8aa0a53
+Generated: 790689ce
+HEAD: 790689ce
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26406 |
-| Reachable | 4595 |
-| Whitelisted | 19031 |
-| **Unreachable** | **2780** |
+| Total Exported | 26452 |
+| Reachable | 4603 |
+| Whitelisted | 19063 |
+| **Unreachable** | **2786** |
 
 ## Top-20 Packages by Dead Code
 
@@ -67,8 +67,8 @@ HEAD: e8aa0a53
 | internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 253 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 253 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 266 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 266 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
@@ -193,8 +193,8 @@ HEAD: e8aa0a53
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 84 | 22 |
-| pkg/hmapi | 0 | 121 | 16 |
-| pkg/hmenum | 0 | 100 | 40 |
+| pkg/hmapi | 0 | 123 | 16 |
+| pkg/hmenum | 0 | 100 | 44 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 4 |

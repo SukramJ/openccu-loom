@@ -42,6 +42,8 @@ export type UIHint = NonNullable<
 // device.FirmwareInfo; availability uses the capitalized keys the Go DTO
 // marshals from device.AvailabilityInfo (IsReachable/LastUpdated/...).
 export type DeviceDetail = components["schemas"]["DeviceDetail"];
+export type CommunicationTestResult =
+  components["schemas"]["CommunicationTestResult"];
 
 // RxMode re-exported from generated schema — the named flags decoded from a
 // device's CCU RX_MODE bitmask. The `wakeup` / `lazy_config` bits mark a

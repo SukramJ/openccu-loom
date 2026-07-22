@@ -422,6 +422,94 @@ func TestHomegearBackendReplaceDeviceUnsupported(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// SearchDevices (BidCos-Wired wired-bus scan)
+// ---------------------------------------------------------------------------
+
+// TestCcuBackendSearchDevicesDispatchesXMLRPCNoArgsIntResult verifies the
+// wire call is exactly `searchDevices()` with no arguments on a
+// BidCos-Wired-scoped backend, and that an int result decodes as-is.
+func TestCcuBackendSearchDevicesDispatchesXMLRPCNoArgsIntResult(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: 3}
+	b := NewCcuBackendForInterface(hmenum.InterfaceBidCosWired, x, nil, nil)
+	count, err := b.SearchDevices(context.Background())
+	if err != nil {
+		t.Fatalf("SearchDevices: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("count=%d, want 3", count)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	if len(got) != 2 {
+		t.Fatalf("expected method+args call, got %v", got)
+	}
+	if method, _ := got[0].(string); method != "searchDevices" {
+		t.Fatalf("method=%s, want searchDevices", method)
+	}
+	args, _ := got[1].([]any)
+	if len(args) != 0 {
+		t.Fatalf("args=%v, want no arguments", args)
+	}
+}
+
+// TestCcuBackendSearchDevicesCoercesFloat64Result verifies a float64 wire
+// reply (as XML-RPC ints commonly decode) is coerced to int.
+func TestCcuBackendSearchDevicesCoercesFloat64Result(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: float64(5)}
+	b := NewCcuBackendForInterface(hmenum.InterfaceBidCosWired, x, nil, nil)
+	count, err := b.SearchDevices(context.Background())
+	if err != nil {
+		t.Fatalf("SearchDevices: %v", err)
+	}
+	if count != 5 {
+		t.Fatalf("count=%d, want 5", count)
+	}
+}
+
+// TestCcuBackendSearchDevicesNonWiredInterfaceUnsupportedWithoutWireCall
+// verifies the interface gate rejects every non-BidCos-Wired interface
+// before any wire call is attempted — only hs485d implements searchDevices.
+func TestCcuBackendSearchDevicesNonWiredInterfaceUnsupportedWithoutWireCall(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: 7}
+	b := NewCcuBackendForInterface(hmenum.InterfaceBidCosRF, x, nil, nil)
+	if _, err := b.SearchDevices(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+	if x.called.Load() != 0 {
+		t.Errorf("wire call must never be made for a non-wired interface, called=%d", x.called.Load())
+	}
+}
+
+// TestCcuBackendSearchDevicesWithoutXMLRPCReturnsErrNotWired verifies a
+// BidCos-Wired-scoped backend without an XML-RPC caller reports
+// ErrNotWired rather than attempting a nil call.
+func TestCcuBackendSearchDevicesWithoutXMLRPCReturnsErrNotWired(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackendForInterface(hmenum.InterfaceBidCosWired, nil, nil, nil)
+	if _, err := b.SearchDevices(context.Background()); !errors.Is(err, ErrNotWired) {
+		t.Fatalf("expected ErrNotWired, got %v", err)
+	}
+}
+
+func TestCuxdBackendSearchDevicesUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	if _, err := b.SearchDevices(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendSearchDevicesUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	if _, err := b.SearchDevices(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
 func TestCcuBackendGetParamsetDescriptionMapsStructs(t *testing.T) {
 	x := &fakeCaller{reply: map[string]any{
 		"STATE": map[string]any{"TYPE": "BOOL", "OPERATIONS": 3},

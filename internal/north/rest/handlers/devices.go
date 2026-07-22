@@ -85,6 +85,11 @@ type DeviceSummary struct {
 	// shows for a device that cannot serve the write.
 	ConfigRestoreSupported bool `json:"config_restore_supported"`
 
+	// CommunicationTestSupported is true when the device's interface can
+	// run the CCU's per-device communication test (radio interfaces).
+	// The SPA gates the "test" action on it.
+	CommunicationTestSupported bool `json:"communication_test_supported"`
+
 	// HasSubDevices mirrors [device.Device.HasSubDevices] so SPA / WS
 	// consumers can apply the same per-channel-group split the MQTT
 	// bridge does under the `sub_devices_enabled` toggle.
@@ -849,29 +854,30 @@ func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
 
 func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	return DeviceSummary{
-		Address:                   d.Address,
-		Central:                   centralName,
-		Interface:                 string(d.Interface),
-		InterfaceID:               d.InterfaceID,
-		IseID:                     d.IseID,
-		Model:                     d.Model,
-		ModelLabel:                d.ModelLabel,
-		ModelIcon:                 d.ModelIcon,
-		SubModel:                  d.SubModel,
-		Name:                      d.Name,
-		Manufacturer:              string(d.Manufacturer),
-		ProductGroup:              string(d.ProductGroup),
-		IsAvailable:               d.Available(),
-		ChannelsCount:             len(d.Channels()),
-		Updatable:                 d.Updatable,
-		UpdateAvailable:           d.UpdateAvailable(),
-		UpdateStatus:              string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
-		Rooms:                     d.Rooms,
-		Functions:                 d.Functions,
-		MasterPushesConfigPending: hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
-		ConfigRestoreSupported:    d.Interface.SupportsConfigRestore(),
-		HasSubDevices:             d.HasSubDevices(),
-		RxMode:                    rxModeInfo(d.RxMode),
+		Address:                    d.Address,
+		Central:                    centralName,
+		Interface:                  string(d.Interface),
+		InterfaceID:                d.InterfaceID,
+		IseID:                      d.IseID,
+		Model:                      d.Model,
+		ModelLabel:                 d.ModelLabel,
+		ModelIcon:                  d.ModelIcon,
+		SubModel:                   d.SubModel,
+		Name:                       d.Name,
+		Manufacturer:               string(d.Manufacturer),
+		ProductGroup:               string(d.ProductGroup),
+		IsAvailable:                d.Available(),
+		ChannelsCount:              len(d.Channels()),
+		Updatable:                  d.Updatable,
+		UpdateAvailable:            d.UpdateAvailable(),
+		UpdateStatus:               string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
+		Rooms:                      d.Rooms,
+		Functions:                  d.Functions,
+		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
+		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
+		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),
+		HasSubDevices:              d.HasSubDevices(),
+		RxMode:                     rxModeInfo(d.RxMode),
 	}
 }
 

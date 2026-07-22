@@ -662,6 +662,15 @@ func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string)
 	return m.Disable(ctx)
 }
 
+// SearchWiredDevices triggers a wired-bus scan via the device-admin
+// registry scan (multi-CCU safe), not the single-hub path.
+func (w *wsHubQuery) SearchWiredDevices(ctx context.Context, interfaceID, centralName string) (int, error) {
+	if w.deviceAdmin == nil {
+		return 0, errors.New("ws: device admin not wired")
+	}
+	return w.deviceAdmin.SearchWiredDevices(ctx, centralName, interfaceID)
+}
+
 func (w *wsHubQuery) TriggerBackup(ctx context.Context) error {
 	h := w.hub.Hub()
 	if h == nil {
@@ -1001,6 +1010,15 @@ func (w *wsDeviceWriter) ReplaceDevice(ctx context.Context, centralName, oldAddr
 		return errors.New("ws: device admin not wired")
 	}
 	return w.admin.ReplaceDevice(ctx, centralName, oldAddress, newAddress)
+}
+
+// TestDeviceCommunication runs the CCU's per-device communication test
+// via DeviceAdminDomain.TestDeviceCommunication.
+func (w *wsDeviceWriter) TestDeviceCommunication(ctx context.Context, address string) (hmapi.CommunicationTestResult, error) {
+	if w.admin == nil {
+		return hmapi.CommunicationTestResult{}, errors.New("ws: device admin not wired")
+	}
+	return w.admin.TestDeviceCommunication(ctx, address)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

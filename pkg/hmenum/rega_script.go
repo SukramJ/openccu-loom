@@ -36,6 +36,8 @@ const (
 	RegaScriptUpdateSystemVariable  RegaScript = "update_system_variable"
 	RegaScriptSetDeviceRooms        RegaScript = "set_device_rooms"
 	RegaScriptSetDeviceFunctions    RegaScript = "set_device_functions"
+	RegaScriptStartComTest          RegaScript = "start_com_test"
+	RegaScriptPollComTest           RegaScript = "poll_com_test"
 	RegaScriptGetUserLevel          RegaScript = "get_user_level"
 	RegaScriptCreateRoom            RegaScript = "create_room"
 	RegaScriptRenameRoom            RegaScript = "rename_room"
@@ -76,6 +78,8 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptUpdateSystemVariable,
 	RegaScriptSetDeviceRooms,
 	RegaScriptSetDeviceFunctions,
+	RegaScriptStartComTest,
+	RegaScriptPollComTest,
 	RegaScriptGetUserLevel,
 	RegaScriptCreateRoom,
 	RegaScriptRenameRoom,
