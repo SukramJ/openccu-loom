@@ -2061,6 +2061,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/firmware/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download a firmware image onto a CCU (admin-only)
+         * @description Instructs one CCU to fetch a firmware image from the supplied
+         *     http/https URL onto the central (posting to the CCU's maintenance
+         *     CGI) so it can be staged for a later install. The CCU performs the
+         *     transfer asynchronously; the endpoint returns 202 once the request
+         *     was accepted.
+         */
+        post: operations["downloadSystemFirmware"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/install-mode": {
         parameters: {
             query?: never;
@@ -8635,13 +8659,60 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Update scheduled */
+            /**
+             * @description Update scheduled. When the device's radio interface reports a
+             *     high transmit duty cycle the body carries an advisory
+             *     `duty_cycle_warning` (the update is never rejected on that
+             *     basis, mirroring the CCU WebUI's non-blocking warning).
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example scheduled */
+                        status: string;
+                        /** @description Transmit duty cycle in percent of the device's radio interface, present only when it is at or above the warning threshold (80%). Absent when unknown or below. */
+                        duty_cycle_warning?: number;
+                    };
+                };
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    downloadSystemFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uri
+                     * @description http/https firmware image the CCU should fetch.
+                     */
+                    url: string;
+                    /** @description Target central (optional for single-CCU deployments). */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Download triggered */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

@@ -118,6 +118,15 @@ type DeviceAdmin interface {
 	// [ErrAcceptConfigIncomplete].
 	AcceptInboxDevice(ctx context.Context, address string, opts AcceptInboxOptions) error
 	UpdateFirmware(ctx context.Context, address string) error
+	// InterfaceDutyCycle returns the transmit duty cycle in percent
+	// (0..100) of the radio interface the device identified by address is
+	// paired to, sourced from the per-interface BidCos utilisation poll.
+	// The bool is false when the value is unknown: the device is not
+	// found, its interface carries no BidCos gateway (HmIP interfaces
+	// report a device-level DUTY_CYCLE data point instead), or the poll
+	// has not populated the cache yet. It is a cache read — no CCU round
+	// trip — so the firmware-update gate can consult it inline.
+	InterfaceDutyCycle(address string) (int, bool)
 	SetRooms(ctx context.Context, address string, rooms []string) error
 	SetFunctions(ctx context.Context, address string, functions []string) error
 }

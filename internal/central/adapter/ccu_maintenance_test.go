@@ -113,3 +113,119 @@ func TestCCUMaintenanceRebootCCUNilRegistry(t *testing.T) {
 		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
 	}
 }
+
+// downloadOps records the firmware-download URL passed to the primary
+// backend and returns a configurable error.
+type downloadOps struct {
+	fakeOperations
+
+	downloadCalls int
+	lastURL       string
+	downloadErr   error
+}
+
+func (d *downloadOps) DownloadFirmware(_ context.Context, url string) error {
+	d.downloadCalls++
+	d.lastURL = url
+	return d.downloadErr
+}
+
+func TestCCUMaintenanceDownloadFirmwareSuccess(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); err != nil {
+		t.Fatalf("DownloadFirmware: %v", err)
+	}
+	if ops.downloadCalls != 1 || ops.lastURL != "https://x/fw.tgz" {
+		t.Fatalf("expected one download of the url, got calls=%d url=%q", ops.downloadCalls, ops.lastURL)
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwareSingleCentralDefault(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	// Empty central resolves to the sole registered central.
+	if err := dom.DownloadFirmware(context.Background(), "", "https://x/fw.tgz"); err != nil {
+		t.Fatalf("DownloadFirmware: %v", err)
+	}
+	if ops.downloadCalls != 1 {
+		t.Fatalf("expected the sole central to be used, got calls=%d", ops.downloadCalls)
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwareUnknownCentral(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	err := dom.DownloadFirmware(context.Background(), "nope", "https://x/fw.tgz")
+	if !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+	if ops.downloadCalls != 0 {
+		t.Fatalf("backend must not be called for an unknown central")
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwarePropagatesError(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{
+		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		downloadErr:    errors.New("ccu unreachable"),
+	}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); err == nil {
+		t.Fatal("expected the backend download error to propagate")
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwareNilRegistry(t *testing.T) {
+	t.Parallel()
+	dom := NewCCUMaintenanceDomain(nil, nil)
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+}
+
+// TestCCUMaintenanceDownloadFirmwareAmbiguousWithoutCentralName pins the
+// resolveCentral rule that the empty-central convenience only applies to a
+// single-CCU deployment: with two centrals registered, an empty name must
+// not silently pick one — it is ambiguous and must fail closed.
+func TestCCUMaintenanceDownloadFirmwareAmbiguousWithoutCentralName(t *testing.T) {
+	t.Parallel()
+	w := clientpkg.NewValueWriter()
+	reg := central.NewRegistry()
+	opsByCentral := map[string]*downloadOps{}
+	for _, name := range []string{"ccu-01", "ccu-02"} {
+		c, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%s): %v", name, err)
+		}
+		ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+		opsByCentral[name] = ops
+		w.Register(name, "HmIP-RF", ops)
+		ic := newTestInterfaceClient(t, name, "HmIP-RF", 5)
+		if err := c.Clients.Register(&coordinators.ClientEntry{
+			InterfaceID: "HmIP-RF",
+			Interface:   hmenum.InterfaceHmIPRF,
+			Client:      ic,
+		}); err != nil {
+			t.Fatalf("Clients.Register(%s): %v", name, err)
+		}
+		if err := reg.Register(c); err != nil {
+			t.Fatalf("reg.Register(%s): %v", name, err)
+		}
+	}
+	dom := NewCCUMaintenanceDomain(reg, w)
+
+	err := dom.DownloadFirmware(context.Background(), "", "https://x/fw.tgz")
+	if !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral for an ambiguous default, got %v", err)
+	}
+	for name, ops := range opsByCentral {
+		if ops.downloadCalls != 0 {
+			t.Fatalf("backend for %s must not be called on an ambiguous default", name)
+		}
+	}
+}

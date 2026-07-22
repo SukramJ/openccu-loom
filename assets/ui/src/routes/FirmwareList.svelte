@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { DeviceDetail, DeviceSummary } from "$lib/api/types";
+  import type { DeviceDetail, DeviceSummary, InterfaceInfo } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -28,9 +28,18 @@
 
   // ---- state ----------------------------------------------------------
 
+  // Duty cycle (percent) at or above which a firmware update is flagged
+  // as risky in the confirm dialog. Mirrors the backend gate; the update
+  // is never blocked, only warned.
+  const DUTY_CYCLE_WARN = 80;
+
   let detailMap = $state<Record<string, DeviceDetail>>({});
   let loadingDetail = $state<Set<string>>(new Set());
   let updating = $state<Set<string>>(new Set());
+  // Per-interface transmit duty cycle from GET /interfaces (D02 surfaces
+  // it for BidCos interfaces). Keyed by "<central>|<interface_id>" so the
+  // update-confirm dialog can warn when a device's radio is saturated.
+  let interfaceDutyCycle = $state<Record<string, number>>({});
   let filterMode = $state<"all" | "updatable">(
     loadLS("firmware:mode", "all") === "updatable" ? "updatable" : "all",
   );
@@ -103,11 +112,36 @@
     if (deviceStore.items.length === 0) {
       await deviceStore.refresh();
     }
+    // Best-effort: the duty-cycle map only feeds an advisory warning, so
+    // a failed interfaces fetch must not block the firmware overview.
+    void loadInterfaceDutyCycles();
     // Eagerly load detail for updatable devices so firmware version
     // info is immediately visible.
     const updatable = deviceStore.items.filter((d) => d.updatable);
     await Promise.allSettled(updatable.map((d) => loadDetail(d.address)));
   });
+
+  async function loadInterfaceDutyCycles() {
+    try {
+      const ifaces: InterfaceInfo[] = await api.listInterfaces();
+      const next: Record<string, number> = {};
+      for (const i of ifaces) {
+        if (typeof i.duty_cycle === "number") {
+          next[(i.central_id ?? "") + "|" + i.id] = i.duty_cycle;
+        }
+      }
+      interfaceDutyCycle = next;
+    } catch {
+      // No duty-cycle warnings — the update still works.
+    }
+  }
+
+  // dutyCycleFor returns the transmit duty cycle (percent) of the radio
+  // interface a device is paired to, or undefined when unknown (HmIP
+  // interfaces or an un-polled BidCos gateway carry no value).
+  function dutyCycleFor(d: DeviceSummary): number | undefined {
+    return interfaceDutyCycle[(d.central ?? "") + "|" + d.interface_id];
+  }
 
   // ---- helpers ---------------------------------------------------------
 
@@ -161,10 +195,16 @@
     }
   }
 
-  async function triggerUpdate(addr: string, name: string) {
+  async function triggerUpdate(device: DeviceSummary, name: string) {
+    const addr = device.address;
+    const dc = dutyCycleFor(device);
+    const body =
+      typeof dc === "number" && dc >= DUTY_CYCLE_WARN
+        ? t("firmware.duty_cycle_warning", { value: dc })
+        : "";
     const ok = await confirmStore.ask({
       title: t("firmware.confirm_update", { name }),
-      body: "",
+      body,
       confirmLabel: t("firmware.update"),
       destructive: false,
     });
@@ -371,7 +411,7 @@
                 variant="default"
                 size="sm"
                 disabled={inProgress}
-                onclick={() => void triggerUpdate(device.address, device.name || device.address)}
+                onclick={() => void triggerUpdate(device, device.name || device.address)}
               >
                 {#if inProgress}{t("firmware.in_progress")}{:else}{t("firmware.update")}{/if}
               </Button>

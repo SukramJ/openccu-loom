@@ -24,6 +24,13 @@
   the CCU WebUI's own behaviour — previously a long-press counter could
   linger and keep the device sending long-press events to the CCU after
   you switched the link off.
+- **Firmware update warns on a busy radio, plus CCU firmware download.**
+  When you trigger a device firmware update over a saturated radio
+  interface (duty cycle 80 % or more), the confirm dialog now warns that
+  the over-the-air transfer may stall — the update still runs, it is only
+  a heads-up. The System page's CCU update card also gains an admin-only
+  field to have a CCU download a firmware image from a URL onto the
+  central so it is ready to install.
 - **Radio load per interface on the Diagnostics page.** BidCos radio
   interfaces now show their transmit duty cycle and receive carrier
   sense right in the interface table — so a pure-BidCos setup or a

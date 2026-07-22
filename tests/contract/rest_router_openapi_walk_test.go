@@ -170,6 +170,7 @@ func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string, interfaces.Acc
 	return nil
 }
 func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { return nil }
+func (fakeDeviceAdmin) InterfaceDutyCycle(string) (int, bool)                { return 0, false }
 func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error { return nil }
 

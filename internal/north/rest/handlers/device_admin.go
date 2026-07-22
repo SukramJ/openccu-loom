@@ -163,9 +163,32 @@ func writeRenameError(w http.ResponseWriter, r *http.Request, err error) {
 	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Rename failed", err)
 }
 
+// dutyCycleWarningThreshold is the transmit duty cycle in percent at or
+// above which a firmware update is flagged as risky. The CCU WebUI
+// gates device updates on a high duty cycle (isDutyCycleOK4DevUpdate);
+// we do not block — an OTA flash still queues — but the operator is
+// warned so a stalled transfer over a saturated radio is expected, not
+// surprising.
+const dutyCycleWarningThreshold = 80
+
+// FirmwareUpdateResponse is the 202 body of the device firmware-update
+// endpoint. DutyCycleWarning is present only when the device's radio
+// interface reports a transmit duty cycle at or above
+// [dutyCycleWarningThreshold]; it is advisory — the update is scheduled
+// regardless. Absent when the duty cycle is unknown or below the
+// threshold.
+type FirmwareUpdateResponse struct {
+	Status           string `json:"status"`
+	DutyCycleWarning *int   `json:"duty_cycle_warning,omitempty"`
+}
+
 // UpdateDeviceFirmware kicks off a firmware update for the device.
 // The CCU runs the actual transfer asynchronously; this endpoint
-// returns 202 once the request was accepted.
+// returns 202 once the request was accepted. When the device's radio
+// interface reports a high transmit duty cycle the response carries an
+// advisory `duty_cycle_warning` field so the caller can surface the
+// risk of a stalled OTA transfer; the update is never rejected on that
+// basis.
 func UpdateDeviceFirmware(admin DeviceAdmin) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if admin == nil {
@@ -173,11 +196,16 @@ func UpdateDeviceFirmware(admin DeviceAdmin) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Device admin unavailable", ""))
 			return
 		}
-		if err := admin.UpdateFirmware(r.Context(), chi.URLParam(r, "addr")); err != nil {
+		addr := chi.URLParam(r, "addr")
+		if err := admin.UpdateFirmware(r.Context(), addr); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Firmware update failed", err)
 			return
 		}
-		JSON(w, http.StatusAccepted, map[string]string{"status": "scheduled"})
+		resp := FirmwareUpdateResponse{Status: "scheduled"}
+		if dc, ok := admin.InterfaceDutyCycle(addr); ok && dc >= dutyCycleWarningThreshold {
+			resp.DutyCycleWarning = &dc
+		}
+		JSON(w, http.StatusAccepted, resp)
 	}
 }
 

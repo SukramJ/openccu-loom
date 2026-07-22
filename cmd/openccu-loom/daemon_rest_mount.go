@@ -256,9 +256,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		RequireAdmin: func(next http.Handler) http.Handler {
 			return d.authMw.RequireRole(auth.RoleAdmin, next)
 		},
-		SystemCCU: newSystemCCUAdapter(d.reg, centralResolve),
-		CCUReboot: d.ccuMaintenanceDomain,
-		RateLimit: buildRateLimitConfig(cfg),
+		SystemCCU:        newSystemCCUAdapter(d.reg, centralResolve),
+		CCUReboot:        d.ccuMaintenanceDomain,
+		FirmwareDownload: d.ccuMaintenanceDomain,
+		RateLimit:        buildRateLimitConfig(cfg),
 		Capabilities: runtimeCapabilityDetector{
 			mqtt:              d.mqttAvailable,
 			matter:            cfg.North.Matter.Enabled,

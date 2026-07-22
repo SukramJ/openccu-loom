@@ -28,6 +28,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list (address, number, eligibility). The device-detail Links tab keeps
   the device-wide switch and adds a per-channel switch for each eligible
   channel. REST `APIVersion` 2.36.0.
+- **Firmware update duty-cycle warning + CCU firmware download.** The
+  device firmware-update endpoint (`POST
+  /devices/{addr}/firmware/update`) now checks the device's radio
+  interface against the per-interface duty-cycle poll and, when it is
+  saturated (≥ 80 %), returns an advisory `duty_cycle_warning` in the
+  202 body — it never blocks the update, mirroring the CCU WebUI's
+  non-blocking warning. The firmware overview surfaces the same warning
+  in the update-confirm dialog. A new admin-only endpoint `POST
+  /api/v1/system/firmware/download` (audited) tells a CCU to fetch a
+  firmware image from a URL onto the central so it can be staged for
+  installation; the CCU system-update panel gains a download field for
+  it. REST `APIVersion` 2.40.0.
 - **Per-radio-interface duty cycle and carrier sense on the Diagnostics
   page.** BidCos radio interfaces now surface their transmit duty cycle
   and receive carrier-sense load directly in the interface table, so

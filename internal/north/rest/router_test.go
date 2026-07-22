@@ -64,6 +64,7 @@ func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.
 	return nil
 }
 func (f *fakeAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
+func (f *fakeAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (f *fakeAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (f *fakeAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
 
@@ -317,6 +318,7 @@ func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfac
 	return nil
 }
 func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
+func (fakeDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
 
@@ -1220,6 +1222,83 @@ func TestRouter_CCUReboot_route(t *testing.T) {
 	}
 	if entries := rec.List(10); len(entries) != 1 || entries[0].Action != audit.ActionSystemCCUReboot || entries[0].Note != "home" {
 		t.Fatalf("expected 1 system_ccu_reboot audit entry for home, got %+v", entries)
+	}
+}
+
+// fakeFirmwareDownloadService is a minimal FirmwareDownloadPort for
+// router-level integration tests; it records the last (central, url) pair
+// it was asked to download and returns a configurable error.
+type fakeFirmwareDownloadService struct {
+	lastCentral string
+	lastURL     string
+	err         error
+}
+
+func (f *fakeFirmwareDownloadService) DownloadFirmware(_ context.Context, central, url string) error {
+	f.lastCentral = central
+	f.lastURL = url
+	return f.err
+}
+
+// TestRouter_FirmwareDownload_route locks POST /system/firmware/download
+// behind the admin role (mirrors TestRouter_CCUReboot_route) and verifies
+// the unknown-central 404, the happy-path 202, and that the download is
+// recorded in the audit log end-to-end through the router — not just at
+// the handler unit-test level.
+func TestRouter_FirmwareDownload_route(t *testing.T) {
+	t.Parallel()
+	mw := auth.NewMiddleware(nil, nil)
+	svc := &fakeFirmwareDownloadService{}
+	rec := audit.NewBuffer(10)
+	build := func(role auth.Role) http.Handler {
+		return NewRouter(Deps{
+			StartedAt:        time.Now(),
+			FirmwareDownload: svc,
+			AuditRecorder:    rec,
+			AuthResolve: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			},
+			AuthRequire:  mw.Require,
+			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+		})
+	}
+	firmwareDownloadBody := func(central string) io.Reader {
+		body := `{"url":"https://x/fw.tgz"`
+		if central != "" {
+			body += `,"central":"` + central + `"`
+		}
+		body += `}`
+		return strings.NewReader(body)
+	}
+
+	rr := httptest.NewRecorder()
+	build(auth.RoleViewer).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/firmware/download", firmwareDownloadBody("")))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("viewer must be forbidden from a firmware download, got %d", rr.Code)
+	}
+
+	svc.err = hmerr.ErrUnknownCentral
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/firmware/download", firmwareDownloadBody("nope")))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unknown central must return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	svc.err = nil
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/firmware/download", firmwareDownloadBody("home")))
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("admin download must return 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if svc.lastCentral != "home" || svc.lastURL != "https://x/fw.tgz" {
+		t.Fatalf("expected download dispatched for central=home url=https://x/fw.tgz, got central=%q url=%q", svc.lastCentral, svc.lastURL)
+	}
+	if entries := rec.List(10); len(entries) != 1 || entries[0].Action != audit.ActionSystemFirmwareDownload ||
+		entries[0].Note != "home https://x/fw.tgz" {
+		t.Fatalf("expected 1 system_firmware_download audit entry for home, got %+v", entries)
 	}
 }
 

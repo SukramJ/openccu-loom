@@ -4,6 +4,8 @@
   import type { SystemUpdateEntry } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -22,6 +24,44 @@
   let busy = $state<string | null>(null);
 
   const isAdmin = $derived(authStore.identity?.role === "admin");
+
+  // Firmware-download form: an admin supplies an http(s) URL and the CCU
+  // fetches the image onto the central so it can be staged for a later
+  // install. Optional per-central target for multi-CCU deployments.
+  let downloadUrl = $state("");
+  let downloadCentral = $state("");
+  let downloading = $state(false);
+
+  const centralOptions = $derived(
+    entries
+      .map((e) => e.central ?? "")
+      .filter((c) => c !== "")
+      .map((c) => ({ value: c, label: c })),
+  );
+
+  // A firmware download targets exactly one CCU. For multi-CCU
+  // deployments default the selector to the first central; single-CCU
+  // leaves it empty so the backend resolves the sole central.
+  $effect(() => {
+    if (centralOptions.length > 1 && downloadCentral === "") {
+      downloadCentral = centralOptions[0].value;
+    }
+  });
+
+  async function downloadFirmware() {
+    const url = downloadUrl.trim();
+    if (!url || downloading) return;
+    downloading = true;
+    try {
+      await api.downloadSystemFirmware(url, downloadCentral || undefined);
+      toastStore.success(t("firmware_download.triggered"));
+      downloadUrl = "";
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      downloading = false;
+    }
+  }
 
   async function load() {
     error = null;
@@ -151,5 +191,38 @@
     {#if !isAdmin}
       <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("ccu_update.admin_only")}</p>
     {/if}
+  {/if}
+
+  {#if isAdmin}
+    <div class="space-y-2 border-t border-[var(--ha-divider-color)] pt-4">
+      <h4 class="text-sm font-semibold">{t("firmware_download.title")}</h4>
+      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("firmware_download.subtitle")}</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <Input
+          class="min-w-0 flex-1"
+          type="url"
+          bind:value={downloadUrl}
+          placeholder={t("firmware_download.url_placeholder")}
+          aria-label={t("firmware_download.url_label")}
+          disabled={downloading}
+        />
+        {#if centralOptions.length > 1}
+          <Select
+            class="h-9 w-auto"
+            bind:value={downloadCentral}
+            options={centralOptions}
+          />
+        {/if}
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          disabled={downloading || downloadUrl.trim() === ""}
+          onclick={() => void downloadFirmware()}
+        >
+          {downloading ? t("firmware_download.downloading") : t("firmware_download.download")}
+        </Button>
+      </div>
+    </div>
   {/if}
 </div>
