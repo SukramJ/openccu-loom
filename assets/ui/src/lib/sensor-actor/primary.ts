@@ -69,6 +69,11 @@ export function findPrimaryDP(
   }
   const readable = dps.find((d) => d.operations.read && d.operations.event);
   if (readable) return readable;
+  // Never promote a write-only DP (e.g. an action press) to the
+  // headline — it has no value to display. Prefer anything readable;
+  // only a pure-action channel falls back to its first DP.
+  const anyReadable = dps.find((d) => d.operations.read);
+  if (anyReadable) return anyReadable;
   return dps[0];
 }
 
