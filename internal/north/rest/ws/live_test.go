@@ -2272,6 +2272,14 @@ func (f *failOnInstallDevice) SetInstallMode(_ context.Context, _ string, _ int)
 	return errors.New("install mode failed")
 }
 
+func (f *failOnInstallDevice) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *failOnInstallDevice) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
 // TestExtendedChangeHistoryListError exercises the error path in changeHistoryListHandler.
 func TestExtendedChangeHistoryListError(t *testing.T) {
 	r, _, _, hist, _, _ := newRouterWithExtended()

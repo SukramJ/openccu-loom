@@ -525,6 +525,33 @@ export const api = {
       },
     );
   },
+  // setChannelRooms / setChannelFunctions replace a single channel's
+  // room / function assignment sets; an empty array clears the set
+  // (PATCH /devices/{addr}/channels/{no}).
+  setChannelRooms(address: string, channelNo: number, rooms: string[]) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms }),
+      },
+    );
+  },
+  setChannelFunctions(
+    address: string,
+    channelNo: number,
+    functions: string[],
+  ) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ functions }),
+      },
+    );
+  },
   // deleteDevice unpairs a device. reset additionally factory-resets the
   // device during removal; force removes an unreachable device even when the
   // CCU cannot complete the handshake. Both map onto the CCU delete bitmask

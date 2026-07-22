@@ -770,8 +770,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.DeviceAdmin != nil {
 				pr.With(admin).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))
-				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin))
-				pr.With(op).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin))
+				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(op).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
 			}

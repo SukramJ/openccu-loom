@@ -370,6 +370,36 @@
     },
     {
       "category": "devices",
+      "description": "Replace a single channel's function (Gewerk) assignments. An empty array clears the set.",
+      "name": "device.set_channel_functions",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "functions": "array"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "functions": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Replace a single channel's room assignments. An empty array clears the set.",
+      "name": "device.set_channel_rooms",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "rooms": "array"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "rooms": "array"
+      }
+    },
+    {
+      "category": "devices",
       "description": "Export a device definition as an aiohomematic-compatible zip (device + paramset descriptions, anonymised). Returns model, filename and base64-encoded zip data.",
       "name": "devices.export_definition",
       "args": {

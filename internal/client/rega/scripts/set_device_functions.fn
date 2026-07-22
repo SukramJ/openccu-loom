@@ -4,24 +4,58 @@
 !#         assignment)
 !# Output: count of assignments after the update.
 !#
-!# Replaces the device's function (Gewerk) assignments with the given
+!# Replaces the object's function (Gewerk) assignments with the given
 !# set. Functions not found on the CCU are silently skipped — the
 !# caller refreshes the device list afterwards to pick up the canonical
 !# state.
+!#
+!# Resolution is rename-proof: dom.GetObject(name) only matches while the
+!# object's name still equals its address, so after a verify miss the
+!# script scans devices and channels by Address() — the same strategy the
+!# CCU's own Device.getReGaIDByAddress method uses.
 
 string sAddress = "##address##";
 string sFunctions = "##functions##";
 integer iCount = 0;
+string sTargetId = "";
 
-object oChan = dom.GetObject(sAddress);
-if (oChan) {
-    string sId = oChan.ID();
+object oByName = dom.GetObject(sAddress);
+if (oByName) {
+    if (oByName.Address() == sAddress) {
+        sTargetId = oByName.ID();
+    }
+}
+if (sTargetId == "") {
+    object oDevices = dom.GetObject(ID_DEVICES);
+    if (oDevices) {
+        string sDevId;
+        foreach (sDevId, oDevices.EnumIDs()) {
+            object oDev = dom.GetObject(sDevId);
+            if (oDev) {
+                if (oDev.Address() == sAddress) {
+                    sTargetId = oDev.ID();
+                } else {
+                    string sChnId;
+                    foreach (sChnId, oDev.Channels()) {
+                        object oChn = dom.GetObject(sChnId);
+                        if (oChn) {
+                            if (oChn.Address() == sAddress) {
+                                sTargetId = oChn.ID();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+if (sTargetId != "") {
     object oFuncList = dom.GetObject(ID_FUNCTIONS);
     string sFuncId;
     foreach (sFuncId, oFuncList.EnumIDs()) {
         object oFunc = dom.GetObject(sFuncId);
         if (oFunc) {
-            oFunc.Remove(sId);
+            oFunc.Remove(sTargetId);
         }
     }
     string sFuncName;
@@ -29,7 +63,7 @@ if (oChan) {
         if (sFuncName != "") {
             object oFunc = oFuncList.Get(sFuncName);
             if (oFunc) {
-                oFunc.Add(sId);
+                oFunc.Add(sTargetId);
                 iCount = iCount + 1;
             }
         }

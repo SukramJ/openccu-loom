@@ -3035,6 +3035,10 @@
           "wire_value": "get_user_level"
         },
         {
+          "go_name": "RegaScriptRebootCCU",
+          "wire_value": "reboot_ccu"
+        },
+        {
           "go_name": "RegaScriptRenameFunction",
           "wire_value": "rename_function"
         },

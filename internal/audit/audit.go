@@ -32,6 +32,12 @@ const (
 	// for one device. The Entry's DeviceAddress carries the target.
 	ActionDeviceInstallMode Action = "device_install_mode"
 
+	// ActionDeviceAssignment records a room / function (Gewerk)
+	// assignment change on a device or a single channel. The Entry's
+	// DeviceAddress carries the device or channel address; the Note the
+	// assigned sets.
+	ActionDeviceAssignment Action = "device_assignment"
+
 	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"

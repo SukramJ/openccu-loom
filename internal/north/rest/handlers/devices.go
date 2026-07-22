@@ -182,6 +182,11 @@ type ChannelSummary struct {
 	// room can be resolved. External clients use it as the
 	// suggested-area of the channel group's sub-device.
 	Room string `json:"room,omitempty"`
+	// Rooms is the channel's full room-assignment set
+	// ([device.Channel.Rooms]) — unlike [ChannelSummary.Room] it is not
+	// collapsed to the unique case, so editors can round-trip the
+	// assignment. Empty when the channel carries no room assignment.
+	Rooms []string `json:"rooms,omitempty"`
 	// Functions are the channel's resolved "Gewerke" (function) labels
 	// ([device.Channel.Functions]) — the channel-level twin of
 	// [DeviceSummary.Functions]. Surfaced so clients can map functions at
@@ -663,6 +668,9 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		}
 	}
 	s.Room = ch.Room()
+	if len(ch.Rooms) > 0 {
+		s.Rooms = ch.Rooms
+	}
 	if len(ch.Functions) > 0 {
 		s.Functions = ch.Functions
 	}

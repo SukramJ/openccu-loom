@@ -129,6 +129,13 @@ type DeviceAdmin interface {
 	InterfaceDutyCycle(address string) (int, bool)
 	SetRooms(ctx context.Context, address string, rooms []string) error
 	SetFunctions(ctx context.Context, address string, functions []string) error
+	// SetChannelRooms replaces a single channel's room assignments. The
+	// channel address is resolved as deviceAddr + ":" + channelNo; an
+	// explicit empty slice clears every assignment.
+	SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error
+	// SetChannelFunctions replaces a single channel's function (Gewerk)
+	// assignments, mirroring [DeviceAdmin.SetChannelRooms].
+	SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error
 }
 
 // AcceptInboxOptions carries the optional first-time configuration
@@ -157,6 +164,11 @@ func (o AcceptInboxOptions) HasConfig() bool {
 // is durable — callers should surface this so the operator re-applies
 // only the configuration rather than re-accepting the device.
 var ErrAcceptConfigIncomplete = errors.New("device accepted but initial configuration incomplete")
+
+// ErrChannelNotFound signals that a channel-scoped device-admin
+// operation named a channel number the device does not have. REST maps
+// it to 404 so a typo is distinguishable from an upstream failure.
+var ErrChannelNotFound = errors.New("channel not found")
 
 // DiagnosticsIntrospectService is the facade the live-introspection
 // diagnostics endpoints depend on. It exposes read-only daemon internals

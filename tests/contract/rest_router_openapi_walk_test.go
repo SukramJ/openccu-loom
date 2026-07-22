@@ -173,6 +173,13 @@ func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { r
 func (fakeDeviceAdmin) InterfaceDutyCycle(string) (int, bool)                { return 0, false }
 func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error { return nil }
+func (fakeDeviceAdmin) SetChannelRooms(context.Context, string, int, []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) SetChannelFunctions(context.Context, string, int, []string) error {
+	return nil
+}
 
 type fakeDeviceInstallMode struct{}
 

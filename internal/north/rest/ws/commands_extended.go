@@ -36,6 +36,13 @@ type DeviceWriter interface {
 	// SetInstallMode toggles a single device into install mode for the
 	// given duration. Used by `device.install_mode`.
 	SetInstallMode(ctx context.Context, address string, durationSeconds int) error
+	// SetChannelRooms replaces a single channel's room assignments. An
+	// explicit empty slice clears the set. Used by
+	// `device.set_channel_rooms`.
+	SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error
+	// SetChannelFunctions replaces a single channel's function (Gewerk)
+	// assignments. Used by `device.set_channel_functions`.
+	SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error
 }
 
 // ParamsetWriter mutates a paramset in one shot. Used by `paramset.put`
@@ -252,6 +259,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("device.rename", deviceRenameHandler(cfg.Devices))
 		router.Register("device.rename_channel", deviceRenameChannelHandler(cfg.Devices))
 		router.Register("device.install_mode", deviceInstallModeHandler(cfg.Devices))
+		router.Register("device.set_channel_rooms", deviceSetChannelRoomsHandler(cfg.Devices))
+		router.Register("device.set_channel_functions", deviceSetChannelFunctionsHandler(cfg.Devices))
 	}
 	if cfg.Paramsets != nil {
 		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
@@ -394,6 +403,60 @@ func deviceRenameChannelHandler(d DeviceWriter) CommandHandler {
 			"address": p.Address,
 			"channel": p.Channel,
 			"name":    p.Name,
+		}, nil
+	}
+}
+
+func deviceSetChannelRoomsHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string   `json:"address"`
+			Channel int      `json:"channel"`
+			Rooms   []string `json:"rooms"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Rooms == nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "rooms is required (an empty array clears the assignment)")
+		}
+		if err := d.SetChannelRooms(ctx, p.Address, p.Channel, p.Rooms); err != nil {
+			return nil, fmt.Errorf("device.set_channel_rooms: %w", err)
+		}
+		return map[string]any{
+			"address": p.Address,
+			"channel": p.Channel,
+			"rooms":   p.Rooms,
+		}, nil
+	}
+}
+
+func deviceSetChannelFunctionsHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address   string   `json:"address"`
+			Channel   int      `json:"channel"`
+			Functions []string `json:"functions"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Functions == nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "functions is required (an empty array clears the assignment)")
+		}
+		if err := d.SetChannelFunctions(ctx, p.Address, p.Channel, p.Functions); err != nil {
+			return nil, fmt.Errorf("device.set_channel_functions: %w", err)
+		}
+		return map[string]any{
+			"address":   p.Address,
+			"channel":   p.Channel,
+			"functions": p.Functions,
 		}, nil
 	}
 }

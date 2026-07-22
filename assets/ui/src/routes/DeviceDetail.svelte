@@ -159,6 +159,14 @@
   let functionsDraft = $state("");
   let functionsBusy = $state(false);
 
+  let editingChannelRooms = $state(false);
+  let channelRoomsDraft = $state("");
+  let channelRoomsBusy = $state(false);
+
+  let editingChannelFunctions = $state(false);
+  let channelFunctionsDraft = $state("");
+  let channelFunctionsBusy = $state(false);
+
   async function load() {
     error = null;
     try {
@@ -456,11 +464,59 @@
   }
 
   function clickChannelInStrip(ch: { number: number; type?: string }) {
+    editingChannelRooms = false;
+    editingChannelFunctions = false;
     if (isWeekProfileChannel(ch.type) && scheduleSupported) {
       configSub = "schedule";
       return;
     }
     location.hash = `#/devices/${detail?.address}/channels/${ch.number}`;
+  }
+
+  function startEditChannelRooms(rooms: string[] | undefined) {
+    channelRoomsDraft = (rooms ?? []).join(", ");
+    editingChannelRooms = true;
+  }
+
+  function startEditChannelFunctions(functions: string[] | undefined) {
+    channelFunctionsDraft = (functions ?? []).join(", ");
+    editingChannelFunctions = true;
+  }
+
+  async function saveChannelRooms(no: number) {
+    channelRoomsBusy = true;
+    try {
+      const list = channelRoomsDraft
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await api.setChannelRooms(address, no, list);
+      toastStore.success(t("channel.rooms_updated"));
+      editingChannelRooms = false;
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      channelRoomsBusy = false;
+    }
+  }
+
+  async function saveChannelFunctions(no: number) {
+    channelFunctionsBusy = true;
+    try {
+      const list = channelFunctionsDraft
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await api.setChannelFunctions(address, no, list);
+      toastStore.success(t("channel.functions_updated"));
+      editingChannelFunctions = false;
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      channelFunctionsBusy = false;
+    }
   }
 
   // Top-level tabs. Three tabs only — the previous Bedienen/Status
@@ -932,6 +988,69 @@
                     <Icon name="mdi:pencil" size={16} />
                   </Button>
                 {/if}
+              </div>
+              <!-- Per-channel room / function assignment. Same comma-list
+                   editor as the device level, persisted via
+                   PATCH /devices/{addr}/channels/{no}. -->
+              <div class="mb-3 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <span class="font-semibold">{t("channel.rooms")}:</span>
+                <div class="flex items-baseline gap-2">
+                  {#if editingChannelRooms}
+                    <div class="flex flex-1 items-center gap-2">
+                      <input
+                        type="text"
+                        bind:value={channelRoomsDraft}
+                        placeholder={t("device.rooms.placeholder")}
+                        aria-label={t("channel.rooms")}
+                        class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      />
+                      <Button type="button" size="sm" onclick={() => void saveChannelRooms(ch.number)} disabled={channelRoomsBusy}>
+                        {t("common.save")}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onclick={() => (editingChannelRooms = false)} disabled={channelRoomsBusy}>
+                        ×
+                      </Button>
+                    </div>
+                  {:else}
+                    <span>{(ch.rooms ?? []).join(", ") || t("common.none")}</span>
+                    <button
+                      type="button"
+                      class="text-brand-600 hover:underline dark:text-brand-400"
+                      onclick={() => startEditChannelRooms(ch.rooms)}
+                    >
+                      {t("common.edit")}
+                    </button>
+                  {/if}
+                </div>
+                <span class="font-semibold">{t("channel.functions")}:</span>
+                <div class="flex items-baseline gap-2">
+                  {#if editingChannelFunctions}
+                    <div class="flex flex-1 items-center gap-2">
+                      <input
+                        type="text"
+                        bind:value={channelFunctionsDraft}
+                        placeholder={t("device.functions.placeholder")}
+                        aria-label={t("channel.functions")}
+                        class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      />
+                      <Button type="button" size="sm" onclick={() => void saveChannelFunctions(ch.number)} disabled={channelFunctionsBusy}>
+                        {t("common.save")}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onclick={() => (editingChannelFunctions = false)} disabled={channelFunctionsBusy}>
+                        ×
+                      </Button>
+                    </div>
+                  {:else}
+                    <span>{(ch.functions ?? []).join(", ") || t("common.none")}</span>
+                    <button
+                      type="button"
+                      class="text-brand-600 hover:underline dark:text-brand-400"
+                      onclick={() => startEditChannelFunctions(ch.functions)}
+                    >
+                      {t("common.edit")}
+                    </button>
+                  {/if}
+                </div>
               </div>
               <ChannelPanel
                 address={detail.address}

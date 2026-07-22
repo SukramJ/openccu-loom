@@ -69,6 +69,8 @@ var writeCommandRoles = map[string]auth.Role{
 	"device.install_mode":                 auth.RoleOperator,
 	"device.rename":                       auth.RoleOperator,
 	"device.rename_channel":               auth.RoleOperator,
+	"device.set_channel_functions":        auth.RoleOperator,
+	"device.set_channel_rooms":            auth.RoleOperator,
 	"firmware.refresh":                    auth.RoleOperator,
 	"firmware.update":                     auth.RoleOperator,
 	"inbox.accept":                        auth.RoleOperator,

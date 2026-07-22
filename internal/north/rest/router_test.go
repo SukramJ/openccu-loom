@@ -67,6 +67,13 @@ func (f *fakeAdmin) UpdateFirmware(_ context.Context, _ string) error           
 func (f *fakeAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (f *fakeAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (f *fakeAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
+func (f *fakeAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *fakeAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
 
 type fakeIncidents struct{ items []handlers.Incident }
 
@@ -327,6 +334,13 @@ func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error        
 func (fakeDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
+func (fakeDeviceAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
 
 // fakeSystemCCUReader is a minimal SystemCCUReader for router-level
 // integration tests; the daemon adapter is exercised elsewhere.

@@ -305,6 +305,51 @@ describe("api — acceptInboxDevice optional config body", () => {
   });
 });
 
+// setChannelRooms / setChannelFunctions PATCH the same channel resource as
+// renameChannel, but with a `rooms`/`functions` body instead of `name` —
+// the channel-level twin of the device-level room/function assignment.
+describe("api — setChannelRooms / setChannelFunctions", () => {
+  it("setChannelRooms PATCHes the channel with a rooms body", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelRooms("HmIP-X", 2, ["Wohnzimmer"]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/channels/2");
+    expect((init.method ?? "GET").toUpperCase()).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ rooms: ["Wohnzimmer"] });
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  it("setChannelRooms sends an explicit empty array to clear the assignment", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelRooms("HmIP-X", 2, []);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ rooms: [] });
+  });
+
+  it("setChannelFunctions PATCHes the channel with a functions body", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelFunctions("HmIP-X", 2, ["Licht"]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/channels/2");
+    expect((init.method ?? "GET").toUpperCase()).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ functions: ["Licht"] });
+  });
+
+  it("setChannelFunctions sends an explicit empty array to clear the assignment", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelFunctions("HmIP-X", 2, []);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ functions: [] });
+  });
+
+  it("percent-encodes the device address in the channel path", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelRooms("0001:2", 3, ["Küche"]);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2/channels/3");
+  });
+});
+
 describe("api — reliability + values-cache admin wrappers", () => {
   it("getReliability GETs /diagnostics/reliability with no central filter", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse([]));

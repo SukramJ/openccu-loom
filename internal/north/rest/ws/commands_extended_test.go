@@ -18,11 +18,13 @@ import (
 )
 
 type stubDevices struct {
-	renamed         map[string]string
-	renamedChannels map[string]string
-	lastInclude     bool
-	installModes    map[string]int
-	failOnAddress   string
+	renamed          map[string]string
+	renamedChannels  map[string]string
+	lastInclude      bool
+	installModes     map[string]int
+	channelRooms     map[string][]string
+	channelFunctions map[string][]string
+	failOnAddress    string
 }
 
 func (s *stubDevices) Rename(_ context.Context, address, name string, includeChannels bool) error {
@@ -53,6 +55,28 @@ func (s *stubDevices) SetInstallMode(_ context.Context, address string, dur int)
 		s.installModes = map[string]int{}
 	}
 	s.installModes[address] = dur
+	return nil
+}
+
+func (s *stubDevices) SetChannelRooms(_ context.Context, deviceAddr string, channelNo int, rooms []string) error {
+	if deviceAddr == s.failOnAddress {
+		return errors.New("device offline")
+	}
+	if s.channelRooms == nil {
+		s.channelRooms = map[string][]string{}
+	}
+	s.channelRooms[deviceAddr+":"+strconv.Itoa(channelNo)] = rooms
+	return nil
+}
+
+func (s *stubDevices) SetChannelFunctions(_ context.Context, deviceAddr string, channelNo int, functions []string) error {
+	if deviceAddr == s.failOnAddress {
+		return errors.New("device offline")
+	}
+	if s.channelFunctions == nil {
+		s.channelFunctions = map[string][]string{}
+	}
+	s.channelFunctions[deviceAddr+":"+strconv.Itoa(channelNo)] = functions
 	return nil
 }
 
@@ -214,6 +238,138 @@ func TestExtendedDeviceRenameChannelHandler(t *testing.T) {
 	}
 	dispatchExpectErr(t, r, "device.rename_channel", map[string]any{"address": "", "channel": 1, "name": "X"}, "address is required")
 	dispatchExpectErr(t, r, "device.rename_channel", map[string]any{"address": "ABC0001", "channel": 1, "name": ""}, "name is required")
+}
+
+// TestExtendedDeviceSetChannelRooms exercises `device.set_channel_rooms`
+// end to end through the Router: the happy path forwards address/channel/
+// rooms to DeviceWriter.SetChannelRooms and echoes them back in the
+// result; a missing address or a nil rooms field is rejected before the
+// domain layer is ever called.
+func TestExtendedDeviceSetChannelRooms(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+		"rooms":   []string{"Wohnzimmer"},
+	}).(map[string]any)
+	if out["address"] != "ABC0001" {
+		t.Fatalf("result address = %v, want ABC0001", out["address"])
+	}
+	if out["channel"] != 1 {
+		t.Fatalf("result channel = %v, want 1", out["channel"])
+	}
+	rooms, ok := out["rooms"].([]string)
+	if !ok || len(rooms) != 1 || rooms[0] != "Wohnzimmer" {
+		t.Fatalf("result rooms = %v", out["rooms"])
+	}
+	if got := devs.channelRooms["ABC0001:1"]; len(got) != 1 || got[0] != "Wohnzimmer" {
+		t.Fatalf("channel rooms not applied to the domain layer: %v", devs.channelRooms)
+	}
+
+	dispatchExpectErr(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "",
+		"channel": 1,
+		"rooms":   []string{"Wohnzimmer"},
+	}, "address is required")
+
+	dispatchExpectErr(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+	}, "rooms is required")
+}
+
+// TestExtendedDeviceSetChannelRoomsEmptyArrayClears verifies the "explicit
+// empty array clears the assignment" contract survives the WS decode path:
+// an explicit `"rooms": []` must reach SetChannelRooms as a non-nil,
+// zero-length slice — distinct from an omitted `rooms` field, which is
+// rejected before the domain layer is called.
+func TestExtendedDeviceSetChannelRoomsEmptyArrayClears(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+		"rooms":   []string{},
+	}).(map[string]any)
+	rooms, ok := out["rooms"].([]string)
+	if !ok {
+		t.Fatalf("expected a rooms slice in the result, got %T: %v", out["rooms"], out["rooms"])
+	}
+	if len(rooms) != 0 {
+		t.Fatalf("expected an empty rooms slice, got %v", rooms)
+	}
+	got, ok := devs.channelRooms["ABC0001:1"]
+	if !ok {
+		t.Fatalf("expected an explicit empty-rooms call to reach the domain layer, got %v", devs.channelRooms)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected zero rooms recorded, got %v", got)
+	}
+}
+
+// TestExtendedDeviceSetChannelFunctions mirrors
+// TestExtendedDeviceSetChannelRooms for `device.set_channel_functions`.
+func TestExtendedDeviceSetChannelFunctions(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_functions", map[string]any{
+		"address":   "ABC0001",
+		"channel":   1,
+		"functions": []string{"Licht"},
+	}).(map[string]any)
+	if out["address"] != "ABC0001" {
+		t.Fatalf("result address = %v, want ABC0001", out["address"])
+	}
+	if out["channel"] != 1 {
+		t.Fatalf("result channel = %v, want 1", out["channel"])
+	}
+	functions, ok := out["functions"].([]string)
+	if !ok || len(functions) != 1 || functions[0] != "Licht" {
+		t.Fatalf("result functions = %v", out["functions"])
+	}
+	if got := devs.channelFunctions["ABC0001:1"]; len(got) != 1 || got[0] != "Licht" {
+		t.Fatalf("channel functions not applied to the domain layer: %v", devs.channelFunctions)
+	}
+
+	dispatchExpectErr(t, r, "device.set_channel_functions", map[string]any{
+		"address": "",
+		"channel": 1,
+		"functions": []string{
+			"Licht",
+		},
+	}, "address is required")
+
+	dispatchExpectErr(t, r, "device.set_channel_functions", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+	}, "functions is required")
+}
+
+// TestExtendedDeviceSetChannelFunctionsEmptyArrayClears mirrors
+// TestExtendedDeviceSetChannelRoomsEmptyArrayClears for functions.
+func TestExtendedDeviceSetChannelFunctionsEmptyArrayClears(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_functions", map[string]any{
+		"address":   "ABC0001",
+		"channel":   1,
+		"functions": []string{},
+	}).(map[string]any)
+	functions, ok := out["functions"].([]string)
+	if !ok {
+		t.Fatalf("expected a functions slice in the result, got %T: %v", out["functions"], out["functions"])
+	}
+	if len(functions) != 0 {
+		t.Fatalf("expected an empty functions slice, got %v", functions)
+	}
+	got, ok := devs.channelFunctions["ABC0001:1"]
+	if !ok {
+		t.Fatalf("expected an explicit empty-functions call to reach the domain layer, got %v", devs.channelFunctions)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected zero functions recorded, got %v", got)
+	}
 }
 
 func TestExtendedDeviceInstallMode(t *testing.T) {

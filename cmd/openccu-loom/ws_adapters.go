@@ -940,6 +940,25 @@ func (w *wsDeviceWriter) SetInstallMode(ctx context.Context, address string, dur
 	return w.admin.SetInstallMode(ctx, address, durationSeconds)
 }
 
+// SetChannelRooms replaces a single channel's room assignments via
+// DeviceAdminDomain.SetChannelRooms (Rega `set_device_rooms` with the
+// channel address).
+func (w *wsDeviceWriter) SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelRooms(ctx, deviceAddr, channelNo, rooms)
+}
+
+// SetChannelFunctions replaces a single channel's function (Gewerk)
+// assignments via DeviceAdminDomain.SetChannelFunctions.
+func (w *wsDeviceWriter) SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelFunctions(ctx, deviceAddr, channelNo, functions)
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // structSliceToMapSlice JSON-encodes a slice of typed structs and decodes them

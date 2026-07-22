@@ -388,10 +388,13 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename a single channel
-         * @description Renames a single channel (JSON-RPC `Channel.setName`). Only the
-         *     name is patchable here — per-channel room / function assignment is
-         *     a later addition. A backend without JSON-RPC (Homegear, CUxD)
+         * Update a single channel (rename, rooms, functions)
+         * @description Applies partial updates to a single channel: rename (JSON-RPC
+         *     `Channel.setName`), room assignment and function (Gewerk)
+         *     assignment — the channel-level twin of `PATCH /devices/{addr}`.
+         *     Omitted fields stay untouched; an explicit empty array clears
+         *     the assignment set. Naming a channel number the device does not
+         *     have answers 404; a backend without JSON-RPC (Homegear, CUxD)
          *     answers 422.
          */
         patch: operations["patchChannel"];
@@ -5125,6 +5128,13 @@ export interface components {
              */
             room?: string;
             /**
+             * @description The channel's full room-assignment set. Unlike `room` it is
+             *     not collapsed to the unique case, so assignment editors can
+             *     round-trip it. Omitted when the channel carries no room
+             *     assignment.
+             */
+            rooms?: string[];
+            /**
              * @description The channel's resolved "Gewerke" (function) labels — the
              *     channel-level twin of `DeviceSummary.functions`. Lets clients
              *     map functions at channel granularity instead of folding them
@@ -7782,6 +7792,16 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
+                    /**
+                     * @description Replaces the channel's room assignments. Room names
+                     *     unknown to the CCU are silently skipped.
+                     */
+                    rooms?: string[];
+                    /**
+                     * @description Replaces the channel's function (Gewerk)
+                     *     assignments. Unknown names are silently skipped.
+                     */
+                    functions?: string[];
                 };
             };
         };
@@ -7794,6 +7814,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, screen, waitFor, fireEvent } from "@testing-library/svelte";
+import { render, cleanup, screen, waitFor, fireEvent, within } from "@testing-library/svelte";
 
 const {
   mockGetDevice,
@@ -9,6 +9,8 @@ const {
   mockPutPreference,
   mockRenameDevice,
   mockRenameChannel,
+  mockSetChannelRooms,
+  mockSetChannelFunctions,
   mockDeleteDevice,
   mockListLinks,
   mockListPrograms,
@@ -21,6 +23,8 @@ const {
   mockPutPreference: vi.fn(),
   mockRenameDevice: vi.fn(),
   mockRenameChannel: vi.fn(),
+  mockSetChannelRooms: vi.fn(),
+  mockSetChannelFunctions: vi.fn(),
   mockDeleteDevice: vi.fn(),
   mockListLinks: vi.fn(),
   mockListPrograms: vi.fn(),
@@ -36,6 +40,8 @@ vi.mock("$lib/api/client", () => ({
     putPreference: (...args: unknown[]) => mockPutPreference(...args),
     renameDevice: (...args: unknown[]) => mockRenameDevice(...args),
     renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
+    setChannelRooms: (...args: unknown[]) => mockSetChannelRooms(...args),
+    setChannelFunctions: (...args: unknown[]) => mockSetChannelFunctions(...args),
     deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
     listLinks: (...args: unknown[]) => mockListLinks(...args),
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
@@ -110,6 +116,8 @@ beforeEach(() => {
   );
   mockRenameDevice.mockResolvedValue(undefined);
   mockRenameChannel.mockResolvedValue(undefined);
+  mockSetChannelRooms.mockResolvedValue(undefined);
+  mockSetChannelFunctions.mockResolvedValue(undefined);
   mockDeleteDevice.mockResolvedValue(undefined);
   mockListLinks.mockResolvedValue([]);
   mockListPrograms.mockResolvedValue([]);
@@ -350,6 +358,128 @@ describe("DeviceDetail — channel rename", () => {
       expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
     });
     expect(screen.getByLabelText("channel.rename")).toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — channel room/function assignment", () => {
+  function deviceWithChannelAssignment(overrides: Record<string, unknown> = {}) {
+    return baseDevice({
+      channels: [
+        {
+          address: "0001ABCD:1",
+          number: 1,
+          type: "SWITCH",
+          name: "Kanal 1",
+          data_points_count: 0,
+          rooms: ["Wohnzimmer"],
+          functions: ["Licht"],
+        },
+      ],
+      channels_count: 1,
+      ...overrides,
+    });
+  }
+
+  // The channel-level rooms/functions row sits in its own labelled
+  // sibling `<div>` right after the "channel.rooms:"/"channel.functions:"
+  // heading span — scoping through that sibling (rather than a bare
+  // getByText("common.edit")) avoids matching the device-level rooms/
+  // functions edit buttons rendered in the header above.
+  function assignmentRow(labelText: string): HTMLElement {
+    const label = screen.getByText(labelText);
+    return label.nextElementSibling as HTMLElement;
+  }
+
+  async function openConfigureTab(overrides: Record<string, unknown> = {}) {
+    mockGetDevice.mockResolvedValue(deviceWithChannelAssignment(overrides));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "device.toptab.configure" }));
+    await waitFor(() => {
+      expect(screen.getByText("channel.rooms:")).toBeInTheDocument();
+    });
+  }
+
+  it("renders the channel's current room and function assignment", async () => {
+    await openConfigureTab();
+    expect(within(assignmentRow("channel.rooms:")).getByText("Wohnzimmer")).toBeInTheDocument();
+    expect(within(assignmentRow("channel.functions:")).getByText("Licht")).toBeInTheDocument();
+  });
+
+  it("renders common.none when a channel carries no room/function assignment", async () => {
+    await openConfigureTab({
+      channels: [
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "Kanal 1", data_points_count: 0 },
+      ],
+    });
+    expect(within(assignmentRow("channel.rooms:")).getByText("common.none")).toBeInTheDocument();
+    expect(within(assignmentRow("channel.functions:")).getByText("common.none")).toBeInTheDocument();
+  });
+
+  it("opens the rooms editor prefilled with the current assignment and commits on save", async () => {
+    await openConfigureTab();
+    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
+
+    const input = screen.getByLabelText("channel.rooms") as HTMLInputElement;
+    expect(input.value).toBe("Wohnzimmer");
+
+    await fireEvent.input(input, { target: { value: "Wohnzimmer, Küche" } });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockSetChannelRooms).toHaveBeenCalledWith("0001ABCD", 1, ["Wohnzimmer", "Küche"]);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("channel.rooms_updated");
+    await waitFor(() => expect(mockGetDevice).toHaveBeenCalledTimes(2));
+  });
+
+  it("opens the functions editor prefilled with the current assignment and commits on save", async () => {
+    await openConfigureTab();
+    await fireEvent.click(
+      within(assignmentRow("channel.functions:")).getByRole("button", { name: "common.edit" }),
+    );
+
+    const input = screen.getByLabelText("channel.functions") as HTMLInputElement;
+    expect(input.value).toBe("Licht");
+
+    await fireEvent.input(input, { target: { value: "Heizung" } });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockSetChannelFunctions).toHaveBeenCalledWith("0001ABCD", 1, ["Heizung"]);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("channel.functions_updated");
+  });
+
+  it("shows an error toast and keeps the rooms editor open when the write fails", async () => {
+    mockSetChannelRooms.mockRejectedValueOnce(new Error("ccu unreachable"));
+    await openConfigureTab();
+    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+    // Editor stays open on failure — no silent fallback / no silent close.
+    expect(screen.getByLabelText("channel.rooms")).toBeInTheDocument();
+    expect(mockGetDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels the rooms editor via the × button without calling the API", async () => {
+    await openConfigureTab();
+    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("channel.rooms")).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "×" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("channel.rooms")).not.toBeInTheDocument();
+    });
+    expect(mockSetChannelRooms).not.toHaveBeenCalled();
   });
 });
 

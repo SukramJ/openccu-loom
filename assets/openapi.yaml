@@ -299,11 +299,14 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: patchChannel
-      summary: Rename a single channel
+      summary: Update a single channel (rename, rooms, functions)
       description: |
-        Renames a single channel (JSON-RPC `Channel.setName`). Only the
-        name is patchable here — per-channel room / function assignment is
-        a later addition. A backend without JSON-RPC (Homegear, CUxD)
+        Applies partial updates to a single channel: rename (JSON-RPC
+        `Channel.setName`), room assignment and function (Gewerk)
+        assignment — the channel-level twin of `PATCH /devices/{addr}`.
+        Omitted fields stay untouched; an explicit empty array clears
+        the assignment set. Naming a channel number the device does not
+        have answers 404; a backend without JSON-RPC (Homegear, CUxD)
         answers 422.
       tags: [devices]
       security:
@@ -321,10 +324,23 @@ paths:
               type: object
               properties:
                 name: { type: string }
+                rooms:
+                  type: array
+                  items: { type: string }
+                  description: |
+                    Replaces the channel's room assignments. Room names
+                    unknown to the CCU are silently skipped.
+                functions:
+                  type: array
+                  items: { type: string }
+                  description: |
+                    Replaces the channel's function (Gewerk)
+                    assignments. Unknown names are silently skipped.
       responses:
         "202":
           description: Update accepted
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -6654,6 +6670,14 @@ components:
             fallback applied. Empty when no unique room can be
             resolved. External clients use it as the suggested area of
             the channel group's sub-device.
+        rooms:
+          type: array
+          items: { type: string }
+          description: |
+            The channel's full room-assignment set. Unlike `room` it is
+            not collapsed to the unique case, so assignment editors can
+            round-trip it. Omitted when the channel carries no room
+            assignment.
         functions:
           type: array
           items: { type: string }

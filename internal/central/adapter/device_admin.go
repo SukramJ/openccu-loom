@@ -7,11 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -318,4 +320,92 @@ func (a *DeviceAdminDomain) SetFunctions(
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// SetChannelRooms replaces a single channel's room assignments via the
+// central's hub-writer. The Rega script resolves channel addresses the
+// same way it resolves device addresses, so the write reuses the
+// device-level set_device_rooms path with the channel address. The live
+// model is stamped eagerly: the channel gets the new set verbatim and
+// the parent device's Rooms are recomputed as the union over all
+// channels; device-direct assignments reappear with the next periodic
+// assignment refresh.
+func (a *DeviceAdminDomain) SetChannelRooms(
+	ctx context.Context, deviceAddr string, channelNo int, rooms []string,
+) error {
+	return a.setChannelAssignment(ctx, deviceAddr, channelNo,
+		func(ctx context.Context, u *central.Unit, channelAddress string) error {
+			return u.HubModel.SetDeviceRoomsRemote(ctx, channelAddress, rooms)
+		},
+		func(dev *device.Device, ch *device.Channel) {
+			ch.Rooms = append([]string(nil), rooms...)
+			dev.Rooms = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Rooms })
+		})
+}
+
+// SetChannelFunctions replaces a single channel's function (Gewerk)
+// assignments, mirroring [DeviceAdminDomain.SetChannelRooms].
+func (a *DeviceAdminDomain) SetChannelFunctions(
+	ctx context.Context, deviceAddr string, channelNo int, functions []string,
+) error {
+	return a.setChannelAssignment(ctx, deviceAddr, channelNo,
+		func(ctx context.Context, u *central.Unit, channelAddress string) error {
+			return u.HubModel.SetDeviceFunctionsRemote(ctx, channelAddress, functions)
+		},
+		func(dev *device.Device, ch *device.Channel) {
+			ch.Functions = append([]string(nil), functions...)
+			dev.Functions = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Functions })
+		})
+}
+
+// setChannelAssignment locates the owning central + channel, dispatches
+// the CCU write and, on success, stamps the live model so reads stay
+// coherent until the next periodic assignment refresh reconciles with
+// the CCU.
+func (a *DeviceAdminDomain) setChannelAssignment(
+	ctx context.Context, deviceAddr string, channelNo int,
+	write func(ctx context.Context, u *central.Unit, channelAddress string) error,
+	stamp func(dev *device.Device, ch *device.Channel),
+) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	channelAddress := deviceAddr + ":" + strconv.Itoa(channelNo)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddr)
+		if !ok {
+			continue
+		}
+		ch := dev.Channel(channelAddress)
+		if ch == nil {
+			return fmt.Errorf("%w: %s", interfaces.ErrChannelNotFound, channelAddress)
+		}
+		if u.HubModel == nil {
+			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, u.Name())
+		}
+		if err := write(ctx, u, channelAddress); err != nil {
+			return err
+		}
+		stamp(dev, ch)
+		return nil
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)
+}
+
+// unionChannelAssignments collects the sorted union of a per-channel
+// assignment slice across every channel of the device.
+func unionChannelAssignments(dev *device.Device, pick func(*device.Channel) []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, ch := range dev.Channels() {
+		for _, name := range pick(ch) {
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
