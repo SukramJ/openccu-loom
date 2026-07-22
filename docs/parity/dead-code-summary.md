@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 17e87918
-HEAD: 17e87918
+Generated: 0873031e
+HEAD: 0873031e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26188 |
+| Total Exported | 26217 |
 | Reachable | 4580 |
-| Whitelisted | 18853 |
-| **Unreachable** | **2755** |
+| Whitelisted | 18878 |
+| **Unreachable** | **2759** |
 
 ## Top-20 Packages by Dead Code
 
@@ -192,7 +192,7 @@ HEAD: 17e87918
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 84 | 22 |
-| pkg/hmapi | 0 | 117 | 14 |
+| pkg/hmapi | 0 | 119 | 16 |
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
