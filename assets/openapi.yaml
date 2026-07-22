@@ -551,6 +551,14 @@ paths:
         scenes, so a double-execution under client retry can produce
         observable side effects. Supply the optional `Idempotency-Key`
         header to suppress that risk.
+
+        The optional body carries `check_conditions`: when `true` the CCU
+        evaluates the program's "if" condition and runs the program only
+        when the condition is currently satisfied. When `false` (the
+        default, and when the body is omitted) the program runs
+        unconditionally. The response reports `executed` — always `true`
+        for an unconditional run, and `false` for a condition-checked run
+        whose condition was not met.
       security:
         - basicAuth: []
         - bearerAuth: []
@@ -561,9 +569,18 @@ paths:
           required: true
           schema: { type: string }
         - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProgramExecuteRequest" }
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Execution result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgramExecuteResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404":
           $ref: "#/components/responses/NotFound"
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -6689,6 +6706,28 @@ components:
             Device part of `channel` (before the ":"). Clients use it to
             group the entity under the owning physical device; absent
             together with `channel` (entity belongs on the hub card).
+    ProgramExecuteRequest:
+      type: object
+      description: Optional body for POST /programs/{id}/execute.
+      properties:
+        check_conditions:
+          type: boolean
+          default: false
+          description: |
+            When true, the CCU evaluates the program's "if" condition and
+            runs the program only when the condition is currently
+            satisfied. When false (the default) the program runs
+            unconditionally.
+    ProgramExecuteResponse:
+      type: object
+      required: [executed]
+      properties:
+        executed:
+          type: boolean
+          description: |
+            Whether the program actually ran. Always true for an
+            unconditional execution (check_conditions=false); false for a
+            condition-checked execution whose condition was not met.
     SysvarSummary:
       type: object
       required: [name, unique_id, value_type, observed]

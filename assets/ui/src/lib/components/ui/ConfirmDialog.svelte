@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
   import Button from "./Button.svelte";
+  import Switch from "./Switch.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
 
   // Renderer for the global confirm-dialog singleton. Mount once
@@ -87,6 +88,18 @@
         <p class="mb-4 text-sm" style="color: var(--ha-secondary-text-color);">
           {opts.body}
         </p>
+      {/if}
+      {#if opts.checkbox}
+        <label
+          class="mb-4 flex cursor-pointer items-center gap-2 text-sm"
+          style="color: var(--ha-primary-text-color);"
+        >
+          <Switch
+            checked={confirmStore.checkboxChecked}
+            onCheckedChange={(v) => confirmStore.setCheckboxChecked(v)}
+          />
+          <span>{opts.checkbox.label}</span>
+        </label>
       {/if}
       <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button

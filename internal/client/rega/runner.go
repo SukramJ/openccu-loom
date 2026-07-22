@@ -179,6 +179,26 @@ func (r *Runner) SetProgramState(ctx context.Context, pid string, state bool) er
 	return err
 }
 
+// ExecuteProgramConditional evaluates the CCU automation program's "if"
+// condition (identified by its ISE-ID pid) and runs the program only when
+// the condition is currently satisfied. It returns whether the program
+// actually executed.
+//
+// Implemented as a ReGa script (execute_program_conditional.fn) because the
+// CCU's JSON-RPC Program.execute runs unconditionally and exposes no
+// condition-gated variant.
+func (r *Runner) ExecuteProgramConditional(ctx context.Context, pid string) (bool, error) {
+	var resp struct {
+		Executed bool `json:"executed"`
+	}
+	if err := r.RunJSON(ctx, hmenum.RegaScriptExecuteProgramConditional, map[string]string{
+		"id": pid,
+	}, &resp); err != nil {
+		return false, fmt.Errorf("rega.ExecuteProgramConditional(%s): %w", pid, err)
+	}
+	return resp.Executed, nil
+}
+
 // SystemUpdateInfo holds the result of [Runner.GetSystemUpdateInfo].
 // Fields mirror py:2149).
 type SystemUpdateInfo struct {

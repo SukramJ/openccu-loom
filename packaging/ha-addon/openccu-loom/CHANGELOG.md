@@ -45,6 +45,12 @@
   the next time the device wakes up (e.g. on a button press) — instead
   of a plain "saved" confirmation. Mains devices keep the immediate
   confirmation.
+- **Run a program only when its condition is met.** The program table's
+  execute-confirmation dialog gains an "Only run when the condition is
+  met" toggle; the CCU then evaluates the program's condition and runs it
+  only when satisfied, and the result toast tells you whether it actually
+  executed. REST/WS clients get the same via an optional `check_conditions`
+  flag on program execution, with an `executed` result (API 2.34.0).
 - **Program list shows condition, activity and last execution.** The
   program table now renders a compact, language-neutral summary of each
   program's root rule — its trigger conditions and resulting activities

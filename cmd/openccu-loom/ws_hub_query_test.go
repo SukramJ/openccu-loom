@@ -98,7 +98,7 @@ func TestWSHubQuery_ListPrograms_LiveHub_ReturnsEmpty(t *testing.T) {
 func TestWSHubQuery_ExecuteProgram_NilHub_Errors(t *testing.T) {
 	t.Parallel()
 	q := nilHubQuery()
-	err := q.ExecuteProgram(context.Background(), "prog-1")
+	_, err := q.ExecuteProgram(context.Background(), "prog-1", false)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -107,9 +107,59 @@ func TestWSHubQuery_ExecuteProgram_NilHub_Errors(t *testing.T) {
 func TestWSHubQuery_ExecuteProgram_LiveHub_UnknownID_Errors(t *testing.T) {
 	t.Parallel()
 	q, _ := liveHubQuery(t)
-	err := q.ExecuteProgram(context.Background(), "nonexistent-prog")
+	_, err := q.ExecuteProgram(context.Background(), "nonexistent-prog", false)
 	if err == nil {
 		t.Fatal("expected error for unknown program, got nil")
+	}
+}
+
+// stubConditionalWriter implements hub.ConditionalProgramWriter so
+// TestWSHubQuery_ExecuteProgram_LiveHub_CheckConditions_RoutesConditional can
+// verify checkConditions=true reaches the condition-checked path rather than
+// the unconditional one.
+type stubConditionalWriter struct {
+	executed  bool
+	condCalls int
+	execCalls int
+}
+
+func (s *stubConditionalWriter) ExecuteProgram(_ context.Context, _ string) error {
+	s.execCalls++
+	return nil
+}
+
+func (s *stubConditionalWriter) SetProgramEnabled(_ context.Context, _ string, _ bool) error {
+	return nil
+}
+
+func (s *stubConditionalWriter) ExecuteProgramConditional(_ context.Context, _ string) (bool, error) {
+	s.condCalls++
+	return s.executed, nil
+}
+
+// TestWSHubQuery_ExecuteProgram_LiveHub_CheckConditions_RoutesConditional
+// verifies checkConditions=true routes through
+// [hub.Program.ExecuteWithConditionCheck] (the conditional writer path) and
+// reports the writer's executed flag, instead of silently falling back to
+// the unconditional Execute call.
+func TestWSHubQuery_ExecuteProgram_LiveHub_CheckConditions_RoutesConditional(t *testing.T) {
+	t.Parallel()
+	q, h := liveHubQuery(t)
+	writer := &stubConditionalWriter{executed: false}
+	h.PutProgram(hub.NewProgram("test-ccu", "prog-cond", "Conditional", "", false, writer))
+
+	executed, err := q.ExecuteProgram(context.Background(), "prog-cond", true)
+	if err != nil {
+		t.Fatalf("ExecuteProgram(checkConditions=true): %v", err)
+	}
+	if executed {
+		t.Fatal("executed=true, want false (writer reports condition not met)")
+	}
+	if writer.condCalls != 1 {
+		t.Fatalf("condCalls=%d, want 1 (conditional path must be used)", writer.condCalls)
+	}
+	if writer.execCalls != 0 {
+		t.Fatalf("execCalls=%d, want 0 (unconditional path must not run)", writer.execCalls)
 	}
 }
 

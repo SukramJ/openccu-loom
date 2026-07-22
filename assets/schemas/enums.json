@@ -2987,6 +2987,10 @@
           "wire_value": "delete_room"
         },
         {
+          "go_name": "RegaScriptExecuteProgramConditional",
+          "wire_value": "execute_program_conditional"
+        },
+        {
           "go_name": "RegaScriptFetchAllDeviceData",
           "wire_value": "fetch_all_device_data"
         },

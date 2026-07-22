@@ -137,6 +137,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   next wakeup. Mirrors the CCU WebUI's
   `config/ic_ifacecmd.cgi` `cmd_ShowConfigPendingMsg`. REST `APIVersion`
   2.35.0.
+- **Run a program only when its condition is met.**
+  `POST /api/v1/programs/{id}/execute` gains an optional body field
+  `check_conditions` (boolean, default false). When true the CCU
+  evaluates the program's "if" condition — via a new
+  `execute_program_conditional` ReGa script — and runs the program only
+  when the condition is currently satisfied; the response now reports
+  `executed` (always true for an unconditional run, false for a
+  condition-checked run whose condition was not met). When false (the
+  default, and when the body is omitted) the program runs unconditionally,
+  preserving existing behaviour. The WS `programs.execute` command gains
+  the same `check_conditions` argument and returns `executed`. The Config
+  UI's execute-confirmation dialog adds an "Only run when the condition is
+  met" toggle and the result toast now distinguishes executed from
+  not-executed. Mirrors OpenCCU's program-execution-with-condition-check
+  WebUI extension. REST `APIVersion` 2.34.0.
+
 - **Program list shows the rule at a glance: condition + activity
   summary and last execution.** `GET /api/v1/programs` (and the single
   `GET /api/v1/programs/{id}`) gain two nullable fields,

@@ -150,8 +150,12 @@ type HubQuery interface {
 	// nil applies the central's include_internal_programs config default,
 	// a non-nil value forces the choice.
 	ListPrograms(ctx context.Context, includeInternal *bool) ([]map[string]any, error)
-	// ExecuteProgram runs a CCU program by id.
-	ExecuteProgram(ctx context.Context, id string) error
+	// ExecuteProgram runs a CCU program by id. When checkConditions is true
+	// the program's "if" condition is evaluated on the CCU and the program
+	// runs only when satisfied; the returned bool reports whether it
+	// executed. When checkConditions is false the program runs
+	// unconditionally and the bool is always true on a clean round-trip.
+	ExecuteProgram(ctx context.Context, id string, checkConditions bool) (executed bool, err error)
 	// ListSysvars returns one entry per system variable.
 	ListSysvars(ctx context.Context) ([]map[string]any, error)
 	// SetSysvar updates a system variable's value.
@@ -515,6 +519,9 @@ func paramsetGetHandler(q DeviceQuery) CommandHandler {
 
 type programIDArgs struct {
 	ID string `json:"id"`
+	// CheckConditions gates execution on the program's "if" condition when
+	// true; when false (the default) the program runs unconditionally.
+	CheckConditions bool `json:"check_conditions"`
 }
 
 // programsListArgs carries the optional include_internal override for
@@ -552,10 +559,11 @@ func programsExecuteHandler(q HubQuery) CommandHandler {
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
 		}
-		if err := q.ExecuteProgram(ctx, args.ID); err != nil {
+		executed, err := q.ExecuteProgram(ctx, args.ID, args.CheckConditions)
+		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "execute_program: "+err.Error())
 		}
-		return map[string]any{"executed": true, "id": args.ID}, nil
+		return map[string]any{"executed": executed, "id": args.ID}, nil
 	}
 }
 

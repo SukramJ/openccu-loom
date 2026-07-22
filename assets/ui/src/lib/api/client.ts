@@ -637,11 +637,15 @@ export const api = {
       ),
     );
   },
-  executeProgram(id: string, central?: string) {
+  executeProgram(id: string, central?: string, checkConditions = false) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
-    return request<void>(
+    return request<{ executed: boolean }>(
       `/programs/${encodeURIComponent(id)}/execute${qs}`,
-      { method: "POST" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ check_conditions: checkConditions }),
+      },
     );
   },
   setProgramEnabled(id: string, active: boolean, central?: string) {

@@ -1733,6 +1733,8 @@ const EN: Catalog = {
   // --- Programs ---
   "programs.toggle.tooltip": "Toggle enabled",
   "programs.executed": 'Program "{name}" executed.',
+  "programs.not_executed": 'Program "{name}" not executed — condition not met.',
+  "programs.check_conditions": "Only run when the condition is met",
   "programs.toggle_done": 'Program "{name}" {state}.',
   "programs.enabled": "enabled",
   "programs.disabled": "disabled",
@@ -4460,6 +4462,8 @@ const DE: Catalog = {
   "quick.mode": "Modus",
   "programs.toggle.tooltip": "Aktivierung umschalten",
   "programs.executed": "Programm \"{name}\" ausgeführt.",
+  "programs.not_executed": "Programm \"{name}\" nicht ausgeführt — Bedingung nicht erfüllt.",
+  "programs.check_conditions": "Nur ausführen, wenn Bedingung erfüllt",
   "programs.toggle_done": "Programm \"{name}\" {state}.",
   "programs.enabled": "aktiviert",
   "programs.disabled": "deaktiviert",

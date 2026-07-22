@@ -1564,6 +1564,14 @@ func (w *hubJSONRPCWriter) ExecuteProgram(ctx context.Context, id string) error 
 	return w.json.Call(ctx, "Program.execute", map[string]any{"id": id}, nil)
 }
 
+// ExecuteProgramConditional evaluates the program's "if" condition via a
+// ReGa script and runs it only when the condition is satisfied. The CCU's
+// JSON-RPC Program.execute runs unconditionally, so the condition-gated
+// variant has to go through ReGa. Returns whether the program executed.
+func (w *hubJSONRPCWriter) ExecuteProgramConditional(ctx context.Context, id string) (bool, error) {
+	return w.rega.ExecuteProgramConditional(ctx, id)
+}
+
 // SetProgramEnabled toggles the active flag via a ReGa script. The
 // CCU's JSON-RPC API does not expose Program.setActive cleanly, so the
 // Rega route is the portable choice.

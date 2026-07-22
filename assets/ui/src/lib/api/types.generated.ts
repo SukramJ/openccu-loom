@@ -673,6 +673,14 @@ export interface paths {
                 query?: {
                     page?: components["parameters"]["Page"];
                     per_page?: components["parameters"]["PerPage"];
+                    /**
+                     * @description Overrides whether internal (Tmp_*, prgEnergyCounter_*) programs
+                     *     are listed. When omitted, each central applies its
+                     *     `include_internal_programs` config default (hidden by default,
+                     *     mirroring the CCU WebUI's "show system programs" toggle). The
+                     *     daemon always knows every program; this only steers delivery.
+                     */
+                    include_internal?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -715,6 +723,14 @@ export interface paths {
          *     scenes, so a double-execution under client retry can produce
          *     observable side effects. Supply the optional `Idempotency-Key`
          *     header to suppress that risk.
+         *
+         *     The optional body carries `check_conditions`: when `true` the CCU
+         *     evaluates the program's "if" condition and runs the program only
+         *     when the condition is currently satisfied. When `false` (the
+         *     default, and when the body is omitted) the program runs
+         *     unconditionally. The response reports `executed` — always `true`
+         *     for an unconditional run, and `false` for a condition-checked run
+         *     whose condition was not met.
          */
         post: {
             parameters: {
@@ -738,15 +754,22 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["ProgramExecuteRequest"];
+                };
+            };
             responses: {
-                /** @description Accepted */
-                202: {
+                /** @description Execution result */
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ProgramExecuteResponse"];
+                    };
                 };
+                400: components["responses"]["BadRequest"];
                 404: components["responses"]["NotFound"];
                 502: components["responses"]["BadGateway"];
                 503: components["responses"]["ServiceUnavailable"];
@@ -5370,6 +5393,25 @@ export interface components {
              *     together with `channel` (entity belongs on the hub card).
              */
             device_address?: string;
+        };
+        /** @description Optional body for POST /programs/{id}/execute. */
+        ProgramExecuteRequest: {
+            /**
+             * @description When true, the CCU evaluates the program's "if" condition and
+             *     runs the program only when the condition is currently
+             *     satisfied. When false (the default) the program runs
+             *     unconditionally.
+             * @default false
+             */
+            check_conditions: boolean;
+        };
+        ProgramExecuteResponse: {
+            /**
+             * @description Whether the program actually ran. Always true for an
+             *     unconditional execution (check_conditions=false); false for a
+             *     condition-checked execution whose condition was not met.
+             */
+            executed: boolean;
         };
         SysvarSummary: {
             /** @description CCU this system variable belongs to. */

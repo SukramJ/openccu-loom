@@ -145,8 +145,17 @@ func TestExecuteProgram(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/programs/P1/execute", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusAccepted {
+	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body struct {
+		Executed bool `json:"executed"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v body=%s", err, rr.Body.String())
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true for unconditional run")
 	}
 	if pw.calls.Load() != 1 {
 		t.Fatalf("calls=%d", pw.calls.Load())

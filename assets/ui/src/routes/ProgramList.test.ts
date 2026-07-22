@@ -3,10 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, waitFor, fireEvent } from "@testing-library/svelte";
 
 const mockListPrograms = vi.fn();
+const mockExecuteProgram = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
-    executeProgram: vi.fn(),
+    executeProgram: (...args: unknown[]) => mockExecuteProgram(...args),
     setProgramEnabled: vi.fn(),
   },
   ApiError: class ApiError extends Error {
@@ -20,7 +21,28 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
+// confirmStore is mocked so the "run program" tests below can drive the
+// check_conditions checkbox result directly instead of round-tripping
+// through the real ConfirmDialog component (that rendering/toggling path
+// is covered by ConfirmDialog.test.ts).
+vi.mock("$lib/stores/confirm.svelte", () => ({
+  confirmStore: {
+    ask: vi.fn().mockResolvedValue(true),
+    checkboxChecked: false,
+  },
+}));
+
 import ProgramList from "./ProgramList.svelte";
+import { confirmStore } from "$lib/stores/confirm.svelte";
+import { toastStore } from "$lib/stores/toast.svelte";
+
+// confirmStore.checkboxChecked is a getter-only property on the real store
+// (callers only ever set it through the ConfirmDialog UI); the mock above
+// backs it with a plain writable field, so tests reach it through this cast
+// instead of fighting the real store's read-only type.
+function setCheckboxChecked(v: boolean) {
+  (confirmStore as unknown as { checkboxChecked: boolean }).checkboxChecked = v;
+}
 
 const heater = {
   id: "P-RULE",
@@ -44,6 +66,9 @@ const bare = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockListPrograms.mockResolvedValue([heater, bare]);
+  confirmStore.ask = vi.fn().mockResolvedValue(true);
+  setCheckboxChecked(false);
+  toastStore.dismissAll();
 });
 
 afterEach(() => cleanup());
@@ -108,5 +133,74 @@ describe("ProgramList rule-summary columns", () => {
       expect(joined).toMatch(/Activity|Aktivität/);
       expect(joined).toMatch(/Last executed|Zuletzt ausgeführt/);
     });
+  });
+});
+
+describe("ProgramList run — check_conditions wiring", () => {
+  async function clickFirstRunButton(container: HTMLElement) {
+    // The DataTable body paints asynchronously past the load() promise
+    // settling (a Svelte effect flush), so poll for the button instead of
+    // racing the render — mirrors the header-column test above.
+    let runButton: HTMLButtonElement | undefined;
+    await waitFor(() => {
+      runButton = [...container.querySelectorAll("button")].find((b) =>
+        /^(Execute|Ausführen)$/.test(b.textContent?.trim() ?? ""),
+      );
+      expect(runButton).toBeTruthy();
+    });
+    await fireEvent.click(runButton!);
+  }
+
+  it("forwards check_conditions=false by default and shows a success toast", async () => {
+    mockExecuteProgram.mockResolvedValue({ executed: true });
+    const { container } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+
+    await clickFirstRunButton(container);
+
+    await waitFor(() => expect(mockExecuteProgram).toHaveBeenCalledTimes(1));
+    expect(mockExecuteProgram.mock.calls[0][2]).toBe(false);
+    await waitFor(() => expect(toastStore.items.length).toBe(1));
+    expect(toastStore.items[0].severity).toBe("success");
+  });
+
+  it("forwards check_conditions=true and shows a success toast when the CCU reports executed=true", async () => {
+    setCheckboxChecked(true);
+    mockExecuteProgram.mockResolvedValue({ executed: true });
+    const { container } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+
+    await clickFirstRunButton(container);
+
+    await waitFor(() => expect(mockExecuteProgram).toHaveBeenCalledTimes(1));
+    expect(mockExecuteProgram.mock.calls[0][2]).toBe(true);
+    await waitFor(() => expect(toastStore.items.length).toBe(1));
+    expect(toastStore.items[0].severity).toBe("success");
+  });
+
+  it("shows an info toast (not an error) when the checked condition was not met", async () => {
+    setCheckboxChecked(true);
+    mockExecuteProgram.mockResolvedValue({ executed: false });
+    const { container } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+
+    await clickFirstRunButton(container);
+
+    await waitFor(() => expect(mockExecuteProgram).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(toastStore.items.length).toBe(1));
+    expect(toastStore.items[0].severity).toBe("info");
+  });
+
+  it("cancelling the confirm dialog does not call the API", async () => {
+    confirmStore.ask = vi.fn().mockResolvedValue(false);
+    const { container } = render(ProgramList);
+    await waitFor(() => expect(mockListPrograms).toHaveBeenCalledTimes(1));
+
+    await clickFirstRunButton(container);
+
+    // Give any (incorrect) async execute() call a chance to fire before
+    // asserting its absence.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockExecuteProgram).not.toHaveBeenCalled();
   });
 });

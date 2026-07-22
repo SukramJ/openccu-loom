@@ -649,8 +649,16 @@
     },
     {
       "category": "programs",
-      "description": "Execute a CCU program by id.",
-      "name": "programs.execute"
+      "description": "Execute a CCU program by id. When `check_conditions` is true the CCU evaluates the program's \"if\" condition and runs the program only when it is satisfied; when false (the default) the program runs unconditionally. `executed` reports whether the program actually ran — always true for an unconditional run, false for a condition-checked run whose condition was not met.",
+      "name": "programs.execute",
+      "args": {
+        "id": "string",
+        "check_conditions": "boolean?"
+      },
+      "result": {
+        "id": "string",
+        "executed": "boolean"
+      }
     },
     {
       "category": "programs",

@@ -62,12 +62,18 @@
       title: t("programs.confirm_run", { name }),
       confirmLabel: t("programs.run"),
       destructive: false,
+      checkbox: { label: t("programs.check_conditions"), checked: false },
     });
     if (!ok) return;
+    const checkConditions = confirmStore.checkboxChecked;
     runningId = id;
     try {
-      await api.executeProgram(id, central);
-      toastStore.success(t("programs.executed", { name }));
+      const res = await api.executeProgram(id, central, checkConditions);
+      if (checkConditions && res?.executed === false) {
+        toastStore.info(t("programs.not_executed", { name }));
+      } else {
+        toastStore.success(t("programs.executed", { name }));
+      }
     } catch (err) {
       toastStore.error(
         err instanceof ApiError

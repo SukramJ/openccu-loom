@@ -1415,7 +1415,7 @@ func TestExecuteProgram_ExecuteError_Returns502(t *testing.T) {
 	}
 }
 
-func TestExecuteProgram_HappyPath_Returns202(t *testing.T) {
+func TestExecuteProgram_HappyPath_Returns200Executed(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	prog := hub.NewProgram("test-ccu", "P-ok", "Ok", "", false,
@@ -1427,8 +1427,145 @@ func TestExecuteProgram_HappyPath_Returns202(t *testing.T) {
 	w := httptest.NewRecorder()
 	ExecuteProgram(idx).ServeHTTP(w, req)
 
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true for unconditional run")
+	}
+}
+
+// condProgramWriter implements hub.ConditionalProgramWriter; ExecuteProgramConditional
+// returns the configured executed flag so the handler's check_conditions branch
+// can be exercised without a live CCU.
+type condProgramWriter struct {
+	executed  bool
+	err       error
+	condCalls int
+	execCalls int
+}
+
+func (c *condProgramWriter) ExecuteProgram(_ context.Context, _ string) error {
+	c.execCalls++
+	return c.err
+}
+
+func (c *condProgramWriter) SetProgramEnabled(_ context.Context, _ string, _ bool) error {
+	return c.err
+}
+
+func (c *condProgramWriter) ExecuteProgramConditional(_ context.Context, _ string) (bool, error) {
+	c.condCalls++
+	if c.err != nil {
+		return false, c.err
+	}
+	return c.executed, nil
+}
+
+func TestExecuteProgram_CheckConditions_ConditionMet(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: true}
+	prog := hub.NewProgram("test-ccu", "P-cond", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true (condition met)")
+	}
+	if writer.condCalls != 1 {
+		t.Fatalf("condCalls=%d, want 1 (conditional path must be used)", writer.condCalls)
+	}
+	if writer.execCalls != 0 {
+		t.Fatalf("execCalls=%d, want 0 (unconditional path must not run)", writer.execCalls)
+	}
+}
+
+func TestExecuteProgram_CheckConditions_ConditionNotMet(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: false}
+	prog := hub.NewProgram("test-ccu", "P-cond", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Executed {
+		t.Fatalf("executed=true, want false (condition not met)")
+	}
+}
+
+// TestExecuteProgram_CheckConditions_WriterError_Returns502 verifies that a
+// CCU-side failure on the condition-checked path (the ReGa script call
+// itself erroring, e.g. a transport failure) surfaces as 502 — the same
+// mapping as the unconditional path — rather than being swallowed as
+// executed=false.
+func TestExecuteProgram_CheckConditions_WriterError_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{err: errors.New("rega call failed")}
+	prog := hub.NewProgram("test-ccu", "P-cond-err", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond-err"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.condCalls != 1 {
+		t.Fatalf("condCalls=%d, want 1 (conditional path must be used)", writer.condCalls)
+	}
+}
+
+// TestExecuteProgram_InvalidJSONBody_Returns400 verifies that a malformed
+// (non-empty, non-JSON) request body is rejected with 400 before any writer
+// call is attempted — the empty-body-is-optional convenience of
+// decodeOptionalJSON must not swallow genuinely malformed input.
+func TestExecuteProgram_InvalidJSONBody_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: true}
+	prog := hub.NewProgram("test-ccu", "P-badjson", "BadJSON", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("NOT JSON"))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-badjson"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.execCalls != 0 || writer.condCalls != 0 {
+		t.Fatalf("no writer call expected on decode failure, got exec=%d cond=%d", writer.execCalls, writer.condCalls)
 	}
 }
 

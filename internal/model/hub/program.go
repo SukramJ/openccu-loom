@@ -241,6 +241,37 @@ func (p *Program) Execute(ctx context.Context) error {
 	return err
 }
 
+// ExecuteWithConditionCheck evaluates the program's "if" condition on the
+// CCU and runs the program only when the condition is satisfied. It reports
+// whether the program actually executed.
+//
+// When the configured writer implements [ConditionalProgramWriter] the
+// condition is evaluated on the CCU; the ExecuteNotifier fires only when the
+// program actually ran (or the round-trip failed), so a condition that is not
+// met records neither an execution nor a notification. When the writer does
+// not support condition checking, the call falls back to the unconditional
+// [Program.Execute] path and reports executed=true on a clean round-trip.
+func (p *Program) ExecuteWithConditionCheck(ctx context.Context) (bool, error) {
+	if p.Writer == nil {
+		return false, fmt.Errorf("program %q: no writer configured", p.ID)
+	}
+	cw, ok := p.Writer.(ConditionalProgramWriter)
+	if !ok {
+		if err := p.Execute(ctx); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	executed, err := cw.ExecuteProgramConditional(ctx, p.ID)
+	p.mu.RLock()
+	notifier := p.ExecuteNotifier
+	p.mu.RUnlock()
+	if notifier != nil && (executed || err != nil) {
+		notifier(ctx, p.ID, hmenum.ProgramTriggerAPI, err == nil)
+	}
+	return executed, err
+}
+
 // SetEnabled flips the program's active state.
 func (p *Program) SetEnabled(ctx context.Context, enabled bool) error {
 	if p.Writer == nil {

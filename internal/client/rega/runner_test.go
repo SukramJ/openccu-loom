@@ -363,6 +363,72 @@ func TestSetProgramStateFalse(t *testing.T) {
 	}
 }
 
+// TestExecuteProgramConditionalPassesID verifies the pid reaches the
+// substituted script and the {"executed":true} response decodes to true.
+func TestExecuteProgramConditionalPassesID(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"executed":true}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	executed, err := r.ExecuteProgramConditional(context.Background(), "prog-42")
+	if err != nil {
+		t.Fatalf("ExecuteProgramConditional: %v", err)
+	}
+	if !executed {
+		t.Fatal("executed=false, want true")
+	}
+	if !strings.Contains(capture.lastScript(), `"prog-42"`) {
+		t.Errorf("script missing pid: %s", capture.lastScript())
+	}
+}
+
+// TestExecuteProgramConditionalConditionNotMet verifies that a
+// {"executed":false} response (condition not satisfied) decodes to false
+// without erroring.
+func TestExecuteProgramConditionalConditionNotMet(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"executed":false}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	executed, err := r.ExecuteProgramConditional(context.Background(), "prog-7")
+	if err != nil {
+		t.Fatalf("ExecuteProgramConditional: %v", err)
+	}
+	if executed {
+		t.Fatal("executed=true, want false (condition not met)")
+	}
+}
+
+// TestExecuteProgramConditionalPropagatesCCUError verifies that a malformed
+// (unparsable) script result — e.g. a degraded CCU-side script run — surfaces
+// as an error wrapping [hmerr.ErrClientException] with executed=false, rather
+// than silently reporting "condition not met".
+func TestExecuteProgramConditionalPropagatesCCUError(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "not json")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	executed, err := r.ExecuteProgramConditional(context.Background(), "prog-42")
+	if err == nil {
+		t.Fatal("expected error for malformed script output")
+	}
+	if executed {
+		t.Error("executed=true on error path, want false")
+	}
+	if !errors.Is(err, hmerr.ErrClientException) {
+		t.Errorf("error should classify as ErrClientException, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "prog-42") {
+		t.Errorf("error should mention the program id, got: %v", err)
+	}
+}
+
 // TestGetSystemUpdateInfo verifies the JSON response is decoded into SystemUpdateInfo.
 func TestGetSystemUpdateInfo(t *testing.T) {
 	t.Parallel()

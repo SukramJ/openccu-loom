@@ -451,6 +451,8 @@ func TestParamsetGetSurfacesBackendError(t *testing.T) {
 type stubHub struct {
 	programs           []map[string]any
 	executedID         string
+	executeChecked     bool
+	executeExecuted    bool
 	executeErr         error
 	sysvars            []map[string]any
 	listErr            error
@@ -494,9 +496,18 @@ func (h *stubHub) ListPrograms(_ context.Context, includeInternal *bool) ([]map[
 	return h.programs, h.listErr
 }
 
-func (h *stubHub) ExecuteProgram(_ context.Context, id string) error {
+func (h *stubHub) ExecuteProgram(_ context.Context, id string, checkConditions bool) (bool, error) {
 	h.executedID = id
-	return h.executeErr
+	h.executeChecked = checkConditions
+	if h.executeErr != nil {
+		return false, h.executeErr
+	}
+	// Unconditional runs always execute; conditional runs report the
+	// stub's configured executeExecuted flag.
+	if checkConditions {
+		return h.executeExecuted, nil
+	}
+	return true, nil
 }
 
 func (h *stubHub) ListSysvars(context.Context) ([]map[string]any, error) {
@@ -615,6 +626,60 @@ func TestProgramsExecuteRequiresID(t *testing.T) {
 	res := r.Dispatch(opCtx(), "programs.execute", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+// TestProgramsExecuteConditional verifies that programs.execute forwards the
+// check_conditions flag and returns the executed result the hub reports:
+// a condition that is not met yields executed=false without erroring.
+func TestProgramsExecuteConditional(t *testing.T) {
+	hub := &stubHub{executeExecuted: false}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1", "check_conditions": true})
+	res := r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error != nil {
+		t.Fatalf("execute err: %+v", res.Error)
+	}
+	if !hub.executeChecked {
+		t.Fatal("check_conditions flag was not forwarded to the hub")
+	}
+	if got := res.Data.(map[string]any)["executed"]; got != false {
+		t.Fatalf("executed=%v want false (condition not met)", got)
+	}
+
+	// When the condition is met the program runs and executed is true.
+	hub.executeExecuted = true
+	res = r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error != nil {
+		t.Fatalf("execute err: %+v", res.Error)
+	}
+	if got := res.Data.(map[string]any)["executed"]; got != true {
+		t.Fatalf("executed=%v want true (condition met)", got)
+	}
+}
+
+// TestProgramsExecuteErrorMapsToInternal verifies that a HubQuery-side
+// failure (the CCU round-trip erroring, whether checked or unconditional)
+// surfaces as a CommandErrorInternal instead of a successful response with
+// a stale executed flag.
+func TestProgramsExecuteErrorMapsToInternal(t *testing.T) {
+	hub := &stubHub{executeErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
+	}
+
+	// Same mapping applies to the condition-checked branch.
+	args, _ = json.Marshal(map[string]any{"id": "P1", "check_conditions": true})
+	res = r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error (checked), got %+v", res.Error)
 	}
 }
 

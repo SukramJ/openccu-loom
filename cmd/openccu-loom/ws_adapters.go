@@ -409,16 +409,22 @@ func (w *wsHubQuery) ListPrograms(_ context.Context, includeInternal *bool) ([]m
 	return out, nil
 }
 
-func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string) error {
+func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditions bool) (bool, error) {
 	h := w.hub.Hub()
 	if h == nil {
-		return errors.New("ws: hub not available")
+		return false, errors.New("ws: hub not available")
 	}
 	p, ok := h.Program(id)
 	if !ok {
-		return fmt.Errorf("ws: program not found: %s", id)
+		return false, fmt.Errorf("ws: program not found: %s", id)
 	}
-	return p.Execute(ctx)
+	if checkConditions {
+		return p.ExecuteWithConditionCheck(ctx)
+	}
+	if err := p.Execute(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {

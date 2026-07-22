@@ -585,7 +585,28 @@ func FetchSysvars(svc SysvarRefreshService) http.HandlerFunc {
 	}
 }
 
-// ExecuteProgram triggers a CCU program.
+// ProgramExecuteRequest is the optional body for
+// `POST /programs/{id}/execute`.
+type ProgramExecuteRequest struct {
+	// CheckConditions gates execution on the program's "if" condition: when
+	// true the CCU evaluates the condition and runs the program only when it
+	// is satisfied. When false (the default) the program runs unconditionally.
+	CheckConditions bool `json:"check_conditions"`
+}
+
+// ProgramExecuteResponse is the body returned by
+// `POST /programs/{id}/execute`.
+type ProgramExecuteResponse struct {
+	// Executed reports whether the program actually ran. It is always true
+	// for an unconditional execution (check_conditions=false); for a
+	// condition-checked execution it is false when the condition was not met.
+	Executed bool `json:"executed"`
+}
+
+// ExecuteProgram triggers a CCU program. The optional body carries
+// check_conditions: when true the program's "if" condition is evaluated on
+// the CCU and the program runs only when the condition is satisfied. The
+// response reports whether the program executed.
 func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h, ok := requireMutationHub(w, r, idx)
@@ -599,11 +620,26 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Program not found", id))
 			return
 		}
+		var req ProgramExecuteRequest
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.CheckConditions {
+			executed, err := p.ExecuteWithConditionCheck(r.Context())
+			if err != nil {
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
+				return
+			}
+			JSON(w, http.StatusOK, ProgramExecuteResponse{Executed: executed})
+			return
+		}
 		if err := p.Execute(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		JSON(w, http.StatusOK, ProgramExecuteResponse{Executed: true})
 	}
 }
 
