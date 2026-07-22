@@ -1,0 +1,22 @@
+!# openccu-loom — execute_program_conditional
+!# Params: ##id## (program ID)
+!# Output: {"executed": <true|false>}
+!#
+!# Evaluates the program's condition (its "if" block) and runs the program
+!# only when that condition is currently satisfied. A program's boolean
+!# State reflects the combined result of its root-rule conditions; when it
+!# is true the program's "then" actions are executed via ProgramExecute and
+!# the result reports executed=true. When the condition is not met — or the
+!# id does not resolve to a program — nothing runs and executed=false.
+
+string sProgramId = "##id##";
+string sExecuted = "false";
+
+object oProgram = dom.GetObject(ID_PROGRAMS).Get(sProgramId);
+if (oProgram) {
+    if (oProgram.State()) {
+        oProgram.ProgramExecute();
+        sExecuted = "true";
+    }
+}
+Write('{"executed":' # sExecuted # '}');

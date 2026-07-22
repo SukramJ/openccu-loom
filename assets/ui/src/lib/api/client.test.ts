@@ -125,6 +125,22 @@ describe("listPrograms / listSysvars — pagination", () => {
     expect(result).toHaveLength(12);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  // include_internal defaults to false (system programs hidden, matching the
+  // CCU WebUI default) and is only forced true on an explicit caller request.
+  it("listPrograms defaults to include_internal=false", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    await api.listPrograms();
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/programs?page=1&per_page=200&include_internal=false");
+  });
+
+  it("listPrograms(true) requests include_internal=true", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    await api.listPrograms(true);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/programs?page=1&per_page=200&include_internal=true");
+  });
 });
 
 describe("api endpoint paths", () => {

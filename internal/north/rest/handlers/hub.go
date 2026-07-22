@@ -5,12 +5,14 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/restapi"
@@ -128,6 +130,15 @@ type ProgramSummary struct {
 	// LastExecuted is the RFC3339 timestamp of the most recent execution,
 	// omitted when no execution has been observed yet. Closes H-032.
 	LastExecuted string `json:"last_executed,omitempty"`
+	// ConditionSummary is a compact, language-neutral rendering of the
+	// program's root-rule trigger conditions (object names joined by the
+	// symbolic operators ==, >=, <=, >, <, &&, ||). Omitted when the
+	// program has no rule or the CCU-side scan produced nothing.
+	ConditionSummary string `json:"condition_summary,omitempty"`
+	// ActivitySummary is a compact, language-neutral rendering of the
+	// program's root-rule activities (object name := value, joined by
+	// "; "). Omitted when the program has no rule.
+	ActivitySummary string `json:"activity_summary,omitempty"`
 	// IsInternal is true for Tmp_*-programs created internally by the CCU.
 	IsInternal bool `json:"is_internal,omitempty"`
 	// EnabledDefault is true when the program matched a configured description
@@ -296,13 +307,26 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 			JSON(w, http.StatusOK, []ProgramSummary{})
 			return
 		}
+		includeInternal, err := parseOptionalBoolQuery(r)
+		if err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid include_internal", err.Error()))
+			return
+		}
 		var out []ProgramSummary
 		for _, nh := range idx.Hubs() {
 			if nh.Hub == nil {
 				continue
 			}
 			serial := idx.SerialSuffix(nh.Central)
+			// The hub always holds internal programs; whether they are served
+			// is resolved per central: an explicit include_internal wins,
+			// otherwise the central's include_internal_programs config default.
+			include := effectiveBool(includeInternal, nh.Hub.IncludeInternalProgramsDefault())
 			for _, p := range nh.Hub.Programs() {
+				if p.IsInternal && !include {
+					continue
+				}
 				out = append(out, toProgramSummary(p, nh.Central, serial))
 			}
 		}
@@ -312,6 +336,31 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
 	}
+}
+
+// parseOptionalBoolQuery reads the include_internal query parameter. It
+// returns (nil, nil) when the parameter is absent or empty so callers can
+// fall back to a per-request default, and a parse error (surfaced as 400)
+// when a non-empty value is not a recognised boolean literal.
+func parseOptionalBoolQuery(r *http.Request) (*bool, error) {
+	raw := r.URL.Query().Get("include_internal")
+	if raw == "" {
+		return nil, nil
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+// effectiveBool resolves an optional override against a default: the
+// override wins when present, otherwise def is used.
+func effectiveBool(override *bool, def bool) bool {
+	if override != nil {
+		return *override
+	}
+	return def
 }
 
 // toProgramSummary maps a hub program onto its REST DTO, tagging it with the
@@ -339,6 +388,7 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 	e.EnabledDefault = p.EnabledByDefault()
 	e.Channel = p.Channel()
 	e.DeviceAddress = p.DeviceAddress()
+	e.ConditionSummary, e.ActivitySummary = p.RuleSummary()
 	return e
 }
 
@@ -537,7 +587,28 @@ func FetchSysvars(svc SysvarRefreshService) http.HandlerFunc {
 	}
 }
 
-// ExecuteProgram triggers a CCU program.
+// ProgramExecuteRequest is the optional body for
+// `POST /programs/{id}/execute`.
+type ProgramExecuteRequest struct {
+	// CheckConditions gates execution on the program's "if" condition: when
+	// true the CCU evaluates the condition and runs the program only when it
+	// is satisfied. When false (the default) the program runs unconditionally.
+	CheckConditions bool `json:"check_conditions"`
+}
+
+// ProgramExecuteResponse is the body returned by
+// `POST /programs/{id}/execute`.
+type ProgramExecuteResponse struct {
+	// Executed reports whether the program actually ran. It is always true
+	// for an unconditional execution (check_conditions=false); for a
+	// condition-checked execution it is false when the condition was not met.
+	Executed bool `json:"executed"`
+}
+
+// ExecuteProgram triggers a CCU program. The optional body carries
+// check_conditions: when true the program's "if" condition is evaluated on
+// the CCU and the program runs only when the condition is satisfied. The
+// response reports whether the program executed.
 func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h, ok := requireMutationHub(w, r, idx)
@@ -551,11 +622,76 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Program not found", id))
 			return
 		}
+		var req ProgramExecuteRequest
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.CheckConditions {
+			executed, err := p.ExecuteWithConditionCheck(r.Context())
+			if err != nil {
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
+				return
+			}
+			JSON(w, http.StatusAccepted, ProgramExecuteResponse{Executed: executed})
+			return
+		}
 		if err := p.Execute(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		JSON(w, http.StatusAccepted, ProgramExecuteResponse{Executed: true})
+	}
+}
+
+// DeleteProgram removes a program from the CCU and drops the local mirror
+// once the call lands. Admin-gated (parity with DELETE /devices) because
+// deletion is irreversible. Returns 404 when the program is unknown, 204
+// on success. Records an audit entry on success.
+func DeleteProgram(idx HubIndex, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
+			return
+		}
+		id := chi.URLParam(r, "id")
+		p, ok := h.Program(id)
+		if !ok {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Program not found", id))
+			return
+		}
+		name := p.Name
+		if err := h.DeleteProgramRemote(r.Context(), id); err != nil {
+			writeProgramDeleteError(w, r, err)
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
+				Action: audit.ActionProgramDelete,
+				Note:   "delete program " + name + " (" + id + ")",
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// writeProgramDeleteError maps the hub sentinels a program delete can
+// return onto HTTP problem responses: an unknown / already-gone program is
+// 404, an execute-only writer is 503, and any other CCU-side failure is a
+// 502 upstream error.
+func writeProgramDeleteError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, hub.ErrProgramNotFound):
+		problem.Write(w, http.StatusNotFound,
+			problem.New(problem.TypeNotFound, r, "Program not found", err.Error()))
+	case errors.Is(err, hub.ErrProgramDeleteUnsupported):
+		problem.Write(w, http.StatusServiceUnavailable,
+			problem.New(problem.TypeServiceUnready, r, "Program deletion unavailable", err.Error()))
+	default:
+		writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Program delete failed", err)
 	}
 }
 

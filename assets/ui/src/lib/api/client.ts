@@ -630,16 +630,22 @@ export const api = {
       body: JSON.stringify({ rooms }),
     });
   },
-  listPrograms() {
+  listPrograms(includeInternal = false) {
     return fetchAllPages<ProgramEntry>((page, perPage) =>
-      request<ProgramEntry[]>(`/programs?page=${page}&per_page=${perPage}`),
+      request<ProgramEntry[]>(
+        `/programs?page=${page}&per_page=${perPage}&include_internal=${includeInternal}`,
+      ),
     );
   },
-  executeProgram(id: string, central?: string) {
+  executeProgram(id: string, central?: string, checkConditions = false) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
-    return request<void>(
+    return request<{ executed: boolean }>(
       `/programs/${encodeURIComponent(id)}/execute${qs}`,
-      { method: "POST" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ check_conditions: checkConditions }),
+      },
     );
   },
   setProgramEnabled(id: string, active: boolean, central?: string) {
@@ -652,6 +658,12 @@ export const api = {
         body: JSON.stringify({ active }),
       },
     );
+  },
+  deleteProgram(id: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/programs/${encodeURIComponent(id)}${qs}`, {
+      method: "DELETE",
+    });
   },
   listAlarmMessages() {
     return request<AlarmMessage[]>(`/alarm-messages`);

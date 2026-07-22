@@ -28,7 +28,7 @@ func TestWSHubQuery_ListPrograms_WithProgram_ReturnsEntry(t *testing.T) {
 	p := hub.NewProgram("ccu-01", "prog-1", "Lights Off", "Turn off all lights", false, nil)
 	h.PutProgram(p)
 
-	got, err := q.ListPrograms(context.Background())
+	got, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestWSHubQuery_ListPrograms_WithActive_IncludesActive(t *testing.T) {
 	p.OnActive(true) // active=true, marks hasActive=true (observed)
 	h.PutProgram(p)
 
-	got, err := q.ListPrograms(context.Background())
+	got, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}
@@ -57,6 +57,54 @@ func TestWSHubQuery_ListPrograms_WithActive_IncludesActive(t *testing.T) {
 	}
 	if got[0]["active"] != true {
 		t.Errorf("expected active=true, got %v", got[0]["active"])
+	}
+}
+
+// TestWSHubQuery_ListPrograms_InternalFilter exercises the internal-program
+// delivery filter: hidden by default, revealed by an explicit override or
+// the central's configured default.
+func TestWSHubQuery_ListPrograms_InternalFilter(t *testing.T) {
+	t.Parallel()
+	boolPtr := func(b bool) *bool { return &b }
+
+	build := func(def bool) *wsHubQuery {
+		q, h := liveHubQuery(t)
+		h.SetIncludeInternalProgramsDefault(def)
+		h.PutProgram(hub.NewProgram("ccu-01", "P-Normal", "Normal", "", false, nil))
+		internal := hub.NewProgram("ccu-01", "Tmp_1", "Tmp_1", "", true, nil)
+		h.PutProgram(internal)
+		return q
+	}
+
+	countInternal := func(t *testing.T, q *wsHubQuery, override *bool) (total, internal int) {
+		t.Helper()
+		got, err := q.ListPrograms(context.Background(), override)
+		if err != nil {
+			t.Fatalf("ListPrograms: %v", err)
+		}
+		for _, e := range got {
+			if e["is_internal"] == true {
+				internal++
+			}
+		}
+		return len(got), internal
+	}
+
+	// Default false, no override → internal hidden.
+	if total, internal := countInternal(t, build(false), nil); total != 1 || internal != 0 {
+		t.Fatalf("default hide: expected 1 program, 0 internal; got total=%d internal=%d", total, internal)
+	}
+	// Default true, no override → both shown.
+	if total, internal := countInternal(t, build(true), nil); total != 2 || internal != 1 {
+		t.Fatalf("default show: expected 2 programs, 1 internal; got total=%d internal=%d", total, internal)
+	}
+	// Override true wins over default false.
+	if total, internal := countInternal(t, build(false), boolPtr(true)); total != 2 || internal != 1 {
+		t.Fatalf("override show: expected 2 programs, 1 internal; got total=%d internal=%d", total, internal)
+	}
+	// Override false wins over default true.
+	if total, internal := countInternal(t, build(true), boolPtr(false)); total != 1 || internal != 0 {
+		t.Fatalf("override hide: expected 1 program, 0 internal; got total=%d internal=%d", total, internal)
 	}
 }
 

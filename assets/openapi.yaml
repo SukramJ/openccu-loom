@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.35.0
+  version: 2.37.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -520,6 +520,16 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
+        - name: include_internal
+          in: query
+          required: false
+          description: |
+            Overrides whether internal (Tmp_*, prgEnergyCounter_*) programs
+            are listed. When omitted, each central applies its
+            `include_internal_programs` config default (hidden by default,
+            mirroring the CCU WebUI's "show system programs" toggle). The
+            daemon always knows every program; this only steers delivery.
+          schema: { type: boolean }
       responses:
         "200":
           description: OK
@@ -541,6 +551,14 @@ paths:
         scenes, so a double-execution under client retry can produce
         observable side effects. Supply the optional `Idempotency-Key`
         header to suppress that risk.
+
+        The optional body carries `check_conditions`: when `true` the CCU
+        evaluates the program's "if" condition and runs the program only
+        when the condition is currently satisfied. When `false` (the
+        default, and when the body is omitted) the program runs
+        unconditionally. The response reports `executed` — always `true`
+        for an unconditional run, and `false` for a condition-checked run
+        whose condition was not met.
       security:
         - basicAuth: []
         - bearerAuth: []
@@ -551,9 +569,18 @@ paths:
           required: true
           schema: { type: string }
         - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProgramExecuteRequest" }
       responses:
         "202":
-          description: Accepted
+          description: Execution result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgramExecuteResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404":
           $ref: "#/components/responses/NotFound"
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -2706,6 +2733,27 @@ paths:
                 active: { type: boolean }
       responses:
         "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteProgram
+      summary: Delete a program from the CCU (admin)
+      description: >-
+        Removes the program from the CCU (dom.DeleteObject) and drops the
+        local mirror once the call lands. Irreversible, therefore admin-gated
+        like DELETE /devices/{addr}. The optional `central` query parameter
+        scopes the target to one CCU when several are configured.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: query, name: central, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -6631,6 +6679,21 @@ components:
         last_executed:
           type: string
           description: RFC3339 timestamp of the most recent execution.
+        condition_summary:
+          type: string
+          description: |
+            Compact, language-neutral rendering of the program's root-rule
+            trigger conditions — object names from the ReGa DOM joined by
+            symbolic operators (==, >=, <=, >, <, &&, ||). Capped at ~200
+            characters with an ellipsis. Absent when the program has no rule
+            or the CCU-side scan produced nothing.
+        activity_summary:
+          type: string
+          description: |
+            Compact, language-neutral rendering of the program's root-rule
+            activities (object name := value, joined by "; "). Capped at
+            ~200 characters with an ellipsis. Absent when the program has no
+            rule.
         is_internal:
           type: boolean
           description: |
@@ -6664,6 +6727,28 @@ components:
             Device part of `channel` (before the ":"). Clients use it to
             group the entity under the owning physical device; absent
             together with `channel` (entity belongs on the hub card).
+    ProgramExecuteRequest:
+      type: object
+      description: Optional body for POST /programs/{id}/execute.
+      properties:
+        check_conditions:
+          type: boolean
+          default: false
+          description: |
+            When true, the CCU evaluates the program's "if" condition and
+            runs the program only when the condition is currently
+            satisfied. When false (the default) the program runs
+            unconditionally.
+    ProgramExecuteResponse:
+      type: object
+      required: [executed]
+      properties:
+        executed:
+          type: boolean
+          description: |
+            Whether the program actually ran. Always true for an
+            unconditional execution (check_conditions=false); false for a
+            condition-checked execution whose condition was not met.
     SysvarSummary:
       type: object
       required: [name, unique_id, value_type, observed]

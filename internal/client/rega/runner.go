@@ -179,6 +179,26 @@ func (r *Runner) SetProgramState(ctx context.Context, pid string, state bool) er
 	return err
 }
 
+// ExecuteProgramConditional evaluates the CCU automation program's "if"
+// condition (identified by its ISE-ID pid) and runs the program only when
+// the condition is currently satisfied. It returns whether the program
+// actually executed.
+//
+// Implemented as a ReGa script (execute_program_conditional.fn) because the
+// CCU's JSON-RPC Program.execute runs unconditionally and exposes no
+// condition-gated variant.
+func (r *Runner) ExecuteProgramConditional(ctx context.Context, pid string) (bool, error) {
+	var resp struct {
+		Executed bool `json:"executed"`
+	}
+	if err := r.RunJSON(ctx, hmenum.RegaScriptExecuteProgramConditional, map[string]string{
+		"id": pid,
+	}, &resp); err != nil {
+		return false, fmt.Errorf("rega.ExecuteProgramConditional(%s): %w", pid, err)
+	}
+	return resp.Executed, nil
+}
+
 // SystemUpdateInfo holds the result of [Runner.GetSystemUpdateInfo].
 // Fields mirror py:2149).
 type SystemUpdateInfo struct {
@@ -320,11 +340,21 @@ func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 type ProgramDescription struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
+	// ConditionSummary is a compact, language-neutral rendering of the
+	// program's root-rule trigger conditions (object names joined by the
+	// symbolic operators ==, >=, <=, >, <, &&, ||). Empty when the program
+	// has no rule. URL-encoded on the wire.
+	ConditionSummary string `json:"condition_summary"`
+	// ActivitySummary is a compact, language-neutral rendering of the
+	// program's root-rule activities (object name := value, joined by "; ").
+	// Empty when the program has no rule. URL-encoded on the wire.
+	ActivitySummary string `json:"activity_summary"`
 }
 
-// GetProgramDescriptions returns the URI-encoded description string for every
-// CCU automation program by running the get_program_descriptions.fn ReGa
-// script. The Description field values are URL-encoded; callers should apply
+// GetProgramDescriptions returns the URI-encoded description string and the
+// compact rule summaries for every CCU automation program by running the
+// get_program_descriptions.fn ReGa script. The Description, ConditionSummary,
+// and ActivitySummary field values are URL-encoded; callers should apply
 // url.QueryUnescape before display.
 func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescription, error) {
 	var descs []ProgramDescription

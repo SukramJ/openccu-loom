@@ -366,14 +366,24 @@ type wsHubQuery struct {
 	deviceAdmin *adapter.DeviceAdminDomain
 }
 
-func (w *wsHubQuery) ListPrograms(_ context.Context) ([]map[string]any, error) {
+func (w *wsHubQuery) ListPrograms(_ context.Context, includeInternal *bool) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
 		return []map[string]any{}, nil
 	}
+	// An explicit include_internal wins; absent, the central's configured
+	// include_internal_programs default applies. The hub always holds
+	// internal (Tmp_*) programs, so this only steers what is delivered.
+	include := includeInternal != nil && *includeInternal
+	if includeInternal == nil {
+		include = h.IncludeInternalProgramsDefault()
+	}
 	progs := h.Programs()
 	out := make([]map[string]any, 0, len(progs))
 	for _, p := range progs {
+		if p.IsInternal && !include {
+			continue
+		}
 		active, observed := p.Active()
 		e := map[string]any{
 			"id":          p.ID,
@@ -399,16 +409,30 @@ func (w *wsHubQuery) ListPrograms(_ context.Context) ([]map[string]any, error) {
 	return out, nil
 }
 
-func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string) error {
+func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditions bool) (bool, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return false, errors.New("ws: hub not available")
+	}
+	p, ok := h.Program(id)
+	if !ok {
+		return false, fmt.Errorf("ws: program not found: %s", id)
+	}
+	if checkConditions {
+		return p.ExecuteWithConditionCheck(ctx)
+	}
+	if err := p.Execute(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *wsHubQuery) DeleteProgram(ctx context.Context, id string) error {
 	h := w.hub.Hub()
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
-	p, ok := h.Program(id)
-	if !ok {
-		return fmt.Errorf("ws: program not found: %s", id)
-	}
-	return p.Execute(ctx)
+	return h.DeleteProgramRemote(ctx, id)
 }
 
 func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {

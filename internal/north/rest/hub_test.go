@@ -148,6 +148,15 @@ func TestExecuteProgram(t *testing.T) {
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
+	var body struct {
+		Executed bool `json:"executed"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v body=%s", err, rr.Body.String())
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true for unconditional run")
+	}
 	if pw.calls.Load() != 1 {
 		t.Fatalf("calls=%d", pw.calls.Load())
 	}

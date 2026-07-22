@@ -30,9 +30,12 @@ import (
 var writeCommandRoles = map[string]auth.Role{
 	// Admin-tier: backup + cache invalidation mirror the REST
 	// `/backups` and `/admin/cache/clear` routes (both `.With(admin)`).
+	// programs.delete mirrors DELETE /programs/{id} (admin-gated like
+	// DELETE /devices — deletion is irreversible).
 	"backup.trigger":  auth.RoleAdmin,
 	"backups.trigger": auth.RoleAdmin,
 	"ccu.cache_clear": auth.RoleAdmin,
+	"programs.delete": auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.
 	"alarm_messages.ack":      auth.RoleOperator,

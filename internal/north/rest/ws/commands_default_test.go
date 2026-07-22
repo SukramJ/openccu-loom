@@ -449,14 +449,19 @@ func TestParamsetGetSurfacesBackendError(t *testing.T) {
 // --- programs.* / sysvars.* ---
 
 type stubHub struct {
-	programs   []map[string]any
-	executedID string
-	executeErr error
-	sysvars    []map[string]any
-	listErr    error
-	setName    string
-	setValue   any
-	setErr     error
+	programs           []map[string]any
+	executedID         string
+	executeChecked     bool
+	executeExecuted    bool
+	executeErr         error
+	deletedProgramID   string
+	deleteProgramErr   error
+	sysvars            []map[string]any
+	listErr            error
+	setName            string
+	setValue           any
+	setErr             error
+	gotIncludeInternal *bool // captures the override ListPrograms last received
 
 	fetchCentral string
 	fetchErr     error
@@ -488,13 +493,28 @@ type stubHub struct {
 	inboxErr          error
 }
 
-func (h *stubHub) ListPrograms(context.Context) ([]map[string]any, error) {
+func (h *stubHub) ListPrograms(_ context.Context, includeInternal *bool) ([]map[string]any, error) {
+	h.gotIncludeInternal = includeInternal
 	return h.programs, h.listErr
 }
 
-func (h *stubHub) ExecuteProgram(_ context.Context, id string) error {
+func (h *stubHub) ExecuteProgram(_ context.Context, id string, checkConditions bool) (bool, error) {
 	h.executedID = id
-	return h.executeErr
+	h.executeChecked = checkConditions
+	if h.executeErr != nil {
+		return false, h.executeErr
+	}
+	// Unconditional runs always execute; conditional runs report the
+	// stub's configured executeExecuted flag.
+	if checkConditions {
+		return h.executeExecuted, nil
+	}
+	return true, nil
+}
+
+func (h *stubHub) DeleteProgram(_ context.Context, id string) error {
+	h.deletedProgramID = id
+	return h.deleteProgramErr
 }
 
 func (h *stubHub) ListSysvars(context.Context) ([]map[string]any, error) {
@@ -613,6 +633,163 @@ func TestProgramsExecuteRequiresID(t *testing.T) {
 	res := r.Dispatch(opCtx(), "programs.execute", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+// TestProgramsExecuteConditional verifies that programs.execute forwards the
+// check_conditions flag and returns the executed result the hub reports:
+// a condition that is not met yields executed=false without erroring.
+func TestProgramsExecuteConditional(t *testing.T) {
+	hub := &stubHub{executeExecuted: false}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1", "check_conditions": true})
+	res := r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error != nil {
+		t.Fatalf("execute err: %+v", res.Error)
+	}
+	if !hub.executeChecked {
+		t.Fatal("check_conditions flag was not forwarded to the hub")
+	}
+	if got := res.Data.(map[string]any)["executed"]; got != false {
+		t.Fatalf("executed=%v want false (condition not met)", got)
+	}
+
+	// When the condition is met the program runs and executed is true.
+	hub.executeExecuted = true
+	res = r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error != nil {
+		t.Fatalf("execute err: %+v", res.Error)
+	}
+	if got := res.Data.(map[string]any)["executed"]; got != true {
+		t.Fatalf("executed=%v want true (condition met)", got)
+	}
+}
+
+// TestProgramsExecuteErrorMapsToInternal verifies that a HubQuery-side
+// failure (the CCU round-trip erroring, whether checked or unconditional)
+// surfaces as a CommandErrorInternal instead of a successful response with
+// a stale executed flag.
+func TestProgramsExecuteErrorMapsToInternal(t *testing.T) {
+	hub := &stubHub{executeErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
+	}
+
+	// Same mapping applies to the condition-checked branch.
+	args, _ = json.Marshal(map[string]any{"id": "P1", "check_conditions": true})
+	res = r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error (checked), got %+v", res.Error)
+	}
+}
+
+func TestProgramsDeleteRequiresID(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+	res := r.Dispatch(adminCtx(), "programs.delete", json.RawMessage(`{}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+func TestProgramsDeleteForwardsID(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(adminCtx(), "programs.delete", args)
+	if res.Error != nil {
+		t.Fatalf("delete err: %+v", res.Error)
+	}
+	if hub.deletedProgramID != "P1" {
+		t.Fatalf("deleted id=%q want P1", hub.deletedProgramID)
+	}
+	data := res.Data.(map[string]any)
+	if data["deleted"] != true || data["id"] != "P1" {
+		t.Fatalf("unexpected result: %+v", data)
+	}
+}
+
+func TestProgramsDeleteErrorMapsToInternal(t *testing.T) {
+	hub := &stubHub{deleteProgramErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(adminCtx(), "programs.delete", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
+	}
+}
+
+// TestProgramsListOmittedArgsPassesNilOverride verifies that dispatching
+// programs.list with no args body at all leaves the include_internal
+// override unset, so the underlying HubQuery applies its own default.
+func TestProgramsListOmittedArgsPassesNilOverride(t *testing.T) {
+	hub := &stubHub{programs: []map[string]any{{"id": "P1"}}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "programs.list", nil)
+	if res.Error != nil {
+		t.Fatalf("list err: %+v", res.Error)
+	}
+	if hub.gotIncludeInternal != nil {
+		t.Fatalf("expected nil override for omitted args, got %v", *hub.gotIncludeInternal)
+	}
+}
+
+// TestProgramsListForwardsIncludeInternal verifies both explicit
+// include_internal values decode and reach the HubQuery unchanged.
+func TestProgramsListForwardsIncludeInternal(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		hub := &stubHub{programs: []map[string]any{{"id": "P1"}}}
+		r := NewRouter()
+		RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+		args, _ := json.Marshal(map[string]any{"include_internal": want})
+		res := r.Dispatch(context.Background(), "programs.list", args)
+		if res.Error != nil {
+			t.Fatalf("include_internal=%v: list err: %+v", want, res.Error)
+		}
+		if hub.gotIncludeInternal == nil || *hub.gotIncludeInternal != want {
+			t.Fatalf("include_internal=%v: HubQuery received %v", want, hub.gotIncludeInternal)
+		}
+	}
+}
+
+// TestProgramsListRejectsNonBooleanIncludeInternal exercises the parsing
+// edge case of a wrong-typed include_internal value (a string instead of
+// a bool): decodeOrEmpty must surface it as bad_request, not panic or
+// silently coerce.
+func TestProgramsListRejectsNonBooleanIncludeInternal(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+
+	res := r.Dispatch(context.Background(), "programs.list", json.RawMessage(`{"include_internal":"yes"}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request for a non-boolean include_internal, got %+v", res.Error)
+	}
+}
+
+// TestProgramsListPropagatesHubError checks that a HubQuery/CCU-side
+// failure surfaces as a command error instead of a silently empty list.
+func TestProgramsListPropagatesHubError(t *testing.T) {
+	hub := &stubHub{listErr: errors.New("rega: program list unavailable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "programs.list", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
 	}
 }
 

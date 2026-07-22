@@ -68,15 +68,18 @@ func TestLoadProgramsScanDisabledLoadsNothing(t *testing.T) {
 	}
 }
 
-func TestLoadProgramsInternalFilter(t *testing.T) {
+func TestLoadProgramsLoadsInternalUnfiltered(t *testing.T) {
 	t.Parallel()
+	// The fetch is always complete: internal programs are loaded into the
+	// hub regardless of include_internal_programs. The flag only records
+	// the per-central delivery default, surfaced via
+	// IncludeInternalProgramsDefault for the northbound list filter.
 	for _, tc := range []struct {
 		name            string
 		includeInternal bool
-		want            int
 	}{
-		{"exclude_internal", false, 1},
-		{"include_internal", true, 2},
+		{"default_hide", false},
+		{"opt_in_show", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -88,8 +91,11 @@ func TestLoadProgramsInternalFilter(t *testing.T) {
 			if err != nil {
 				t.Fatalf("loadPrograms: %v", err)
 			}
-			if got := len(h.Programs()); got != tc.want {
-				t.Fatalf("includeInternal=%v: got %d programs, want %d", tc.includeInternal, got, tc.want)
+			if got := len(h.Programs()); got != 2 {
+				t.Fatalf("includeInternal=%v: expected both programs loaded, got %d", tc.includeInternal, got)
+			}
+			if got := h.IncludeInternalProgramsDefault(); got != tc.includeInternal {
+				t.Fatalf("IncludeInternalProgramsDefault=%v, want %v", got, tc.includeInternal)
 			}
 		})
 	}

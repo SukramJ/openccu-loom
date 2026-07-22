@@ -137,6 +137,57 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   next wakeup. Mirrors the CCU WebUI's
   `config/ic_ifacecmd.cgi` `cmd_ShowConfigPendingMsg`. REST `APIVersion`
   2.35.0.
+- **Delete a CCU program.** `DELETE /api/v1/programs/{id}` removes a
+  program from the CCU (`dom.DeleteObject`, via a new `delete_program`
+  ReGa script) and drops the local mirror once the call lands. It is
+  admin-gated and irreversible — parity with `DELETE /devices/{addr}` —
+  returns 204 on success, 404 for an unknown id, and records an audit
+  entry (`program_delete`). The optional `central` query parameter scopes
+  the target when several CCUs are configured. The WS `programs.delete`
+  command (admin role) exposes the same operation, and the Config UI's
+  program table gains a Delete action guarded by the shared destructive
+  confirm dialog with a result toast. REST `APIVersion` 2.34.0.
+
+- **Run a program only when its condition is met.**
+  `POST /api/v1/programs/{id}/execute` gains an optional body field
+  `check_conditions` (boolean, default false). When true the CCU
+  evaluates the program's "if" condition — via a new
+  `execute_program_conditional` ReGa script — and runs the program only
+  when the condition is currently satisfied; the response now reports
+  `executed` (always true for an unconditional run, false for a
+  condition-checked run whose condition was not met). When false (the
+  default, and when the body is omitted) the program runs unconditionally,
+  preserving existing behaviour. The WS `programs.execute` command gains
+  the same `check_conditions` argument and returns `executed`. The Config
+  UI's execute-confirmation dialog adds an "Only run when the condition is
+  met" toggle and the result toast now distinguishes executed from
+  not-executed. Mirrors OpenCCU's program-execution-with-condition-check
+  WebUI extension. REST `APIVersion` 2.34.0.
+
+- **Program list shows the rule at a glance: condition + activity
+  summary and last execution.** `GET /api/v1/programs` (and the single
+  `GET /api/v1/programs/{id}`) gain two nullable fields,
+  `condition_summary` and `activity_summary` — a compact,
+  language-neutral rendering of each program's root rule. Object names
+  come from the CCU (channel and system-variable names); comparison and
+  logical operators render as symbols (`==`, `>=`, `<=`, `>`, `<`,
+  `&&`, `||`) and activities as `name := value`, so the strings need no
+  translation. They are built by extending the
+  `get_program_descriptions` ReGa script with a bounded root-rule
+  traversal (one extra ReGa round-trip, capped at ~200 characters with
+  an ellipsis). The Config UI program table adds Condition and Activity
+  columns (collapsible on narrow viewports) plus a Last-executed column.
+  REST `APIVersion` 2.34.0.
+- **Reveal system-internal programs at runtime — no config change
+  needed.** The daemon now always loads internal programs (`Tmp_*`,
+  `prgEnergyCounter_*`) into the hub and filters them at delivery, so
+  they can be shown on demand. `GET /api/v1/programs` and the WS
+  `programs.list` command gain an optional `include_internal` override;
+  when omitted the central's `include_internal_programs` config remains
+  the default (hidden), preserving existing behaviour for MQTT and other
+  clients. The Config UI program table adds a "Show system programs"
+  toggle (off by default, persisted locally), mirroring the CCU WebUI's
+  footer button. REST `APIVersion` 2.34.0.
 
 ## [0.45.0] — 2026-07-20
 

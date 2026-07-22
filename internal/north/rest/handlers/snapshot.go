@@ -444,8 +444,15 @@ func snapshotPrograms(idx HubIndex) []ProgramSummary {
 		return nil
 	}
 	progs := idx.Hub().Programs()
+	// The hub always holds internal programs; the snapshot mirrors the
+	// list endpoint's default and omits them unless the central opted in
+	// via include_internal_programs.
+	includeInternal := idx.Hub().IncludeInternalProgramsDefault()
 	out := make([]ProgramSummary, 0, len(progs))
 	for _, p := range progs {
+		if p.IsInternal && !includeInternal {
+			continue
+		}
 		active, observed := p.Active()
 		entry := ProgramSummary{
 			ID:          p.ID,
@@ -458,6 +465,7 @@ func snapshotPrograms(idx HubIndex) []ProgramSummary {
 			v := active
 			entry.Active = &v
 		}
+		entry.ConditionSummary, entry.ActivitySummary = p.RuleSummary()
 		out = append(out, entry)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

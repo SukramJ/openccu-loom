@@ -330,6 +330,51 @@ func TestSnapshotPrograms_NilHub(t *testing.T) {
 	}
 }
 
+// TestSnapshotPrograms_RuleSummary verifies snapshotPrograms surfaces the
+// condition and activity rule summaries recorded on the hub program,
+// mirroring the same mapping ListPrograms applies via toProgramSummary.
+func TestSnapshotPrograms_RuleSummary(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	prog := hub.NewProgram("test-ccu", "P-RULE", "Heater", "", false, nil)
+	prog.SetRuleSummary("Wohnzimmer >= 20.00", "Bücherregal := 1.00")
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+
+	out := snapshotPrograms(idx)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 program, got %d", len(out))
+	}
+	if out[0].ConditionSummary != "Wohnzimmer >= 20.00" {
+		t.Errorf("ConditionSummary = %q, want %q", out[0].ConditionSummary, "Wohnzimmer >= 20.00")
+	}
+	if out[0].ActivitySummary != "Bücherregal := 1.00" {
+		t.Errorf("ActivitySummary = %q, want %q", out[0].ActivitySummary, "Bücherregal := 1.00")
+	}
+}
+
+// TestSnapshotPrograms_InternalFilter verifies the snapshot mirrors the
+// list endpoint's internal-program delivery default: hidden unless the
+// central's include_internal_programs config opted in.
+func TestSnapshotPrograms_InternalFilter(t *testing.T) {
+	t.Parallel()
+
+	idxHidden := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	out := snapshotPrograms(idxHidden)
+	if len(out) != 1 {
+		t.Fatalf("default hide: expected 1 program, got %d", len(out))
+	}
+	if out[0].IsInternal {
+		t.Error("default hide: the surviving program must be the non-internal one")
+	}
+
+	idxShown := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	out = snapshotPrograms(idxShown)
+	if len(out) != 2 {
+		t.Fatalf("config default on: expected both programs, got %d", len(out))
+	}
+}
+
 // --- snapshotSysvars with nil hub ---
 
 func TestSnapshotSysvars_NilHub(t *testing.T) {

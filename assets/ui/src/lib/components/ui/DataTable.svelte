@@ -158,7 +158,7 @@
         <tr>
           {#each columns as col (col.key)}
             <th
-              class="px-3 py-2 {alignClass(col.align)}"
+              class="px-3 py-2 {alignClass(col.align)} {col.headClass ?? ''}"
               aria-sort={ariaSort(col)}
               scope="col"
             >

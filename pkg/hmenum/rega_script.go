@@ -25,6 +25,8 @@ const (
 	RegaScriptGetSystemUpdateInfo           RegaScript = "get_system_update_info"
 	RegaScriptGetSystemVariableDescriptions RegaScript = "get_system_variable_descriptions"
 	RegaScriptSetProgramState               RegaScript = "set_program_state"
+	RegaScriptExecuteProgramConditional     RegaScript = "execute_program_conditional"
+	RegaScriptDeleteProgram                 RegaScript = "delete_program"
 	RegaScriptSetSystemVariable             RegaScript = "set_system_variable"
 	// Lifecycle scripts. Names match
 	// Reference where one exists
@@ -67,6 +69,8 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptGetSystemUpdateInfo,
 	RegaScriptGetSystemVariableDescriptions,
 	RegaScriptSetProgramState,
+	RegaScriptExecuteProgramConditional,
+	RegaScriptDeleteProgram,
 	RegaScriptSetSystemVariable,
 	RegaScriptCreateSystemVariable,
 	RegaScriptUpdateSystemVariable,

@@ -719,14 +719,32 @@ func hubEnabledDefault(isInternal bool, desc string, markers []hmenum.Descriptio
 	return markerMatch(desc, markers)
 }
 
-// programDescriptions fetches per-program CCU descriptions via ReGa for
-// marker filtering. Program.getAll omits descriptions, so the call is
-// only made when program markers are configured (it costs an extra
-// ReGa round-trip); otherwise an empty map is returned and descriptions
-// stay blank.
-func programDescriptions(ctx context.Context, runner *rega.Runner, markers []hmenum.DescriptionMarker) map[string]string {
-	out := make(map[string]string)
-	if runner == nil || len(markers) == 0 {
+// programMeta carries the per-program metadata decoded from the
+// get_program_descriptions ReGa script: the human-readable PrgInfo
+// description used for marker filtering, plus the compact rule summaries
+// surfaced to north-bound clients.
+type programMeta struct {
+	description      string
+	conditionSummary string
+	activitySummary  string
+}
+
+// ruleSummaryMaxRunes caps a rule summary so a program with a large
+// rule tree cannot bloat the /programs payload or the UI column. The
+// script already renders only the root rule; this is the display safety
+// net. See truncateRuleSummary.
+const ruleSummaryMaxRunes = 200
+
+// programMetadata fetches per-program metadata (PrgInfo description plus
+// the root-rule summaries) via the get_program_descriptions ReGa script.
+// Program.getAll omits these fields, so the script costs one extra ReGa
+// round-trip; it is issued whenever a runner is available because the
+// rule summaries are surfaced regardless of whether program markers are
+// configured. Returns an empty map when no runner is wired or the script
+// fails — callers then fall back to blank descriptions and summaries.
+func programMetadata(ctx context.Context, runner *rega.Runner) map[string]programMeta {
+	out := make(map[string]programMeta)
+	if runner == nil {
 		return out
 	}
 	descs, err := runner.GetProgramDescriptions(ctx)
@@ -734,36 +752,58 @@ func programDescriptions(ctx context.Context, runner *rega.Runner, markers []hme
 		return out
 	}
 	for _, d := range descs {
-		if decoded, derr := url.QueryUnescape(d.Description); derr == nil {
-			out[d.ID] = decoded
-		} else {
-			out[d.ID] = d.Description
+		out[d.ID] = programMeta{
+			description:      decodeRegaField(d.Description),
+			conditionSummary: truncateRuleSummary(decodeRegaField(d.ConditionSummary)),
+			activitySummary:  truncateRuleSummary(decodeRegaField(d.ActivitySummary)),
 		}
 	}
 	return out
+}
+
+// truncateRuleSummary caps a rule summary at ruleSummaryMaxRunes runes,
+// appending a single-character ellipsis when it overflows. Rune-aware so
+// a multibyte channel name is never split mid-character.
+func truncateRuleSummary(s string) string {
+	r := []rune(s)
+	if len(r) <= ruleSummaryMaxRunes {
+		return s
+	}
+	return string(r[:ruleSummaryMaxRunes]) + "…"
 }
 
 func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h *hub.Hub, writer hub.ProgramWriter, opts hubScanOptions) error {
 	if !opts.enableProgramScan {
 		return nil
 	}
+	// The fetch is complete: internal (Tmp_*, prgEnergyCounter_*) programs
+	// are always loaded into the hub so the daemon knows them. The
+	// include_internal_programs config only steers the *delivery* default,
+	// recorded here so northbound list responses that omit an explicit
+	// override reproduce the historical (hide-by-default) behaviour.
+	h.SetIncludeInternalProgramsDefault(opts.includeInternalPrograms)
 	var programs []programEntry
 	if err := jc.Call(ctx, "Program.getAll", nil, &programs); err != nil {
 		return err
 	}
-	descByID := programDescriptions(ctx, runner, opts.programMarkers)
+	metaByID := programMetadata(ctx, runner)
 	// Collect the fresh ID set for the stale-entry diff below.
 	freshIDs := make(map[string]struct{}, len(programs))
 	for _, p := range programs {
 		if p.ID == "" {
 			continue
 		}
-		if p.IsInternal && !opts.includeInternalPrograms {
+		meta := metaByID[p.ID]
+		if !markerMatch(meta.description, opts.programMarkers) {
 			continue
 		}
-		desc := descByID[p.ID]
-		if !markerMatch(desc, opts.programMarkers) {
-			continue
+		// The description field stays coupled to marker filtering: it is only
+		// exposed when program markers are configured (mirroring the prior
+		// behaviour), whereas the rule summaries below are surfaced
+		// unconditionally.
+		desc := ""
+		if len(opts.programMarkers) > 0 {
+			desc = meta.description
 		}
 		freshIDs[p.ID] = struct{}{}
 		if existing, ok := h.Program(p.ID); ok {
@@ -771,17 +811,20 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			// OnUpdate (e.g. MQTT publisher) remain valid across periodic
 			// refreshes. Only create a new Program when the ID is genuinely new.
 			existing.UpdateMetadata(p.Name, p.IsInternal, writer)
-			existing.EnabledDefault = hubEnabledDefault(p.IsInternal, desc, opts.programMarkers)
+			existing.EnabledDefault = hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers)
 			existing.OnActive(p.IsActive)
+			existing.SetRuleSummary(meta.conditionSummary, meta.activitySummary)
 		} else {
 			prog := hub.NewProgram(h.CentralName, p.ID, p.Name, desc, p.IsInternal, writer)
-			prog.EnabledDefault = hubEnabledDefault(p.IsInternal, desc, opts.programMarkers)
+			prog.EnabledDefault = hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers)
 			prog.OnActive(p.IsActive)
+			prog.SetRuleSummary(meta.conditionSummary, meta.activitySummary)
 			h.PutProgram(prog)
 		}
 	}
 	// Remove programs that are no longer present on the CCU or no longer
-	// pass the internal / marker filters.
+	// pass the marker filter. Internal programs are kept unconditionally;
+	// their visibility is a delivery-time concern, not a fetch one.
 	for _, existing := range h.Programs() {
 		if _, ok := freshIDs[existing.ID]; !ok {
 			h.RemoveProgram(existing.ID)
@@ -1244,10 +1287,10 @@ func interfaceForChannel(unit *central.Unit, channelAddress string) string {
 }
 
 // decodeRegaField URL-decodes a field emitted by the get_service_messages,
-// get_alarm_messages and get_inbox_devices ReGa scripts, which percent-encode
-// human-readable strings (names, device names, descriptions). On a decode
-// error the raw value is returned unchanged so a single malformed field never
-// drops the whole message.
+// get_alarm_messages, get_inbox_devices and get_program_descriptions ReGa
+// scripts, which percent-encode human-readable strings (names, device names,
+// descriptions, rule summaries). On a decode error the raw value is returned
+// unchanged so a single malformed field never drops the whole message.
 func decodeRegaField(s string) string {
 	if s == "" {
 		return ""
@@ -1521,6 +1564,14 @@ func (w *hubJSONRPCWriter) ExecuteProgram(ctx context.Context, id string) error 
 	return w.json.Call(ctx, "Program.execute", map[string]any{"id": id}, nil)
 }
 
+// ExecuteProgramConditional evaluates the program's "if" condition via a
+// ReGa script and runs it only when the condition is satisfied. The CCU's
+// JSON-RPC Program.execute runs unconditionally, so the condition-gated
+// variant has to go through ReGa. Returns whether the program executed.
+func (w *hubJSONRPCWriter) ExecuteProgramConditional(ctx context.Context, id string) (bool, error) {
+	return w.rega.ExecuteProgramConditional(ctx, id)
+}
+
 // SetProgramEnabled toggles the active flag via a ReGa script. The
 // CCU's JSON-RPC API does not expose Program.setActive cleanly, so the
 // Rega route is the portable choice.
@@ -1534,6 +1585,20 @@ func (w *hubJSONRPCWriter) SetProgramEnabled(ctx context.Context, id string, ena
 		"state": state,
 	})
 	return err
+}
+
+// DeleteProgram removes the program from the CCU via the delete_program
+// ReGa script. The CCU exposes Program.deleteProgramByName (by name) over
+// JSON-RPC but no delete-by-id, so the ID-keyed ReGa route is the portable
+// choice — the same reason SetProgramEnabled goes through ReGa. A "0"
+// script result (id no longer resolves to a program) maps to
+// [hub.ErrProgramNotFound].
+func (w *hubJSONRPCWriter) DeleteProgram(ctx context.Context, id string) error {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptDeleteProgram, map[string]string{"id": id})
+	if err != nil {
+		return err
+	}
+	return parseMutateResult(out, hub.ErrProgramNotFound)
 }
 
 // SetSysvar writes the sysvar with per-type wire dispatch, mirroring

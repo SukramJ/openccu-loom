@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -311,6 +312,68 @@ func TestListPrograms_NoExecution_LastExecutedOmitted(t *testing.T) {
 	}
 }
 
+// TestListPrograms_RuleSummary verifies the DTO mapping surfaces the
+// condition and activity summaries set on the hub program.
+func TestListPrograms_RuleSummary(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	prog := hub.NewProgram("test-ccu", "P-RULE", "Heater", "", false, nil)
+	prog.SetRuleSummary("Wohnzimmer >= 20.00", "Bücherregal := 1.00")
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []ProgramSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 program, got %d", len(body))
+	}
+	if body[0].ConditionSummary != "Wohnzimmer >= 20.00" {
+		t.Errorf("condition_summary = %q, want %q", body[0].ConditionSummary, "Wohnzimmer >= 20.00")
+	}
+	if body[0].ActivitySummary != "Bücherregal := 1.00" {
+		t.Errorf("activity_summary = %q, want %q", body[0].ActivitySummary, "Bücherregal := 1.00")
+	}
+}
+
+// TestListPrograms_NoRuleSummary_Omitted pins that a program without a
+// resolved rule summary omits both summary fields from the JSON.
+func TestListPrograms_NoRuleSummary_Omitted(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.PutProgram(hub.NewProgram("test-ccu", "P-BARE", "Bare", "", false, nil))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var raw []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("expected 1 program, got %d", len(raw))
+	}
+	if _, present := raw[0]["condition_summary"]; present {
+		t.Error("condition_summary must be omitted when no rule summary was resolved")
+	}
+	if _, present := raw[0]["activity_summary"]; present {
+		t.Error("activity_summary must be omitted when no rule summary was resolved")
+	}
+}
+
 // ── H-033 SysvarSummary.min / max ──────────────────────────────────────────
 
 // TestListSysvars_MinMaxExposed pins H-033: a sysvar with declared bounds
@@ -601,6 +664,128 @@ func TestExecuteProgram_NotFound_Returns404(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// --- DeleteProgram ---
+
+// deletableProgramWriter implements hub.ProgramDeleter. deleteErr, when set,
+// is returned by DeleteProgram so tests can drive the upstream-failure path.
+type deletableProgramWriter struct {
+	deleteErr  error
+	deleteCall int
+}
+
+func (d *deletableProgramWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (d *deletableProgramWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
+
+func (d *deletableProgramWriter) DeleteProgram(_ context.Context, _ string) error {
+	d.deleteCall++
+	return d.deleteErr
+}
+
+// executeOnlyProgramWriter implements hub.ProgramWriter but NOT
+// hub.ProgramDeleter, so Program.Delete surfaces ErrProgramDeleteUnsupported.
+type executeOnlyProgramWriter struct{}
+
+func (executeOnlyProgramWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (executeOnlyProgramWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
+
+func TestDeleteProgram_HubNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestDeleteProgram_NotFound_Returns404(t *testing.T) {
+	t.Parallel()
+	idx, _ := newTestHubWithProgram(t)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/NOTFOUND", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "NOTFOUND"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteProgram_HappyPath_Returns204AndRemovesAndAudits(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &deletableProgramWriter{}
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, writer))
+	idx := &testHubIndex{h: h}
+	rec := &captureRecorder{}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.deleteCall != 1 {
+		t.Fatalf("expected exactly one CCU delete call, got %d", writer.deleteCall)
+	}
+	if _, ok := h.Program("P1"); ok {
+		t.Fatal("program still present in hub cache after delete")
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionProgramDelete {
+		t.Fatalf("expected one program_delete audit entry, got %+v", rec.entries)
+	}
+	if !strings.Contains(rec.entries[0].Note, "P1") || !strings.Contains(rec.entries[0].Note, "Morning Routine") {
+		t.Fatalf("audit note missing id/name: %q", rec.entries[0].Note)
+	}
+}
+
+func TestDeleteProgram_WriterUnsupported_Returns503(t *testing.T) {
+	t.Parallel()
+	// The default fakeProgramWriter (execute + set-enabled) does NOT implement
+	// hub.ProgramDeleter, so Delete must surface as 503 and never drop the entry.
+	h := hub.NewHub("test-ccu")
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, executeOnlyProgramWriter{}))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := h.Program("P1"); !ok {
+		t.Fatal("program dropped from cache despite failed delete")
+	}
+}
+
+func TestDeleteProgram_UpstreamFailure_Returns502AndKeepsEntry(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &deletableProgramWriter{deleteErr: errors.New("ccu unreachable")}
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, writer))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := h.Program("P1"); !ok {
+		t.Fatal("program dropped from cache despite upstream failure")
 	}
 }
 
@@ -949,32 +1134,175 @@ func TestListServiceMessages_NilHub_ReturnsEmptyArray(t *testing.T) {
 	}
 }
 
-// --- ListPrograms with IsInternal flag ---
+// --- ListPrograms internal-program delivery filter ---
 
-func TestListPrograms_InternalFlag(t *testing.T) {
-	t.Parallel()
-	h := hub.NewHub("ccu01")
-	p := hub.NewProgram("ccu01", "Tmp_001", "Tmp_001", "", false, nil)
-	p.IsInternal = true
-	h.PutProgram(p)
-	idx := &testHubIndex{h: h}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+// listProgramsBody drives ListPrograms with the given query string and
+// returns the decoded body plus the HTTP status code.
+func listProgramsBody(t *testing.T, idx HubIndex, query string) (int, []ProgramSummary) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs"+query, http.NoBody)
 	w := httptest.NewRecorder()
 	ListPrograms(idx).ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
 	var body []ProgramSummary
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if w.Code == http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+	}
+	return w.Code, body
+}
+
+// hubWithInternalProgram builds a hub carrying one normal and one internal
+// program, with the given per-central default for internal visibility.
+func hubWithInternalProgram(t *testing.T, includeDefault bool) *hub.Hub {
+	t.Helper()
+	h := hub.NewHub("ccu01")
+	h.SetIncludeInternalProgramsDefault(includeDefault)
+	h.PutProgram(hub.NewProgram("ccu01", "P-Normal", "Normal", "", false, nil))
+	internal := hub.NewProgram("ccu01", "Tmp_001", "Tmp_001", "", false, nil)
+	internal.IsInternal = true
+	h.PutProgram(internal)
+	return h
+}
+
+func TestListPrograms_InternalHiddenByDefault(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, body := listProgramsBody(t, idx, "")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
 	}
 	if len(body) != 1 {
-		t.Fatalf("expected 1 program, got %d", len(body))
+		t.Fatalf("expected only the non-internal program, got %d", len(body))
 	}
-	if !body[0].IsInternal {
-		t.Error("expected is_internal=true for Tmp_ programs")
+	if body[0].IsInternal {
+		t.Error("the surviving program must be the non-internal one")
+	}
+}
+
+func TestListPrograms_InternalShownWhenConfigDefaultsOn(t *testing.T) {
+	t.Parallel()
+	// No query parameter → the central's include_internal_programs default
+	// (true) governs delivery: both programs are listed.
+	idx := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	code, body := listProgramsBody(t, idx, "")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected both programs, got %d", len(body))
+	}
+}
+
+func TestListPrograms_IncludeInternalQueryOverridesDefault(t *testing.T) {
+	t.Parallel()
+	// include_internal=true reveals internal programs even when the central
+	// default hides them; the is_internal flag still propagates.
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, body := listProgramsBody(t, idx, "?include_internal=true")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected both programs, got %d", len(body))
+	}
+	var sawInternal bool
+	for _, p := range body {
+		if p.IsInternal {
+			sawInternal = true
+		}
+	}
+	if !sawInternal {
+		t.Error("expected is_internal=true program in the include_internal=true response")
+	}
+
+	// include_internal=false hides internal programs even when the central
+	// default would show them.
+	idxOn := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	code, body = listProgramsBody(t, idxOn, "?include_internal=false")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 1 || body[0].IsInternal {
+		t.Fatalf("include_internal=false must hide internal programs, got %d", len(body))
+	}
+}
+
+func TestListPrograms_InvalidIncludeInternalIsBadRequest(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, _ := listProgramsBody(t, idx, "?include_internal=maybe")
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a non-boolean include_internal, got %d", code)
+	}
+}
+
+// --- parseOptionalBoolQuery / effectiveBool unit tests ---
+
+func TestParseOptionalBoolQuery_AbsentReturnsNil(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	got, err := parseOptionalBoolQuery(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for an absent parameter, got %v", *got)
+	}
+}
+
+func TestParseOptionalBoolQuery_ParsesRecognisedLiterals(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		raw  string
+		want bool
+	}{
+		{"true", true},
+		{"false", false},
+		{"1", true},
+		{"0", false},
+		{"True", true},
+		{"FALSE", false},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs?include_internal="+tc.raw, http.NoBody)
+		got, err := parseOptionalBoolQuery(req)
+		if err != nil {
+			t.Fatalf("include_internal=%q: unexpected error: %v", tc.raw, err)
+		}
+		if got == nil || *got != tc.want {
+			t.Fatalf("include_internal=%q: got %v, want %v", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestParseOptionalBoolQuery_InvalidLiteralErrors(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{"maybe", "yes", "on", "2"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs?include_internal="+raw, http.NoBody)
+		if _, err := parseOptionalBoolQuery(req); err == nil {
+			t.Fatalf("include_internal=%q: expected a parse error, got none", raw)
+		}
+	}
+}
+
+func TestEffectiveBool_OverrideWinsOverDefault(t *testing.T) {
+	t.Parallel()
+	yes, no := true, false
+	if got := effectiveBool(&yes, false); !got {
+		t.Fatal("override=true, def=false: expected true")
+	}
+	if got := effectiveBool(&no, true); got {
+		t.Fatal("override=false, def=true: expected false")
+	}
+}
+
+func TestEffectiveBool_NilOverrideFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	if got := effectiveBool(nil, true); !got {
+		t.Fatal("nil override, def=true: expected true")
+	}
+	if got := effectiveBool(nil, false); got {
+		t.Fatal("nil override, def=false: expected false")
 	}
 }
 
@@ -1210,7 +1538,7 @@ func TestExecuteProgram_ExecuteError_Returns502(t *testing.T) {
 	}
 }
 
-func TestExecuteProgram_HappyPath_Returns202(t *testing.T) {
+func TestExecuteProgram_HappyPath_ReturnsAcceptedExecuted(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	prog := hub.NewProgram("test-ccu", "P-ok", "Ok", "", false,
@@ -1224,6 +1552,143 @@ func TestExecuteProgram_HappyPath_Returns202(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true for unconditional run")
+	}
+}
+
+// condProgramWriter implements hub.ConditionalProgramWriter; ExecuteProgramConditional
+// returns the configured executed flag so the handler's check_conditions branch
+// can be exercised without a live CCU.
+type condProgramWriter struct {
+	executed  bool
+	err       error
+	condCalls int
+	execCalls int
+}
+
+func (c *condProgramWriter) ExecuteProgram(_ context.Context, _ string) error {
+	c.execCalls++
+	return c.err
+}
+
+func (c *condProgramWriter) SetProgramEnabled(_ context.Context, _ string, _ bool) error {
+	return c.err
+}
+
+func (c *condProgramWriter) ExecuteProgramConditional(_ context.Context, _ string) (bool, error) {
+	c.condCalls++
+	if c.err != nil {
+		return false, c.err
+	}
+	return c.executed, nil
+}
+
+func TestExecuteProgram_CheckConditions_ConditionMet(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: true}
+	prog := hub.NewProgram("test-ccu", "P-cond", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true (condition met)")
+	}
+	if writer.condCalls != 1 {
+		t.Fatalf("condCalls=%d, want 1 (conditional path must be used)", writer.condCalls)
+	}
+	if writer.execCalls != 0 {
+		t.Fatalf("execCalls=%d, want 0 (unconditional path must not run)", writer.execCalls)
+	}
+}
+
+func TestExecuteProgram_CheckConditions_ConditionNotMet(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: false}
+	prog := hub.NewProgram("test-ccu", "P-cond", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Executed {
+		t.Fatalf("executed=true, want false (condition not met)")
+	}
+}
+
+// TestExecuteProgram_CheckConditions_WriterError_Returns502 verifies that a
+// CCU-side failure on the condition-checked path (the ReGa script call
+// itself erroring, e.g. a transport failure) surfaces as 502 — the same
+// mapping as the unconditional path — rather than being swallowed as
+// executed=false.
+func TestExecuteProgram_CheckConditions_WriterError_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{err: errors.New("rega call failed")}
+	prog := hub.NewProgram("test-ccu", "P-cond-err", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond-err"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.condCalls != 1 {
+		t.Fatalf("condCalls=%d, want 1 (conditional path must be used)", writer.condCalls)
+	}
+}
+
+// TestExecuteProgram_InvalidJSONBody_Returns400 verifies that a malformed
+// (non-empty, non-JSON) request body is rejected with 400 before any writer
+// call is attempted — the empty-body-is-optional convenience of
+// decodeOptionalJSON must not swallow genuinely malformed input.
+func TestExecuteProgram_InvalidJSONBody_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: true}
+	prog := hub.NewProgram("test-ccu", "P-badjson", "BadJSON", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("NOT JSON"))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-badjson"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.execCalls != 0 || writer.condCalls != 0 {
+		t.Fatalf("no writer call expected on decode failure, got exec=%d cond=%d", writer.execCalls, writer.condCalls)
 	}
 }
 

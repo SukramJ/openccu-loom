@@ -314,7 +314,7 @@ func TestWSHubQuery_ExecuteProgram_LiveHub_FoundProgram_NilWriter(t *testing.T) 
 	q, h := buildHubQueryWithLiveHub(t)
 	// Register a program with nil Writer so Execute returns an error.
 	h.PutProgram(hubmodel.NewProgram("ccu-01", "prog-test-coverage4", "Coverage Test Program", "", false, nil))
-	err := q.ExecuteProgram(context.Background(), "prog-test-coverage4")
+	_, err := q.ExecuteProgram(context.Background(), "prog-test-coverage4", false)
 	if err == nil {
 		t.Error("expected error from Program.Execute with nil Writer")
 	}
@@ -539,7 +539,7 @@ func TestWSHubQuery_ListPrograms_LiveHub_WithProgram(t *testing.T) {
 	q, h := buildHubQueryWithLiveHub(t)
 	h.PutProgram(hubmodel.NewProgram("ccu-01", "prog-list-1", "List Test", "desc", false, nil))
 
-	out, err := q.ListPrograms(context.Background())
+	out, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestWSHubQuery_ListPrograms_LiveHub_WithExecutedProgram(t *testing.T) {
 	prog.OnExecution(true, hmenum.ProgramTriggerUser)
 	h.PutProgram(prog)
 
-	out, err := q.ListPrograms(context.Background())
+	out, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}

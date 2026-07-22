@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
@@ -113,6 +114,17 @@ var ErrNoFirmwareUpdater = errors.New("hub: no firmware updater configured")
 // not wired.
 var ErrNoInboxAccepter = errors.New("hub: no inbox accepter configured")
 
+// ErrProgramNotFound is returned by [Hub.DeleteProgramRemote] when no
+// program with the given ID exists in the hub cache, and by the writer
+// when the CCU declines the delete (the id no longer resolves to a
+// program object). The REST handler surfaces it as 404.
+var ErrProgramNotFound = errors.New("hub: program not found")
+
+// ErrProgramDeleteUnsupported is returned by [Program.Delete] when the
+// wired [ProgramWriter] does not implement [ProgramDeleter] (execute-only
+// mode). The REST handler surfaces it as 503.
+var ErrProgramDeleteUnsupported = errors.New("hub: program deletion not supported by writer")
+
 // BackupTrigger initiates a CCU backup. Implementations dispatch
 // `create_backup_start` / `create_backup_status` Rega scripts.
 type BackupTrigger interface {
@@ -182,6 +194,17 @@ type Hub struct {
 	// Populated via [Hub.SetConnectivity] once the adapter layer creates it.
 	connectivity *Connectivity
 
+	// includeInternalDefault is the per-central northbound default that
+	// governs whether internal (Tmp_*, prgEnergyCounter_*) programs appear
+	// in list responses that omit an explicit include_internal parameter.
+	// The hub always holds the full program set (internal ones included);
+	// this flag only steers the default delivery filter, mirroring the
+	// CCU WebUI's footerBtnShowSystemPrograms default. Set during hub
+	// wiring from the central's include_internal_programs config; read on
+	// every programs-list request, so it is atomic for the lock-free read
+	// path.
+	includeInternalDefault atomic.Bool
+
 	// Registration observers. The HubMQTTPublisher subscribes once at
 	// daemon start and reacts to every later PutSysvar/PutProgram so
 	// sysvars/programs loaded by the first ReGa refresh — which runs
@@ -207,6 +230,20 @@ func NewHub(centralName string) *Hub {
 		sysvars:         make(map[string]*Sysvar),
 		installModeDPs:  make(map[string]*InstallMode),
 	}
+}
+
+// SetIncludeInternalProgramsDefault records the per-central northbound
+// default for internal-program visibility. The hub keeps every program;
+// this only governs list responses that omit an explicit override.
+func (h *Hub) SetIncludeInternalProgramsDefault(v bool) {
+	h.includeInternalDefault.Store(v)
+}
+
+// IncludeInternalProgramsDefault reports whether internal programs are
+// exposed by default in list responses that omit an explicit
+// include_internal parameter (default false, matching the CCU WebUI).
+func (h *Hub) IncludeInternalProgramsDefault() bool {
+	return h.includeInternalDefault.Load()
 }
 
 // --- Programs ---
@@ -300,6 +337,24 @@ func (h *Hub) RemoveProgram(id string) bool {
 		prog.NotifyRemoved()
 	}
 	return true
+}
+
+// DeleteProgramRemote removes a program on the CCU and drops it from the
+// in-memory cache once the call succeeded. Returns [ErrProgramNotFound]
+// when no program with the given ID is registered. The cache entry is
+// removed (firing [Program.NotifyRemoved]) only after the CCU round-trip
+// succeeds, so a failed delete leaves the mirror intact. Mirrors
+// [Hub.DeleteSysvarRemote].
+func (h *Hub) DeleteProgramRemote(ctx context.Context, id string) error {
+	p, ok := h.Program(id)
+	if !ok {
+		return ErrProgramNotFound
+	}
+	if err := p.Delete(ctx); err != nil {
+		return err
+	}
+	h.RemoveProgram(id)
+	return nil
 }
 
 // --- System variables ---

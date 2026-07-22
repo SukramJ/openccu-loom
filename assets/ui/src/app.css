@@ -390,3 +390,18 @@ html[data-skin="ha"] {
     content: none;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * `.hide-narrow` collapses a whole data-table column away below the lg
+ * breakpoint (1024px), in both the tabular and the card-reflow layouts.
+ * Applied to a column's <th> (via headClass) and <td> (via cellClass) so
+ * header and cells disappear together — no dangling header, no misaligned
+ * grid. Used for secondary columns that would crowd a phone or tablet.
+ * The `!important` beats the reflow rule's `display: flex` on <td>.
+ * ────────────────────────────────────────────────────────────────── */
+@media (max-width: 1023px) {
+  .table-reflow th.hide-narrow,
+  .table-reflow td.hide-narrow {
+    display: none !important;
+  }
+}

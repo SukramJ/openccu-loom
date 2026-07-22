@@ -45,6 +45,29 @@
   the next time the device wakes up (e.g. on a button press) — instead
   of a plain "saved" confirmation. Mains devices keep the immediate
   confirmation.
+- **Delete a program.** The program table gains a Delete action (guarded
+  by a confirmation dialog) that removes a program from the CCU for good.
+  REST/WS clients get the same via `DELETE /api/v1/programs/{id}` and the
+  `programs.delete` command — both admin-only, since deletion is
+  irreversible (API 2.34.0).
+- **Run a program only when its condition is met.** The program table's
+  execute-confirmation dialog gains an "Only run when the condition is
+  met" toggle; the CCU then evaluates the program's condition and runs it
+  only when satisfied, and the result toast tells you whether it actually
+  executed. REST/WS clients get the same via an optional `check_conditions`
+  flag on program execution, with an `executed` result (API 2.34.0).
+- **Program list shows condition, activity and last execution.** The
+  program table now renders a compact, language-neutral summary of each
+  program's root rule — its trigger conditions and resulting activities
+  (symbolic operators, CCU object names) — alongside a Last-executed
+  column. REST clients get the same via new `condition_summary` and
+  `activity_summary` fields on `GET /api/v1/programs` (API 2.34.0).
+- **Show system programs on demand.** The program table gains a "Show
+  system programs" toggle (off by default) that reveals CCU-internal
+  programs (`Tmp_*`, `prgEnergyCounter_*`) without changing the config.
+  REST/WS clients get the same via an optional `include_internal`
+  parameter; without it the `include_internal_programs` setting still
+  governs the default (API 2.34.0).
 
 ## 0.45.0
 

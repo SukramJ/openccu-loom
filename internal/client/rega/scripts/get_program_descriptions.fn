@@ -1,9 +1,17 @@
 !# openccu-loom — get_program_descriptions
-!# Output: [{"id":"<program-id>","description":"<uri-encoded info>"}...]
+!# Output: [{"id":"<program-id>","description":"<uri-encoded info>",
+!#          "condition_summary":"<uri-encoded>","activity_summary":"<uri-encoded>"}...]
 !#
-!# Walks every registered program and emits its description. URL
-!# encoding is used because .PrgInfo() strings may contain quotes,
-!# backslashes, or newlines.
+!# Walks every registered program and emits its PrgInfo description plus a
+!# compact, language-neutral summary of the program's root rule: the
+!# trigger conditions (condition_summary) and the resulting activities
+!# (activity_summary). Object names are taken from the ReGa DOM; the
+!# comparison and logical operators are rendered as symbols (==, >=, <=,
+!# >, <, &&, ||, :=) so the strings need no translation on the client.
+!# Only the root ("if") rule is summarised to keep the payload small;
+!# else-if sub-rules are omitted. Every field is URL-encoded because
+!# names and info strings may contain quotes, backslashes, or newlines
+!# that would otherwise break the JSON framing.
 
 string sProgramId;
 boolean bFirst = true;
@@ -13,6 +21,99 @@ foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
     object oProgram = dom.GetObject(sProgramId);
     if (oProgram) {
         string sDescription = oProgram.PrgInfo().UriEncode();
+        string sCond = "";
+        string sAct = "";
+
+        object oRule = oProgram.Rule();
+        if (oRule) {
+            ! --- trigger conditions ---
+            integer iCondCount = oRule.RuleConditions().Count();
+            if (iCondCount > 0) {
+                string sCondIdx;
+                foreach (sCondIdx, system.GenerateEnum(0, iCondCount - 1)) {
+                    object oC = oRule.RuleCondition(sCondIdx);
+                    if (oC) {
+                        integer iSingleCount = oC.CndSingleCount();
+                        if (iSingleCount > 0) {
+                            string sSingleIdx;
+                            foreach (sSingleIdx, system.GenerateEnum(0, iSingleCount - 1)) {
+                                object oSC = oC.CndSingleCondition(sSingleIdx);
+                                if (oSC) {
+                                    if (sSingleIdx.ToInteger() > 0) {
+                                        if (oSC.OperatorType() == 2) { sCond = sCond # " || "; }
+                                        else { sCond = sCond # " && "; }
+                                    }
+                                    integer iLVT = oSC.LeftValType();
+                                    string sName = "?";
+                                    boolean bValue = false;
+                                    if (iLVT == ivtObjectId) {
+                                        object oCC = dom.GetObject(oSC.ConditionChannel());
+                                        if (oCC) { sName = oCC.Name(); }
+                                        bValue = true;
+                                    }
+                                    if (iLVT == ivtSystemId) {
+                                        object oLV = dom.GetObject(oSC.LeftVal());
+                                        if (oLV) { sName = oLV.Name(); }
+                                        bValue = true;
+                                    }
+                                    if (iLVT == ivtCurrentDate) {
+                                        sName = "@time";
+                                    }
+                                    sCond = sCond # sName;
+                                    if (bValue) {
+                                        integer iCT = oSC.ConditionType();
+                                        integer iRV1 = oSC.RightVal1();
+                                        integer iRV2 = oSC.RightVal2();
+                                        if (iCT == 5) { sCond = sCond # " == " # iRV1.ToString(2); }
+                                        if ((iCT == 6) || (iCT == 7)) { sCond = sCond # " [" # iRV1.ToString(2) # ".." # iRV2.ToString(2) # "]"; }
+                                        if (iCT == 8) { sCond = sCond # " > " # iRV1.ToString(2); }
+                                        if (iCT == 9) { sCond = sCond # " >= " # iRV1.ToString(2); }
+                                        if (iCT == 10) { sCond = sCond # " < " # iRV1.ToString(2); }
+                                        if (iCT == 11) { sCond = sCond # " <= " # iRV1.ToString(2); }
+                                    }
+                                }
+                            }
+                        }
+                        if (sCondIdx.ToInteger() < (iCondCount - 1)) {
+                            if (oC.CndOperatorType() == 2) { sCond = sCond # " || "; }
+                            else { sCond = sCond # " && "; }
+                        }
+                    }
+                }
+            }
+
+            ! --- resulting activities ---
+            object oDest = oRule.RuleDestination();
+            if (oDest) {
+                integer iDestCount = oDest.DestSingleCount();
+                if (iDestCount > 0) {
+                    string sDestIdx;
+                    foreach (sDestIdx, system.GenerateEnum(0, iDestCount - 1)) {
+                        object oSD = oDest.DestSingleDestination(sDestIdx);
+                        if (oSD) {
+                            if (sDestIdx.ToInteger() > 0) { sAct = sAct # "; "; }
+                            integer iP = oSD.DestinationParam();
+                            if (iP == ivtString) {
+                                sAct = sAct # "@script";
+                            }
+                            else {
+                                string sName = "?";
+                                if (iP == ivtSystemId) {
+                                    object oLV = dom.GetObject(oSD.DestinationDP());
+                                    if (oLV) { sName = oLV.Name(); }
+                                }
+                                if (iP == ivtObjectId) {
+                                    object oCH = dom.GetObject(oSD.DestinationChannel());
+                                    if (oCH) { sName = oCH.Name(); }
+                                }
+                                integer iV = oSD.DestinationValue();
+                                sAct = sAct # sName # " := " # iV.ToString(2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if (bFirst) {
             bFirst = false;
@@ -20,7 +121,7 @@ foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
             WriteLine(',');
         }
 
-        Write('{"id":"' # sProgramId # '","description":"' # sDescription # '"}');
+        Write('{"id":"' # sProgramId # '","description":"' # sDescription # '","condition_summary":"' # sCond.UriEncode() # '","activity_summary":"' # sAct.UriEncode() # '"}');
     }
 }
 Write(']');

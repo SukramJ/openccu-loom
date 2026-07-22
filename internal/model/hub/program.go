@@ -44,14 +44,16 @@ type Program struct {
 	// Nil means no notification is sent (default until wired).
 	ExecuteNotifier func(ctx context.Context, id string, trigger hmenum.ProgramTrigger, success bool)
 
-	mu              sync.RWMutex
-	active          bool
-	hasActive       bool
-	lastExecute     time.Time
-	lastResult      bool
-	hasResult       bool
-	callbacks       []func(event ProgramEvent)
-	removedHandlers []func()
+	mu               sync.RWMutex
+	active           bool
+	hasActive        bool
+	lastExecute      time.Time
+	lastResult       bool
+	hasResult        bool
+	conditionSummary string
+	activitySummary  string
+	callbacks        []func(event ProgramEvent)
+	removedHandlers  []func()
 }
 
 // NewProgram constructs a [Program] with a fully initialised
@@ -160,6 +162,25 @@ func (p *Program) LastResult() (success, observed bool) {
 	return p.lastResult, p.hasResult
 }
 
+// RuleSummary returns the compact, language-neutral summaries of the
+// program's root rule: the trigger conditions and the resulting
+// activities. Both are empty until [SetRuleSummary] has been called with
+// non-empty values (the program has no rule, or rule scanning found none).
+func (p *Program) RuleSummary() (condition, activity string) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.conditionSummary, p.activitySummary
+}
+
+// SetRuleSummary records the compact rule summaries resolved by the hub
+// scan. Safe to call on every refresh; the latest values win.
+func (p *Program) SetRuleSummary(condition, activity string) {
+	p.mu.Lock()
+	p.conditionSummary = condition
+	p.activitySummary = activity
+	p.mu.Unlock()
+}
+
 // UpdateMetadata refreshes the mutable CCU-side fields on an existing
 // program entry without replacing the pointer. Callers that hold a
 // reference to this Program (e.g. via OnUpdate subscriptions) continue
@@ -220,6 +241,37 @@ func (p *Program) Execute(ctx context.Context) error {
 	return err
 }
 
+// ExecuteWithConditionCheck evaluates the program's "if" condition on the
+// CCU and runs the program only when the condition is satisfied. It reports
+// whether the program actually executed.
+//
+// When the configured writer implements [ConditionalProgramWriter] the
+// condition is evaluated on the CCU; the ExecuteNotifier fires only when the
+// program actually ran (or the round-trip failed), so a condition that is not
+// met records neither an execution nor a notification. When the writer does
+// not support condition checking, the call falls back to the unconditional
+// [Program.Execute] path and reports executed=true on a clean round-trip.
+func (p *Program) ExecuteWithConditionCheck(ctx context.Context) (bool, error) {
+	if p.Writer == nil {
+		return false, fmt.Errorf("program %q: no writer configured", p.ID)
+	}
+	cw, ok := p.Writer.(ConditionalProgramWriter)
+	if !ok {
+		if err := p.Execute(ctx); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	executed, err := cw.ExecuteProgramConditional(ctx, p.ID)
+	p.mu.RLock()
+	notifier := p.ExecuteNotifier
+	p.mu.RUnlock()
+	if notifier != nil && (executed || err != nil) {
+		notifier(ctx, p.ID, hmenum.ProgramTriggerAPI, err == nil)
+	}
+	return executed, err
+}
+
 // SetEnabled flips the program's active state.
 func (p *Program) SetEnabled(ctx context.Context, enabled bool) error {
 	if p.Writer == nil {
@@ -230,6 +282,22 @@ func (p *Program) SetEnabled(ctx context.Context, enabled bool) error {
 	}
 	p.OnActive(enabled)
 	return nil
+}
+
+// Delete removes the program from the CCU via the configured writer. The
+// writer must implement [ProgramDeleter]; otherwise Delete returns
+// [ErrProgramDeleteUnsupported]. Delete does not touch the hub cache — the
+// owning [Hub.DeleteProgramRemote] drops the entry (and fires
+// [Program.NotifyRemoved]) only after the CCU round-trip succeeds.
+func (p *Program) Delete(ctx context.Context) error {
+	if p.Writer == nil {
+		return fmt.Errorf("program %q: no writer configured", p.ID)
+	}
+	d, ok := p.Writer.(ProgramDeleter)
+	if !ok {
+		return ErrProgramDeleteUnsupported
+	}
+	return d.DeleteProgram(ctx, p.ID)
 }
 
 // OnUpdate registers a subscription for execution events. Returns an
