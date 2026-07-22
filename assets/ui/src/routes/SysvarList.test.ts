@@ -215,6 +215,18 @@ function buttonByText(scope: HTMLElement, re: RegExp): HTMLButtonElement {
   return btn as HTMLButtonElement;
 }
 
+// findSelectByLabel mirrors findByLabel but for the <select> controls
+// (e.g. the create-form's value-type picker), which findByLabel cannot
+// locate since it only looks for <input>.
+function findSelectByLabel(scope: HTMLElement, labelText: string): HTMLSelectElement {
+  const label = [...scope.querySelectorAll("label")].find(
+    (l) => l.querySelector("span")?.textContent?.trim() === labelText,
+  );
+  const select = label?.querySelector("select");
+  if (!select) throw new Error(`select for label "${labelText}" not found`);
+  return select as HTMLSelectElement;
+}
+
 describe("SysvarList edit dialog dispatch", () => {
   const listVar = {
     name: "Mode",
@@ -310,5 +322,34 @@ describe("SysvarList create dialog dispatch", () => {
       expect.objectContaining({ name: "NewVar", description: "a helpful note" }),
       "",
     );
+  });
+
+  // The create-type picker must offer ALARM alongside the other create
+  // codes, and the hint text must stay hidden until ALARM is the active
+  // selection (the default form value_type is BOOL, so the hint must not
+  // leak into the form before the operator has chosen ALARM).
+  //
+  // Driving the native <select> through a simulated "change" event and
+  // asserting the reactive follow-on (the conditional hint paragraph) is
+  // not exercised here: happy-dom's `:checked` selector match — which
+  // Svelte's select binding relies on to read back the chosen option —
+  // only supports <input>, not <option>, so the binding never observes
+  // the simulated selection in this test environment.
+  it("offers ALARM in the create-type select and hides the alarm hint by default", async () => {
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(mockListSysvars).toHaveBeenCalledTimes(1));
+    await fireEvent.click(buttonByText(container, /\+\s*(new|neu)/i));
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll("label")].some(
+          (l) => l.querySelector("span")?.textContent?.trim() === t("sysvars.create.name"),
+        ),
+      ).toBe(true),
+    );
+
+    const typeSelect = findSelectByLabel(container, t("sysvars.create.type"));
+    const opts = Array.from(typeSelect.options).map((o) => o.value);
+    expect(opts).toEqual(["BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"]);
+    expect(container.textContent).not.toContain(t("sysvars.create.alarm_hint"));
   });
 });

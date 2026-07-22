@@ -188,6 +188,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   clients. The Config UI program table adds a "Show system programs"
   toggle (off by default, persisted locally), mirroring the CCU WebUI's
   footer button. REST `APIVersion` 2.34.0.
+- **Alarm system variables can be created.** `POST /sysvars` now accepts
+  `value_type: "ALARM"`, provisioning a binary, acknowledgeable alarm
+  line on the CCU. The Rega `create_system_variable` script backs it
+  with an `OT_ALARMDP` object (not the `OT_VARDP` every other type uses)
+  and wires up the binary alarm condition, so the new variable reads,
+  writes and acknowledges like any hand-created CCU alarm. The
+  system-variable create form offers ALARM in its type dropdown, and the
+  handler now validates `value_type` against the known create set
+  (rejecting read-side wire codes such as `LOGIC`/`NUMBER`/`LIST`).
+
 - **System variables can be renamed, and carry a description from
   creation.** `PATCH /sysvars/{name}` now accepts an optional `name`
   field that renames the variable in place (the CCU-side rename runs

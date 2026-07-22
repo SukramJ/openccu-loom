@@ -1450,11 +1450,13 @@ type recordingSysvarMutator struct {
 	name          string
 	newName       string
 	createName    string
+	createType    string
 	createDescrip string
 }
 
-func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, name, _, _, _, _, description string, _ []string) error {
+func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, name, valueType, _, _, _, description string, _ []string) error {
 	r.createName = name
+	r.createType = valueType
 	r.createDescrip = description
 	return nil
 }
@@ -1529,6 +1531,115 @@ func TestCreateSysvar_Description_PassesThrough(t *testing.T) {
 	}
 	if mut.createName != "Flag" || mut.createDescrip != "a helpful note" {
 		t.Fatalf("mutator got name=%q description=%q", mut.createName, mut.createDescrip)
+	}
+}
+
+// An ALARM value_type is accepted and reaches the mutator unchanged so
+// the Rega create script can provision a binary alarm line.
+func TestCreateSysvar_Alarm_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Einbruch","value_type":"ALARM"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createName != "Einbruch" || mut.createType != "ALARM" {
+		t.Fatalf("mutator got name=%q type=%q, want Einbruch/ALARM", mut.createName, mut.createType)
+	}
+}
+
+// An unknown value_type is rejected with 422 before any CCU call, so a
+// garbage type never reaches the Rega script (which would silently
+// create a type-less variable). LOGIC/NUMBER/LIST are read-side codes,
+// not create codes, and are rejected too; the check is case-sensitive
+// and does not trim surrounding whitespace.
+func TestCreateSysvar_InvalidType_Returns422(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		valueType string
+	}{
+		{"read_side_logic", "LOGIC"},
+		{"read_side_number", "NUMBER"},
+		{"read_side_list", "LIST"},
+		{"lowercase_alarm", "alarm"},
+		{"mixed_case_alarm", "Alarm"},
+		{"trailing_space", "BOOL "},
+		{"leading_space", " BOOL"},
+		{"unknown_garbage", "NOT_A_TYPE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := hub.NewHub("test-ccu")
+			mut := &recordingSysvarMutator{}
+			h.SysvarMutator = mut
+			idx := &testHubIndex{h: h}
+			body := `{"name":"Flag","value_type":"` + tc.valueType + `"}`
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			CreateSysvar(idx).ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("value_type=%q: expected 422, got %d body=%s", tc.valueType, w.Code, w.Body.String())
+			}
+			if mut.createName != "" {
+				t.Fatalf("value_type=%q: mutator was called with name=%q despite invalid type", tc.valueType, mut.createName)
+			}
+		})
+	}
+}
+
+// Every accepted value_type — including ALARM — reaches the mutator
+// unchanged and yields 202. This table complements the single-case
+// TestCreateSysvar_Alarm_PassesThrough by pinning the full accepted
+// vocabulary in one place.
+func TestCreateSysvar_ValidTypes_Returns202(t *testing.T) {
+	t.Parallel()
+	for _, vt := range []string{"BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"} {
+		t.Run(vt, func(t *testing.T) {
+			t.Parallel()
+			h := hub.NewHub("test-ccu")
+			mut := &recordingSysvarMutator{}
+			h.SysvarMutator = mut
+			idx := &testHubIndex{h: h}
+			body := `{"name":"Flag","value_type":"` + vt + `"}`
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			CreateSysvar(idx).ServeHTTP(w, req)
+
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("value_type=%q: expected 202, got %d body=%s", vt, w.Code, w.Body.String())
+			}
+			if mut.createType != vt {
+				t.Fatalf("value_type=%q: mutator got type=%q", vt, mut.createType)
+			}
+		})
+	}
+}
+
+// A CCU-side error on the ALARM create path (e.g. the Rega script
+// failed to create the OT_ALARMDP object) must surface as 502, exactly
+// like every other value_type's error path.
+func TestCreateSysvar_Alarm_MutatorError_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: errors.New("rega down")}
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Einbruch","value_type":"ALARM"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -2056,7 +2167,7 @@ func TestCreateSysvar_MutatorError_Returns502(t *testing.T) {
 	h := hub.NewHub("test-ccu")
 	h.SysvarMutator = &errSysvarMutator{err: errors.New("rega down")}
 	idx := &testHubIndex{h: h}
-	body := `{"name":"Flag","value_type":"LOGIC"}`
+	body := `{"name":"Flag","value_type":"BOOL"}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	CreateSysvar(idx).ServeHTTP(w, req)

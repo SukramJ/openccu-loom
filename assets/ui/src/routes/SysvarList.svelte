@@ -328,8 +328,14 @@
             <option value="FLOAT">FLOAT</option>
             <option value="STRING">STRING</option>
             <option value="ENUM">ENUM</option>
+            <option value="ALARM">ALARM</option>
           </select>
         </label>
+        {#if createForm.value_type === "ALARM"}
+          <p class="text-xs text-slate-500 md:col-span-2 dark:text-slate-400">
+            {t("sysvars.create.alarm_hint")}
+          </p>
+        {/if}
         <label class="text-sm">
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={createForm.unit} />

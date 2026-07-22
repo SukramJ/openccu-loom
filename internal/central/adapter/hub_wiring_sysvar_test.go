@@ -213,6 +213,29 @@ func TestCreateSysvarIntegerFallsBackToRega(t *testing.T) {
 	}
 }
 
+// ALARM has no native JSON-RPC counterpart (there is no
+// SysVar.createAlarm), so it must always fall back to the
+// create_system_variable Rega script, carrying the ALARM type marker
+// so the script's OT_ALARMDP branch fires.
+func TestCreateSysvarAlarmFallsBackToRega(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.CreateSysvar(context.Background(), "Einbruch", "ALARM", "", "", "", "", nil); err != nil {
+		t.Fatalf("CreateSysvar: %v", err)
+	}
+	if got := m.regaCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 Rega call for ALARM, got %d", got)
+	}
+	if got := m.createBool.Load() + m.createFlt.Load() + m.createEnum.Load(); got != 0 {
+		t.Fatalf("JSON-RPC create path must not run for ALARM, got %d", got)
+	}
+	body := m.lastRega.Load()
+	if body == nil || !strings.Contains(*body, `"ALARM"`) {
+		t.Fatalf("rega body missing ALARM type marker: %v", body)
+	}
+}
+
 // A description on an otherwise JSON-RPC-eligible BOOL forces the Rega
 // fallback, because the native SysVar.createBool/createFloat/createEnum
 // methods carry no description parameter. The rendered script must
@@ -434,6 +457,22 @@ func TestCreateSysvarRegaPathPropagatesCCUError(t *testing.T) {
 		t.Fatal("expected a CCU error to propagate, got nil")
 	}
 	if !strings.Contains(err.Error(), "script execution failed") {
+		t.Fatalf("error = %v, want it to carry the CCU message", err)
+	}
+}
+
+// ALARM always takes the Rega path (no native createAlarm); a CCU-side
+// failure there (e.g. the OT_ALARMDP object could not be created) must
+// propagate to the caller like any other Rega-path error.
+func TestCreateSysvarAlarmPropagatesCCUError(t *testing.T) {
+	url := newErrorJSONRPCServer(t, "OT_ALARMDP creation failed")
+	w := newWriterAgainst(t, url)
+
+	err := w.CreateSysvar(context.Background(), "Einbruch", "ALARM", "", "", "", "", nil)
+	if err == nil {
+		t.Fatal("expected a CCU error to propagate, got nil")
+	}
+	if !strings.Contains(err.Error(), "OT_ALARMDP creation failed") {
 		t.Fatalf("error = %v, want it to carry the CCU message", err)
 	}
 }

@@ -1648,6 +1648,8 @@ const EN: Catalog = {
   "sysvars.create.type": "Type",
   "sysvars.create.unit": "Unit",
   "sysvars.create.values": "Values (semicolon-separated)",
+  "sysvars.create.alarm_hint":
+    "Creates a binary, acknowledgeable alarm line on the CCU.",
   "sysvars.edit.title": "Edit",
   "sysvars.edit.name": "Name (rename)",
   "sysvars.edit.description": "Description",
@@ -4384,6 +4386,8 @@ const DE: Catalog = {
   "sysvars.create.type": "Typ",
   "sysvars.create.unit": "Einheit",
   "sysvars.create.values": "Werte (Semikolon-getrennt)",
+  "sysvars.create.alarm_hint":
+    "Legt eine binäre, quittierbare Alarmlinie auf der CCU an.",
   "sysvars.edit.title": "Bearbeiten",
   "sysvars.edit.name": "Name (umbenennen)",
   "sysvars.edit.description": "Beschreibung",

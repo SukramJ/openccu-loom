@@ -460,12 +460,26 @@ func SetProgramEnabled(idx HubIndex) http.HandlerFunc {
 // SysvarCreateRequest is the body for `POST /sysvars`.
 type SysvarCreateRequest struct {
 	Name        string   `json:"name"`
-	ValueType   string   `json:"value_type"` // BOOL|INTEGER|FLOAT|STRING|ENUM
+	ValueType   string   `json:"value_type"` // BOOL|INTEGER|FLOAT|STRING|ENUM|ALARM
 	Unit        string   `json:"unit,omitempty"`
 	Min         string   `json:"min,omitempty"`
 	Max         string   `json:"max,omitempty"`
 	Description string   `json:"description,omitempty"`
 	ValueList   []string `json:"value_list,omitempty"`
+}
+
+// sysvarCreateTypes is the set of value_type codes the CCU's
+// create_system_variable Rega script and the native JSON-RPC create
+// methods understand. It is deliberately narrower than the read-side
+// [hmenum.HubValueType] vocabulary (LOGIC/NUMBER/LIST): those are how
+// the CCU reports existing variables, not how a new one is requested.
+var sysvarCreateTypes = map[string]struct{}{
+	"BOOL":    {},
+	"INTEGER": {},
+	"FLOAT":   {},
+	"STRING":  {},
+	"ENUM":    {},
+	"ALARM":   {},
 }
 
 // CreateSysvar provisions a new sysvar on the CCU via the Rega
@@ -486,6 +500,12 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 		if req.Name == "" || req.ValueType == "" {
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, "name and value_type are required", ""))
+			return
+		}
+		if _, ok := sysvarCreateTypes[req.ValueType]; !ok {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r,
+					"value_type must be one of BOOL, INTEGER, FLOAT, STRING, ENUM, ALARM", req.ValueType))
 			return
 		}
 		if err := h.CreateSysvarRemote(r.Context(),

@@ -68,6 +68,10 @@
   REST/WS clients get the same via an optional `include_internal`
   parameter; without it the `include_internal_programs` setting still
   governs the default (API 2.34.0).
+- **Create alarm system variables.** The system-variable create form
+  now offers an ALARM type, provisioning a binary, acknowledgeable alarm
+  line on the CCU (just like an alarm variable created in the CCU's own
+  WebUI).
 - **Rename system variables and describe them at creation.** The
   system-variable editor can now rename a variable, and the create form
   accepts a description up front (previously the name was fixed and the

@@ -1,5 +1,5 @@
 !# openccu-loom — create_system_variable
-!# Params: ##name## (sysvar name), ##type## (BOOL|FLOAT|INTEGER|STRING|ENUM),
+!# Params: ##name## (sysvar name), ##type## (BOOL|FLOAT|INTEGER|STRING|ENUM|ALARM),
 !#         ##unit## (optional unit string), ##min## / ##max## (FLOAT/INTEGER bounds)
 !#         ##values## (semicolon-separated ENUM keys, ignored otherwise)
 !#         ##description## (optional description text; "" leaves it empty)
@@ -8,6 +8,11 @@
 !# Creates a system variable on the CCU. Silent no-op if a sysvar with
 !# the same name already exists — the caller checks the existing value
 !# afterwards via getSysVar.
+!#
+!# ALARM is a binary alarm line: it is backed by an OT_ALARMDP object
+!# (not the OT_VARDP that every other type uses) so the CCU treats it as
+!# a real, acknowledgeable alarm variable, wiring up the binary alarm
+!# condition and marking it as a system alarm.
 
 string sName = "##name##";
 string sType = "##type##";
@@ -23,9 +28,23 @@ if (oSv) {
     quit;
 }
 
-object oNew = dom.CreateObject(OT_VARDP);
+object oNew;
+if (sType == "ALARM") {
+    oNew = dom.CreateObject(OT_ALARMDP);
+} else {
+    oNew = dom.CreateObject(OT_VARDP);
+}
 if (oNew) {
     oNew.Name(sName);
+    if (sType == "ALARM") {
+        oNew.AlSetBinaryCondition();
+        oNew.ValueType(ivtBinary);
+        oNew.ValueSubType(istAlarm);
+        oNew.ValueName0("false");
+        oNew.ValueName1("true");
+        oNew.AlType(atSystem);
+        oNew.AlArm(true);
+    }
     if (sType == "BOOL") {
         oNew.ValueType(ivtBinary);
         oNew.ValueSubType(istBool);

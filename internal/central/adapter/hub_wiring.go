@@ -1634,10 +1634,12 @@ func (w *hubJSONRPCWriter) SetSysvar(ctx context.Context, name string, value any
 // BOOL/FLOAT/ENUM without a custom unit or description go through the
 // CCU's native JSON-RPC methods (`SysVar.createBool` / `createFloat` /
 // `createEnum`), which own the exact CCU surface (UTF-8/BOM, escape
-// rules). INTEGER, STRING and any sysvar that needs a `ValueUnit` or a
-// description fall back to the `create_system_variable` Rega script
-// because the CCU's JSON-RPC has no equivalent for those (createBool /
-// createFloat / createEnum carry no description parameter).
+// rules). INTEGER, STRING, ALARM and any sysvar that needs a
+// `ValueUnit` or a description fall back to the `create_system_variable`
+// Rega script because the CCU's JSON-RPC has no equivalent for those
+// (createBool / createFloat / createEnum carry no description parameter,
+// and there is no native createAlarm — the script backs an ALARM line
+// with an OT_ALARMDP object so it stays acknowledgeable).
 func (w *hubJSONRPCWriter) CreateSysvar(
 	ctx context.Context,
 	name, valueType, unit, vmin, vmax, description string,
