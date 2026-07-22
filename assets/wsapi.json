@@ -37,6 +37,14 @@
     },
     {
       "category": "alarms",
+      "description": "Acknowledge (clear) every active alarm message in one pass. The response carries the number acknowledged.",
+      "name": "alarm_messages.ack_all",
+      "result": {
+        "acknowledged": "integer"
+      }
+    },
+    {
+      "category": "alarms",
       "description": "List all active CCU alarm messages.",
       "name": "alarm_messages.list"
     },
@@ -724,13 +732,31 @@
     },
     {
       "category": "alarms",
-      "description": "Disable (suppress) a single service message by id.",
+      "description": "Disable (permanently suppress) a single service message by id. Resolves the message's channel + service parameter and suppresses it on the CCU via Interface.suppressServiceMessages until cleared via service_messages.unsuppress.",
       "name": "service_messages.disable"
+    },
+    {
+      "category": "alarms",
+      "description": "List the permanently-suppressed service-message channel parameters across every central. Reconciled against each CCU's live Interface.getSuppressedServiceMessages.",
+      "name": "service_messages.suppressed"
+    },
+    {
+      "category": "alarms",
+      "description": "Clear a permanent service-message suppression. Params: channel (required), parameter (empty = all parameters of the channel), interface (optional, resolved from the stored suppression).",
+      "name": "service_messages.unsuppress"
     },
     {
       "category": "alarms",
       "description": "Acknowledge (clear) a single service message by id.",
       "name": "service_messages.ack"
+    },
+    {
+      "category": "alarms",
+      "description": "Acknowledge (clear) every quittable service message in one pass. The response carries the number acknowledged.",
+      "name": "service_messages.ack_all",
+      "result": {
+        "acknowledged": "integer"
+      }
     },
     {
       "category": "alarms",

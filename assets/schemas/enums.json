@@ -2947,6 +2947,14 @@
           "wire_value": "accept_device_in_inbox"
         },
         {
+          "go_name": "RegaScriptAcknowledgeAllAlarmMessages",
+          "wire_value": "acknowledge_all_alarm_messages"
+        },
+        {
+          "go_name": "RegaScriptAcknowledgeAllServiceMessages",
+          "wire_value": "acknowledge_all_service_messages"
+        },
+        {
           "go_name": "RegaScriptAcknowledgeMessage",
           "wire_value": "acknowledge_message"
         },

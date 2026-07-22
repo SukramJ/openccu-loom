@@ -503,6 +503,14 @@ func (w *wsHubQuery) AcknowledgeAlarmMessage(ctx context.Context, id string) err
 	return h.Messages.Acknowledge(ctx, id)
 }
 
+func (w *wsHubQuery) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return 0, errors.New("ws: hub not available")
+	}
+	return h.Messages.AcknowledgeAll(ctx)
+}
+
 func (w *wsHubQuery) ListServiceMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
@@ -534,6 +542,14 @@ func (w *wsHubQuery) AcknowledgeServiceMessage(ctx context.Context, id string) e
 		return errors.New("ws: hub not available")
 	}
 	return h.ServiceMessages.Acknowledge(ctx, id)
+}
+
+func (w *wsHubQuery) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return 0, errors.New("ws: hub not available")
+	}
+	return h.ServiceMessages.AcknowledgeAll(ctx)
 }
 
 // InstallModeStatus returns the per-interface install-mode state by

@@ -80,10 +80,19 @@ type CentralInfo interface {
 	Reconcile(ctx context.Context) error
 }
 
-// ExtendedHub adds the niche service-message operation that was
-// missing from the base [HubQuery] contract.
+// ExtendedHub adds the niche service-message operations that were
+// missing from the base [HubQuery] contract: durable suppression of a
+// message ([ExtendedHub.DisableServiceMessage]), listing the current
+// suppressions, and clearing one.
 type ExtendedHub interface {
 	DisableServiceMessage(ctx context.Context, id string) error
+	// ListSuppressedServiceMessages returns the durably-suppressed
+	// channel parameters across every central.
+	ListSuppressedServiceMessages(ctx context.Context) ([]map[string]any, error)
+	// UnsuppressServiceMessage clears a durable suppression. interfaceID
+	// may be empty (resolved from the stored suppression); an empty
+	// parameter clears every service parameter of the channel.
+	UnsuppressServiceMessage(ctx context.Context, interfaceID, channel, parameter string) error
 }
 
 // CentralLinksManager is the mutating + read surface for the
@@ -290,6 +299,8 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	}
 	if cfg.ExtendedHub != nil {
 		router.Register("service_messages.disable", serviceMessagesDisableHandler(cfg.ExtendedHub))
+		router.Register("service_messages.suppressed", serviceMessagesSuppressedHandler(cfg.ExtendedHub))
+		router.Register("service_messages.unsuppress", serviceMessagesUnsuppressHandler(cfg.ExtendedHub))
 	}
 	if cfg.UISchema != nil {
 		// paramset.form_schema — full UI schema for one channel/paramset.
@@ -630,6 +641,39 @@ func serviceMessagesDisableHandler(h ExtendedHub) CommandHandler {
 			return nil, fmt.Errorf("service_messages.disable: %w", err)
 		}
 		return map[string]any{"disabled": p.ID}, nil
+	}
+}
+
+func serviceMessagesSuppressedHandler(h ExtendedHub) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		items, err := h.ListSuppressedServiceMessages(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("service_messages.suppressed: %w", err)
+		}
+		if items == nil {
+			items = []map[string]any{}
+		}
+		return map[string]any{"items": items}, nil
+	}
+}
+
+func serviceMessagesUnsuppressHandler(h ExtendedHub) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Interface string `json:"interface"`
+			Channel   string `json:"channel"`
+			Parameter string `json:"parameter"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Channel == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "channel is required")
+		}
+		if err := h.UnsuppressServiceMessage(ctx, p.Interface, p.Channel, p.Parameter); err != nil {
+			return nil, fmt.Errorf("service_messages.unsuppress: %w", err)
+		}
+		return map[string]any{"unsuppressed": p.Channel}, nil
 	}
 }
 

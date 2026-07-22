@@ -466,6 +466,9 @@ type stubHub struct {
 	ackedAlarmID    string
 	ackedServiceID  string
 	ackErr          error
+	ackAllAlarms    bool
+	ackAllServices  bool
+	ackAllCount     int
 
 	installStatus       map[string]any
 	installEnabledID    string
@@ -518,6 +521,11 @@ func (h *stubHub) AcknowledgeAlarmMessage(_ context.Context, id string) error {
 	return h.ackErr
 }
 
+func (h *stubHub) AcknowledgeAllAlarmMessages(context.Context) (int, error) {
+	h.ackAllAlarms = true
+	return h.ackAllCount, h.ackErr
+}
+
 func (h *stubHub) ListServiceMessages(context.Context) ([]map[string]any, error) {
 	return h.serviceMessages, h.listErr
 }
@@ -525,6 +533,11 @@ func (h *stubHub) ListServiceMessages(context.Context) ([]map[string]any, error)
 func (h *stubHub) AcknowledgeServiceMessage(_ context.Context, id string) error {
 	h.ackedServiceID = id
 	return h.ackErr
+}
+
+func (h *stubHub) AcknowledgeAllServiceMessages(context.Context) (int, error) {
+	h.ackAllServices = true
+	return h.ackAllCount, h.ackErr
 }
 
 func (h *stubHub) InstallModeStatus(context.Context) (map[string]any, error) {
@@ -669,6 +682,55 @@ func TestAlarmAndServiceMessagesListAndAck(t *testing.T) {
 	res = r.Dispatch(opCtx(), "service_messages.ack", args2)
 	if res.Error != nil || hub.ackedServiceID != "S1" {
 		t.Fatalf("ack service: err=%+v hub.ackedServiceID=%q", res.Error, hub.ackedServiceID)
+	}
+}
+
+func TestAlarmAndServiceMessagesAckAll(t *testing.T) {
+	hub := &stubHub{ackAllCount: 4}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(opCtx(), "alarm_messages.ack_all", nil)
+	if res.Error != nil || !hub.ackAllAlarms {
+		t.Fatalf("ack_all alarm: err=%+v called=%v", res.Error, hub.ackAllAlarms)
+	}
+	if n := res.Data.(map[string]any)["acknowledged"]; n != 4 {
+		t.Fatalf("alarm ack_all acknowledged=%v, want 4", n)
+	}
+
+	res = r.Dispatch(opCtx(), "service_messages.ack_all", nil)
+	if res.Error != nil || !hub.ackAllServices {
+		t.Fatalf("ack_all service: err=%+v called=%v", res.Error, hub.ackAllServices)
+	}
+	if n := res.Data.(map[string]any)["acknowledged"]; n != 4 {
+		t.Fatalf("service ack_all acknowledged=%v, want 4", n)
+	}
+}
+
+func TestAckAllPropagatesError(t *testing.T) {
+	hub := &stubHub{ackErr: errors.New("rega down")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+	res := r.Dispatch(opCtx(), "service_messages.ack_all", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
+	}
+}
+
+// TestAlarmAckAllPropagatesError mirrors TestAckAllPropagatesError for the
+// alarm_messages.ack_all command — the two bulk-acknowledge commands are
+// registered from separate handler closures, so each needs its own error-path
+// pin.
+func TestAlarmAckAllPropagatesError(t *testing.T) {
+	hub := &stubHub{ackErr: errors.New("rega down")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+	res := r.Dispatch(opCtx(), "alarm_messages.ack_all", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
+	}
+	if !hub.ackAllAlarms {
+		t.Error("alarm_messages.ack_all must dispatch to AcknowledgeAllAlarmMessages, not the service path")
 	}
 }
 

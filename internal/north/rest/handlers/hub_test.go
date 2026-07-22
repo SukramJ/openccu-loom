@@ -1039,6 +1039,37 @@ type okMessageAcknowledger struct{}
 
 func (okMessageAcknowledger) AcknowledgeMessage(_ context.Context, _ string) error { return nil }
 
+// okBulkAck implements hub.BulkMessageAcknowledger and reports a fixed count.
+type okBulkAck struct{ n int }
+
+func (b okBulkAck) AcknowledgeAllServiceMessages(context.Context) (int, error) { return b.n, nil }
+func (b okBulkAck) AcknowledgeAllAlarmMessages(context.Context) (int, error)   { return b.n, nil }
+
+// errBulkAck implements hub.BulkMessageAcknowledger and always errors.
+type errBulkAck struct{ err error }
+
+func (b errBulkAck) AcknowledgeAllServiceMessages(context.Context) (int, error) { return 0, b.err }
+func (b errBulkAck) AcknowledgeAllAlarmMessages(context.Context) (int, error)   { return 0, b.err }
+
+// stubBulkAckCounter implements hub.BulkMessageAcknowledger and records how
+// many times each method was invoked, so a test can assert a central-scoped
+// bulk acknowledge left an out-of-scope central's acker untouched.
+type stubBulkAckCounter struct {
+	n            int
+	serviceCalls int
+	alarmCalls   int
+}
+
+func (b *stubBulkAckCounter) AcknowledgeAllServiceMessages(context.Context) (int, error) {
+	b.serviceCalls++
+	return b.n, nil
+}
+
+func (b *stubBulkAckCounter) AcknowledgeAllAlarmMessages(context.Context) (int, error) {
+	b.alarmCalls++
+	return b.n, nil
+}
+
 // errProgramWriter implements hub.ProgramWriter and always returns an error.
 type errProgramWriter struct{ err error }
 
@@ -1265,7 +1296,11 @@ func TestDisableServiceMessage_HappyPath_Returns202(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	h.ServiceMessages = hub.NewServiceMessages(okMessageAcknowledger{})
-	h.ServiceMessages.Replace([]hub.ServiceMessage{{ID: "S1", Timestamp: time.Now()}})
+	h.ServiceMessages.SetSuppressor(noopSuppressor{})
+	h.ServiceMessages.Replace([]hub.ServiceMessage{{
+		ID: "S1", Address: "ABC:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
 	idx := &testHubIndex{h: h}
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"id": "S1"}))
@@ -1277,6 +1312,185 @@ func TestDisableServiceMessage_HappyPath_Returns202(t *testing.T) {
 	}
 	if h.ServiceMessages.Count() != 0 {
 		t.Fatalf("Count=%d after disable, want 0", h.ServiceMessages.Count())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AckAllAlarmMessages / AckAllServiceMessages — bulk acknowledge
+// ---------------------------------------------------------------------------
+
+func TestAckAllAlarmMessages_HubNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(nil).ServeHTTP(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestAckAllAlarmMessages_HappyPath_ReturnsCount(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Messages.SetAcknowledgers(nil, okBulkAck{n: 3})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 3 {
+		t.Fatalf("acknowledged=%d, want 3", got.Acknowledged)
+	}
+}
+
+func TestAckAllAlarmMessages_Error_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Messages.SetAcknowledgers(nil, errBulkAck{err: errors.New("rega down")})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAckAllServiceMessages_HappyPath_ReturnsCount(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages.SetAcknowledgers(nil, okBulkAck{n: 5})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 5 {
+		t.Fatalf("acknowledged=%d, want 5", got.Acknowledged)
+	}
+}
+
+func TestAckAllServiceMessages_Error_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages.SetAcknowledgers(nil, errBulkAck{err: errors.New("rega down")})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAckAllServiceMessages_UnknownCentral_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages.SetAcknowledgers(nil, okBulkAck{n: 5})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/?central=does-not-exist", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestAckAllAlarmMessages_UnknownCentral_Returns400 mirrors the service-side
+// unknown-central case for the alarm endpoint.
+func TestAckAllAlarmMessages_UnknownCentral_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Messages.SetAcknowledgers(nil, okBulkAck{n: 5})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/?central=does-not-exist", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestAckAllAlarmMessages_MultiCentral_SumsAcrossHubs verifies that omitting
+// ?central= acknowledges every registered central and sums their individual
+// counts into one response, rather than only acting on the first hub.
+func TestAckAllAlarmMessages_MultiCentral_SumsAcrossHubs(t *testing.T) {
+	t.Parallel()
+	h1 := hub.NewHub("ccu-alpha")
+	h1.Messages.SetAcknowledgers(nil, okBulkAck{n: 2})
+	h2 := hub.NewHub("ccu-beta")
+	h2.Messages.SetAcknowledgers(nil, okBulkAck{n: 3})
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-alpha", Hub: h1},
+		{Central: "ccu-beta", Hub: h2},
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 5 {
+		t.Fatalf("acknowledged=%d, want 5 (2+3 summed across both centrals)", got.Acknowledged)
+	}
+}
+
+// TestAckAllServiceMessages_ScopedCentral_OnlyActsOnNamedHub verifies that a
+// ?central= query parameter restricts the bulk acknowledge to the named
+// central: the other central's bulk acknowledger must not be invoked and its
+// count must not be added to the total.
+func TestAckAllServiceMessages_ScopedCentral_OnlyActsOnNamedHub(t *testing.T) {
+	t.Parallel()
+	h1 := hub.NewHub("ccu-alpha")
+	alphaBulk := &stubBulkAckCounter{n: 2}
+	h1.ServiceMessages.SetAcknowledgers(nil, alphaBulk)
+	h2 := hub.NewHub("ccu-beta")
+	betaBulk := &stubBulkAckCounter{n: 7}
+	h2.ServiceMessages.SetAcknowledgers(nil, betaBulk)
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-alpha", Hub: h1},
+		{Central: "ccu-beta", Hub: h2},
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, "/?central=ccu-alpha", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 2 {
+		t.Fatalf("acknowledged=%d, want 2 (only ccu-alpha scoped)", got.Acknowledged)
+	}
+	if alphaBulk.serviceCalls != 1 {
+		t.Errorf("ccu-alpha bulk acker called %d times, want 1", alphaBulk.serviceCalls)
+	}
+	if betaBulk.serviceCalls != 0 {
+		t.Errorf("ccu-beta bulk acker called %d times, want 0 (must not be invoked when central= scopes to alpha)", betaBulk.serviceCalls)
 	}
 }
 

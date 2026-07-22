@@ -1,0 +1,27 @@
+!# openccu-loom — acknowledge_all_alarm_messages
+!# Output: {"acknowledged":<count>}
+!#
+!# Acknowledges every active alarm message in one pass and returns the
+!# number acknowledged. Alarm messages are the ALARMDP objects under
+!# ID_SYSTEM_VARIABLES whose AlState == 1; they are acknowledged
+!# unconditionally via AlReceipt() (there is no writability gate for
+!# alarm messages, matching the single-message acknowledge_message.fn).
+!#
+!# Mirrors the CCU WebUI ackAll() ReceiptAlarm loop. The companion
+!# read script is get_alarm_messages.fn.
+
+integer iCount = 0;
+string sVarId;
+
+object oSysvars = dom.GetObject(ID_SYSTEM_VARIABLES);
+if (oSysvars) {
+    foreach (sVarId, oSysvars.EnumIDs()) {
+        object oVar = dom.GetObject(sVarId);
+        if (oVar && (oVar.TypeName() == "ALARMDP") && (oVar.AlState() == 1)) {
+            oVar.AlReceipt();
+            iCount = iCount + 1;
+        }
+    }
+}
+
+Write('{"acknowledged":' # iCount # '}');

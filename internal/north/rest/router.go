@@ -962,8 +962,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// inbox, update, metrics, connectivity, install-mode).
 				pr.Get("/hub/data-points", handlers.GetHubDataPoints(d.Hub))
 				pr.Get("/alarm-messages", handlers.ListAlarmMessages(d.Hub))
+				pr.With(op).Post("/alarm-messages/ack-all", handlers.AckAllAlarmMessages(d.Hub))
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))
 				pr.Get("/service-messages", handlers.ListServiceMessages(d.Hub))
+				pr.Get("/service-messages/suppressed", handlers.ListSuppressedServiceMessages(d.Hub))
+				pr.With(op).Post("/service-messages/ack-all", handlers.AckAllServiceMessages(d.Hub))
+				pr.With(op).Post("/service-messages/unsuppress", handlers.UnsuppressServiceMessage(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/ack", handlers.AckServiceMessage(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/disable", handlers.DisableServiceMessage(d.Hub))
 			}

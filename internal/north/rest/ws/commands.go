@@ -36,6 +36,7 @@ var writeCommandRoles = map[string]auth.Role{
 
 	// Operator-tier: every real device / config / schedule / link mutation.
 	"alarm_messages.ack":      auth.RoleOperator,
+	"alarm_messages.ack_all":  auth.RoleOperator,
 	"alarm_panel.acknowledge": auth.RoleOperator,
 	"alarm_panel.arm":         auth.RoleOperator,
 	"alarm_panel.disarm":      auth.RoleOperator,
@@ -88,7 +89,9 @@ var writeCommandRoles = map[string]auth.Role{
 	"schedules.device.set":                auth.RoleOperator,
 	"schedules.set_enabled":               auth.RoleOperator,
 	"service_messages.ack":                auth.RoleOperator,
+	"service_messages.ack_all":            auth.RoleOperator,
 	"service_messages.disable":            auth.RoleOperator,
+	"service_messages.unsuppress":         auth.RoleOperator,
 	"sysvars.set":                         auth.RoleOperator,
 }
 
@@ -165,6 +168,7 @@ var readOnlyCommands = map[string]struct{}{
 	"schedules.device.get":        {},
 	"schedules.list_devices":      {},
 	"service_messages.list":       {},
+	"service_messages.suppressed": {},
 	"system.commands":             {},
 	"system.health":               {},
 	"system.user_permissions":     {},

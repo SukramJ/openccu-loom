@@ -154,6 +154,11 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// recovery can re-apply these without racing a concurrent hub write.
 	unit.HubModel.SetMutator(writer)
 	unit.HubModel.Update.SetFirmwareUpdater(writer)
+	// Wire the single- and bulk-message acknowledgers so REST/WS/MQTT
+	// acknowledge and acknowledge-all calls reach the CCU ReGa engine.
+	msgAck := hubMessageAck{runner: runner}
+	unit.HubModel.Messages.SetAcknowledgers(msgAck, msgAck)
+	unit.HubModel.ServiceMessages.SetAcknowledgers(msgAck, msgAck)
 	// Post-install progress monitor: after a triggered CCU system update, watch
 	// the firmware version and clear the in-progress flag once it changes.
 	// See launchSystemUpdateProgressMonitor.
@@ -1137,14 +1142,17 @@ func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit
 			continue
 		}
 		seen[id] = struct{}{}
+		decodedName := decodeRegaField(m.Name)
 		all = append(all, hub.ServiceMessage{
 			ID:          id,
-			Name:        decodeRegaField(m.Name),
+			Name:        decodedName,
 			Address:     m.Address,
 			DeviceName:  decodeRegaField(m.DeviceName),
+			Parameter:   serviceMessageParameter(decodedName),
+			InterfaceID: interfaceForChannel(unit, m.Address),
 			Type:        hmenum.ServiceMessageType(m.Type),
 			Counter:     m.Counter,
-			DisplayName: messageDisplayName(catalogs, locale, decodeRegaField(m.Name)),
+			DisplayName: messageDisplayName(catalogs, locale, decodedName),
 		})
 	}
 	unit.HubModel.ServiceMessages.Replace(all)
@@ -1201,6 +1209,38 @@ func messageDisplayName(catalogs *i18n.Catalogs, locale, rawName string) string 
 		return code
 	}
 	return translated
+}
+
+// serviceMessageParameter extracts the service parameter from a raw CCU
+// service-message name. The name format is "AL-ADDRESS:CHANNEL.PARAM";
+// the parameter is the segment after the last dot. Device / channel
+// addresses never contain a dot, so the split is unambiguous. Returns ""
+// when the name carries no parameter segment — the caller then suppresses
+// every service parameter of the channel.
+func serviceMessageParameter(rawName string) string {
+	if idx := strings.LastIndex(rawName, "."); idx >= 0 {
+		return rawName[idx+1:]
+	}
+	return ""
+}
+
+// interfaceForChannel resolves the CCU interface (e.g. "HmIP-RF") that
+// owns channelAddress by looking up the device (the part before the ":")
+// in the model registry. Returns "" when the device is not registered;
+// the suppressor then re-resolves the interface at call time. Multi-CCU-
+// safe: the lookup is scoped to unit's own registry.
+func interfaceForChannel(unit *central.Unit, channelAddress string) string {
+	if unit == nil || unit.ModelRegistry == nil || channelAddress == "" {
+		return ""
+	}
+	deviceAddr := channelAddress
+	if i := strings.IndexByte(channelAddress, ':'); i >= 0 {
+		deviceAddr = channelAddress[:i]
+	}
+	if d, ok := unit.ModelRegistry.Get(deviceAddr); ok && d != nil {
+		return string(d.Interface)
+	}
+	return ""
 }
 
 // decodeRegaField URL-decodes a field emitted by the get_service_messages,
@@ -1443,6 +1483,29 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 	}
 	// Fallback: preserve as string so the caller at least sees something.
 	return hmtypes.StringValue(s), true
+}
+
+// hubMessageAck adapts the ReGa [rega.Runner] to the model's
+// [hub.MessageAcknowledger] and [hub.BulkMessageAcknowledger] contracts.
+// Single-message acknowledge drops the runner's confirmation boolean —
+// a false with no error means the message was already gone, which the
+// model treats as success. The bulk methods forward the acknowledged
+// count unchanged.
+type hubMessageAck struct {
+	runner *rega.Runner
+}
+
+func (a hubMessageAck) AcknowledgeMessage(ctx context.Context, id string) error {
+	_, err := a.runner.AcknowledgeMessage(ctx, id)
+	return err
+}
+
+func (a hubMessageAck) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
+	return a.runner.AcknowledgeAllServiceMessages(ctx)
+}
+
+func (a hubMessageAck) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
+	return a.runner.AcknowledgeAllAlarmMessages(ctx)
 }
 
 // hubJSONRPCWriter implements [hub.ProgramWriter] + [hub.SysvarWriter]
@@ -1869,4 +1932,107 @@ func WireBackupAndDownload(unit *central.Unit, writer *clientpkg.ValueWriter) {
 		}
 		return ic.CreateBackupAndDownload(ctx, b, 0, 0)
 	})
+}
+
+// ErrServiceMessageSuppressorNoClient is returned when the service-message
+// suppressor cannot resolve an interface client or its backend for the
+// requested interface — either no client is registered yet or the
+// backend has not been wired.
+var ErrServiceMessageSuppressorNoClient = errors.New("service_message_suppressor: no interface client available")
+
+// clientServiceMessageSuppressor routes CCU service-message suppression
+// through the per-interface [client.InterfaceClient] backend. It resolves
+// the interface client + backend for the target interface at call time so
+// it stays decoupled from interface-wiring order (the same late-binding
+// approach as [clientSysvarCreator]).
+//
+// It satisfies three interfaces at once — [coordinators.ServiceMessageSuppressor],
+// [coordinators.ServiceMessageReader], and [hub.ServiceMessageSuppressor] —
+// so a single instance backs both the hub coordinator seam and the
+// [hub.ServiceMessages] aggregate's [hub.ServiceMessages.Disable] path.
+type clientServiceMessageSuppressor struct {
+	unit   *central.Unit
+	writer *clientpkg.ValueWriter
+}
+
+// resolveInterface returns interfaceID unchanged when non-empty; otherwise
+// it looks the interface up from channelAddress via the model registry.
+func (c *clientServiceMessageSuppressor) resolveInterface(interfaceID, channelAddress string) string {
+	if interfaceID != "" {
+		return interfaceID
+	}
+	return interfaceForChannel(c.unit, channelAddress)
+}
+
+// backendFor resolves the interface client and its registered backend for
+// interfaceID (the bare CCU interface name, e.g. "HmIP-RF"). The client
+// registry is keyed by the composite wire id, so the lookup translates the
+// bare name through [WireInterfaceID].
+func (c *clientServiceMessageSuppressor) backendFor(interfaceID string) (*clientpkg.InterfaceClient, backends.Operations, error) {
+	if c.unit == nil || c.unit.Clients == nil || c.writer == nil || interfaceID == "" {
+		return nil, nil, ErrServiceMessageSuppressorNoClient
+	}
+	wireID := WireInterfaceID(c.unit.Name(), hmenum.Interface(interfaceID))
+	entry, ok := c.unit.Clients.Get(wireID)
+	if !ok || entry == nil || entry.Client == nil {
+		return nil, nil, fmt.Errorf("%w: interface %q", ErrServiceMessageSuppressorNoClient, interfaceID)
+	}
+	b, ok := c.writer.Backend(c.unit.Name(), wireID)
+	if !ok {
+		return nil, nil, fmt.Errorf("%w: backend not registered for %s/%s",
+			ErrServiceMessageSuppressorNoClient, c.unit.Name(), wireID)
+	}
+	return entry.Client, b, nil
+}
+
+// SuppressServiceMessage implements [coordinators.ServiceMessageSuppressor]
+// and [hub.ServiceMessageSuppressor]. The backend's own interface type is
+// sent as the JSON-RPC `interface` parameter, so it must match interfaceID
+// — which it does because the backend is looked up by that interface.
+func (c *clientServiceMessageSuppressor) SuppressServiceMessage(ctx context.Context, interfaceID, channelAddress, parameterID string, suppress bool) error {
+	iface := c.resolveInterface(interfaceID, channelAddress)
+	ic, b, err := c.backendFor(iface)
+	if err != nil {
+		return err
+	}
+	_, err = ic.SuppressServiceMessage(ctx, b, channelAddress, parameterID, suppress)
+	return err
+}
+
+// GetSuppressedServiceMessages implements [coordinators.ServiceMessageReader]
+// and [hub.ServiceMessageSuppressor]. Returns the CCU's current suppressed
+// service-parameter list for channelAddress on the resolved interface.
+func (c *clientServiceMessageSuppressor) GetSuppressedServiceMessages(ctx context.Context, interfaceID, channelAddress string) ([]string, error) {
+	iface := c.resolveInterface(interfaceID, channelAddress)
+	ic, b, err := c.backendFor(iface)
+	if err != nil {
+		return nil, err
+	}
+	return ic.GetSuppressedServiceMessages(ctx, b, iface, channelAddress)
+}
+
+// WireServiceMessageSuppressor installs the durable service-message
+// suppressor on unit. The same instance backs the hub-coordinator seam
+// ([coordinators.HubCoordinator.SetServiceMessageSuppressor] /
+// [coordinators.HubCoordinator.SetServiceMessageReader]) and the
+// [hub.ServiceMessages] aggregate's [hub.ServiceMessages.Disable] /
+// [hub.ServiceMessages.Unsuppress] path, so REST / WS calls actually reach
+// the CCU's Interface.suppressServiceMessages instead of being no-ops.
+//
+// Call this after [WireCentrals] has registered all interface clients so
+// the target interface's client is available when the first suppress call
+// arrives — the same late-binding reason as [WireSysvarCreator]. Nil
+// arguments are safe.
+func WireServiceMessageSuppressor(unit *central.Unit, writer *clientpkg.ValueWriter) {
+	if unit == nil {
+		return
+	}
+	s := &clientServiceMessageSuppressor{unit: unit, writer: writer}
+	if unit.Hub != nil {
+		unit.Hub.SetServiceMessageSuppressor(s)
+		unit.Hub.SetServiceMessageReader(s)
+	}
+	if unit.HubModel != nil && unit.HubModel.ServiceMessages != nil {
+		unit.HubModel.ServiceMessages.SetSuppressor(s)
+	}
 }

@@ -15,4 +15,6 @@
 # fine; godevccu does not implement the legacy Tcl/ReGa surface.
 backup.status               -- godevccu has no ReGa.runScript; live CCU returns ok
 backup.trigger              -- godevccu has no ReGa.runScript; live CCU returns ok
+alarm_messages.ack_all      -- godevccu has no ReGa.runScript; live CCU returns ok
+service_messages.ack_all    -- godevccu has no ReGa.runScript; live CCU returns ok
 firmware.update             -- godevccu has no ReGa.runScript; live CCU returns ok

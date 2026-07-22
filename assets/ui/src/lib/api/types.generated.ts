@@ -2727,6 +2727,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm-messages/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge all alarm messages
+         * @description Acknowledges every active alarm message in a single CCU pass.
+         *     An optional `central` query parameter scopes the operation to
+         *     one CCU; when omitted the acknowledge runs across every
+         *     registered central. The response carries the total number of
+         *     messages acknowledged.
+         */
+        post: operations["ackAllAlarmMessages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-messages/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge all quittable service messages
+         * @description Acknowledges every quittable service message in a single CCU
+         *     pass (non-quittable messages are left untouched, mirroring the
+         *     single-message writability gate). An optional `central` query
+         *     parameter scopes the operation to one CCU; when omitted the
+         *     acknowledge runs across every registered central. The response
+         *     carries the total number of messages acknowledged.
+         */
+        post: operations["ackAllServiceMessages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/service-messages/{id}/disable": {
         parameters: {
             query?: never;
@@ -2737,16 +2786,69 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Disable (suppress) a service message
-         * @description The CCU exposes exactly one dismiss primitive for service
-         *     messages — there is no separate wire-level "disable/suppress
-         *     forever" operation — so this shares the same domain call as
-         *     `POST .../ack` (`hub.ServiceMessages.Disable` delegates to
-         *     `Acknowledge`). Exposed as its own operation (rather than an
-         *     alias) so callers can name the intent, and shares the domain
+         * Disable (permanently suppress) a service message
+         * @description Durably suppresses the service message's channel parameter on the
+         *     CCU via `Interface.suppressServiceMessages`. Unlike `POST .../ack`
+         *     (a one-shot dismiss that returns as soon as the condition
+         *     re-triggers), the CCU stops raising service messages for the
+         *     resolved channel + service parameter until it is unsuppressed via
+         *     `POST /service-messages/unsuppress`. The channel and parameter are
+         *     resolved from the stored message; the suppression is recorded and
+         *     surfaced by `GET /service-messages/suppressed`. Shares the domain
          *     call with the WS `service_messages.disable` command.
          */
         post: operations["disableServiceMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-messages/suppressed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List permanently suppressed service messages
+         * @description Returns the service-message channel parameters that have been
+         *     durably suppressed via `POST /service-messages/{id}/disable`,
+         *     aggregated across every central. The list is reconciled against
+         *     each CCU's live `Interface.getSuppressedServiceMessages`, so an
+         *     entry cleared elsewhere (e.g. the CCU WebUI) drops out. Each entry
+         *     can be cleared via `POST /service-messages/unsuppress`.
+         */
+        get: operations["listSuppressedServiceMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-messages/unsuppress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear a permanent service-message suppression
+         * @description Clears a durable suppression for a channel parameter via
+         *     `Interface.suppressServiceMessages` (suppress=false). The optional
+         *     `central` query parameter selects the target central (required
+         *     when more than one CCU is registered). The request body names the
+         *     channel (required) and the service parameter (omit or empty to
+         *     clear every service parameter of the channel); the interface is
+         *     optional and resolved from the stored suppression when omitted.
+         */
+        post: operations["unsuppressServiceMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5445,6 +5547,24 @@ export interface components {
             quittable: boolean;
             /** @description Human-readable translation of the message code. */
             display_name?: string;
+        };
+        SuppressedServiceMessage: {
+            /** @description CCU this suppression belongs to (multi-central grouping). */
+            central?: string;
+            /** @description CCU interface the channel lives on (e.g. "HmIP-RF"). */
+            interface?: string;
+            /** @description Suppressed channel address ("ADDR:chn"). */
+            channel: string;
+            /** @description Suppressed service parameter (e.g. "LOWBAT"). Empty means every service parameter of the channel is suppressed. */
+            parameter?: string;
+            /** @description Human-readable channel/device name, when known. */
+            device_name?: string;
+            /** @description Raw CCU message name that was suppressed, when known. */
+            name?: string;
+        };
+        AckAllResult: {
+            /** @description Number of messages acknowledged across the scoped centrals. */
+            acknowledged: number;
         };
         InstallModeInterfaceEntry: {
             /** @description CCU the interface belongs to. */
@@ -9547,6 +9667,56 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    ackAllAlarmMessages: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AckAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    ackAllServiceMessages: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AckAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     disableServiceMessage: {
         parameters: {
             query?: never;
@@ -9565,6 +9735,61 @@ export interface operations {
                 };
                 content?: never;
             };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSuppressedServiceMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suppressed service messages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuppressedServiceMessage"][];
+                };
+            };
+        };
+    };
+    unsuppressServiceMessage: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description CCU interface the channel lives on (e.g. "HmIP-RF"). Optional — resolved from the stored suppression when omitted. */
+                    interface?: string;
+                    /** @description Channel address ("ADDR:chn"). */
+                    channel: string;
+                    /** @description Service parameter to unsuppress (e.g. "LOWBAT"). Omit or empty to clear every service parameter of the channel. */
+                    parameter?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

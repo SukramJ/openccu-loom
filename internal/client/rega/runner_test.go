@@ -753,6 +753,120 @@ func TestAcknowledgeMessageEmptyIDReturnsError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Bulk acknowledge: parse the acknowledged count + dispatch the right script
+// ---------------------------------------------------------------------------
+
+// TestAcknowledgeAllServiceMessagesParsesCount verifies the service bulk-ack
+// runner parses {"acknowledged":n} and dispatches the writability-gated
+// service pass.
+func TestAcknowledgeAllServiceMessagesParsesCount(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"acknowledged":4}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	n, err := r.AcknowledgeAllServiceMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllServiceMessages: %v", err)
+	}
+	if n != 4 {
+		t.Fatalf("count=%d, want 4", n)
+	}
+	if !strings.Contains(capture.lastScript(), "acknowledge_all_service_messages") {
+		t.Errorf("wrong script dispatched: %s", capture.lastScript())
+	}
+	// Service messages are acknowledged only when writable — the gate must
+	// be present in the dispatched body.
+	if !strings.Contains(capture.lastScript(), "Operations()") {
+		t.Errorf("service ack-all must apply the writability gate: %s", capture.lastScript())
+	}
+}
+
+// TestAcknowledgeAllAlarmMessagesParsesCount verifies the alarm bulk-ack
+// runner parses {"acknowledged":n} and dispatches the ALARMDP pass.
+func TestAcknowledgeAllAlarmMessagesParsesCount(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"acknowledged":7}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	n, err := r.AcknowledgeAllAlarmMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllAlarmMessages: %v", err)
+	}
+	if n != 7 {
+		t.Fatalf("count=%d, want 7", n)
+	}
+	if !strings.Contains(capture.lastScript(), "acknowledge_all_alarm_messages") {
+		t.Errorf("wrong script dispatched: %s", capture.lastScript())
+	}
+	if !strings.Contains(capture.lastScript(), "ALARMDP") {
+		t.Errorf("alarm ack-all must walk ALARMDP objects: %s", capture.lastScript())
+	}
+}
+
+// TestAcknowledgeAllServiceMessagesCCUError surfaces a transport failure as a
+// wrapped error and a zero count.
+func TestAcknowledgeAllServiceMessagesCCUError(t *testing.T) {
+	t.Parallel()
+	_, runner := newFakeServer(t, func(_ string) any {
+		return `not valid json`
+	})
+	n, err := runner.AcknowledgeAllServiceMessages(context.Background())
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0 on error", n)
+	}
+}
+
+// TestAcknowledgeAllAlarmMessagesCCUError mirrors
+// TestAcknowledgeAllServiceMessagesCCUError for the alarm bulk-ack script.
+func TestAcknowledgeAllAlarmMessagesCCUError(t *testing.T) {
+	t.Parallel()
+	_, runner := newFakeServer(t, func(_ string) any {
+		return `not valid json`
+	})
+	n, err := runner.AcknowledgeAllAlarmMessages(context.Background())
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0 on error", n)
+	}
+}
+
+// TestAcknowledgeAllMessagesZeroCount verifies that {"acknowledged":0} — the
+// CCU's answer when nothing was quittable/active — parses as a clean
+// zero-count success rather than being mistaken for a decode failure.
+func TestAcknowledgeAllMessagesZeroCount(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"acknowledged":0}`)
+	defer srv.Close()
+	r := newRunner(t, srv.URL)
+
+	n, err := r.AcknowledgeAllServiceMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllServiceMessages: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0", n)
+	}
+
+	n, err = r.AcknowledgeAllAlarmMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllAlarmMessages: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0", n)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Timeout / context cancellation
 // ---------------------------------------------------------------------------
 

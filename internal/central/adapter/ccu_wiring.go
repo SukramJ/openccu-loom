@@ -466,6 +466,10 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// Late-binding handlers: resolve the primary client/backend at call time.
 	WireSysvarCreator(unit, writer)
 	WireBackupAndDownload(unit, writer)
+	// Durable service-message suppression: routes the hub coordinator seam
+	// and the ServiceMessages aggregate's Disable/Unsuppress path through the
+	// per-interface backend's Interface.suppressServiceMessages call.
+	WireServiceMessageSuppressor(unit, writer)
 	// Per-interface install-mode data points: one per pairing-capable radio,
 	// each writing to its own interface backend (no CCU-wide toggle exists).
 	WireInstallModeDPs(unit, writer)

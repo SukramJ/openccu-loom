@@ -53,7 +53,12 @@ type AlarmMessage struct {
 type AlarmMessages struct {
 	datapoint.BaseDataPointFields
 
-	Ack MessageAcknowledger
+	// Ack acknowledges a single alarm message by id. BulkAck acknowledges
+	// every active alarm message in one CCU pass. Both are set at
+	// construction (nil for tests / single-CCU convenience) or re-wired
+	// under the aggregate mutex via [AlarmMessages.SetAcknowledgers].
+	Ack     MessageAcknowledger
+	BulkAck BulkMessageAcknowledger
 
 	// ServiceRegistry implements the write-half of [payload.Source].
 	// Each AlarmMessages instance gets its own registry so the dismiss
@@ -158,13 +163,38 @@ func (a *AlarmMessages) Replace(messages []AlarmMessage) {
 	}
 }
 
+// SetAcknowledgers wires (or re-wires) the single- and bulk-message
+// acknowledgers under the aggregate mutex. Use this from the hub-wiring
+// adapter so a background WireHub recovery can re-apply them without
+// racing a concurrent [AlarmMessages.Acknowledge] / [AlarmMessages.AcknowledgeAll]
+// call.
+func (a *AlarmMessages) SetAcknowledgers(single MessageAcknowledger, bulk BulkMessageAcknowledger) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Ack = single
+	a.BulkAck = bulk
+}
+
+func (a *AlarmMessages) acker() MessageAcknowledger {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.Ack
+}
+
+func (a *AlarmMessages) bulkAcker() BulkMessageAcknowledger {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.BulkAck
+}
+
 // Acknowledge dispatches an acknowledge for id through the writer and
 // removes the entry from the local set.
 func (a *AlarmMessages) Acknowledge(ctx context.Context, id string) error {
-	if a.Ack == nil {
+	ack := a.acker()
+	if ack == nil {
 		return errors.New("alarm messages: no acknowledger configured")
 	}
-	if err := a.Ack.AcknowledgeMessage(ctx, id); err != nil {
+	if err := ack.AcknowledgeMessage(ctx, id); err != nil {
 		return err
 	}
 	a.mu.Lock()
@@ -183,6 +213,36 @@ func (a *AlarmMessages) Acknowledge(ctx context.Context, id string) error {
 		}
 	}
 	return nil
+}
+
+// AcknowledgeAll acknowledges every active alarm message on the CCU in one
+// pass and returns the number acknowledged. On success the local set is
+// cleared (all alarm messages are unconditionally acknowledgeable) and the
+// change callbacks fire once. A nil bulk acknowledger yields an error.
+func (a *AlarmMessages) AcknowledgeAll(ctx context.Context) (int, error) {
+	bulk := a.bulkAcker()
+	if bulk == nil {
+		return 0, errors.New("alarm messages: no bulk acknowledger configured")
+	}
+	n, err := bulk.AcknowledgeAllAlarmMessages(ctx)
+	if err != nil {
+		return 0, err
+	}
+	a.mu.Lock()
+	changed := len(a.messages) > 0
+	a.messages = map[string]AlarmMessage{}
+	cbs := make([]func(messages []AlarmMessage), len(a.callbacks))
+	copy(cbs, a.callbacks)
+	a.mu.Unlock()
+	if changed {
+		snapshot := a.List()
+		for _, cb := range cbs {
+			if cb != nil {
+				cb(snapshot)
+			}
+		}
+	}
+	return n, nil
 }
 
 // LegacyName returns the original pre-slug name stored on the CCU.
@@ -219,7 +279,18 @@ type ServiceMessage struct {
 	Name       string
 	Address    string
 	DeviceName string
-	Type       hmenum.ServiceMessageType
+	// Parameter is the service parameter that raised the message (the
+	// segment after the last dot in the raw CCU name, e.g. "LOWBAT").
+	// Empty when the raw name carries no parameter segment. Used by
+	// [ServiceMessages.Disable] to target the JSON-RPC
+	// Interface.suppressServiceMessages call at the exact parameter.
+	Parameter string
+	// InterfaceID is the CCU interface the channel lives on
+	// (e.g. "HmIP-RF"), resolved from [ServiceMessage.Address] at load
+	// time. May be empty when the owning device was not (yet) registered;
+	// the suppressor then re-resolves it from the channel address.
+	InterfaceID string
+	Type        hmenum.ServiceMessageType
 	// Description is the optional human-readable message text returned by
 	// the CCU Rega script.
 	Description string
@@ -245,7 +316,12 @@ type ServiceMessage struct {
 type ServiceMessages struct {
 	datapoint.BaseDataPointFields
 
-	Ack MessageAcknowledger
+	// Ack acknowledges a single service message by id. BulkAck acknowledges
+	// every quittable service message in one CCU pass. Both are set at
+	// construction (nil for tests / single-CCU convenience) or re-wired
+	// under the aggregate mutex via [ServiceMessages.SetAcknowledgers].
+	Ack     MessageAcknowledger
+	BulkAck BulkMessageAcknowledger
 
 	// ServiceRegistry implements the write-half of [payload.Source].
 	// Each ServiceMessages instance gets its own registry so the dismiss
@@ -256,6 +332,36 @@ type ServiceMessages struct {
 	messages  map[string]ServiceMessage
 	observed  bool
 	callbacks []func(messages []ServiceMessage)
+
+	// suppressor durably suppresses a channel parameter on the CCU.
+	// Wired via [ServiceMessages.SetSuppressor]; nil disables the
+	// suppress / unsuppress path ([Disable] returns an error).
+	suppressor ServiceMessageSuppressor
+	// suppressed records the channel parameters this daemon has
+	// suppressed on the CCU, keyed by suppressKey(interface, channel,
+	// parameter). It seeds the management view exposed via [Suppressed]
+	// so an operator can later clear the suppression.
+	suppressed map[string]SuppressedServiceMessage
+}
+
+// SuppressedServiceMessage is one durably-suppressed channel parameter.
+// It is the management-view counterpart of a [ServiceMessage]: after
+// [ServiceMessages.Disable] suppresses a message it is recorded here so
+// the operator can list and later clear ([ServiceMessages.Unsuppress])
+// the suppression.
+type SuppressedServiceMessage struct {
+	InterfaceID string
+	Channel     string
+	Parameter   string
+	DeviceName  string
+	Name        string
+}
+
+// suppressKey builds the map key for the suppressed-parameter registry.
+// The NUL separator cannot occur in any of the three components, so the
+// key is collision-free.
+func suppressKey(interfaceID, channel, parameter string) string {
+	return interfaceID + "\x00" + channel + "\x00" + parameter
 }
 
 // NewServiceMessages constructs a ServiceMessages aggregate with no
@@ -271,6 +377,7 @@ func NewServiceMessagesWithCentral(centralName string, ack MessageAcknowledger) 
 		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", "service_messages"),
 		Ack:                 ack,
 		messages:            map[string]ServiceMessage{},
+		suppressed:          map[string]SuppressedServiceMessage{},
 	}
 	s.RegisterService("dismiss", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
 		id, err := payload.ParamString(params, "item_id")
@@ -342,12 +449,37 @@ func (s *ServiceMessages) Replace(messages []ServiceMessage) {
 	}
 }
 
+// SetAcknowledgers wires (or re-wires) the single- and bulk-message
+// acknowledgers under the aggregate mutex. Use this from the hub-wiring
+// adapter so a background WireHub recovery can re-apply them without
+// racing a concurrent [ServiceMessages.Acknowledge] / [ServiceMessages.AcknowledgeAll]
+// call.
+func (s *ServiceMessages) SetAcknowledgers(single MessageAcknowledger, bulk BulkMessageAcknowledger) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Ack = single
+	s.BulkAck = bulk
+}
+
+func (s *ServiceMessages) acker() MessageAcknowledger {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Ack
+}
+
+func (s *ServiceMessages) bulkAcker() BulkMessageAcknowledger {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.BulkAck
+}
+
 // Acknowledge dispatches an acknowledge.
 func (s *ServiceMessages) Acknowledge(ctx context.Context, id string) error {
-	if s.Ack == nil {
+	ack := s.acker()
+	if ack == nil {
 		return errors.New("service messages: no acknowledger configured")
 	}
-	if err := s.Ack.AcknowledgeMessage(ctx, id); err != nil {
+	if err := ack.AcknowledgeMessage(ctx, id); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -368,16 +500,201 @@ func (s *ServiceMessages) Acknowledge(ctx context.Context, id string) error {
 	return nil
 }
 
-// Disable suppresses a single service message by id. The CCU exposes
-// exactly one dismiss primitive for service messages (the same ReGa
-// acknowledge call [Acknowledge] uses) — there is no separate
-// "disable/suppress forever" operation on the wire, so Disable delegates
-// to Acknowledge. It exists as its own method (rather than an alias at
-// the call site) so REST `POST .../service-messages/{id}/disable` and the
-// WS `service_messages.disable` command both name the operation they
-// actually expose to callers while sharing one domain call.
+// AcknowledgeAll acknowledges every quittable service message on the CCU in
+// one pass and returns the number acknowledged. On success the quittable
+// entries are removed from the local set and the change callbacks fire once.
+// Non-quittable messages are left in place (the CCU leaves them untouched
+// too). A nil bulk acknowledger yields an error.
+func (s *ServiceMessages) AcknowledgeAll(ctx context.Context) (int, error) {
+	bulk := s.bulkAcker()
+	if bulk == nil {
+		return 0, errors.New("service messages: no bulk acknowledger configured")
+	}
+	n, err := bulk.AcknowledgeAllServiceMessages(ctx)
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	changed := false
+	for id := range s.messages {
+		if s.messages[id].Quittable {
+			delete(s.messages, id)
+			changed = true
+		}
+	}
+	cbs := make([]func(messages []ServiceMessage), len(s.callbacks))
+	copy(cbs, s.callbacks)
+	s.mu.Unlock()
+	if changed {
+		snapshot := s.List()
+		for _, cb := range cbs {
+			if cb != nil {
+				cb(snapshot)
+			}
+		}
+	}
+	return n, nil
+}
+
+// SetSuppressor wires (or re-wires) the durable service-message
+// suppressor under the aggregate mutex. Use this from the hub-wiring
+// adapter so a background WireHub recovery can re-apply it without racing
+// a concurrent [ServiceMessages.Disable] / [ServiceMessages.Unsuppress]
+// call.
+func (s *ServiceMessages) SetSuppressor(sup ServiceMessageSuppressor) {
+	s.mu.Lock()
+	s.suppressor = sup
+	s.mu.Unlock()
+}
+
+// Disable durably suppresses a single service message by id. Unlike
+// [Acknowledge] (a one-shot dismiss), Disable calls the CCU's
+// Interface.suppressServiceMessages so the message's channel parameter
+// stops raising service messages until it is unsuppressed
+// ([ServiceMessages.Unsuppress]). It resolves the target channel
+// (Address) and parameter from the stored message, records the
+// suppression for the management view, and removes the message from the
+// active set. Returns an error when no suppressor is wired, the id is
+// unknown, or the CCU call fails.
+//
+// Backs REST `POST .../service-messages/{id}/disable` and the WS
+// `service_messages.disable` command.
 func (s *ServiceMessages) Disable(ctx context.Context, id string) error {
-	return s.Acknowledge(ctx, id)
+	s.mu.RLock()
+	msg, ok := s.messages[id]
+	sup := s.suppressor
+	s.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("service messages: unknown message id %q", id)
+	}
+	if sup == nil {
+		return errors.New("service messages: no suppressor configured")
+	}
+	if err := sup.SuppressServiceMessage(ctx, msg.InterfaceID, msg.Address, msg.Parameter, true); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.suppressed[suppressKey(msg.InterfaceID, msg.Address, msg.Parameter)] = SuppressedServiceMessage{
+		InterfaceID: msg.InterfaceID,
+		Channel:     msg.Address,
+		Parameter:   msg.Parameter,
+		DeviceName:  msg.DeviceName,
+		Name:        msg.Name,
+	}
+	_, existed := s.messages[id]
+	delete(s.messages, id)
+	cbs := make([]func(messages []ServiceMessage), len(s.callbacks))
+	copy(cbs, s.callbacks)
+	s.mu.Unlock()
+	if !existed {
+		return nil
+	}
+	snapshot := s.List()
+	for _, cb := range cbs {
+		if cb != nil {
+			cb(snapshot)
+		}
+	}
+	return nil
+}
+
+// Unsuppress clears a previously-applied suppression for the given
+// channel parameter via the CCU's Interface.suppressServiceMessages
+// (suppress=false). An empty interfaceID is resolved from the stored
+// suppression record when possible; an empty parameter targets every
+// service parameter of the channel. On success the record is dropped
+// from the management view. Returns an error when no suppressor is wired
+// or the CCU call fails.
+func (s *ServiceMessages) Unsuppress(ctx context.Context, interfaceID, channel, parameter string) error {
+	s.mu.RLock()
+	sup := s.suppressor
+	if interfaceID == "" {
+		for _, e := range s.suppressed {
+			if e.Channel == channel && e.Parameter == parameter {
+				interfaceID = e.InterfaceID
+				break
+			}
+		}
+	}
+	s.mu.RUnlock()
+	if sup == nil {
+		return errors.New("service messages: no suppressor configured")
+	}
+	if err := sup.SuppressServiceMessage(ctx, interfaceID, channel, parameter, false); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	delete(s.suppressed, suppressKey(interfaceID, channel, parameter))
+	s.mu.Unlock()
+	return nil
+}
+
+// Suppressed returns the durably-suppressed channel parameters for the
+// management view, sorted by channel then parameter. When a suppressor
+// is wired it reconciles the local record against the CCU's live
+// Interface.getSuppressedServiceMessages so entries cleared elsewhere
+// (e.g. via the CCU WebUI) drop out; a per-channel read error is
+// tolerated and leaves that channel's records in place. Returns an empty
+// slice when nothing is suppressed.
+func (s *ServiceMessages) Suppressed(ctx context.Context) []SuppressedServiceMessage {
+	s.mu.RLock()
+	sup := s.suppressor
+	entries := make([]SuppressedServiceMessage, 0, len(s.suppressed))
+	for _, e := range s.suppressed {
+		entries = append(entries, e)
+	}
+	s.mu.RUnlock()
+
+	if sup != nil {
+		// live holds the CCU's current suppressed-parameter set per
+		// (interface, channel). A nil value marks a channel whose read
+		// failed — its records are kept unconditionally.
+		type chanKey struct{ iface, channel string }
+		live := make(map[chanKey]map[string]bool)
+		for _, e := range entries {
+			k := chanKey{e.InterfaceID, e.Channel}
+			if _, done := live[k]; done {
+				continue
+			}
+			params, err := sup.GetSuppressedServiceMessages(ctx, e.InterfaceID, e.Channel)
+			if err != nil {
+				live[k] = nil
+				continue
+			}
+			set := make(map[string]bool, len(params))
+			for _, p := range params {
+				set[p] = true
+			}
+			live[k] = set
+		}
+		kept := entries[:0]
+		for _, e := range entries {
+			set := live[chanKey{e.InterfaceID, e.Channel}]
+			// Keep when the read failed (set == nil), when the record
+			// targets all parameters (Parameter == ""), or when the CCU
+			// still reports this parameter as suppressed.
+			if set == nil || e.Parameter == "" || set[e.Parameter] {
+				kept = append(kept, e)
+			}
+		}
+		entries = kept
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Channel != entries[j].Channel {
+			return entries[i].Channel < entries[j].Channel
+		}
+		return entries[i].Parameter < entries[j].Parameter
+	})
+	return entries
+}
+
+// SuppressedCount returns the number of recorded suppressions without
+// contacting the CCU.
+func (s *ServiceMessages) SuppressedCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.suppressed)
 }
 
 // LegacyName returns the original pre-slug name stored on the CCU.

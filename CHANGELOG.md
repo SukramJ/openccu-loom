@@ -67,6 +67,42 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shared destructive-confirm dialog and a toast result. This reboots the
   CCU hardware — distinct from `POST /system/restart`, which restarts the
   OpenCCU-Loom daemon itself. REST `APIVersion` 2.33.0.
+- **Permanently suppress service messages.** "Disable" now durably
+  suppresses a service message's channel parameter on the CCU via
+  `Interface.suppressServiceMessages` instead of merely acknowledging it
+  once — the device stops raising the message until the suppression is
+  cleared. `POST /api/v1/service-messages/{id}/disable` resolves the
+  message's channel + service parameter and suppresses it; the new
+  `GET /api/v1/service-messages/suppressed` lists the active suppressions
+  (reconciled against each CCU's live
+  `Interface.getSuppressedServiceMessages`); and `POST
+  /api/v1/service-messages/unsuppress` (body `channel` + optional
+  `parameter` / `interface`, optional `central` query) clears one. The
+  matching `service_messages.suppressed` / `service_messages.unsuppress`
+  WebSocket commands mirror the REST surface. This closes a long-standing
+  gap: the client-layer suppression path
+  (`InterfaceClient.SuppressServiceMessage` /
+  `GetSuppressedServiceMessages`) and the `HubCoordinator` seam existed
+  but were never wired — central bring-up now installs the suppressor so
+  the calls reach the CCU. The Config UI Messages view gains a "Hide
+  permanently" action per service message (confirm dialog + toast) and a
+  new "Suppressed" tab listing active suppressions with a "Restore"
+  action. REST `APIVersion` 2.32.0.
+- **Bulk acknowledge for service and alarm messages ("Acknowledge
+  all").** New `POST /api/v1/service-messages/ack-all` and
+  `POST /api/v1/alarm-messages/ack-all` endpoints (and the matching
+  `service_messages.ack_all` / `alarm_messages.ack_all` WebSocket
+  commands) clear every quittable message of a class in a single CCU
+  pass and return the number acknowledged (`{"acknowledged": n}`). Both
+  accept an optional `central` query parameter to scope the operation to
+  one CCU; when omitted every registered central is acknowledged. Two
+  new ReGa scripts drive the wire pass — service messages honour the
+  per-message writability gate, alarm messages are acknowledged
+  unconditionally, mirroring the CCU WebUI's "acknowledge all" loop. The
+  Config UI Messages view gains an "Acknowledge all" button per tab,
+  shown only when acknowledgeable messages exist, guarded by a confirm
+  dialog and reporting the acknowledged count via a toast. REST
+  `APIVersion` 2.32.0.
 
 ## [0.45.0] — 2026-07-20
 

@@ -13,6 +13,20 @@
   Rebooting persists the CCU's state and restarts it; the connection drops
   briefly and recovers on its own. This restarts the CCU hardware, not the
   add-on (API 2.33.0).
+- **Hide service messages permanently.** The Messages view's service
+  messages gain a "Hide permanently" action that durably suppresses the
+  message on the CCU (it stops being raised until you bring it back),
+  plus a new "Suppressed" tab that lists the hidden messages with a
+  "Restore" action. New `GET /service-messages/suppressed` and
+  `POST /service-messages/unsuppress` REST endpoints and matching
+  WebSocket commands back it; "Disable" now suppresses instead of just
+  acknowledging (API 2.32.0).
+- **"Acknowledge all" for messages.** The Messages view gains a per-tab
+  "Acknowledge all" button that clears every quittable service message
+  or every active alarm message in one CCU pass and reports how many
+  were acknowledged. New `POST /service-messages/ack-all` and
+  `POST /alarm-messages/ack-all` REST endpoints and the matching
+  `*.ack_all` WebSocket commands back it (API 2.32.0).
 
 ## 0.45.0
 

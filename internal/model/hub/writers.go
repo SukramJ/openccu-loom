@@ -42,3 +42,34 @@ type DeviceInstallModeWriter interface {
 type MessageAcknowledger interface {
 	AcknowledgeMessage(ctx context.Context, id string) error
 }
+
+// BulkMessageAcknowledger acknowledges every quittable message of a
+// class on the CCU in a single pass, returning the number of messages
+// that were acknowledged. The two methods back [ServiceMessages.AcknowledgeAll]
+// and [AlarmMessages.AcknowledgeAll] respectively.
+type BulkMessageAcknowledger interface {
+	AcknowledgeAllServiceMessages(ctx context.Context) (int, error)
+	AcknowledgeAllAlarmMessages(ctx context.Context) (int, error)
+}
+
+// ServiceMessageSuppressor permanently suppresses (or clears the
+// suppression of) CCU service messages for a single channel parameter.
+// Unlike an acknowledge — which dismisses a message once until the
+// underlying condition re-triggers — suppression is durable: the CCU
+// stops raising service messages for the given channel parameter until
+// it is explicitly unsuppressed.
+//
+// interfaceID is the CCU interface the channel lives on (e.g.
+// "HmIP-RF"); an empty value asks the implementation to resolve it from
+// channelAddress. channelAddress is the channel address ("ADDR:chn").
+// parameterID is the service parameter name (e.g. "LOWBAT"); an empty
+// parameterID targets every service parameter of the channel. suppress
+// toggles suppression (true) versus removal of the suppression (false).
+//
+// Backs the JSON-RPC Interface.suppressServiceMessages /
+// Interface.getSuppressedServiceMessages calls; wire via
+// [ServiceMessages.SetSuppressor].
+type ServiceMessageSuppressor interface {
+	SuppressServiceMessage(ctx context.Context, interfaceID, channelAddress, parameterID string, suppress bool) error
+	GetSuppressedServiceMessages(ctx context.Context, interfaceID, channelAddress string) ([]string, error)
+}

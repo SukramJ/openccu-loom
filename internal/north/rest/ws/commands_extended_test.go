@@ -122,11 +122,31 @@ func (s *stubCentral) Reconcile(_ context.Context) error {
 }
 
 type stubExtendedHub struct {
-	disabled []string
+	disabled     []string
+	unsuppressed []string
+	suppressed   []map[string]any
+
+	listErr       error
+	unsuppressErr error
 }
 
 func (s *stubExtendedHub) DisableServiceMessage(_ context.Context, id string) error {
 	s.disabled = append(s.disabled, id)
+	return nil
+}
+
+func (s *stubExtendedHub) ListSuppressedServiceMessages(_ context.Context) ([]map[string]any, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return s.suppressed, nil
+}
+
+func (s *stubExtendedHub) UnsuppressServiceMessage(_ context.Context, _, channel, _ string) error {
+	if s.unsuppressErr != nil {
+		return s.unsuppressErr
+	}
+	s.unsuppressed = append(s.unsuppressed, channel)
 	return nil
 }
 
@@ -302,6 +322,76 @@ func TestExtendedServiceMessagesDisable(t *testing.T) {
 	if len(ehub.disabled) != 1 || ehub.disabled[0] != "MSG-7" {
 		t.Fatalf("disable not recorded: %v", ehub.disabled)
 	}
+}
+
+// TestExtendedServiceMessagesSuppressed verifies the `service_messages.suppressed`
+// command wraps the domain listing in an {"items": [...]} envelope, and
+// substitutes an empty array (never `null`) when nothing is suppressed.
+func TestExtendedServiceMessagesSuppressed(t *testing.T) {
+	r, _, _, _, _, ehub := newRouterWithExtended()
+	ehub.suppressed = []map[string]any{{"channel": "ABC:1", "parameter": "LOWBAT"}}
+
+	out := dispatch(t, r, "service_messages.suppressed", map[string]any{}).(map[string]any)
+	items, ok := out["items"].([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["channel"] != "ABC:1" {
+		t.Fatalf("service_messages.suppressed payload = %v", out)
+	}
+}
+
+func TestExtendedServiceMessagesSuppressedEmpty(t *testing.T) {
+	r, _, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "service_messages.suppressed", map[string]any{}).(map[string]any)
+	items, ok := out["items"].([]map[string]any)
+	if !ok || items == nil || len(items) != 0 {
+		t.Fatalf("expected a non-nil empty items array, got %v", out)
+	}
+}
+
+func TestExtendedServiceMessagesSuppressedHandlerError(t *testing.T) {
+	r, _, _, _, _, ehub := newRouterWithExtended()
+	ehub.listErr = errors.New("rega timeout")
+
+	dispatchExpectErr(t, r, "service_messages.suppressed", map[string]any{}, "rega timeout")
+}
+
+// TestExtendedServiceMessagesUnsuppress verifies the `service_messages.unsuppress`
+// command forwards the channel/parameter/interface to the domain layer and
+// returns an acknowledgement payload naming the cleared channel.
+func TestExtendedServiceMessagesUnsuppress(t *testing.T) {
+	r, _, _, _, _, ehub := newRouterWithExtended()
+
+	out := dispatch(t, r, "service_messages.unsuppress", map[string]any{
+		"interface": "HmIP-RF", "channel": "ABC:1", "parameter": "LOWBAT",
+	}).(map[string]any)
+	if out["unsuppressed"] != "ABC:1" {
+		t.Fatalf("unsuppress payload = %v", out)
+	}
+	if len(ehub.unsuppressed) != 1 || ehub.unsuppressed[0] != "ABC:1" {
+		t.Fatalf("unsuppress not recorded: %v", ehub.unsuppressed)
+	}
+}
+
+// TestExtendedServiceMessagesUnsuppressMissingChannel asserts an empty
+// channel is rejected before reaching the domain layer.
+func TestExtendedServiceMessagesUnsuppressMissingChannel(t *testing.T) {
+	r, _, _, _, _, ehub := newRouterWithExtended()
+
+	dispatchExpectErr(t, r, "service_messages.unsuppress", map[string]any{
+		"parameter": "LOWBAT",
+	}, "channel is required")
+	if len(ehub.unsuppressed) != 0 {
+		t.Fatalf("domain layer must not be called on validation failure, got %v", ehub.unsuppressed)
+	}
+}
+
+func TestExtendedServiceMessagesUnsuppressHandlerError(t *testing.T) {
+	r, _, _, _, _, ehub := newRouterWithExtended()
+	ehub.unsuppressErr = errors.New("ccu unreachable")
+
+	dispatchExpectErr(t, r, "service_messages.unsuppress", map[string]any{
+		"channel": "ABC:1",
+	}, "ccu unreachable")
 }
 
 // TestExtendedParamsetPutHiddenParamReturnsForbidenError asserts that
