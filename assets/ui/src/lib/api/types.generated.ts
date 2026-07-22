@@ -7686,10 +7686,10 @@ export interface operations {
                     /** @description Name of the new system variable. */
                     name: string;
                     /**
-                     * @description Value kind of the new variable.
+                     * @description Value kind of the new variable. ALARM provisions a binary, acknowledgeable alarm line (backed by an OT_ALARMDP on the CCU) and always routes through the Rega create script.
                      * @enum {string}
                      */
-                    value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM";
+                    value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM" | "ALARM";
                     /** @description Physical unit string (e.g. "°C", "%"). */
                     unit?: string;
                     /** @description Minimum value (as string, CCU convention). */
@@ -7704,6 +7704,8 @@ export interface operations {
                     value_name_0?: string;
                     /** @description True-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "true" default. */
                     value_name_1?: string;
+                    /** @description Bind the new variable to a device channel ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves it unassigned. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+                    channel_address?: string;
                 };
             };
         };
@@ -7844,6 +7846,8 @@ export interface operations {
                     is_visible?: boolean;
                     /** @description Toggle the archive flag (CCU DPArchive) that records value changes to the measurement history. Omit to leave it unchanged. */
                     is_logged?: boolean;
+                    /** @description Reassign the CCU "Kanalzuordnung". Tri-state: omit to leave the assignment untouched, send an empty string to clear it, or a channel address ("ADDR:idx") to assign it. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+                    channel_address?: string;
                 };
             };
         };
@@ -7856,6 +7860,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

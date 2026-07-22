@@ -188,6 +188,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   clients. The Config UI program table adds a "Show system programs"
   toggle (off by default, persisted locally), mirroring the CCU WebUI's
   footer button. REST `APIVersion` 2.34.0.
+- **A system variable's channel assignment is writable.** `POST /sysvars`
+  and `PATCH /sysvars/{name}` now accept an optional `channel_address`
+  ("ADDR:idx", the CCU "Kanalzuordnung"). The address is resolved to the
+  channel's ReGa ise id via `Interface.getIseIDByAddress` before it reaches
+  the CCU; `CreateSysvar` no longer hard-codes `chn_id: -1`, and the
+  `update_system_variable` Rega script gained `oSv.Channel()`. On PATCH the
+  field is tri-state (omit = leave untouched, empty string = clear the
+  assignment, an address = assign it); an address the CCU cannot resolve is
+  rejected with 422. The system-variable create and edit dialogs offer a
+  searchable device/channel picker to set or clear the assignment. REST
+  `APIVersion` 2.31.0.
+
 - **Alarm system variables can be created.** `POST /sysvars` now accepts
   `value_type: "ALARM"`, provisioning a binary, acknowledgeable alarm
   line on the CCU. The Rega `create_system_variable` script backs it

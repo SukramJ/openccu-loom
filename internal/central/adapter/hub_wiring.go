@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -1654,6 +1655,17 @@ func (w *hubJSONRPCWriter) SetSysvar(ctx context.Context, name string, value any
 // no native createAlarm — the script backs an ALARM line with an
 // OT_ALARMDP object so it stays acknowledgeable).
 func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCreateSpec) error {
+	// A channel address binds the variable to a device channel; -1 leaves it
+	// unassigned. The address is resolved to the channel's ReGa ise id (the
+	// value SysVar.create* and oNew.Channel() expect) before it hits the CCU.
+	chnID := -1
+	if spec.Channel != "" {
+		id, err := w.resolveChannelISEID(ctx, spec.Channel)
+		if err != nil {
+			return err
+		}
+		chnID = id
+	}
 	// Custom binary value labels only apply to BOOL/ALARM and force the
 	// Rega path — the native createBool has no value-name parameter.
 	customLabels := spec.ValueName0 != "" || spec.ValueName1 != ""
@@ -1664,13 +1676,13 @@ func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCrea
 				"name":     spec.Name,
 				"init_val": 0,
 				"internal": 0,
-				"chn_id":   -1,
+				"chn_id":   chnID,
 			}, nil)
 		case "FLOAT":
 			params := map[string]any{
 				"name":     spec.Name,
 				"internal": 0,
-				"chn_id":   -1,
+				"chn_id":   chnID,
 			}
 			if spec.Min != "" {
 				params["min_value"] = spec.Min
@@ -1684,7 +1696,7 @@ func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCrea
 				"name":       spec.Name,
 				"value_list": strings.Join(spec.ValueList, ";"),
 				"internal":   0,
-				"chn_id":     -1,
+				"chn_id":     chnID,
 			}, nil)
 		}
 	}
@@ -1710,8 +1722,38 @@ func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCrea
 		"description": spec.Description,
 		"valuename0":  vn0,
 		"valuename1":  vn1,
+		"channel":     strconv.Itoa(chnID),
 	})
 	return err
+}
+
+// resolveChannelISEID resolves a device or channel address to its ReGa ise
+// id via the canonical Interface.getIseIDByAddress JSON-RPC method — the
+// numeric id oSv.Channel() / SysVar.create* bind for the "Kanalzuordnung".
+// A CCU-side fault or a non-positive id means the address does not name a
+// channel on this CCU; both surface as [hub.ErrSysvarChannelUnknown] so the
+// REST handler answers 422 (bad channel address) rather than 502. A genuine
+// transport failure propagates unchanged.
+func (w *hubJSONRPCWriter) resolveChannelISEID(ctx context.Context, address string) (int, error) {
+	var raw any
+	if err := w.json.Call(ctx, "Interface.getIseIDByAddress", map[string]any{"address": address}, &raw); err != nil {
+		var rpcErr *hmerr.JSONRPCError
+		if errors.As(err, &rpcErr) {
+			return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
+		}
+		return 0, err
+	}
+	id := 0
+	switch v := raw.(type) {
+	case float64:
+		id = int(v)
+	case string:
+		id, _ = strconv.Atoi(strings.TrimSpace(v))
+	}
+	if id <= 0 {
+		return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
+	}
+	return id, nil
 }
 
 // DeleteSysvar removes a sysvar via the CCU's native JSON-RPC method
@@ -1733,6 +1775,21 @@ func (w *hubJSONRPCWriter) DeleteSysvar(ctx context.Context, name string) error 
 // changes are unsafe at the CCU level — callers wanting that must delete
 // + recreate.
 func (w *hubJSONRPCWriter) UpdateSysvar(ctx context.Context, spec hub.SysvarUpdateSpec) error {
+	// Channel assignment is tri-state: nil leaves it untouched (""), an empty
+	// string clears it (ise id -1), an address resolves to the channel's ise
+	// id. The update script's `if (sChannel != "")` guard skips the "" case.
+	channelParam := ""
+	if spec.Channel != nil {
+		if *spec.Channel == "" {
+			channelParam = "-1"
+		} else {
+			id, err := w.resolveChannelISEID(ctx, *spec.Channel)
+			if err != nil {
+				return err
+			}
+			channelParam = strconv.Itoa(id)
+		}
+	}
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptUpdateSystemVariable, map[string]string{
 		"name":        spec.Name,
 		"newname":     spec.NewName,
@@ -1745,6 +1802,7 @@ func (w *hubJSONRPCWriter) UpdateSysvar(ctx context.Context, spec hub.SysvarUpda
 		"valuename1":  spec.ValueName1,
 		"visible":     boolFlagParam(spec.Visible),
 		"logged":      boolFlagParam(spec.Logged),
+		"channel":     channelParam,
 	})
 	return err
 }

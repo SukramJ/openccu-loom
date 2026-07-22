@@ -13,6 +13,7 @@
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
+  import SysvarChannelPicker from "$lib/components/SysvarChannelPicker.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import {
@@ -55,8 +56,15 @@
   });
 
   let createDescription = $state("");
+  // Channel assignment ("Kanalzuordnung") for the create form; empty = none.
+  let createChannel = $state("");
 
   let editing = $state<SysvarEntry | null>(null);
+  // Channel assignment for the edit dialog. editChannelDirty gates whether a
+  // save sends channel_address at all, so an untouched picker never rewrites
+  // a name-derived channel into an explicit CCU assignment.
+  let editChannel = $state("");
+  let editChannelDirty = $state(false);
   let editForm = $state({
     name: "",
     unit: "",
@@ -72,6 +80,8 @@
 
   function startEdit(sv: SysvarEntry) {
     editing = sv;
+    editChannel = sv.channel ?? "";
+    editChannelDirty = false;
     editForm = {
       name: sv.name,
       unit: sv.unit ?? "",
@@ -117,6 +127,9 @@
         body.is_visible = editForm.is_visible;
       if (editForm.is_logged !== (editing.is_logged ?? false))
         body.is_logged = editForm.is_logged;
+      // Channel assignment: only when the operator touched the picker. An
+      // empty string clears the assignment; a channel address assigns it.
+      if (editChannelDirty) body.channel_address = editChannel;
       await api.patchSysvar(editing.name, body, editing.central);
       toastStore.success(
         t("sysvars.updated", { name: (body.name as string) ?? editing.name }),
@@ -222,6 +235,7 @@
             : undefined,
           value_name_0: binary && createForm.value_name_0 ? createForm.value_name_0 : undefined,
           value_name_1: binary && createForm.value_name_1 ? createForm.value_name_1 : undefined,
+          channel_address: createChannel || undefined,
         },
         createCentral,
       );
@@ -238,6 +252,7 @@
         value_name_1: "",
       };
       createDescription = "";
+      createChannel = "";
       await load();
     } catch (err) {
       toastStore.error(
@@ -421,6 +436,15 @@
             <Input bind:value={createForm.value_list} placeholder={t("sysvars.create.values_placeholder")} />
           </label>
         {/if}
+        <div class="text-sm md:col-span-2">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.label")}</span>
+          <SysvarChannelPicker
+            value={createChannel}
+            central={createCentral || undefined}
+            onChange={(v) => (createChannel = v)}
+          />
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.hint")}</p>
+        </div>
       </div>
       <div class="mt-3 flex justify-end gap-2">
         <Button
@@ -602,6 +626,18 @@
           <span class="text-xs text-slate-500 dark:text-slate-400">{t("sysvars.flags.logged")}</span>
           <Switch checked={editForm.is_logged} onCheckedChange={(v) => (editForm.is_logged = v)} />
         </label>
+        <div class="block text-sm">
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.label")}</span>
+          <SysvarChannelPicker
+            value={editChannel}
+            central={editing.central || undefined}
+            onChange={(v) => {
+              editChannel = v;
+              editChannelDirty = true;
+            }}
+          />
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.channel.hint")}</p>
+        </div>
       </div>
       <div class="mt-4 flex justify-end gap-2">
         <Button

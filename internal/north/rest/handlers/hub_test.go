@@ -1454,10 +1454,12 @@ type recordingSysvarMutator struct {
 	createDescrip string
 	createVN0     string
 	createVN1     string
+	createChannel string
 	updateVN0     string
 	updateVN1     string
 	updateVisible *bool
 	updateLogged  *bool
+	updateChannel *string
 }
 
 func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, spec hub.SysvarCreateSpec) error {
@@ -1466,6 +1468,7 @@ func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, spec hub.Sysvar
 	r.createDescrip = spec.Description
 	r.createVN0 = spec.ValueName0
 	r.createVN1 = spec.ValueName1
+	r.createChannel = spec.Channel
 	return nil
 }
 
@@ -1476,6 +1479,7 @@ func (r *recordingSysvarMutator) UpdateSysvar(_ context.Context, spec hub.Sysvar
 	r.updateVN1 = spec.ValueName1
 	r.updateVisible = spec.Visible
 	r.updateLogged = spec.Logged
+	r.updateChannel = spec.Channel
 	return nil
 }
 
@@ -1564,6 +1568,123 @@ func TestCreateSysvar_Alarm_PassesThrough(t *testing.T) {
 	}
 	if mut.createName != "Einbruch" || mut.createType != "ALARM" {
 		t.Fatalf("mutator got name=%q type=%q, want Einbruch/ALARM", mut.createName, mut.createType)
+	}
+}
+
+// A channel_address in the POST body reaches CreateSysvar as the channel to
+// bind the new variable to.
+func TestCreateSysvar_ChannelAddress_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","channel_address":"ABC0000001:3"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createChannel != "ABC0000001:3" {
+		t.Fatalf("mutator got channel=%q, want ABC0000001:3", mut.createChannel)
+	}
+}
+
+// An unresolvable channel address on create surfaces as 422 (bad request
+// field), not 502 — the fault is the caller's address, not the CCU.
+func TestCreateSysvar_ChannelUnknown_Returns422(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: hub.ErrSysvarChannelUnknown}
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","channel_address":"BAD:9"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// A channel_address in the PATCH body reaches UpdateSysvar as a non-nil
+// pointer so the tri-state assign/clear/untouched semantics survive.
+func TestPatchSysvar_ChannelAddress_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":"ABC0000001:3"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel == nil || *mut.updateChannel != "ABC0000001:3" {
+		t.Fatalf("mutator got channel=%v, want ABC0000001:3", mut.updateChannel)
+	}
+}
+
+// An empty-string channel_address is the explicit "clear the assignment"
+// signal — it must reach the mutator as a non-nil pointer to "".
+func TestPatchSysvar_ChannelClear_PassesEmptyPointer(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":""}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel == nil || *mut.updateChannel != "" {
+		t.Fatalf("clear must pass a non-nil empty pointer, got %v", mut.updateChannel)
+	}
+}
+
+// Omitting channel_address must leave the mutator's Channel pointer nil so the
+// CCU assignment is left untouched.
+func TestPatchSysvar_ChannelOmitted_LeavesPointerNil(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel != nil {
+		t.Fatalf("omitted channel_address must leave the pointer nil, got %v", *mut.updateChannel)
+	}
+}
+
+// An unresolvable channel address on PATCH surfaces as 422, not 502.
+func TestPatchSysvar_ChannelUnknown_Returns422(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: hub.ErrSysvarChannelUnknown}
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":"BAD:9"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

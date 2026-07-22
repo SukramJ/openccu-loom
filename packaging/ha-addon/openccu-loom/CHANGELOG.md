@@ -68,6 +68,10 @@
   REST/WS clients get the same via an optional `include_internal`
   parameter; without it the `include_internal_programs` setting still
   governs the default (API 2.34.0).
+- **Assign a system variable to a device channel.** The system-variable
+  create and edit dialogs now offer a searchable device/channel picker to
+  set (or clear) a variable's channel assignment ("Kanalzuordnung"), just
+  like the CCU's own WebUI. An unresolvable channel is rejected.
 - **Create alarm system variables.** The system-variable create form
   now offers an ALARM type, provisioning a binary, acknowledgeable alarm
   line on the CCU (just like an alarm variable created in the CCU's own

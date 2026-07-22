@@ -483,6 +483,10 @@ type SysvarCreateRequest struct {
 	// "false" / "true" defaults; ignored for non-binary types.
 	ValueName0 string `json:"value_name_0,omitempty"`
 	ValueName1 string `json:"value_name_1,omitempty"`
+	// ChannelAddress binds the new variable to a device channel
+	// ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves it unassigned.
+	// An address the CCU cannot resolve is rejected with 422.
+	ChannelAddress string `json:"channel_address,omitempty"`
 }
 
 // sysvarCreateTypes is the set of value_type codes the CCU's
@@ -535,7 +539,13 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 			ValueList:   req.ValueList,
 			ValueName0:  req.ValueName0,
 			ValueName1:  req.ValueName1,
+			Channel:     req.ChannelAddress,
 		}); err != nil {
+			if errors.Is(err, hub.ErrSysvarChannelUnknown) {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "channel_address does not resolve to a device channel", req.ChannelAddress))
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar create failed", err)
 			return
 		}
@@ -565,6 +575,11 @@ type SysvarPatchRequest struct {
 	// untouched, a present true/false sets it.
 	IsVisible *bool `json:"is_visible,omitempty"`
 	IsLogged  *bool `json:"is_logged,omitempty"`
+	// ChannelAddress reassigns the CCU "Kanalzuordnung". Tri-state: an
+	// omitted field leaves the assignment untouched, an empty string clears
+	// it, a channel address ("ADDR:idx") assigns it. An address the CCU
+	// cannot resolve is rejected with 422.
+	ChannelAddress *string `json:"channel_address,omitempty"`
 }
 
 // PatchSysvar updates a sysvar's metadata in place via the Rega
@@ -611,7 +626,19 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 		if req.ValueName1 != nil {
 			spec.ValueName1 = *req.ValueName1
 		}
+		if req.ChannelAddress != nil {
+			spec.Channel = req.ChannelAddress
+		}
 		if err := h.UpdateSysvarRemote(r.Context(), spec); err != nil {
+			if errors.Is(err, hub.ErrSysvarChannelUnknown) {
+				detail := ""
+				if req.ChannelAddress != nil {
+					detail = *req.ChannelAddress
+				}
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "channel_address does not resolve to a device channel", detail))
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar update failed", err)
 			return
 		}

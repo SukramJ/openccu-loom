@@ -718,6 +718,13 @@ paths:
                   description: >
                     True-state label for a binary (BOOL/ALARM) variable.
                     Empty adopts the CCU's own "true" default.
+                channel_address:
+                  type: string
+                  description: >
+                    Bind the new variable to a device channel ("ADDR:idx",
+                    the CCU "Kanalzuordnung"). Empty leaves it unassigned.
+                    The address is resolved to the channel's ReGa ise id;
+                    an address the CCU cannot resolve is rejected with 422.
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -858,10 +865,19 @@ paths:
                     Toggle the archive flag (CCU DPArchive) that records
                     value changes to the measurement history. Omit to leave
                     it unchanged.
+                channel_address:
+                  type: string
+                  description: >
+                    Reassign the CCU "Kanalzuordnung". Tri-state: omit to
+                    leave the assignment untouched, send an empty string to
+                    clear it, or a channel address ("ADDR:idx") to assign it.
+                    The address is resolved to the channel's ReGa ise id; an
+                    address the CCU cannot resolve is rejected with 422.
       responses:
         "202":
           description: Accepted — Rega script dispatched asynchronously.
         "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:

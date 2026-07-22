@@ -88,6 +88,11 @@ type SysvarCreateSpec struct {
 	ValueList   []string
 	ValueName0  string
 	ValueName1  string
+	// Channel optionally binds the new variable to a device channel
+	// ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves the variable
+	// unassigned. The adapter resolves the address to the channel's ReGa
+	// ise id before it reaches the CCU.
+	Channel string
 }
 
 // SysvarUpdateSpec carries every field `PATCH /sysvars/{name}` can change
@@ -107,6 +112,12 @@ type SysvarUpdateSpec struct {
 	ValueName1  string
 	Visible     *bool
 	Logged      *bool
+	// Channel is the tri-state channel-assignment control ("Kanalzuordnung").
+	// nil leaves the assignment untouched; a non-nil pointer sets it — an
+	// empty string clears the assignment (ise id -1), a channel address
+	// ("ADDR:idx") assigns it. The adapter resolves the address to the
+	// channel's ReGa ise id before it reaches the CCU.
+	Channel *string
 }
 
 // SysvarMutator is the optional CCU-side write-path for sysvars.
@@ -123,6 +134,12 @@ type SysvarMutator interface {
 // 503 so the SPA can show "feature not configured" instead of a
 // generic upstream error.
 var ErrNoSysvarMutator = errors.New("hub: no sysvar mutator configured")
+
+// ErrSysvarChannelUnknown is returned when a sysvar create/patch carries a
+// channel address that the CCU cannot resolve to a ReGa ise id. The REST
+// handler surfaces it as a 422 (bad request field) rather than a 502, since
+// the fault is the caller's channel address, not the upstream CCU.
+var ErrSysvarChannelUnknown = errors.New("hub: sysvar channel address not resolvable")
 
 // ErrNoRoomMutator is the room-side analogue.
 var ErrNoRoomMutator = errors.New("hub: no room mutator configured")

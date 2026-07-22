@@ -17,7 +17,14 @@ vi.mock("$lib/api/client", () => ({
     patchSysvar: vi.fn(),
     createSysvar: vi.fn(),
     deleteSysvar: vi.fn(),
+    // The channel-assignment picker pulls the shared device store (and,
+    // per picked device, the channel list); an empty catalogue keeps the
+    // dialogs rendering without a daemon.
+    listDevices: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    listChannels: vi.fn().mockResolvedValue({ items: [] }),
   },
+  // Module-load hook of the auth store, which the device store imports.
+  setUnauthorizedHandler: vi.fn(),
   ApiError: class ApiError extends Error {
     constructor(
       public readonly status: number,

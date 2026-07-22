@@ -5,6 +5,8 @@
 !#         ##description## (optional description text; "" leaves it empty)
 !#         ##valuename0## / ##valuename1## (BOOL/ALARM false/true labels;
 !#           caller supplies the CCU "false"/"true" defaults when unset)
+!#         ##channel## (channel ise id for the "Kanalzuordnung"; "" or a
+!#           non-positive value leaves the variable unassigned)
 !# Output: the new sysvar's serial id, or an empty string on failure.
 !#
 !# Creates a system variable on the CCU. Silent no-op if a sysvar with
@@ -25,6 +27,7 @@ string sValues = "##values##";
 string sDescription = "##description##";
 string sValueName0 = "##valuename0##";
 string sValueName1 = "##valuename1##";
+string sChannel = "##channel##";
 
 object oSv = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
 if (oSv) {
@@ -78,6 +81,10 @@ if (oNew) {
     }
     if (sUnit != "") { oNew.ValueUnit(sUnit); }
     if (sDescription != "") { oNew.DPInfo(sDescription); }
+    if (sChannel != "") {
+        integer iChnId = sChannel.ToInteger();
+        if (iChnId > 0) { oNew.Channel(iChnId); }
+    }
     oNew.Internal(false);
     oNew.Visible(true);
     dom.GetObject(ID_SYSTEM_VARIABLES).Add(oNew.ID());

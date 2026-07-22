@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"maps"
 	"net/http"
@@ -34,11 +35,20 @@ type sysvarMockServer struct {
 	regaCnt    atomic.Int32
 	setBool    atomic.Int32
 	setFloat   atomic.Int32
+	iseCnt     atomic.Int32
 
-	lastCreate atomic.Pointer[map[string]any]
-	lastSet    atomic.Pointer[map[string]any]
-	lastDelete atomic.Pointer[string]
-	lastRega   atomic.Pointer[string]
+	// iseID is returned by Interface.getIseIDByAddress; iseFault makes it
+	// answer with a CCU-side error object instead (the unresolvable-address
+	// case). newSysvarMock seeds iseID with a valid id so channel-carrying
+	// tests resolve by default.
+	iseID    atomic.Int32
+	iseFault atomic.Bool
+
+	lastCreate  atomic.Pointer[map[string]any]
+	lastSet     atomic.Pointer[map[string]any]
+	lastDelete  atomic.Pointer[string]
+	lastRega    atomic.Pointer[string]
+	lastIseAddr atomic.Pointer[string]
 
 	// regaResult is what ReGa.runScript returns as result; the string-only
 	// set_system_variable script emits the written value on success and
@@ -49,6 +59,7 @@ type sysvarMockServer struct {
 func newSysvarMock(t *testing.T) *sysvarMockServer {
 	t.Helper()
 	m := &sysvarMockServer{}
+	m.iseID.Store(4321)
 	m.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var env struct {
@@ -91,6 +102,16 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 			cp := copyMap(env.Params)
 			m.lastSet.Store(&cp)
 			_, _ = w.Write([]byte(`{"result":true}`))
+		case "Interface.getIseIDByAddress":
+			m.iseCnt.Add(1)
+			addr, _ := env.Params["address"].(string)
+			m.lastIseAddr.Store(&addr)
+			if m.iseFault.Load() {
+				_, _ = w.Write([]byte(`{"error":{"code":500,"message":"address not found"}}`))
+				return
+			}
+			payload, _ := json.Marshal(map[string]any{"result": m.iseID.Load()})
+			_, _ = w.Write(payload)
 		case "ReGa.runScript":
 			m.regaCnt.Add(1)
 			script, _ := env.Params["script"].(string)
@@ -796,5 +817,184 @@ func TestUpdateSysvarIndependentFlags(t *testing.T) {
 	}
 	if !strings.Contains(*body, `sLogged = "";`) {
 		t.Fatalf("rega body should leave sLogged untouched when Logged is nil: %v", *body)
+	}
+}
+
+// ─── Channel assignment (SV06) ──────────────────────────────────────────────
+//
+// A create/patch carrying a channel address resolves it to the channel's
+// ReGa ise id via Interface.getIseIDByAddress before it reaches the CCU. The
+// native create path threads the id into chn_id (no longer hard-coded -1);
+// the Rega paths bind it into the script's ##channel## slot.
+
+// A BOOL create with a channel address resolves the address and threads the
+// numeric ise id into SysVar.createBool's chn_id (replacing the -1 default).
+func TestCreateSysvarChannelResolvesIntoNativeChnID(t *testing.T) {
+	m := newSysvarMock(t)
+	m.iseID.Store(5678)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Alarm", ValueType: "BOOL", Channel: "ABC0000001:3",
+	})
+	if err != nil {
+		t.Fatalf("CreateSysvar: %v", err)
+	}
+	if got := m.iseCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 Interface.getIseIDByAddress call, got %d", got)
+	}
+	if addr := m.lastIseAddr.Load(); addr == nil || *addr != "ABC0000001:3" {
+		t.Fatalf("resolved address = %v, want ABC0000001:3", addr)
+	}
+	got := m.lastCreate.Load()
+	if got == nil || (*got)["chn_id"] != float64(5678) {
+		t.Fatalf("create chn_id = %v, want 5678", got)
+	}
+}
+
+// A create forced onto the Rega path (INTEGER) with a channel address resolves
+// the id and binds it into the script's ##channel## slot.
+func TestCreateSysvarChannelViaRegaBindsResolvedID(t *testing.T) {
+	m := newSysvarMock(t)
+	m.iseID.Store(9001)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Counter", ValueType: "INTEGER", Channel: "ABC0000001:3",
+	})
+	if err != nil {
+		t.Fatalf("CreateSysvar: %v", err)
+	}
+	if got := m.iseCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 resolve call, got %d", got)
+	}
+	body := m.lastRega.Load()
+	if body == nil || !strings.Contains(*body, `sChannel = "9001"`) {
+		t.Fatalf("rega body missing resolved channel id: %v", body)
+	}
+}
+
+// A create without a channel leaves chn_id at the unassigned -1 default and
+// never resolves an address.
+func TestCreateSysvarNoChannelKeepsUnassigned(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Alarm", ValueType: "BOOL"}); err != nil {
+		t.Fatalf("CreateSysvar: %v", err)
+	}
+	if got := m.iseCnt.Load(); got != 0 {
+		t.Fatalf("no channel must not resolve an address, got %d calls", got)
+	}
+	got := m.lastCreate.Load()
+	if got == nil || (*got)["chn_id"] != float64(-1) {
+		t.Fatalf("create chn_id = %v, want -1", got)
+	}
+}
+
+// A channel address the CCU cannot resolve (a JSON-RPC fault) surfaces as the
+// hub.ErrSysvarChannelUnknown sentinel, which the REST handler maps to 422.
+func TestCreateSysvarChannelUnknownAddressReturnsSentinel(t *testing.T) {
+	m := newSysvarMock(t)
+	m.iseFault.Store(true)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Alarm", ValueType: "BOOL", Channel: "BAD:9",
+	})
+	if !errors.Is(err, hub.ErrSysvarChannelUnknown) {
+		t.Fatalf("err = %v, want hub.ErrSysvarChannelUnknown", err)
+	}
+	if got := m.createBool.Load(); got != 0 {
+		t.Fatalf("createBool must not run when the channel does not resolve, got %d", got)
+	}
+}
+
+// A non-positive resolved id (address exists on the wire but names nothing)
+// is also treated as unresolvable.
+func TestCreateSysvarChannelZeroIDReturnsSentinel(t *testing.T) {
+	m := newSysvarMock(t)
+	m.iseID.Store(0)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Alarm", ValueType: "BOOL", Channel: "ABC:1",
+	})
+	if !errors.Is(err, hub.ErrSysvarChannelUnknown) {
+		t.Fatalf("err = %v, want hub.ErrSysvarChannelUnknown", err)
+	}
+}
+
+// A PATCH with a channel address resolves it and binds the id into the update
+// script's ##channel## slot.
+func TestUpdateSysvarChannelResolvesAndMarshals(t *testing.T) {
+	m := newSysvarMock(t)
+	m.iseID.Store(7777)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	addr := "ABC0000001:5"
+	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Channel: &addr}); err != nil {
+		t.Fatalf("UpdateSysvar: %v", err)
+	}
+	if got := m.iseCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 resolve call, got %d", got)
+	}
+	body := m.lastRega.Load()
+	if body == nil || !strings.Contains(*body, `sChannel = "7777"`) {
+		t.Fatalf("rega body missing resolved channel id: %v", body)
+	}
+}
+
+// A PATCH clearing the assignment (empty-string pointer) marshals -1 into the
+// ##channel## slot and never resolves an address.
+func TestUpdateSysvarChannelClearMarshalsMinusOne(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	empty := ""
+	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Channel: &empty}); err != nil {
+		t.Fatalf("UpdateSysvar: %v", err)
+	}
+	if got := m.iseCnt.Load(); got != 0 {
+		t.Fatalf("clearing must not resolve an address, got %d calls", got)
+	}
+	body := m.lastRega.Load()
+	if body == nil || !strings.Contains(*body, `sChannel = "-1"`) {
+		t.Fatalf("rega body should clear the channel with -1: %v", body)
+	}
+}
+
+// A PATCH that leaves Channel nil binds "" into the slot so the script's
+// `if (sChannel != "")` guard skips the write and the CCU assignment stays.
+func TestUpdateSysvarChannelNilLeavesSlotEmpty(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Unit: "°C"}); err != nil {
+		t.Fatalf("UpdateSysvar: %v", err)
+	}
+	if got := m.iseCnt.Load(); got != 0 {
+		t.Fatalf("nil channel must not resolve an address, got %d calls", got)
+	}
+	body := m.lastRega.Load()
+	if body == nil || !strings.Contains(*body, `sChannel = "";`) {
+		t.Fatalf("rega body should leave the channel slot empty: %v", body)
+	}
+}
+
+// A PATCH channel address the CCU cannot resolve surfaces the sentinel and
+// never dispatches the update script.
+func TestUpdateSysvarChannelUnknownAddressReturnsSentinel(t *testing.T) {
+	m := newSysvarMock(t)
+	m.iseFault.Store(true)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	addr := "BAD:9"
+	err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Channel: &addr})
+	if !errors.Is(err, hub.ErrSysvarChannelUnknown) {
+		t.Fatalf("err = %v, want hub.ErrSysvarChannelUnknown", err)
+	}
+	if got := m.regaCnt.Load(); got != 0 {
+		t.Fatalf("update script must not run when the channel does not resolve, got %d", got)
 	}
 }
