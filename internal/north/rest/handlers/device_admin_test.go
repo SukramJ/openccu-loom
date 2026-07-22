@@ -29,6 +29,7 @@ type stubDeviceAdmin struct {
 	updateFWErr         error
 	setRoomsErr         error
 	setFunctionsErr     error
+	restoreErr          error
 	lastAddress         string
 	lastNewName         string
 	lastIncludeChannels bool
@@ -102,6 +103,11 @@ func (s *stubDeviceAdmin) SetChannelFunctions(_ context.Context, deviceAddr stri
 	s.lastChannelNo = channelNo
 	s.lastFunctions = functions
 	return s.setFunctionsErr
+}
+
+func (s *stubDeviceAdmin) RestoreDeviceConfig(_ context.Context, addr string) error {
+	s.lastAddress = addr
+	return s.restoreErr
 }
 
 func TestDeleteDevice_HappyPath(t *testing.T) {

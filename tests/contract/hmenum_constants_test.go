@@ -121,6 +121,92 @@ func TestInstallModeClassification(t *testing.T) {
 	}
 }
 
+// TestConfigRestoreClassification pins the exact set of interfaces that
+// expose `restoreConfigToDevice`: HmIP-RF and BidCos-RF, because rfd and
+// HMIPServer implement the method while hs485d (BidCos-Wired) does not.
+// VirtualDevices and CUxD are synchronous / have no stored-config concept
+// and must not be members either.
+func TestConfigRestoreClassification(t *testing.T) {
+	t.Parallel()
+
+	wantTrue := []hmenum.Interface{
+		hmenum.InterfaceHmIPRF,
+		hmenum.InterfaceBidCosRF,
+	}
+	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceBidCosWired,
+		hmenum.InterfaceVirtualDevices,
+		hmenum.InterfaceCUxD,
+	}
+
+	// Exactly the two radios whose CCU-side process (rfd / HMIPServer)
+	// implements restoreConfigToDevice.
+	if got := len(hmenum.InterfacesSupportingConfigRestore); got != 2 {
+		t.Fatalf("InterfacesSupportingConfigRestore len=%d, want 2", got)
+	}
+
+	for _, iface := range wantTrue {
+		if _, ok := hmenum.InterfacesSupportingConfigRestore[iface]; !ok {
+			t.Errorf("%s missing from InterfacesSupportingConfigRestore", iface)
+		}
+		if !iface.SupportsConfigRestore() {
+			t.Errorf("%s.SupportsConfigRestore() = false, want true", iface)
+		}
+	}
+
+	for _, iface := range wantFalse {
+		if _, ok := hmenum.InterfacesSupportingConfigRestore[iface]; ok {
+			t.Errorf("%s must not be in InterfacesSupportingConfigRestore", iface)
+		}
+		if iface.SupportsConfigRestore() {
+			t.Errorf("%s.SupportsConfigRestore() = true, want false", iface)
+		}
+	}
+}
+
+// TestReplaceClassification pins the exact set of interfaces whose daemon
+// exposes `listReplaceableDevices` / `replaceDevice`: BidCos-RF and
+// BidCos-Wired, because rfd and hs485d implement the guided device-replace
+// swap while HMIPServer (HmIP-RF) throws NotImplementedException. CUxD and
+// VirtualDevices have no pairing concept and must not be members either.
+func TestReplaceClassification(t *testing.T) {
+	t.Parallel()
+
+	wantTrue := []hmenum.Interface{
+		hmenum.InterfaceBidCosRF,
+		hmenum.InterfaceBidCosWired,
+	}
+	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceHmIPRF,
+		hmenum.InterfaceVirtualDevices,
+		hmenum.InterfaceCUxD,
+	}
+
+	// Exactly the two radios whose CCU-side process (rfd / hs485d)
+	// implements replaceDevice.
+	if got := len(hmenum.InterfacesSupportingReplace); got != 2 {
+		t.Fatalf("InterfacesSupportingReplace len=%d, want 2", got)
+	}
+
+	for _, iface := range wantTrue {
+		if _, ok := hmenum.InterfacesSupportingReplace[iface]; !ok {
+			t.Errorf("%s missing from InterfacesSupportingReplace", iface)
+		}
+		if !iface.SupportsReplace() {
+			t.Errorf("%s.SupportsReplace() = false, want true", iface)
+		}
+	}
+
+	for _, iface := range wantFalse {
+		if _, ok := hmenum.InterfacesSupportingReplace[iface]; ok {
+			t.Errorf("%s must not be in InterfacesSupportingReplace", iface)
+		}
+		if iface.SupportsReplace() {
+			t.Errorf("%s.SupportsReplace() = true, want false", iface)
+		}
+	}
+}
+
 // TestCategoryToTypeCovers ensures every real DataPointCategory maps to
 // a DataPointType. UNDEFINED is intentionally omitted.
 func TestCategoryToTypeCovers(t *testing.T) {

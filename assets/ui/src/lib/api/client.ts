@@ -26,6 +26,7 @@ import type {
   FunctionEntry,
   GroupCentralEntry,
   InboxDevice,
+  ReplaceCandidate,
   InstallModeInterfaceEntry,
   RoomEntry,
   UserListEntry,
@@ -568,6 +569,29 @@ export const api = {
       `/devices/${encodeURIComponent(address)}${suffix}`,
       { method: "DELETE" },
     );
+  },
+  // List the already-paired devices the new (inbox) device may replace
+  // (BidCos-RF / BidCos-Wired only). Read-only.
+  async listReplaceCandidates(address: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    const r = await request<{ candidates: ReplaceCandidate[] }>(
+      `/devices/${encodeURIComponent(address)}/replace-candidates${qs}`,
+    );
+    return r.candidates;
+  },
+  // Swap a paired device (oldAddress) for the new device at address
+  // (admin-only). The CCU migrates links / teams / ReGa references.
+  replaceDevice(address: string, oldAddress: string, central?: string) {
+    return request<{
+      status: string;
+      old_address: string;
+      new_address: string;
+      central?: string;
+    }>(`/devices/${encodeURIComponent(address)}/replace`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ old_address: oldAddress, ...(central ? { central } : {}) }),
+    });
   },
   acceptInboxDevice(
     address: string,
@@ -1190,6 +1214,15 @@ export const api = {
   updateFirmware(address: string) {
     return request<{ status: string; duty_cycle_warning?: number }>(
       `/devices/${encodeURIComponent(address)}/firmware/update`,
+      { method: "POST" },
+    );
+  },
+  // Re-transmit the centrally stored configuration to a device after a
+  // factory reset (admin-only; HmIP-RF / BidCos-RF only). The CCU runs
+  // the transfer asynchronously — watch CONFIG_PENDING for progress.
+  restoreDeviceConfig(address: string) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/config/restore`,
       { method: "POST" },
     );
   },

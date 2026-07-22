@@ -65,6 +65,25 @@ func (i Interface) SupportsInstallMode() bool {
 	return ok
 }
 
+// SupportsConfigRestore reports whether the stored configuration can be
+// re-transmitted to a device on this interface via
+// `restoreConfigToDevice`. True for HmIP-RF and BidCos-RF (rfd /
+// HMIPServer); false for BidCos-Wired, CUxD and VirtualDevices, which
+// do not expose the method.
+func (i Interface) SupportsConfigRestore() bool {
+	_, ok := InterfacesSupportingConfigRestore[i]
+	return ok
+}
+
+// SupportsReplace reports whether a paired device on this interface can
+// be swapped for a new one via `replaceDevice`. True for BidCos-RF and
+// BidCos-Wired (rfd / hs485d); false for HmIP-* (HMIPServer throws
+// NotImplementedException), CUxD and VirtualDevices.
+func (i Interface) SupportsReplace() bool {
+	_, ok := InterfacesSupportingReplace[i]
+	return ok
+}
+
 // PushesConfigPending reports whether this interface — taken on its
 // own — delivers reliable CONFIG_PENDING events on MASTER writes.
 // True for HmIP-*; false for BidCos-* (CONFIG_PENDING is unreliable;
@@ -147,6 +166,27 @@ var (
 		InterfaceBidCosRF:    {},
 		InterfaceBidCosWired: {},
 		InterfaceHmIPRF:      {},
+	}
+
+	// InterfacesSupportingConfigRestore lists the interfaces whose
+	// daemon exposes `restoreConfigToDevice`. rfd (BidCos-RF) and
+	// HMIPServer (HmIP-RF) implement it; hs485d (BidCos-Wired) and CUxD
+	// do not. HmIP-Wired has no own interface — it rides the HmIP-RF
+	// service and is covered transitively.
+	InterfacesSupportingConfigRestore = map[Interface]struct{}{
+		InterfaceBidCosRF: {},
+		InterfaceHmIPRF:   {},
+	}
+
+	// InterfacesSupportingReplace lists the interfaces whose daemon
+	// exposes `listReplaceableDevices` / `replaceDevice`. rfd
+	// (BidCos-RF) and hs485d (BidCos-Wired) implement the swap; HMIPServer
+	// (HmIP-*) throws NotImplementedException, and CUxD / VirtualDevices
+	// have no such concept — the CCU WebUI hides "replace device" for
+	// HmIP for the same reason.
+	InterfacesSupportingReplace = map[Interface]struct{}{
+		InterfaceBidCosRF:    {},
+		InterfaceBidCosWired: {},
 	}
 
 	// InterfacesPushingConfigPending lists the interfaces that emit

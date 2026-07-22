@@ -49,6 +49,38 @@ func listDevicesViaCaller(ctx context.Context, caller Caller, prefix string) ([]
 	return out, nil
 }
 
+// listReplaceableDevicesViaCaller implements the ListReplaceableDevices
+// wire call: the interface daemon computes which already-paired devices
+// the given new device may replace (type / channel compatibility) and
+// returns their descriptions. Mirrors [listDevicesViaCaller] but with
+// the one-argument `listReplaceableDevices(newAddress)` method.
+func listReplaceableDevicesViaCaller(ctx context.Context, caller Caller, prefix, newAddress string) ([]hmproto.DeviceDescription, error) {
+	if caller == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := caller.Call(ctx, "listReplaceableDevices", newAddress)
+	if err != nil {
+		return nil, err
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.ListReplaceableDevices: unexpected type %T", prefix, raw)
+	}
+	out := make([]hmproto.DeviceDescription, 0, len(list))
+	for i, entry := range list {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s.ListReplaceableDevices[%d]: not a struct", prefix, i)
+		}
+		dd, err := toDeviceDescription(m)
+		if err != nil {
+			return nil, fmt.Errorf("%s.ListReplaceableDevices[%d]: %w", prefix, i, err)
+		}
+		out = append(out, dd)
+	}
+	return out, nil
+}
+
 // getParamsetDescriptionViaCaller implements the GetParamsetDescription
 // wire call shared by every backend.
 func getParamsetDescriptionViaCaller(

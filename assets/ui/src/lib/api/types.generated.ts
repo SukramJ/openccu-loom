@@ -2098,6 +2098,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/config/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-transmit stored configuration to a device (admin-only)
+         * @description Asks the CCU to re-send every channel's stored MASTER paramset
+         *     plus the device's direct-link peerings — the recovery path after
+         *     a device factory reset. The transfer runs asynchronously on the
+         *     radio (watch the device's CONFIG_PENDING state for progress), so
+         *     the endpoint returns 202 once the request was accepted. Supported
+         *     on HmIP-RF and BidCos-RF only; other interfaces (BidCos-Wired,
+         *     CUxD, VirtualDevices) answer 422. Consult
+         *     `DeviceSummary.config_restore_supported` before offering the
+         *     action.
+         */
+        post: operations["restoreDeviceConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/replace-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List devices the new device may replace
+         * @description Returns the already-paired devices the new (inbox) device at
+         *     `{addr}` may replace — the interface daemon (rfd / hs485d)
+         *     computes type / channel compatibility. `model_matches` flags an
+         *     exact-model swap apart from a compatible cross-type one. A pure
+         *     CCU read. Supported on BidCos-RF and BidCos-Wired only; HmIP
+         *     devices cannot be replaced (the CCU WebUI hides the action for
+         *     them too).
+         */
+        get: operations["listDeviceReplaceCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a paired device with a new one (admin-only)
+         * @description Swaps the paired `old_address` for the new device at `{addr}`.
+         *     The interface daemon migrates direct links, teams and link
+         *     paramsets; ReGa re-binds the existing object in place (same
+         *     ise-ID, so programs, names and rooms survive) and the old device
+         *     is unpaired. Returns 202 once the swap is applied — the radio
+         *     config transfer to the new device continues CCU-side afterwards.
+         *     Supported on BidCos-RF and BidCos-Wired only.
+         */
+        post: operations["replaceDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/firmware/download": {
         parameters: {
             query?: never;
@@ -5011,6 +5091,12 @@ export interface components {
              */
             master_pushes_config_pending: boolean;
             /**
+             * @description True when the device's interface exposes `restoreConfigToDevice`
+             *     (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
+             *     it. False for BidCos-Wired, CUxD and VirtualDevices.
+             */
+            config_restore_supported?: boolean;
+            /**
              * @description True when the device should be split into multiple logical
              *     sub-devices for northbound presentation. The SPA's CdpTilesPanel
              *     uses this flag to switch from a flat tile grid to per-group
@@ -7285,10 +7371,29 @@ export interface components {
             central?: string;
             address: string;
             model: string;
+            /**
+             * @description CCU interface the device was detected through. The SPA hides
+             *     the "replace existing device" action for HmIP interfaces,
+             *     which do not support the swap.
+             */
+            interface?: string;
             serial?: string;
             manufacturer?: string;
             /** Format: int64 */
             first_seen?: number;
+        };
+        /**
+         * @description One already-paired device a new (inbox) device may replace,
+         *     returned by GET /devices/{addr}/replace-candidates.
+         */
+        ReplaceCandidate: {
+            address: string;
+            name?: string;
+            model?: string;
+            interface?: string;
+            central?: string;
+            /** @description True when the candidate's model equals the new device's (an exact swap rather than a compatible cross-type one). */
+            model_matches: boolean;
         };
         /** @description One candidate returned by GET /channels/{no}/linkable-channels. */
         LinkableChannel: {
@@ -8849,6 +8954,109 @@ export interface operations {
                     };
                 };
             };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    restoreDeviceConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description Restore dispatched; the configuration transfer continues
+             *     asynchronously (watch CONFIG_PENDING).
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listDeviceReplaceCandidates: {
+        parameters: {
+            query?: {
+                /** @description Disambiguates the CCU; optional for single-CCU setups. */
+                central?: string;
+            };
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        candidates: components["schemas"]["ReplaceCandidate"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    replaceDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The paired device the new device replaces. */
+                    old_address: string;
+                    /** @description Disambiguates the CCU; optional for single-CCU setups. */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /**
+             * @description Replace applied; the device's radio configuration transfer
+             *     continues asynchronously.
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example replacing */
+                        status: string;
+                        old_address: string;
+                        new_address: string;
+                        central?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

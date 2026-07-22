@@ -232,6 +232,33 @@ func (a *DeviceAdminDomain) UpdateFirmware(ctx context.Context, address string) 
 	return backend.UpdateFirmware(ctx, address)
 }
 
+// RestoreDeviceConfig re-transmits the centrally stored configuration
+// (MASTER paramsets of every channel plus link peerings) to the device
+// via `restoreConfigToDevice` (XML-RPC). Only rfd (BidCos-RF) and
+// HMIPServer (HmIP-RF) expose the method; devices on any other
+// interface answer [backends.ErrUnsupported] before a wire call is
+// made. The CCU runs the transfer asynchronously (CONFIG_PENDING).
+func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address string) error {
+	if a.registry == nil || a.writer == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		if !dev.Interface.SupportsConfigRestore() {
+			return fmt.Errorf("restore config: interface %s: %w", dev.Interface, backends.ErrUnsupported)
+		}
+		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		if !ok {
+			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
+		}
+		return backend.RestoreConfigToDevice(ctx, address)
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
 // InterfaceDutyCycle returns the transmit duty cycle in percent (0..100)
 // of the radio interface the device is paired to, read from the owning
 // central's per-interface BidCos utilisation cache (populated by the

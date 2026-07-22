@@ -370,6 +370,45 @@
     },
     {
       "category": "devices",
+      "description": "List the already-paired devices the new (inbox) device may replace. Supported on BidCos-RF and BidCos-Wired only.",
+      "name": "device.replace_candidates",
+      "args": {
+        "address": "string",
+        "central": "string?"
+      },
+      "result": {
+        "candidates": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Swap a paired device for a new one. The CCU migrates direct links, teams and ReGa references; the old device is unpaired. Supported on BidCos-RF and BidCos-Wired only.",
+      "name": "device.replace",
+      "args": {
+        "address": "string",
+        "old_address": "string",
+        "central": "string?"
+      },
+      "result": {
+        "status": "string",
+        "old_address": "string",
+        "new_address": "string",
+        "central": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Re-transmit the centrally stored configuration (all channels' MASTER paramsets + link peerings) to a device after a factory reset. Supported on HmIP-RF and BidCos-RF only.",
+      "name": "device.restore_config",
+      "args": {
+        "address": "string"
+      },
+      "result": {
+        "address": "string"
+      }
+    },
+    {
+      "category": "devices",
       "description": "Replace a single channel's function (Gewerk) assignments. An empty array clears the set.",
       "name": "device.set_channel_functions",
       "args": {

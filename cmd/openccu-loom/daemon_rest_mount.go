@@ -196,6 +196,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Config:                d.configAdapter,
 		Devices:               d.devicesAdapter,
 		DeviceAdmin:           d.deviceAdminDomain,
+		DeviceReplacer:        d.deviceAdminDomain,
 		FirmwareRefresher:     firmwareRefresherFrom(d.firmwareRefresher),
 		DeviceInstallMode:     d.deviceAdminDomain,
 		DeviceIcons:           newDeviceIconProxy(d.reg, centralResolve),

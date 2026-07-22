@@ -43,6 +43,16 @@ type DeviceWriter interface {
 	// SetChannelFunctions replaces a single channel's function (Gewerk)
 	// assignments. Used by `device.set_channel_functions`.
 	SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error
+	// RestoreConfig re-transmits the centrally stored configuration to
+	// the device after a factory reset. Used by
+	// `device.restore_config`.
+	RestoreConfig(ctx context.Context, address string) error
+	// ReplaceCandidates lists the paired devices the new device may
+	// replace. Read-only; used by `device.replace_candidates`.
+	ReplaceCandidates(ctx context.Context, centralName, newAddress string) ([]hmapi.ReplaceCandidate, error)
+	// ReplaceDevice swaps a paired device for a new one. Used by
+	// `device.replace`.
+	ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error
 }
 
 // ParamsetWriter mutates a paramset in one shot. Used by `paramset.put`
@@ -261,6 +271,9 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("device.install_mode", deviceInstallModeHandler(cfg.Devices))
 		router.Register("device.set_channel_rooms", deviceSetChannelRoomsHandler(cfg.Devices))
 		router.Register("device.set_channel_functions", deviceSetChannelFunctionsHandler(cfg.Devices))
+		router.Register("device.restore_config", deviceRestoreConfigHandler(cfg.Devices))
+		router.Register("device.replace_candidates", deviceReplaceCandidatesHandler(cfg.Devices))
+		router.Register("device.replace", deviceReplaceHandler(cfg.Devices))
 	}
 	if cfg.Paramsets != nil {
 		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
@@ -457,6 +470,75 @@ func deviceSetChannelFunctionsHandler(d DeviceWriter) CommandHandler {
 			"address":   p.Address,
 			"channel":   p.Channel,
 			"functions": p.Functions,
+		}, nil
+	}
+}
+
+func deviceRestoreConfigHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if err := d.RestoreConfig(ctx, p.Address); err != nil {
+			return nil, fmt.Errorf("device.restore_config: %w", err)
+		}
+		return map[string]any{"address": p.Address}, nil
+	}
+}
+
+func deviceReplaceCandidatesHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+			Central string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		candidates, err := d.ReplaceCandidates(ctx, p.Central, p.Address)
+		if err != nil {
+			return nil, fmt.Errorf("device.replace_candidates: %w", err)
+		}
+		if candidates == nil {
+			candidates = []hmapi.ReplaceCandidate{}
+		}
+		return map[string]any{"candidates": candidates}, nil
+	}
+}
+
+func deviceReplaceHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address    string `json:"address"`
+			OldAddress string `json:"old_address"`
+			Central    string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.OldAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "old_address is required")
+		}
+		if err := d.ReplaceDevice(ctx, p.Central, p.OldAddress, p.Address); err != nil {
+			return nil, fmt.Errorf("device.replace: %w", err)
+		}
+		return map[string]any{
+			"status":      "replacing",
+			"old_address": p.OldAddress,
+			"new_address": p.Address,
+			"central":     p.Central,
 		}, nil
 	}
 }

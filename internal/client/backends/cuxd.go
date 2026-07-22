@@ -106,6 +106,24 @@ func (b *CuxdBackend) UpdateFirmware(context.Context, string) error {
 	return ErrUnsupported
 }
 
+// RestoreConfigToDevice implements Operations. CUxD has no stored-config
+// re-transmit; always returns [ErrUnsupported].
+func (b *CuxdBackend) RestoreConfigToDevice(context.Context, string) error {
+	return ErrUnsupported
+}
+
+// ListReplaceableDevices implements Operations. CUxD has no
+// device-replacement concept; always returns [ErrUnsupported].
+func (b *CuxdBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
+// ReplaceDevice implements Operations. CUxD has no device-replacement
+// concept; always returns [ErrUnsupported].
+func (b *CuxdBackend) ReplaceDevice(context.Context, string, string) error {
+	return ErrUnsupported
+}
+
 // --- direct links (not modelled by CUxD) --------------------------
 //
 // CUxD's virtual devices are composed at runtime and have no peer-to-

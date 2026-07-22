@@ -142,6 +142,18 @@ func (*paramsetFakeOps) SetInstallModeLocal(context.Context, int, string, string
 	return backends.ErrUnsupported
 }
 
+func (*paramsetFakeOps) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (*paramsetFakeOps) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

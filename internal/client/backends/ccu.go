@@ -227,6 +227,39 @@ func (b *CcuBackend) UpdateFirmware(ctx context.Context, address string) error {
 	return err
 }
 
+// RestoreConfigToDevice re-transmits the stored configuration to the
+// device via the XML-RPC `restoreConfigToDevice(address)` call. The
+// method name is identical on rfd (BidCos-RF) and HMIPServer (HmIP-RF);
+// the per-interface support gate lives in the adapter.
+func (b *CcuBackend) RestoreConfigToDevice(ctx context.Context, address string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "restoreConfigToDevice", address)
+	return err
+}
+
+// ListReplaceableDevices returns the devices the new device may replace
+// via the XML-RPC `listReplaceableDevices(newDeviceAddress)` call
+// (rfd / hs485d). The per-interface support gate lives in the adapter.
+func (b *CcuBackend) ListReplaceableDevices(ctx context.Context, newDeviceAddress string) ([]hmproto.DeviceDescription, error) {
+	if b.xml == nil {
+		return nil, ErrUnsupported
+	}
+	return listReplaceableDevicesViaCaller(ctx, b.xml, "ccu", newDeviceAddress)
+}
+
+// ReplaceDevice swaps oldDeviceAddress for newDeviceAddress via the
+// XML-RPC `replaceDevice(old, new)` call (rfd / hs485d). The
+// per-interface support gate lives in the adapter.
+func (b *CcuBackend) ReplaceDevice(ctx context.Context, oldDeviceAddress, newDeviceAddress string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "replaceDevice", oldDeviceAddress, newDeviceAddress)
+	return err
+}
+
 // --- direct links --------------------------------------------------
 
 // GetLinks implements Operations. CCU returns the link descriptors

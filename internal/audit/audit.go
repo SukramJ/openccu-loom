@@ -48,6 +48,16 @@ const (
 	// SGTIN; the device key is credential material and never recorded.
 	ActionInstallModeLocal Action = "install_mode_local"
 
+	// ActionDeviceConfigRestore records a re-transmit of the centrally
+	// stored configuration to a device after a factory reset. The
+	// Entry's DeviceAddress carries the target.
+	ActionDeviceConfigRestore Action = "device_config_restore"
+
+	// ActionDeviceReplace records a guided device replacement: the
+	// Entry's DeviceAddress carries the old (replaced, now unpaired)
+	// device; the Note the new device address.
+	ActionDeviceReplace Action = "device_replace"
+
 	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"

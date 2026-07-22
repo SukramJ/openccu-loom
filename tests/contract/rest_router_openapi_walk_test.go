@@ -33,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -181,9 +182,19 @@ func (fakeDeviceAdmin) SetChannelFunctions(context.Context, string, int, []strin
 	return nil
 }
 
+func (fakeDeviceAdmin) RestoreDeviceConfig(context.Context, string) error { return nil }
+
 type fakeDeviceInstallMode struct{}
 
 func (fakeDeviceInstallMode) SetInstallMode(context.Context, string, int) error { return nil }
+
+type fakeDeviceReplacer struct{}
+
+func (fakeDeviceReplacer) ReplaceCandidates(context.Context, string, string) ([]hmapi.ReplaceCandidate, error) {
+	return nil, nil
+}
+
+func (fakeDeviceReplacer) ReplaceDevice(context.Context, string, string, string) error { return nil }
 
 type fakeRoomFunctionAdmin struct{}
 
@@ -518,6 +529,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		History:               fakeHistoryService{},
 		Energy:                fakeEnergyService{},
 		DeviceAdmin:           fakeDeviceAdmin{},
+		DeviceReplacer:        fakeDeviceReplacer{},
 		FirmwareRefresher:     fakeFirmwareRefresher{},
 		DeviceInstallMode:     fakeDeviceInstallMode{},
 		RoomFunctionAdmin:     fakeRoomFunctionAdmin{},

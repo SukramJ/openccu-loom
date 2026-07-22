@@ -8,6 +8,49 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.47.0] — unreleased
 
+### Added
+
+- **Per-channel room and function assignment.** `PATCH
+  /api/v1/devices/{addr}/channels/{no}` now accepts `rooms` and
+  `functions` (alongside `name`), and the new WebSocket commands
+  `device.set_channel_rooms` / `device.set_channel_functions` mirror it.
+  The CCU assigns rooms and Gewerke per channel, not just per device;
+  the device-detail view gains per-channel editors, and
+  `ChannelSummary` now exposes the full `rooms` array. The assignment
+  ReGa scripts resolve their target rename-proof (name lookup, then an
+  address scan), so a renamed device or channel no longer silently
+  fails to update.
+- **HmIP teach-in without internet (SGTIN + key).** The HmIP install
+  mode gains the keyserver-less LOCAL flavour: entering a device's SGTIN
+  and key from its label opens a pairing window restricted to exactly
+  that device. `POST /install-mode/interfaces` and the
+  `install_mode.enable` WebSocket command accept `sgtin` + `key`; the
+  values are normalised server-side (including the Base32 label-form key
+  conversion). The endpoint additionally accepts `central` (multi-CCU
+  disambiguation) and `device_address`.
+- **Virtual-remote key simulation.** The CCU's virtual remotes
+  (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50) render as a key grid with short
+  and long press buttons in the device detail; writable press slots on
+  other devices become interactive too. A press is a single boolean
+  write of `PRESS_SHORT` / `PRESS_LONG`, and a cell flashes on the CCU's
+  echoed press event.
+- **Restore stored device configuration.** A new `POST
+  /api/v1/devices/{addr}/config/restore` endpoint and
+  `device.restore_config` WebSocket command re-transmit the centrally
+  stored configuration (every channel's MASTER paramset plus link
+  peerings) to a device after a factory reset. Admin-gated,
+  audit-logged, and surfaced as a device-detail action for devices whose
+  interface supports it (`config_restore_supported`); HmIP-RF and
+  BidCos-RF only.
+- **Guided device replace.** `GET
+  /api/v1/devices/{addr}/replace-candidates` lists the paired devices a
+  new (inbox) device may replace, and `POST /api/v1/devices/{addr}/replace`
+  performs the swap (matching WebSocket commands
+  `device.replace_candidates` / `device.replace`). The CCU migrates
+  direct links, teams and ReGa references; the old device is unpaired.
+  Offered from the inbox for BidCos devices only (HmIP does not support
+  it); admin-gated and audit-logged.
+
 ## [0.46.0] — 2026-07-22
 
 ### Added

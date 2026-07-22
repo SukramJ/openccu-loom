@@ -129,6 +129,18 @@ func (t *testBackendOps) SetInstallModeLocal(context.Context, int, string, strin
 	return backends.ErrUnsupported
 }
 
+func (t *testBackendOps) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (t *testBackendOps) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (t *testBackendOps) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (t *testBackendOps) GetServiceMessages(_ context.Context, _ string) ([]map[string]any, error) {
 	return nil, nil
 }

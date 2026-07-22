@@ -79,6 +79,22 @@ func TestCapabilityFor_InstallModeLocal(t *testing.T) {
 	}
 }
 
+// TestCapabilityFor_ReplaceDevice verifies that the guided device-replace
+// capability is advertised only for KindCCU — CUxD and Homegear have no
+// listReplaceableDevices/replaceDevice wire method.
+func TestCapabilityFor_ReplaceDevice(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).ReplaceDevice {
+		t.Error("KindCCU: ReplaceDevice should be true")
+	}
+	if CapabilityFor(KindCUxD).ReplaceDevice {
+		t.Error("KindCUxD: ReplaceDevice should be false")
+	}
+	if CapabilityFor(KindHomegear).ReplaceDevice {
+		t.Error("KindHomegear: ReplaceDevice should be false")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Homegear capability profile
 // ---------------------------------------------------------------------------
@@ -414,6 +430,7 @@ func TestCCUCapabilityMatrix(t *testing.T) {
 		"GetAllPrograms":         caps.GetAllPrograms,
 		"GetAllSysvars":          caps.GetAllSysvars,
 		"FirmwareUpdate":         caps.FirmwareUpdate,
+		"ConfigRestore":          caps.ConfigRestore,
 		"AlarmMessages":          caps.AlarmMessages,
 		"Backup":                 caps.Backup,
 		"CreateSystemVariable":   caps.CreateSystemVariable,
@@ -463,6 +480,7 @@ func TestHomegearCapabilityMatrix(t *testing.T) {
 		"GetAllPrograms":  caps.GetAllPrograms,
 		"GetAllSysvars":   caps.GetAllSysvars,
 		"FirmwareUpdate":  caps.FirmwareUpdate,
+		"ConfigRestore":   caps.ConfigRestore,
 		"Backup":          caps.Backup,
 		"InstallMode":     caps.InstallMode,
 		"HasSystemUpdate": caps.HasSystemUpdate,
@@ -503,6 +521,7 @@ func TestCUxDCapabilityMatrix(t *testing.T) {
 		"GetAllPrograms":  caps.GetAllPrograms,
 		"GetAllSysvars":   caps.GetAllSysvars,
 		"FirmwareUpdate":  caps.FirmwareUpdate,
+		"ConfigRestore":   caps.ConfigRestore,
 		"Backup":          caps.Backup,
 		"AlarmMessages":   caps.AlarmMessages,
 		"InstallMode":     caps.InstallMode,

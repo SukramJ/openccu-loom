@@ -2294,6 +2294,12 @@ const EN: Catalog = {
     "{count} program(s) reference this device.",
   "device.confirm_firmware_body":
     'Trigger firmware update for "{name}"? The device will be briefly unreachable.',
+  "device.restore_config": "Restore config",
+  "device.restore_config.tooltip":
+    "Re-transmit the stored configuration to the device (after a factory reset)",
+  "device.confirm_restore_config_body":
+    'Re-transmit the stored configuration (all channel settings and direct links) to "{name}"? Use this after a factory reset — the transfer runs over the radio and may take a while.',
+  "device.restore_config_triggered": "Configuration transfer started.",
   "device.status.paramset_pick": "Read source",
   // --- Maintenance grid ---
   "device.maintenance.title": "Maintenance",
@@ -2660,6 +2666,20 @@ const EN: Catalog = {
     "Local teach-in started — press the pairing button on the device.",
   "inbox.install_mode_local_hint":
     "Works without internet access: only the device matching SGTIN and key can pair.",
+  "inbox.replace.button": "Replace device",
+  "inbox.replace.title": "Replace an existing device",
+  "inbox.replace.intro":
+    "Choose the paired device that {address} replaces. Its links, teams and programs move to the new device; the old device is unpaired.",
+  "inbox.replace.empty": "No replaceable devices",
+  "inbox.replace.empty_description":
+    "The CCU found no compatible paired device this one can replace.",
+  "inbox.replace.same_type": "Same type",
+  "inbox.replace.compatible_type": "Compatible",
+  "inbox.replace.confirm_title": "Replace device?",
+  "inbox.replace.confirm_text":
+    "\"{new}\" will replace \"{old}\". The old device is unpaired and removed from the system. This cannot be undone.",
+  "inbox.replace.confirm_label": "Replace",
+  "inbox.replace.success": "Device replaced.",
   "inbox.pair_serial_started": "Pairing window opened for {addr}.",
   "light.brightness": "Brightness",
   "light.color_temp": "Color temperature",
@@ -5136,6 +5156,12 @@ const DE: Catalog = {
     "{count} Programm(e) verweisen auf dieses Gerät.",
   "device.confirm_firmware_body":
     'Firmware-Update für "{name}" starten? Das Gerät ist während des Updates kurz nicht erreichbar.',
+  "device.restore_config": "Konfiguration wiederherstellen",
+  "device.restore_config.tooltip":
+    "Die gespeicherte Konfiguration erneut an das Gerät übertragen (nach einem Werksreset)",
+  "device.confirm_restore_config_body":
+    'Die gespeicherte Konfiguration (alle Kanaleinstellungen und Direktverknüpfungen) erneut an "{name}" übertragen? Nach einem Werksreset verwenden — die Übertragung läuft über Funk und kann etwas dauern.',
+  "device.restore_config_triggered": "Konfigurationsübertragung gestartet.",
   "device.status.paramset_pick": "Quelle",
   // --- Wartungs-Grid ---
   "device.maintenance.title": "Wartung",
@@ -5477,6 +5503,20 @@ const DE: Catalog = {
     "Lokales Anlernen gestartet — Anlerntaste am Gerät drücken.",
   "inbox.install_mode_local_hint":
     "Funktioniert ohne Internetzugang: Nur das Gerät mit passender SGTIN und Key kann sich anmelden.",
+  "inbox.replace.button": "Gerät tauschen",
+  "inbox.replace.title": "Vorhandenes Gerät tauschen",
+  "inbox.replace.intro":
+    "Wähle das angelernte Gerät, das {address} ersetzt. Verknüpfungen, Teams und Programme wandern auf das neue Gerät; das alte Gerät wird abgelernt.",
+  "inbox.replace.empty": "Keine tauschbaren Geräte",
+  "inbox.replace.empty_description":
+    "Die CCU hat kein kompatibles angelerntes Gerät gefunden, das dieses ersetzen kann.",
+  "inbox.replace.same_type": "Gleicher Typ",
+  "inbox.replace.compatible_type": "Kompatibel",
+  "inbox.replace.confirm_title": "Gerät tauschen?",
+  "inbox.replace.confirm_text":
+    "„{new}“ ersetzt „{old}“. Das alte Gerät wird abgelernt und aus dem System entfernt. Das kann nicht rückgängig gemacht werden.",
+  "inbox.replace.confirm_label": "Tauschen",
+  "inbox.replace.success": "Gerät getauscht.",
   "inbox.pair_serial_started": "Anlernfenster für {addr} geöffnet.",
   "light.brightness": "Helligkeit",
   "light.color_temp": "Farbtemperatur",

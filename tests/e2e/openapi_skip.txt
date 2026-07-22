@@ -29,3 +29,6 @@ getHistory -- opt-in feature; route not mounted in E2E harness (history off by d
 # /energy route is only mounted when history is enabled, so it 404s in the E2E
 # harness. Covered by handler unit tests in internal/north/rest/handlers/energy_test.go.
 getEnergy -- opt-in feature; route not mounted in E2E harness (history off by default)
+restoreDeviceConfig -- godevccu has no restoreConfigToDevice; live CCU re-transmits config
+listDeviceReplaceCandidates -- godevccu has no listReplaceableDevices; live CCU returns candidates
+replaceDevice -- godevccu has no replaceDevice; live CCU performs the swap

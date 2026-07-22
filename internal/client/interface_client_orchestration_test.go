@@ -124,6 +124,18 @@ func (b *orchBackend) SetInstallModeLocal(context.Context, int, string, string) 
 	return backends.ErrUnsupported
 }
 
+func (b *orchBackend) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *orchBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (b *orchBackend) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (b *orchBackend) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return b.svcMessages, nil
 }

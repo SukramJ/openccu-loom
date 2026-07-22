@@ -134,6 +134,7 @@
   let renameChannelBusy = $state(false);
   let deleting = $state(false);
   let updatingFw = $state(false);
+  let restoringConfig = $state(false);
   let exportingDef = $state(false);
 
   // Delete-with-options dialog. The plain confirm becomes a small options
@@ -380,6 +381,27 @@
       toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       updatingFw = false;
+    }
+  }
+
+  async function onRestoreConfig() {
+    if (!detail) return;
+    const ok = await confirmStore.ask({
+      title: t("device.restore_config"),
+      body: t("device.confirm_restore_config_body", {
+        name: detail.name || detail.address,
+      }),
+      confirmLabel: t("device.restore_config"),
+    });
+    if (!ok) return;
+    restoringConfig = true;
+    try {
+      await api.restoreDeviceConfig(address);
+      toastStore.success(t("device.restore_config_triggered"));
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      restoringConfig = false;
     }
   }
 
@@ -748,6 +770,19 @@
               >
                 <Icon name="mdi:download" size={14} />
                 {updatingFw ? "…" : t("device.firmware_update")}
+              </Button>
+            {/if}
+            {#if detail.config_restore_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onRestoreConfig()}
+                disabled={restoringConfig}
+                title={t("device.restore_config.tooltip")}
+              >
+                <Icon name="mdi:backup-restore" size={14} />
+                {restoringConfig ? "…" : t("device.restore_config")}
               </Button>
             {/if}
             <Button

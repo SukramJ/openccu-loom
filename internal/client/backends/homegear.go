@@ -144,6 +144,24 @@ func (b *HomegearBackend) UpdateFirmware(_ context.Context, _ string) error {
 	return ErrUnsupported
 }
 
+// RestoreConfigToDevice implements Operations. Homegear has no
+// CCU-style stored-config re-transmit; always returns [ErrUnsupported].
+func (b *HomegearBackend) RestoreConfigToDevice(_ context.Context, _ string) error {
+	return ErrUnsupported
+}
+
+// ListReplaceableDevices implements Operations. Homegear has no
+// device-replacement concept; always returns [ErrUnsupported].
+func (b *HomegearBackend) ListReplaceableDevices(_ context.Context, _ string) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
+// ReplaceDevice implements Operations. Homegear has no
+// device-replacement concept; always returns [ErrUnsupported].
+func (b *HomegearBackend) ReplaceDevice(_ context.Context, _, _ string) error {
+	return ErrUnsupported
+}
+
 // --- direct links --------------------------------------------------
 
 // GetLinks implements Operations.

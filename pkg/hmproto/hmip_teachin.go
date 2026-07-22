@@ -5,6 +5,7 @@ package hmproto
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -31,7 +32,7 @@ func NormalizeSGTIN(s string) (string, error) {
 		return "", fmt.Errorf("sgtin must be 24 hex characters, got %d", len(v))
 	}
 	if !isUpperHex(v) {
-		return "", fmt.Errorf("sgtin contains non-hex characters")
+		return "", errors.New("sgtin contains non-hex characters")
 	}
 	return v, nil
 }
@@ -46,7 +47,7 @@ func NormalizeSGTIN(s string) (string, error) {
 func NormalizeHmIPKey(s string) (string, error) {
 	v := stripKeySeparators(s)
 	if v == "" {
-		return "", fmt.Errorf("key is empty")
+		return "", errors.New("key is empty")
 	}
 	if len(v) >= 32 {
 		if len(v) == 32 && isUpperHex(v) {
@@ -67,9 +68,9 @@ func NormalizeHmIPKey(s string) (string, error) {
 		bits += 5
 		for bits > 8 {
 			if pos < 0 {
-				return "", fmt.Errorf("key label form too long")
+				return "", errors.New("key label form too long")
 			}
-			buf[pos] = byte(value)
+			buf[pos] = byte(value & 0xff)
 			pos--
 			value >>= 8
 			bits -= 8
@@ -80,7 +81,7 @@ func NormalizeHmIPKey(s string) (string, error) {
 
 // isUpperHex reports whether v consists solely of 0-9 / A-F.
 func isUpperHex(v string) bool {
-	for i := 0; i < len(v); i++ {
+	for i := range len(v) {
 		c := v[i]
 		if (c < '0' || c > '9') && (c < 'A' || c > 'F') {
 			return false

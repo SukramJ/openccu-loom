@@ -1,5 +1,24 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.47.0
+
+- **Rooms and Gewerke can now be assigned per channel**, not just per
+  device — the device detail gains an editor on each channel, matching
+  how the CCU organises channels.
+- **Teach in HmIP devices without internet access.** The inbox gains an
+  offline teach-in form: enter a device's SGTIN and key from its label
+  and only that device can pair — no keyserver/internet needed (API
+  2.43.0).
+- **Virtual remotes are now operable.** The CCU's virtual remote-control
+  devices show a key grid with short/long press buttons; pressing a key
+  behaves like a physical button press.
+- **Restore a device's configuration after a factory reset.** A new
+  device-detail action re-sends every stored channel setting and direct
+  link to the device (HmIP-RF / BidCos-RF).
+- **Replace a device with a new one.** From the inbox you can swap a
+  broken or upgraded BidCos device for a new one — the CCU moves the
+  links, teams and programs across and unpairs the old device.
+
 ## 0.46.0
 
 - **Heating groups are now listed (read-only).** OpenCCU-Loom can show the

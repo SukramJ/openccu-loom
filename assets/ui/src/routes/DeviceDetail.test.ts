@@ -14,6 +14,7 @@ const {
   mockDeleteDevice,
   mockListLinks,
   mockListPrograms,
+  mockRestoreDeviceConfig,
   mockToastSuccess,
   mockToastError,
 } = vi.hoisted(() => ({
@@ -28,6 +29,7 @@ const {
   mockDeleteDevice: vi.fn(),
   mockListLinks: vi.fn(),
   mockListPrograms: vi.fn(),
+  mockRestoreDeviceConfig: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
 }));
@@ -45,6 +47,7 @@ vi.mock("$lib/api/client", () => ({
     deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
     listLinks: (...args: unknown[]) => mockListLinks(...args),
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
+    restoreDeviceConfig: (...args: unknown[]) => mockRestoreDeviceConfig(...args),
     updateFirmware: vi.fn(),
     setDeviceRooms: vi.fn(),
     setDeviceFunctions: vi.fn(),
@@ -89,6 +92,7 @@ vi.mock("./AuditLog.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/HistoryChart.svelte", () => ({ default: () => {} }));
 
 import DeviceDetail from "./DeviceDetail.svelte";
+import { confirmStore } from "$lib/stores/confirm.svelte";
 
 function baseDevice(overrides: Record<string, unknown> = {}) {
   return {
@@ -121,6 +125,7 @@ beforeEach(() => {
   mockDeleteDevice.mockResolvedValue(undefined);
   mockListLinks.mockResolvedValue([]);
   mockListPrograms.mockResolvedValue([]);
+  mockRestoreDeviceConfig.mockResolvedValue(undefined);
 });
 
 afterEach(() => cleanup());
@@ -203,6 +208,96 @@ describe("DeviceDetail — happy path", () => {
       expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
     });
     expect(screen.queryByText("device.no_channels")).not.toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — restore device config", () => {
+  it("hides the restore-config button when config_restore_supported is absent", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.restore_config" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the restore-config button when config_restore_supported is false", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: false }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.restore_config" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the restore-config button when config_restore_supported is true", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("confirms, calls the restore API, and shows a success toast", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    vi.mocked(confirmStore.ask).mockResolvedValueOnce(true);
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.restore_config" }));
+
+    await waitFor(() => {
+      expect(mockRestoreDeviceConfig).toHaveBeenCalledWith("0001ABCD");
+    });
+    expect(confirmStore.ask).toHaveBeenCalledOnce();
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.restore_config_triggered");
+  });
+
+  it("does nothing when the user cancels the confirm dialog", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    // confirmStore.ask defaults to "cancelled" (see the file-wide mock above).
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.restore_config" }));
+
+    await waitFor(() => expect(confirmStore.ask).toHaveBeenCalledOnce());
+    expect(mockRestoreDeviceConfig).not.toHaveBeenCalled();
+  });
+
+  it("shows an error toast when the restore call fails", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    vi.mocked(confirmStore.ask).mockResolvedValueOnce(true);
+    mockRestoreDeviceConfig.mockRejectedValueOnce(new Error("ccu unreachable"));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.restore_config" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
   });
 });
 

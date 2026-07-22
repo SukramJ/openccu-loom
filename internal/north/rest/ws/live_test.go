@@ -28,6 +28,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/configui"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // --- helpers -----------------------------------------------------------------
@@ -2279,6 +2280,14 @@ func (f *failOnInstallDevice) SetChannelRooms(_ context.Context, _ string, _ int
 func (f *failOnInstallDevice) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
 	return nil
 }
+
+func (f *failOnInstallDevice) RestoreConfig(_ context.Context, _ string) error { return nil }
+
+func (f *failOnInstallDevice) ReplaceCandidates(_ context.Context, _, _ string) ([]hmapi.ReplaceCandidate, error) {
+	return nil, nil
+}
+
+func (f *failOnInstallDevice) ReplaceDevice(_ context.Context, _, _, _ string) error { return nil }
 
 // TestExtendedChangeHistoryListError exercises the error path in changeHistoryListHandler.
 func TestExtendedChangeHistoryListError(t *testing.T) {

@@ -118,6 +118,12 @@ type DeviceAdmin interface {
 	// [ErrAcceptConfigIncomplete].
 	AcceptInboxDevice(ctx context.Context, address string, opts AcceptInboxOptions) error
 	UpdateFirmware(ctx context.Context, address string) error
+	// RestoreDeviceConfig re-transmits the centrally stored
+	// configuration (all channels' MASTER paramsets + link peerings) to
+	// the device after a factory reset. Supported on HmIP-RF and
+	// BidCos-RF only; other interfaces answer with a
+	// [backends.ErrUnsupported]-class error the handler maps to 422.
+	RestoreDeviceConfig(ctx context.Context, address string) error
 	// InterfaceDutyCycle returns the transmit duty cycle in percent
 	// (0..100) of the radio interface the device identified by address is
 	// paired to, sourced from the per-interface BidCos utilisation poll.

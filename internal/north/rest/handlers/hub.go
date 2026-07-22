@@ -235,9 +235,13 @@ type SysvarRefreshService = interfaces.SysvarRefreshService
 // InboxDeviceDTO is one entry in `GET /api/v1/inbox`.
 type InboxDeviceDTO struct {
 	// Central is the CCU that reported this pending device.
-	Central      string `json:"central,omitempty"`
-	Address      string `json:"address"`
-	Model        string `json:"model"`
+	Central string `json:"central,omitempty"`
+	Address string `json:"address"`
+	Model   string `json:"model"`
+	// Interface is the CCU interface the device was detected through.
+	// The SPA hides the "replace existing device" action for HmIP
+	// interfaces, which do not support the swap.
+	Interface    string `json:"interface,omitempty"`
 	Serial       string `json:"serial,omitempty"`
 	Manufacturer string `json:"manufacturer,omitempty"`
 	FirstSeen    int64  `json:"first_seen,omitempty"`
@@ -946,6 +950,7 @@ func ListInbox(idx HubIndex) http.HandlerFunc {
 					Central:      nh.Central,
 					Address:      e.Address,
 					Model:        e.Model,
+					Interface:    e.Interface,
 					Serial:       e.Serial,
 					Manufacturer: e.Manufacturer,
 					FirstSeen:    e.FirstSeen,

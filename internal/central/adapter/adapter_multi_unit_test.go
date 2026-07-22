@@ -13339,6 +13339,18 @@ func (*configFakeOperations) SetInstallModeLocal(context.Context, int, string, s
 	return backends.ErrUnsupported
 }
 
+func (*configFakeOperations) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*configFakeOperations) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*configFakeOperations) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (*configFakeOperations) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

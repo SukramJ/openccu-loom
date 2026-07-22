@@ -571,3 +571,20 @@ type UISchemaProfile struct {
 	ActiveProfileID int             `json:"active_profile_id,omitempty"`
 	Raw             json.RawMessage `json:"raw,omitempty"`
 }
+
+// --- Device replace ---
+
+// ReplaceCandidate is one already-paired device a new (inbox) device may
+// replace, as returned by `GET /devices/{addr}/replace-candidates`. The
+// interface daemon (rfd / hs485d) computes type / channel compatibility;
+// ModelMatches is true when the candidate's model equals the new
+// device's, letting the SPA badge an exact swap apart from a compatible
+// cross-type one.
+type ReplaceCandidate struct {
+	Address      string `json:"address"`
+	Name         string `json:"name,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Interface    string `json:"interface,omitempty"`
+	Central      string `json:"central,omitempty"`
+	ModelMatches bool   `json:"model_matches"`
+}

@@ -337,7 +337,12 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   `PATCH /devices/{addr}/channels/{no}` fehlen. Zusatzbefund: openapi.yaml
   dokumentiert bei `patchDevice` nur `name` — Spec-Drift, `rooms`/
   `functions` nachziehen. *ReGa, vorhanden.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `PATCH
+  /devices/{addr}/channels/{no}` akzeptiert `rooms`/`functions`, WS
+  `device.set_channel_rooms` / `device.set_channel_functions`,
+  `ChannelSummary.rooms`, rename-sichere ReGa-Skript-Auflösung,
+  SPA-Kanal-Editoren, Audit `device_assignment`. (Der bei `patchDevice`
+  gemeldete Drift war bereits geschlossen.)
 - **G02 — Gerät löschen mit Optionen (RESET/FORCE + Abhängigkeits-Check)** (partial, P2 S)
   `deleteDevice` wird fest mit `flags=0` gerufen; „ab Werk zurücksetzen"
   (1) und „erzwingen" (2) plus Vorab-Warnung über abhängige Links/Programme
@@ -350,7 +355,14 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   implementiert (`callback_handlers.go:572`) — es fehlt die northbound
   Auslöse-Fläche + LINK-/ReGa-Migration als asynchroner Workflow.
   *XML-RPC + ReGa kombiniert.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `GET
+  /devices/{addr}/replace-candidates` + `POST /devices/{addr}/replace`
+  (WS `device.replace_candidates` / `device.replace`), Southbound
+  `listReplaceableDevices`/`replaceDevice` (nur BidCos-RF/-Wired),
+  Eager-Modell-Swap + relaxierter Cross-Type-Guard, Inbox-Replace-Dialog,
+  Audit `device_replace`. Die CCU migriert Links/Teams/ReGa-Referenzen
+  selbst; die WebUI-seitige Energiezähler-Sysvar-Umbenennung ist eine
+  dokumentierte Restlücke (siehe `docs/parity/by_design.md`).
 - **G04 — Gerätekonfiguration wiederherstellen (`restoreConfigToDevice`)** (missing, P2 M)
   Nach Geräte-Werksreset die zentralseitig gespeicherte Konfiguration
   (MASTER aller Kanäle + Link-Peerings) komplett neu übertragen
@@ -358,17 +370,28 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Capability-Gating. *Empfehlung:* Backend-Op + `POST
   /devices/{addr}/config/restore` + Button im Gerätedetail (CONFIG_PENDING-
   Badge als Fortschritt existiert schon). *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `POST
+  /devices/{addr}/config/restore` (WS `device.restore_config`, admin,
+  Audit), Southbound `restoreConfigToDevice` mit Per-Interface-Gate
+  (HmIP-RF/BidCos-RF), `DeviceSummary.config_restore_supported` +
+  Gerätedetail-Button.
 - **G05 — HmIP-Anlernen ohne Internet (SGTIN + Key)** (missing, P2 M)
   `setInstallModeHMIP` wird fest mit `installMode:"ALL"` gesendet;
   LOCAL-Modus mit SGTIN+Key (inkl. Base32→Base16) fehlt. *Empfehlung:*
   Request erweitern + SPA-Formular im Inbox-Bereich. *JSON-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0):
+  `POST /install-mode/interfaces` + `install_mode.enable` um `sgtin`/`key`
+  erweitert, serverseitige Normalisierung in `pkg/hmproto` (SGTIN +
+  Base32→Base16-Key), kein Broadcast-Fallback, Audit
+  `install_mode`/`install_mode_local`, SPA-Offline-Anlernformular.
 - **G06 — Virtuelle Fernbedienung / Tastensimulation** (partial, P2 S)
   Modell kennt `IsVirtualRemote` bereits; die SPA rendert BUTTON-Kanäle
   read-only. *Empfehlung:* Tastenraster mit Kurz/Lang-Buttons
   (PRESS_SHORT/LONG via vorhandenem setValue) im Gerätedetail.
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (reine SPA, kein
+  API-Bump): `VirtualRemoteKeyGrid` im Gerätedetail + interaktives
+  `ButtonEvent`-Widget (Gate `operations.write && usage==data_point`),
+  Einzel-Bool-`setValue` mit `device.trigger`-Flash-Feedback.
 - **G07 — Servicemeldungen dauerhaft unterdrücken** (partial, P2 M)
   Die komplette Client-Schicht (`SuppressServiceMessage`,
   `GetSuppressedServiceMessages`, Koordinator-Naht) existiert

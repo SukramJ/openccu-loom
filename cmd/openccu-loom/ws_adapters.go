@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -972,6 +973,34 @@ func (w *wsDeviceWriter) SetChannelFunctions(ctx context.Context, deviceAddr str
 		return errors.New("ws: device admin not wired")
 	}
 	return w.admin.SetChannelFunctions(ctx, deviceAddr, channelNo, functions)
+}
+
+// RestoreConfig re-transmits the stored configuration to the device via
+// DeviceAdminDomain.RestoreDeviceConfig (XML-RPC
+// `restoreConfigToDevice`).
+func (w *wsDeviceWriter) RestoreConfig(ctx context.Context, address string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.RestoreDeviceConfig(ctx, address)
+}
+
+// ReplaceCandidates lists the devices the new device may replace via
+// DeviceAdminDomain.ReplaceCandidates.
+func (w *wsDeviceWriter) ReplaceCandidates(ctx context.Context, centralName, newAddress string) ([]hmapi.ReplaceCandidate, error) {
+	if w.admin == nil {
+		return nil, errors.New("ws: device admin not wired")
+	}
+	return w.admin.ReplaceCandidates(ctx, centralName, newAddress)
+}
+
+// ReplaceDevice swaps a paired device for a new one via
+// DeviceAdminDomain.ReplaceDevice.
+func (w *wsDeviceWriter) ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.ReplaceDevice(ctx, centralName, oldAddress, newAddress)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

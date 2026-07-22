@@ -51,6 +51,10 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// DeviceReplacer backs the guided device-replace workflow
+	// (GET /devices/{addr}/replace-candidates + POST
+	// /devices/{addr}/replace). Nil serves those routes as 503.
+	DeviceReplacer handlers.DeviceReplacePort
 	// FirmwareRefresher backs POST /devices/firmware/refresh (force
 	// re-read of per-device firmware data from every CCU). Nil leaves
 	// the route unmounted.
@@ -774,6 +778,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
+				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
+			}
+			if d.DeviceReplacer != nil {
+				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
+				pr.With(admin).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))
 			}
 			if d.FirmwareRefresher != nil {
 				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))

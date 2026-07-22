@@ -13,6 +13,7 @@ import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  ArchiveRestore,
   ArrowLeft,
   ArrowRight,
   BarChart3,
@@ -113,6 +114,7 @@ export type IconName =
   | "mdi:alert-circle"
   | "mdi:alert-triangle"
   | "mdi:arrow-left"
+  | "mdi:backup-restore"
   | "mdi:arrow-right"
   | "mdi:battery"
   | "mdi:battery-alert"
@@ -199,6 +201,7 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:alert-circle": CircleAlert,
   "mdi:alert-triangle": AlertTriangle,
   "mdi:arrow-left": ArrowLeft,
+  "mdi:backup-restore": ArchiveRestore,
   "mdi:arrow-right": ArrowRight,
   "mdi:battery": Battery,
   "mdi:battery-alert": BatteryWarning,

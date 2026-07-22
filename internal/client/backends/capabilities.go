@@ -57,6 +57,21 @@ type Capabilities struct {
 	// triggers.
 	FirmwareUpdate bool
 
+	// ConfigRestore is true when the backend exposes
+	// `restoreConfigToDevice` (re-transmit stored config after a
+	// factory reset). CCU only; the caller additionally gates on the
+	// interface, since hs485d / VirtualDevices under KindCCU do not
+	// expose the method.
+	ConfigRestore bool
+
+	// ReplaceDevice is true when the backend exposes
+	// `listReplaceableDevices` / `replaceDevice` (guided swap of a
+	// paired device for a new one). CCU only; the caller additionally
+	// gates on the interface, since HMIPServer (HmIP-*) throws
+	// NotImplementedException — only rfd (BidCos-RF) and hs485d
+	// (BidCos-Wired) implement it.
+	ReplaceDevice bool
+
 	// RequiresPeriodicRefresh is true for backends that cannot push
 	// events and need the periodic-refresh coordinator.
 	RequiresPeriodicRefresh bool
@@ -162,6 +177,8 @@ func CapabilityFor(kind Kind) Capabilities {
 			GetAllPrograms:         true,
 			GetAllSysvars:          true,
 			FirmwareUpdate:         true,
+			ConfigRestore:          true,
+			ReplaceDevice:          true,
 			AlarmMessages:          true,
 			Backup:                 true,
 			CreateSystemVariable:   true,

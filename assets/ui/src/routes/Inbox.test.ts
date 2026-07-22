@@ -10,8 +10,11 @@ const mockListInbox = vi.fn();
 const mockListRooms = vi.fn();
 const mockListFunctions = vi.fn();
 const mockAcceptInboxDevice = vi.fn();
+const mockListReplaceCandidates = vi.fn();
+const mockReplaceDevice = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
+const mockConfirmAsk = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the component
@@ -23,6 +26,8 @@ vi.mock("$lib/api/client", () => ({
     listRooms: (...args: unknown[]) => mockListRooms(...args),
     listFunctions: (...args: unknown[]) => mockListFunctions(...args),
     acceptInboxDevice: (...args: unknown[]) => mockAcceptInboxDevice(...args),
+    listReplaceCandidates: (...args: unknown[]) => mockListReplaceCandidates(...args),
+    replaceDevice: (...args: unknown[]) => mockReplaceDevice(...args),
     listInstallModeInterfaces: vi.fn().mockResolvedValue([]),
     setInstallModeInterface: vi.fn(),
     pairDeviceInstallMode: vi.fn(),
@@ -34,6 +39,10 @@ vi.mock("$lib/api/client", () => ({
       this.status = status;
     }
   },
+}));
+
+vi.mock("$lib/stores/confirm.svelte", () => ({
+  confirmStore: { ask: (...args: unknown[]) => mockConfirmAsk(...args) },
 }));
 
 vi.mock("$lib/i18n", () => ({
@@ -81,12 +90,22 @@ import Inbox from "./Inbox.svelte";
 
 const ONE_DEVICE = [{ address: "0009ABCD", model: "HmIP-STH", central: "" }];
 
+// A BidCos-RF device is the only inbox interface that offers the
+// "replace existing device" action (isReplaceable in Inbox.svelte) — HmIP
+// throws NotImplementedException on the CCU side.
+const REPLACEABLE_DEVICE = [
+  { address: "0009ABCD", model: "HM-Sec-SC", central: "", interface: "BidCos-RF" },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockListInbox.mockResolvedValue(ONE_DEVICE);
   mockListRooms.mockResolvedValue([{ name: "Kitchen" }, { name: "Living Room" }]);
   mockListFunctions.mockResolvedValue([{ name: "Lights" }, { name: "Heating" }]);
   mockAcceptInboxDevice.mockResolvedValue(undefined);
+  mockListReplaceCandidates.mockResolvedValue([]);
+  mockReplaceDevice.mockResolvedValue(undefined);
+  mockConfirmAsk.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -223,5 +242,89 @@ describe("Inbox — accept dialog config payload", () => {
     await waitFor(() => {
       expect(mockAcceptInboxDevice).toHaveBeenCalledWith("0009ABCD", "", undefined);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Guided device replace — isReplaceable gating + confirm/submit flow
+// ---------------------------------------------------------------------------
+// Mirrors the accept-dialog coverage above: Inbox.svelte's replace dialog
+// (openReplace/confirmReplace) is the one piece of client-only logic
+// (interface gating, confirm-then-submit) with no Go-side counterpart.
+
+describe("Inbox — replace workflow", () => {
+  it("hides the replace action for a device on a non-BidCos interface", async () => {
+    mockListInbox.mockResolvedValue([
+      { address: "0009ABCD", model: "HmIP-STH", central: "", interface: "HmIP-RF" },
+    ]);
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.accept")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("inbox.replace.button")).toBeNull();
+  });
+
+  it("opens the replace dialog for a BidCos device and lists candidates", async () => {
+    mockListInbox.mockResolvedValue(REPLACEABLE_DEVICE);
+    mockListReplaceCandidates.mockResolvedValue([
+      { address: "OLD001", name: "Fenster", model: "HM-Sec-SC", model_matches: true },
+    ]);
+
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.replace.button")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.replace.button"));
+
+    await waitFor(() => {
+      expect(mockListReplaceCandidates).toHaveBeenCalledWith("0009ABCD", undefined);
+      expect(screen.getByText("Fenster")).toBeInTheDocument();
+    });
+  });
+
+  it("confirms a replace and forwards the chosen candidate to replaceDevice", async () => {
+    mockListInbox.mockResolvedValue(REPLACEABLE_DEVICE);
+    mockListReplaceCandidates.mockResolvedValue([
+      { address: "OLD001", name: "Fenster", model: "HM-Sec-SC", model_matches: true },
+    ]);
+
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.replace.button")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.replace.button"));
+    await waitFor(() => {
+      expect(screen.getByText("Fenster")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("Fenster"));
+
+    await waitFor(() => {
+      expect(mockConfirmAsk).toHaveBeenCalled();
+      expect(mockReplaceDevice).toHaveBeenCalledWith("0009ABCD", "OLD001", undefined);
+      expect(mockToastSuccess).toHaveBeenCalled();
+    });
+  });
+
+  it("does not call replaceDevice when the confirm dialog is dismissed", async () => {
+    mockConfirmAsk.mockResolvedValue(false);
+    mockListInbox.mockResolvedValue(REPLACEABLE_DEVICE);
+    mockListReplaceCandidates.mockResolvedValue([
+      { address: "OLD001", name: "Fenster", model: "HM-Sec-SC", model_matches: true },
+    ]);
+
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.replace.button")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.replace.button"));
+    await waitFor(() => {
+      expect(screen.getByText("Fenster")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("Fenster"));
+
+    await waitFor(() => {
+      expect(mockConfirmAsk).toHaveBeenCalled();
+    });
+    expect(mockReplaceDevice).not.toHaveBeenCalled();
   });
 });

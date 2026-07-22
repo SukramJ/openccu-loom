@@ -152,6 +152,21 @@ describe("api endpoint paths", () => {
     expect(url).toBe("/api/v1/backups");
     expect((init.method ?? "GET").toUpperCase()).toBe("POST");
   });
+
+  // restoreDeviceConfig re-transmits the stored configuration after a
+  // factory reset (admin-only; HmIP-RF / BidCos-RF only).
+  it("restoreDeviceConfig posts to /devices/{addr}/config/restore", async () => {
+    await api.restoreDeviceConfig("HmIP-X");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/config/restore");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("restoreDeviceConfig percent-encodes the device address", async () => {
+    await api.restoreDeviceConfig("ABC 123");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/ABC%20123/config/restore");
+  });
 });
 
 describe("api — deleteDevice reset/force query flags", () => {
@@ -248,6 +263,50 @@ describe("api — central links channel scoping", () => {
     await api.createCentralLinks("0001ABCD", "");
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+  });
+});
+
+// Guided device replace: listReplaceCandidates is a read-only GET scoped
+// by an optional `central` query param; replaceDevice is the admin-only
+// POST that swaps a paired device for the new one, carrying old_address
+// (and central, when given) in the JSON body.
+describe("api — device replace workflow", () => {
+  it("listReplaceCandidates GETs the replace-candidates endpoint and unwraps the envelope", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ address: "OLD001", model: "HM-Sec-SC", model_matches: true }] }),
+    );
+    const candidates = await api.listReplaceCandidates("NEW001", "ccu");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/NEW001/replace-candidates?central=ccu");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+    expect(candidates).toEqual([{ address: "OLD001", model: "HM-Sec-SC", model_matches: true }]);
+  });
+
+  it("listReplaceCandidates omits the query string when no central is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ candidates: [] }));
+    await api.listReplaceCandidates("NEW001");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/NEW001/replace-candidates");
+  });
+
+  it("replaceDevice POSTs old_address and central in the JSON body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ status: "replacing", old_address: "OLD001", new_address: "NEW001", central: "ccu" }, 202),
+    );
+    await api.replaceDevice("NEW001", "OLD001", "ccu");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/NEW001/replace");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ old_address: "OLD001", central: "ccu" });
+  });
+
+  it("replaceDevice omits central from the body when not given", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ status: "replacing", old_address: "OLD001", new_address: "NEW001" }, 202),
+    );
+    await api.replaceDevice("NEW001", "OLD001");
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ old_address: "OLD001" });
   });
 });
 

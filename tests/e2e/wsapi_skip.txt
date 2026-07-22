@@ -19,3 +19,6 @@ alarm_messages.ack_all      -- godevccu has no ReGa.runScript; live CCU returns 
 service_messages.ack_all    -- godevccu has no ReGa.runScript; live CCU returns ok
 firmware.update             -- godevccu has no ReGa.runScript; live CCU returns ok
 groups.list                 -- godevccu has no CCU.getHeatingGroupList; live CCU returns groups.gson
+device.restore_config       -- godevccu has no restoreConfigToDevice; live CCU re-transmits config
+device.replace_candidates   -- godevccu has no listReplaceableDevices; live CCU returns candidates
+device.replace              -- godevccu has no replaceDevice; live CCU performs the swap

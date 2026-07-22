@@ -143,6 +143,52 @@ func TestGetDevice_HappyPath(t *testing.T) {
 	}
 }
 
+// TestGetDevice_ConfigRestoreSupportedReflectsInterface verifies
+// DeviceSummary.ConfigRestoreSupported (JSON: config_restore_supported)
+// mirrors hmenum.Interface.SupportsConfigRestore(): true for HmIP-RF and
+// BidCos-RF (rfd / HMIPServer implement restoreConfigToDevice), false for
+// BidCos-Wired (hs485d does not).
+func TestGetDevice_ConfigRestoreSupportedReflectsInterface(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		iface hmenum.Interface
+		want  bool
+	}{
+		{"HmIP-RF", hmenum.InterfaceHmIPRF, true},
+		{"BidCos-RF", hmenum.InterfaceBidCosRF, true},
+		{"BidCos-Wired", hmenum.InterfaceBidCosWired, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := device.New(device.Config{
+				Address:     "0001ABCD",
+				Model:       "HmIP-BSM",
+				Interface:   tc.iface,
+				InterfaceID: string(tc.iface),
+				Name:        "Test Device",
+			})
+			idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+			w := httptest.NewRecorder()
+			GetDevice(idx, nil).ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+			var body DeviceDetail
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.ConfigRestoreSupported != tc.want {
+				t.Errorf("%s: config_restore_supported=%v, want %v", tc.iface, body.ConfigRestoreSupported, tc.want)
+			}
+		})
+	}
+}
+
 func TestGetDevice_NotFound_Returns404(t *testing.T) {
 	t.Parallel()
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{}}

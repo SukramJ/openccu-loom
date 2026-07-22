@@ -32,10 +32,12 @@ var writeCommandRoles = map[string]auth.Role{
 	// `/backups` and `/admin/cache/clear` routes (both `.With(admin)`).
 	// programs.delete mirrors DELETE /programs/{id} (admin-gated like
 	// DELETE /devices — deletion is irreversible).
-	"backup.trigger":  auth.RoleAdmin,
-	"backups.trigger": auth.RoleAdmin,
-	"ccu.cache_clear": auth.RoleAdmin,
-	"programs.delete": auth.RoleAdmin,
+	"backup.trigger":        auth.RoleAdmin,
+	"backups.trigger":       auth.RoleAdmin,
+	"ccu.cache_clear":       auth.RoleAdmin,
+	"device.replace":        auth.RoleAdmin,
+	"device.restore_config": auth.RoleAdmin,
+	"programs.delete":       auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.
 	"alarm_messages.ack":      auth.RoleOperator,
@@ -147,6 +149,7 @@ var readOnlyCommands = map[string]struct{}{
 	"central.system_health":       {},
 	"change_history.list":         {},
 	"config.session.changes":      {},
+	"device.replace_candidates":   {},
 	"devices.export_definition":   {},
 	"devices.get":                 {},
 	"devices.list":                {},

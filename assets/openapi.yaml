@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.42.0
+  version: 2.43.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1956,6 +1956,121 @@ paths:
                       Transmit duty cycle in percent of the device's radio
                       interface, present only when it is at or above the
                       warning threshold (80%). Absent when unknown or below.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/config/restore:
+    post:
+      operationId: restoreDeviceConfig
+      summary: Re-transmit stored configuration to a device (admin-only)
+      description: |
+        Asks the CCU to re-send every channel's stored MASTER paramset
+        plus the device's direct-link peerings — the recovery path after
+        a device factory reset. The transfer runs asynchronously on the
+        radio (watch the device's CONFIG_PENDING state for progress), so
+        the endpoint returns 202 once the request was accepted. Supported
+        on HmIP-RF and BidCos-RF only; other interfaces (BidCos-Wired,
+        CUxD, VirtualDevices) answer 422. Consult
+        `DeviceSummary.config_restore_supported` before offering the
+        action.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202":
+          description: |
+            Restore dispatched; the configuration transfer continues
+            asynchronously (watch CONFIG_PENDING).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/replace-candidates:
+    get:
+      operationId: listDeviceReplaceCandidates
+      summary: List devices the new device may replace
+      description: |
+        Returns the already-paired devices the new (inbox) device at
+        `{addr}` may replace — the interface daemon (rfd / hs485d)
+        computes type / channel compatibility. `model_matches` flags an
+        exact-model swap apart from a compatible cross-type one. A pure
+        CCU read. Supported on BidCos-RF and BidCos-Wired only; HmIP
+        devices cannot be replaced (the CCU WebUI hides the action for
+        them too).
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: query, name: central, required: false, schema: { type: string }, description: "Disambiguates the CCU; optional for single-CCU setups." }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidates]
+                properties:
+                  candidates:
+                    type: array
+                    items: { $ref: "#/components/schemas/ReplaceCandidate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/replace:
+    post:
+      operationId: replaceDevice
+      summary: Replace a paired device with a new one (admin-only)
+      description: |
+        Swaps the paired `old_address` for the new device at `{addr}`.
+        The interface daemon migrates direct links, teams and link
+        paramsets; ReGa re-binds the existing object in place (same
+        ise-ID, so programs, names and rooms survive) and the old device
+        is unpaired. Returns 202 once the swap is applied — the radio
+        config transfer to the new device continues CCU-side afterwards.
+        Supported on BidCos-RF and BidCos-Wired only.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_address]
+              properties:
+                old_address:
+                  type: string
+                  description: The paired device the new device replaces.
+                central:
+                  type: string
+                  description: Disambiguates the CCU; optional for single-CCU setups.
+      responses:
+        "202":
+          description: |
+            Replace applied; the device's radio configuration transfer
+            continues asynchronously.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, old_address, new_address]
+                properties:
+                  status: { type: string, example: replacing }
+                  old_address: { type: string }
+                  new_address: { type: string }
+                  central: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /system/firmware/download:
@@ -6531,6 +6646,12 @@ components:
             for the true→false transition before refreshing MASTER. False for
             BidCos-*, VirtualDevices, CUxD — those rely on the save-path
             reload because CONFIG_PENDING never fires (or fires unreliably).
+        config_restore_supported:
+          type: boolean
+          description: |
+            True when the device's interface exposes `restoreConfigToDevice`
+            (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
+            it. False for BidCos-Wired, CUxD and VirtualDevices.
         has_sub_devices:
           type: boolean
           description: |
@@ -9349,9 +9470,31 @@ components:
         central: { type: string, description: CCU that reported this pending device. }
         address: { type: string }
         model: { type: string }
+        interface:
+          type: string
+          description: |
+            CCU interface the device was detected through. The SPA hides
+            the "replace existing device" action for HmIP interfaces,
+            which do not support the swap.
         serial: { type: string }
         manufacturer: { type: string }
         first_seen: { type: integer, format: int64 }
+
+    ReplaceCandidate:
+      type: object
+      required: [address, model_matches]
+      description: |
+        One already-paired device a new (inbox) device may replace,
+        returned by GET /devices/{addr}/replace-candidates.
+      properties:
+        address: { type: string }
+        name: { type: string }
+        model: { type: string }
+        interface: { type: string }
+        central: { type: string }
+        model_matches:
+          type: boolean
+          description: True when the candidate's model equals the new device's (an exact swap rather than a compatible cross-type one).
 
     LinkableChannel:
       type: object

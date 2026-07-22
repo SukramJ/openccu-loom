@@ -219,11 +219,11 @@ func (m *InstallMode) EnableLocal(ctx context.Context, duration time.Duration, s
 	}
 	normalizedSGTIN, err := hmproto.NormalizeSGTIN(sgtin)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrInstallModeInvalidLocalInput, err)
+		return fmt.Errorf("%w: %w", ErrInstallModeInvalidLocalInput, err)
 	}
 	normalizedKey, err := hmproto.NormalizeHmIPKey(key)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrInstallModeInvalidLocalInput, err)
+		return fmt.Errorf("%w: %w", ErrInstallModeInvalidLocalInput, err)
 	}
 	lw, ok := m.Writer.(LocalInstallModeWriter)
 	if !ok {

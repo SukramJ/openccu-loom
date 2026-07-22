@@ -416,6 +416,7 @@ export type EditSessionResponse = components["schemas"]["EditSessionResponse"];
 
 // InboxDevice re-exported from generated schema. central is optional (Go json:"central,omitempty").
 export type InboxDevice = components["schemas"]["InboxDevice"];
+export type ReplaceCandidate = components["schemas"]["ReplaceCandidate"];
 
 // ConfigSnapshot re-exported from generated schema.
 // Generated adds: extras, policies fields — additive, safe.

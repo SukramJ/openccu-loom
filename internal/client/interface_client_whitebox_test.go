@@ -500,6 +500,18 @@ func (b *orchBackendStub) SetInstallModeLocal(context.Context, int, string, stri
 	return backends.ErrUnsupported
 }
 
+func (b *orchBackendStub) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (b *orchBackendStub) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

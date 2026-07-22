@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // jsonUnmarshal is a package-level alias so fakeScriptRunner.RunJSON
@@ -227,6 +228,196 @@ func TestCuxdBackendDeleteDeviceUnsupported(t *testing.T) {
 	t.Parallel()
 	b := NewCuxdBackend(&fakeCaller{}, nil)
 	if err := b.DeleteDevice(context.Background(), "CUX0001", 0); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+// TestCcuBackendRestoreConfigToDeviceDispatchesXMLRPC verifies the wire
+// call is exactly `restoreConfigToDevice(address)` — the CCU method name
+// rfd (BidCos-RF) and HMIPServer (HmIP-RF) share.
+func TestCcuBackendRestoreConfigToDeviceDispatchesXMLRPC(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: nil}
+	b := NewCcuBackend(x, nil, nil)
+	if err := b.RestoreConfigToDevice(context.Background(), "0001ABCD"); err != nil {
+		t.Fatalf("RestoreConfigToDevice: %v", err)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	if len(got) != 2 {
+		t.Fatalf("expected method+args call, got %v", got)
+	}
+	if method, _ := got[0].(string); method != "restoreConfigToDevice" {
+		t.Fatalf("method=%s, want restoreConfigToDevice", method)
+	}
+	args, _ := got[1].([]any)
+	if len(args) != 1 || args[0] != "0001ABCD" {
+		t.Fatalf("args=%v, want [0001ABCD]", args)
+	}
+}
+
+// TestCcuBackendRestoreConfigToDevicePropagatesFault verifies an XML-RPC
+// fault from the CCU (e.g. the device is momentarily unreachable) is
+// propagated to the caller rather than swallowed.
+func TestCcuBackendRestoreConfigToDevicePropagatesFault(t *testing.T) {
+	t.Parallel()
+	fault := &hmerr.XMLRPCFault{Code: -1, Message: "device unreachable"}
+	x := &fakeCaller{err: fault}
+	b := NewCcuBackend(x, nil, nil)
+	err := b.RestoreConfigToDevice(context.Background(), "0001ABCD")
+	var got *hmerr.XMLRPCFault
+	if !errors.As(err, &got) || got.Code != -1 {
+		t.Fatalf("expected *hmerr.XMLRPCFault{Code: -1}, got %v", err)
+	}
+}
+
+func TestCcuBackendRestoreConfigToDeviceWithoutXMLRPCErrors(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(nil, nil, nil)
+	if err := b.RestoreConfigToDevice(context.Background(), "0001ABCD"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCuxdBackendRestoreConfigToDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	if err := b.RestoreConfigToDevice(context.Background(), "CUX0001"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendRestoreConfigToDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	if err := b.RestoreConfigToDevice(context.Background(), "ABCD1234"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+// TestCcuBackendListReplaceableDevicesDispatchesXMLRPC verifies the wire
+// call is exactly `listReplaceableDevices(newAddress)` and that a returned
+// device row decodes correctly.
+func TestCcuBackendListReplaceableDevicesDispatchesXMLRPC(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: []any{
+		map[string]any{"ADDRESS": "OLD001", "TYPE": "HM-Sec-SC"},
+	}}
+	b := NewCcuBackend(x, nil, nil)
+	devs, err := b.ListReplaceableDevices(context.Background(), "NEW001")
+	if err != nil {
+		t.Fatalf("ListReplaceableDevices: %v", err)
+	}
+	if len(devs) != 1 || devs[0].Address != "OLD001" || devs[0].Type != "HM-Sec-SC" {
+		t.Fatalf("devs=%+v", devs)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	if len(got) != 2 {
+		t.Fatalf("expected method+args call, got %v", got)
+	}
+	if method, _ := got[0].(string); method != "listReplaceableDevices" {
+		t.Fatalf("method=%s, want listReplaceableDevices", method)
+	}
+	args, _ := got[1].([]any)
+	if len(args) != 1 || args[0] != "NEW001" {
+		t.Fatalf("args=%v, want [NEW001]", args)
+	}
+}
+
+// TestCcuBackendListReplaceableDevicesPropagatesFault verifies an XML-RPC
+// fault from the CCU (e.g. a serial belonging to another interface) is
+// propagated rather than swallowed.
+func TestCcuBackendListReplaceableDevicesPropagatesFault(t *testing.T) {
+	t.Parallel()
+	fault := &hmerr.XMLRPCFault{Code: -1, Message: "unknown method"}
+	x := &fakeCaller{err: fault}
+	b := NewCcuBackend(x, nil, nil)
+	_, err := b.ListReplaceableDevices(context.Background(), "NEW001")
+	var got *hmerr.XMLRPCFault
+	if !errors.As(err, &got) || got.Code != -1 {
+		t.Fatalf("expected *hmerr.XMLRPCFault{Code: -1}, got %v", err)
+	}
+}
+
+func TestCcuBackendListReplaceableDevicesWithoutXMLRPCErrors(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(nil, nil, nil)
+	if _, err := b.ListReplaceableDevices(context.Background(), "NEW001"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+// TestCcuBackendReplaceDeviceDispatchesXMLRPC verifies the wire call is
+// exactly `replaceDevice(old, new)`.
+func TestCcuBackendReplaceDeviceDispatchesXMLRPC(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: nil}
+	b := NewCcuBackend(x, nil, nil)
+	if err := b.ReplaceDevice(context.Background(), "OLD001", "NEW001"); err != nil {
+		t.Fatalf("ReplaceDevice: %v", err)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	if len(got) != 2 {
+		t.Fatalf("expected method+args call, got %v", got)
+	}
+	if method, _ := got[0].(string); method != "replaceDevice" {
+		t.Fatalf("method=%s, want replaceDevice", method)
+	}
+	args, _ := got[1].([]any)
+	if len(args) != 2 || args[0] != "OLD001" || args[1] != "NEW001" {
+		t.Fatalf("args=%v, want [OLD001 NEW001]", args)
+	}
+}
+
+// TestCcuBackendReplaceDevicePropagatesFault verifies an incompatible-pair
+// fault from the CCU is propagated rather than swallowed.
+func TestCcuBackendReplaceDevicePropagatesFault(t *testing.T) {
+	t.Parallel()
+	fault := &hmerr.XMLRPCFault{Code: -2, Message: "incompatible device types"}
+	x := &fakeCaller{err: fault}
+	b := NewCcuBackend(x, nil, nil)
+	err := b.ReplaceDevice(context.Background(), "OLD001", "NEW001")
+	var got *hmerr.XMLRPCFault
+	if !errors.As(err, &got) || got.Code != -2 {
+		t.Fatalf("expected *hmerr.XMLRPCFault{Code: -2}, got %v", err)
+	}
+}
+
+func TestCcuBackendReplaceDeviceWithoutXMLRPCErrors(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(nil, nil, nil)
+	if err := b.ReplaceDevice(context.Background(), "OLD001", "NEW001"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCuxdBackendListReplaceableDevicesUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	if _, err := b.ListReplaceableDevices(context.Background(), "NEW001"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCuxdBackendReplaceDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	if err := b.ReplaceDevice(context.Background(), "OLD001", "NEW001"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendListReplaceableDevicesUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	if _, err := b.ListReplaceableDevices(context.Background(), "NEW001"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendReplaceDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	if err := b.ReplaceDevice(context.Background(), "OLD001", "NEW001"); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("expected ErrUnsupported, got %v", err)
 	}
 }

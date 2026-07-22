@@ -73,6 +73,37 @@ type DeviceOps interface {
 	// [ErrUnsupported] on backends without [Capabilities.FirmwareUpdate].
 	UpdateFirmware(ctx context.Context, address string) error
 
+	// RestoreConfigToDevice re-transmits the centrally stored
+	// configuration (MASTER paramsets of every channel plus link
+	// peerings) to the device — the recovery path after a device
+	// factory reset. Maps to the CCU `restoreConfigToDevice(address)`
+	// XML-RPC call. The call returns promptly; the radio transfer
+	// continues asynchronously (CONFIG_PENDING). Returns
+	// [ErrUnsupported] on backends without [Capabilities.ConfigRestore]
+	// (CUxD, Homegear); the caller additionally gates on the interface
+	// (only rfd / HMIPServer expose the method).
+	RestoreConfigToDevice(ctx context.Context, address string) error
+
+	// ListReplaceableDevices returns the already-paired devices the new
+	// device (newDeviceAddress) may replace — the interface daemon
+	// computes type / channel compatibility. Maps to the XML-RPC
+	// `listReplaceableDevices(newDeviceAddress)` call. Returns
+	// [ErrUnsupported] on backends without [Capabilities.ReplaceDevice];
+	// the caller additionally gates on the interface (rfd / hs485d
+	// only). A wrong-interface serial produces an upstream fault the
+	// caller tolerates.
+	ListReplaceableDevices(ctx context.Context, newDeviceAddress string) ([]hmproto.DeviceDescription, error)
+
+	// ReplaceDevice swaps oldDeviceAddress for newDeviceAddress on the
+	// interface daemon: the daemon migrates the direct links, teams and
+	// link paramsets, and ReGa re-binds the existing object in place
+	// (same ise-ID → programs, names, rooms survive). Maps to the
+	// XML-RPC `replaceDevice(oldDeviceAddress, newDeviceAddress)` call.
+	// Returns [ErrUnsupported] on backends without
+	// [Capabilities.ReplaceDevice]; an incompatible pair surfaces as an
+	// upstream fault.
+	ReplaceDevice(ctx context.Context, oldDeviceAddress, newDeviceAddress string) error
+
 	// DeleteDevice unpairs the device from the CCU. Maps to the CCU's
 	// `deleteDevice(address, flags)` XML-RPC call. flags is the CCU delete
 	// bitmask ([DeleteFlagReset] resets the device to factory defaults,
