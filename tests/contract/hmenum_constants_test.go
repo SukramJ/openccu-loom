@@ -248,6 +248,46 @@ func TestDeviceSearchClassification(t *testing.T) {
 	}
 }
 
+// TestCommunicationTestClassification pins the exact set of interfaces on
+// which the CCU's per-device communication/function test can run: HmIP-RF,
+// BidCos-RF, and BidCos-Wired reach real devices over radio/bus. CUxD has
+// no ReGa com-test scripts and VirtualDevices has no radio to test.
+func TestCommunicationTestClassification(t *testing.T) {
+	t.Parallel()
+
+	wantTrue := []hmenum.Interface{
+		hmenum.InterfaceHmIPRF,
+		hmenum.InterfaceBidCosRF,
+		hmenum.InterfaceBidCosWired,
+	}
+	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceVirtualDevices,
+		hmenum.InterfaceCUxD,
+	}
+
+	if got := len(hmenum.InterfacesSupportingCommunicationTest); got != 3 {
+		t.Fatalf("InterfacesSupportingCommunicationTest len=%d, want 3", got)
+	}
+
+	for _, iface := range wantTrue {
+		if _, ok := hmenum.InterfacesSupportingCommunicationTest[iface]; !ok {
+			t.Errorf("%s missing from InterfacesSupportingCommunicationTest", iface)
+		}
+		if !iface.SupportsCommunicationTest() {
+			t.Errorf("%s.SupportsCommunicationTest() = false, want true", iface)
+		}
+	}
+
+	for _, iface := range wantFalse {
+		if _, ok := hmenum.InterfacesSupportingCommunicationTest[iface]; ok {
+			t.Errorf("%s must not be in InterfacesSupportingCommunicationTest", iface)
+		}
+		if iface.SupportsCommunicationTest() {
+			t.Errorf("%s.SupportsCommunicationTest() = true, want false", iface)
+		}
+	}
+}
+
 // TestCategoryToTypeCovers ensures every real DataPointCategory maps to
 // a DataPointType. UNDEFINED is intentionally omitted.
 func TestCategoryToTypeCovers(t *testing.T) {

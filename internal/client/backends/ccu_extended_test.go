@@ -8,7 +8,7 @@
 // GetAllDeviceData, GetDeviceDetails, GetDeviceDescription,
 // CreateBackupAndDownload, TriggerFirmwareUpdate, DeleteSystemVariable,
 // GetIseIDByAddress, GetLinkInfo, SetLinkInfo, GetSuppressedServiceMessages,
-// HasProgramIDs.
+// HasProgramIDs, TestDevice.
 
 package backends
 
@@ -17,7 +17,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -1372,5 +1374,167 @@ func TestCcuListBidcosInterfacesError(t *testing.T) {
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
 	if _, err := b.ListBidcosInterfaces(context.Background(), "BidCos-RF"); err == nil {
 		t.Fatal("expected error to propagate")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestDevice — per-device communication/function test
+// ---------------------------------------------------------------------------
+
+func TestCcuTestDeviceNoRega(t *testing.T) {
+	t.Parallel()
+	// Without a ScriptRunner the operation must return ErrUnsupported —
+	// there is no JSON-RPC method for the com-test, only the ReGa scripts.
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	_, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 1)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuTestDeviceStartFailureReturnsError(t *testing.T) {
+	t.Parallel()
+	runner := &fakeScriptRunner{
+		rawJSON: `{"success":false,"error":"device unreachable"}`,
+	}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	_, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 1)
+	if err == nil {
+		t.Fatal("expected error when start reports failure")
+	}
+	if !strings.Contains(err.Error(), "device unreachable") {
+		t.Errorf("error should surface the CCU-reported message, got: %v", err)
+	}
+}
+
+func TestCcuTestDeviceStartFailureDefaultMessage(t *testing.T) {
+	t.Parallel()
+	// No "error" field on a failed start: the backend substitutes a
+	// generic message rather than returning an empty error string.
+	runner := &fakeScriptRunner{rawJSON: `{"success":false}`}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	_, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 1)
+	if err == nil {
+		t.Fatal("expected error when start reports failure")
+	}
+	if !strings.Contains(err.Error(), "communication test start failed") {
+		t.Errorf("expected default failure message, got: %v", err)
+	}
+}
+
+// TestCcuTestDeviceHappyPathPassesAfterPolling verifies the poll loop:
+// the first poll_com_test reply reports passed:false, the second reports
+// passed:true with a completed timestamp — TestDevice must keep polling
+// until it sees passed:true and parse CompletedAt with the ReGa
+// "%Y-%m-%d %H:%M:%S" layout.
+func TestCcuTestDeviceHappyPathPassesAfterPolling(t *testing.T) {
+	t.Parallel()
+	runner := &multiScriptRunner{replies: []string{
+		`{"success":true,"started":"2026-07-22 10:00:00"}`,
+		`{"passed":false}`,
+		`{"passed":true,"completed":"2026-07-22 10:00:05"}`,
+	}}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	// maxWaitSecs/pollIntervalSecs small so the two poll ticks (false, then
+	// true) fire quickly — the test asserts behaviour, not real timing.
+	result, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 0.01)
+	if err != nil {
+		t.Fatalf("TestDevice: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("result=%+v, want Passed=true", result)
+	}
+	if result.TimedOut {
+		t.Fatalf("result=%+v, want TimedOut=false", result)
+	}
+	if result.StartedAt.IsZero() {
+		t.Error("StartedAt must be set")
+	}
+	wantCompleted := "2026-07-22 10:00:05"
+	if got := result.CompletedAt.Format(comTestTimeLayout); got != wantCompleted {
+		t.Errorf("CompletedAt=%q, want %q", got, wantCompleted)
+	}
+	if result.DurationMs < 0 {
+		t.Errorf("DurationMs=%d, want >= 0", result.DurationMs)
+	}
+}
+
+// TestCcuTestDeviceTimeoutWhenNeverPasses verifies that a device that
+// never reports passed:true surfaces TimedOut=true, Passed=false once the
+// poll window elapses — small maxWaitSecs/pollIntervalSecs keep the test
+// fast (tens of milliseconds) without faking the clock.
+func TestCcuTestDeviceTimeoutWhenNeverPasses(t *testing.T) {
+	t.Parallel()
+	runner := &multiScriptRunner{replies: []string{
+		`{"success":true,"started":"2026-07-22 10:00:00"}`,
+		`{"passed":false}`,
+	}}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	start := time.Now()
+	result, err := b.TestDevice(context.Background(), "AABBCCDD", 0.05, 0.01)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("TestDevice: %v", err)
+	}
+	if result.Passed {
+		t.Fatalf("result=%+v, want Passed=false", result)
+	}
+	if !result.TimedOut {
+		t.Fatalf("result=%+v, want TimedOut=true", result)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("timeout test took %v, want well under the 2s test-suite budget", elapsed)
+	}
+}
+
+// TestCcuTestDeviceDefaultsAppliedWhenZeroOrNegative verifies the
+// maxWaitSecs<=0 / pollIntervalSecs<=0 fallback to 30s/2s does not panic
+// or divide by zero — it exercises the branch via a context that is
+// cancelled almost immediately so the test does not actually wait 2s.
+func TestCcuTestDeviceDefaultsAppliedWhenZeroOrNegative(t *testing.T) {
+	t.Parallel()
+	runner := &multiScriptRunner{replies: []string{
+		`{"success":true,"started":"2026-07-22 10:00:00"}`,
+		`{"passed":false}`,
+	}}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := b.TestDevice(ctx, "AABBCCDD", 0, -1)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("want context.DeadlineExceeded (proving the 2s default poll interval is in effect), got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestDevice — CUxD / Homegear always ErrUnsupported (no ReGa surface)
+// ---------------------------------------------------------------------------
+
+func TestCuxdBackendTestDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	_, err := b.TestDevice(context.Background(), "CUX0001", 1, 1)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendTestDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	_, err := b.TestDevice(context.Background(), "HG0001", 1, 1)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }

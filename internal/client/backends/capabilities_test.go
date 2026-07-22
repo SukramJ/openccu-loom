@@ -42,6 +42,7 @@ func TestCCUCapabilityFlags(t *testing.T) {
 		{"FirmwareUpdate", caps.FirmwareUpdate, true},
 		{"DeleteSystemVariable", caps.DeleteSystemVariable, true},
 		{"CreateSystemVariable", caps.CreateSystemVariable, true},
+		{"CommunicationTest", caps.CommunicationTest, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,6 +110,22 @@ func TestCapabilityFor_SearchDevices(t *testing.T) {
 	}
 	if CapabilityFor(KindHomegear).SearchDevices {
 		t.Error("KindHomegear: SearchDevices should be false")
+	}
+}
+
+// TestCapabilityFor_CommunicationTest verifies that the per-device
+// communication/function test capability is advertised only for KindCCU —
+// CUxD and Homegear have no ReGa runner to drive the start/poll scripts.
+func TestCapabilityFor_CommunicationTest(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).CommunicationTest {
+		t.Error("KindCCU: CommunicationTest should be true")
+	}
+	if CapabilityFor(KindCUxD).CommunicationTest {
+		t.Error("KindCUxD: CommunicationTest should be false")
+	}
+	if CapabilityFor(KindHomegear).CommunicationTest {
+		t.Error("KindHomegear: CommunicationTest should be false")
 	}
 }
 
@@ -448,6 +465,7 @@ func TestCCUCapabilityMatrix(t *testing.T) {
 		"GetAllSysvars":          caps.GetAllSysvars,
 		"FirmwareUpdate":         caps.FirmwareUpdate,
 		"ConfigRestore":          caps.ConfigRestore,
+		"CommunicationTest":      caps.CommunicationTest,
 		"AlarmMessages":          caps.AlarmMessages,
 		"Backup":                 caps.Backup,
 		"CreateSystemVariable":   caps.CreateSystemVariable,

@@ -167,6 +167,37 @@ describe("api endpoint paths", () => {
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/v1/devices/ABC%20123/config/restore");
   });
+
+  // testDeviceCommunication runs the CCU's per-device communication /
+  // function test and returns the CommunicationTestResult it POSTs back.
+  it("testDeviceCommunication posts to /devices/{addr}/test", async () => {
+    await api.testDeviceCommunication("HmIP-X");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/test");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("testDeviceCommunication percent-encodes the device address", async () => {
+    await api.testDeviceCommunication("ABC 123");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/ABC%20123/test");
+  });
+
+  it("testDeviceCommunication returns the CommunicationTestResult body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        passed: true,
+        started_at: "2026-07-22T10:00:00Z",
+        completed_at: "2026-07-22T10:00:03Z",
+        duration_ms: 3000,
+        timed_out: false,
+      }),
+    );
+    const result = await api.testDeviceCommunication("HmIP-X");
+    expect(result.passed).toBe(true);
+    expect(result.duration_ms).toBe(3000);
+    expect(result.timed_out).toBe(false);
+  });
 });
 
 describe("api — deleteDevice reset/force query flags", () => {

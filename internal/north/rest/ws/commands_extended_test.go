@@ -462,6 +462,44 @@ func TestExtendedDeviceRestoreConfig(t *testing.T) {
 	}, "address is required")
 }
 
+// TestExtendedDeviceTest exercises `device.test` end to end through the
+// Router: the happy path forwards the address to
+// DeviceWriter.TestDeviceCommunication and returns its result verbatim; a
+// missing address is rejected before the domain layer is ever called.
+func TestExtendedDeviceTest(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.test", map[string]any{
+		"address": "ABC0001",
+	}).(hmapi.CommunicationTestResult)
+	if !out.Passed {
+		t.Fatalf("result=%+v, want Passed=true (stubDevices.TestDeviceCommunication canned result)", out)
+	}
+	if !devs.testedDevices["ABC0001"] {
+		t.Fatalf("communication test not forwarded to the domain layer: %v", devs.testedDevices)
+	}
+
+	dispatchExpectErr(t, r, "device.test", map[string]any{
+		"address": "",
+	}, "address is required")
+}
+
+// TestExtendedDeviceTestMissingAddressReturnsBadRequest asserts the error
+// code (not just the message) for the missing-address rejection, mirroring
+// TestExtendedParamsetPut_EditLockEnforced's code-level assertions.
+func TestExtendedDeviceTestMissingAddressReturnsBadRequest(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	raw, _ := json.Marshal(map[string]any{"address": ""})
+	res := r.Dispatch(opCtx(), "device.test", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected code %q, got %+v", CommandErrorBadRequest, res.Error)
+	}
+	if len(devs.testedDevices) != 0 {
+		t.Fatalf("domain layer must not be called on validation failure, got %v", devs.testedDevices)
+	}
+}
+
 // TestExtendedDeviceReplaceCandidates exercises `device.replace_candidates`
 // end to end through the Router: the happy path forwards address/central
 // to DeviceWriter.ReplaceCandidates and wraps its result in a {"candidates":

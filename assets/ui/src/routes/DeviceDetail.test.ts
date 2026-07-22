@@ -15,8 +15,10 @@ const {
   mockListLinks,
   mockListPrograms,
   mockRestoreDeviceConfig,
+  mockTestDeviceCommunication,
   mockToastSuccess,
   mockToastError,
+  mockToastWarn,
 } = vi.hoisted(() => ({
   mockGetDevice: vi.fn(),
   mockGetDeviceSchedule: vi.fn(),
@@ -30,8 +32,10 @@ const {
   mockListLinks: vi.fn(),
   mockListPrograms: vi.fn(),
   mockRestoreDeviceConfig: vi.fn(),
+  mockTestDeviceCommunication: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
+  mockToastWarn: vi.fn(),
 }));
 
 vi.mock("$lib/api/client", () => ({
@@ -48,6 +52,7 @@ vi.mock("$lib/api/client", () => ({
     listLinks: (...args: unknown[]) => mockListLinks(...args),
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
     restoreDeviceConfig: (...args: unknown[]) => mockRestoreDeviceConfig(...args),
+    testDeviceCommunication: (...args: unknown[]) => mockTestDeviceCommunication(...args),
     updateFirmware: vi.fn(),
     setDeviceRooms: vi.fn(),
     setDeviceFunctions: vi.fn(),
@@ -70,6 +75,7 @@ vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
+    warn: (...args: unknown[]) => mockToastWarn(...args),
   },
 }));
 
@@ -126,6 +132,13 @@ beforeEach(() => {
   mockListLinks.mockResolvedValue([]);
   mockListPrograms.mockResolvedValue([]);
   mockRestoreDeviceConfig.mockResolvedValue(undefined);
+  mockTestDeviceCommunication.mockResolvedValue({
+    passed: true,
+    started_at: "2026-07-22T10:00:00Z",
+    completed_at: "2026-07-22T10:00:03Z",
+    duration_ms: 3000,
+    timed_out: false,
+  });
 });
 
 afterEach(() => cleanup());
@@ -294,6 +307,103 @@ describe("DeviceDetail — restore device config", () => {
       ).toBeInTheDocument();
     });
     await fireEvent.click(screen.getByRole("button", { name: "device.restore_config" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+  });
+});
+
+describe("DeviceDetail — communication test", () => {
+  it("hides the test button when communication_test_supported is absent", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.communication_test" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the test button when communication_test_supported is false", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: false }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.communication_test" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the test button when communication_test_supported is true", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("runs the test, shows a success toast, and renders a passed badge", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.communication_test" }));
+
+    await waitFor(() => {
+      expect(mockTestDeviceCommunication).toHaveBeenCalledWith("0001ABCD");
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.communication_test_passed");
+    await waitFor(() => {
+      expect(screen.getByText("device.communication_test_passed")).toBeInTheDocument();
+    });
+  });
+
+  it("shows a warning toast and a failed badge when the device does not answer", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    mockTestDeviceCommunication.mockResolvedValueOnce({
+      passed: false,
+      started_at: "2026-07-22T10:00:00Z",
+      duration_ms: 30000,
+      timed_out: true,
+    });
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.communication_test" }));
+
+    await waitFor(() => {
+      expect(mockToastWarn).toHaveBeenCalledWith("device.communication_test_failed");
+    });
+    expect(screen.getByText("device.communication_test_failed")).toBeInTheDocument();
+  });
+
+  it("shows an error toast when the test call fails", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    mockTestDeviceCommunication.mockRejectedValueOnce(new Error("ccu unreachable"));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.communication_test" }));
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
