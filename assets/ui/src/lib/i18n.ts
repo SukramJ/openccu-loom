@@ -859,6 +859,7 @@ const EN: Catalog = {
   "nav.firmware": "Firmware",
   "nav.inbox": "Inbox",
   "nav.fleet": "Fleet",
+  "nav.groups": "Groups",
   "favorites.title": "Favorites",
   "favorites.subtitle": "Your pinned devices and system variables, synced across browsers.",
   "favorites.empty": "No favorites yet. Pin a device from its detail page.",
@@ -2163,6 +2164,7 @@ const EN: Catalog = {
   "page.title.diagnostics": "Diagnostics — OpenCCU-Loom",
   "page.title.energy": "Energy — OpenCCU-Loom",
   "page.title.fleet": "Fleet — OpenCCU-Loom",
+  "page.title.groups": "Heating groups — OpenCCU-Loom",
   "page.title.logs": "Logs — OpenCCU-Loom",
   "page.title.settings": "Settings — OpenCCU-Loom",
   "page.title.about": "About — OpenCCU-Loom",
@@ -2817,6 +2819,21 @@ const EN: Catalog = {
   "fleet.field.devices": "Devices",
   "fleet.field.interfaces": "Interfaces",
   "fleet.open_webui": "Open CCU WebUI",
+  // --- Heating groups (read-only, GR01) ---
+  "groups.title": "Heating groups",
+  "groups.subtitle":
+    "Read-only overview of the CCU's heating groups (HmIP / BidCos) and their members.",
+  "groups.count": "{count} groups",
+  "groups.empty": "No heating groups configured yet.",
+  "groups.empty.description":
+    "Heating groups are created and edited on the CCU itself; this view only mirrors the current roster.",
+  "groups.load_error": "Could not load heating groups: {error}",
+  "groups.field.id": "ID",
+  "groups.type": "Type",
+  "groups.field.group_device_name": "Virtual device",
+  "groups.operate_only_via_group": "Group-only operation",
+  "groups.members": "{count} members",
+  "groups.members.empty": "No members",
 };
 
 const DE: Catalog = {
@@ -3673,6 +3690,7 @@ const DE: Catalog = {
   "favorites.kind.sysvar": "Systemvariable",
   "nav.inbox": "Posteingang",
   "nav.fleet": "CCUs",
+  "nav.groups": "Gruppen",
   "nav.logout": "Abmelden",
   "nav.messages": "Meldungen",
   "nav.programs": "Programme",
@@ -4965,6 +4983,7 @@ const DE: Catalog = {
   "page.title.diagnostics": "Diagnose — OpenCCU-Loom",
   "page.title.energy": "Energie — OpenCCU-Loom",
   "page.title.fleet": "CCUs — OpenCCU-Loom",
+  "page.title.groups": "Heizungsgruppen — OpenCCU-Loom",
   "page.title.logs": "Protokoll — OpenCCU-Loom",
   "page.title.settings": "Einstellungen — OpenCCU-Loom",
   "page.title.about": "Info — OpenCCU-Loom",
@@ -5589,6 +5608,21 @@ const DE: Catalog = {
   "fleet.field.devices": "Geräte",
   "fleet.field.interfaces": "Schnittstellen",
   "fleet.open_webui": "CCU-WebUI öffnen",
+  // --- Heizungsgruppen (schreibgeschützt, GR01) ---
+  "groups.title": "Heizungsgruppen",
+  "groups.subtitle":
+    "Schreibgeschützte Übersicht der Heizungsgruppen (HmIP / BidCos) der CCU und ihrer Mitglieder.",
+  "groups.count": "{count} Gruppen",
+  "groups.empty": "Noch keine Heizungsgruppen konfiguriert.",
+  "groups.empty.description":
+    "Heizungsgruppen werden auf der CCU selbst angelegt und bearbeitet; diese Ansicht spiegelt nur den aktuellen Bestand.",
+  "groups.load_error": "Heizungsgruppen konnten nicht geladen werden: {error}",
+  "groups.field.id": "ID",
+  "groups.type": "Typ",
+  "groups.field.group_device_name": "Virtuelles Gerät",
+  "groups.operate_only_via_group": "Nur Gruppenbedienung",
+  "groups.members": "{count} Mitglieder",
+  "groups.members.empty": "Keine Mitglieder",
 };
 
 const catalogs: Record<string, Catalog> = { en: EN, de: DE };

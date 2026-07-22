@@ -47,6 +47,7 @@ type wsCommandWiring struct {
 	linksDomain      *adapter.LinksDomain
 	schedulesDomain  *adapter.SchedulesDomain
 	centralLinks     *adapter.CentralLinksDomain
+	groupsDomain     *adapter.GroupsDomain
 	definitionExport *adapter.DefinitionExportDomain
 	deviceAdmin      *adapter.DeviceAdminDomain
 	paramsets        *adapter.ParamsetsDomain
@@ -144,6 +145,9 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// ws.CentralLinksManager directly. Backs central.create_links /
 		// central.remove_links / central.links_status.
 		CentralLinks: w.centralLinks,
+		// Groups: wired — read-only heating-group listing. The same
+		// groupsAdapter backs the REST GET /api/v1/groups reader.
+		Groups: newGroupsAdapter(w.groupsDomain),
 		// SessionRecorder: wired — fans recording.start/stop/status across
 		// every central's session.Recorder via the registry.
 		SessionRecorder: wsSessionRecorderFrom(w.registry),

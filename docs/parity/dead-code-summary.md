@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 0873031e
-HEAD: 0873031e
+Generated: aa2a8069
+HEAD: aa2a8069
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26217 |
-| Reachable | 4580 |
-| Whitelisted | 18878 |
-| **Unreachable** | **2759** |
+| Total Exported | 26264 |
+| Reachable | 4585 |
+| Whitelisted | 18913 |
+| **Unreachable** | **2766** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: 0873031e
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 37 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 89 | 48 |
+| internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
@@ -99,7 +99,7 @@ HEAD: 0873031e
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 37 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 89 | 48 |
+| internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
@@ -153,6 +153,7 @@ HEAD: 0873031e
 | internal/model/custom/textdisplay | 0 | 5 | 18 |
 | internal/model/datapoint | 0 | 3 | 0 |
 | internal/model/device/definitionexport | 0 | 6 | 2 |
+| internal/model/group | 0 | 4 | 0 |
 | internal/model/naming | 0 | 2 | 4 |
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/bridge | 0 | 7 | 0 |

@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/configui"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -234,6 +235,8 @@ type ExtendedCommandsConfig struct {
 	// SessionRecorder backs `recording.start`, `recording.stop`, and
 	// `recording.status`.
 	SessionRecorder SessionRecorder
+	// Groups backs `groups.list` — the read-only heating-group listing.
+	Groups GroupsQuery
 }
 
 // RegisterExtendedCommands wires the post-MVP command set onto router.
@@ -299,6 +302,11 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		h := incidentsListHandler(cfg.IncidentLister)
 		router.Register("incidents.list", h)
 		router.Register("incidents.get", h)
+	}
+	if cfg.Groups != nil {
+		// groups.list — read-only heating-group listing (one entry per
+		// central; optional `central` narrows to one).
+		router.Register("groups.list", groupsListHandler(cfg.Groups))
 	}
 	if cfg.ExtendedHub != nil {
 		router.Register("service_messages.disable", serviceMessagesDisableHandler(cfg.ExtendedHub))
@@ -812,6 +820,35 @@ func incidentsListHandler(l IncidentLister) CommandHandler {
 			items = []map[string]any{}
 		}
 		return map[string]any{"incidents": items}, nil
+	}
+}
+
+// GroupsQuery is the read facade the `groups.list` command pulls from.
+// The cmd-level groups adapter satisfies it (the same adapter that backs
+// the REST `GET /api/v1/groups` reader), so the two transports share one
+// implementation. An empty `central` aggregates over all centrals.
+type GroupsQuery interface {
+	List(ctx context.Context, central string) ([]handlers.GroupCentralEntry, error)
+}
+
+// groupsListHandler implements `groups.list`. Request:
+// { "central": str (optional) }. Response: { "entries": [...] }.
+func groupsListHandler(q GroupsQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Central string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		entries, err := q.List(ctx, p.Central)
+		if err != nil {
+			return nil, fmt.Errorf("groups.list: %w", err)
+		}
+		if entries == nil {
+			entries = []handlers.GroupCentralEntry{}
+		}
+		return map[string]any{"entries": entries}, nil
 	}
 }
 

@@ -96,6 +96,7 @@ var knownWSCategories = map[string]bool{
 	"config":          true,
 	"devices":         true,
 	"firmware":        true,
+	"groups":          true,
 	"inbox":           true,
 	"incidents":       true,
 	"install_mode":    true,

@@ -149,6 +149,7 @@ var readOnlyCommands = map[string]struct{}{
 	"devices.get":                 {},
 	"devices.list":                {},
 	"firmware.info":               {},
+	"groups.list":                 {},
 	"inbox.list":                  {},
 	"incidents.get":               {},
 	"incidents.list":              {},

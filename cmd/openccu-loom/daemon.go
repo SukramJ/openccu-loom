@@ -546,6 +546,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	definitionExportDomain := adapter.NewDefinitionExportDomain(reg)
 	deviceAdminDomain := adapter.NewDeviceAdminDomain(reg, valueWriter)
 	ccuMaintenanceDomain := adapter.NewCCUMaintenanceDomain(reg, valueWriter)
+	groupsDomain := adapter.NewGroupsDomain(reg, valueWriter)
 	dpWriterAdapter := adapter.NewDataPointWriterAdapter(reg, valueWriter)
 	customDPDispatcher := adapter.NewCustomDPDispatcher(reg).SetAuditRecorder(auditRec)
 	roomFunctionAdmin := adapter.NewRoomFunctionAdminDomain(reg)
@@ -596,6 +597,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		linksDomain:      linksDomain,
 		schedulesDomain:  schedulesDomain,
 		centralLinks:     centralLinksDomain,
+		groupsDomain:     groupsDomain,
 		definitionExport: definitionExportDomain,
 		deviceAdmin:      deviceAdminDomain,
 		paramsets:        paramsetsDomain,
@@ -658,6 +660,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		devicesAdapter:          devicesAdapter,
 		deviceAdminDomain:       deviceAdminDomain,
 		ccuMaintenanceDomain:    ccuMaintenanceDomain,
+		groupsDomain:            groupsDomain,
 		deviceReloader:          deviceReloader,
 		firmwareRefresher:       adapter.NewFirmwareDomain(reg, valueWriter),
 		editSessions:            editSessions,

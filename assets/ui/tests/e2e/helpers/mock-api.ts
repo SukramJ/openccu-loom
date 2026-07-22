@@ -64,6 +64,10 @@ export async function mockAllApis(page: Page): Promise<void> {
   );
 
   // Programs
+  await page.route('**/api/v1/groups*', (route) =>
+    route.fulfill({ json: fixture('groups.json') }),
+  );
+
   await page.route('**/api/v1/programs', (route) =>
     route.fulfill({ json: fixture('programs.json') }),
   );

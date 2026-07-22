@@ -405,6 +405,14 @@
       "name": "firmware.update"
     },
     {
+      "category": "groups",
+      "description": "List Homematic heating groups (HmIP / BidCos), grouped by central, read from each CCU's groups.gson via CCU.getHeatingGroupList. Read-only; omit `central` to aggregate over all centrals or set it to scope to one. Creating/editing/deleting groups runs through the CCU jpages proxy (ADR 0055) and is a separate surface.",
+      "name": "groups.list",
+      "args": {
+        "central": "string?"
+      }
+    },
+    {
       "category": "hub",
       "description": "Server-pushed: a CCU program finished executing (Zentralenprogramm). Topic is scoped per central and per program-id.",
       "kind": "broadcast",

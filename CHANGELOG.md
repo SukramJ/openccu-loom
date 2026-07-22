@@ -10,7 +10,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Collapsible help on the central-link (press-event forwarding) panel.**
+- **Heating-group listing (read-only).** A new `GET /api/v1/groups`
+  endpoint and `groups.list` WebSocket command surface the Homematic
+  heating groups (HmIP / BidCos) configured on each CCU, grouped by
+  central. The listing is read from each CCU's `groups.gson` via the
+  `CCU.getHeatingGroupList` JSON-RPC method and joined into a typed
+  shape (id, name, type, "operate only via group" flag, and member
+  addresses). Omitting the `central` query aggregates over all
+  centrals; a non-CCU or offline central contributes an empty roster
+  rather than failing the request. This is the first slice of the
+  group-administration work; creating, editing, and deleting groups
+  will run through the CCU jpages proxy (see the new
+  [ADR 0055](docs/adr/0055-groups-jpages-proxy.md)) and lands
+  separately. API version 2.42.0.
   The device-detail Links tab now carries an expandable info hint that
   explains why an HmIP button can look dead — without press-event
   forwarding many buttons never send their events to the CCU or

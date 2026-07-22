@@ -430,6 +430,13 @@ export type LinkableChannel = components["schemas"]["LinkableChannel"];
 // cross-CCU overview (Fleet.svelte).
 export type SystemCCUEntry = components["schemas"]["SystemCCUEntry"];
 
+// Heating-group types re-exported from generated schema — one central's
+// roster (`GET /api/v1/groups`), read-only (GR01). Create/edit/delete
+// runs through the CCU jpages proxy and is exposed separately (ADR 0055).
+export type GroupCentralEntry = components["schemas"]["GroupCentralEntry"];
+export type GroupEntry = components["schemas"]["GroupEntry"];
+export type GroupMemberEntry = components["schemas"]["GroupMemberEntry"];
+
 // Per-device RF reception strength from `GET /diagnostics/rssi`, read from
 // the maintenance-channel RSSI_DEVICE / RSSI_PEER data points (works for HmIP
 // and BidCos). rssi_device / rssi_peer are null when the device does not

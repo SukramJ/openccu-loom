@@ -2,6 +2,11 @@
 
 ## 0.46.0
 
+- **Heating groups are now listed (read-only).** OpenCCU-Loom can show the
+  Homematic heating groups (HmIP / BidCos) configured on each CCU —
+  their name, type, members, and the "operate only via group" flag —
+  read straight from the CCU. Creating and editing groups will follow;
+  this first step makes them visible (API 2.42.0).
 - **New help hint on the press-event forwarding panel.** The device-detail
   Links tab now has an expandable note explaining why an HmIP button can
   seem to do nothing (without forwarding, many buttons never send their

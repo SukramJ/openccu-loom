@@ -277,6 +277,10 @@ type Deps struct {
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
 	FirmwareDownload handlers.FirmwareDownloadPort
+	// Groups backs `GET /api/v1/groups` — the read-only heating-group
+	// listing (one entry per central; `?central=` scopes to one). Nil
+	// serves the route as 503.
+	Groups handlers.GroupsReader
 	// RateLimit, when non-nil, installs the per-identity REST
 	// rate limiter before the auth-require gate. Nil disables it.
 	RateLimit *middleware.RateLimitConfig
@@ -859,6 +863,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
 			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
+			// Read-only heating-group listing (one entry per central).
+			pr.Get("/groups", handlers.ListGroups(d.Groups))
 			// Persistent "restart required" status for the SPA banner.
 			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
 			// Config fields changed since the daemon started.

@@ -661,6 +661,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Heating-group listing (read-only)
+         * @description Returns Homematic heating groups (HmIP / BidCos), grouped by
+         *     central. Read from each CCU's groups.gson via the
+         *     `CCU.getHeatingGroupList` JSON-RPC method.
+         *
+         *     Without a `central` query the response aggregates over every
+         *     configured central, one `entries` object each; a central whose
+         *     backend cannot read groups (offline, or a non-CCU backend)
+         *     contributes an empty `groups` array rather than failing the
+         *     request. With `central` set, the listing is scoped to that
+         *     central and returns 404 when it is unknown or cannot serve
+         *     groups.
+         *
+         *     This is the read surface only. Creating, editing, and deleting
+         *     groups runs through the CCU jpages proxy (ADR 0055) and is
+         *     exposed separately.
+         */
+        get: operations["listGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/programs": {
         parameters: {
             query?: never;
@@ -4779,6 +4813,40 @@ export interface components {
              */
             capabilities: string[];
         };
+        /** @description One central's heating-group roster. */
+        GroupCentralEntry: {
+            /** @description Daemon-local central name the groups belong to. */
+            central: string;
+            groups: components["schemas"]["GroupEntry"][];
+        };
+        /**
+         * @description One Homematic heating group (HmIP / BidCos), as read from the
+         *     CCU's groups.gson via `CCU.getHeatingGroupList`. Read-only — the
+         *     create / edit / delete surface runs through the CCU jpages proxy
+         *     (see ADR 0055) and is exposed separately.
+         */
+        GroupEntry: {
+            /** @description Numeric CCU group id. */
+            id: number;
+            /** @description Operator-facing group name. */
+            name: string;
+            /** @description Label of the backing virtual device; often empty. */
+            group_device_name?: string;
+            /** @description The "operate only via group" flag. */
+            forbid_single_operation: boolean;
+            /** @description Group-type key. */
+            type_id: string;
+            /** @description CCU-provided type label (may be a translation key). */
+            type_label?: string;
+            members: components["schemas"]["GroupMemberEntry"][];
+        };
+        /** @description One device or channel wired into a heating group. */
+        GroupMemberEntry: {
+            /** @description Member device or channel address. */
+            address: string;
+            /** @description Member-type key. */
+            type_id?: string;
+        };
         /**
          * @description One CCU as known to the daemon. `name` is the daemon-local
          *     identifier (config-driven, multi-CCU-safe). The other fields
@@ -7755,6 +7823,34 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listGroups: {
+        parameters: {
+            query?: {
+                /** @description Scope the listing to one central (matches `SystemCCUEntry.name`). Omit to aggregate over all centrals. */
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Heating groups grouped by central */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        entries: components["schemas"]["GroupCentralEntry"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
