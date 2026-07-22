@@ -185,6 +185,18 @@ type SysvarSummary struct {
 	// back CCU bookkeeping; clients skip them for HA entities unless
 	// opted in (the reference stack's INTERNAL description marker).
 	IsInternal bool `json:"is_internal,omitempty"`
+	// IsVisible mirrors the CCU's isVisible flag (WebUI visibility);
+	// IsLogged mirrors isLogged (whether the CCU archives value changes).
+	// Both are always emitted (a real CCU reports them for every variable)
+	// so a client can rely on the explicit false as "hidden"/"not logged"
+	// rather than an absent field.
+	IsVisible bool `json:"is_visible"`
+	IsLogged  bool `json:"is_logged"`
+	// ValueName0 / ValueName1 are the CCU-side false / true value labels
+	// for a binary (LOGIC / ALARM) variable — the operator-visible text
+	// for each state. Empty for non-binary variables.
+	ValueName0 string `json:"value_name_0,omitempty"`
+	ValueName1 string `json:"value_name_1,omitempty"`
 	// IsExtended is true when the variable's description carried the
 	// extended marker — clients then expose the writable entity flavour
 	// (switch/number/select/text) instead of the read-only default.
@@ -466,6 +478,11 @@ type SysvarCreateRequest struct {
 	Max         string   `json:"max,omitempty"`
 	Description string   `json:"description,omitempty"`
 	ValueList   []string `json:"value_list,omitempty"`
+	// ValueName0 / ValueName1 set the false / true value labels of a
+	// binary (BOOL / ALARM) variable. Empty adopts the CCU's own
+	// "false" / "true" defaults; ignored for non-binary types.
+	ValueName0 string `json:"value_name_0,omitempty"`
+	ValueName1 string `json:"value_name_1,omitempty"`
 }
 
 // sysvarCreateTypes is the set of value_type codes the CCU's
@@ -508,8 +525,17 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 					"value_type must be one of BOOL, INTEGER, FLOAT, STRING, ENUM, ALARM", req.ValueType))
 			return
 		}
-		if err := h.CreateSysvarRemote(r.Context(),
-			req.Name, req.ValueType, req.Unit, req.Min, req.Max, req.Description, req.ValueList); err != nil {
+		if err := h.CreateSysvarRemote(r.Context(), hub.SysvarCreateSpec{
+			Name:        req.Name,
+			ValueType:   req.ValueType,
+			Unit:        req.Unit,
+			Min:         req.Min,
+			Max:         req.Max,
+			Description: req.Description,
+			ValueList:   req.ValueList,
+			ValueName0:  req.ValueName0,
+			ValueName1:  req.ValueName1,
+		}); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar create failed", err)
 			return
 		}
@@ -529,6 +555,16 @@ type SysvarPatchRequest struct {
 	Max         *string   `json:"max,omitempty"`
 	ValueList   *[]string `json:"value_list,omitempty"`
 	Description *string   `json:"description,omitempty"`
+	// ValueName0 / ValueName1 rename the false / true value labels of a
+	// binary (LOGIC / ALARM) variable. A present, empty string leaves the
+	// label untouched (the CCU rejects a blank label).
+	ValueName0 *string `json:"value_name_0,omitempty"`
+	ValueName1 *string `json:"value_name_1,omitempty"`
+	// IsVisible / IsLogged toggle the CCU WebUI-visibility and archive
+	// (DPArchive) flags. Tri-state: an omitted field leaves the flag
+	// untouched, a present true/false sets it.
+	IsVisible *bool `json:"is_visible,omitempty"`
+	IsLogged  *bool `json:"is_logged,omitempty"`
 }
 
 // PatchSysvar updates a sysvar's metadata in place via the Rega
@@ -546,29 +582,36 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		newName, unit, vmin, vmax, desc := "", "", "", "", ""
-		var valueList []string
+		spec := hub.SysvarUpdateSpec{
+			Name:    name,
+			Visible: req.IsVisible,
+			Logged:  req.IsLogged,
+		}
 		if req.Name != nil {
-			newName = *req.Name
+			spec.NewName = *req.Name
 		}
 		if req.Unit != nil {
-			unit = *req.Unit
+			spec.Unit = *req.Unit
 		}
 		if req.Min != nil {
-			vmin = *req.Min
+			spec.Min = *req.Min
 		}
 		if req.Max != nil {
-			vmax = *req.Max
+			spec.Max = *req.Max
 		}
 		if req.Description != nil {
-			desc = *req.Description
+			spec.Description = *req.Description
 		}
 		if req.ValueList != nil {
-			valueList = *req.ValueList
+			spec.ValueList = *req.ValueList
 		}
-		if err := h.UpdateSysvarRemote(
-			r.Context(), name, newName, unit, vmin, vmax, desc, valueList,
-		); err != nil {
+		if req.ValueName0 != nil {
+			spec.ValueName0 = *req.ValueName0
+		}
+		if req.ValueName1 != nil {
+			spec.ValueName1 = *req.ValueName1
+		}
+		if err := h.UpdateSysvarRemote(r.Context(), spec); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar update failed", err)
 			return
 		}
@@ -832,6 +875,10 @@ func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 		Observed:       ok,
 		ValueList:      s.ValueList,
 		IsInternal:     s.IsInternal,
+		IsVisible:      s.IsVisible,
+		IsLogged:       s.IsLogged,
+		ValueName0:     s.ValueName0,
+		ValueName1:     s.ValueName1,
 		IsExtended:     s.IsExtended,
 		Vid:            s.Vid,
 		EnabledDefault: s.EnabledByDefault(),

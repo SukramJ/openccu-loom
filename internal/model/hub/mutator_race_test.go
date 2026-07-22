@@ -13,13 +13,9 @@ import (
 // used to exercise the guarded setter/getter under -race.
 type raceMutator struct{}
 
-func (raceMutator) CreateSysvar(context.Context, string, string, string, string, string, string, []string) error {
-	return nil
-}
-func (raceMutator) DeleteSysvar(context.Context, string) error { return nil }
-func (raceMutator) UpdateSysvar(context.Context, string, string, string, string, string, string, []string) error {
-	return nil
-}
+func (raceMutator) CreateSysvar(context.Context, SysvarCreateSpec) error       { return nil }
+func (raceMutator) DeleteSysvar(context.Context, string) error                 { return nil }
+func (raceMutator) UpdateSysvar(context.Context, SysvarUpdateSpec) error       { return nil }
 func (raceMutator) SetDeviceRooms(context.Context, string, []string) error     { return nil }
 func (raceMutator) SetDeviceFunctions(context.Context, string, []string) error { return nil }
 func (raceMutator) TriggerBackup(context.Context) error                        { return nil }
@@ -54,7 +50,7 @@ func TestHubMutatorConcurrentSetAndRead(t *testing.T) {
 			defer wg.Done()
 			for range 1000 {
 				_ = h.TriggerBackupRemote(ctx)
-				_ = h.CreateSysvarRemote(ctx, "x", "FLOAT", "", "0", "1", "", nil)
+				_ = h.CreateSysvarRemote(ctx, SysvarCreateSpec{Name: "x", ValueType: "FLOAT", Min: "0", Max: "1"})
 				_ = h.SetDeviceRoomsRemote(ctx, "ABC:1", nil)
 				_ = h.AcceptInboxDeviceRemote(ctx, "ABC")
 			}

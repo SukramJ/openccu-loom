@@ -5438,6 +5438,30 @@ export interface components {
              */
             is_internal?: boolean;
             /**
+             * @description Mirrors the CCU's isVisible flag — whether the variable is
+             *     shown in the CCU WebUI. Always present (a real CCU reports it
+             *     for every variable).
+             */
+            is_visible?: boolean;
+            /**
+             * @description Mirrors the CCU's isLogged flag (backed by the CCU-side
+             *     DPArchive setting) — whether value changes are recorded to the
+             *     measurement archive. Always present.
+             */
+            is_logged?: boolean;
+            /**
+             * @description False-state value label for a binary (LOGIC/ALARM) variable —
+             *     the operator-visible text for value 0. Absent for non-binary
+             *     variables.
+             */
+            value_name_0?: string;
+            /**
+             * @description True-state value label for a binary (LOGIC/ALARM) variable —
+             *     the operator-visible text for value 1. Absent for non-binary
+             *     variables.
+             */
+            value_name_1?: string;
+            /**
              * @description True when the variable's description carried the extended
              *     marker — clients expose the writable entity flavour
              *     (switch/number/select/text) instead of the read-only default.
@@ -7676,6 +7700,10 @@ export interface operations {
                     description?: string;
                     /** @description Ordered list of enum labels for ENUM-type sysvars. */
                     value_list?: string[];
+                    /** @description False-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "false" default. Setting a custom label routes creation through the Rega script. */
+                    value_name_0?: string;
+                    /** @description True-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "true" default. */
+                    value_name_1?: string;
                 };
             };
         };
@@ -7808,6 +7836,14 @@ export interface operations {
                     max?: string;
                     /** @description Ordered list of enum labels for LIST/ENUM-type sysvars. */
                     value_list?: string[];
+                    /** @description New false-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+                    value_name_0?: string;
+                    /** @description New true-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+                    value_name_1?: string;
+                    /** @description Toggle the CCU WebUI-visibility flag. Omit to leave it unchanged. */
+                    is_visible?: boolean;
+                    /** @description Toggle the archive flag (CCU DPArchive) that records value changes to the measurement history. Omit to leave it unchanged. */
+                    is_logged?: boolean;
                 };
             };
         };

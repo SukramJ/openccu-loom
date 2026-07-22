@@ -1665,6 +1665,13 @@ const EN: Catalog = {
   "sysvars.count": "{count} variables",
   "sysvars.edit.tooltip": "Edit metadata",
   "sysvars.remove.tooltip": "Remove variable",
+  "sysvars.labels.title": "Value labels",
+  "sysvars.labels.value0": "Label for “false”",
+  "sysvars.labels.value1": "Label for “true”",
+  "sysvars.labels.hint":
+    "Operator-visible text for each state of a binary (BOOL/ALARM) variable.",
+  "sysvars.flags.visible": "Visible in CCU WebUI",
+  "sysvars.flags.logged": "Log value changes",
   // --- DeviceDetail ---
   "device.tab.control": "Control",
   "device.tab.values": "Values",
@@ -4403,6 +4410,13 @@ const DE: Catalog = {
   "sysvars.count": "{count} Variablen",
   "sysvars.edit.tooltip": "Metadaten bearbeiten",
   "sysvars.remove.tooltip": "Variable entfernen",
+  "sysvars.labels.title": "Wertelabels",
+  "sysvars.labels.value0": "Bezeichnung für „falsch“",
+  "sysvars.labels.value1": "Bezeichnung für „wahr“",
+  "sysvars.labels.hint":
+    "Für den Bediener sichtbarer Text je Zustand einer binären (BOOL/ALARM) Variable.",
+  "sysvars.flags.visible": "Im CCU-WebUI sichtbar",
+  "sysvars.flags.logged": "Werteänderungen protokollieren",
   "device.tab.control": "Bedienen",
   "device.tab.values": "Werte",
   "device.tab.master": "Konfiguration",

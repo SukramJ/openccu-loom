@@ -707,6 +707,17 @@ paths:
                   type: array
                   items: { type: string }
                   description: Ordered list of enum labels for ENUM-type sysvars.
+                value_name_0:
+                  type: string
+                  description: >
+                    False-state label for a binary (BOOL/ALARM) variable.
+                    Empty adopts the CCU's own "false" default. Setting a
+                    custom label routes creation through the Rega script.
+                value_name_1:
+                  type: string
+                  description: >
+                    True-state label for a binary (BOOL/ALARM) variable.
+                    Empty adopts the CCU's own "true" default.
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -826,6 +837,27 @@ paths:
                   type: array
                   items: { type: string }
                   description: Ordered list of enum labels for LIST/ENUM-type sysvars.
+                value_name_0:
+                  type: string
+                  description: >
+                    New false-state label for a binary (LOGIC/ALARM)
+                    variable. An empty string leaves the label untouched.
+                value_name_1:
+                  type: string
+                  description: >
+                    New true-state label for a binary (LOGIC/ALARM)
+                    variable. An empty string leaves the label untouched.
+                is_visible:
+                  type: boolean
+                  description: >
+                    Toggle the CCU WebUI-visibility flag. Omit to leave it
+                    unchanged.
+                is_logged:
+                  type: boolean
+                  description: >
+                    Toggle the archive flag (CCU DPArchive) that records
+                    value changes to the measurement history. Omit to leave
+                    it unchanged.
       responses:
         "202":
           description: Accepted — Rega script dispatched asynchronously.
@@ -6822,6 +6854,30 @@ components:
             Mirrors the CCU's isInternal flag. Internal variables back
             CCU bookkeeping; clients skip them for HA entities unless
             opted in (aiohomematic's INTERNAL description marker).
+        is_visible:
+          type: boolean
+          description: |
+            Mirrors the CCU's isVisible flag — whether the variable is
+            shown in the CCU WebUI. Always present (a real CCU reports it
+            for every variable).
+        is_logged:
+          type: boolean
+          description: |
+            Mirrors the CCU's isLogged flag (backed by the CCU-side
+            DPArchive setting) — whether value changes are recorded to the
+            measurement archive. Always present.
+        value_name_0:
+          type: string
+          description: |
+            False-state value label for a binary (LOGIC/ALARM) variable —
+            the operator-visible text for value 0. Absent for non-binary
+            variables.
+        value_name_1:
+          type: string
+          description: |
+            True-state value label for a binary (LOGIC/ALARM) variable —
+            the operator-visible text for value 1. Absent for non-binary
+            variables.
         is_extended:
           type: boolean
           description: |

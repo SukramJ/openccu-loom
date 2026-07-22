@@ -1340,11 +1340,11 @@ func TestToSysvarSummary_WithValue(t *testing.T) {
 // errSysvarMutator implements hub.SysvarMutator and always returns an error.
 type errSysvarMutator struct{ err error }
 
-func (e *errSysvarMutator) CreateSysvar(_ context.Context, _, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) CreateSysvar(_ context.Context, _ hub.SysvarCreateSpec) error {
 	return e.err
 }
 
-func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _ hub.SysvarUpdateSpec) error {
 	return e.err
 }
 
@@ -1452,18 +1452,30 @@ type recordingSysvarMutator struct {
 	createName    string
 	createType    string
 	createDescrip string
+	createVN0     string
+	createVN1     string
+	updateVN0     string
+	updateVN1     string
+	updateVisible *bool
+	updateLogged  *bool
 }
 
-func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, name, valueType, _, _, _, description string, _ []string) error {
-	r.createName = name
-	r.createType = valueType
-	r.createDescrip = description
+func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, spec hub.SysvarCreateSpec) error {
+	r.createName = spec.Name
+	r.createType = spec.ValueType
+	r.createDescrip = spec.Description
+	r.createVN0 = spec.ValueName0
+	r.createVN1 = spec.ValueName1
 	return nil
 }
 
-func (r *recordingSysvarMutator) UpdateSysvar(_ context.Context, name, newName, _, _, _, _ string, _ []string) error {
-	r.name = name
-	r.newName = newName
+func (r *recordingSysvarMutator) UpdateSysvar(_ context.Context, spec hub.SysvarUpdateSpec) error {
+	r.name = spec.Name
+	r.newName = spec.NewName
+	r.updateVN0 = spec.ValueName0
+	r.updateVN1 = spec.ValueName1
+	r.updateVisible = spec.Visible
+	r.updateLogged = spec.Logged
 	return nil
 }
 
@@ -1552,6 +1564,78 @@ func TestCreateSysvar_Alarm_PassesThrough(t *testing.T) {
 	}
 	if mut.createName != "Einbruch" || mut.createType != "ALARM" {
 		t.Fatalf("mutator got name=%q type=%q, want Einbruch/ALARM", mut.createName, mut.createType)
+	}
+}
+
+// Binary value labels in the POST body reach CreateSysvar so a new
+// BOOL/ALARM variable can carry operator-chosen state text from creation.
+func TestCreateSysvar_ValueLabels_PassThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Tuer","value_type":"BOOL","value_name_0":"zu","value_name_1":"offen"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createVN0 != "zu" || mut.createVN1 != "offen" {
+		t.Fatalf("mutator got labels %q/%q, want zu/offen", mut.createVN0, mut.createVN1)
+	}
+}
+
+// The PATCH body's value labels and visibility / archive flags reach
+// UpdateSysvar. The flags are tri-state pointers so an explicit true/false
+// survives, and an omitted flag stays nil (leave the CCU value untouched).
+func TestPatchSysvar_LabelsAndFlags_PassThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"value_name_0":"zu","value_name_1":"offen","is_visible":true,"is_logged":false}`
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(body))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "Tuer"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "Tuer" || mut.updateVN0 != "zu" || mut.updateVN1 != "offen" {
+		t.Fatalf("mutator got name=%q labels=%q/%q", mut.name, mut.updateVN0, mut.updateVN1)
+	}
+	if mut.updateVisible == nil || !*mut.updateVisible {
+		t.Fatalf("is_visible not threaded through as true: %v", mut.updateVisible)
+	}
+	if mut.updateLogged == nil || *mut.updateLogged {
+		t.Fatalf("is_logged not threaded through as false: %v", mut.updateLogged)
+	}
+}
+
+// Omitting the flags entirely from the PATCH body leaves the mutator's
+// tri-state pointers nil so UpdateSysvar's script slots resolve to "" and
+// the CCU flags stay as-is.
+func TestPatchSysvar_FlagsOmitted_StayNil(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "Tuer"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateVisible != nil || mut.updateLogged != nil {
+		t.Fatalf("omitted flags must stay nil, got visible=%v logged=%v", mut.updateVisible, mut.updateLogged)
 	}
 }
 
@@ -2426,6 +2510,30 @@ func TestToSysvarSummary_UniqueID(t *testing.T) {
 	}
 	if !strings.HasPrefix(s.UniqueID, "loom_") {
 		t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
+	}
+}
+
+// TestToSysvarSummary_LabelsAndFlags verifies that toSysvarSummary carries
+// the CCU value labels and the visibility/archive flags from the model
+// Sysvar onto the wire SysvarSummary unchanged, including the false/false
+// case (the DTO must not default the flags to true).
+func TestToSysvarSummary_LabelsAndFlags(t *testing.T) {
+	t.Parallel()
+	sv := hub.NewSysvar("ccu01", "Tuer", "", hmenum.HubValueTypeLogic, nil)
+	sv.IsVisible = true
+	sv.IsLogged = false
+	sv.ValueName0 = "zu"
+	sv.ValueName1 = "offen"
+
+	s := toSysvarSummary(sv, "vccu0000000")
+	if !s.IsVisible {
+		t.Error("IsVisible = false, want true")
+	}
+	if s.IsLogged {
+		t.Error("IsLogged = true, want false")
+	}
+	if s.ValueName0 != "zu" || s.ValueName1 != "offen" {
+		t.Fatalf("labels = %q/%q, want zu/offen", s.ValueName0, s.ValueName1)
 	}
 }
 

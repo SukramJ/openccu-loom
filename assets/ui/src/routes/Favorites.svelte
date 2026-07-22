@@ -161,10 +161,16 @@
               {@const widget = sysvarWidget(sv)}
               <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2 dark:border-slate-700">
                 {#if widget === "switch"}
+                  {@const on = Boolean(currentValue(sv))}
                   <Switch
-                    checked={Boolean(currentValue(sv))}
+                    checked={on}
                     onCheckedChange={(v) => setDraft(sv, v)}
                   />
+                  {#if sv.value_name_0 || sv.value_name_1}
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                      {on ? (sv.value_name_1 ?? "") : (sv.value_name_0 ?? "")}
+                    </span>
+                  {/if}
                 {:else if widget === "select"}
                   <Select
                     options={(sv.value_list ?? []).map((label, i) => ({

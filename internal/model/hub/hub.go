@@ -73,20 +73,48 @@ var (
 	ErrCentralNotFound  = errors.New("hub: central not found")
 )
 
+// SysvarCreateSpec carries every field `POST /sysvars` can set on a new
+// CCU system variable. Empty string fields adopt the CCU default; the
+// value-label fields (ValueName0/1) apply to binary (BOOL/ALARM)
+// variables only and default to the CCU's own "false"/"true" text when
+// left empty.
+type SysvarCreateSpec struct {
+	Name        string
+	ValueType   string
+	Unit        string
+	Min         string
+	Max         string
+	Description string
+	ValueList   []string
+	ValueName0  string
+	ValueName1  string
+}
+
+// SysvarUpdateSpec carries every field `PATCH /sysvars/{name}` can change
+// on an existing variable without altering its type. Empty string fields
+// leave the corresponding CCU metadata untouched; a non-empty NewName
+// renames the variable. Visible and Logged are tri-state: nil leaves the
+// flag as-is, a non-nil pointer sets it.
+type SysvarUpdateSpec struct {
+	Name        string // current (target) sysvar name
+	NewName     string
+	Unit        string
+	Min         string
+	Max         string
+	Description string
+	ValueList   []string
+	ValueName0  string
+	ValueName1  string
+	Visible     *bool
+	Logged      *bool
+}
+
 // SysvarMutator is the optional CCU-side write-path for sysvars.
 // Implementations dispatch ReGa scripts; nil leaves the hub in
 // in-memory-only mode (Create/Delete return ErrNoSysvarMutator).
 type SysvarMutator interface {
-	CreateSysvar(
-		ctx context.Context,
-		name, valueType, unit, vmin, vmax, description string,
-		valueList []string,
-	) error
-	UpdateSysvar(
-		ctx context.Context,
-		name, newName, unit, vmin, vmax, description string,
-		valueList []string,
-	) error
+	CreateSysvar(ctx context.Context, spec SysvarCreateSpec) error
+	UpdateSysvar(ctx context.Context, spec SysvarUpdateSpec) error
 	DeleteSysvar(ctx context.Context, name string) error
 }
 
@@ -521,16 +549,12 @@ func (h *Hub) inboxMut() InboxAccepter { h.mu.RLock(); defer h.mu.RUnlock(); ret
 // CreateSysvarRemote provisions a sysvar on the CCU. The hub mirror
 // is updated lazily by the periodic sysvar refresh; the REST handler
 // returns 202 once the call lands.
-func (h *Hub) CreateSysvarRemote(
-	ctx context.Context,
-	name, valueType, unit, vmin, vmax, description string,
-	valueList []string,
-) error {
+func (h *Hub) CreateSysvarRemote(ctx context.Context, spec SysvarCreateSpec) error {
 	m := h.sysvarMut()
 	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	return m.CreateSysvar(ctx, name, valueType, unit, vmin, vmax, description, valueList)
+	return m.CreateSysvar(ctx, spec)
 }
 
 // DeleteSysvarRemote removes a sysvar on the CCU and drops it from
@@ -548,25 +572,22 @@ func (h *Hub) DeleteSysvarRemote(ctx context.Context, name string) error {
 }
 
 // UpdateSysvarRemote patches a sysvar's metadata (name, unit, bounds,
-// value list, description) without changing its type. A non-empty
-// newName that differs from name renames the variable; the local
-// cache is re-keyed once the CCU call lands so the new name is visible
-// before the next periodic refresh reconciles it. Type changes are
-// unsafe at the CCU level — callers wanting that must delete + recreate.
-func (h *Hub) UpdateSysvarRemote(
-	ctx context.Context,
-	name, newName, unit, vmin, vmax, description string,
-	valueList []string,
-) error {
+// value list, description, value labels, visibility and archive flags)
+// without changing its type. A non-empty NewName that differs from Name
+// renames the variable; the local cache is re-keyed once the CCU call
+// lands so the new name is visible before the next periodic refresh
+// reconciles it. Type changes are unsafe at the CCU level — callers
+// wanting that must delete + recreate.
+func (h *Hub) UpdateSysvarRemote(ctx context.Context, spec SysvarUpdateSpec) error {
 	m := h.sysvarMut()
 	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	if err := m.UpdateSysvar(ctx, name, newName, unit, vmin, vmax, description, valueList); err != nil {
+	if err := m.UpdateSysvar(ctx, spec); err != nil {
 		return err
 	}
-	if newName != "" && newName != name {
-		h.RenameSysvar(name, newName)
+	if spec.NewName != "" && spec.NewName != spec.Name {
+		h.RenameSysvar(spec.Name, spec.NewName)
 	}
 	return nil
 }

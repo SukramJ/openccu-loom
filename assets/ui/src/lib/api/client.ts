@@ -590,6 +590,8 @@ export const api = {
       max?: string;
       description?: string;
       value_list?: string[];
+      value_name_0?: string;
+      value_name_1?: string;
     },
     central: string,
   ) {
@@ -609,6 +611,10 @@ export const api = {
       max?: string;
       value_list?: string[];
       description?: string;
+      value_name_0?: string;
+      value_name_1?: string;
+      is_visible?: boolean;
+      is_logged?: boolean;
     },
     central?: string,
   ) {

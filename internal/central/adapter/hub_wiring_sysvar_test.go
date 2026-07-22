@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 )
 
 // CreateSysvar / DeleteSysvar prefer the CCU's native JSON-RPC methods
@@ -146,7 +147,7 @@ func TestCreateSysvarBoolUsesJSONRPC(t *testing.T) {
 	m := newSysvarMock(t)
 	w := newWriterAgainst(t, m.srv.URL)
 
-	if err := w.CreateSysvar(context.Background(), "Alarm", "BOOL", "", "", "", "", nil); err != nil {
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Alarm", ValueType: "BOOL"}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	if got := m.createBool.Load(); got != 1 {
@@ -165,7 +166,7 @@ func TestCreateSysvarFloatUsesJSONRPC(t *testing.T) {
 	m := newSysvarMock(t)
 	w := newWriterAgainst(t, m.srv.URL)
 
-	if err := w.CreateSysvar(context.Background(), "Temp", "FLOAT", "", "0", "100", "", nil); err != nil {
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Temp", ValueType: "FLOAT", Min: "0", Max: "100"}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	if got := m.createFlt.Load(); got != 1 {
@@ -182,7 +183,7 @@ func TestCreateSysvarEnumUsesJSONRPC(t *testing.T) {
 	w := newWriterAgainst(t, m.srv.URL)
 
 	values := []string{"a", "b", "c"}
-	if err := w.CreateSysvar(context.Background(), "Mode", "ENUM", "", "", "", "", values); err != nil {
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Mode", ValueType: "ENUM", ValueList: values}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	if got := m.createEnum.Load(); got != 1 {
@@ -198,7 +199,7 @@ func TestCreateSysvarIntegerFallsBackToRega(t *testing.T) {
 	m := newSysvarMock(t)
 	w := newWriterAgainst(t, m.srv.URL)
 
-	if err := w.CreateSysvar(context.Background(), "Counter", "INTEGER", "", "0", "10", "", nil); err != nil {
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Counter", ValueType: "INTEGER", Min: "0", Max: "10"}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	if got := m.regaCnt.Load(); got != 1 {
@@ -221,7 +222,7 @@ func TestCreateSysvarAlarmFallsBackToRega(t *testing.T) {
 	m := newSysvarMock(t)
 	w := newWriterAgainst(t, m.srv.URL)
 
-	if err := w.CreateSysvar(context.Background(), "Einbruch", "ALARM", "", "", "", "", nil); err != nil {
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Einbruch", ValueType: "ALARM"}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	if got := m.regaCnt.Load(); got != 1 {
@@ -244,7 +245,7 @@ func TestCreateSysvarWithDescriptionFallsBackToRega(t *testing.T) {
 	m := newSysvarMock(t)
 	w := newWriterAgainst(t, m.srv.URL)
 
-	if err := w.CreateSysvar(context.Background(), "Alarm", "BOOL", "", "", "", "guards the door", nil); err != nil {
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Alarm", ValueType: "BOOL", Description: "guards the door"}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	if got := m.regaCnt.Load(); got != 1 {
@@ -265,7 +266,7 @@ func TestUpdateSysvarMarshalsNewName(t *testing.T) {
 	m := newSysvarMock(t)
 	w := newWriterAgainst(t, m.srv.URL)
 
-	if err := w.UpdateSysvar(context.Background(), "Old", "Fresh", "", "", "", "", nil); err != nil {
+	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "Old", NewName: "Fresh"}); err != nil {
 		t.Fatalf("UpdateSysvar: %v", err)
 	}
 	if got := m.regaCnt.Load(); got != 1 {
@@ -394,7 +395,7 @@ func TestCreateSysvarBoolWithUnitFallsBackToRega(t *testing.T) {
 	m := newSysvarMock(t)
 	w := newWriterAgainst(t, m.srv.URL)
 
-	if err := w.CreateSysvar(context.Background(), "Mit_Unit", "BOOL", "°C", "", "", "", nil); err != nil {
+	if err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Mit_Unit", ValueType: "BOOL", Unit: "°C"}); err != nil {
 		t.Fatalf("CreateSysvar: %v", err)
 	}
 	if got := m.regaCnt.Load(); got != 1 {
@@ -437,7 +438,7 @@ func TestCreateSysvarNativePathPropagatesCCUError(t *testing.T) {
 	url := newErrorJSONRPCServer(t, "sysvar name already exists")
 	w := newWriterAgainst(t, url)
 
-	err := w.CreateSysvar(context.Background(), "Alarm", "BOOL", "", "", "", "", nil)
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Alarm", ValueType: "BOOL"})
 	if err == nil {
 		t.Fatal("expected a CCU error to propagate, got nil")
 	}
@@ -452,7 +453,7 @@ func TestCreateSysvarRegaPathPropagatesCCUError(t *testing.T) {
 	url := newErrorJSONRPCServer(t, "script execution failed")
 	w := newWriterAgainst(t, url)
 
-	err := w.CreateSysvar(context.Background(), "Alarm", "BOOL", "", "", "", "guards the door", nil)
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Alarm", ValueType: "BOOL", Description: "guards the door"})
 	if err == nil {
 		t.Fatal("expected a CCU error to propagate, got nil")
 	}
@@ -468,7 +469,7 @@ func TestCreateSysvarAlarmPropagatesCCUError(t *testing.T) {
 	url := newErrorJSONRPCServer(t, "OT_ALARMDP creation failed")
 	w := newWriterAgainst(t, url)
 
-	err := w.CreateSysvar(context.Background(), "Einbruch", "ALARM", "", "", "", "", nil)
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "Einbruch", ValueType: "ALARM"})
 	if err == nil {
 		t.Fatal("expected a CCU error to propagate, got nil")
 	}
@@ -483,7 +484,7 @@ func TestUpdateSysvarPropagatesCCUError(t *testing.T) {
 	url := newErrorJSONRPCServer(t, "object not found")
 	w := newWriterAgainst(t, url)
 
-	err := w.UpdateSysvar(context.Background(), "Old", "New", "", "", "", "", nil)
+	err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "Old", NewName: "New"})
 	if err == nil {
 		t.Fatal("expected a CCU error to propagate, got nil")
 	}
@@ -503,5 +504,297 @@ func TestDeleteSysvarPropagatesCCUError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "sysvar not found") {
 		t.Fatalf("error = %v, want it to carry the CCU message", err)
+	}
+}
+
+// Custom binary value labels have no native JSON-RPC create parameter, so
+// a BOOL create carrying ValueName0/1 must fall back to the Rega script
+// and the rendered script must bind the operator's labels.
+func TestCreateSysvarCustomLabelsFallBackToRega(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Tuer", ValueType: "BOOL", ValueName0: "zu", ValueName1: "offen",
+	})
+	if err != nil {
+		t.Fatalf("CreateSysvar: %v", err)
+	}
+	if got := m.regaCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 Rega call for custom labels, got %d", got)
+	}
+	if got := m.createBool.Load(); got != 0 {
+		t.Fatalf("native createBool must not run when labels are set, got %d", got)
+	}
+	body := m.lastRega.Load()
+	if body == nil {
+		t.Fatal("rega body not captured")
+	}
+	if !strings.Contains(*body, `sValueName0 = "zu"`) || !strings.Contains(*body, `sValueName1 = "offen"`) {
+		t.Fatalf("rega body missing custom value labels: %v", *body)
+	}
+}
+
+// A BOOL create forced onto the Rega path (here by a custom unit) without
+// explicit labels must still bind the CCU's own "false"/"true" defaults so
+// the script never overwrites the labels with a blank string.
+func TestCreateSysvarRegaFillsDefaultLabels(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{
+		Name: "Mit_Unit", ValueType: "BOOL", Unit: "°C",
+	})
+	if err != nil {
+		t.Fatalf("CreateSysvar: %v", err)
+	}
+	body := m.lastRega.Load()
+	if body == nil {
+		t.Fatal("rega body not captured")
+	}
+	if !strings.Contains(*body, `sValueName0 = "false"`) || !strings.Contains(*body, `sValueName1 = "true"`) {
+		t.Fatalf("rega body missing default value labels: %v", *body)
+	}
+}
+
+// UpdateSysvar threads the value labels and the tri-state visibility /
+// archive flags into the update script slots. A nil flag stays "" (leave
+// the CCU value untouched); a non-nil flag binds "true"/"false".
+func TestUpdateSysvarPassesLabelsAndFlags(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	visible := true
+	logged := false
+	err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{
+		Name: "Tuer", ValueName0: "zu", ValueName1: "offen",
+		Visible: &visible, Logged: &logged,
+	})
+	if err != nil {
+		t.Fatalf("UpdateSysvar: %v", err)
+	}
+	body := m.lastRega.Load()
+	if body == nil {
+		t.Fatal("rega body not captured")
+	}
+	for _, want := range []string{
+		`sValueName0 = "zu"`,
+		`sValueName1 = "offen"`,
+		`sVisible = "true"`,
+		`sLogged = "false"`,
+	} {
+		if !strings.Contains(*body, want) {
+			t.Fatalf("rega body missing %q: %v", want, *body)
+		}
+	}
+}
+
+// An UpdateSysvar that leaves the flags nil must bind them to the empty
+// string so the script's `if (sVisible != "")` guards skip the write and
+// the CCU flag stays as-is.
+func TestUpdateSysvarNilFlagsLeaveScriptSlotsEmpty(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "X", Unit: "°C"}); err != nil {
+		t.Fatalf("UpdateSysvar: %v", err)
+	}
+	body := m.lastRega.Load()
+	if body == nil {
+		t.Fatal("rega body not captured")
+	}
+	if !strings.Contains(*body, `sVisible = "";`) || !strings.Contains(*body, `sLogged = "";`) {
+		t.Fatalf("rega body should leave visibility/archive slots empty: %v", *body)
+	}
+}
+
+// loadSysvars must parse the value labels and the visibility / archive
+// flags that SysVar.getAll reports for LOGIC and ALARM variables onto the
+// hub Sysvar so every north-bound plane (REST, WS, MQTT) sees them.
+func TestLoadSysvarsParsesLabelsAndFlags(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		var result any
+		if req["method"] == "SysVar.getAll" {
+			result = []map[string]any{{
+				"id": "200", "name": "Tuer", "type": "LOGIC", "value": "true",
+				"isInternal": false, "isVisible": true, "isLogged": true,
+				"valueName0": "zu", "valueName1": "offen",
+			}}
+		}
+		resp, _ := json.Marshal(map[string]any{"result": result, "error": nil})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(resp)
+	}))
+	defer srv.Close()
+
+	jc, err := jsonrpc.New(jsonrpc.Config{Endpoint: srv.URL})
+	if err != nil {
+		t.Fatalf("jsonrpc.New: %v", err)
+	}
+	h := hub.NewHub("c")
+	if err := loadSysvars(context.Background(), jc, nil, h, nil, hubScanOptions{enableSysvarScan: true}); err != nil {
+		t.Fatalf("loadSysvars: %v", err)
+	}
+	sv, ok := h.Sysvar("Tuer")
+	if !ok {
+		t.Fatal("sysvar Tuer should have been loaded")
+	}
+	if sv.ValueName0 != "zu" || sv.ValueName1 != "offen" {
+		t.Fatalf("value labels = %q/%q, want zu/offen", sv.ValueName0, sv.ValueName1)
+	}
+	if !sv.IsVisible || !sv.IsLogged {
+		t.Fatalf("flags: IsVisible=%v IsLogged=%v, want true/true", sv.IsVisible, sv.IsLogged)
+	}
+}
+
+// A non-binary variable (FLOAT here) reports no value labels and can carry
+// isVisible=false / isLogged=false — loadSysvars must not default the
+// flags to true, which a naive zero-value read would mask since Go's bool
+// zero value happens to be "false" only when the parse actually ran.
+func TestLoadSysvarsParsesFlagsFalseAndNoLabels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		var result any
+		if req["method"] == "SysVar.getAll" {
+			result = []map[string]any{{
+				"id": "201", "name": "Temp", "type": "FLOAT", "value": "21.5",
+				"isInternal": false, "isVisible": false, "isLogged": false,
+			}}
+		}
+		resp, _ := json.Marshal(map[string]any{"result": result, "error": nil})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(resp)
+	}))
+	defer srv.Close()
+
+	jc, err := jsonrpc.New(jsonrpc.Config{Endpoint: srv.URL})
+	if err != nil {
+		t.Fatalf("jsonrpc.New: %v", err)
+	}
+	h := hub.NewHub("c")
+	if err := loadSysvars(context.Background(), jc, nil, h, nil, hubScanOptions{enableSysvarScan: true}); err != nil {
+		t.Fatalf("loadSysvars: %v", err)
+	}
+	sv, ok := h.Sysvar("Temp")
+	if !ok {
+		t.Fatal("sysvar Temp should have been loaded")
+	}
+	if sv.IsVisible || sv.IsLogged {
+		t.Fatalf("flags: IsVisible=%v IsLogged=%v, want false/false", sv.IsVisible, sv.IsLogged)
+	}
+	if sv.ValueName0 != "" || sv.ValueName1 != "" {
+		t.Fatalf("value labels = %q/%q, want both empty for a non-binary variable", sv.ValueName0, sv.ValueName1)
+	}
+}
+
+// ALARM variables are the other binary type SysVar.getAll reports value
+// labels for (alongside LOGIC); loadSysvars must not special-case away
+// from LOGIC.
+func TestLoadSysvarsAlarmTypeParsesLabels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		var result any
+		if req["method"] == "SysVar.getAll" {
+			result = []map[string]any{{
+				"id": "202", "name": "Einbruch", "type": "ALARM", "value": "false",
+				"isInternal": false, "isVisible": true, "isLogged": false,
+				"valueName0": "ruhig", "valueName1": "alarm",
+			}}
+		}
+		resp, _ := json.Marshal(map[string]any{"result": result, "error": nil})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(resp)
+	}))
+	defer srv.Close()
+
+	jc, err := jsonrpc.New(jsonrpc.Config{Endpoint: srv.URL})
+	if err != nil {
+		t.Fatalf("jsonrpc.New: %v", err)
+	}
+	h := hub.NewHub("c")
+	if err := loadSysvars(context.Background(), jc, nil, h, nil, hubScanOptions{enableSysvarScan: true}); err != nil {
+		t.Fatalf("loadSysvars: %v", err)
+	}
+	sv, ok := h.Sysvar("Einbruch")
+	if !ok {
+		t.Fatal("sysvar Einbruch should have been loaded")
+	}
+	if sv.ValueName0 != "ruhig" || sv.ValueName1 != "alarm" {
+		t.Fatalf("value labels = %q/%q, want ruhig/alarm", sv.ValueName0, sv.ValueName1)
+	}
+	if !sv.IsVisible || sv.IsLogged {
+		t.Fatalf("flags: IsVisible=%v IsLogged=%v, want true/false", sv.IsVisible, sv.IsLogged)
+	}
+}
+
+// A CCU-side error on SysVar.getAll itself (not the write-side create/
+// update/delete calls covered above) must propagate to the caller instead
+// of loadSysvars silently returning an empty catalogue.
+func TestLoadSysvarsPropagatesCCUError(t *testing.T) {
+	url := newErrorJSONRPCServer(t, "backend temporarily unavailable")
+
+	jc, err := jsonrpc.New(jsonrpc.Config{Endpoint: url})
+	if err != nil {
+		t.Fatalf("jsonrpc.New: %v", err)
+	}
+	h := hub.NewHub("c")
+	err = loadSysvars(context.Background(), jc, nil, h, nil, hubScanOptions{enableSysvarScan: true})
+	if err == nil {
+		t.Fatal("expected a CCU error to propagate, got nil")
+	}
+	if !strings.Contains(err.Error(), "backend temporarily unavailable") {
+		t.Fatalf("error = %v, want it to carry the CCU message", err)
+	}
+}
+
+// boolFlagParam renders the tri-state Visible/Logged pointer into the Rega
+// script parameter text: nil leaves the CCU flag untouched ("") while a
+// non-nil pointer binds the literal "true"/"false".
+func TestBoolFlagParam(t *testing.T) {
+	trueVal, falseVal := true, false
+	tests := []struct {
+		name string
+		in   *bool
+		want string
+	}{
+		{"nil leaves flag untouched", nil, ""},
+		{"true", &trueVal, "true"},
+		{"false", &falseVal, "false"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := boolFlagParam(tt.in); got != tt.want {
+				t.Errorf("boolFlagParam(%v) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// UpdateSysvar's two flags are independent tri-state pointers: setting one
+// must not perturb the other's "leave untouched" (nil → "") slot.
+func TestUpdateSysvarIndependentFlags(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	visible := false
+	err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{
+		Name: "X", Visible: &visible,
+	})
+	if err != nil {
+		t.Fatalf("UpdateSysvar: %v", err)
+	}
+	body := m.lastRega.Load()
+	if body == nil {
+		t.Fatal("rega body not captured")
+	}
+	if !strings.Contains(*body, `sVisible = "false"`) {
+		t.Fatalf("rega body missing sVisible=false: %v", *body)
+	}
+	if !strings.Contains(*body, `sLogged = "";`) {
+		t.Fatalf("rega body should leave sLogged untouched when Logged is nil: %v", *body)
 	}
 }

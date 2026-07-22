@@ -28,17 +28,17 @@ type stubSysvarMutator struct {
 	deleted   []string
 }
 
-func (s *stubSysvarMutator) CreateSysvar(_ context.Context, name, _, _, _, _, _ string, _ []string) error {
+func (s *stubSysvarMutator) CreateSysvar(_ context.Context, spec SysvarCreateSpec) error {
 	s.mu.Lock()
-	s.created = append(s.created, name)
+	s.created = append(s.created, spec.Name)
 	s.mu.Unlock()
 	return s.createErr
 }
 
-func (s *stubSysvarMutator) UpdateSysvar(_ context.Context, name, newName, _, _, _, _ string, _ []string) error {
+func (s *stubSysvarMutator) UpdateSysvar(_ context.Context, spec SysvarUpdateSpec) error {
 	s.mu.Lock()
-	s.updated = append(s.updated, name)
-	s.renamedTo = append(s.renamedTo, newName)
+	s.updated = append(s.updated, spec.Name)
+	s.renamedTo = append(s.renamedTo, spec.NewName)
 	s.mu.Unlock()
 	return s.updateErr
 }
@@ -121,7 +121,7 @@ func TestHubRemoveSysvar(t *testing.T) {
 
 func TestHubCreateSysvarRemote_noMutator(t *testing.T) {
 	h := NewHub("ccu")
-	err := h.CreateSysvarRemote(context.Background(), "X", "integer", "", "0", "100", "", nil)
+	err := h.CreateSysvarRemote(context.Background(), SysvarCreateSpec{Name: "X", ValueType: "integer", Min: "0", Max: "100"})
 	if !errors.Is(err, ErrNoSysvarMutator) {
 		t.Fatalf("want ErrNoSysvarMutator, got %v", err)
 	}
@@ -131,7 +131,7 @@ func TestHubCreateSysvarRemote_withMutator(t *testing.T) {
 	h := NewHub("ccu")
 	mut := &stubSysvarMutator{}
 	h.SysvarMutator = mut
-	if err := h.CreateSysvarRemote(context.Background(), "MyVar", "integer", "°C", "0", "100", "", nil); err != nil {
+	if err := h.CreateSysvarRemote(context.Background(), SysvarCreateSpec{Name: "MyVar", ValueType: "integer", Unit: "°C", Min: "0", Max: "100"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(mut.created) != 1 || mut.created[0] != "MyVar" {
@@ -180,7 +180,7 @@ func TestHubUpdateSysvarRemote(t *testing.T) {
 	h := NewHub("ccu")
 	mut := &stubSysvarMutator{}
 	h.SysvarMutator = mut
-	if err := h.UpdateSysvarRemote(context.Background(), "X", "", "°C", "0", "50", "desc", nil); err != nil {
+	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "X", Unit: "°C", Min: "0", Max: "50", Description: "desc"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(mut.updated) != 1 || mut.updated[0] != "X" {
@@ -190,7 +190,7 @@ func TestHubUpdateSysvarRemote(t *testing.T) {
 
 func TestHubUpdateSysvarRemote_noMutator(t *testing.T) {
 	h := NewHub("ccu")
-	if !errors.Is(h.UpdateSysvarRemote(context.Background(), "X", "", "", "", "", "", nil), ErrNoSysvarMutator) {
+	if !errors.Is(h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "X"}), ErrNoSysvarMutator) {
 		t.Fatal("want ErrNoSysvarMutator")
 	}
 }
@@ -202,7 +202,7 @@ func TestHubUpdateSysvarRemote_renamesCacheKey(t *testing.T) {
 	mut := &stubSysvarMutator{}
 	h.SysvarMutator = mut
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Old"}})
-	if err := h.UpdateSysvarRemote(context.Background(), "Old", "New", "", "", "", "", nil); err != nil {
+	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "Old", NewName: "New"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(mut.renamedTo) != 1 || mut.renamedTo[0] != "New" {
@@ -226,7 +226,7 @@ func TestHubUpdateSysvarRemote_renameSkippedOnError(t *testing.T) {
 	sentinel := errors.New("rega error")
 	h.SysvarMutator = &stubSysvarMutator{updateErr: sentinel}
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "Old"}})
-	if err := h.UpdateSysvarRemote(context.Background(), "Old", "New", "", "", "", "", nil); !errors.Is(err, sentinel) {
+	if err := h.UpdateSysvarRemote(context.Background(), SysvarUpdateSpec{Name: "Old", NewName: "New"}); !errors.Is(err, sentinel) {
 		t.Fatalf("want sentinel, got %v", err)
 	}
 	if _, ok := h.Sysvar("Old"); !ok {

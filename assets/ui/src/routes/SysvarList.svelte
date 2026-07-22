@@ -20,6 +20,7 @@
     sysvarNumberStep,
     isListSysvar,
     isNumberSysvar,
+    isBoolSysvar,
   } from "$lib/sysvar-widget";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -40,7 +41,18 @@
     min: string;
     max: string;
     value_list: string;
-  }>({ name: "", value_type: "BOOL", unit: "", min: "", max: "", value_list: "" });
+    value_name_0: string;
+    value_name_1: string;
+  }>({
+    name: "",
+    value_type: "BOOL",
+    unit: "",
+    min: "",
+    max: "",
+    value_list: "",
+    value_name_0: "",
+    value_name_1: "",
+  });
 
   let createDescription = $state("");
 
@@ -52,6 +64,10 @@
     max: "",
     value_list: "",
     description: "",
+    value_name_0: "",
+    value_name_1: "",
+    is_visible: true,
+    is_logged: false,
   });
 
   function startEdit(sv: SysvarEntry) {
@@ -63,6 +79,10 @@
       max: "",
       value_list: (sv.value_list ?? []).join(";"),
       description: sv.description ?? "",
+      value_name_0: sv.value_name_0 ?? "",
+      value_name_1: sv.value_name_1 ?? "",
+      is_visible: sv.is_visible ?? true,
+      is_logged: sv.is_logged ?? false,
     };
   }
 
@@ -83,6 +103,20 @@
           .map((s) => s.trim())
           .filter(Boolean);
       }
+      if (isBoolSysvar(editing.value_type)) {
+        // A blank label leaves the CCU value untouched; only send a
+        // genuinely changed, non-empty label.
+        const vn0 = editForm.value_name_0.trim();
+        const vn1 = editForm.value_name_1.trim();
+        if (vn0 && vn0 !== (editing.value_name_0 ?? "")) body.value_name_0 = vn0;
+        if (vn1 && vn1 !== (editing.value_name_1 ?? "")) body.value_name_1 = vn1;
+      }
+      // Visibility / archive flags: send only when the operator changed
+      // them, so an unrelated edit does not re-toggle the CCU flag.
+      if (editForm.is_visible !== (editing.is_visible ?? true))
+        body.is_visible = editForm.is_visible;
+      if (editForm.is_logged !== (editing.is_logged ?? false))
+        body.is_logged = editForm.is_logged;
       await api.patchSysvar(editing.name, body, editing.central);
       toastStore.success(
         t("sysvars.updated", { name: (body.name as string) ?? editing.name }),
@@ -173,6 +207,8 @@
     if (!createForm.name) return;
     savingName = "__create__";
     try {
+      const binary =
+        createForm.value_type === "BOOL" || createForm.value_type === "ALARM";
       await api.createSysvar(
         {
           name: createForm.name,
@@ -184,12 +220,23 @@
           value_list: createForm.value_type === "ENUM" && createForm.value_list
             ? createForm.value_list.split(";").map((s) => s.trim()).filter(Boolean)
             : undefined,
+          value_name_0: binary && createForm.value_name_0 ? createForm.value_name_0 : undefined,
+          value_name_1: binary && createForm.value_name_1 ? createForm.value_name_1 : undefined,
         },
         createCentral,
       );
       toastStore.success(t("sysvars.created"));
       creating = false;
-      createForm = { name: "", value_type: "BOOL", unit: "", min: "", max: "", value_list: "" };
+      createForm = {
+        name: "",
+        value_type: "BOOL",
+        unit: "",
+        min: "",
+        max: "",
+        value_list: "",
+        value_name_0: "",
+        value_name_1: "",
+      };
       createDescription = "";
       await load();
     } catch (err) {
@@ -336,6 +383,18 @@
             {t("sysvars.create.alarm_hint")}
           </p>
         {/if}
+        {#if createForm.value_type === "BOOL" || createForm.value_type === "ALARM"}
+          <div class="grid grid-cols-2 gap-2 md:col-span-2">
+            <label class="text-sm">
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value0")}</span>
+              <Input bind:value={createForm.value_name_0} placeholder="false" />
+            </label>
+            <label class="text-sm">
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value1")}</span>
+              <Input bind:value={createForm.value_name_1} placeholder="true" />
+            </label>
+          </div>
+        {/if}
         <label class="text-sm">
           <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={createForm.unit} />
@@ -417,7 +476,15 @@
           {:else if col.key === "value"}
             {@const widget = sysvarWidget(sv)}
             {#if widget === "switch"}
-              <Switch checked={Boolean(currentValue(sv))} onCheckedChange={(v) => setDraft(sv, v)} />
+              {@const on = Boolean(currentValue(sv))}
+              <span class="inline-flex items-center gap-2">
+                <Switch checked={on} onCheckedChange={(v) => setDraft(sv, v)} />
+                {#if sv.value_name_0 || sv.value_name_1}
+                  <span class="text-xs text-slate-500 dark:text-slate-400">
+                    {on ? (sv.value_name_1 ?? "") : (sv.value_name_0 ?? "")}
+                  </span>
+                {/if}
+              </span>
             {:else if widget === "select"}
               <Select
                 options={(sv.value_list ?? []).map((label, i) => ({ value: String(i), label }))}
@@ -511,6 +578,30 @@
             <Input bind:value={editForm.value_list} />
           </label>
         {/if}
+        {#if isBoolSysvar(editing.value_type)}
+          <fieldset class="rounded-md border border-slate-200 p-2 dark:border-slate-700">
+            <legend class="px-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.title")}</legend>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value0")}</span>
+                <Input bind:value={editForm.value_name_0} />
+              </label>
+              <label class="text-sm">
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.value1")}</span>
+                <Input bind:value={editForm.value_name_1} />
+              </label>
+            </div>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.labels.hint")}</p>
+          </fieldset>
+        {/if}
+        <label class="flex items-center justify-between gap-2 text-sm">
+          <span class="text-xs text-slate-500 dark:text-slate-400">{t("sysvars.flags.visible")}</span>
+          <Switch checked={editForm.is_visible} onCheckedChange={(v) => (editForm.is_visible = v)} />
+        </label>
+        <label class="flex items-center justify-between gap-2 text-sm">
+          <span class="text-xs text-slate-500 dark:text-slate-400">{t("sysvars.flags.logged")}</span>
+          <Switch checked={editForm.is_logged} onCheckedChange={(v) => (editForm.is_logged = v)} />
+        </label>
       </div>
       <div class="mt-4 flex justify-end gap-2">
         <Button

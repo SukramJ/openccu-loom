@@ -3,6 +3,8 @@
 !#         ##unit## (optional unit string), ##min## / ##max## (FLOAT/INTEGER bounds)
 !#         ##values## (semicolon-separated ENUM keys, ignored otherwise)
 !#         ##description## (optional description text; "" leaves it empty)
+!#         ##valuename0## / ##valuename1## (BOOL/ALARM false/true labels;
+!#           caller supplies the CCU "false"/"true" defaults when unset)
 !# Output: the new sysvar's serial id, or an empty string on failure.
 !#
 !# Creates a system variable on the CCU. Silent no-op if a sysvar with
@@ -21,6 +23,8 @@ string sMin = "##min##";
 string sMax = "##max##";
 string sValues = "##values##";
 string sDescription = "##description##";
+string sValueName0 = "##valuename0##";
+string sValueName1 = "##valuename1##";
 
 object oSv = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
 if (oSv) {
@@ -40,16 +44,16 @@ if (oNew) {
         oNew.AlSetBinaryCondition();
         oNew.ValueType(ivtBinary);
         oNew.ValueSubType(istAlarm);
-        oNew.ValueName0("false");
-        oNew.ValueName1("true");
+        oNew.ValueName0(sValueName0);
+        oNew.ValueName1(sValueName1);
         oNew.AlType(atSystem);
         oNew.AlArm(true);
     }
     if (sType == "BOOL") {
         oNew.ValueType(ivtBinary);
         oNew.ValueSubType(istBool);
-        oNew.ValueName0("false");
-        oNew.ValueName1("true");
+        oNew.ValueName0(sValueName0);
+        oNew.ValueName1(sValueName1);
     }
     if (sType == "INTEGER") {
         oNew.ValueType(ivtInteger);

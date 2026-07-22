@@ -209,6 +209,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   surfaces both: the edit dialog has a rename field, the create form a
   description field.
 
+- **System variables expose their value labels and visibility / logging
+  flags.** The sysvar catalogue read from the CCU (`SysVar.getAll`) now
+  parses the fields it already ships — the binary `valueName0`/
+  `valueName1` state labels (for `LOGIC`/`ALARM` variables) and the
+  `isVisible` / `isLogged` flags. They surface as `value_name_0`,
+  `value_name_1`, `is_visible` and `is_logged` on `SysvarSummary` (REST
+  `GET /sysvars` and the WS `sysvars.list`). `POST /sysvars` accepts the
+  two value labels (empty adopts the CCU's own `false`/`true` defaults; a
+  custom label routes creation through the Rega script since the native
+  `SysVar.createBool` has no label parameter), and `PATCH /sysvars/{name}`
+  accepts the two labels plus tri-state `is_visible` / `is_logged`
+  toggles (backed by the CCU-side `Visible()` / `DPArchive()` settings).
+  In the SPA, a boolean sysvar's switch now shows the operator-visible
+  state label instead of a bare toggle, and the edit and create dialogs
+  offer the value-label fields plus the visibility and logging switches.
+
 ### Fixed
 
 - **The system-variable edit dialog now patches the value list of real

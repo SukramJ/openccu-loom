@@ -85,6 +85,12 @@
   CCU types `LOGIC` and `ALARM` (the most common kind) now render as an
   on/off switch instead of a free-text field, so they can be flipped
   with one click. Labelled list variables keep their dropdown.
+- **System-variable state labels, visibility and logging.** A boolean
+  variable's switch now shows the CCU state labels (e.g. "closed" /
+  "open") instead of a bare toggle, and the edit and create dialogs let
+  you set those two labels along with whether the variable is visible in
+  the CCU WebUI and whether its value changes are logged to the
+  measurement archive.
 
 ## 0.45.0
 

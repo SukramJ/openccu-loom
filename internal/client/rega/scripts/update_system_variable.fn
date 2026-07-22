@@ -5,6 +5,9 @@
 !#         ##min##   / ##max## (FLOAT/INTEGER bounds; "" untouched)
 !#         ##values## (semicolon-separated ENUM keys; "" untouched)
 !#         ##description## (optional description text; "" untouched)
+!#         ##valuename0## / ##valuename1## (BOOL/ALARM false/true labels; "" untouched)
+!#         ##visible## / ##logged## ("true"/"false" set the WebUI-visibility and
+!#           archive (DPArchive) flags; "" leaves each flag untouched)
 !# Output: "ok" once the metadata patch landed, "" otherwise.
 !#
 !# Updates an existing sysvar's metadata in place. A non-empty newname
@@ -22,6 +25,10 @@ string sMin = "##min##";
 string sMax = "##max##";
 string sValues = "##values##";
 string sDescription = "##description##";
+string sValueName0 = "##valuename0##";
+string sValueName1 = "##valuename1##";
+string sVisible = "##visible##";
+string sLogged = "##logged##";
 
 object oSv = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
 if (oSv) {
@@ -30,6 +37,12 @@ if (oSv) {
     if (sMax != "") { oSv.ValueMax(sMax); }
     if (sValues != "") { oSv.ValueList(sValues); }
     if (sDescription != "") { oSv.DPInfo(sDescription); }
+    if (sValueName0 != "") { oSv.ValueName0(sValueName0); }
+    if (sValueName1 != "") { oSv.ValueName1(sValueName1); }
+    if (sVisible == "true") { oSv.Visible(true); }
+    if (sVisible == "false") { oSv.Visible(false); }
+    if (sLogged == "true") { oSv.DPArchive(true); }
+    if (sLogged == "false") { oSv.DPArchive(false); }
     if (sNewName != "") { oSv.Name(sNewName); }
     Write("ok");
 }

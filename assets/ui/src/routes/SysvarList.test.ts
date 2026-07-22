@@ -89,6 +89,24 @@ describe("SysvarList value widget", () => {
     expect(c.querySelector('input[type="text"]')).toBeNull();
   });
 
+  it("renders the current-state value label next to a LOGIC switch", async () => {
+    const c = await renderWith({
+      name: "S_Door",
+      central: "",
+      value_type: "LOGIC",
+      value: true,
+      value_list: [],
+      unit: "",
+      value_name_0: "zugesperrt",
+      value_name_1: "geoeffnet",
+    });
+    expect(c.querySelector('[role="switch"]')).not.toBeNull();
+    // value === true → the true-state label is shown; the false-state
+    // label is not.
+    expect(c.textContent).toContain("geoeffnet");
+    expect(c.textContent).not.toContain("zugesperrt");
+  });
+
   it("renders a switch for an ALARM sysvar even with a label list", async () => {
     const c = await renderWith({
       name: "S_Alarm",
@@ -207,6 +225,18 @@ function findByLabel(scope: HTMLElement, labelText: string): HTMLInputElement {
   return input as HTMLInputElement;
 }
 
+// switchByLabel locates a role="switch" control by the text of the <span>
+// sharing its wrapping <label> — the is_visible/is_logged flags render as
+// a Switch, not an <input>, so findByLabel cannot see them.
+function switchByLabel(scope: HTMLElement, labelText: string): HTMLElement {
+  const label = [...scope.querySelectorAll("label")].find(
+    (l) => l.querySelector("span")?.textContent?.trim() === labelText,
+  );
+  const sw = label?.querySelector('[role="switch"]');
+  if (!sw) throw new Error(`switch for label "${labelText}" not found`);
+  return sw as HTMLElement;
+}
+
 function buttonByText(scope: HTMLElement, re: RegExp): HTMLButtonElement {
   const btn = [...scope.querySelectorAll("button")].find((b) =>
     re.test(b.textContent ?? ""),
@@ -295,6 +325,70 @@ describe("SysvarList edit dialog dispatch", () => {
     const body = vi.mocked(api.patchSysvar).mock.calls[0][1] as Record<string, unknown>;
     expect(body.name).toBeUndefined();
   });
+
+  const logicVar = {
+    name: "Door",
+    central: "ccu1",
+    value_type: "LOGIC",
+    value: false,
+    value_list: [],
+    unit: "",
+    is_internal: false,
+    is_extended: false,
+    is_visible: true,
+    is_logged: false,
+    value_name_0: "zu",
+    value_name_1: "offen",
+  };
+
+  it("renders the value-label fields pre-filled for a LOGIC sysvar", async () => {
+    const { dialog } = await openEditDialog(logicVar);
+    expect(findByLabel(dialog, t("sysvars.labels.value0")).value).toBe("zu");
+    expect(findByLabel(dialog, t("sysvars.labels.value1")).value).toBe("offen");
+  });
+
+  it("sends a changed value label in the patch body", async () => {
+    const { dialog } = await openEditDialog(logicVar);
+    const vn1 = findByLabel(dialog, t("sysvars.labels.value1"));
+    vn1.value = "aufgesperrt";
+    await fireEvent.input(vn1);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    expect(api.patchSysvar).toHaveBeenCalledWith(
+      "Door",
+      expect.objectContaining({ value_name_1: "aufgesperrt" }),
+      "ccu1",
+    );
+  });
+
+  it("does not resend unchanged labels or flags on a plain save", async () => {
+    const { dialog } = await openEditDialog(logicVar);
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(api.patchSysvar).mock.calls[0][1] as Record<string, unknown>;
+    expect(body.value_name_0).toBeUndefined();
+    expect(body.value_name_1).toBeUndefined();
+    expect(body.is_visible).toBeUndefined();
+    expect(body.is_logged).toBeUndefined();
+  });
+
+  // Toggling the visibility / archive switches must reach the PATCH body
+  // as the new boolean — the counterpart of the "unchanged flags stay
+  // out of the body" case above, exercising the actual send path.
+  it("sends a toggled visibility/archive flag in the patch body", async () => {
+    const { dialog } = await openEditDialog(logicVar);
+    await fireEvent.click(switchByLabel(dialog, t("sysvars.flags.visible")));
+    await fireEvent.click(switchByLabel(dialog, t("sysvars.flags.logged")));
+    await fireEvent.click(buttonByText(dialog, /save|speichern/i));
+    await waitFor(() => expect(api.patchSysvar).toHaveBeenCalledTimes(1));
+    // logicVar starts is_visible: true, is_logged: false — toggling both
+    // flips them.
+    expect(api.patchSysvar).toHaveBeenCalledWith(
+      "Door",
+      expect.objectContaining({ is_visible: false, is_logged: true }),
+      "ccu1",
+    );
+  });
 });
 
 describe("SysvarList create dialog dispatch", () => {
@@ -351,5 +445,36 @@ describe("SysvarList create dialog dispatch", () => {
     const opts = Array.from(typeSelect.options).map((o) => o.value);
     expect(opts).toEqual(["BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"]);
     expect(container.textContent).not.toContain(t("sysvars.create.alarm_hint"));
+  });
+
+  // The default create type is BOOL, so the value-label fields must be
+  // available and thread into the create body when the operator fills
+  // them in.
+  it("includes the binary value labels in the create body for a BOOL variable", async () => {
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(mockListSysvars).toHaveBeenCalledTimes(1));
+    await fireEvent.click(buttonByText(container, /\+\s*(new|neu)/i));
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll("label")].some(
+          (l) => l.querySelector("span")?.textContent?.trim() === t("sysvars.create.name"),
+        ),
+      ).toBe(true),
+    );
+    const nameInput = findByLabel(container, t("sysvars.create.name"));
+    nameInput.value = "Door";
+    await fireEvent.input(nameInput);
+    const vn0 = findByLabel(container, t("sysvars.labels.value0"));
+    vn0.value = "zu";
+    await fireEvent.input(vn0);
+    const vn1 = findByLabel(container, t("sysvars.labels.value1"));
+    vn1.value = "offen";
+    await fireEvent.input(vn1);
+    await fireEvent.click(buttonByText(container, /^(add|hinzufügen)$/i));
+    await waitFor(() => expect(api.createSysvar).toHaveBeenCalledTimes(1));
+    expect(api.createSysvar).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Door", value_name_0: "zu", value_name_1: "offen" }),
+      "",
+    );
   });
 });
