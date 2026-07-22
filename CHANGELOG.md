@@ -6,7 +6,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.46.0] — unreleased
+## [0.47.0] — unreleased
+
+## [0.46.0] — 2026-07-22
 
 ### Added
 
