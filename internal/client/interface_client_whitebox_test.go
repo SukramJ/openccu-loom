@@ -496,6 +496,10 @@ func (b *orchBackendStub) SetInstallMode(context.Context, bool, int, int, string
 	return nil
 }
 
+func (b *orchBackendStub) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (b *orchBackendStub) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

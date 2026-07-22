@@ -144,6 +144,10 @@ func (*stubBackend) SetInstallMode(context.Context, bool, int, int, string) erro
 	return nil
 }
 
+func (*stubBackend) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (*stubBackend) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

@@ -260,6 +260,14 @@ type SystemOps interface {
 	// is false.
 	SetInstallMode(ctx context.Context, on bool, duration, mode int, deviceAddress string) error
 
+	// SetInstallModeLocal opens an HmIP pairing window restricted to a
+	// single device identified by SGTIN + device key — the keyserver-less
+	// LOCAL teach-in. sgtin and keyHex must be pre-normalised (24 / 32
+	// uppercase hex characters, see pkg/hmproto). Returns
+	// [ErrUnsupported] on backends or interfaces without the HmIP
+	// JSON-RPC surface ([Capabilities.InstallModeLocal]).
+	SetInstallModeLocal(ctx context.Context, duration int, sgtin, keyHex string) error
+
 	// --- service / alarm messages -----------------------------------------
 
 	// GetServiceMessages returns all active service messages. An optional

@@ -125,6 +125,10 @@ func (t *testBackendOps) SetInstallMode(_ context.Context, _ bool, _, _ int, _ s
 	return nil
 }
 
+func (t *testBackendOps) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (t *testBackendOps) GetServiceMessages(_ context.Context, _ string) ([]map[string]any, error) {
 	return nil, nil
 }

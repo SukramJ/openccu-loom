@@ -633,6 +633,21 @@ func (w *wsHubQuery) EnableInstallMode(ctx context.Context, interfaceID string, 
 	return m.Enable(ctx, time.Duration(durationSecs)*time.Second)
 }
 
+// EnableInstallModeLocal opens the keyserver-less HmIP LOCAL pairing
+// window (SGTIN + device-key whitelist) via InstallMode.EnableLocal,
+// which normalises both inputs and refuses to fall back to broadcast.
+func (w *wsHubQuery) EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSecs int, sgtin, key string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	m, ok := h.InstallModeDP(interfaceID)
+	if !ok {
+		return fmt.Errorf("ws: install mode for interface %q not registered", interfaceID)
+	}
+	return m.EnableLocal(ctx, time.Duration(durationSecs)*time.Second, sgtin, key)
+}
+
 // DisableInstallMode closes the pairing window for interfaceID.
 func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string) error {
 	h := w.hub.Hub()

@@ -95,6 +95,12 @@ type Capabilities struct {
 	// on/off.
 	InstallMode bool
 
+	// InstallModeLocal is true when the backend supports the
+	// keyserver-less HmIP LOCAL teach-in (SGTIN + device-key
+	// whitelist). Requires the HmIP JSON-RPC surface; the backend
+	// additionally gates on the HmIP-RF interface at call time.
+	InstallModeLocal bool
+
 	// LinkOperations is true when the backend supports direct-link
 	// CRUD.
 	LinkOperations bool
@@ -165,6 +171,7 @@ func CapabilityFor(kind Kind) Capabilities {
 			HasSystemUpdate:        true,
 			InboxDevices:           true,
 			InstallMode:            true,
+			InstallModeLocal:       true,
 			LinkOperations:         true,
 			ServiceMessages:        true,
 			SetProgramState:        true,

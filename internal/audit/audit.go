@@ -38,6 +38,16 @@ const (
 	// assigned sets.
 	ActionDeviceAssignment Action = "device_assignment"
 
+	// ActionInstallMode records an interface-level pairing window
+	// toggled on or off. The Note carries central, interface and
+	// duration; DeviceAddress the optional targeted device.
+	ActionInstallMode Action = "install_mode"
+
+	// ActionInstallModeLocal records a keyserver-less HmIP LOCAL
+	// teach-in (one-device SGTIN whitelist). DeviceAddress carries the
+	// SGTIN; the device key is credential material and never recorded.
+	ActionInstallModeLocal Action = "install_mode_local"
+
 	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"

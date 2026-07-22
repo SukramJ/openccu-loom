@@ -191,6 +191,9 @@ type HubQuery interface {
 	// EnableInstallMode opens the pairing window for the named
 	// interface for the given duration in seconds.
 	EnableInstallMode(ctx context.Context, interfaceID string, durationSeconds int) error
+	// EnableInstallModeLocal opens the keyserver-less HmIP LOCAL
+	// pairing window restricted to one device (SGTIN + device key).
+	EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSeconds int, sgtin, key string) error
 	// DisableInstallMode closes the pairing window.
 	DisableInstallMode(ctx context.Context, interfaceID string) error
 
@@ -696,6 +699,10 @@ func serviceMessagesAckAllHandler(q HubQuery) CommandHandler {
 type installModeEnableArgs struct {
 	InterfaceID     string `json:"interface_id"`
 	DurationSeconds int    `json:"duration_seconds"`
+	// SGTIN + Key request the keyserver-less HmIP LOCAL teach-in
+	// (one-device whitelist). Both must come together.
+	SGTIN string `json:"sgtin,omitempty"`
+	Key   string `json:"key,omitempty"`
 }
 
 type installModeIfaceArgs struct {
@@ -723,6 +730,15 @@ func installModeEnableHandler(q HubQuery) CommandHandler {
 		}
 		if args.DurationSeconds <= 0 {
 			return nil, NewCommandError(CommandErrorBadRequest, "duration_seconds must be > 0")
+		}
+		if (args.SGTIN != "") != (args.Key != "") {
+			return nil, NewCommandError(CommandErrorBadRequest, "sgtin and key must be supplied together")
+		}
+		if args.SGTIN != "" {
+			if err := q.EnableInstallModeLocal(ctx, args.InterfaceID, args.DurationSeconds, args.SGTIN, args.Key); err != nil {
+				return nil, NewCommandError(CommandErrorInternal, "enable_install_mode_local: "+err.Error())
+			}
+			return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds, "local": true}, nil
 		}
 		if err := q.EnableInstallMode(ctx, args.InterfaceID, args.DurationSeconds); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "enable_install_mode: "+err.Error())

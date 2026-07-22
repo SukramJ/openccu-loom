@@ -7460,6 +7460,34 @@ components:
           type: integer
           minimum: 0
           description: Install-mode duration; defaults to 60 when omitted.
+        central:
+          type: string
+          description: |
+            Disambiguates the CCU when several centrals expose the same
+            interface name. Omitted matches the first interface entry
+            across all centrals.
+        device_address:
+          type: string
+          description: |
+            Restricts pairing to one already-known device address
+            (targeted teach-in / re-pairing by serial). Only meaningful
+            with active=true; ignored on stop. Note that HmIP radios
+            have no address-targeted pairing on the CCU side — use
+            sgtin + key there instead.
+        sgtin:
+          type: string
+          description: |
+            HmIP SGTIN for the keyserver-less LOCAL teach-in. Formatted
+            label input (dashes, spaces, lowercase) is accepted and
+            normalised server-side to 24 hex characters. Requires key,
+            active=true, and is mutually exclusive with device_address.
+        key:
+          type: string
+          format: password
+          description: |
+            HmIP device key from the label: 32 hex characters, or the
+            shorter Base32 label form (converted automatically). Never
+            logged or audited.
     SystemUpdateEntry:
       type: object
       required: [update_available, in_progress, observed]

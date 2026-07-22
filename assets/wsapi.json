@@ -553,8 +553,14 @@
     },
     {
       "category": "install_mode",
-      "description": "Open the pairing window for the named interface for a given duration in seconds.",
-      "name": "install_mode.enable"
+      "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device.",
+      "name": "install_mode.enable",
+      "args": {
+        "interface_id": "string",
+        "duration_seconds": "integer",
+        "sgtin": "string?",
+        "key": "string?"
+      }
     },
     {
       "category": "install_mode",

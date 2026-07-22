@@ -462,6 +462,12 @@ func (*HomegearBackend) SetInstallMode(context.Context, bool, int, int, string) 
 	return ErrUnsupported
 }
 
+// SetInstallModeLocal implements Operations. Homegear has no HmIP
+// LOCAL teach-in; returns ErrUnsupported.
+func (*HomegearBackend) SetInstallModeLocal(context.Context, int, string, string) error {
+	return ErrUnsupported
+}
+
 // GetServiceMessages implements Operations. Not available on Homegear.
 func (*HomegearBackend) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, ErrUnsupported

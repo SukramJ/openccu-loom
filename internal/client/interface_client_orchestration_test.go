@@ -120,6 +120,10 @@ func (b *orchBackend) SetInstallMode(context.Context, bool, int, int, string) er
 	return b.setInstallErr
 }
 
+func (b *orchBackend) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (b *orchBackend) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return b.svcMessages, nil
 }

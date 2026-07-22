@@ -63,6 +63,22 @@ func TestCapabilityFor_CCU_HasMetadataTrue(t *testing.T) {
 	}
 }
 
+// TestCapabilityFor_InstallModeLocal verifies that the keyserver-less HmIP
+// LOCAL teach-in capability is advertised only for KindCCU — CUxD and
+// Homegear have no HmIP JSON-RPC surface to serve it.
+func TestCapabilityFor_InstallModeLocal(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).InstallModeLocal {
+		t.Error("KindCCU: InstallModeLocal should be true")
+	}
+	if CapabilityFor(KindCUxD).InstallModeLocal {
+		t.Error("KindCUxD: InstallModeLocal should be false")
+	}
+	if CapabilityFor(KindHomegear).InstallModeLocal {
+		t.Error("KindHomegear: InstallModeLocal should be false")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Homegear capability profile
 // ---------------------------------------------------------------------------

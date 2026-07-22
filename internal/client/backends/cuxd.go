@@ -221,6 +221,12 @@ func (*CuxdBackend) SetInstallMode(context.Context, bool, int, int, string) erro
 	return ErrUnsupported
 }
 
+// SetInstallModeLocal returns ErrUnsupported on CUxD; the HmIP LOCAL
+// teach-in is CCU-only.
+func (*CuxdBackend) SetInstallModeLocal(context.Context, int, string, string) error {
+	return ErrUnsupported
+}
+
 // GetServiceMessages returns ErrUnsupported on CUxD; service messages are CCU-only.
 func (*CuxdBackend) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, ErrUnsupported

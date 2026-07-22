@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"strconv"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -449,6 +450,7 @@ func TestParamsetGetSurfacesBackendError(t *testing.T) {
 // --- programs.* / sysvars.* ---
 
 type stubHub struct {
+	localCalls         map[string]string
 	programs           []map[string]any
 	executedID         string
 	executeChecked     bool
@@ -568,6 +570,14 @@ func (h *stubHub) EnableInstallMode(_ context.Context, ifaceID string, durationS
 	h.installEnabledID = ifaceID
 	h.installDurationSecs = durationSecs
 	return h.installErr
+}
+
+func (h *stubHub) EnableInstallModeLocal(_ context.Context, ifaceID string, durationSecs int, sgtin, key string) error {
+	if h.localCalls == nil {
+		h.localCalls = map[string]string{}
+	}
+	h.localCalls[ifaceID] = sgtin + "/" + key + "/" + strconv.Itoa(durationSecs)
+	return nil
 }
 
 func (h *stubHub) DisableInstallMode(_ context.Context, ifaceID string) error {
@@ -963,6 +973,89 @@ func TestInstallModeEnableValidatesArgs(t *testing.T) {
 	res = r.Dispatch(opCtx(), "install_mode.enable", zeroDur)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("zero duration: %+v", res.Error)
+	}
+}
+
+// TestInstallModeEnableLocalRequiresSGTINAndKeyTogether verifies that
+// supplying sgtin without key (or vice versa) is rejected as bad_request —
+// the two must arrive together for the keyserver-less HmIP LOCAL teach-in.
+func TestInstallModeEnableLocalRequiresSGTINAndKeyTogether(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+
+	sgtinOnly, _ := json.Marshal(map[string]any{
+		"interface_id":     "HmIP-RF",
+		"duration_seconds": 300,
+		"sgtin":            "3014F711A061A7D569892A67",
+	})
+	res := r.Dispatch(opCtx(), "install_mode.enable", sgtinOnly)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("sgtin without key: %+v", res.Error)
+	}
+}
+
+// TestInstallModeEnableLocalDispatchesToHubQuery verifies the LOCAL
+// teach-in happy path: interface_id/sgtin/key/duration reach
+// EnableInstallModeLocal on the HubQuery, and the response carries
+// "local": true so the SPA can distinguish the two enable flavours.
+func TestInstallModeEnableLocalDispatchesToHubQuery(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{
+		"interface_id":     "HmIP-RF",
+		"duration_seconds": 300,
+		"sgtin":            "3014F711A061A7D569892A67",
+		"key":              "0110C8531D0952D8D73E1194E95B5F19",
+	})
+	res := r.Dispatch(opCtx(), "install_mode.enable", args)
+	if res.Error != nil {
+		t.Fatalf("enable local: %+v", res.Error)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("result not a map: %T", res.Data)
+	}
+	if local, _ := data["local"].(bool); !local {
+		t.Fatalf("result[\"local\"] = %v, want true", data["local"])
+	}
+	got, ok := hub.localCalls["HmIP-RF"]
+	if !ok {
+		t.Fatal("EnableInstallModeLocal was not called for interface HmIP-RF")
+	}
+	const want = "3014F711A061A7D569892A67/0110C8531D0952D8D73E1194E95B5F19/300"
+	if got != want {
+		t.Fatalf("localCalls[HmIP-RF] = %q, want %q", got, want)
+	}
+}
+
+// TestInstallModeEnableWithoutSGTINStillUsesLegacyPath verifies that
+// omitting sgtin/key entirely still dispatches through the pre-existing
+// broadcast EnableInstallMode path (no "local" key in the result), so the
+// LOCAL teach-in addition is fully backwards compatible.
+func TestInstallModeEnableWithoutSGTINStillUsesLegacyPath(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"interface_id": "HmIP-RF", "duration_seconds": 60})
+	res := r.Dispatch(opCtx(), "install_mode.enable", args)
+	if res.Error != nil {
+		t.Fatalf("legacy enable: %+v", res.Error)
+	}
+	if hub.installEnabledID != "HmIP-RF" || hub.installDurationSecs != 60 {
+		t.Fatalf("legacy enable saw (%q, %d) want (HmIP-RF, 60)", hub.installEnabledID, hub.installDurationSecs)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("result not a map: %T", res.Data)
+	}
+	if _, present := data["local"]; present {
+		t.Fatalf("legacy enable result must not carry \"local\", got %v", data["local"])
+	}
+	if len(hub.localCalls) != 0 {
+		t.Fatalf("legacy enable must not call EnableInstallModeLocal, got %v", hub.localCalls)
 	}
 }
 

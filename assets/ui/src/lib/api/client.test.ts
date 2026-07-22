@@ -574,3 +574,44 @@ describe("getHistory", () => {
     expect(headers["X-CSRF-Token"]).toBeUndefined();
   });
 });
+
+describe("api.setInstallModeInterface — LOCAL teach-in body shape", () => {
+  // setInstallModeInterface POSTs, then re-fetches the interface list; every
+  // test here mocks both responses so the follow-up GET doesn't throw.
+  beforeEach(() => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+  });
+
+  it("includes sgtin and key in the body when a local arg is given", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true, 300, undefined, {
+      sgtin: "3014-F711-A061-A7D5-6989-2A67",
+      key: "0110C8531D0952D8D73E1194E95B5F19",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/install-mode/interfaces");
+    const body = JSON.parse(init.body as string);
+    expect(body.sgtin).toBe("3014-F711-A061-A7D5-6989-2A67");
+    expect(body.key).toBe("0110C8531D0952D8D73E1194E95B5F19");
+    expect(body.interface).toBe("HmIP-RF");
+    expect(body.active).toBe(true);
+    expect(body.seconds).toBe(300);
+  });
+
+  it("omits sgtin and key from the body when no local arg is given", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true, 60);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).not.toHaveProperty("sgtin");
+    expect(body).not.toHaveProperty("key");
+  });
+
+  it("omits sgtin and key from the body for a plain device_address teach-in", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true, 60, "AABBCCDD:1");
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.device_address).toBe("AABBCCDD:1");
+    expect(body).not.toHaveProperty("sgtin");
+    expect(body).not.toHaveProperty("key");
+  });
+});

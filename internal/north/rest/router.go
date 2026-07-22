@@ -1005,7 +1005,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub))
 				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
 				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
-				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub))
+				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub, d.AuditRecorder))
 			}
 			if d.Interfaces != nil {
 				pr.Get("/interfaces", handlers.ListInterfaces(d.Interfaces))

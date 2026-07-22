@@ -1296,6 +1296,7 @@ export const api = {
     active: boolean,
     seconds?: number,
     deviceAddress?: string,
+    local?: { sgtin: string; key: string },
   ) {
     await request<void>(`/install-mode/interfaces`, {
       method: "POST",
@@ -1305,6 +1306,7 @@ export const api = {
         active,
         ...(seconds ? { seconds } : {}),
         ...(deviceAddress ? { device_address: deviceAddress } : {}),
+        ...(local ? { sgtin: local.sgtin, key: local.key } : {}),
       }),
     });
     return api.listInstallModeInterfaces();

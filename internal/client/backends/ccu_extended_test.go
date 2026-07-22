@@ -139,6 +139,101 @@ func TestCcuSetInstallModeWithoutAddress(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// SetInstallModeLocal — keyserver-less HmIP LOCAL teach-in
+// ---------------------------------------------------------------------------
+
+// TestCcuBackendSetInstallModeLocalPayload pins both the JSON-RPC method
+// name and the exact full param map SetInstallModeLocal sends: every key
+// must be present (the CCU-side wrapper dereferences all of them
+// unconditionally) and "keymode"/"installMode" carry the exact casing the
+// wire contract requires.
+func TestCcuBackendSetInstallModeLocalPayload(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: nil}
+	b := NewCcuBackendForInterface(hmenum.InterfaceHmIPRF, &fakeCaller{}, j, nil)
+	if err := b.SetInstallModeLocal(context.Background(), 300, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19"); err != nil {
+		t.Fatalf("SetInstallModeLocal: %v", err)
+	}
+	method, args, ok := loadArgs(j)
+	if !ok || method != "Interface.setInstallModeHMIP" {
+		t.Fatalf("method=%s", method)
+	}
+	if len(args) != 1 {
+		t.Fatalf("want 1 arg (params map), got %d: %v", len(args), args)
+	}
+	params, ok := args[0].(map[string]any)
+	if !ok {
+		t.Fatalf("params not a map: %T", args[0])
+	}
+	want := map[string]any{
+		"interface":   "HmIP-RF",
+		"on":          "true",
+		"time":        300,
+		"installMode": "LOCAL",
+		"address":     "3014F711A061A7D569892A67",
+		"key":         "0110C8531D0952D8D73E1194E95B5F19",
+		"keymode":     "LOCAL",
+	}
+	if len(params) != len(want) {
+		t.Fatalf("params has %d keys, want %d: %v", len(params), len(want), params)
+	}
+	for k, v := range want {
+		if got := params[k]; got != v {
+			t.Errorf("params[%q] = %v, want %v", k, got, v)
+		}
+	}
+}
+
+// TestCcuBackendSetInstallModeLocalNonHmIP verifies that any non-HmIP-RF
+// interface refuses the LOCAL teach-in with ErrUnsupported — the CCU's
+// setInstallModeHMIP wrapper only exists for HmIP.
+func TestCcuBackendSetInstallModeLocalNonHmIP(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: nil}
+	b := NewCcuBackendForInterface(hmenum.InterfaceBidCosRF, &fakeCaller{}, j, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+	if j.called.Load() != 0 {
+		t.Fatal("SetInstallModeLocal must not call JSON-RPC for a non-HmIP interface")
+	}
+}
+
+// TestCcuBackendSetInstallModeLocalNoJSON verifies that a HmIP-RF backend
+// without a wired JSON-RPC caller also refuses with ErrUnsupported.
+func TestCcuBackendSetInstallModeLocalNoJSON(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackendForInterface(hmenum.InterfaceHmIPRF, &fakeCaller{}, nil, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// TestCuxdBackendSetInstallModeLocalUnsupported verifies the CUxD stub:
+// install mode (LOCAL or otherwise) is CCU-only.
+func TestCuxdBackendSetInstallModeLocalUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// TestHomegearBackendSetInstallModeLocalUnsupported verifies the Homegear
+// stub: no HmIP JSON-RPC surface exists on Homegear.
+func TestHomegearBackendSetInstallModeLocalUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // GetServiceMessages
 // ---------------------------------------------------------------------------
 

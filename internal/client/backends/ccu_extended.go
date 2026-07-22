@@ -105,6 +105,30 @@ func (b *CcuBackend) SetInstallMode(ctx context.Context, on bool, duration, mode
 	return err
 }
 
+// SetInstallModeLocal implements Operations. Opens the HmIP pairing
+// window in keyserver-less LOCAL mode: the CCU builds a one-device
+// whitelist from SGTIN + device key and forwards it to the HmIP server
+// as setInstallModeWithWhitelist. Every parameter key must be present
+// on every call and the casing is part of the wire contract (`keymode`
+// all-lowercase, `installMode` camelCase) — the CCU-side JSON-RPC
+// wrapper dereferences all of them unconditionally.
+func (b *CcuBackend) SetInstallModeLocal(ctx context.Context, duration int, sgtin, keyHex string) error {
+	if b.ifaceType != hmenum.InterfaceHmIPRF || b.json == nil {
+		return ErrUnsupported
+	}
+	params := map[string]any{
+		"interface":   string(b.ifaceType),
+		"on":          "true",
+		"time":        duration,
+		"installMode": "LOCAL",
+		"address":     sgtin,
+		"key":         keyHex,
+		"keymode":     "LOCAL",
+	}
+	_, err := b.json.Call(ctx, "Interface.setInstallModeHMIP", params)
+	return err
+}
+
 // --- service / alarm messages -------------------------------------------
 
 // GetServiceMessages implements Operations. Returns all active service

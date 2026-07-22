@@ -138,6 +138,10 @@ func (*paramsetFakeOps) SetInstallMode(context.Context, bool, int, int, string) 
 	return nil
 }
 
+func (*paramsetFakeOps) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (*paramsetFakeOps) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

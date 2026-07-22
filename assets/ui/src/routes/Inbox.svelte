@@ -13,6 +13,11 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
+  import {
+    isValidHmIPKeyInput,
+    normalizeSgtin,
+    stripLabelSeparators,
+  } from "$lib/hmip";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -101,6 +106,43 @@
       );
     } finally {
       pairBusy = false;
+    }
+  }
+
+  // Keyserver-less HmIP LOCAL teach-in: pairing restricted to exactly
+  // one device by SGTIN + device key from the label — works without
+  // internet/keyserver access. Only offered on HmIP interfaces; the
+  // daemon re-normalises both inputs authoritatively (incl. the Base32
+  // label-form key conversion).
+  let localSgtin = $state("");
+  let localKey = $state("");
+  let localBusy = $state(false);
+  const selectedIsHmIP = $derived(selectedInterface.startsWith("HmIP"));
+  const localSgtinInvalid = $derived(
+    localSgtin.trim() !== "" && normalizeSgtin(localSgtin) === null,
+  );
+  const localKeyInvalid = $derived(
+    localKey.trim() !== "" && !isValidHmIPKeyInput(localKey),
+  );
+  async function startLocalTeachIn() {
+    const sgtin = normalizeSgtin(localSgtin);
+    if (!sgtin || !isValidHmIPKeyInput(localKey)) return;
+    localBusy = true;
+    try {
+      await api.setInstallModeInterface(selectedInterface, true, 60, undefined, {
+        sgtin,
+        key: stripLabelSeparators(localKey),
+      });
+      toastStore.success(t("inbox.install_mode_local_started"));
+      localSgtin = "";
+      localKey = "";
+      void installModeStore.refresh();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
+      );
+    } finally {
+      localBusy = false;
     }
   }
 
@@ -358,6 +400,56 @@
       {t("inbox.pair_serial_submit")}
     </Button>
   </form>
+
+  {#if selectedIsHmIP}
+    <!-- Keyserver-less HmIP LOCAL teach-in (SGTIN + device key). -->
+    <form
+      class="mb-4 flex flex-wrap items-center gap-2"
+      onsubmit={(e) => {
+        e.preventDefault();
+        void startLocalTeachIn();
+      }}
+    >
+      <label class="text-xs text-slate-500 dark:text-slate-400" for="inbox-local-sgtin">
+        {t("inbox.install_mode_local_label")}
+      </label>
+      <input
+        id="inbox-local-sgtin"
+        type="text"
+        bind:value={localSgtin}
+        placeholder={t("inbox.install_mode_local_sgtin_placeholder")}
+        aria-label={t("inbox.install_mode_local_sgtin_label")}
+        class="w-64 rounded-md border px-2 py-2 font-mono text-sm shadow-sm focus:outline-none {localSgtinInvalid
+          ? 'border-red-400 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200'
+          : 'border-slate-300 bg-white focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'}"
+        disabled={localBusy}
+      />
+      <input
+        id="inbox-local-key"
+        type="text"
+        bind:value={localKey}
+        placeholder={t("inbox.install_mode_local_key_placeholder")}
+        aria-label={t("inbox.install_mode_local_key_label")}
+        class="w-64 rounded-md border px-2 py-2 font-mono text-sm shadow-sm focus:outline-none {localKeyInvalid
+          ? 'border-red-400 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200'
+          : 'border-slate-300 bg-white focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'}"
+        disabled={localBusy}
+      />
+      <Button
+        type="submit"
+        variant="outline"
+        disabled={localBusy ||
+          normalizeSgtin(localSgtin) === null ||
+          localKey.trim() === "" ||
+          !isValidHmIPKeyInput(localKey)}
+      >
+        {t("inbox.install_mode_local_submit")}
+      </Button>
+      <span class="w-full text-xs text-slate-400 dark:text-slate-500 sm:w-auto">
+        {t("inbox.install_mode_local_hint")}
+      </span>
+    </form>
+  {/if}
 
   {#if installModeStore.active}
     <div class="mb-4 flex items-center gap-2 rounded border border-brand-300 bg-brand-50 p-3 text-sm text-brand-900 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200">

@@ -13335,6 +13335,10 @@ func (*configFakeOperations) SetInstallMode(context.Context, bool, int, int, str
 	return nil
 }
 
+func (*configFakeOperations) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (*configFakeOperations) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
 	return nil, nil
 }

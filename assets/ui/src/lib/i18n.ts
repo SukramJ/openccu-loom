@@ -2636,6 +2636,16 @@ const EN: Catalog = {
   "inbox.pair_serial_label": "Pair by serial:",
   "inbox.pair_serial_placeholder": "Device address / serial",
   "inbox.pair_serial_submit": "Pair device",
+  "inbox.install_mode_local_label": "Pair HmIP device offline (SGTIN + key):",
+  "inbox.install_mode_local_sgtin_label": "SGTIN",
+  "inbox.install_mode_local_sgtin_placeholder": "SGTIN, e.g. 3014-F711-A000-…",
+  "inbox.install_mode_local_key_label": "Device key",
+  "inbox.install_mode_local_key_placeholder": "Device key from the label",
+  "inbox.install_mode_local_submit": "Start local teach-in",
+  "inbox.install_mode_local_started":
+    "Local teach-in started — press the pairing button on the device.",
+  "inbox.install_mode_local_hint":
+    "Works without internet access: only the device matching SGTIN and key can pair.",
   "inbox.pair_serial_started": "Pairing window opened for {addr}.",
   "light.brightness": "Brightness",
   "light.color_temp": "Color temperature",
@@ -5429,6 +5439,16 @@ const DE: Catalog = {
   "inbox.pair_serial_label": "Per Seriennummer anlernen:",
   "inbox.pair_serial_placeholder": "Geräteadresse / Seriennummer",
   "inbox.pair_serial_submit": "Gerät anlernen",
+  "inbox.install_mode_local_label": "HmIP-Gerät offline anlernen (SGTIN + Key):",
+  "inbox.install_mode_local_sgtin_label": "SGTIN",
+  "inbox.install_mode_local_sgtin_placeholder": "SGTIN, z. B. 3014-F711-A000-…",
+  "inbox.install_mode_local_key_label": "Geräteschlüssel",
+  "inbox.install_mode_local_key_placeholder": "Geräteschlüssel vom Etikett",
+  "inbox.install_mode_local_submit": "Lokales Anlernen starten",
+  "inbox.install_mode_local_started":
+    "Lokales Anlernen gestartet — Anlerntaste am Gerät drücken.",
+  "inbox.install_mode_local_hint":
+    "Funktioniert ohne Internetzugang: Nur das Gerät mit passender SGTIN und Key kann sich anmelden.",
   "inbox.pair_serial_started": "Anlernfenster für {addr} geöffnet.",
   "light.brightness": "Helligkeit",
   "light.color_temp": "Farbtemperatur",

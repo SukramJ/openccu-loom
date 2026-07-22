@@ -5828,6 +5828,34 @@ export interface components {
             active: boolean;
             /** @description Install-mode duration; defaults to 60 when omitted. */
             seconds?: number;
+            /**
+             * @description Disambiguates the CCU when several centrals expose the same
+             *     interface name. Omitted matches the first interface entry
+             *     across all centrals.
+             */
+            central?: string;
+            /**
+             * @description Restricts pairing to one already-known device address
+             *     (targeted teach-in / re-pairing by serial). Only meaningful
+             *     with active=true; ignored on stop. Note that HmIP radios
+             *     have no address-targeted pairing on the CCU side — use
+             *     sgtin + key there instead.
+             */
+            device_address?: string;
+            /**
+             * @description HmIP SGTIN for the keyserver-less LOCAL teach-in. Formatted
+             *     label input (dashes, spaces, lowercase) is accepted and
+             *     normalised server-side to 24 hex characters. Requires key,
+             *     active=true, and is mutually exclusive with device_address.
+             */
+            sgtin?: string;
+            /**
+             * Format: password
+             * @description HmIP device key from the label: 32 hex characters, or the
+             *     shorter Base32 label form (converted automatically). Never
+             *     logged or audited.
+             */
+            key?: string;
         };
         SystemUpdateEntry: {
             /** @description CCU this update info belongs to. */

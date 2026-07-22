@@ -123,6 +123,10 @@ func (b *countingBackend) SetInstallMode(_ context.Context, _ bool, _, _ int, _ 
 	return nil
 }
 
+func (b *countingBackend) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
 func (b *countingBackend) GetServiceMessages(_ context.Context, _ string) ([]map[string]any, error) {
 	return nil, nil
 }
