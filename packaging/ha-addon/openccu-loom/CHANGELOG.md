@@ -2,6 +2,12 @@
 
 ## 0.46.0
 
+- **Toggling press-event forwarding now asks first and reports as a
+  toast.** Enabling or disabling the central-link forwarding (whole device
+  or a single channel) opens a confirmation dialog before it acts —
+  disabling warns that CCU-side programs may use these press events and
+  that afterwards neither CCU programs nor OpenCCU-Loom will receive them.
+  The result appears as a toast instead of an inline banner.
 - **Central-link toggle per channel.** The device-detail Links tab keeps
   the whole-device press-event forwarding switch and now adds a
   per-channel switch for each eligible channel, so you can route the

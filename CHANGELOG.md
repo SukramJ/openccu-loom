@@ -53,6 +53,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   without a pairing concept (CUxD) now answers 422 instead of 502. REST
   `APIVersion` 2.31.0.
 
+### Changed
+
+- **Toggling press-event forwarding now asks for confirmation and reports
+  through a toast.** The device-detail Links tab used to enable/disable the
+  central-link forwarding immediately and show the result in an inline
+  banner. Every toggle (device-wide and per-channel, enable and disable)
+  now runs through the shared confirm dialog first — disable uses the
+  destructive variant and warns that CCU-side programs may consume the
+  press events and that after disabling neither CCU programs nor
+  OpenCCU-Loom will receive them — matching the CCU WebUI's yes/no safety
+  question in both directions. The touched/skipped/failed result is now a
+  toast (a warning toast when any channel failed), and the inline banner is
+  gone. SPA-only; no REST surface change.
+
 ### Fixed
 
 - **Deactivating a central link now clears PRESS_LONG too.** Removing the

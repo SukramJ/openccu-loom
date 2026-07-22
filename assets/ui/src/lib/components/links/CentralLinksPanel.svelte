@@ -5,6 +5,8 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
 
   // Central-Links toggle. Mirrors aiohomematic's
@@ -15,7 +17,10 @@
   // exactly which channels participated. Besides the device-wide
   // switch it offers a per-channel switch for each eligible channel,
   // mirroring the CCU channel-config dialog that scopes the switch to
-  // the single opened channel.
+  // the single opened channel. Every toggle is guarded by the shared
+  // confirm dialog and reports its result through a toast, matching
+  // the CCU WebUI which asks a yes/no safety question in both
+  // directions.
 
   type Props = { address: string };
   let { address }: Props = $props();
@@ -26,8 +31,6 @@
   // per-channel switch is currently in flight.
   let busy = $state<"create" | "remove" | null>(null);
   let busyChannel = $state<string | null>(null);
-  let banner = $state<string | null>(null);
-  let lastReport = $state<CentralLinksReport | null>(null);
   let loadError = $state<string | null>(null);
 
   async function load() {
@@ -50,53 +53,69 @@
         : String(err);
   }
 
-  function bannerFor(enabled: boolean, report: CentralLinksReport): string {
-    return t(enabled ? "central.report.enabled" : "central.report.disabled", {
+  // Confirm before every toggle. Enabling raises the device's radio
+  // duty cycle; disabling can strand CCU-side programs that consume the
+  // press events, so it runs through the destructive variant of the
+  // shared dialog.
+  function confirmToggle(enable: boolean): Promise<boolean> {
+    return confirmStore.ask({
+      title: t(enable ? "central.confirm.enable_title" : "central.confirm.disable_title"),
+      body: t(enable ? "central.confirm.enable_body" : "central.confirm.disable_body"),
+      confirmLabel: t(enable ? "central.enable" : "central.disable"),
+      destructive: !enable,
+    });
+  }
+
+  function reportToast(enable: boolean, report: CentralLinksReport) {
+    const msg = t(enable ? "central.report.enabled" : "central.report.disabled", {
       touched: report.touched,
       skipped: report.skipped,
       failed: report.failed,
     });
+    if (report.failed > 0) {
+      toastStore.warn(msg);
+    } else {
+      toastStore.success(msg);
+    }
   }
 
   async function create() {
+    if (!(await confirmToggle(true))) return;
     busy = "create";
-    banner = null;
     try {
-      lastReport = await api.createCentralLinks(address);
-      banner = bannerFor(true, lastReport);
+      reportToast(true, await api.createCentralLinks(address));
       await load();
     } catch (err) {
-      banner = errorText(err);
+      toastStore.error(t("central.action_failed"), errorText(err));
     } finally {
       busy = null;
     }
   }
 
   async function remove() {
+    if (!(await confirmToggle(false))) return;
     busy = "remove";
-    banner = null;
     try {
-      lastReport = await api.removeCentralLinks(address);
-      banner = bannerFor(false, lastReport);
+      reportToast(false, await api.removeCentralLinks(address));
       await load();
     } catch (err) {
-      banner = errorText(err);
+      toastStore.error(t("central.action_failed"), errorText(err));
     } finally {
       busy = null;
     }
   }
 
   async function toggleChannel(channelAddress: string, enable: boolean) {
+    if (!(await confirmToggle(enable))) return;
     busyChannel = channelAddress;
-    banner = null;
     try {
-      lastReport = enable
+      const report = enable
         ? await api.createCentralLinks(address, channelAddress)
         : await api.removeCentralLinks(address, channelAddress);
-      banner = bannerFor(enable, lastReport);
+      reportToast(enable, report);
       await load();
     } catch (err) {
-      banner = errorText(err);
+      toastStore.error(t("central.action_failed"), errorText(err));
     } finally {
       busyChannel = null;
     }
@@ -196,10 +215,6 @@
             {/each}
           </ul>
         </div>
-      {/if}
-
-      {#if banner}
-        <p class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</p>
       {/if}
     </div>
   {/if}

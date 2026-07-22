@@ -1804,6 +1804,13 @@ const EN: Catalog = {
   "central.device_wide": "Whole device",
   "central.per_channel": "Per channel",
   "central.channel_label": "Channel {number}",
+  "central.confirm.enable_title": "Enable press-event forwarding?",
+  "central.confirm.enable_body":
+    "The CCU will forward this channel's press events (PRESS_SHORT/PRESS_LONG) to OpenCCU-Loom and to CCU-side programs. This raises the device's radio duty cycle and battery use.",
+  "central.confirm.disable_title": "Disable press-event forwarding?",
+  "central.confirm.disable_body":
+    "CCU-side programs may rely on these press events. After disabling, neither CCU programs nor OpenCCU-Loom will receive press events from this channel.",
+  "central.action_failed": "Could not change press-event forwarding",
   // --- Schedules ---
   "schedule.loading": "Loading schedule…",
   "schedule.unsupported":
@@ -4555,6 +4562,13 @@ const DE: Catalog = {
   "central.device_wide": "Ganzes Gerät",
   "central.per_channel": "Pro Kanal",
   "central.channel_label": "Kanal {number}",
+  "central.confirm.enable_title": "Tasterevent-Weiterleitung aktivieren?",
+  "central.confirm.enable_body":
+    "Die CCU leitet die Tasterevents (PRESS_SHORT/PRESS_LONG) dieses Kanals an OpenCCU-Loom und an CCU-Programme weiter. Das erhöht den Funk-DutyCycle und den Batterieverbrauch des Geräts.",
+  "central.confirm.disable_title": "Tasterevent-Weiterleitung deaktivieren?",
+  "central.confirm.disable_body":
+    "CCU-seitige Programme könnten diese Tasterevents nutzen. Nach dem Deaktivieren erhalten weder CCU-Programme noch OpenCCU-Loom Tasterevents dieses Kanals.",
+  "central.action_failed": "Tasterevent-Weiterleitung konnte nicht geändert werden",
   "schedule.loading": "Lade Zeitplan…",
   "schedule.unsupported": "Dieses Gerät unterstützt keinen Zeitplan.",
   "schedule.unsupported_channel":
