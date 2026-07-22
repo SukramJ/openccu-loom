@@ -4858,6 +4858,27 @@ export interface components {
              *     sections.
              */
             has_sub_devices: boolean;
+            rx_mode?: components["schemas"]["RxMode"];
+        };
+        /**
+         * @description Named flags decoded from the device's CCU RX_MODE bitmask. The
+         *     `wakeup` / `lazy_config` bits mark a battery-powered device that only
+         *     applies pending configuration when it next wakes up — the SPA shows a
+         *     "pending wakeup" hint after a link/config write to such a device. Only
+         *     set bits are present; the whole object is omitted when the CCU reports
+         *     no rx mode (RX_MODE == 0).
+         */
+        RxMode: {
+            /** @description Mains-powered, permanently reachable (RX_ALWAYS); applies configuration immediately. */
+            always?: boolean;
+            /** @description Reachable via burst wakeup (RX_BURST). */
+            burst?: boolean;
+            /** @description Reachable in its configuration window (RX_CONFIG). */
+            config?: boolean;
+            /** @description Battery device that only accepts pending configuration on its next wakeup (RX_WAKEUP). */
+            wakeup?: boolean;
+            /** @description Battery device whose configuration transfer is deferred until its next wakeup (RX_LAZY_CONFIG). */
+            lazy_config?: boolean;
         };
         DeviceList: {
             items: components["schemas"]["DeviceSummary"][];

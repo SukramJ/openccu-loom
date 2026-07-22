@@ -10,6 +10,7 @@ import type { Link } from "$lib/api/types";
 const mockListLinks = vi.fn();
 const mockUpdateLink = vi.fn();
 const mockRemoveLink = vi.fn();
+const mockGetDevice = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the component
@@ -20,6 +21,7 @@ vi.mock("$lib/api/client", () => ({
     listLinks: (...args: unknown[]) => mockListLinks(...args),
     updateLink: (...args: unknown[]) => mockUpdateLink(...args),
     removeLink: (...args: unknown[]) => mockRemoveLink(...args),
+    getDevice: (...args: unknown[]) => mockGetDevice(...args),
   },
   ApiError: class ApiError extends Error {
     status: number;
@@ -36,25 +38,37 @@ vi.mock("$lib/i18n", () => ({
 
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
+const mockToastPush = vi.fn();
 
 vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
+    push: (...args: unknown[]) => mockToastPush(...args),
   },
 }));
 
+const mockConfirmAsk = vi.fn();
 vi.mock("$lib/stores/confirm.svelte", () => ({
-  confirmStore: { ask: vi.fn().mockResolvedValue(false) },
+  confirmStore: { ask: (...args: unknown[]) => mockConfirmAsk(...args) },
 }));
 
 // AddLinkForm and LinkConfigPanel have their own component tests (via
 // their respective usage sites); here they only need to prove the
 // rename panel yields the stage to them and back, so both are stubbed
 // to a DOM marker (mirrors the ScheduleTab.test.ts editor-stub pattern).
+//
+// The mock also captures the `onAdded` callback prop DeviceLinks wires in,
+// so the "add-link wakeup hint" tests below can invoke it directly and
+// exercise DeviceLinks' own onAdded() handler without re-implementing
+// AddLinkForm's submit flow (already covered by AddLinkForm's own tests).
+let capturedOnAdded:
+  | ((result: { senderAddress: string; receiverAddress: string }) => void)
+  | undefined;
 vi.mock("./AddLinkForm.svelte", () => ({
-  default: () => {
+  default: (_anchor: unknown, props: Record<string, unknown>) => {
     document.body.setAttribute("data-add-form-rendered", "1");
+    capturedOnAdded = props.onAdded as typeof capturedOnAdded;
     return { $set: vi.fn(), $destroy: vi.fn() };
   },
 }));
@@ -127,7 +141,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   document.body.removeAttribute("data-add-form-rendered");
   document.body.removeAttribute("data-config-panel-rendered");
+  capturedOnAdded = undefined;
   mockListLinks.mockResolvedValue([LINK_A]);
+  // Default: destructive prompts are declined so rename tests never
+  // reach a delete; the delete-hint tests opt in per case.
+  mockConfirmAsk.mockResolvedValue(false);
+  // Default: both endpoints are mains devices (no wakeup hint) unless a
+  // test overrides per address.
+  mockGetDevice.mockResolvedValue({ rx_mode: { always: true } });
 });
 
 afterEach(() => {
@@ -256,5 +277,119 @@ describe("DeviceLinks — rename edge cases", () => {
     await fireEvent.click(renameButton(container));
 
     expect(nameInput(container).value).toBe("Original Name");
+  });
+});
+
+describe("DeviceLinks — delete wakeup hint", () => {
+  it("shows the pending-wakeup info toast instead of the plain 'removed' toast when a link endpoint is a battery device", async () => {
+    mockConfirmAsk.mockResolvedValue(true);
+    mockRemoveLink.mockResolvedValue(undefined);
+    // Receiver DEV002 is a battery device; sender DEV001 is mains.
+    mockGetDevice.mockImplementation((addr: string) =>
+      Promise.resolve(
+        addr === "DEV002"
+          ? { rx_mode: { wakeup: true } }
+          : { rx_mode: { always: true } },
+      ),
+    );
+    const { container } = await renderLoaded();
+    await fireEvent.click(findButtonByText(container, "common.delete"));
+
+    await waitFor(() => {
+      expect(mockRemoveLink).toHaveBeenCalledWith(
+        "DEV001",
+        "DEV001:1",
+        "DEV002:2",
+      );
+    });
+    await waitFor(() => {
+      expect(mockToastPush).toHaveBeenCalledTimes(1);
+    });
+    const [severity, title] = mockToastPush.mock.calls[0];
+    expect(severity).toBe("info");
+    expect(title).toBe("links.wakeup_pending.title");
+    // The plain success toast is suppressed — the hint conveys success.
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("shows the plain 'removed' toast when both endpoints are mains devices", async () => {
+    mockConfirmAsk.mockResolvedValue(true);
+    mockRemoveLink.mockResolvedValue(undefined);
+    mockGetDevice.mockResolvedValue({ rx_mode: { always: true } });
+    const { container } = await renderLoaded();
+    await fireEvent.click(findButtonByText(container, "common.delete"));
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith("links.removed");
+    });
+    expect(mockToastPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("DeviceLinks — add wakeup hint", () => {
+  async function openAddForm(container: HTMLElement) {
+    await fireEvent.click(findButtonByText(container, "common.add"));
+    await waitFor(() => {
+      expect(document.body.getAttribute("data-add-form-rendered")).toBe("1");
+    });
+    expect(capturedOnAdded).toBeTypeOf("function");
+  }
+
+  it("shows the pending-wakeup info toast instead of the plain 'created' toast when a link endpoint is a battery device", async () => {
+    mockGetDevice.mockImplementation((addr: string) =>
+      Promise.resolve(
+        addr === "DEV009"
+          ? { rx_mode: { wakeup: true } }
+          : { rx_mode: { always: true } },
+      ),
+    );
+    const { container } = await renderLoaded();
+    await openAddForm(container);
+
+    await capturedOnAdded!({
+      senderAddress: "DEV001:1",
+      receiverAddress: "DEV009:2",
+    });
+
+    await waitFor(() => {
+      expect(mockToastPush).toHaveBeenCalledTimes(1);
+    });
+    const [severity, title] = mockToastPush.mock.calls[0];
+    expect(severity).toBe("info");
+    expect(title).toBe("links.wakeup_pending.title");
+    // The plain success toast is suppressed — the hint conveys success.
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("shows the plain 'created' toast when both endpoints are mains devices", async () => {
+    mockGetDevice.mockResolvedValue({ rx_mode: { always: true } });
+    const { container } = await renderLoaded();
+    await openAddForm(container);
+
+    await capturedOnAdded!({
+      senderAddress: "DEV001:1",
+      receiverAddress: "DEV002:2",
+    });
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith("links.created");
+    });
+    expect(mockToastPush).not.toHaveBeenCalled();
+  });
+
+  it("treats a device fetch failure on either endpoint as 'no wakeup' and still shows the plain 'created' toast", async () => {
+    mockGetDevice.mockRejectedValue(new Error("network down"));
+    const { container } = await renderLoaded();
+    await openAddForm(container);
+
+    await capturedOnAdded!({
+      senderAddress: "DEV001:1",
+      receiverAddress: "DEV002:2",
+    });
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith("links.created");
+    });
+    expect(mockToastPush).not.toHaveBeenCalled();
   });
 });

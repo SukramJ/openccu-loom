@@ -1535,3 +1535,94 @@ func TestToChannelSummary_IsCustomDpPrimary(t *testing.T) {
 		}
 	})
 }
+
+func TestRxModeInfo_DecodesBitmask(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		mode hmenum.RxMode
+		want *RxModeInfo
+	}{
+		{"undefined yields nil", hmenum.RxModeUndefined, nil},
+		{"always only", hmenum.RxModeAlways, &RxModeInfo{Always: true}},
+		{"wakeup only", hmenum.RxModeWakeup, &RxModeInfo{Wakeup: true}},
+		{"lazy config only", hmenum.RxModeLazyConfig, &RxModeInfo{LazyConfig: true}},
+		{
+			"burst plus wakeup",
+			hmenum.RxModeBurst | hmenum.RxModeWakeup,
+			&RxModeInfo{Burst: true, Wakeup: true},
+		},
+		{
+			"config plus lazy config",
+			hmenum.RxModeConfig | hmenum.RxModeLazyConfig,
+			&RxModeInfo{Config: true, LazyConfig: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := rxModeInfo(tc.mode)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("rxModeInfo(%d) = %+v, want nil", tc.mode, got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("rxModeInfo(%d) = nil, want %+v", tc.mode, tc.want)
+			}
+			if *got != *tc.want {
+				t.Fatalf("rxModeInfo(%d) = %+v, want %+v", tc.mode, *got, *tc.want)
+			}
+		})
+	}
+}
+
+func TestToDeviceSummary_RxModeSurfacesWakeup(t *testing.T) {
+	t.Parallel()
+
+	// A mains device (RX_ALWAYS) surfaces rx_mode with wakeup/lazy_config
+	// clear, so the SPA shows no pending-wakeup hint.
+	mains := device.New(device.Config{
+		Address:   "MAINS00001",
+		Model:     "HmIP-PSM",
+		Interface: hmenum.InterfaceHmIPRF,
+		RxMode:    hmenum.RxModeAlways,
+	})
+	ms := toDeviceSummary(mains, "ccu-01")
+	if ms.RxMode == nil {
+		t.Fatal("mains device: expected non-nil rx_mode")
+	}
+	if ms.RxMode.Wakeup || ms.RxMode.LazyConfig {
+		t.Errorf("mains device: expected wakeup/lazy_config false, got %+v", *ms.RxMode)
+	}
+	if !ms.RxMode.Always {
+		t.Error("mains device: expected always=true")
+	}
+
+	// A battery device (RX_WAKEUP|RX_LAZY_CONFIG) surfaces the wakeup bits.
+	battery := device.New(device.Config{
+		Address:   "BATT000001",
+		Model:     "HmIP-eTRV",
+		Interface: hmenum.InterfaceHmIPRF,
+		RxMode:    hmenum.RxModeWakeup | hmenum.RxModeLazyConfig,
+	})
+	bs := toDeviceSummary(battery, "ccu-01")
+	if bs.RxMode == nil {
+		t.Fatal("battery device: expected non-nil rx_mode")
+	}
+	if !bs.RxMode.Wakeup || !bs.RxMode.LazyConfig {
+		t.Errorf("battery device: expected wakeup and lazy_config true, got %+v", *bs.RxMode)
+	}
+
+	// A device with no rx mode (RX_MODE == 0) omits the field entirely.
+	none := device.New(device.Config{
+		Address:   "NONE000001",
+		Model:     "HM-Test",
+		Interface: hmenum.InterfaceVirtualDevices,
+	})
+	ns := toDeviceSummary(none, "ccu-01")
+	if ns.RxMode != nil {
+		t.Errorf("no-rx-mode device: expected nil rx_mode, got %+v", *ns.RxMode)
+	}
+}

@@ -29,6 +29,7 @@
   } from "$lib/channel/brightness-helper";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { notifyWakeupPending } from "$lib/links/wakeup-hint";
   import { subscribe } from "$lib/stores/events.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
   import type { DataPointChangedEvent } from "$lib/api/types";
@@ -505,7 +506,11 @@
       // working copy (the callback server will also stream the event
       // through, but a refresh is simpler for the initial scope).
       await load(address, channel, paramset, locale, peer, expertMode);
-      toastStore.success(t("channel.saved_short"));
+      // A LINK paramset write goes to a battery device only on its next
+      // wakeup; surface that hint in place of the plain success toast.
+      const wakeupShown =
+        paramset === "LINK" ? await notifyWakeupPending([address]) : false;
+      if (!wakeupShown) toastStore.success(t("channel.saved_short"));
       banner = null;
     } catch (err) {
       // 423 Locked: our edit lock lapsed (heartbeat missed, taken over,

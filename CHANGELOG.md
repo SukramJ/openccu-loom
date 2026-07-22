@@ -124,6 +124,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The value follows the sender's live pushes, and the edit is tracked
   and undoable like any manual change. SPA-only, mirroring the CCU
   WebUI's `config/ic_md.cgi` "Aktuelle Helligkeit übernehmen" helper.
+- **"Pending wakeup" hint after link operations on battery devices.**
+  A battery-powered device only applies a new/removed direct link or a
+  written LINK paramset the next time it wakes up (a button press, a
+  cyclic wake interval); mains devices apply it immediately. The device
+  detail DTO now decodes the CCU `RX_MODE` bitmask into a new `rx_mode`
+  object (`always`/`burst`/`config`/`wakeup`/`lazy_config` flags), and
+  after a successful add-link, remove-link, or LINK-paramset save the
+  SPA checks the affected device(s) and — when one carries a
+  `wakeup`/`lazy_config` rx mode — replaces the plain success toast with
+  an info toast reminding the operator the change transfers only on the
+  next wakeup. Mirrors the CCU WebUI's
+  `config/ic_ifacecmd.cgi` `cmd_ShowConfigPendingMsg`. REST `APIVersion`
+  2.35.0.
 
 ## [0.45.0] — 2026-07-20
 

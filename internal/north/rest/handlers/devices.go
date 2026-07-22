@@ -83,6 +83,47 @@ type DeviceSummary struct {
 	// consumers can apply the same per-channel-group split the MQTT
 	// bridge does under the `sub_devices_enabled` toggle.
 	HasSubDevices bool `json:"has_sub_devices"`
+
+	// RxMode decodes the device's CCU RX_MODE bitmask into named flags.
+	// Its `wakeup` / `lazy_config` bits mark a battery-powered device that
+	// only applies pending configuration on its next wakeup — the SPA uses
+	// them to show a "pending wakeup" hint after a link/config write.
+	// Omitted when the CCU reports no rx mode (RX_MODE == 0).
+	RxMode *RxModeInfo `json:"rx_mode,omitempty"`
+}
+
+// RxModeInfo decodes a device's CCU RX_MODE bitmask into named boolean
+// flags. Set bits are emitted; cleared bits are omitted.
+type RxModeInfo struct {
+	// Always marks a mains-powered device that is permanently reachable
+	// (RX_ALWAYS) and applies configuration immediately.
+	Always bool `json:"always,omitempty"`
+	// Burst marks a device reachable via burst wakeup (RX_BURST).
+	Burst bool `json:"burst,omitempty"`
+	// Config marks a device reachable in its configuration window (RX_CONFIG).
+	Config bool `json:"config,omitempty"`
+	// Wakeup marks a battery device that only accepts pending configuration
+	// when it next wakes up (RX_WAKEUP).
+	Wakeup bool `json:"wakeup,omitempty"`
+	// LazyConfig marks a battery device whose configuration transfer is
+	// deferred until its next wakeup (RX_LAZY_CONFIG).
+	LazyConfig bool `json:"lazy_config,omitempty"`
+}
+
+// rxModeInfo decodes a device's RX_MODE bitmask into a [RxModeInfo]. It
+// returns nil when no bit is set (RX_MODE == 0), so the DTO omits the
+// field for devices the CCU reports no rx mode for.
+func rxModeInfo(m hmenum.RxMode) *RxModeInfo {
+	if m == hmenum.RxModeUndefined {
+		return nil
+	}
+	return &RxModeInfo{
+		Always:     m.Has(hmenum.RxModeAlways),
+		Burst:      m.Has(hmenum.RxModeBurst),
+		Config:     m.Has(hmenum.RxModeConfig),
+		Wakeup:     m.Has(hmenum.RxModeWakeup),
+		LazyConfig: m.Has(hmenum.RxModeLazyConfig),
+	}
 }
 
 // DeviceDetail extends [DeviceSummary] with the firmware snapshot
@@ -815,6 +856,7 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 		Functions:                 d.Functions,
 		MasterPushesConfigPending: hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
 		HasSubDevices:             d.HasSubDevices(),
+		RxMode:                    rxModeInfo(d.RxMode),
 	}
 }
 

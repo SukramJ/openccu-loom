@@ -2023,6 +2023,9 @@ const EN: Catalog = {
   "links.config.receiver_section": "Receiver configuration",
   "links.config.sender_section": "Sender configuration",
   "links.created": "Link created.",
+  "links.wakeup_pending.title": "Saved — pending device wakeup",
+  "links.wakeup_pending.body":
+    "This is a battery-powered device. The change is queued and only transfers the next time the device wakes up (e.g. on a button press).",
   "links.removal_failed": "Removal failed",
   "links.no_for_device": "No direct links for this device.",
   "links.configure": "Configure",
@@ -4749,6 +4752,9 @@ const DE: Catalog = {
   "links.config.receiver_section": "Empfänger-Konfiguration",
   "links.config.sender_section": "Sender-Konfiguration",
   "links.created": "Verknüpfung erstellt.",
+  "links.wakeup_pending.title": "Gespeichert – wird beim Aufwachen übertragen",
+  "links.wakeup_pending.body":
+    "Dies ist ein batteriebetriebenes Gerät. Die Änderung ist vorgemerkt und wird erst beim nächsten Aufwachen des Geräts übertragen (z. B. per Tastendruck).",
   "links.removal_failed": "Entfernen fehlgeschlagen",
   "links.no_for_device": "Keine Direktverknüpfungen für dieses Gerät.",
   "links.configure": "Konfigurieren",

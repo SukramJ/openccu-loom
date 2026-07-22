@@ -38,6 +38,13 @@
   the brightness condition thresholds (`SHORT_COND_VALUE_LO`/`_HI` and
   the `LONG_` variants) that takes the sender's current brightness —
   no more reading the value off elsewhere and typing it in.
+- **"Wird beim Aufwachen übertragen" hint for battery devices.** After
+  adding or removing a direct link, or saving a LINK paramset, for a
+  battery-powered device (rx mode `WAKEUP`/`LAZY_CONFIG`), the config UI
+  now shows an info notice that the change is queued and only transfers
+  the next time the device wakes up (e.g. on a button press) — instead
+  of a plain "saved" confirmation. Mains devices keep the immediate
+  confirmation.
 
 ## 0.45.0
 

@@ -6157,6 +6157,33 @@ components:
             sub-devices for northbound presentation. The SPA's CdpTilesPanel
             uses this flag to switch from a flat tile grid to per-group
             sections.
+        rx_mode:
+          $ref: "#/components/schemas/RxMode"
+    RxMode:
+      type: object
+      description: |
+        Named flags decoded from the device's CCU RX_MODE bitmask. The
+        `wakeup` / `lazy_config` bits mark a battery-powered device that only
+        applies pending configuration when it next wakes up — the SPA shows a
+        "pending wakeup" hint after a link/config write to such a device. Only
+        set bits are present; the whole object is omitted when the CCU reports
+        no rx mode (RX_MODE == 0).
+      properties:
+        always:
+          type: boolean
+          description: Mains-powered, permanently reachable (RX_ALWAYS); applies configuration immediately.
+        burst:
+          type: boolean
+          description: Reachable via burst wakeup (RX_BURST).
+        config:
+          type: boolean
+          description: Reachable in its configuration window (RX_CONFIG).
+        wakeup:
+          type: boolean
+          description: Battery device that only accepts pending configuration on its next wakeup (RX_WAKEUP).
+        lazy_config:
+          type: boolean
+          description: Battery device whose configuration transfer is deferred until its next wakeup (RX_LAZY_CONFIG).
     DeviceList:
       type: object
       required: [items, page, per_page, total]

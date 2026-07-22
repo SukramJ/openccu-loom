@@ -11,6 +11,7 @@
   import LinkConfigPanel from "./LinkConfigPanel.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { notifyWakeupPending } from "$lib/links/wakeup-hint";
   import { t } from "$lib/i18n";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
@@ -154,7 +155,14 @@
         link.sender_address,
         link.receiver_address,
       );
-      toastStore.success(t("links.removed"));
+      // Removing a link rewrites config on both endpoints; a battery
+      // device applies it only on its next wakeup. The wakeup hint (when
+      // shown) stands in for the plain "removed" toast.
+      const wakeupShown = await notifyWakeupPending([
+        link.sender_address,
+        link.receiver_address,
+      ]);
+      if (!wakeupShown) toastStore.success(t("links.removed"));
       await load();
     } catch (err) {
       const msg =
@@ -167,9 +175,19 @@
     }
   }
 
-  async function onAdded() {
+  async function onAdded(result: {
+    senderAddress: string;
+    receiverAddress: string;
+  }) {
     adding = false;
-    toastStore.success(t("links.created"));
+    // A new link writes config to both endpoints; a battery device
+    // applies it only on its next wakeup. The wakeup hint (when shown)
+    // stands in for the plain "created" toast.
+    const wakeupShown = await notifyWakeupPending([
+      result.senderAddress,
+      result.receiverAddress,
+    ]);
+    if (!wakeupShown) toastStore.success(t("links.created"));
     await load();
   }
 
