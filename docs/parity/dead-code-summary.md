@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: ec99740b
-HEAD: ec99740b
+Generated: 0156366b
+HEAD: 0156366b
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25928 |
-| Reachable | 4568 |
-| Whitelisted | 18625 |
+| Total Exported | 25954 |
+| Reachable | 4570 |
+| Whitelisted | 18649 |
 | **Unreachable** | **2735** |
 
 ## Top-20 Packages by Dead Code
