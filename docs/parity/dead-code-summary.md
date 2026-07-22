@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 300e3cea
-HEAD: 300e3cea
+Generated: ec99740b
+HEAD: ec99740b
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25817 |
-| Reachable | 4562 |
-| Whitelisted | 18526 |
-| **Unreachable** | **2729** |
+| Total Exported | 25928 |
+| Reachable | 4568 |
+| Whitelisted | 18625 |
+| **Unreachable** | **2735** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: 300e3cea
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 37 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 89 | 46 |
+| internal/central/adapter | 4 | 89 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
@@ -31,7 +31,7 @@ HEAD: 300e3cea
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 41 | 30 |
+| internal/model/hub | 2 | 45 | 30 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -99,7 +99,7 @@ HEAD: 300e3cea
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 37 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 89 | 46 |
+| internal/central/adapter | 4 | 89 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
@@ -111,7 +111,7 @@ HEAD: 300e3cea
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 41 | 30 |
+| internal/model/hub | 2 | 45 | 30 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
