@@ -8,6 +8,11 @@
   a warning when direct links or programs still reference it, and
   accepting a new device from the inbox can set its name, rooms, and
   functions in one step.
+- **Reboot a CCU from OpenCCU-Loom.** The Settings → System page gains a
+  "CCU maintenance" card with a per-central reboot button (admin-only).
+  Rebooting persists the CCU's state and restarts it; the connection drops
+  briefly and recovers on its own. This restarts the CCU hardware, not the
+  add-on (API 2.33.0).
 
 ## 0.45.0
 

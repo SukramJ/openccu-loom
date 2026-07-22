@@ -31,6 +31,10 @@ const (
 	// for one device. The Entry's DeviceAddress carries the target.
 	ActionDeviceInstallMode Action = "device_install_mode"
 
+	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
+	// host. The Entry's Note carries the target central name.
+	ActionSystemCCUReboot Action = "system_ccu_reboot"
+
 	// ActionRoomFunction records room / function (Gewerk) entity
 	// lifecycle changes (create / rename / delete). The Note carries
 	// the operation and target name.

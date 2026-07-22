@@ -1386,6 +1386,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/ccu/{central}/reboot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reboot one CCU (admin-only)
+         * @description Reboots the named CCU. The daemon runs a ReGa script that
+         *     persists the CCU's state (`system.Save()`) and then triggers
+         *     `/sbin/reboot`. The southbound connection to that central drops
+         *     for the duration of the reboot and recovers automatically once
+         *     the CCU is back (the readiness gate re-runs the bring-up).
+         *
+         *     Unrelated to `POST /system/restart`, which restarts the
+         *     OpenCCU-Loom daemon itself — this reboots the CCU hardware.
+         */
+        post: operations["rebootSystemCCU"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/restart-pending": {
         parameters: {
             query?: never;
@@ -7583,6 +7610,30 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    rebootSystemCCU: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Target central name (matches `SystemCCUEntry.name`). */
+                central: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reboot triggered */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getRestartPending: {

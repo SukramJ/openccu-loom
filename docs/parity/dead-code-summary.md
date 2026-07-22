@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: a2750ce7
-HEAD: a2750ce7
+Generated: 300e3cea
+HEAD: 300e3cea
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25788 |
-| Reachable | 4555 |
-| Whitelisted | 18507 |
-| **Unreachable** | **2726** |
+| Total Exported | 25817 |
+| Reachable | 4562 |
+| Whitelisted | 18526 |
+| **Unreachable** | **2729** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,11 +19,11 @@ HEAD: a2750ce7
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 37 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 88 | 46 |
+| internal/central/adapter | 4 | 89 | 46 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| pkg/hmerr | 4 | 5 | 24 |
+| pkg/hmerr | 4 | 5 | 26 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
@@ -99,11 +99,11 @@ HEAD: a2750ce7
 | internal/central/events | 10 | 9 | 0 |
 | internal/client/backends | 8 | 37 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 88 | 46 |
+| internal/central/adapter | 4 | 89 | 46 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| pkg/hmerr | 4 | 5 | 24 |
+| pkg/hmerr | 4 | 5 | 26 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
 | internal/ccudata | 2 | 31 | 4 |

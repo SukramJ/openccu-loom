@@ -263,6 +263,9 @@ type Deps struct {
 	// metadata (model, version, serial, configured interfaces). Nil
 	// returns an empty entries array.
 	SystemCCU handlers.SystemCCUReader
+	// CCUReboot backs `POST /api/v1/system/ccu/{central}/reboot` — an
+	// admin-only reboot of one CCU host. Nil serves the route as 503.
+	CCUReboot handlers.CCURebootPort
 	// RateLimit, when non-nil, installs the per-identity REST
 	// rate limiter before the auth-require gate. Nil disables it.
 	RateLimit *middleware.RateLimitConfig
@@ -833,6 +836,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))
 			}
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
+			// Reboot one CCU host. Admin-gated like DELETE /devices; the
+			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
+			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
 			// Persistent "restart required" status for the SPA banner.
 			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
 			// Config fields changed since the daemon started.

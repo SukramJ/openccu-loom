@@ -33,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -322,6 +323,19 @@ func (fakeDeviceAdmin) SetFunctions(_ context.Context, _ string, _ []string) err
 type fakeSystemCCUReader struct{ entries []handlers.SystemCCUEntry }
 
 func (f fakeSystemCCUReader) List(_ context.Context) []handlers.SystemCCUEntry { return f.entries }
+
+// fakeCCURebootService is a minimal CCURebootPort for router-level
+// integration tests; it records the last central it was asked to reboot
+// and returns a configurable error.
+type fakeCCURebootService struct {
+	lastCentral string
+	err         error
+}
+
+func (f *fakeCCURebootService) RebootCCU(_ context.Context, central string) error {
+	f.lastCentral = central
+	return f.err
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -1151,6 +1165,59 @@ func TestRouter_SystemCCU(t *testing.T) {
 	}
 	if len(got.Entries) != 1 || got.Entries[0].Name != "home" {
 		t.Fatalf("entries=%+v", got.Entries)
+	}
+}
+
+// TestRouter_CCUReboot_route locks POST /system/ccu/{central}/reboot behind
+// the admin role (mirrors TestRouter_Audit_RequiresAdmin) and verifies the
+// unknown-central 404, the happy-path 202, and that the reboot is recorded
+// in the audit log end-to-end through the router — not just at the handler
+// unit-test level.
+func TestRouter_CCUReboot_route(t *testing.T) {
+	t.Parallel()
+	mw := auth.NewMiddleware(nil, nil)
+	rebooter := &fakeCCURebootService{}
+	rec := audit.NewBuffer(10)
+	build := func(role auth.Role) http.Handler {
+		return NewRouter(Deps{
+			StartedAt:     time.Now(),
+			CCUReboot:     rebooter,
+			AuditRecorder: rec,
+			AuthResolve: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			},
+			AuthRequire:  mw.Require,
+			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+		})
+	}
+
+	rr := httptest.NewRecorder()
+	build(auth.RoleViewer).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/ccu/home/reboot", http.NoBody))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("viewer must be forbidden from reboot, got %d", rr.Code)
+	}
+
+	rebooter.err = hmerr.ErrUnknownCentral
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/ccu/nope/reboot", http.NoBody))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unknown central must return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rebooter.err = nil
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/ccu/home/reboot", http.NoBody))
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("admin reboot must return 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if rebooter.lastCentral != "home" {
+		t.Fatalf("expected reboot dispatched for central=home, got %q", rebooter.lastCentral)
+	}
+	if entries := rec.List(10); len(entries) != 1 || entries[0].Action != audit.ActionSystemCCUReboot || entries[0].Note != "home" {
+		t.Fatalf("expected 1 system_ccu_reboot audit entry for home, got %+v", entries)
 	}
 }
 

@@ -59,11 +59,12 @@ type restMountDeps struct {
 	// (password change / user update / user delete).
 	sessions *auth.SessionStore
 
-	healthAdapter     *adapter.HealthAdapter
-	configAdapter     *adapter.ConfigAdapter
-	devicesAdapter    *adapter.DevicesAdapter
-	deviceAdminDomain *adapter.DeviceAdminDomain
-	deviceReloader    *adapter.DeviceReloaderAdapter
+	healthAdapter        *adapter.HealthAdapter
+	configAdapter        *adapter.ConfigAdapter
+	devicesAdapter       *adapter.DevicesAdapter
+	deviceAdminDomain    *adapter.DeviceAdminDomain
+	ccuMaintenanceDomain *adapter.CCUMaintenanceDomain
+	deviceReloader       *adapter.DeviceReloaderAdapter
 	// firmwareRefresher backs POST /devices/firmware/refresh (the same
 	// FirmwareDomain the WS `firmware.refresh` command uses).
 	firmwareRefresher *adapter.FirmwareDomain
@@ -256,6 +257,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			return d.authMw.RequireRole(auth.RoleAdmin, next)
 		},
 		SystemCCU: newSystemCCUAdapter(d.reg, centralResolve),
+		CCUReboot: d.ccuMaintenanceDomain,
 		RateLimit: buildRateLimitConfig(cfg),
 		Capabilities: runtimeCapabilityDetector{
 			mqtt:              d.mqttAvailable,

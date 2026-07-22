@@ -13,6 +13,7 @@
   import RoomsFunctionsAdmin from "$lib/components/settings/RoomsFunctionsAdmin.svelte";
   import TlsCertCard from "$lib/components/settings/TlsCertCard.svelte";
   import SystemUpdatePanel from "$lib/components/settings/SystemUpdatePanel.svelte";
+  import CCUMaintenancePanel from "$lib/components/settings/CCUMaintenancePanel.svelte";
   import ChangesOverview from "$lib/components/settings/ChangesOverview.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import {
@@ -651,6 +652,9 @@
         <div class="space-y-3">
           <div class="rounded border border-slate-200 p-3 dark:border-slate-800">
             <SystemUpdatePanel />
+          </div>
+          <div class="rounded border border-slate-200 p-3 dark:border-slate-800">
+            <CCUMaintenancePanel />
           </div>
           <div class="rounded border border-slate-200 p-3 dark:border-slate-800">
             <div class="mb-2 flex items-center justify-between gap-2">

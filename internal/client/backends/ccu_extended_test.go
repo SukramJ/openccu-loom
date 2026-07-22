@@ -877,6 +877,48 @@ func TestCcuTriggerFirmwareUpdateDispatch(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// RebootCCU
+// ---------------------------------------------------------------------------
+
+func TestCcuRebootCCUNoScriptRunner(t *testing.T) {
+	t.Parallel()
+	// Without a ScriptRunner the reboot has no wire path (no JSON-RPC reboot
+	// method exists), so it must return ErrUnsupported.
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	_, err := b.RebootCCU(context.Background())
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuRebootCCUDispatch(t *testing.T) {
+	t.Parallel()
+	sr := &fakeScriptRunner{rawJSON: `{"success":true,"message":"CCU reboot triggered"}`}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(sr)
+	ok, err := b.RebootCCU(context.Background())
+	if err != nil {
+		t.Fatalf("RebootCCU: %v", err)
+	}
+	if !ok {
+		t.Fatal("ok should be true on success")
+	}
+	if sr.lastScript != hmenum.RegaScriptRebootCCU {
+		t.Fatalf("script = %q, want reboot_ccu", sr.lastScript)
+	}
+}
+
+func TestCcuRebootCCUScriptError(t *testing.T) {
+	t.Parallel()
+	sr := &fakeScriptRunner{err: errors.New("rega down")}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(sr)
+	if _, err := b.RebootCCU(context.Background()); err == nil {
+		t.Fatal("expected error when the ReGa script fails")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DeleteSystemVariable
 // ---------------------------------------------------------------------------
 

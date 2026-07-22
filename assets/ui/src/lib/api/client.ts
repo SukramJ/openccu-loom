@@ -993,6 +993,16 @@ export const api = {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(`/system/update/install${qs}`, { method: "POST" });
   },
+  // --- CCU maintenance -----------------------------------------
+  // Reboot one CCU host (admin-only). This reboots the CCU hardware, not
+  // the OpenCCU-Loom daemon; the southbound connection drops for the reboot
+  // and recovers automatically.
+  rebootCCU(central: string) {
+    return request<void>(
+      `/system/ccu/${encodeURIComponent(central)}/reboot`,
+      { method: "POST" },
+    );
+  },
   // --- Messages: ack / clear -----------------------------------
   ackAlarm(id: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
