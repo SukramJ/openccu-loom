@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 0156366b
-HEAD: 0156366b
+Generated: 1c385c5d
+HEAD: 1c385c5d
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25954 |
-| Reachable | 4570 |
-| Whitelisted | 18649 |
-| **Unreachable** | **2735** |
+| Total Exported | 26048 |
+| Reachable | 4576 |
+| Whitelisted | 18729 |
+| **Unreachable** | **2743** |
 
 ## Top-20 Packages by Dead Code
 
@@ -31,7 +31,7 @@ HEAD: 0156366b
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 45 | 30 |
+| internal/model/hub | 2 | 49 | 34 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -111,7 +111,7 @@ HEAD: 0156366b
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 45 | 30 |
+| internal/model/hub | 2 | 49 | 34 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
