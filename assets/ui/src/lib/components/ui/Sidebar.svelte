@@ -44,6 +44,7 @@
     | "backups"
     | "sysvars"
     | "programs"
+    | "groups"
     | "messages"
     | "audit"
     | "diagnostics"
@@ -174,6 +175,12 @@
           icon: "mdi:zap",
           label: t("nav.sysvars"),
           matches: ["sysvars"],
+        },
+        {
+          href: "#/groups",
+          icon: "mdi:home-group",
+          label: t("nav.groups"),
+          matches: ["groups"],
         },
       ],
     },

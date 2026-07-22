@@ -64,6 +64,7 @@ type restMountDeps struct {
 	devicesAdapter       *adapter.DevicesAdapter
 	deviceAdminDomain    *adapter.DeviceAdminDomain
 	ccuMaintenanceDomain *adapter.CCUMaintenanceDomain
+	groupsDomain         *adapter.GroupsDomain
 	deviceReloader       *adapter.DeviceReloaderAdapter
 	// firmwareRefresher backs POST /devices/firmware/refresh (the same
 	// FirmwareDomain the WS `firmware.refresh` command uses).
@@ -264,6 +265,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		SystemCCU:        newSystemCCUAdapter(d.reg, centralResolve),
 		CCUReboot:        d.ccuMaintenanceDomain,
 		FirmwareDownload: d.ccuMaintenanceDomain,
+		Groups:           newGroupsAdapter(d.groupsDomain),
 		RateLimit:        buildRateLimitConfig(cfg),
 		Capabilities: runtimeCapabilityDetector{
 			mqtt:              d.mqttAvailable,

@@ -18,3 +18,4 @@ backup.trigger              -- godevccu has no ReGa.runScript; live CCU returns 
 alarm_messages.ack_all      -- godevccu has no ReGa.runScript; live CCU returns ok
 service_messages.ack_all    -- godevccu has no ReGa.runScript; live CCU returns ok
 firmware.update             -- godevccu has no ReGa.runScript; live CCU returns ok
+groups.list                 -- godevccu has no CCU.getHeatingGroupList; live CCU returns groups.gson

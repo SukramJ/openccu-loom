@@ -49,6 +49,7 @@ import {
   Gauge,
   Globe,
   Grid3x3,
+  Group,
   Hand,
   Hash,
   History,
@@ -140,6 +141,7 @@ export type IconName =
   | "mdi:globe"
   | "mdi:history"
   | "mdi:home"
+  | "mdi:home-group"
   | "mdi:import"
   | "mdi:information-outline"
   | "mdi:key"
@@ -225,6 +227,7 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:globe": Globe,
   "mdi:history": History,
   "mdi:home": Home,
+  "mdi:home-group": Group,
   "mdi:import": FileUp,
   "mdi:information-outline": Info,
   "mdi:key": KeyRound,

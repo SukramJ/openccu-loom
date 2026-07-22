@@ -299,7 +299,9 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   `GET /api/v1/groups` mit Join gegen das Loom-Gerätemodell, SPA-Liste mit
   Links auf die vorhandenen Geräteseiten (Bedienen/Parametrieren der
   virtuellen Geräte funktioniert heute schon). *JSON-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.42.0): `GET
+  /api/v1/groups` (+ `?central=`) und WS `groups.list`, typisierter
+  `groups.gson`-Parser, SPA-Ansicht „Heizungsgruppen".
 - **GR02 — Gruppen-Konfigurator: anlegen, Mitglieder, speichern, löschen** (missing, P1 XL)
   Die Orchestrierung (virtuelles Gerät am VirtualDevices-Interface,
   Direktverknüpfungs-Matrix je Gruppentyp, `groups.gson`-Pflege,
@@ -826,7 +828,11 @@ Initialisierung.
   Proxy ist empfohlen (Drift-Risiko der Verknüpfungs-Matrix);
   Session-Mechanik gegen `/pages/jpages` vorab verifizieren. Betrifft
   GR01–GR05.
-  **Entscheidung:** `offen`
+  **Entscheidung:** `entschieden` → Proxy, siehe
+  [ADR 0055](adr/0055-groups-jpages-proxy.md). Session-Frage geklärt:
+  HMServer validiert die jpages-`sid` gegen ReGa (`/api/homematic.cgi`),
+  also genügt Looms bestehender JSON-RPC-`Session.login`-Token; kein
+  separater WebUI-Login nötig (Präzedenz: `SetDownloadFirmwareTransport`).
 - **A4 — Programmeditor-Sicherheitsmodell.**
   Der ReGa-Skript-Endpunkt ist faktisch Remote-Code-Execution auf der
   Zentrale — admin-only, Audit-Log mit Klartext, Rate-Limit,

@@ -24,6 +24,7 @@ import type {
   EditSessionResponse,
   EnergyResponse,
   FunctionEntry,
+  GroupCentralEntry,
   InboxDevice,
   InstallModeInterfaceEntry,
   RoomEntry,
@@ -1051,6 +1052,14 @@ export const api = {
   // overview (Fleet.svelte). Reflects runtime-added CCUs live.
   async getSystemCCUs(): Promise<SystemCCUEntry[]> {
     const r = await request<{ entries: SystemCCUEntry[] }>(`/system/ccu`);
+    return r.entries;
+  },
+  // Read-only heating-group roster (GR01), grouped by central. Groups
+  // themselves are read from the CCU's groups.gson; create/edit/delete
+  // runs through the CCU jpages proxy, not this surface (ADR 0055).
+  async getGroups(central?: string): Promise<GroupCentralEntry[]> {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    const r = await request<{ entries: GroupCentralEntry[] }>(`/groups${qs}`);
     return r.entries;
   },
   // --- CCU system (firmware) update ----------------------------

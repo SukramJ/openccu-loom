@@ -18,6 +18,7 @@
   import BackupList from "./routes/BackupList.svelte";
   import SysvarList from "./routes/SysvarList.svelte";
   import ProgramList from "./routes/ProgramList.svelte";
+  import GroupList from "./routes/GroupList.svelte";
   import MessageList from "./routes/MessageList.svelte";
   import Settings from "./routes/Settings.svelte";
   import Inbox from "./routes/Inbox.svelte";
@@ -171,6 +172,7 @@
     | { kind: "backups" }
     | { kind: "sysvars" }
     | { kind: "programs" }
+    | { kind: "groups" }
     | { kind: "messages" }
     | { kind: "audit" }
     | { kind: "diagnostics" }
@@ -195,6 +197,7 @@
     if (path === "/backups") return { kind: "backups" };
     if (path === "/sysvars") return { kind: "sysvars" };
     if (path === "/programs") return { kind: "programs" };
+    if (path === "/groups") return { kind: "groups" };
     if (path === "/messages") return { kind: "messages" };
     if (path === "/audit") return { kind: "audit" };
     if (path === "/diagnostics") return { kind: "diagnostics" };
@@ -243,6 +246,7 @@
     route.kind === "diagnostics" ? t("page.title.diagnostics") :
     route.kind === "energy" ? t("page.title.energy") :
     route.kind === "fleet" ? t("page.title.fleet") :
+    route.kind === "groups" ? t("page.title.groups") :
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
     route.kind === "overview" ? t("page.title.overview") :
@@ -343,6 +347,8 @@
           <SysvarList />
         {:else if route.kind === "programs"}
           <ProgramList />
+        {:else if route.kind === "groups"}
+          <GroupList />
         {:else if route.kind === "messages"}
           <MessageList />
         {:else if route.kind === "audit"}

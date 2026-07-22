@@ -1,0 +1,32 @@
+{
+  "entries": [
+    {
+      "central": "ccu1",
+      "groups": [
+        {
+          "id": 4711,
+          "name": "Wohnzimmer",
+          "group_device_name": "Wohnzimmer",
+          "forbid_single_operation": true,
+          "type_id": "HEATING",
+          "type_label": "Heating group",
+          "members": [
+            { "address": "000A1B2C3D4E5F:1", "type_id": "THERMOSTAT" },
+            { "address": "000A1B2C3D4E60:1", "type_id": "THERMOSTAT" }
+          ]
+        },
+        {
+          "id": 4712,
+          "name": "Schlafzimmer",
+          "group_device_name": "",
+          "forbid_single_operation": false,
+          "type_id": "HEATING",
+          "type_label": "Heating group",
+          "members": [
+            { "address": "000A1B2C3D4E70:1", "type_id": "THERMOSTAT" }
+          ]
+        }
+      ]
+    }
+  ]
+}

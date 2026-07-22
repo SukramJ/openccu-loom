@@ -69,6 +69,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		// JSON-RPC — CCU
 		"CCU.getAuthEnabled":          true,
 		"CCU.getHttpsRedirectEnabled": true,
+		"CCU.getHeatingGroupList":     true,
 
 		// JSON-RPC — Interface
 		"Interface.getInstallMode":               true,

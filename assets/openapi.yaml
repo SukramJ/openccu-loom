@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.41.0
+  version: 2.42.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -512,6 +512,52 @@ paths:
           $ref: "#/components/responses/Locked"
         "502":
           $ref: "#/components/responses/BadGateway"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /groups:
+    get:
+      operationId: listGroups
+      summary: Heating-group listing (read-only)
+      description: |
+        Returns Homematic heating groups (HmIP / BidCos), grouped by
+        central. Read from each CCU's groups.gson via the
+        `CCU.getHeatingGroupList` JSON-RPC method.
+
+        Without a `central` query the response aggregates over every
+        configured central, one `entries` object each; a central whose
+        backend cannot read groups (offline, or a non-CCU backend)
+        contributes an empty `groups` array rather than failing the
+        request. With `central` set, the listing is scoped to that
+        central and returns 404 when it is unknown or cannot serve
+        groups.
+
+        This is the read surface only. Creating, editing, and deleting
+        groups runs through the CCU jpages proxy (ADR 0055) and is
+        exposed separately.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Scope the listing to one central (matches
+            `SystemCCUEntry.name`). Omit to aggregate over all centrals.
+      responses:
+        "200":
+          description: Heating groups grouped by central
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/GroupCentralEntry" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /programs:
@@ -6221,6 +6267,58 @@ components:
               - mqtt.discovery.v1
               - matter.bridge.v1
               - auth.oidc.v1
+    GroupCentralEntry:
+      type: object
+      required: [central, groups]
+      description: One central's heating-group roster.
+      properties:
+        central:
+          type: string
+          description: Daemon-local central name the groups belong to.
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/GroupEntry" }
+    GroupEntry:
+      type: object
+      required: [id, name, forbid_single_operation, type_id, members]
+      description: |
+        One Homematic heating group (HmIP / BidCos), as read from the
+        CCU's groups.gson via `CCU.getHeatingGroupList`. Read-only — the
+        create / edit / delete surface runs through the CCU jpages proxy
+        (see ADR 0055) and is exposed separately.
+      properties:
+        id:
+          type: integer
+          description: Numeric CCU group id.
+        name:
+          type: string
+          description: Operator-facing group name.
+        group_device_name:
+          type: string
+          description: Label of the backing virtual device; often empty.
+        forbid_single_operation:
+          type: boolean
+          description: The "operate only via group" flag.
+        type_id:
+          type: string
+          description: Group-type key.
+        type_label:
+          type: string
+          description: CCU-provided type label (may be a translation key).
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/GroupMemberEntry" }
+    GroupMemberEntry:
+      type: object
+      required: [address]
+      description: One device or channel wired into a heating group.
+      properties:
+        address:
+          type: string
+          description: Member device or channel address.
+        type_id:
+          type: string
+          description: Member-type key.
     SystemCCUEntry:
       type: object
       required: [name, host, available, is_ha_app, configured_interfaces, readiness]

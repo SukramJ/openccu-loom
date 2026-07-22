@@ -411,6 +411,26 @@ func (b *CcuBackend) GetAllSystemVariables(ctx context.Context) ([]map[string]an
 	return toSliceOfMaps(raw, "GetAllSystemVariables")
 }
 
+// GetHeatingGroupList implements the heating-group read capability.
+// It calls CCU.getHeatingGroupList, which returns the raw contents of
+// the CCU's /etc/config/groups.gson as a JSON string (or the sentinel
+// "-1" when the file is absent). The string is returned verbatim; the
+// caller parses it via internal/model/group.ParseGroupList.
+func (b *CcuBackend) GetHeatingGroupList(ctx context.Context) (string, error) {
+	if b.json == nil {
+		return "", ErrUnsupported
+	}
+	raw, err := b.json.Call(ctx, "CCU.getHeatingGroupList")
+	if err != nil {
+		return "", err
+	}
+	s, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("GetHeatingGroupList: unexpected result type %T", raw)
+	}
+	return s, nil
+}
+
 // --- bulk device data ---------------------------------------------------
 
 // GetAllDeviceData implements Operations. Fetches all current data-point
