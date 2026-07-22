@@ -10,6 +10,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Collapsible help on the central-link (press-event forwarding) panel.**
+  The device-detail Links tab now carries an expandable info hint that
+  explains why an HmIP button can look dead — without press-event
+  forwarding many buttons never send their events to the CCU or
+  OpenCCU-Loom — and that enabling forwarding raises the device's radio
+  duty cycle and battery consumption. Mirrors the CCU channel-config
+  "info" dialog. Fully localized (de + en); no API change.
 - **Central-link (press-event forwarding) toggle can now target a single
   channel.** `POST` / `DELETE /devices/{addr}/central-links` (and the
   WebSocket commands `central.create_links` / `central.remove_links`)

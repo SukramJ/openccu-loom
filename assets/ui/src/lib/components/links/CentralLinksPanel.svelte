@@ -5,6 +5,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
@@ -140,7 +141,23 @@
       {/if}
     {/if}
   </header>
-  <p class="mb-3 text-xs text-[var(--ha-secondary-text-color)]">{t("central.subtitle")}</p>
+  <p class="mb-2 text-xs text-[var(--ha-secondary-text-color)]">{t("central.subtitle")}</p>
+
+  <!-- Collapsible help matching the CCU channel-config "info" dialog: press
+       forwarding is off by default to spare duty cycle and battery, which is
+       why a button can look dead, and enabling it has an ongoing cost. -->
+  <details class="mb-3">
+    <summary
+      class="flex cursor-pointer items-center gap-1 text-xs text-[var(--ha-secondary-text-color)]"
+    >
+      <Icon name="mdi:information-outline" size={14} />
+      {t("central.help.summary")}
+    </summary>
+    <ul class="mt-1 list-disc space-y-1 pl-5 text-xs text-[var(--ha-secondary-text-color)]">
+      <li>{t("central.help.no_link")}</li>
+      <li>{t("central.help.duty_cycle")}</li>
+    </ul>
+  </details>
 
   {#if loading}
     <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>

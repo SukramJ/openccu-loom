@@ -208,6 +208,22 @@ describe("CentralLinksPanel — toggle confirmation", () => {
       expect(mockToastError).toHaveBeenCalledWith("central.action_failed", "404: not found");
     });
   });
+
+  it("falls back to String(err) in the error toast detail for a non-Error rejection", async () => {
+    mockConfirmAsk.mockResolvedValue(true);
+    // Not every rejection is an Error/ApiError instance (e.g. a thrown
+    // string from an intermediate layer) — errorText()'s final branch
+    // must still produce a readable toast instead of "[object Object]".
+    mockCreate.mockRejectedValue("boom");
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    const enable = await deviceWideButton("central.enable");
+    await fireEvent.click(enable);
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("central.action_failed", "boom");
+    });
+  });
 });
 
 describe("CentralLinksPanel — per-channel toggle", () => {
@@ -272,6 +288,74 @@ describe("CentralLinksPanel — per-channel toggle", () => {
   });
 });
 
+describe("CentralLinksPanel — duty-cycle / battery help hint", () => {
+  it("renders the collapsible help with both key statements", async () => {
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    // The <details> content is present in the DOM even while collapsed.
+    await waitFor(() => {
+      expect(screen.getByText("central.help.summary")).toBeTruthy();
+    });
+    expect(screen.getByText("central.help.no_link")).toBeTruthy();
+    expect(screen.getByText("central.help.duty_cycle")).toBeTruthy();
+  });
+
+  it("keeps the help hint visible even for unsupported devices", async () => {
+    mockStatus.mockResolvedValue(UNSUPPORTED_STATUS);
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("central.help.no_link")).toBeTruthy();
+    });
+    expect(screen.getByText("central.help.duty_cycle")).toBeTruthy();
+  });
+
+  it("stays visible while the initial status is still loading", async () => {
+    let resolveStatus!: (value: typeof SUPPORTED_STATUS) => void;
+    mockStatus.mockReturnValue(
+      new Promise((resolve) => {
+        resolveStatus = resolve;
+      }),
+    );
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    // The help hint is static markup, not gated on the status fetch —
+    // it must render on first paint, before the request resolves.
+    await waitFor(() => {
+      expect(screen.getByText("common.loading")).toBeTruthy();
+    });
+    expect(screen.getByText("central.help.no_link")).toBeTruthy();
+    expect(screen.getByText("central.help.duty_cycle")).toBeTruthy();
+
+    resolveStatus(SUPPORTED_STATUS);
+    await waitFor(() => {
+      expect(screen.queryByText("common.loading")).toBeNull();
+    });
+  });
+
+  it("stays visible when the status fetch fails", async () => {
+    mockStatus.mockRejectedValue(new ApiError(500, {}, "ccu unreachable"));
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/ccu unreachable/)).toBeTruthy();
+    });
+    expect(screen.getByText("central.help.no_link")).toBeTruthy();
+    expect(screen.getByText("central.help.duty_cycle")).toBeTruthy();
+  });
+
+  it("renders the <details> collapsed by default", async () => {
+    const { container } = render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("central.help.summary")).toBeTruthy();
+    });
+    const details = container.querySelector("details");
+    expect(details).toBeTruthy();
+    expect(details?.open).toBe(false);
+  });
+});
+
 describe("CentralLinksPanel — status rendering edge cases", () => {
   it("disables the device-wide buttons when there are no eligible channels", async () => {
     mockStatus.mockResolvedValue(NO_ELIGIBLE_STATUS);
@@ -303,6 +387,19 @@ describe("CentralLinksPanel — status rendering edge cases", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/ccu unreachable/)).toBeTruthy();
+    });
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("falls back to String(err) when the status fetch rejects with a non-ApiError value", async () => {
+    // load()'s catch branch has the same ApiError/else split as
+    // errorText() — a rejection that is not an ApiError instance must
+    // still render a message instead of leaving the panel blank.
+    mockStatus.mockRejectedValue("offline");
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/offline/)).toBeTruthy();
     });
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });

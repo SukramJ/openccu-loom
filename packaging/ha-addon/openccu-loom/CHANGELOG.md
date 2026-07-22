@@ -2,6 +2,11 @@
 
 ## 0.46.0
 
+- **New help hint on the press-event forwarding panel.** The device-detail
+  Links tab now has an expandable note explaining why an HmIP button can
+  seem to do nothing (without forwarding, many buttons never send their
+  press events) and that turning forwarding on increases the device's
+  radio duty cycle and battery use.
 - **Toggling press-event forwarding now asks first and reports as a
   toast.** Enabling or disabling the central-link forwarding (whole device
   or a single channel) opens a confirmation dialog before it acts —
