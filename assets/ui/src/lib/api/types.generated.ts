@@ -7680,7 +7680,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": {
                     /** @description Name of the new system variable. */
