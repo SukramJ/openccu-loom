@@ -2571,9 +2571,20 @@ export interface paths {
         /** PRESS-event forwarding status for the device */
         get: operations["getCentralLinksStatus"];
         put?: never;
-        /** Enable central click-event forwarding */
+        /**
+         * Enable central click-event forwarding
+         * @description Enables CCU click-event forwarding. Without `channel` every
+         *     eligible (press-event) channel of the device is switched on;
+         *     with `channel` (a channel address such as ABC0000001:4) only
+         *     that single channel is touched.
+         */
         post: operations["createCentralLinks"];
-        /** Disable central click-event forwarding */
+        /**
+         * Disable central click-event forwarding
+         * @description Disables CCU click-event forwarding. Without `channel` the whole
+         *     device is switched off; with `channel` (a channel address such as
+         *     ABC0000001:4) only that single channel is touched.
+         */
         delete: operations["removeCentralLinks"];
         options?: never;
         head?: never;
@@ -7027,6 +7038,18 @@ export interface components {
             supported: boolean;
             reason?: string;
             eligible_channels?: number;
+            /**
+             * @description Per-channel suitability for central click-event routing. One
+             *     entry per eligible (press-event) channel, letting clients
+             *     offer a per-channel toggle alongside the device-wide one.
+             */
+            channels?: components["schemas"]["CentralLinksChannelStatus"][];
+        };
+        /** @description One channel's suitability for central click-event routing. */
+        CentralLinksChannelStatus: {
+            address: string;
+            number: number;
+            eligible: boolean;
         };
         /** @description A derived/calculated data point on a channel. */
         CalculatedDPSummary: {
@@ -9459,7 +9482,10 @@ export interface operations {
     };
     createCentralLinks: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device. */
+                channel?: string;
+            };
             header?: never;
             path: {
                 addr: string;
@@ -9482,7 +9508,10 @@ export interface operations {
     };
     removeCentralLinks: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device. */
+                channel?: string;
+            };
             header?: never;
             path: {
                 addr: string;

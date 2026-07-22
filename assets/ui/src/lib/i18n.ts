@@ -1801,6 +1801,9 @@ const EN: Catalog = {
     "Enabled: {touched} channel(s), {skipped} skipped, {failed} failed.",
   "central.report.disabled":
     "Disabled: {touched} channel(s), {skipped} skipped, {failed} failed.",
+  "central.device_wide": "Whole device",
+  "central.per_channel": "Per channel",
+  "central.channel_label": "Channel {number}",
   // --- Schedules ---
   "schedule.loading": "Loading schedule…",
   "schedule.unsupported":
@@ -4549,6 +4552,9 @@ const DE: Catalog = {
     "Aktiviert: {touched} Kanal/Kanäle, {skipped} übersprungen, {failed} fehlgeschlagen.",
   "central.report.disabled":
     "Deaktiviert: {touched} Kanal/Kanäle, {skipped} übersprungen, {failed} fehlgeschlagen.",
+  "central.device_wide": "Ganzes Gerät",
+  "central.per_channel": "Pro Kanal",
+  "central.channel_label": "Kanal {number}",
   "schedule.loading": "Lade Zeitplan…",
   "schedule.unsupported": "Dieses Gerät unterstützt keinen Zeitplan.",
   "schedule.unsupported_channel":

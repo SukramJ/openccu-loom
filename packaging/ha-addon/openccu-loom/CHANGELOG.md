@@ -2,6 +2,11 @@
 
 ## 0.46.0
 
+- **Central-link toggle per channel.** The device-detail Links tab keeps
+  the whole-device press-event forwarding switch and now adds a
+  per-channel switch for each eligible channel, so you can route the
+  clicks of a single button to OpenCCU-Loom without touching the rest of
+  the device (API 2.36.0).
 - **Device admin from the UI.** Renaming a device now persists to the
   CCU (optionally renaming all channels along), single channels can be
   renamed, removing a device offers factory-reset / force options with

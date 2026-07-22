@@ -21,13 +21,24 @@ type fakeCentralLinks struct {
 	removeErr    error
 	status       hmapi.CentralLinksStatus
 	statusErr    error
+
+	// Captured targets of the last create/remove call so tests can
+	// assert the channel argument is forwarded from the request.
+	lastCreateAddr    string
+	lastCreateChannel string
+	lastRemoveAddr    string
+	lastRemoveChannel string
 }
 
-func (f *fakeCentralLinks) CreateCentralLinks(_ context.Context, _ string) (hmapi.CentralLinksReport, error) {
+func (f *fakeCentralLinks) CreateCentralLinks(_ context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error) {
+	f.lastCreateAddr = deviceAddress
+	f.lastCreateChannel = channelAddress
 	return f.createReport, f.createErr
 }
 
-func (f *fakeCentralLinks) RemoveCentralLinks(_ context.Context, _ string) (hmapi.CentralLinksReport, error) {
+func (f *fakeCentralLinks) RemoveCentralLinks(_ context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error) {
+	f.lastRemoveAddr = deviceAddress
+	f.lastRemoveChannel = channelAddress
 	return f.removeReport, f.removeErr
 }
 
@@ -171,12 +182,120 @@ func TestCentralRemoveLinks_AddressAlias(t *testing.T) {
 	}
 }
 
+func TestCentralCreateLinks_ForwardsChannel(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCentralLinks{createReport: hmapi.CentralLinksReport{Touched: 1}}
+	r := newLinksRouter(fake, nil)
+
+	raw := marshalArgs(t, map[string]any{"device_address": "ABC0001", "channel": "ABC0001:2"})
+	res := r.Dispatch(opCtx(), "central.create_links", raw)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %v", res.Error)
+	}
+	if fake.lastCreateAddr != "ABC0001" {
+		t.Errorf("device address = %q, want ABC0001", fake.lastCreateAddr)
+	}
+	if fake.lastCreateChannel != "ABC0001:2" {
+		t.Errorf("channel = %q, want ABC0001:2", fake.lastCreateChannel)
+	}
+}
+
+func TestCentralRemoveLinks_ForwardsChannel(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCentralLinks{removeReport: hmapi.CentralLinksReport{Touched: 1}}
+	r := newLinksRouter(fake, nil)
+
+	raw := marshalArgs(t, map[string]any{"device_address": "ABC0001", "channel": "ABC0001:3"})
+	res := r.Dispatch(opCtx(), "central.remove_links", raw)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %v", res.Error)
+	}
+	if fake.lastRemoveChannel != "ABC0001:3" {
+		t.Errorf("channel = %q, want ABC0001:3", fake.lastRemoveChannel)
+	}
+}
+
+func TestCentralCreateLinks_NoChannelForwardsEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCentralLinks{createReport: hmapi.CentralLinksReport{Touched: 2}}
+	r := newLinksRouter(fake, nil)
+
+	raw := marshalArgs(t, map[string]any{"device_address": "ABC0001"})
+	res := r.Dispatch(opCtx(), "central.create_links", raw)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %v", res.Error)
+	}
+	if fake.lastCreateChannel != "" {
+		t.Errorf("channel = %q, want empty", fake.lastCreateChannel)
+	}
+}
+
+func TestCentralRemoveLinks_MissingAddress(t *testing.T) {
+	t.Parallel()
+	r := newLinksRouter(&fakeCentralLinks{}, nil)
+
+	res := r.Dispatch(opCtx(), "central.remove_links", marshalArgs(t, map[string]any{}))
+	if res.Error == nil {
+		t.Fatal("expected error for missing address")
+	}
+	if res.Error.Code != CommandErrorBadRequest {
+		t.Errorf("expected bad_request, got %q", res.Error.Code)
+	}
+}
+
+func TestCentralRemoveLinks_ManagerError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCentralLinks{removeErr: errors.New("boom")}
+	r := newLinksRouter(fake, nil)
+
+	raw := marshalArgs(t, map[string]any{"device_address": "ABC0001"})
+	res := r.Dispatch(opCtx(), "central.remove_links", raw)
+	if res.Error == nil {
+		t.Fatal("expected error from manager")
+	}
+	if res.Error.Code != CommandErrorInternal {
+		t.Errorf("expected internal_error, got %q", res.Error.Code)
+	}
+}
+
+func TestCentralLinksStatus_MissingAddress(t *testing.T) {
+	t.Parallel()
+	r := newLinksRouter(&fakeCentralLinks{}, nil)
+
+	res := r.Dispatch(context.Background(), "central.links_status", marshalArgs(t, map[string]any{}))
+	if res.Error == nil {
+		t.Fatal("expected error for missing address")
+	}
+	if res.Error.Code != CommandErrorBadRequest {
+		t.Errorf("expected bad_request, got %q", res.Error.Code)
+	}
+}
+
+func TestCentralLinksStatus_ManagerError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCentralLinks{statusErr: errors.New("lookup failed")}
+	r := newLinksRouter(fake, nil)
+
+	raw := marshalArgs(t, map[string]any{"device_address": "ABC0001"})
+	res := r.Dispatch(context.Background(), "central.links_status", raw)
+	if res.Error == nil {
+		t.Fatal("expected error from manager")
+	}
+	if res.Error.Code != CommandErrorInternal {
+		t.Errorf("expected internal_error, got %q", res.Error.Code)
+	}
+}
+
 func TestCentralLinksStatus_HappyPath(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCentralLinks{
 		status: hmapi.CentralLinksStatus{
 			Supported:        true,
 			EligibleChannels: 2,
+			Channels: []hmapi.CentralLinksChannelStatus{
+				{Address: "ABC0001:1", Number: 1, Eligible: true},
+				{Address: "ABC0001:2", Number: 2, Eligible: true},
+			},
 		},
 	}
 	r := newLinksRouter(fake, nil)
@@ -192,6 +311,12 @@ func TestCentralLinksStatus_HappyPath(t *testing.T) {
 	}
 	if got.EligibleChannels != 2 {
 		t.Errorf("expected EligibleChannels=2, got %d", got.EligibleChannels)
+	}
+	if len(got.Channels) != 2 {
+		t.Fatalf("expected 2 per-channel entries, got %d", len(got.Channels))
+	}
+	if got.Channels[1].Address != "ABC0001:2" || !got.Channels[1].Eligible {
+		t.Errorf("unexpected channel entry: %+v", got.Channels[1])
 	}
 }
 

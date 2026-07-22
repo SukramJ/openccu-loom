@@ -199,6 +199,58 @@ describe("api — deleteDevice reset/force query flags", () => {
   });
 });
 
+// central-links (createCentralLinks/removeCentralLinks) accept an optional
+// `channel` scope: an empty/omitted channel touches the whole device
+// (unchanged historical behaviour), a channel address scopes the call to
+// that single channel exactly like the CCU channel-config dialog. Both
+// verbs build the query string identically, so cover POST and DELETE.
+describe("api — central links channel scoping", () => {
+  it("centralLinksStatus GETs the device's status with no query string", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ supported: true }));
+    await api.centralLinksStatus("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+  });
+
+  it("createCentralLinks POSTs without a query string when no channel is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 2, skipped: 0, failed: 0 }, 202));
+    await api.createCentralLinks("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("createCentralLinks appends ?channel= when a channel address is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 1, skipped: 0, failed: 0 }, 202));
+    await api.createCentralLinks("0001ABCD", "0001ABCD:2");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links?channel=0001ABCD%3A2");
+  });
+
+  it("removeCentralLinks DELETEs without a query string when no channel is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 2, skipped: 0, failed: 0 }, 202));
+    await api.removeCentralLinks("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+    expect((init.method ?? "GET").toUpperCase()).toBe("DELETE");
+  });
+
+  it("removeCentralLinks appends ?channel= when a channel address is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 1, skipped: 0, failed: 0 }, 202));
+    await api.removeCentralLinks("0001ABCD", "0001ABCD:2");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links?channel=0001ABCD%3A2");
+  });
+
+  it("treats an empty-string channel the same as an omitted channel", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 2, skipped: 0, failed: 0 }, 202));
+    await api.createCentralLinks("0001ABCD", "");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+  });
+});
+
 // acceptInboxDevice's config body is optional and must stay backward
 // compatible: an empty/omitted config keeps the historical "accept only"
 // POST with no body, so the daemon's `io.EOF` fast-path is exercised. Only

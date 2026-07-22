@@ -41,18 +41,22 @@ var ErrNoCentralLinkBackend = errors.New("central-links: no backend for device")
 // channel; matches `REPORT_VALUE_USAGE_VALUE_ID` in const.py.
 const reportValueUsageValueID = "PRESS_SHORT"
 
-// CreateCentralLinks enables click-event routing for every eligible
-// channel of the device. Returns the count of channels touched and
-// the count of channels that were skipped (no press events / wrong
-// interface).
-func (c *CentralLinksDomain) CreateCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error) {
-	return c.runReport(ctx, deviceAddress, 1)
+// CreateCentralLinks enables click-event routing. When channelAddress
+// is empty every eligible channel of the device is switched on; when it
+// names a channel address only that single channel is touched (mirrors
+// the CCU channel-config dialog, which scopes the switch to the opened
+// channel). Returns the count of channels touched and the count of
+// channels that were skipped (no press events / wrong interface).
+func (c *CentralLinksDomain) CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error) {
+	return c.runReport(ctx, deviceAddress, channelAddress, 1)
 }
 
-// RemoveCentralLinks tears the central click-event routing down for
-// every eligible channel.
-func (c *CentralLinksDomain) RemoveCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error) {
-	return c.runReport(ctx, deviceAddress, 0)
+// RemoveCentralLinks tears the central click-event routing down. When
+// channelAddress is empty every eligible channel of the device is
+// switched off; when it names a channel address only that channel is
+// touched.
+func (c *CentralLinksDomain) RemoveCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error) {
+	return c.runReport(ctx, deviceAddress, channelAddress, 0)
 }
 
 // CentralLinksStatus reports per-device whether central links are
@@ -74,20 +78,28 @@ func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (hmapi.Cen
 			}, nil
 		}
 		eligible := 0
+		var channels []hmapi.CentralLinksChannelStatus
 		for _, ch := range dev.Channels() {
-			if channelHasPressEvents(ch) {
-				eligible++
+			if !channelHasPressEvents(ch) {
+				continue
 			}
+			eligible++
+			channels = append(channels, hmapi.CentralLinksChannelStatus{
+				Address:  ch.Address,
+				Number:   ch.Number,
+				Eligible: true,
+			})
 		}
 		return hmapi.CentralLinksStatus{
 			Supported:        true,
 			EligibleChannels: eligible,
+			Channels:         channels,
 		}, nil
 	}
 	return hmapi.CentralLinksStatus{}, fmt.Errorf("%w: device %s", ErrNoCentralLinkBackend, deviceAddress)
 }
 
-func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string, refCounter int) (hmapi.CentralLinksReport, error) {
+func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, channelAddress string, refCounter int) (hmapi.CentralLinksReport, error) {
 	if c.registry == nil || c.writer == nil {
 		return hmapi.CentralLinksReport{}, ErrNoCentralLinkBackend
 	}
@@ -99,6 +111,14 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string
 		if !isCentralLinkInterface(dev.Interface) {
 			return hmapi.CentralLinksReport{}, hmapi.ErrCentralLinksUnsupported
 		}
+		channels := dev.Channels()
+		if channelAddress != "" {
+			ch := findChannelByAddress(channels, channelAddress)
+			if ch == nil {
+				return hmapi.CentralLinksReport{}, fmt.Errorf("%w: %s", hmapi.ErrCentralLinksChannelNotFound, channelAddress)
+			}
+			channels = []*device.Channel{ch}
+		}
 		backend, ok := c.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
 			return hmapi.CentralLinksReport{}, fmt.Errorf("%w: %s/%s", ErrNoCentralLinkBackend, u.Name(), dev.InterfaceID)
@@ -109,7 +129,7 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string
 		}
 		report := hmapi.CentralLinksReport{}
 		var firstErr error
-		for _, ch := range dev.Channels() {
+		for _, ch := range channels {
 			if !channelHasPressEvents(ch) {
 				report.Skipped++
 				continue
@@ -129,6 +149,16 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string
 		return report, nil
 	}
 	return hmapi.CentralLinksReport{}, fmt.Errorf("%w: device %s", ErrNoCentralLinkBackend, deviceAddress)
+}
+
+// findChannelByAddress returns the channel whose address matches, or nil.
+func findChannelByAddress(channels []*device.Channel, address string) *device.Channel {
+	for _, ch := range channels {
+		if ch != nil && ch.Address == address {
+			return ch
+		}
+	}
+	return nil
 }
 
 // centralLinkBackend is the slim slice of backends.Operations the

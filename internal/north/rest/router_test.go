@@ -149,11 +149,11 @@ func (fakeScheduleService) CopyClimateProfile(_ context.Context, _ string, _ int
 
 type fakeCentralLinksService struct{}
 
-func (fakeCentralLinksService) CreateCentralLinks(_ context.Context, _ string) (handlers.CentralLinksReport, error) {
+func (fakeCentralLinksService) CreateCentralLinks(_ context.Context, _, _ string) (handlers.CentralLinksReport, error) {
 	return handlers.CentralLinksReport{}, nil
 }
 
-func (fakeCentralLinksService) RemoveCentralLinks(_ context.Context, _ string) (handlers.CentralLinksReport, error) {
+func (fakeCentralLinksService) RemoveCentralLinks(_ context.Context, _, _ string) (handlers.CentralLinksReport, error) {
 	return handlers.CentralLinksReport{}, nil
 }
 

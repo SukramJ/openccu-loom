@@ -10,6 +10,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Central-link (press-event forwarding) toggle can now target a single
+  channel.** `POST` / `DELETE /devices/{addr}/central-links` (and the
+  WebSocket commands `central.create_links` / `central.remove_links`)
+  accept an optional `channel` (a channel address such as `ABC0000001:4`);
+  without it the whole device is switched as before, with it only that one
+  channel is touched — mirroring the CCU channel-config dialog, which
+  scopes the switch to the opened channel. `GET /devices/{addr}/central-links`
+  (and `central.links_status`) now also return a per-channel `channels`
+  list (address, number, eligibility). The device-detail Links tab keeps
+  the device-wide switch and adds a per-channel switch for each eligible
+  channel. REST `APIVersion` 2.36.0.
 - **First-time configuration when accepting an inbox device.**
   `POST /devices/{addr}/accept` (and the WebSocket command
   `inbox.accept`) now take an optional body — `name`,
