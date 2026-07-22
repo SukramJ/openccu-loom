@@ -804,6 +804,13 @@ type stubLinks struct {
 	addErr           error
 	removeErr        error
 
+	// set_info
+	setSender      string
+	setReceiver    string
+	setName        string
+	setDescription string
+	setInfoErr     error
+
 	// link paramset
 	linkParamsetValues map[string]any
 	linkParamsetErr    error
@@ -823,6 +830,14 @@ func (l *stubLinks) AddLink(_ context.Context, sender, receiver, name, descripti
 	l.addedName = name
 	l.addedDescription = description
 	return l.addErr
+}
+
+func (l *stubLinks) SetLinkInfo(_ context.Context, sender, receiver, name, description string) error {
+	l.setSender = sender
+	l.setReceiver = receiver
+	l.setName = name
+	l.setDescription = description
+	return l.setInfoErr
 }
 
 func (l *stubLinks) RemoveLink(_ context.Context, sender, receiver string) error {
@@ -961,6 +976,49 @@ func TestLinksAddRequiresSenderAndReceiver(t *testing.T) {
 	res := r.Dispatch(opCtx(), "links.add", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+func TestLinksSetInfoForwardsArgs(t *testing.T) {
+	links := &stubLinks{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+
+	args, _ := json.Marshal(map[string]any{
+		"sender": "S:1", "receiver": "R:1", "name": "Stairs", "description": "auto",
+	})
+	res := r.Dispatch(opCtx(), "links.set_info", args)
+	if res.Error != nil {
+		t.Fatalf("set_info err: %+v", res.Error)
+	}
+	if links.setSender != "S:1" || links.setReceiver != "R:1" ||
+		links.setName != "Stairs" || links.setDescription != "auto" {
+		t.Fatalf("set_info stub captured wrong args: %+v", links)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok || data["updated"] != true {
+		t.Fatalf("expected updated=true, got %+v", res.Data)
+	}
+}
+
+func TestLinksSetInfoRequiresSenderAndReceiver(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: &stubLinks{}})
+	args, _ := json.Marshal(map[string]any{"sender": "S:1"})
+	res := r.Dispatch(opCtx(), "links.set_info", args)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+func TestLinksSetInfoBackendError(t *testing.T) {
+	links := &stubLinks{setInfoErr: errors.New("ccu boom")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+	args, _ := json.Marshal(map[string]any{"sender": "S:1", "receiver": "R:1"})
+	res := r.Dispatch(opCtx(), "links.set_info", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
 	}
 }
 

@@ -99,6 +99,10 @@ func (fakeLinksService) ListLinks(context.Context, string, string) ([]handlers.L
 
 func (fakeLinksService) AddLink(context.Context, string, string, string, string) error { return nil }
 
+func (fakeLinksService) SetLinkInfo(context.Context, string, string, string, string) error {
+	return nil
+}
+
 func (fakeLinksService) RemoveLink(context.Context, string, string) error { return nil }
 
 func (fakeLinksService) LinkableChannels(context.Context, string, string, string, string) ([]handlers.LinkableChannel, error) {

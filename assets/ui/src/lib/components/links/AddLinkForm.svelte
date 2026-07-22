@@ -11,7 +11,13 @@
     interfaceId: string;
     locale: string;
     onCancel: () => void;
-    onAdded: () => void;
+    // Fired after the link is created. Carries both endpoint addresses so
+    // the parent can check either side for a WAKEUP / LAZY_CONFIG battery
+    // device and show the "pending wakeup" hint.
+    onAdded: (result: {
+      senderAddress: string;
+      receiverAddress: string;
+    }) => void;
   };
 
   let { deviceAddress, interfaceId, locale, onCancel, onAdded }: Props =
@@ -204,7 +210,7 @@
         name: linkName,
         description: linkDescription,
       });
-      onAdded();
+      onAdded({ senderAddress, receiverAddress });
     } catch (err) {
       error =
         err instanceof ApiError

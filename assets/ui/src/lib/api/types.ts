@@ -43,6 +43,11 @@ export type UIHint = NonNullable<
 // marshals from device.AvailabilityInfo (IsReachable/LastUpdated/...).
 export type DeviceDetail = components["schemas"]["DeviceDetail"];
 
+// RxMode re-exported from generated schema — the named flags decoded from a
+// device's CCU RX_MODE bitmask. The `wakeup` / `lazy_config` bits mark a
+// battery device that only applies pending configuration on its next wakeup.
+export type RxMode = components["schemas"]["RxMode"];
+
 // Paginated is generic — not generated (openapi-typescript generates per-endpoint
 // response types, not a generic wrapper). Keep hand-written.
 export type Paginated<T> = {

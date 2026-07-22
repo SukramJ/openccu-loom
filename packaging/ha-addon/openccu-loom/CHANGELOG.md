@@ -27,6 +27,24 @@
   were acknowledged. New `POST /service-messages/ack-all` and
   `POST /alarm-messages/ack-all` REST endpoints and the matching
   `*.ack_all` WebSocket commands back it (API 2.32.0).
+- **Rename direct links.** The name and description of an existing
+  direct link (Direktverknüpfung) can now be changed after creation —
+  via the new pencil action in the device links view, the REST
+  endpoint `PATCH /devices/{addr}/links`, or the `links.set_info`
+  WebSocket command (API 2.35.0).
+- **Motion-detector brightness helper in the link editor.** When a
+  direct link's sender is a motion detector that reports a brightness
+  reading, the LINK paramset editor now offers a one-click button on
+  the brightness condition thresholds (`SHORT_COND_VALUE_LO`/`_HI` and
+  the `LONG_` variants) that takes the sender's current brightness —
+  no more reading the value off elsewhere and typing it in.
+- **"Wird beim Aufwachen übertragen" hint for battery devices.** After
+  adding or removing a direct link, or saving a LINK paramset, for a
+  battery-powered device (rx mode `WAKEUP`/`LAZY_CONFIG`), the config UI
+  now shows an info notice that the change is queued and only transfers
+  the next time the device wakes up (e.g. on a button press) — instead
+  of a plain "saved" confirmation. Mains devices keep the immediate
+  confirmation.
 
 ## 0.45.0
 

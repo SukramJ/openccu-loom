@@ -396,6 +396,21 @@ export const api = {
       body: JSON.stringify(body),
     });
   },
+  updateLink(
+    address: string,
+    body: {
+      sender_address: string;
+      receiver_address: string;
+      name?: string;
+      description?: string;
+    },
+  ) {
+    return request<void>(`/devices/${encodeURIComponent(address)}/links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
   removeLink(address: string, sender: string, receiver: string) {
     const qs = new URLSearchParams({ sender, receiver });
     return request<void>(

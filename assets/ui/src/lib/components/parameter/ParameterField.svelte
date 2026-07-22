@@ -37,6 +37,16 @@
      * disambiguation.
      */
     nameBadge?: boolean;
+    /**
+     * Present only for LINK condition-threshold fields whose sender
+     * channel currently reports a brightness reading. Renders a
+     * one-click "take current brightness" button that patches the field
+     * with the sender's live value via `onChange` (so it respects the
+     * editor's dirty tracking / undo stack). `display` is the
+     * human-readable value shown in the tooltip. See
+     * channel/brightness-helper.ts.
+     */
+    brightnessHelper?: { value: number; display: string } | null;
   };
 
   let {
@@ -48,6 +58,7 @@
     onChange,
     onAction,
     nameBadge = false,
+    brightnessHelper = null,
   }: Props = $props();
 
   // Writability model with two distinct axes so the UI can react
@@ -374,6 +385,27 @@
   {:else}
     <div class="text-xs italic text-[var(--ha-secondary-text-color)]">
       {t("parameter.unknown_type", { type: parameter.type })}
+    </div>
+  {/if}
+
+  {#if brightnessHelper && !interactionDisabled}
+    {@const reading = brightnessHelper}
+    <!-- Motion-detector brightness helper: fills this LINK condition
+         threshold with the sender channel's current reading. Mirrors
+         the CCU WebUI's "use current brightness" button
+         (config/ic_md.cgi). Writes through onChange so the edit is
+         tracked / undoable like any manual change. -->
+    <div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={() => onChange(reading.value)}
+        title={t("channel.brightness.apply_tooltip", { value: reading.display })}
+      >
+        <Icon name="mdi:sun" size={14} />
+        {t("channel.brightness.apply", { value: reading.display })}
+      </Button>
     </div>
   {/if}
 

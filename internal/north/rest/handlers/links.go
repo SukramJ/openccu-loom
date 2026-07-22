@@ -35,6 +35,17 @@ type AddLinkRequest struct {
 	Description     string `json:"description,omitempty"`
 }
 
+// UpdateLinkRequest is the JSON body for PATCH /devices/{addr}/links.
+// Both channel addresses identify the existing link; name and
+// description carry the new metadata. They are written verbatim, so an
+// empty string clears the corresponding field on the CCU.
+type UpdateLinkRequest struct {
+	SenderAddress   string `json:"sender_address"`
+	ReceiverAddress string `json:"receiver_address"`
+	Name            string `json:"name,omitempty"`
+	Description     string `json:"description,omitempty"`
+}
+
 // ListLinks GET /api/v1/devices/{addr}/links?locale=de
 func ListLinks(svc LinksService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +94,37 @@ func AddLink(svc LinksService) http.HandlerFunc {
 		}
 		if err := svc.AddLink(r.Context(), req.SenderAddress, req.ReceiverAddress, req.Name, req.Description); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Add link failed", err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// UpdateLink PATCH /api/v1/devices/{addr}/links
+//
+// Changes the name / description of an existing direct link. The two
+// channel addresses in the body identify the link; the device address
+// in the path scopes the owning central + interface.
+func UpdateLink(svc LinksService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Links service unavailable", ""))
+			return
+		}
+		var req UpdateLinkRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.SenderAddress == "" || req.ReceiverAddress == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "sender_address and receiver_address required", ""))
+			return
+		}
+		if err := svc.SetLinkInfo(r.Context(), req.SenderAddress, req.ReceiverAddress, req.Name, req.Description); err != nil {
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Update link failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

@@ -39,6 +39,16 @@ func TestWSLinkQuery_AddLink_NonNilDomain_Errors(t *testing.T) {
 	_ = err
 }
 
+func TestWSLinkQuery_SetLinkInfo_NonNilDomain_Errors(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-01")
+	domain := adapter.NewLinksDomain(reg, nil, nil)
+	q := &wsLinkQuery{domain: domain, registry: reg}
+	err := q.SetLinkInfo(context.Background(), "A:0", "B:0", "name", "desc")
+	// Devices not found → error expected; must not panic.
+	_ = err
+}
+
 func TestWSLinkQuery_RemoveLink_NonNilDomain_Errors(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-01")

@@ -1915,6 +1915,10 @@ const EN: Catalog = {
   "channel.save_n": "Save ({count})",
   "channel.unsaved": "Unsaved changes",
   "channel.saved_short": "Saved.",
+  // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
+  "channel.brightness.apply": "Use brightness {value}",
+  "channel.brightness.apply_tooltip":
+    "Take the motion sender's current brightness ({value}) as this threshold.",
   // --- DST sub-group headers (channel/dst-groups.ts) ---
   "channel.dst.start_header": "Start of daylight saving time",
   "channel.dst.end_header": "End of daylight saving time",
@@ -2019,12 +2023,24 @@ const EN: Catalog = {
   "links.config.receiver_section": "Receiver configuration",
   "links.config.sender_section": "Sender configuration",
   "links.created": "Link created.",
+  "links.wakeup_pending.title": "Saved — pending device wakeup",
+  "links.wakeup_pending.body":
+    "This is a battery-powered device. The change is queued and only transfers the next time the device wakes up (e.g. on a button press).",
   "links.removal_failed": "Removal failed",
   "links.no_for_device": "No direct links for this device.",
   "links.configure": "Configure",
   "links.direction": "Direction",
   "links.outgoing_label": "Outgoing",
   "links.incoming_label": "Incoming",
+  "links.rename": "Rename",
+  "links.rename.title": "Rename link",
+  "links.rename.name": "Name",
+  "links.rename.description": "Description",
+  "links.rename.name_placeholder": "Link name",
+  "links.rename.description_placeholder": "Optional description",
+  "links.rename.saving": "Saving…",
+  "links.renamed": "Link renamed.",
+  "links.rename_failed": "Rename failed",
   "links.confirm_delete":
     "Really delete the link {sender} → {receiver}?",
   "links.links_label": "links",
@@ -4626,6 +4642,10 @@ const DE: Catalog = {
   "channel.save_n": "Speichern ({count})",
   "channel.unsaved": "Ungespeicherte Änderungen",
   "channel.saved_short": "Gespeichert.",
+  // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
+  "channel.brightness.apply": "Helligkeit {value} übernehmen",
+  "channel.brightness.apply_tooltip":
+    "Aktuelle Helligkeit des Bewegungsmelders ({value}) als diesen Schwellwert übernehmen.",
   // --- DST sub-group headers (channel/dst-groups.ts) ---
   "channel.dst.start_header": "Beginn der Sommerzeit",
   "channel.dst.end_header": "Ende der Sommerzeit",
@@ -4732,12 +4752,24 @@ const DE: Catalog = {
   "links.config.receiver_section": "Empfänger-Konfiguration",
   "links.config.sender_section": "Sender-Konfiguration",
   "links.created": "Verknüpfung erstellt.",
+  "links.wakeup_pending.title": "Gespeichert – wird beim Aufwachen übertragen",
+  "links.wakeup_pending.body":
+    "Dies ist ein batteriebetriebenes Gerät. Die Änderung ist vorgemerkt und wird erst beim nächsten Aufwachen des Geräts übertragen (z. B. per Tastendruck).",
   "links.removal_failed": "Entfernen fehlgeschlagen",
   "links.no_for_device": "Keine Direktverknüpfungen für dieses Gerät.",
   "links.configure": "Konfigurieren",
   "links.direction": "Richtung",
   "links.outgoing_label": "Ausgehend",
   "links.incoming_label": "Eingehend",
+  "links.rename": "Umbenennen",
+  "links.rename.title": "Verknüpfung umbenennen",
+  "links.rename.name": "Name",
+  "links.rename.description": "Beschreibung",
+  "links.rename.name_placeholder": "Name der Verknüpfung",
+  "links.rename.description_placeholder": "Optionale Beschreibung",
+  "links.rename.saving": "Speichern…",
+  "links.renamed": "Verknüpfung umbenannt.",
+  "links.rename_failed": "Umbenennen fehlgeschlagen",
   "links.confirm_delete":
     "Verknüpfung {sender} → {receiver} wirklich löschen?",
   "links.links_label": "Verknüpfungen",

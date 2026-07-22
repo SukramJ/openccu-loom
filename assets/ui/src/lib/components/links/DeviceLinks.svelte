@@ -4,10 +4,14 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
+  import Label from "$lib/components/ui/Label.svelte";
   import AddLinkForm from "./AddLinkForm.svelte";
   import LinkConfigPanel from "./LinkConfigPanel.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { notifyWakeupPending } from "$lib/links/wakeup-hint";
   import { t } from "$lib/i18n";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
@@ -26,6 +30,12 @@
   let adding = $state(false);
   // The link currently being edited (or null for list view).
   let editing = $state<Link | null>(null);
+  // The link whose name/description is being renamed (or null). Opening
+  // the rename form prefills these draft fields from the link.
+  let renaming = $state<Link | null>(null);
+  let renameName = $state("");
+  let renameDescription = $state("");
+  let renameSaving = $state(false);
 
   // Sort + filter state. The list can grow large for devices with
   // many channels; sorting by direction or peer-name speeds scanning,
@@ -145,7 +155,14 @@
         link.sender_address,
         link.receiver_address,
       );
-      toastStore.success(t("links.removed"));
+      // Removing a link rewrites config on both endpoints; a battery
+      // device applies it only on its next wakeup. The wakeup hint (when
+      // shown) stands in for the plain "removed" toast.
+      const wakeupShown = await notifyWakeupPending([
+        link.sender_address,
+        link.receiver_address,
+      ]);
+      if (!wakeupShown) toastStore.success(t("links.removed"));
       await load();
     } catch (err) {
       const msg =
@@ -158,10 +175,59 @@
     }
   }
 
-  async function onAdded() {
+  async function onAdded(result: {
+    senderAddress: string;
+    receiverAddress: string;
+  }) {
     adding = false;
-    toastStore.success(t("links.created"));
+    // A new link writes config to both endpoints; a battery device
+    // applies it only on its next wakeup. The wakeup hint (when shown)
+    // stands in for the plain "created" toast.
+    const wakeupShown = await notifyWakeupPending([
+      result.senderAddress,
+      result.receiverAddress,
+    ]);
+    if (!wakeupShown) toastStore.success(t("links.created"));
     await load();
+  }
+
+  function startRename(link: Link) {
+    adding = false;
+    renaming = link;
+    renameName = link.name ?? "";
+    renameDescription = link.description ?? "";
+  }
+
+  function cancelRename() {
+    renaming = null;
+    renameName = "";
+    renameDescription = "";
+  }
+
+  async function saveRename() {
+    if (!renaming) return;
+    renameSaving = true;
+    try {
+      await api.updateLink(deviceAddress, {
+        sender_address: renaming.sender_address,
+        receiver_address: renaming.receiver_address,
+        name: renameName,
+        description: renameDescription,
+      });
+      toastStore.success(t("links.renamed"));
+      cancelRename();
+      await load();
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? `${err.status}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      toastStore.error(t("links.rename_failed"), msg);
+    } finally {
+      renameSaving = false;
+    }
   }
 
   function directionLabel(direction: string): string {
@@ -215,7 +281,10 @@
         <Button
           type="button"
           size="sm"
-          onclick={() => (adding = !adding)}
+          onclick={() => {
+            adding = !adding;
+            if (adding) cancelRename();
+          }}
           disabled={loading}
         >
           {adding ? t("common.cancel") : t("common.add")}
@@ -237,6 +306,66 @@
         onCancel={() => (adding = false)}
         onAdded={onAdded}
       />
+    {/if}
+
+    {#if renaming}
+      <div
+        class="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[color-mix(in_srgb,var(--color-slate-900)_40%,transparent)]"
+      >
+        <h3 class="mb-1 text-sm font-semibold">{t("links.rename.title")}</h3>
+        <p class="mb-3 text-xs text-[var(--ha-secondary-text-color)]">
+          {partyLabel(
+            renaming.sender_device_name,
+            renaming.sender_channel_name,
+            renaming.sender_channel_type_label,
+            renaming.sender_address,
+          )}
+          <span class="mx-1">→</span>
+          {partyLabel(
+            renaming.receiver_device_name,
+            renaming.receiver_channel_name,
+            renaming.receiver_channel_type_label,
+            renaming.receiver_address,
+          )}
+        </p>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <Label class="mb-1">{t("links.rename.name")}</Label>
+            <Input
+              type="text"
+              bind:value={renameName}
+              placeholder={t("links.rename.name_placeholder")}
+            />
+          </div>
+          <div>
+            <Label class="mb-1">{t("links.rename.description")}</Label>
+            <Input
+              type="text"
+              bind:value={renameDescription}
+              placeholder={t("links.rename.description_placeholder")}
+            />
+          </div>
+        </div>
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={cancelRename}
+            disabled={renameSaving}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onclick={() => void saveRename()}
+            disabled={renameSaving}
+          >
+            {renameSaving ? t("links.rename.saving") : t("common.save")}
+          </Button>
+        </div>
+      </div>
     {/if}
 
     {#if links.length === 0 && !loading && !adding}
@@ -316,6 +445,16 @@
               {/if}
             </div>
             <div class="flex flex-shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label={t("links.rename")}
+                title={t("links.rename")}
+                onclick={() => startRename(link)}
+              >
+                <Icon name="mdi:pencil" size={16} />
+              </Button>
               <Button
                 type="button"
                 variant="outline"

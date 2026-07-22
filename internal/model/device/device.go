@@ -31,8 +31,15 @@ type Config struct {
 	Rooms        []string
 	Functions    []string
 	RxModes      []hmenum.CommandRxMode
-	Updatable    bool
-	Firmware     FirmwareInfo
+	// RxMode is the device's raw receive-mode bitmask from the CCU
+	// `listDevices` RX_MODE field (ALWAYS / BURST / CONFIG / WAKEUP /
+	// LAZY_CONFIG). It tells consumers whether the device only accepts
+	// pending configuration on its next wakeup (battery devices carry
+	// WAKEUP / LAZY_CONFIG) rather than immediately (mains devices carry
+	// ALWAYS).
+	RxMode    hmenum.RxMode
+	Updatable bool
+	Firmware  FirmwareInfo
 
 	// IseID is the CCU-internal numeric identifier for the device. Set by the
 	// ingest pipeline from the Rega script device-details response
@@ -85,9 +92,16 @@ type Device struct {
 	Room string `payload:"info"`
 	// Function is the device's single canonical function (Gewerk)
 	// assignment, set under the same one-entry rule as [Room].
-	Function  string                 `payload:"info"`
-	RxModes   []hmenum.CommandRxMode `payload:"config,alt=rx_modes"`
-	Updatable bool                   `payload:"config"`
+	Function string                 `payload:"info"`
+	RxModes  []hmenum.CommandRxMode `payload:"config,alt=rx_modes"`
+	// RxMode is the raw receive-mode bitmask from the CCU RX_MODE field.
+	// See [Config.RxMode]. A device with WAKEUP or LAZY_CONFIG set only
+	// applies pending configuration when it next wakes up, which lets a
+	// north-bound surface show a "pending wakeup" hint after a config
+	// write. Not part of the payload plane; consumed by the REST device
+	// DTO only.
+	RxMode    hmenum.RxMode
+	Updatable bool `payload:"config"`
 
 	// IseID is the CCU-internal numeric identifier for this device. Set by the
 	// ingest pipeline from the Rega script device-details response.
@@ -196,6 +210,7 @@ func New(cfg Config) *Device {
 		Room:                         singleOrEmpty(cfg.Rooms),
 		Function:                     singleOrEmpty(cfg.Functions),
 		RxModes:                      append([]hmenum.CommandRxMode(nil), cfg.RxModes...),
+		RxMode:                       cfg.RxMode,
 		Updatable:                    cfg.Updatable,
 		IseID:                        cfg.IseID,
 		SchemaVersion:                cfg.SchemaVersion,

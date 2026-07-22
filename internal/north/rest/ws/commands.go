@@ -75,6 +75,7 @@ var writeCommandRoles = map[string]auth.Role{
 	"links.add":                           auth.RoleOperator,
 	"links.put_paramset":                  auth.RoleOperator,
 	"links.remove":                        auth.RoleOperator,
+	"links.set_info":                      auth.RoleOperator,
 	"master_profiles.apply":               auth.RoleOperator,
 	"paramset.copy":                       auth.RoleOperator,
 	"paramset.put":                        auth.RoleOperator,

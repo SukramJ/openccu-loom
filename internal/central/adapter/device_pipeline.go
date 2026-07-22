@@ -447,12 +447,17 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 		// HmIP devices only register under the SUBTYPE key ("PSM" → "psm"). Without
 		// SubModel populated, [Translations.DeviceModelLabel] returns empty for the
 		// majority of HmIP devices and HA-Discovery's `model_id` field stays unset.
-		SubModel:      dd.Subtype,
-		Name:          displayName,
-		Manufacturer:  hmenum.ManufacturerEQ3,
-		ProductGroup:  hmenum.ProductGroupForModel(dd.Type, iface),
-		Rooms:         rooms,
-		Functions:     functions,
+		SubModel:     dd.Subtype,
+		Name:         displayName,
+		Manufacturer: hmenum.ManufacturerEQ3,
+		ProductGroup: hmenum.ProductGroupForModel(dd.Type, iface),
+		Rooms:        rooms,
+		Functions:    functions,
+		// RX_MODE is the device's receive-mode bitmask; carrying it lets the
+		// REST device DTO tell WAKEUP / LAZY_CONFIG battery devices apart from
+		// mains devices, so the SPA can surface a "pending wakeup" hint after a
+		// link/config write.
+		RxMode:        hmenum.RxMode(dd.RXMode),
 		IseID:         deviceISEID,
 		SchemaVersion: schemaVersion,
 		Firmware: device.FirmwareInfo{

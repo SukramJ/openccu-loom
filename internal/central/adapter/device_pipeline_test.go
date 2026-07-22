@@ -215,6 +215,58 @@ func TestDevicePipelineSchemaVersionNilIsZero(t *testing.T) {
 	}
 }
 
+// TestDevicePipelineRxModePropagated verifies that the CCU RX_MODE bitmask
+// on the device description reaches the device model, so the REST DTO can
+// tell WAKEUP / LAZY_CONFIG battery devices apart from mains devices.
+func TestDevicePipelineRxModePropagated(t *testing.T) {
+	t.Parallel()
+	c, _ := central.New(central.Config{Name: "ccu-01"})
+	p := NewDevicePipeline(c)
+
+	// RX_WAKEUP (8) | RX_LAZY_CONFIG (16) = 24 — a battery device.
+	err := p.Ingest(context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+		{Address: "BATT0001", Type: "HmIP-eTRV", RXMode: 24},
+		{Address: "BATT0001:1", Parent: "BATT0001"},
+	})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	d, ok := c.ModelRegistry.Get("BATT0001")
+	if !ok {
+		t.Fatal("device missing after ingest")
+	}
+	if !d.RxMode.Has(hmenum.RxModeWakeup) || !d.RxMode.Has(hmenum.RxModeLazyConfig) {
+		t.Fatalf("RxMode = %d, want WAKEUP|LAZY_CONFIG set", d.RxMode)
+	}
+}
+
+// TestDevicePipelineRxModeUndefinedWhenAbsent verifies that a device
+// description without an RX_MODE field (the Go zero value, 0) propagates as
+// hmenum.RxModeUndefined rather than being mistaken for RX_ALWAYS — the CCU
+// omits RX_MODE for backends that never report it (e.g. some CUxD/Homegear
+// device kinds), and the REST DTO must be able to tell "no rx mode reported"
+// apart from "explicitly mains-powered".
+func TestDevicePipelineRxModeUndefinedWhenAbsent(t *testing.T) {
+	t.Parallel()
+	c, _ := central.New(central.Config{Name: "ccu-01"})
+	p := NewDevicePipeline(c)
+
+	err := p.Ingest(context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+		{Address: "NORXM0001", Type: "HmIP-BSM"},
+		{Address: "NORXM0001:1", Parent: "NORXM0001"},
+	})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	d, ok := c.ModelRegistry.Get("NORXM0001")
+	if !ok {
+		t.Fatal("device missing after ingest")
+	}
+	if d.RxMode != hmenum.RxModeUndefined {
+		t.Fatalf("RxMode = %d, want RxModeUndefined for an absent RX_MODE field", d.RxMode)
+	}
+}
+
 // ─── Item 2 — device.ProductGroup model-prefix matching ──────────────────────
 
 // TestProductGroupForModelPrefix verifies that ProductGroupForModel

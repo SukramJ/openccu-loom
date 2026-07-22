@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
@@ -6004,9 +6005,17 @@ type linksBackend struct {
 	getLinksErr     error
 	addLinkErr      error
 	removeLinkErr   error
+	setLinkInfoErr  error
 	getLinkPeersErr error
 	putLinkParamErr error
 	getLinkParamErr error
+
+	// Captured arguments of the most recent SetLinkInfo call.
+	setIface       string
+	setSender      string
+	setReceiver    string
+	setName        string
+	setDescription string
 }
 
 func (b *linksBackend) GetLinks(_ context.Context, _ string) ([]hmproto.LinkDescription, error) {
@@ -6022,6 +6031,18 @@ func (b *linksBackend) AddLink(_ context.Context, _, _, _, _ string) error {
 
 func (b *linksBackend) RemoveLink(_ context.Context, _, _ string) error {
 	return b.removeLinkErr
+}
+
+func (b *linksBackend) SetLinkInfo(_ context.Context, iface, sender, receiver, name, description string) (bool, error) {
+	b.setIface = iface
+	b.setSender = sender
+	b.setReceiver = receiver
+	b.setName = name
+	b.setDescription = description
+	if b.setLinkInfoErr != nil {
+		return false, b.setLinkInfoErr
+	}
+	return true, nil
 }
 
 func (b *linksBackend) GetLinkPeers(_ context.Context, _ string) ([]string, error) {
@@ -6146,6 +6167,84 @@ func TestRemoveLink_BackendError(t *testing.T) {
 	err := domain.RemoveLink(context.Background(), "RL2DEV01B26:1", "PEER:1")
 	if !errors.Is(err, removeErr) {
 		t.Errorf("expected removeErr, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetLinkInfo — device in no central → ErrDescriptionNotFound
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_DeviceNotFound(t *testing.T) {
+	t.Parallel()
+	domain, _ := buildLinksFixtureNoBackend(t, "ccu-b26-si0", "SI0DEV01B26")
+	err := domain.SetLinkInfo(context.Background(), "UNKNOWNDEV:1", "PEER:1", "n", "d")
+	if !errors.Is(err, hmerr.ErrDescriptionNotFound) {
+		t.Errorf("expected ErrDescriptionNotFound, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetLinkInfo — backend not found
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_NoBackend(t *testing.T) {
+	t.Parallel()
+	domain, _ := buildLinksFixtureNoBackend(t, "ccu-b26-si1", "SI1DEV01B26")
+	err := domain.SetLinkInfo(context.Background(), "SI1DEV01B26:1", "PEER:1", "n", "d")
+	if !errors.Is(err, ErrNoLinkBackend) {
+		t.Errorf("expected ErrNoLinkBackend, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetLinkInfo — backend.SetLinkInfo error propagates
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_BackendError(t *testing.T) {
+	t.Parallel()
+	setErr := errors.New("set link info fail")
+	b := &linksBackend{setLinkInfoErr: setErr}
+	domain := buildLinksFixtureWithBackend(t, "ccu-b26-si2", "SI2DEV01B26", b)
+	err := domain.SetLinkInfo(context.Background(), "SI2DEV01B26:1", "PEER:1", "n", "d")
+	if !errors.Is(err, setErr) {
+		t.Errorf("expected setErr, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetLinkInfo — forwards the device interface + all four args to the
+// backend and records an audit entry.
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_ForwardsArgsAndRecordsAudit(t *testing.T) {
+	t.Parallel()
+	b := &linksBackend{}
+	domain := buildLinksFixtureWithBackend(t, "ccu-b26-si3", "SI3DEV01B26", b)
+	auditBuf := audit.NewBuffer(10)
+	domain.SetAuditRecorder(auditBuf)
+
+	if err := domain.SetLinkInfo(context.Background(), "SI3DEV01B26:1", "PEER:2", "Treppenlicht", "auto"); err != nil {
+		t.Fatalf("SetLinkInfo: %v", err)
+	}
+	if b.setIface != "HmIP-RF" {
+		t.Errorf("iface: want HmIP-RF, got %q", b.setIface)
+	}
+	if b.setSender != "SI3DEV01B26:1" || b.setReceiver != "PEER:2" {
+		t.Errorf("addresses forwarded wrong: sender=%q receiver=%q", b.setSender, b.setReceiver)
+	}
+	if b.setName != "Treppenlicht" || b.setDescription != "auto" {
+		t.Errorf("name/description forwarded wrong: name=%q desc=%q", b.setName, b.setDescription)
+	}
+	entries := auditBuf.List(0)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(entries))
+	}
+	e := entries[0]
+	if e.Action != audit.ActionLinkUpdate {
+		t.Errorf("audit action: want %q, got %q", audit.ActionLinkUpdate, e.Action)
+	}
+	if e.DeviceAddress != "SI3DEV01B26" || e.ChannelNo != 1 || e.Peer != "PEER:2" || e.Note != "Treppenlicht" {
+		t.Errorf("audit entry fields wrong: %+v", e)
 	}
 }
 

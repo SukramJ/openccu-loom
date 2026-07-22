@@ -290,6 +290,13 @@ func (w *wsLinkQuery) AddLink(ctx context.Context, sender, receiver, name, descr
 	return w.domain.AddLink(ctx, sender, receiver, name, description)
 }
 
+func (w *wsLinkQuery) SetLinkInfo(ctx context.Context, sender, receiver, name, description string) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.SetLinkInfo(ctx, sender, receiver, name, description)
+}
+
 func (w *wsLinkQuery) RemoveLink(ctx context.Context, sender, receiver string) error {
 	if w.domain == nil {
 		return errors.New("ws: links domain not wired")

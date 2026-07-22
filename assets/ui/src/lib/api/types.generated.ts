@@ -2516,7 +2516,8 @@ export interface paths {
         delete: operations["removeLink"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename a direct link (change name / description) */
+        patch: operations["updateLink"];
         trace?: never;
     };
     "/devices/{addr}/link-ps/{peer}": {
@@ -4857,6 +4858,27 @@ export interface components {
              *     sections.
              */
             has_sub_devices: boolean;
+            rx_mode?: components["schemas"]["RxMode"];
+        };
+        /**
+         * @description Named flags decoded from the device's CCU RX_MODE bitmask. The
+         *     `wakeup` / `lazy_config` bits mark a battery-powered device that only
+         *     applies pending configuration when it next wakes up — the SPA shows a
+         *     "pending wakeup" hint after a link/config write to such a device. Only
+         *     set bits are present; the whole object is omitted when the CCU reports
+         *     no rx mode (RX_MODE == 0).
+         */
+        RxMode: {
+            /** @description Mains-powered, permanently reachable (RX_ALWAYS); applies configuration immediately. */
+            always?: boolean;
+            /** @description Reachable via burst wakeup (RX_BURST). */
+            burst?: boolean;
+            /** @description Reachable in its configuration window (RX_CONFIG). */
+            config?: boolean;
+            /** @description Battery device that only accepts pending configuration on its next wakeup (RX_WAKEUP). */
+            wakeup?: boolean;
+            /** @description Battery device whose configuration transfer is deferred until its next wakeup (RX_LAZY_CONFIG). */
+            lazy_config?: boolean;
         };
         DeviceList: {
             items: components["schemas"]["DeviceSummary"][];
@@ -6903,6 +6925,13 @@ export interface components {
         };
         /** @description Create a direct link between a sender and a receiver channel. */
         AddLinkRequest: {
+            sender_address: string;
+            receiver_address: string;
+            name?: string;
+            description?: string;
+        };
+        /** @description Change the name and/or description of an existing direct link. The two channel addresses identify the link; name and description are written verbatim, so an empty string clears that field on the CCU. */
+        UpdateLinkRequest: {
             sender_address: string;
             receiver_address: string;
             name?: string;
@@ -9185,6 +9214,33 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLinkRequest"];
+            };
+        };
         responses: {
             /** @description Scheduled */
             202: {

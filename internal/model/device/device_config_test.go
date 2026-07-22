@@ -121,6 +121,36 @@ func TestDeviceIgnoreOnInitialLoadSet(t *testing.T) {
 	}
 }
 
+// ─── RxMode ──────────────────────────────────────────────────────────────────
+
+// TestDeviceRxModeUndefinedByDefault verifies the zero value: a Config that
+// never sets RxMode propagates hmenum.RxModeUndefined, matching a device the
+// CCU reports no RX_MODE bitmask for.
+func TestDeviceRxModeUndefinedByDefault(t *testing.T) {
+	t.Parallel()
+
+	d := device.New(baseDeviceCfg())
+	if d.RxMode != hmenum.RxModeUndefined {
+		t.Errorf("RxMode = %d, want RxModeUndefined (default)", d.RxMode)
+	}
+}
+
+// TestDeviceRxModeSet verifies that RxMode is propagated verbatim from
+// Config to Device, including a combined bitmask (WAKEUP | LAZY_CONFIG).
+func TestDeviceRxModeSet(t *testing.T) {
+	t.Parallel()
+
+	cfg := baseDeviceCfg()
+	cfg.RxMode = hmenum.RxModeWakeup | hmenum.RxModeLazyConfig
+	d := device.New(cfg)
+	if !d.RxMode.Has(hmenum.RxModeWakeup) || !d.RxMode.Has(hmenum.RxModeLazyConfig) {
+		t.Errorf("RxMode = %d, want WAKEUP|LAZY_CONFIG set", d.RxMode)
+	}
+	if d.RxMode.Has(hmenum.RxModeAlways) {
+		t.Errorf("RxMode = %d, must not carry ALWAYS", d.RxMode)
+	}
+}
+
 // ─── Channel.IseID ───────────────────────────────────────────────────────────
 
 // TestChannelIseIDDefaultsToZero verifies that a channel's IseID defaults to 0.
