@@ -24,6 +24,12 @@
   the CCU WebUI's own behaviour — previously a long-press counter could
   linger and keep the device sending long-press events to the CCU after
   you switched the link off.
+- **Secured transmission (AES) per channel.** A device channel's
+  configuration now shows a "Secured transmission" switch whenever the
+  channel supports AES-signed telegrams. Turning it on asks first,
+  reminding you that secured transmission increases the channel's radio
+  load and — on battery devices — battery use; turning it off applies
+  right away. This mirrors the CCU WebUI's transmit-mode dialog.
 - **Firmware update warns on a busy radio, plus CCU firmware download.**
   When you trigger a device firmware update over a saturated radio
   interface (duty cycle 80 % or more), the confirm dialog now warns that

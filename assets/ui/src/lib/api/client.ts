@@ -466,6 +466,15 @@ export const api = {
       },
     );
   },
+  // Raw paramset read (unfiltered by the visibility store). Used to
+  // surface configuration parameters the UISchema builder hides by
+  // default — e.g. AES_ACTIVE (secured transmission), which carries the
+  // `internal` ui-flag but is a legitimate operator-facing toggle.
+  getParamset(channelAddress: string, paramset: "VALUES" | "MASTER") {
+    return request<Record<string, unknown>>(
+      `/devices/${encodeURIComponent(channelAddress)}/paramsets/${paramset}`,
+    );
+  },
   setValue(address: string, channel: number, parameter: string, value: unknown) {
     return request<void>(
       `/devices/${encodeURIComponent(address)}/channels/${channel}/data-points/${parameter}/value`,

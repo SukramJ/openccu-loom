@@ -7,6 +7,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import ProfileSelector from "./ProfileSelector.svelte";
   import SubsetGroupSelector from "./SubsetGroupSelector.svelte";
+  import SecureTransmission from "./SecureTransmission.svelte";
   import {
     validateCrossRules,
     visibleParameters,
@@ -841,6 +842,15 @@
     {/if}
 
     {#if paramset === "MASTER"}
+      <!-- Secured-transmission (AES_ACTIVE) toggle. Rendered from the raw
+           MASTER paramset independent of the visibility store, since the
+           parameter carries the `internal` ui-flag and is filtered out of
+           the schema. Writes through the same edit-locked MASTER path. -->
+      <SecureTransmission
+        {channelAddress}
+        editToken={lockSession?.token}
+        disabled={!!lockedByOther || lockLost}
+      />
       <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
         <input
           type="checkbox"

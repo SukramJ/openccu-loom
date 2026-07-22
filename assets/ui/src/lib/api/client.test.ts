@@ -366,6 +366,29 @@ describe("api paramset writes — edit-lock token header", () => {
     expect(headers["Content-Type"]).toBe("application/json");
   });
 
+  it("getParamset GETs the raw paramset with no edit-lock header", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ AES_ACTIVE: false }));
+    const result = await api.getParamset("00021BE9957782:4", "MASTER");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/00021BE9957782%3A4/paramsets/MASTER");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+    const headers = headersOf(fetchMock.mock.calls[0]);
+    expect(headers["X-Edit-Token"]).toBeUndefined();
+    expect(result).toEqual({ AES_ACTIVE: false });
+  });
+
+  it("getParamset percent-encodes the channel address for the VALUES paramset", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ STATE: true }));
+    await api.getParamset("0001:2", "VALUES");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2/paramsets/VALUES");
+  });
+
+  it("getParamset propagates the daemon error on a failed read", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "not found" }, 404));
+    await expect(api.getParamset("0001ABCD:1", "MASTER")).rejects.toBeTruthy();
+  });
+
   it("putLinkParamset sends X-Edit-Token when a token is held", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
     await api.putLinkParamset(

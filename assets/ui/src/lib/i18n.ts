@@ -1959,6 +1959,17 @@ const EN: Catalog = {
   "channel.save_n": "Save ({count})",
   "channel.unsaved": "Unsaved changes",
   "channel.saved_short": "Saved.",
+  // --- Secured transmission (channel/SecureTransmission.svelte) ---
+  "channel.secure_transmission.title": "Secured transmission",
+  "channel.secure_transmission.help":
+    "Sign this channel's radio telegrams (AES). Raises security but also the channel's radio load and, on battery devices, battery drain.",
+  "channel.secure_transmission.confirm_title": "Enable secured transmission?",
+  "channel.secure_transmission.confirm_body":
+    "Secured (AES-signed) transmission adds an acknowledgement round-trip to every command, which increases this channel's radio load and — on battery devices — battery drain. Enable it anyway?",
+  "channel.secure_transmission.enable": "Enable",
+  "channel.secure_transmission.enabled_toast": "Secured transmission enabled.",
+  "channel.secure_transmission.disabled_toast": "Secured transmission disabled.",
+  "channel.secure_transmission.failed": "Could not change transmission mode.",
   // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
   "channel.brightness.apply": "Use brightness {value}",
   "channel.brightness.apply_tooltip":
@@ -4740,6 +4751,17 @@ const DE: Catalog = {
   "channel.save_n": "Speichern ({count})",
   "channel.unsaved": "Ungespeicherte Änderungen",
   "channel.saved_short": "Gespeichert.",
+  // --- Secured transmission (channel/SecureTransmission.svelte) ---
+  "channel.secure_transmission.title": "Gesicherte Übertragung",
+  "channel.secure_transmission.help":
+    "Funktelegramme dieses Kanals signieren (AES). Erhöht die Sicherheit, steigert aber die Funklast des Kanals und – bei Batteriegeräten – den Batterieverbrauch.",
+  "channel.secure_transmission.confirm_title": "Gesicherte Übertragung aktivieren?",
+  "channel.secure_transmission.confirm_body":
+    "Die gesicherte (AES-signierte) Übertragung fügt jedem Befehl eine Bestätigungsrunde hinzu. Das erhöht die Funklast dieses Kanals und – bei Batteriegeräten – den Batterieverbrauch. Trotzdem aktivieren?",
+  "channel.secure_transmission.enable": "Aktivieren",
+  "channel.secure_transmission.enabled_toast": "Gesicherte Übertragung aktiviert.",
+  "channel.secure_transmission.disabled_toast": "Gesicherte Übertragung deaktiviert.",
+  "channel.secure_transmission.failed": "Übertragungsmodus konnte nicht geändert werden.",
   // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
   "channel.brightness.apply": "Helligkeit {value} übernehmen",
   "channel.brightness.apply_tooltip":

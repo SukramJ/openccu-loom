@@ -28,6 +28,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list (address, number, eligibility). The device-detail Links tab keeps
   the device-wide switch and adds a per-channel switch for each eligible
   channel. REST `APIVersion` 2.36.0.
+- **Secured-transmission (AES) toggle per channel.** The channel MASTER
+  configuration panel now shows a dedicated "Secured transmission" row
+  with a switch for every channel whose MASTER paramset carries
+  `AES_ACTIVE` (the per-channel AES signing flag). The switch reads its
+  state straight from the raw paramset — independent of the visibility /
+  un-ignore store, since `AES_ACTIVE` carries the `internal` ui-flag and
+  is filtered out of the normal schema — and writes through the existing
+  edit-locked `PUT /devices/{addr}/paramsets/MASTER` path. Enabling asks
+  for confirmation first, warning that secured transmission raises the
+  channel's radio load and battery drain; disabling applies immediately.
+  No REST or ReGa change: writing `AES_ACTIVE` on the interface is the
+  authoritative mechanism (the CCU WebUI's ReGa `setTransMode` only adds
+  a WebUI-cache refresh the daemon neither uses nor needs).
 - **Firmware update duty-cycle warning + CCU firmware download.** The
   device firmware-update endpoint (`POST
   /devices/{addr}/firmware/update`) now checks the device's radio
