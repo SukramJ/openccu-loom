@@ -145,7 +145,7 @@ func TestExecuteProgram(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/programs/P1/execute", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
+	if rr.Code != http.StatusAccepted {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
 	var body struct {

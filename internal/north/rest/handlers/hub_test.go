@@ -1538,7 +1538,7 @@ func TestExecuteProgram_ExecuteError_Returns502(t *testing.T) {
 	}
 }
 
-func TestExecuteProgram_HappyPath_Returns200Executed(t *testing.T) {
+func TestExecuteProgram_HappyPath_ReturnsAcceptedExecuted(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	prog := hub.NewProgram("test-ccu", "P-ok", "Ok", "", false,
@@ -1550,8 +1550,8 @@ func TestExecuteProgram_HappyPath_Returns200Executed(t *testing.T) {
 	w := httptest.NewRecorder()
 	ExecuteProgram(idx).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
 	}
 	var body ProgramExecuteResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -1601,7 +1601,7 @@ func TestExecuteProgram_CheckConditions_ConditionMet(t *testing.T) {
 	w := httptest.NewRecorder()
 	ExecuteProgram(idx).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
+	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 	var body ProgramExecuteResponse
@@ -1631,7 +1631,7 @@ func TestExecuteProgram_CheckConditions_ConditionNotMet(t *testing.T) {
 	w := httptest.NewRecorder()
 	ExecuteProgram(idx).ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
+	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 	var body ProgramExecuteResponse

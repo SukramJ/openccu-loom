@@ -634,14 +634,14 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 				return
 			}
-			JSON(w, http.StatusOK, ProgramExecuteResponse{Executed: executed})
+			JSON(w, http.StatusAccepted, ProgramExecuteResponse{Executed: executed})
 			return
 		}
 		if err := p.Execute(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 			return
 		}
-		JSON(w, http.StatusOK, ProgramExecuteResponse{Executed: true})
+		JSON(w, http.StatusAccepted, ProgramExecuteResponse{Executed: true})
 	}
 }
 

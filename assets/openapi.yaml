@@ -575,7 +575,7 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/ProgramExecuteRequest" }
       responses:
-        "200":
+        "202":
           description: Execution result
           content:
             application/json:

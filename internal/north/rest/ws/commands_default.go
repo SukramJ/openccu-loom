@@ -338,27 +338,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 	}
 
 	if cfg.Hub != nil {
-		router.Register("programs.list", programsListHandler(cfg.Hub))
-		router.Register("programs.execute", programsExecuteHandler(cfg.Hub))
-		router.Register("programs.delete", programsDeleteHandler(cfg.Hub))
-		router.Register("sysvars.list", sysvarsListHandler(cfg.Hub))
-		router.Register("sysvars.set", sysvarsSetHandler(cfg.Hub))
-		router.Register("sysvars.fetch", sysvarsFetchHandler(cfg.Hub))
-		router.Register("alarm_messages.list", alarmMessagesListHandler(cfg.Hub))
-		router.Register("alarm_messages.ack", alarmMessagesAckHandler(cfg.Hub))
-		router.Register("alarm_messages.ack_all", alarmMessagesAckAllHandler(cfg.Hub))
-		router.Register("service_messages.list", serviceMessagesListHandler(cfg.Hub))
-		router.Register("service_messages.ack", serviceMessagesAckHandler(cfg.Hub))
-		router.Register("service_messages.ack_all", serviceMessagesAckAllHandler(cfg.Hub))
-		router.Register("install_mode.status", installModeStatusHandler(cfg.Hub))
-		router.Register("install_mode.enable", installModeEnableHandler(cfg.Hub))
-		router.Register("install_mode.disable", installModeDisableHandler(cfg.Hub))
-		router.Register("backup.trigger", backupTriggerHandler(cfg.Hub))
-		router.Register("backup.status", backupStatusHandler(cfg.Hub))
-		router.Register("firmware.info", firmwareInfoHandler(cfg.Hub))
-		router.Register("firmware.update", firmwareUpdateHandler(cfg.Hub))
-		router.Register("inbox.list", inboxListHandler(cfg.Hub))
-		router.Register("inbox.accept", inboxAcceptHandler(cfg.Hub))
+		registerHubCommands(router, cfg.Hub)
 	}
 
 	if cfg.Backups != nil {
@@ -1055,6 +1035,35 @@ type scheduleActiveProfileArgs struct {
 // registerScheduleCommands wires the schedules.* command family onto
 // router. Extracted from RegisterDefaultCommands to keep that function
 // within the statement-count budget.
+
+// registerHubCommands wires every hub-backed command family
+// (programs, sysvars, messages, install mode, backup, firmware, inbox).
+// Split out of RegisterDefaultCommands to keep that function within the
+// linter's statement budget.
+func registerHubCommands(router *Router, q HubQuery) {
+	router.Register("programs.list", programsListHandler(q))
+	router.Register("programs.execute", programsExecuteHandler(q))
+	router.Register("programs.delete", programsDeleteHandler(q))
+	router.Register("sysvars.list", sysvarsListHandler(q))
+	router.Register("sysvars.set", sysvarsSetHandler(q))
+	router.Register("sysvars.fetch", sysvarsFetchHandler(q))
+	router.Register("alarm_messages.list", alarmMessagesListHandler(q))
+	router.Register("alarm_messages.ack", alarmMessagesAckHandler(q))
+	router.Register("alarm_messages.ack_all", alarmMessagesAckAllHandler(q))
+	router.Register("service_messages.list", serviceMessagesListHandler(q))
+	router.Register("service_messages.ack", serviceMessagesAckHandler(q))
+	router.Register("service_messages.ack_all", serviceMessagesAckAllHandler(q))
+	router.Register("install_mode.status", installModeStatusHandler(q))
+	router.Register("install_mode.enable", installModeEnableHandler(q))
+	router.Register("install_mode.disable", installModeDisableHandler(q))
+	router.Register("backup.trigger", backupTriggerHandler(q))
+	router.Register("backup.status", backupStatusHandler(q))
+	router.Register("firmware.info", firmwareInfoHandler(q))
+	router.Register("firmware.update", firmwareUpdateHandler(q))
+	router.Register("inbox.list", inboxListHandler(q))
+	router.Register("inbox.accept", inboxAcceptHandler(q))
+}
+
 func registerScheduleCommands(router *Router, q ScheduleQuery) {
 	router.Register("schedules.climate.get", schedulesClimateGetHandler(q))
 	router.Register("schedules.climate.set", schedulesClimateSetHandler(q))

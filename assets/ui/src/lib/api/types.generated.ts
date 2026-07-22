@@ -761,7 +761,7 @@ export interface paths {
             };
             responses: {
                 /** @description Execution result */
-                200: {
+                202: {
                     headers: {
                         [name: string]: unknown;
                     };
