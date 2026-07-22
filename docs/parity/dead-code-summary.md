@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 0eb54fd1
-HEAD: 0eb54fd1
+Generated: 0873031e
+HEAD: 0873031e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26131 |
-| Reachable | 4576 |
-| Whitelisted | 18802 |
-| **Unreachable** | **2753** |
+| Total Exported | 26217 |
+| Reachable | 4580 |
+| Whitelisted | 18878 |
+| **Unreachable** | **2759** |
 
 ## Top-20 Packages by Dead Code
 
@@ -126,12 +126,12 @@ HEAD: 0eb54fd1
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 22 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |
-| internal/central/coordinators | 0 | 119 | 4 |
+| internal/central/coordinators | 0 | 121 | 4 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |
 | internal/client | 0 | 26 | 8 |
 | internal/client/observer | 0 | 3 | 0 |
-| internal/client/transport/jsonrpc | 0 | 11 | 0 |
+| internal/client/transport/jsonrpc | 0 | 13 | 0 |
 | internal/clock | 0 | 5 | 0 |
 | internal/configstore | 0 | 17 | 0 |
 | internal/configui | 0 | 16 | 0 |
@@ -196,4 +196,4 @@ HEAD: 0eb54fd1
 | pkg/hmenum | 0 | 100 | 36 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
-| pkg/interfaces | 0 | 79 | 2 |
+| pkg/interfaces | 0 | 81 | 2 |

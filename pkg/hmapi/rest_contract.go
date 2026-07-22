@@ -177,6 +177,16 @@ type InterfaceState struct {
 	CentralID string `json:"central_id,omitempty"`
 	Host      string `json:"host,omitempty"`
 	Note      string `json:"note,omitempty"`
+	// DutyCycle is the interface's transmit duty cycle in percent (0..100)
+	// for BidCos radio interfaces, sourced from the CCU's
+	// listBidcosInterfaces poll. Nil (absent) when unknown or when the
+	// interface carries no BidCos gateway (e.g. HmIP-RF, whose device-level
+	// DUTY_CYCLE data points provide the value instead).
+	DutyCycle *int `json:"duty_cycle,omitempty"`
+	// CarrierSense is the interface's receive carrier-sense load in percent
+	// (0..100). Nil (absent) when the CCU does not report it, which is the
+	// common case over the JSON-RPC surface.
+	CarrierSense *int `json:"carrier_sense,omitempty"`
 }
 
 // --- Links ---
@@ -503,6 +513,11 @@ type UISchemaParameterOps struct {
 	Read  bool `json:"read"`
 	Write bool `json:"write"`
 	Event bool `json:"event"`
+	// Determine is the DETERMINE bit (0x08): the parameter's live value
+	// can be read from the device on demand. The MASTER editor renders a
+	// "Determine" button for such fields. Omitted when unset so the
+	// addition is backward-compatible.
+	Determine bool `json:"determine,omitempty"`
 }
 
 // UISchemaParameterFlags mirrors the OCCU FLAGS bitmask.

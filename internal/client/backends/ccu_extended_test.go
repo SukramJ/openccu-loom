@@ -1226,3 +1226,56 @@ func TestCcuHasProgramIDsNilReply(t *testing.T) {
 		t.Fatal("expected found=false for nil reply")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ListBidcosInterfaces
+// ---------------------------------------------------------------------------
+
+func TestCcuListBidcosInterfacesNoJSON(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(&fakeCaller{}, nil, nil)
+	if _, err := b.ListBidcosInterfaces(context.Background(), "BidCos-RF"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuListBidcosInterfacesDispatch(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: []any{
+		map[string]any{
+			"address":     "OEQ1234567",
+			"type":        "CCU2",
+			"dutyCycle":   "27",
+			"isConnected": true,
+			"isDefault":   true,
+		},
+	}}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	out, err := b.ListBidcosInterfaces(context.Background(), "BidCos-RF")
+	if err != nil {
+		t.Fatalf("ListBidcosInterfaces: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("len=%d, want 1", len(out))
+	}
+	if out[0]["address"] != "OEQ1234567" {
+		t.Fatalf("address=%v", out[0]["address"])
+	}
+	method, args, ok := loadArgs(j)
+	if !ok || method != "Interface.listBidcosInterfaces" {
+		t.Fatalf("method=%s", method)
+	}
+	params, _ := args[0].(map[string]any)
+	if params["interface"] != "BidCos-RF" {
+		t.Fatalf("interface param=%v", params["interface"])
+	}
+}
+
+func TestCcuListBidcosInterfacesError(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{err: errors.New("boom")}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	if _, err := b.ListBidcosInterfaces(context.Background(), "BidCos-RF"); err == nil {
+		t.Fatal("expected error to propagate")
+	}
+}

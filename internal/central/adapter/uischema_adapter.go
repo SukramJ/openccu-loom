@@ -459,7 +459,7 @@ func (a *UISchemaAdapter) buildParameters(
 			Max:        cloneRaw(pd.Max),
 			Default:    cloneRaw(pd.Default),
 			Control:    pd.Control,
-			Operations: hmapi.UISchemaParameterOps{Read: pd.IsReadable(), Write: dpIsWritable(dp, pd), Event: pd.IsEvent()},
+			Operations: hmapi.UISchemaParameterOps{Read: pd.IsReadable(), Write: dpIsWritable(dp, pd), Event: pd.IsEvent(), Determine: pd.IsDeterminable()},
 			Flags:      hmapi.UISchemaParameterFlags{Visible: pd.IsVisible(), Internal: pd.IsInternal(), Service: pd.IsService()},
 		}
 		if len(pd.ValueList) > 0 {

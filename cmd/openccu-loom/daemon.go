@@ -664,6 +664,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		dpWriterAdapter:         dpWriterAdapter,
 		customDPDispatcher:      customDPDispatcher,
 		paramsetsDomain:         paramsetsDomain,
+		parameterDeterminer:     adapter.NewParameterDeterminerAdapter(reg, valueWriter),
 		hubAdapter:              hubAdapter,
 		ifaceAdapter:            ifaceAdapter,
 		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),

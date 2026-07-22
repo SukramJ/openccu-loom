@@ -28,6 +28,58 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list (address, number, eligibility). The device-detail Links tab keeps
   the device-wide switch and adds a per-channel switch for each eligible
   channel. REST `APIVersion` 2.36.0.
+- **"Determine" button in the channel MASTER editor.** Determine-capable
+  MASTER parameters — the ones the firmware spells out as
+  `operations="read,write,determine"`, i.e. OPERATIONS bit `0x08` — now
+  render a "Determine" button that reads the parameter's current value
+  straight from the device and stages it into the editor, dirty-tracked
+  and undoable exactly like a manual edit (an error surfaces as a toast; a
+  spinner shows while the read is in flight). The channel ui-schema now
+  exposes the capability per parameter (`operations.determine`), and a new
+  additive endpoint `POST
+  /devices/{addr}/channels/{no}/paramsets/{key}/determine` backs the
+  button — a read, so it carries no edit-lock token. The REST route shares
+  the registry-resolved backend path with the existing WS
+  `paramset.determine` command; the SPA uses REST because its WebSocket
+  channel is event-only. Mirrors the CCU WebUI's per-parameter "Determine"
+  link (`config/ic_ifacecmd.cgi`).
+- **Secured-transmission (AES) toggle per channel.** The channel MASTER
+  configuration panel now shows a dedicated "Secured transmission" row
+  with a switch for every channel whose MASTER paramset carries
+  `AES_ACTIVE` (the per-channel AES signing flag). The switch reads its
+  state straight from the raw paramset — independent of the visibility /
+  un-ignore store, since `AES_ACTIVE` carries the `internal` ui-flag and
+  is filtered out of the normal schema — and writes through the existing
+  edit-locked `PUT /devices/{addr}/paramsets/MASTER` path. Enabling asks
+  for confirmation first, warning that secured transmission raises the
+  channel's radio load and battery drain; disabling applies immediately.
+  No REST or ReGa change: writing `AES_ACTIVE` on the interface is the
+  authoritative mechanism (the CCU WebUI's ReGa `setTransMode` only adds
+  a WebUI-cache refresh the daemon neither uses nor needs).
+- **Firmware update duty-cycle warning + CCU firmware download.** The
+  device firmware-update endpoint (`POST
+  /devices/{addr}/firmware/update`) now checks the device's radio
+  interface against the per-interface duty-cycle poll and, when it is
+  saturated (≥ 80 %), returns an advisory `duty_cycle_warning` in the
+  202 body — it never blocks the update, mirroring the CCU WebUI's
+  non-blocking warning. The firmware overview surfaces the same warning
+  in the update-confirm dialog. A new admin-only endpoint `POST
+  /api/v1/system/firmware/download` (audited) tells a CCU to fetch a
+  firmware image from a URL onto the central so it can be staged for
+  installation; the CCU system-update panel gains a download field for
+  it. REST `APIVersion` 2.40.0.
+- **Per-radio-interface duty cycle and carrier sense on the Diagnostics
+  page.** BidCos radio interfaces now surface their transmit duty cycle
+  and receive carrier-sense load directly in the interface table, so
+  pure-BidCos installations and radio-LAN gateways — which have no
+  device that exposes `DUTY_CYCLE` — finally show their radio budget.
+  A new per-central poll (60 s, pure JSON-RPC, no radio traffic) reads
+  the CCU's `Interface.listBidcosInterfaces` and caches the result;
+  `GET /api/v1/interfaces` gains optional `duty_cycle` and
+  `carrier_sense` fields (percent, absent when the CCU does not report
+  them, e.g. for HmIP-RF, which the device-level data points still
+  cover). The SPA renders each as a threshold badge — green, yellow
+  from 60 %, red from 80 %. REST `APIVersion` 2.39.0.
 - **First-time configuration when accepting an inbox device.**
   `POST /devices/{addr}/accept` (and the WebSocket command
   `inbox.accept`) now take an optional body — `name`,

@@ -230,6 +230,34 @@ func (a *DeviceAdminDomain) UpdateFirmware(ctx context.Context, address string) 
 	return backend.UpdateFirmware(ctx, address)
 }
 
+// InterfaceDutyCycle returns the transmit duty cycle in percent (0..100)
+// of the radio interface the device is paired to, read from the owning
+// central's per-interface BidCos utilisation cache (populated by the
+// periodic listBidcosInterfaces poll). The bool is false when the device
+// is unknown, the central has no hub coordinator, the interface carries
+// no BidCos gateway (HmIP), or the poll has not run yet. It performs no
+// CCU round trip so the firmware-update handler can gate on it inline.
+func (a *DeviceAdminDomain) InterfaceDutyCycle(address string) (int, bool) {
+	if a.registry == nil {
+		return 0, false
+	}
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		if u.Hub == nil {
+			return 0, false
+		}
+		info, ok := u.Hub.BidcosInterface(dev.InterfaceID)
+		if !ok || info.DutyCycle < 0 {
+			return 0, false
+		}
+		return info.DutyCycle, true
+	}
+	return 0, false
+}
+
 // SetInstallMode opens a per-device pairing window via the backend's
 // XML-RPC `setInstallMode(true, durationSecs, mode=1, address)` call.
 // `mode=1` is the CCU's "normal" install mode (mode=2 means "ready

@@ -37,6 +37,8 @@ type stubDeviceAdmin struct {
 	lastReset           bool
 	lastForce           bool
 	lastAcceptOpts      interfaces.AcceptInboxOptions
+	dutyCycle           int
+	dutyCycleKnown      bool
 }
 
 func (s *stubDeviceAdmin) UnpairDevice(_ context.Context, addr string, reset, force bool) error {
@@ -69,6 +71,10 @@ func (s *stubDeviceAdmin) AcceptInboxDevice(_ context.Context, addr string, opts
 func (s *stubDeviceAdmin) UpdateFirmware(_ context.Context, addr string) error {
 	s.lastAddress = addr
 	return s.updateFWErr
+}
+
+func (s *stubDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool) {
+	return s.dutyCycle, s.dutyCycleKnown
 }
 
 func (s *stubDeviceAdmin) SetRooms(_ context.Context, addr string, rooms []string) error {
@@ -315,6 +321,84 @@ func TestUpdateDeviceFirmware_HappyPath(t *testing.T) {
 	}
 	if body["status"] != "scheduled" {
 		t.Fatalf("expected status=scheduled, got %q", body["status"])
+	}
+}
+
+// decodeFirmwareUpdate decodes the 202 body into a struct that can hold
+// the optional duty-cycle warning field.
+func decodeFirmwareUpdate(t *testing.T, w *httptest.ResponseRecorder) FirmwareUpdateResponse {
+	t.Helper()
+	var body FirmwareUpdateResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	return body
+}
+
+func TestUpdateDeviceFirmware_HighDutyCycle_AddsWarning(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{dutyCycle: 85, dutyCycleKnown: true}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateDeviceFirmware(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	body := decodeFirmwareUpdate(t, w)
+	if body.Status != "scheduled" {
+		t.Fatalf("expected status=scheduled, got %q", body.Status)
+	}
+	if body.DutyCycleWarning == nil || *body.DutyCycleWarning != 85 {
+		t.Fatalf("expected duty_cycle_warning=85, got %v", body.DutyCycleWarning)
+	}
+}
+
+func TestUpdateDeviceFirmware_LowDutyCycle_NoWarning(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{dutyCycle: 40, dutyCycleKnown: true}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateDeviceFirmware(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if body := decodeFirmwareUpdate(t, w); body.DutyCycleWarning != nil {
+		t.Fatalf("expected no warning below threshold, got %v", *body.DutyCycleWarning)
+	}
+}
+
+func TestUpdateDeviceFirmware_UnknownDutyCycle_NoWarning(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{dutyCycleKnown: false}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateDeviceFirmware(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if body := decodeFirmwareUpdate(t, w); body.DutyCycleWarning != nil {
+		t.Fatalf("expected no warning when duty cycle unknown, got %v", *body.DutyCycleWarning)
+	}
+}
+
+// TestUpdateDeviceFirmware_ThresholdBoundary pins the >=80 inclusive edge.
+func TestUpdateDeviceFirmware_ThresholdBoundary(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{dutyCycle: dutyCycleWarningThreshold, dutyCycleKnown: true}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	UpdateDeviceFirmware(admin).ServeHTTP(w, req)
+
+	body := decodeFirmwareUpdate(t, w)
+	if body.DutyCycleWarning == nil || *body.DutyCycleWarning != dutyCycleWarningThreshold {
+		t.Fatalf("expected warning at the threshold boundary, got %v", body.DutyCycleWarning)
 	}
 }
 

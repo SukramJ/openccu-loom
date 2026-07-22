@@ -5,11 +5,13 @@ package jsonrpc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -693,6 +695,109 @@ func (c *Client) GetInstallMode(ctx context.Context, iface string) (int, error) 
 		return 0, err
 	}
 	return result, nil
+}
+
+// BidcosInterface is one gateway entry returned by
+// [Client.ListBidcosInterfaces]. It carries the per-gateway radio
+// utilisation the CCU exposes for a BidCos interface (the CCU's own
+// antenna plus any LAN gateways). DutyCycle and CarrierSense are
+// percentages in the 0..100 range, or -1 when the CCU did not report
+// the value.
+type BidcosInterface struct {
+	// Address is the gateway serial number (e.g. "OEQ1234567").
+	Address string
+	// Description is the human-readable gateway description.
+	Description string
+	// Type is the gateway type string (e.g. "CCU2", "HM-LGW").
+	Type string
+	// DutyCycle is the transmit duty cycle in percent (0..100), or -1
+	// when unknown.
+	DutyCycle int
+	// CarrierSense is the receive carrier-sense load in percent (0..100),
+	// or -1 when unknown. Most CCU firmwares do not report this over the
+	// JSON-RPC surface, so it is commonly -1.
+	CarrierSense int
+	// Connected reports whether the gateway is currently reachable.
+	Connected bool
+	// Default reports whether this gateway is the interface's default
+	// (primary) gateway.
+	Default bool
+}
+
+// ListBidcosInterfaces returns the BidCos gateways attached to the named
+// interface together with their radio utilisation. Reads-only: this is a
+// pure JSON-RPC query that generates no radio traffic.
+//
+// Wire: Interface.listBidcosInterfaces, params: {interface: iface}. The
+// CCU emits per gateway: address, description, dutyCycle, isConnected,
+// isDefault, fwVersion, type (see the CCU WebUI
+// listbidcosinterfaces.tcl handler). Numeric fields arrive as JSON
+// strings, so decoding goes through a permissive map coercion.
+func (c *Client) ListBidcosInterfaces(ctx context.Context, iface string) ([]BidcosInterface, error) {
+	var raw []map[string]any
+	if err := c.Call(ctx, "Interface.listBidcosInterfaces", map[string]any{
+		"interface": iface,
+	}, &raw); err != nil {
+		return nil, err
+	}
+	out := make([]BidcosInterface, 0, len(raw))
+	for _, m := range raw {
+		out = append(out, BidcosInterface{
+			Address:      bidcosString(m, "address"),
+			Description:  bidcosString(m, "description"),
+			Type:         bidcosString(m, "type"),
+			DutyCycle:    bidcosPercent(m, "dutyCycle"),
+			CarrierSense: bidcosPercent(m, "carrierSense"),
+			Connected:    bidcosBool(m, "isConnected"),
+			Default:      bidcosBool(m, "isDefault"),
+		})
+	}
+	return out, nil
+}
+
+// bidcosString extracts a string value from a decoded JSON map, returning
+// "" when the key is absent or not a string.
+func bidcosString(m map[string]any, key string) string {
+	s, _ := m[key].(string)
+	return s
+}
+
+// bidcosBool extracts a boolean value from a decoded JSON map. It accepts
+// a native JSON bool as well as the string forms "true"/"1" the CCU may
+// emit; anything else is false.
+func bidcosBool(m map[string]any, key string) bool {
+	switch v := m[key].(type) {
+	case bool:
+		return v
+	case string:
+		return v == "true" || v == "1"
+	default:
+		return false
+	}
+}
+
+// bidcosPercent coerces a duty-cycle / carrier-sense field into a 0..100
+// integer percentage. The CCU emits these as quoted JSON strings, so both
+// the string and native-number shapes are handled. Returns -1 when the
+// key is absent or cannot be parsed, which the north-bound DTO renders as
+// "unknown".
+func bidcosPercent(m map[string]any, key string) int {
+	switch v := m[key].(type) {
+	case float64:
+		return int(v)
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return int(n)
+		}
+	case string:
+		if v == "" {
+			return -1
+		}
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return n
+		}
+	}
+	return -1
 }
 
 // GetLinkInfo returns the name and description of the direct link between two

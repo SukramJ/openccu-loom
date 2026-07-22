@@ -170,6 +170,7 @@ func (fakeDeviceAdmin) AcceptInboxDevice(context.Context, string, interfaces.Acc
 	return nil
 }
 func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { return nil }
+func (fakeDeviceAdmin) InterfaceDutyCycle(string) (int, bool)                { return 0, false }
 func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error { return nil }
 
@@ -346,6 +347,12 @@ func (fakeParamsetService) GetLinkParamset(context.Context, string, string) (map
 
 func (fakeParamsetService) PutLinkParamset(context.Context, string, string, map[string]any) error {
 	return nil
+}
+
+type fakeParameterDeterminer struct{}
+
+func (fakeParameterDeterminer) DetermineParameter(context.Context, string, string, string) (any, error) {
+	return nil, nil
 }
 
 // fakeHubIndex backs the hub-singleton routes (programs, sysvars,
@@ -528,6 +535,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		DeviceLookup:          fakeDeviceLookup{},
 		Backup:                fakeBackupService{},
 		Paramsets:             fakeParamsetService{},
+		ParameterDeterminer:   fakeParameterDeterminer{},
 		Hub:                   fakeHubIndex{h: hub.NewHub("test")},
 		SysvarRefresh:         fakeSysvarRefreshService{},
 		Interfaces:            fakeInterfaceIndex{},

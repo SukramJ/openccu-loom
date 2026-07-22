@@ -466,6 +466,36 @@ export const api = {
       },
     );
   },
+  // Raw paramset read (unfiltered by the visibility store). Used to
+  // surface configuration parameters the UISchema builder hides by
+  // default — e.g. AES_ACTIVE (secured transmission), which carries the
+  // `internal` ui-flag but is a legitimate operator-facing toggle.
+  getParamset(channelAddress: string, paramset: "VALUES" | "MASTER") {
+    return request<Record<string, unknown>>(
+      `/devices/${encodeURIComponent(channelAddress)}/paramsets/${paramset}`,
+    );
+  },
+  // Read one parameter's current live value straight from the device
+  // (the MASTER editor's "Determine" button). A read, so no edit-lock
+  // token — but it triggers a device round-trip. Returns the device's
+  // value; the caller stages it into the editor's working copy so dirty
+  // tracking / undo keep working. Mirrors the WS `paramset.determine`
+  // command, which the SPA cannot call (its WS channel is event-only).
+  determineParameter(
+    address: string,
+    channel: number,
+    paramset: "VALUES" | "MASTER" | "LINK",
+    parameter: string,
+  ) {
+    return request<{ value: unknown }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channel}/paramsets/${paramset}/determine`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parameter }),
+      },
+    );
+  },
   setValue(address: string, channel: number, parameter: string, value: unknown) {
     return request<void>(
       `/devices/${encodeURIComponent(address)}/channels/${channel}/data-points/${parameter}/value`,
@@ -1118,11 +1148,23 @@ export const api = {
     );
   },
   // --- Firmware update -----------------------------------------
+  // The 202 body carries `duty_cycle_warning` (interface duty cycle in
+  // percent) only when the device's radio interface is saturated — the
+  // update is scheduled regardless; the field is advisory.
   updateFirmware(address: string) {
-    return request<{ status: string }>(
+    return request<{ status: string; duty_cycle_warning?: number }>(
       `/devices/${encodeURIComponent(address)}/firmware/update`,
       { method: "POST" },
     );
+  },
+  // Ask a CCU to fetch a firmware image onto the central (admin-only).
+  // central is optional for single-CCU deployments.
+  downloadSystemFirmware(url: string, central?: string) {
+    return request<void>(`/system/firmware/download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(central ? { url, central } : { url }),
+    });
   },
   // Force a re-read of per-device firmware data from every CCU so the
   // firmware overview reflects updates the CCU performed, without

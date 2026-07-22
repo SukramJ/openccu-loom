@@ -677,6 +677,7 @@ const EN: Catalog = {
   "firmware.awaiting_transfer": "Awaiting transfer to the device",
   "firmware.triggered": "Firmware update triggered for {name}.",
   "firmware.confirm_update": "Trigger firmware update for \"{name}\"? The device will be briefly unreachable.",
+  "firmware.duty_cycle_warning": "The radio interface duty cycle is high ({value}%). The over-the-air transfer may stall until the radio recovers.",
   "firmware.count": "{count} of {total} devices",
   "firmware.state.UNKNOWN": "Unknown",
   "firmware.state.UP_TO_DATE": "Up to date",
@@ -1958,6 +1959,17 @@ const EN: Catalog = {
   "channel.save_n": "Save ({count})",
   "channel.unsaved": "Unsaved changes",
   "channel.saved_short": "Saved.",
+  // --- Secured transmission (channel/SecureTransmission.svelte) ---
+  "channel.secure_transmission.title": "Secured transmission",
+  "channel.secure_transmission.help":
+    "Sign this channel's radio telegrams (AES). Raises security but also the channel's radio load and, on battery devices, battery drain.",
+  "channel.secure_transmission.confirm_title": "Enable secured transmission?",
+  "channel.secure_transmission.confirm_body":
+    "Secured (AES-signed) transmission adds an acknowledgement round-trip to every command, which increases this channel's radio load and — on battery devices — battery drain. Enable it anyway?",
+  "channel.secure_transmission.enable": "Enable",
+  "channel.secure_transmission.enabled_toast": "Secured transmission enabled.",
+  "channel.secure_transmission.disabled_toast": "Secured transmission disabled.",
+  "channel.secure_transmission.failed": "Could not change transmission mode.",
   // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
   "channel.brightness.apply": "Use brightness {value}",
   "channel.brightness.apply_tooltip":
@@ -2188,6 +2200,14 @@ const EN: Catalog = {
   "parameter.unknown_type": "Unknown type: {type}",
   "parameter.execute": "Run",
   "parameter.custom": "Custom value",
+  // "Determine" button: reads the parameter's current value from the
+  // device (OPERATIONS 0x08) and stages it into the editor.
+  "parameter.determine": "Determine",
+  "parameter.determine.tooltip": "Read the current value from the device",
+  "parameter.determine.done": "Determined {name} from the device",
+  "parameter.determine.failed": "Determine failed",
+  "parameter.determine.unsupported":
+    "This device does not support determining this parameter",
   // Directional qualifier appended to a label shared by two parameters
   // that differ only by an upper/lower threshold suffix in their name.
   "parameter.threshold.upper": "upper threshold",
@@ -2683,6 +2703,9 @@ const EN: Catalog = {
   "diagnostics.col.interface": "Interface",
   "diagnostics.col.type": "Type",
   "diagnostics.col.status": "Status",
+  "diagnostics.col.duty_cycle": "Duty cycle",
+  "diagnostics.col.carrier_sense": "Carrier sense",
+  "diagnostics.utilisation_unknown": "Not reported for this interface",
   "diagnostics.col.host": "Host / Central",
   "diagnostics.col.action": "Action",
   "diagnostics.col.client": "Client",
@@ -2740,6 +2763,13 @@ const EN: Catalog = {
   "ccu_update.subtitle": "Trigger the CCU's own firmware update. The CCU reboots during the install.",
   "ccu_update.title": "CCU system update",
   "ccu_update.triggered": "CCU update triggered for {central} — it will reboot.",
+  "firmware_download.title": "Download firmware to a CCU",
+  "firmware_download.subtitle": "The CCU fetches a firmware image from the URL onto the central so it can be staged for installation.",
+  "firmware_download.url_label": "Firmware image URL",
+  "firmware_download.url_placeholder": "https://…",
+  "firmware_download.download": "Download",
+  "firmware_download.downloading": "Downloading…",
+  "firmware_download.triggered": "Firmware download triggered.",
   // --- Column labels for migrated DataTable views ---
   "messages.col.name": "Message",
   "messages.col.device": "Device",
@@ -3429,6 +3459,7 @@ const DE: Catalog = {
   "firmware.awaiting_transfer": "Übertragung ans Gerät steht aus",
   "firmware.triggered": "Firmware-Update für {name} angestoßen.",
   "firmware.confirm_update": "Firmware-Update für \"{name}\" anstoßen? Das Gerät ist während des Updates kurz nicht erreichbar.",
+  "firmware.duty_cycle_warning": "Der Duty Cycle der Funkschnittstelle ist hoch ({value}%). Die Funkübertragung kann stocken, bis sich der Funk erholt hat.",
   "firmware.count": "{count} von {total} Geräten",
   "firmware.state.UNKNOWN": "Unbekannt",
   "firmware.state.UP_TO_DATE": "Aktuell",
@@ -4728,6 +4759,17 @@ const DE: Catalog = {
   "channel.save_n": "Speichern ({count})",
   "channel.unsaved": "Ungespeicherte Änderungen",
   "channel.saved_short": "Gespeichert.",
+  // --- Secured transmission (channel/SecureTransmission.svelte) ---
+  "channel.secure_transmission.title": "Gesicherte Übertragung",
+  "channel.secure_transmission.help":
+    "Funktelegramme dieses Kanals signieren (AES). Erhöht die Sicherheit, steigert aber die Funklast des Kanals und – bei Batteriegeräten – den Batterieverbrauch.",
+  "channel.secure_transmission.confirm_title": "Gesicherte Übertragung aktivieren?",
+  "channel.secure_transmission.confirm_body":
+    "Die gesicherte (AES-signierte) Übertragung fügt jedem Befehl eine Bestätigungsrunde hinzu. Das erhöht die Funklast dieses Kanals und – bei Batteriegeräten – den Batterieverbrauch. Trotzdem aktivieren?",
+  "channel.secure_transmission.enable": "Aktivieren",
+  "channel.secure_transmission.enabled_toast": "Gesicherte Übertragung aktiviert.",
+  "channel.secure_transmission.disabled_toast": "Gesicherte Übertragung deaktiviert.",
+  "channel.secure_transmission.failed": "Übertragungsmodus konnte nicht geändert werden.",
   // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
   "channel.brightness.apply": "Helligkeit {value} übernehmen",
   "channel.brightness.apply_tooltip":
@@ -4958,6 +5000,12 @@ const DE: Catalog = {
   "parameter.unknown_type": "Unbekannter Typ: {type}",
   "parameter.execute": "Ausführen",
   "parameter.custom": "Benutzerdefiniert",
+  "parameter.determine": "Bestimmen",
+  "parameter.determine.tooltip": "Aktuellen Wert vom Gerät bestimmen",
+  "parameter.determine.done": "{name} vom Gerät bestimmt",
+  "parameter.determine.failed": "Bestimmen fehlgeschlagen",
+  "parameter.determine.unsupported":
+    "Dieses Gerät unterstützt das Bestimmen dieses Parameters nicht",
   "parameter.threshold.upper": "oberer Grenzwert",
   "parameter.threshold.lower": "unterer Grenzwert",
   // --- Zeitpaar-Presets (channel/time-pairs.ts) — nur die
@@ -5427,6 +5475,9 @@ const DE: Catalog = {
   "diagnostics.col.interface": "Interface",
   "diagnostics.col.type": "Typ",
   "diagnostics.col.status": "Status",
+  "diagnostics.col.duty_cycle": "Duty-Cycle",
+  "diagnostics.col.carrier_sense": "Carrier-Sense",
+  "diagnostics.utilisation_unknown": "Für dieses Interface nicht gemeldet",
   "diagnostics.col.host": "Host / Zentrale",
   "diagnostics.col.action": "Aktion",
   "diagnostics.col.client": "Client",
@@ -5484,6 +5535,13 @@ const DE: Catalog = {
   "ccu_update.subtitle": "Stößt das Firmware-Update der CCU an. Die CCU startet während der Installation neu.",
   "ccu_update.title": "CCU-System-Update",
   "ccu_update.triggered": "CCU-Update für {central} angestoßen — sie startet neu.",
+  "firmware_download.title": "Firmware auf eine CCU laden",
+  "firmware_download.subtitle": "Die CCU lädt ein Firmware-Abbild von der URL auf die Zentrale, damit es für die Installation bereitsteht.",
+  "firmware_download.url_label": "URL des Firmware-Abbilds",
+  "firmware_download.url_placeholder": "https://…",
+  "firmware_download.download": "Herunterladen",
+  "firmware_download.downloading": "Wird geladen…",
+  "firmware_download.triggered": "Firmware-Download angestoßen.",
   // --- Spaltenbezeichnungen für migrierte DataTable-Views ---
   "messages.col.name": "Meldung",
   "messages.col.device": "Gerät",

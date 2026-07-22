@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.40.0
+  version: 2.41.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1872,7 +1872,66 @@ paths:
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "202":
-          description: Update scheduled
+          description: |
+            Update scheduled. When the device's radio interface reports a
+            high transmit duty cycle the body carries an advisory
+            `duty_cycle_warning` (the update is never rejected on that
+            basis, mirroring the CCU WebUI's non-blocking warning).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: scheduled
+                  duty_cycle_warning:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                    description: >
+                      Transmit duty cycle in percent of the device's radio
+                      interface, present only when it is at or above the
+                      warning threshold (80%). Absent when unknown or below.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /system/firmware/download:
+    post:
+      operationId: downloadSystemFirmware
+      summary: Download a firmware image onto a CCU (admin-only)
+      description: |
+        Instructs one CCU to fetch a firmware image from the supplied
+        http/https URL onto the central (posting to the CCU's maintenance
+        CGI) so it can be staged for a later install. The CCU performs the
+        transfer asynchronously; the endpoint returns 202 once the request
+        was accepted.
+      tags: [system]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: http/https firmware image the CCU should fetch.
+                central:
+                  type: string
+                  description: Target central (optional for single-CCU deployments).
+      responses:
+        "202":
+          description: Download triggered
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/install-mode:
@@ -1903,6 +1962,55 @@ paths:
           description: Pairing window opened
         "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/paramsets/{key}/determine:
+    post:
+      operationId: determineParameter
+      summary: Read one parameter's live value from the device
+      description: |
+        Reads ("determines") the current value of a single parameter straight
+        from the device via the CCU's determineParameter operation — the MASTER
+        editor's "Determine" button. This is a read (no edit-lock token
+        required), but it triggers a device round-trip, so the parameter is
+        named in the request body. The {key} path segment scopes the request to
+        the paramset being edited; the CCU auto-selects the paramset on the
+        wire. Shares the backend path with the WS `paramset.determine` command.
+      tags: [paramsets]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+        - { in: path, name: key, required: true, schema: { type: string, enum: [VALUES, MASTER, LINK] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parameter]
+              properties:
+                parameter:
+                  type: string
+                  description: Name of the parameter to determine (e.g. "TEMPERATURE").
+      responses:
+        "200":
+          description: The value the device reported for the parameter.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [value]
+                properties:
+                  value:
+                    description: |
+                      The determined value. Type follows the parameter's
+                      declared TYPE (bool / number / string); null when the
+                      backend does not support the operation (e.g. CUxD).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502":
+          description: CCU read error
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/ui-schema:
     get:
@@ -7315,6 +7423,19 @@ components:
         central_id: { type: string }
         host: { type: string }
         note: { type: string }
+        duty_cycle:
+          type: integer
+          description: |
+            Transmit duty cycle in percent (0..100) for BidCos radio
+            interfaces, sourced from the CCU's listBidcosInterfaces poll.
+            Absent when unknown or when the interface carries no BidCos
+            gateway (e.g. HmIP-RF, covered by device-level DUTY_CYCLE
+            data points).
+        carrier_sense:
+          type: integer
+          description: |
+            Receive carrier-sense load in percent (0..100). Absent when
+            the CCU does not report it (the common case over JSON-RPC).
     Snapshot:
       type: object
       required: [generated_at, devices]

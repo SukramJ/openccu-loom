@@ -1078,6 +1078,86 @@ func TestListInterfaces_WithEntries(t *testing.T) {
 	}
 }
 
+// TestListInterfaces_DutyCycleSerialization verifies that a BidCos interface's
+// duty cycle (including a legitimate 0) round-trips as duty_cycle while an
+// interface without radio-utilisation data omits the field entirely.
+func TestListInterfaces_DutyCycleSerialization(t *testing.T) {
+	t.Parallel()
+	zero := 0
+	dc := 42
+	idx := &testFullInterfaceIndex{
+		ifaces: []InterfaceState{
+			{ID: "BidCos-RF", Name: "BidCos", Connected: true, Interface: "BidCos-RF", DutyCycle: &dc},
+			{ID: "BidCos-Wired", Name: "wired", Connected: true, Interface: "BidCos-Wired", DutyCycle: &zero},
+			{ID: "HmIP-RF", Name: "HmIP", Connected: true, Interface: "HmIP-RF"},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	ListInterfaces(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"duty_cycle":42`) {
+		t.Errorf("expected duty_cycle:42 in body, got %s", body)
+	}
+	if !strings.Contains(body, `"duty_cycle":0`) {
+		t.Errorf("expected a legitimate duty_cycle:0 to be serialized, got %s", body)
+	}
+
+	// The HmIP-RF entry has a nil DutyCycle → the field must be absent.
+	var states []InterfaceState
+	if err := json.Unmarshal(w.Body.Bytes(), &states); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, s := range states {
+		if s.ID == "HmIP-RF" && s.DutyCycle != nil {
+			t.Errorf("HmIP-RF DutyCycle should be nil, got %v", *s.DutyCycle)
+		}
+	}
+}
+
+// TestListInterfaces_CarrierSenseSerialization verifies that a present
+// carrier_sense value round-trips and that an absent one is omitted from
+// the JSON body. carrier_sense is commonly absent (most CCU firmwares do
+// not report it over JSON-RPC), so both branches need explicit coverage.
+func TestListInterfaces_CarrierSenseSerialization(t *testing.T) {
+	t.Parallel()
+	cs := 17
+	idx := &testFullInterfaceIndex{
+		ifaces: []InterfaceState{
+			{ID: "BidCos-RF", Name: "BidCos", Connected: true, Interface: "BidCos-RF", CarrierSense: &cs},
+			{ID: "HmIP-RF", Name: "HmIP", Connected: true, Interface: "HmIP-RF"},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	ListInterfaces(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"carrier_sense":17`) {
+		t.Errorf("expected carrier_sense:17 in body, got %s", body)
+	}
+
+	var states []InterfaceState
+	if err := json.Unmarshal(w.Body.Bytes(), &states); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, s := range states {
+		if s.ID == "HmIP-RF" && s.CarrierSense != nil {
+			t.Errorf("HmIP-RF CarrierSense should be nil (absent), got %v", *s.CarrierSense)
+		}
+		if s.ID == "BidCos-RF" && (s.CarrierSense == nil || *s.CarrierSense != 17) {
+			t.Errorf("BidCos-RF CarrierSense = %v, want 17", s.CarrierSense)
+		}
+	}
+}
+
 // --- CreateSysvar with hub and valid request ---
 
 func TestCreateSysvar_HappyPath_Returns202(t *testing.T) {

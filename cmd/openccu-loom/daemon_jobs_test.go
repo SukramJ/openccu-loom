@@ -58,6 +58,7 @@ func TestRegisterStandardJobsForRegistersUnconditionalJobs(t *testing.T) {
 		"central.health_heartbeat",
 		"central.check_connection",
 		"hub.connectivity_refresh",
+		"hub.bidcos_interfaces_refresh",
 		"hub.last_event_age_refresh",
 		"hub.program_refresh",
 		"hub.sysvar_refresh",

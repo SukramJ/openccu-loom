@@ -19,11 +19,14 @@ vi.mock("$lib/stores/devices.svelte", () => ({
 
 const mockGetDevice = vi.fn();
 const mockRefreshFirmwareData = vi.fn();
+const mockListInterfaces = vi.fn().mockResolvedValue([]);
+const mockUpdateFirmware = vi.fn().mockResolvedValue(undefined);
 vi.mock("$lib/api/client", () => ({
   api: {
     getDevice: (...args: unknown[]) => mockGetDevice(...args),
-    updateFirmware: vi.fn(),
+    updateFirmware: (...args: unknown[]) => mockUpdateFirmware(...args),
     refreshFirmwareData: (...args: unknown[]) => mockRefreshFirmwareData(...args),
+    listInterfaces: (...args: unknown[]) => mockListInterfaces(...args),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -36,8 +39,16 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
+// confirmStore.ask defaults to "cancelled" so the duty-cycle-warning tests
+// can inspect the dialog body without also exercising the post-confirm
+// update flow.
+vi.mock("$lib/stores/confirm.svelte", () => ({
+  confirmStore: { ask: vi.fn().mockResolvedValue(false) },
+}));
+
 import { toastStore } from "$lib/stores/toast.svelte";
 import { deviceStore } from "$lib/stores/devices.svelte";
+import { confirmStore } from "$lib/stores/confirm.svelte";
 import { ApiError } from "$lib/api/client";
 import FirmwareList from "./FirmwareList.svelte";
 
@@ -193,5 +204,118 @@ describe("FirmwareList zero-version placeholder", () => {
     expect(
       queryByText("1 device(s) have a firmware update available."),
     ).toBeNull();
+  });
+});
+
+// The CCU WebUI gates device firmware updates on a high BidCos duty
+// cycle; OpenCCU-Loom never blocks the update but warns the operator in
+// the confirm dialog so a stalled OTA transfer over a saturated radio is
+// expected, not surprising. The warning is sourced from GET /interfaces,
+// matched to the device via "<central>|<interface_id>".
+describe("FirmwareList duty cycle warning", () => {
+  const dutyDevice = {
+    address: "LEQ0012345",
+    name: "Lamp",
+    model: "HM-LC-Sw1-Pl",
+    interface_id: "BidCos-RF",
+    central: "",
+    updatable: true,
+    update_available: true,
+  };
+
+  beforeEach(() => {
+    mockItems = [dutyDevice];
+    mockGetDevice.mockResolvedValue({
+      address: dutyDevice.address,
+      update_available: true,
+      firmware: {
+        Current: "1.0",
+        Available: "1.1",
+        Updatable: true,
+        UpdateState: "READY_FOR_UPDATE",
+      },
+    });
+  });
+
+  it("warns in the confirm dialog when the device's radio interface duty cycle is at or above 80%", async () => {
+    mockListInterfaces.mockResolvedValueOnce([
+      {
+        id: "BidCos-RF",
+        central_id: "",
+        name: "BidCos-RF",
+        interface: "BidCos-RF",
+        connected: true,
+        duty_cycle: 85,
+      },
+    ]);
+    const { findByRole } = render(FirmwareList);
+
+    await fireEvent.click(await findByRole("button", { name: "Update" }));
+
+    await waitFor(() => {
+      expect(confirmStore.ask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: "The radio interface duty cycle is high (85%). The over-the-air transfer may stall until the radio recovers.",
+        }),
+      );
+    });
+  });
+
+  it("does not warn when the duty cycle is below the threshold", async () => {
+    mockListInterfaces.mockResolvedValueOnce([
+      {
+        id: "BidCos-RF",
+        central_id: "",
+        name: "BidCos-RF",
+        interface: "BidCos-RF",
+        connected: true,
+        duty_cycle: 40,
+      },
+    ]);
+    const { findByRole } = render(FirmwareList);
+
+    await fireEvent.click(await findByRole("button", { name: "Update" }));
+
+    await waitFor(() => {
+      expect(confirmStore.ask).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "" }),
+      );
+    });
+  });
+
+  it("does not warn when the interface carries no duty-cycle reading (HmIP or un-polled BidCos)", async () => {
+    mockListInterfaces.mockResolvedValueOnce([
+      {
+        id: "BidCos-RF",
+        central_id: "",
+        name: "BidCos-RF",
+        interface: "BidCos-RF",
+        connected: true,
+      },
+    ]);
+    const { findByRole } = render(FirmwareList);
+
+    await fireEvent.click(await findByRole("button", { name: "Update" }));
+
+    await waitFor(() => {
+      expect(confirmStore.ask).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "" }),
+      );
+    });
+  });
+
+  it("does not block the update flow when GET /interfaces fails", async () => {
+    mockListInterfaces.mockRejectedValueOnce(new Error("network error"));
+    const { findByRole } = render(FirmwareList);
+
+    // The best-effort duty-cycle fetch failing must not prevent the
+    // update button (or the rest of the overview) from rendering.
+    await fireEvent.click(await findByRole("button", { name: "Update" }));
+
+    await waitFor(() => {
+      expect(confirmStore.ask).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "" }),
+      );
+    });
   });
 });

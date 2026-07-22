@@ -366,6 +366,29 @@ describe("api paramset writes — edit-lock token header", () => {
     expect(headers["Content-Type"]).toBe("application/json");
   });
 
+  it("getParamset GETs the raw paramset with no edit-lock header", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ AES_ACTIVE: false }));
+    const result = await api.getParamset("00021BE9957782:4", "MASTER");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/00021BE9957782%3A4/paramsets/MASTER");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+    const headers = headersOf(fetchMock.mock.calls[0]);
+    expect(headers["X-Edit-Token"]).toBeUndefined();
+    expect(result).toEqual({ AES_ACTIVE: false });
+  });
+
+  it("getParamset percent-encodes the channel address for the VALUES paramset", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ STATE: true }));
+    await api.getParamset("0001:2", "VALUES");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2/paramsets/VALUES");
+  });
+
+  it("getParamset propagates the daemon error on a failed read", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "not found" }, 404));
+    await expect(api.getParamset("0001ABCD:1", "MASTER")).rejects.toBeTruthy();
+  });
+
   it("putLinkParamset sends X-Edit-Token when a token is held", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
     await api.putLinkParamset(
@@ -383,6 +406,37 @@ describe("api paramset writes — edit-lock token header", () => {
     expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
     const headers = headersOf(fetchMock.mock.calls[0]);
     expect(headers["X-Edit-Token"]).toBe("tok-xyz");
+  });
+});
+
+describe("api — determineParameter (MASTER editor 'Determine' button)", () => {
+  it("POSTs the parameter name to the channel-scoped determine route (happy path)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ value: 21.5 }));
+    const result = await api.determineParameter("00021BE9957782", 4, "MASTER", "TEMPERATURE");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "/api/v1/devices/00021BE9957782/channels/4/paramsets/MASTER/determine",
+    );
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ parameter: "TEMPERATURE" });
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
+      "application/json",
+    );
+    expect(result).toEqual({ value: 21.5 });
+  });
+
+  it("percent-encodes the device address (edge case: address carrying reserved characters)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ value: 1 }));
+    await api.determineParameter("0001:2", 1, "LINK", "ON_TIME");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2/channels/1/paramsets/LINK/determine");
+  });
+
+  it("propagates the daemon error on a failed determine (error path)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "ccu unreachable" }, 502));
+    await expect(
+      api.determineParameter("00021BE9957782", 4, "MASTER", "TEMPERATURE"),
+    ).rejects.toBeTruthy();
   });
 });
 

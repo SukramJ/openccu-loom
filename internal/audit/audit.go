@@ -36,6 +36,12 @@ const (
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"
 
+	// ActionSystemFirmwareDownload records an operator-triggered CCU
+	// firmware download: the CCU fetches a firmware image from a URL onto
+	// the central so it can be staged for installation. The Entry's Note
+	// carries the target central name and the source URL.
+	ActionSystemFirmwareDownload Action = "system_firmware_download"
+
 	// ActionRoomFunction records room / function (Gewerk) entity
 	// lifecycle changes (create / rename / delete). The Note carries
 	// the operation and target name.

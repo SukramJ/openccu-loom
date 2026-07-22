@@ -2061,6 +2061,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/firmware/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download a firmware image onto a CCU (admin-only)
+         * @description Instructs one CCU to fetch a firmware image from the supplied
+         *     http/https URL onto the central (posting to the CCU's maintenance
+         *     CGI) so it can be staged for a later install. The CCU performs the
+         *     transfer asynchronously; the endpoint returns 202 once the request
+         *     was accepted.
+         */
+        post: operations["downloadSystemFirmware"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/install-mode": {
         parameters: {
             query?: never;
@@ -2077,6 +2101,32 @@ export interface paths {
          *     backend is resolved by address.
          */
         post: operations["deviceInstallMode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/paramsets/{key}/determine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read one parameter's live value from the device
+         * @description Reads ("determines") the current value of a single parameter straight
+         *     from the device via the CCU's determineParameter operation — the MASTER
+         *     editor's "Determine" button. This is a read (no edit-lock token
+         *     required), but it triggers a device round-trip, so the parameter is
+         *     named in the request body. The {key} path segment scopes the request to
+         *     the paramset being edited; the CCU auto-selects the paramset on the
+         *     wire. Shares the backend path with the WS `paramset.determine` command.
+         */
+        post: operations["determineParameter"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5766,6 +5816,19 @@ export interface components {
             central_id?: string;
             host?: string;
             note?: string;
+            /**
+             * @description Transmit duty cycle in percent (0..100) for BidCos radio
+             *     interfaces, sourced from the CCU's listBidcosInterfaces poll.
+             *     Absent when unknown or when the interface carries no BidCos
+             *     gateway (e.g. HmIP-RF, covered by device-level DUTY_CYCLE
+             *     data points).
+             */
+            duty_cycle?: number;
+            /**
+             * @description Receive carrier-sense load in percent (0..100). Absent when
+             *     the CCU does not report it (the common case over JSON-RPC).
+             */
+            carrier_sense?: number;
         };
         Snapshot: {
             /** Format: date-time */
@@ -8622,13 +8685,60 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Update scheduled */
+            /**
+             * @description Update scheduled. When the device's radio interface reports a
+             *     high transmit duty cycle the body carries an advisory
+             *     `duty_cycle_warning` (the update is never rejected on that
+             *     basis, mirroring the CCU WebUI's non-blocking warning).
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example scheduled */
+                        status: string;
+                        /** @description Transmit duty cycle in percent of the device's radio interface, present only when it is at or above the warning threshold (80%). Absent when unknown or below. */
+                        duty_cycle_warning?: number;
+                    };
+                };
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    downloadSystemFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uri
+                     * @description http/https firmware image the CCU should fetch.
+                     */
+                    url: string;
+                    /** @description Target central (optional for single-CCU deployments). */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Download triggered */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -8660,6 +8770,55 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    determineParameter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+                key: "VALUES" | "MASTER" | "LINK";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Name of the parameter to determine (e.g. "TEMPERATURE"). */
+                    parameter: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The value the device reported for the parameter. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * @description The determined value. Type follows the parameter's
+                         *     declared TYPE (bool / number / string); null when the
+                         *     backend does not support the operation (e.g. CUxD).
+                         */
+                        value: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description CCU read error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };

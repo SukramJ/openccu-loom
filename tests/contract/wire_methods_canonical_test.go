@@ -89,6 +89,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"Interface.suppressServiceMessages":      true,
 		"Interface.getSuppressedServiceMessages": true,
 		"Interface.getIseIDByAddress":            true,
+		"Interface.listBidcosInterfaces":         true,
 
 		// JSON-RPC — Channel
 		"Channel.setName":       true,

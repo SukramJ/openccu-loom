@@ -7,6 +7,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import ParameterLevelField from "./ParameterLevelField.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import Spinner from "$lib/components/ui/Spinner.svelte";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -47,6 +48,16 @@
      * channel/brightness-helper.ts.
      */
     brightnessHelper?: { value: number; display: string } | null;
+    /**
+     * Present only when the parent wants a "Determine" button for
+     * determine-capable parameters (OPERATIONS 0x08). Invoked on click;
+     * the parent reads the device's live value and stages it through the
+     * editor's dirty tracking, then this component clears its spinner.
+     * The button is shown only when the parameter is determine-capable
+     * and the field is interactive. Mirrors the CCU WebUI's "Determine"
+     * link (config/ic_ifacecmd.cgi cmd_determineParameter).
+     */
+    onDetermine?: () => Promise<void>;
   };
 
   let {
@@ -59,7 +70,22 @@
     onAction,
     nameBadge = false,
     brightnessHelper = null,
+    onDetermine,
   }: Props = $props();
+
+  // Spinner state for an in-flight determine round-trip. Local to the
+  // field so each button shows its own progress independently.
+  let determining = $state(false);
+
+  async function runDetermine() {
+    if (!onDetermine || determining) return;
+    determining = true;
+    try {
+      await onDetermine();
+    } finally {
+      determining = false;
+    }
+  }
 
   // Writability model with two distinct axes so the UI can react
   // appropriately to each:
@@ -77,6 +103,13 @@
   // `writable` retained for child components that only look at a
   // single boolean; kept truthy only when the widget is fully open.
   const writable = $derived(!interactionDisabled);
+
+  // The "Determine" button shows only for determine-capable parameters
+  // (OPERATIONS 0x08) when the parent wired a handler and the field is
+  // interactive — determining a value you cannot then edit is pointless.
+  const canDetermine = $derived(
+    !!onDetermine && parameter.operations.determine === true && !interactionDisabled,
+  );
 
   // LEVEL parameters (display_as_percent) render as a 0–100 % slider
   // plus optional "last value" checkbox; routed to a dedicated
@@ -385,6 +418,30 @@
   {:else}
     <div class="text-xs italic text-[var(--ha-secondary-text-color)]">
       {t("parameter.unknown_type", { type: parameter.type })}
+    </div>
+  {/if}
+
+  {#if canDetermine}
+    <!-- Determine helper: reads the parameter's current live value from
+         the device and stages it into the editor (dirty-tracked) via the
+         parent handler. Mirrors the CCU WebUI's "Determine" button
+         (config/ic_ifacecmd.cgi cmd_determineParameter). -->
+    <div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={determining}
+        onclick={runDetermine}
+        title={t("parameter.determine.tooltip")}
+      >
+        {#if determining}
+          <Spinner size={14} />
+        {:else}
+          <Icon name="mdi:gauge" size={14} />
+        {/if}
+        {t("parameter.determine")}
+      </Button>
     </div>
   {/if}
 

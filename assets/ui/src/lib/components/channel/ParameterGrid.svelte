@@ -31,6 +31,12 @@
     brightnessSource?: { value: number; unit: string | null } | null;
     onParamChange: (name: string, value: unknown) => void;
     onAction?: (name: string) => void;
+    /**
+     * Determine one parameter's live value from the device. When set, a
+     * "Determine" button is rendered for determine-capable parameters.
+     * Wired only in the MASTER editor; omitted elsewhere.
+     */
+    onDetermine?: (name: string) => Promise<void>;
   };
 
   let {
@@ -43,6 +49,7 @@
     brightnessSource = null,
     onParamChange,
     onAction,
+    onDetermine,
   }: Props = $props();
 
   // Build the per-field brightness helper for a condition-threshold
@@ -216,6 +223,7 @@
         brightnessHelper={brightnessHelperFor(p)}
         onChange={(v) => onParamChange(p.name, v)}
         onAction={onAction ? () => onAction(p.name) : undefined}
+        onDetermine={onDetermine ? () => onDetermine(p.name) : undefined}
       />
     {/each}
   {/if}
@@ -242,6 +250,7 @@
               brightnessHelper={brightnessHelperFor(p)}
               onChange={(v) => onParamChange(p.name, v)}
               onAction={onAction ? () => onAction(p.name) : undefined}
+              onDetermine={onDetermine ? () => onDetermine(p.name) : undefined}
             />
           {/each}
         </div>

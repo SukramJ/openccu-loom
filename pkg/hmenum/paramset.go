@@ -65,11 +65,19 @@ func (s ParameterStatus) String() string { return string(s) }
 type Operations int
 
 // Operations values.
+//
+// The CCU encodes a fourth, less-common bit next to READ/WRITE/EVENT:
+// DETERMINE (0x08). Firmware descriptors spell it out symbolically as
+// operations="read,write,determine"; the paramset-description wire form
+// carries it as bit 8. It marks a parameter whose live value can be read
+// straight from the device on demand (the WebUI's "Determine" button),
+// which is what backs the determineParameter operation.
 const (
-	OperationsNone  Operations = 0
-	OperationsRead  Operations = 1
-	OperationsWrite Operations = 2
-	OperationsEvent Operations = 4
+	OperationsNone      Operations = 0
+	OperationsRead      Operations = 1
+	OperationsWrite     Operations = 2
+	OperationsEvent     Operations = 4
+	OperationsDetermine Operations = 8
 )
 
 // Has reports whether every bit of want is set in o.
@@ -83,6 +91,10 @@ func (o Operations) IsWritable() bool { return o.Has(OperationsWrite) }
 
 // IsEvent reports whether the EVENT bit is set.
 func (o Operations) IsEvent() bool { return o.Has(OperationsEvent) }
+
+// IsDeterminable reports whether the DETERMINE bit is set — the parameter
+// exposes an on-demand live read via determineParameter.
+func (o Operations) IsDeterminable() bool { return o.Has(OperationsDetermine) }
 
 // Flag is the FLAGS bitmask from a paramset description. The CCU encodes
 // visibility and classification hints here.

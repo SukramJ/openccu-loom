@@ -7,6 +7,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import ProfileSelector from "./ProfileSelector.svelte";
   import SubsetGroupSelector from "./SubsetGroupSelector.svelte";
+  import SecureTransmission from "./SecureTransmission.svelte";
   import {
     validateCrossRules,
     visibleParameters,
@@ -534,6 +535,36 @@
     banner = null;
   }
 
+  // Determine one parameter's live value from the device and stage it
+  // into the working copy through onParamChange, so dirty tracking + undo
+  // apply exactly as for a manual edit. Errors surface as a toast; the
+  // ParameterField owns the button spinner (it awaits this promise). Only
+  // wired for MASTER — the CCU's determineParameter auto-selects the
+  // paramset, which is unambiguous for MASTER but not for per-peer LINK.
+  async function determineParam(name: string) {
+    try {
+      const res = await api.determineParameter(address, channel, paramset, name);
+      if (res.value === null || res.value === undefined) {
+        toastStore.error(
+          t("parameter.determine.failed"),
+          t("parameter.determine.unsupported"),
+        );
+        return;
+      }
+      onParamChange(name, res.value);
+      toastStore.success(t("parameter.determine.done", { name }));
+    } catch (err) {
+      toastStore.error(t("parameter.determine.failed"), friendlyError(err, t));
+    }
+  }
+
+  // MASTER-only: the "Determine" button reads the current configuration
+  // value from the device. Passed as undefined for VALUES/LINK so the
+  // button never renders there.
+  const determineHandler = $derived(
+    paramset === "MASTER" ? determineParam : undefined,
+  );
+
   async function runAction(name: string) {
     saving = true;
     banner = null;
@@ -841,6 +872,15 @@
     {/if}
 
     {#if paramset === "MASTER"}
+      <!-- Secured-transmission (AES_ACTIVE) toggle. Rendered from the raw
+           MASTER paramset independent of the visibility store, since the
+           parameter carries the `internal` ui-flag and is filtered out of
+           the schema. Writes through the same edit-locked MASTER path. -->
+      <SecureTransmission
+        {channelAddress}
+        editToken={lockSession?.token}
+        disabled={!!lockedByOther || lockLost}
+      />
       <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
         <input
           type="checkbox"
@@ -892,6 +932,7 @@
               brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
+              onDetermine={determineHandler}
             />
           </section>
         {:else}
@@ -922,6 +963,7 @@
             brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
+            onDetermine={determineHandler}
           />
         </section>
       {/if}
@@ -949,6 +991,7 @@
               brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
+              onDetermine={determineHandler}
             />
           </section>
         {/if}
@@ -975,6 +1018,7 @@
             brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
+            onDetermine={determineHandler}
           />
         </section>
       {/if}
@@ -989,6 +1033,7 @@
         brightnessSource={brightnessSource}
         {onParamChange}
         onAction={runAction}
+        onDetermine={determineHandler}
       />
     {/if}
 

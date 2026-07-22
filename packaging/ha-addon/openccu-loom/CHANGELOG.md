@@ -24,6 +24,32 @@
   the CCU WebUI's own behaviour — previously a long-press counter could
   linger and keep the device sending long-press events to the CCU after
   you switched the link off.
+- **"Determine" button for channel settings.** Configuration parameters
+  whose live value the device can report on demand now show a "Determine"
+  button in the channel settings editor. Pressing it reads the current
+  value straight from the device and drops it into the field as an
+  unsaved edit you can still adjust or undo before saving. Mirrors the
+  CCU WebUI's per-parameter "Determine" action.
+- **Secured transmission (AES) per channel.** A device channel's
+  configuration now shows a "Secured transmission" switch whenever the
+  channel supports AES-signed telegrams. Turning it on asks first,
+  reminding you that secured transmission increases the channel's radio
+  load and — on battery devices — battery use; turning it off applies
+  right away. This mirrors the CCU WebUI's transmit-mode dialog.
+- **Firmware update warns on a busy radio, plus CCU firmware download.**
+  When you trigger a device firmware update over a saturated radio
+  interface (duty cycle 80 % or more), the confirm dialog now warns that
+  the over-the-air transfer may stall — the update still runs, it is only
+  a heads-up. The System page's CCU update card also gains an admin-only
+  field to have a CCU download a firmware image from a URL onto the
+  central so it is ready to install.
+- **Radio load per interface on the Diagnostics page.** BidCos radio
+  interfaces now show their transmit duty cycle and receive carrier
+  sense right in the interface table — so a pure-BidCos setup or a
+  radio-LAN gateway finally shows how close it is to its transmit budget,
+  not just individual devices. The value updates every minute and is
+  colour-coded (green, yellow from 60 %, red from 80 %). HmIP interfaces,
+  where the CCU reports this per device instead, stay blank here.
 - **Device admin from the UI.** Renaming a device now persists to the
   CCU (optionally renaming all channels along), single channels can be
   renamed, removing a device offers factory-reset / force options with

@@ -74,6 +74,12 @@ type Deps struct {
 	Reloader  handlers.ReloaderService
 	DPWriter  handlers.DataPointWriter
 	Paramsets handlers.ParamsetService
+	// ParameterDeterminer backs
+	// POST /devices/{addr}/channels/{no}/paramsets/{key}/determine — the
+	// MASTER editor's "Determine" button, which reads one parameter's live
+	// value straight from the device. Nil disables the route (404); shares
+	// the domain call with the WS `paramset.determine` command.
+	ParameterDeterminer handlers.ParameterDeterminer
 	// WebhookInboundEnabled mounts the inbound webhook routes
 	// (POST /webhook/value, POST /webhook/program) when true; off means the
 	// routes are not mounted (404). Restart-required (mirrors north.mcp).
@@ -267,6 +273,10 @@ type Deps struct {
 	// CCUReboot backs `POST /api/v1/system/ccu/{central}/reboot` — an
 	// admin-only reboot of one CCU host. Nil serves the route as 503.
 	CCUReboot handlers.CCURebootPort
+	// FirmwareDownload backs `POST /api/v1/system/firmware/download` — an
+	// admin-only trigger that has one CCU fetch a firmware image onto the
+	// central. Nil serves the route as 503.
+	FirmwareDownload handlers.FirmwareDownloadPort
 	// RateLimit, when non-nil, installs the per-identity REST
 	// rate limiter before the auth-require gate. Nil disables it.
 	RateLimit *middleware.RateLimitConfig
@@ -687,6 +697,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 						handlers.MatchMasterProfile(d.Devices, d.MasterProfiles))
 				}
 			}
+			if d.ParameterDeterminer != nil {
+				// Read one parameter's live value from the device (the MASTER
+				// editor's "Determine" button). A read, so no edit-lock token —
+				// but it triggers a device round-trip like master-profiles/match.
+				pr.Post("/devices/{addr}/channels/{no}/paramsets/{key}/determine",
+					handlers.DetermineParameter(d.ParameterDeterminer))
+			}
 			if d.UISchema != nil {
 				pr.Get("/devices/{addr}/channels/{no}/ui-schema", handlers.UISchemaHandler(d.UISchema))
 			}
@@ -841,6 +858,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// Reboot one CCU host. Admin-gated like DELETE /devices; the
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
 			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
+			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
 			// Persistent "restart required" status for the SPA banner.
 			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
 			// Config fields changed since the daemon started.

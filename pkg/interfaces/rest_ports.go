@@ -118,6 +118,15 @@ type DeviceAdmin interface {
 	// [ErrAcceptConfigIncomplete].
 	AcceptInboxDevice(ctx context.Context, address string, opts AcceptInboxOptions) error
 	UpdateFirmware(ctx context.Context, address string) error
+	// InterfaceDutyCycle returns the transmit duty cycle in percent
+	// (0..100) of the radio interface the device identified by address is
+	// paired to, sourced from the per-interface BidCos utilisation poll.
+	// The bool is false when the value is unknown: the device is not
+	// found, its interface carries no BidCos gateway (HmIP interfaces
+	// report a device-level DUTY_CYCLE data point instead), or the poll
+	// has not populated the cache yet. It is a cache read — no CCU round
+	// trip — so the firmware-update gate can consult it inline.
+	InterfaceDutyCycle(address string) (int, bool)
 	SetRooms(ctx context.Context, address string, rooms []string) error
 	SetFunctions(ctx context.Context, address string, functions []string) error
 }
@@ -206,6 +215,22 @@ type ParamsetService interface {
 	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+}
+
+// ParameterDeterminer backs `POST /devices/{addr}/channels/{no}/paramsets/{key}/determine`.
+// It reads ("determines") the current live value of a single parameter
+// straight from the device via the CCU's determineParameter operation,
+// which auto-selects the paramset. This is a read, not a configuration
+// write — the MASTER editor's "Determine" button uses it to pull the
+// device's current value into an editable field.
+//
+// The interfaceID argument is resolved from the central registry by the
+// implementation ([central/adapter.ParameterDeterminerAdapter], which
+// also backs the WS `paramset.determine` command); the REST handler
+// passes "" for it. Returns nil when the backend does not support the
+// operation (e.g. CUxD).
+type ParameterDeterminer interface {
+	DetermineParameter(ctx context.Context, interfaceID, channelAddress, parameterID string) (any, error)
 }
 
 // RPCRecorderService is the facade the RPC-session-recording endpoints depend
