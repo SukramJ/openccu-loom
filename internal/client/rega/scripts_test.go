@@ -144,6 +144,26 @@ func TestScriptBodyContainsExpectedPlaceholders(t *testing.T) {
 	}
 }
 
+// TestRebootCCUScriptBody verifies the reboot script is registered and its
+// body persists runtime state before triggering the reboot. A reboot without
+// the preceding system.Save() would lose unsaved CCU state.
+func TestRebootCCUScriptBody(t *testing.T) {
+	t.Parallel()
+	body, err := loadScript(hmenum.RegaScriptRebootCCU)
+	if err != nil {
+		t.Fatalf("loadScript(reboot_ccu): %v", err)
+	}
+	for _, token := range []string{"system.Save()", "/sbin/reboot"} {
+		if !strings.Contains(body, token) {
+			t.Errorf("reboot_ccu script does not contain %q", token)
+		}
+	}
+	// Save must precede the reboot so state is persisted first.
+	if strings.Index(body, "system.Save()") > strings.Index(body, "/sbin/reboot") {
+		t.Error("reboot_ccu must call system.Save() before /sbin/reboot")
+	}
+}
+
 // TestCreateSystemVariableScriptHasAlarmBranch pins the ALARM branch of
 // the create_system_variable script. An alarm line must be backed by an
 // OT_ALARMDP object (not the OT_VARDP every other type uses), wire up the
