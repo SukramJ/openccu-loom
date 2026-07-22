@@ -475,6 +475,27 @@ export const api = {
       `/devices/${encodeURIComponent(channelAddress)}/paramsets/${paramset}`,
     );
   },
+  // Read one parameter's current live value straight from the device
+  // (the MASTER editor's "Determine" button). A read, so no edit-lock
+  // token — but it triggers a device round-trip. Returns the device's
+  // value; the caller stages it into the editor's working copy so dirty
+  // tracking / undo keep working. Mirrors the WS `paramset.determine`
+  // command, which the SPA cannot call (its WS channel is event-only).
+  determineParameter(
+    address: string,
+    channel: number,
+    paramset: "VALUES" | "MASTER" | "LINK",
+    parameter: string,
+  ) {
+    return request<{ value: unknown }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channel}/paramsets/${paramset}/determine`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parameter }),
+      },
+    );
+  },
   setValue(address: string, channel: number, parameter: string, value: unknown) {
     return request<void>(
       `/devices/${encodeURIComponent(address)}/channels/${channel}/data-points/${parameter}/value`,

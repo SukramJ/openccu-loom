@@ -513,6 +513,11 @@ type UISchemaParameterOps struct {
 	Read  bool `json:"read"`
 	Write bool `json:"write"`
 	Event bool `json:"event"`
+	// Determine is the DETERMINE bit (0x08): the parameter's live value
+	// can be read from the device on demand. The MASTER editor renders a
+	// "Determine" button for such fields. Omitted when unset so the
+	// addition is backward-compatible.
+	Determine bool `json:"determine,omitempty"`
 }
 
 // UISchemaParameterFlags mirrors the OCCU FLAGS bitmask.

@@ -28,6 +28,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list (address, number, eligibility). The device-detail Links tab keeps
   the device-wide switch and adds a per-channel switch for each eligible
   channel. REST `APIVersion` 2.36.0.
+- **"Determine" button in the channel MASTER editor.** Determine-capable
+  MASTER parameters — the ones the firmware spells out as
+  `operations="read,write,determine"`, i.e. OPERATIONS bit `0x08` — now
+  render a "Determine" button that reads the parameter's current value
+  straight from the device and stages it into the editor, dirty-tracked
+  and undoable exactly like a manual edit (an error surfaces as a toast; a
+  spinner shows while the read is in flight). The channel ui-schema now
+  exposes the capability per parameter (`operations.determine`), and a new
+  additive endpoint `POST
+  /devices/{addr}/channels/{no}/paramsets/{key}/determine` backs the
+  button — a read, so it carries no edit-lock token. The REST route shares
+  the registry-resolved backend path with the existing WS
+  `paramset.determine` command; the SPA uses REST because its WebSocket
+  channel is event-only. Mirrors the CCU WebUI's per-parameter "Determine"
+  link (`config/ic_ifacecmd.cgi`).
 - **Secured-transmission (AES) toggle per channel.** The channel MASTER
   configuration panel now shows a dedicated "Secured transmission" row
   with a switch for every channel whose MASTER paramset carries

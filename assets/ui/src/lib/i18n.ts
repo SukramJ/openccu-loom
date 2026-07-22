@@ -2200,6 +2200,14 @@ const EN: Catalog = {
   "parameter.unknown_type": "Unknown type: {type}",
   "parameter.execute": "Run",
   "parameter.custom": "Custom value",
+  // "Determine" button: reads the parameter's current value from the
+  // device (OPERATIONS 0x08) and stages it into the editor.
+  "parameter.determine": "Determine",
+  "parameter.determine.tooltip": "Read the current value from the device",
+  "parameter.determine.done": "Determined {name} from the device",
+  "parameter.determine.failed": "Determine failed",
+  "parameter.determine.unsupported":
+    "This device does not support determining this parameter",
   // Directional qualifier appended to a label shared by two parameters
   // that differ only by an upper/lower threshold suffix in their name.
   "parameter.threshold.upper": "upper threshold",
@@ -4992,6 +5000,12 @@ const DE: Catalog = {
   "parameter.unknown_type": "Unbekannter Typ: {type}",
   "parameter.execute": "Ausführen",
   "parameter.custom": "Benutzerdefiniert",
+  "parameter.determine": "Bestimmen",
+  "parameter.determine.tooltip": "Aktuellen Wert vom Gerät bestimmen",
+  "parameter.determine.done": "{name} vom Gerät bestimmt",
+  "parameter.determine.failed": "Bestimmen fehlgeschlagen",
+  "parameter.determine.unsupported":
+    "Dieses Gerät unterstützt das Bestimmen dieses Parameters nicht",
   "parameter.threshold.upper": "oberer Grenzwert",
   "parameter.threshold.lower": "unterer Grenzwert",
   // --- Zeitpaar-Presets (channel/time-pairs.ts) — nur die

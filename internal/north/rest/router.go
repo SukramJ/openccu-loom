@@ -74,6 +74,12 @@ type Deps struct {
 	Reloader  handlers.ReloaderService
 	DPWriter  handlers.DataPointWriter
 	Paramsets handlers.ParamsetService
+	// ParameterDeterminer backs
+	// POST /devices/{addr}/channels/{no}/paramsets/{key}/determine — the
+	// MASTER editor's "Determine" button, which reads one parameter's live
+	// value straight from the device. Nil disables the route (404); shares
+	// the domain call with the WS `paramset.determine` command.
+	ParameterDeterminer handlers.ParameterDeterminer
 	// WebhookInboundEnabled mounts the inbound webhook routes
 	// (POST /webhook/value, POST /webhook/program) when true; off means the
 	// routes are not mounted (404). Restart-required (mirrors north.mcp).
@@ -690,6 +696,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					pr.Post("/devices/{addr}/channels/{no}/master-profiles/match",
 						handlers.MatchMasterProfile(d.Devices, d.MasterProfiles))
 				}
+			}
+			if d.ParameterDeterminer != nil {
+				// Read one parameter's live value from the device (the MASTER
+				// editor's "Determine" button). A read, so no edit-lock token —
+				// but it triggers a device round-trip like master-profiles/match.
+				pr.Post("/devices/{addr}/channels/{no}/paramsets/{key}/determine",
+					handlers.DetermineParameter(d.ParameterDeterminer))
 			}
 			if d.UISchema != nil {
 				pr.Get("/devices/{addr}/channels/{no}/ui-schema", handlers.UISchemaHandler(d.UISchema))

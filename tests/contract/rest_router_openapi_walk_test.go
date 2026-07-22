@@ -349,6 +349,12 @@ func (fakeParamsetService) PutLinkParamset(context.Context, string, string, map[
 	return nil
 }
 
+type fakeParameterDeterminer struct{}
+
+func (fakeParameterDeterminer) DetermineParameter(context.Context, string, string, string) (any, error) {
+	return nil, nil
+}
+
 // fakeHubIndex backs the hub-singleton routes (programs, sysvars,
 // system/update, install-mode/interfaces, ...). h may be nil — the
 // route registration in router.go depends only on the interface being
@@ -529,6 +535,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		DeviceLookup:          fakeDeviceLookup{},
 		Backup:                fakeBackupService{},
 		Paramsets:             fakeParamsetService{},
+		ParameterDeterminer:   fakeParameterDeterminer{},
 		Hub:                   fakeHubIndex{h: hub.NewHub("test")},
 		SysvarRefresh:         fakeSysvarRefreshService{},
 		Interfaces:            fakeInterfaceIndex{},

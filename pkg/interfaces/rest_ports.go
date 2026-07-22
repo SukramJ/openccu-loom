@@ -217,6 +217,22 @@ type ParamsetService interface {
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
 }
 
+// ParameterDeterminer backs `POST /devices/{addr}/channels/{no}/paramsets/{key}/determine`.
+// It reads ("determines") the current live value of a single parameter
+// straight from the device via the CCU's determineParameter operation,
+// which auto-selects the paramset. This is a read, not a configuration
+// write — the MASTER editor's "Determine" button uses it to pull the
+// device's current value into an editable field.
+//
+// The interfaceID argument is resolved from the central registry by the
+// implementation ([central/adapter.ParameterDeterminerAdapter], which
+// also backs the WS `paramset.determine` command); the REST handler
+// passes "" for it. Returns nil when the backend does not support the
+// operation (e.g. CUxD).
+type ParameterDeterminer interface {
+	DetermineParameter(ctx context.Context, interfaceID, channelAddress, parameterID string) (any, error)
+}
+
 // RPCRecorderService is the facade the RPC-session-recording endpoints depend
 // on. It activates/deactivates the per-central session recorder (which
 // captures XML/JSON-RPC call→response pairs for deterministic golden replay)

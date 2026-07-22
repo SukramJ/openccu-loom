@@ -2107,6 +2107,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/channels/{no}/paramsets/{key}/determine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read one parameter's live value from the device
+         * @description Reads ("determines") the current value of a single parameter straight
+         *     from the device via the CCU's determineParameter operation — the MASTER
+         *     editor's "Determine" button. This is a read (no edit-lock token
+         *     required), but it triggers a device round-trip, so the parameter is
+         *     named in the request body. The {key} path segment scopes the request to
+         *     the paramset being edited; the CCU auto-selects the paramset on the
+         *     wire. Shares the backend path with the WS `paramset.determine` command.
+         */
+        post: operations["determineParameter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/channels/{no}/ui-schema": {
         parameters: {
             query?: never;
@@ -8744,6 +8770,55 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    determineParameter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+                key: "VALUES" | "MASTER" | "LINK";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Name of the parameter to determine (e.g. "TEMPERATURE"). */
+                    parameter: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The value the device reported for the parameter. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * @description The determined value. Type follows the parameter's
+                         *     declared TYPE (bool / number / string); null when the
+                         *     backend does not support the operation (e.g. CUxD).
+                         */
+                        value: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description CCU read error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };

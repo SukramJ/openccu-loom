@@ -535,6 +535,36 @@
     banner = null;
   }
 
+  // Determine one parameter's live value from the device and stage it
+  // into the working copy through onParamChange, so dirty tracking + undo
+  // apply exactly as for a manual edit. Errors surface as a toast; the
+  // ParameterField owns the button spinner (it awaits this promise). Only
+  // wired for MASTER — the CCU's determineParameter auto-selects the
+  // paramset, which is unambiguous for MASTER but not for per-peer LINK.
+  async function determineParam(name: string) {
+    try {
+      const res = await api.determineParameter(address, channel, paramset, name);
+      if (res.value === null || res.value === undefined) {
+        toastStore.error(
+          t("parameter.determine.failed"),
+          t("parameter.determine.unsupported"),
+        );
+        return;
+      }
+      onParamChange(name, res.value);
+      toastStore.success(t("parameter.determine.done", { name }));
+    } catch (err) {
+      toastStore.error(t("parameter.determine.failed"), friendlyError(err, t));
+    }
+  }
+
+  // MASTER-only: the "Determine" button reads the current configuration
+  // value from the device. Passed as undefined for VALUES/LINK so the
+  // button never renders there.
+  const determineHandler = $derived(
+    paramset === "MASTER" ? determineParam : undefined,
+  );
+
   async function runAction(name: string) {
     saving = true;
     banner = null;
@@ -902,6 +932,7 @@
               brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
+              onDetermine={determineHandler}
             />
           </section>
         {:else}
@@ -932,6 +963,7 @@
             brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
+            onDetermine={determineHandler}
           />
         </section>
       {/if}
@@ -959,6 +991,7 @@
               brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
+              onDetermine={determineHandler}
             />
           </section>
         {/if}
@@ -985,6 +1018,7 @@
             brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
+            onDetermine={determineHandler}
           />
         </section>
       {/if}
@@ -999,6 +1033,7 @@
         brightnessSource={brightnessSource}
         {onParamChange}
         onAction={runAction}
+        onDetermine={determineHandler}
       />
     {/if}
 

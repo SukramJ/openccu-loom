@@ -286,6 +286,12 @@ func (fakeParamsetService) PutLinkParamset(_ context.Context, _, _ string, _ map
 	return nil
 }
 
+type fakeParameterDeterminerService struct{}
+
+func (fakeParameterDeterminerService) DetermineParameter(_ context.Context, _, _, _ string) (any, error) {
+	return 21.5, nil
+}
+
 type fakeRefreshDevicesService struct{}
 
 func (fakeRefreshDevicesService) RefreshDevices(_ context.Context) error { return nil }
@@ -1034,6 +1040,31 @@ func TestRouter_Paramsets_route(t *testing.T) {
 	withoutDep.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/devices/A/paramsets/MASTER", http.NoBody))
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 without Paramsets dep, got %d", rr.Code)
+	}
+}
+
+// TestRouter_ParameterDetermine_route verifies the MASTER editor's
+// "Determine" button route (POST .../paramsets/{key}/determine) is
+// guarded behind the ParameterDeterminer dep, exactly like the sibling
+// Paramsets routes above.
+func TestRouter_ParameterDetermine_route(t *testing.T) {
+	t.Parallel()
+	body := func() io.Reader { return bytes.NewBufferString(`{"parameter":"TEMPERATURE"}`) }
+
+	withDep := NewRouter(Deps{StartedAt: time.Now(), ParameterDeterminer: fakeParameterDeterminerService{}})
+	rr := httptest.NewRecorder()
+	withDep.ServeHTTP(rr, httptest.NewRequest(http.MethodPost,
+		"/api/v1/devices/A/channels/1/paramsets/MASTER/determine", body()))
+	if rr.Code == http.StatusNotFound {
+		t.Fatal("paramsets/determine route not mounted")
+	}
+
+	withoutDep := NewRouter(Deps{StartedAt: time.Now()})
+	rr = httptest.NewRecorder()
+	withoutDep.ServeHTTP(rr, httptest.NewRequest(http.MethodPost,
+		"/api/v1/devices/A/channels/1/paramsets/MASTER/determine", body()))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 without ParameterDeterminer dep, got %d", rr.Code)
 	}
 }
 

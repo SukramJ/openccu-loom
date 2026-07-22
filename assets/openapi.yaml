@@ -1963,6 +1963,55 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/paramsets/{key}/determine:
+    post:
+      operationId: determineParameter
+      summary: Read one parameter's live value from the device
+      description: |
+        Reads ("determines") the current value of a single parameter straight
+        from the device via the CCU's determineParameter operation — the MASTER
+        editor's "Determine" button. This is a read (no edit-lock token
+        required), but it triggers a device round-trip, so the parameter is
+        named in the request body. The {key} path segment scopes the request to
+        the paramset being edited; the CCU auto-selects the paramset on the
+        wire. Shares the backend path with the WS `paramset.determine` command.
+      tags: [paramsets]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+        - { in: path, name: key, required: true, schema: { type: string, enum: [VALUES, MASTER, LINK] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parameter]
+              properties:
+                parameter:
+                  type: string
+                  description: Name of the parameter to determine (e.g. "TEMPERATURE").
+      responses:
+        "200":
+          description: The value the device reported for the parameter.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [value]
+                properties:
+                  value:
+                    description: |
+                      The determined value. Type follows the parameter's
+                      declared TYPE (bool / number / string); null when the
+                      backend does not support the operation (e.g. CUxD).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502":
+          description: CCU read error
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/ui-schema:
     get:
       operationId: getUiSchema

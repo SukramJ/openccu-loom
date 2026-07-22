@@ -24,6 +24,12 @@
   the CCU WebUI's own behaviour — previously a long-press counter could
   linger and keep the device sending long-press events to the CCU after
   you switched the link off.
+- **"Determine" button for channel settings.** Configuration parameters
+  whose live value the device can report on demand now show a "Determine"
+  button in the channel settings editor. Pressing it reads the current
+  value straight from the device and drops it into the field as an
+  unsaved edit you can still adjust or undo before saving. Mirrors the
+  CCU WebUI's per-parameter "Determine" action.
 - **Secured transmission (AES) per channel.** A device channel's
   configuration now shows a "Secured transmission" switch whenever the
   channel supports AES-signed telegrams. Turning it on asks first,

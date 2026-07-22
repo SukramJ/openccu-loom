@@ -139,7 +139,15 @@ export type UISchemaParameter = {
   max?: unknown;
   default?: unknown;
   value_list?: UISchemaValueListEntry[];
-  operations: { read: boolean; write: boolean; event: boolean };
+  // `determine` (OPERATIONS bit 0x08) marks a parameter whose live value
+  // can be read from the device on demand; the MASTER editor renders a
+  // "Determine" button for it. Omitted (falsey) when the bit is unset.
+  operations: {
+    read: boolean;
+    write: boolean;
+    event: boolean;
+    determine?: boolean;
+  };
   flags: { visible: boolean; internal: boolean; service: boolean };
   control?: string;
   value?: unknown;

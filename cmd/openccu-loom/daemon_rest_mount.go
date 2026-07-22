@@ -75,9 +75,13 @@ type restMountDeps struct {
 	dpWriterAdapter    *adapter.DataPointWriterAdapter
 	customDPDispatcher *adapter.CustomDPDispatcher
 	paramsetsDomain    *adapter.ParamsetsDomain
-	hubAdapter         *adapter.HubAdapter
-	ifaceAdapter       *adapter.InterfacesAdapter
-	incidents          handlers.IncidentsReader
+	// parameterDeterminer backs POST .../paramsets/{key}/determine (the
+	// MASTER editor's "Determine" button). Shares the registry-resolved
+	// backend path with the WS `paramset.determine` command.
+	parameterDeterminer *adapter.ParameterDeterminerAdapter
+	hubAdapter          *adapter.HubAdapter
+	ifaceAdapter        *adapter.InterfacesAdapter
+	incidents           handlers.IncidentsReader
 	// alarm is the daemon-level alarm service backing the /alarm surface.
 	// It may be a nil *alarm.Service (subsystem disabled or failed to
 	// start); alarmPanelFrom converts that to a nil interface so the
@@ -199,6 +203,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		DPWriter:              d.dpWriterAdapter,
 		CustomDPWriter:        d.customDPDispatcher,
 		Paramsets:             d.paramsetsDomain,
+		ParameterDeterminer:   d.parameterDeterminer,
 		Hub:                   d.hubAdapter,
 		WebhookInboundEnabled: cfg.North.Webhook.Inbound.Enabled,
 		WebhookInboundToken:   cfg.North.Webhook.Inbound.Token,
