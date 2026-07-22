@@ -7,6 +7,12 @@
   per-channel switch for each eligible channel, so you can route the
   clicks of a single button to OpenCCU-Loom without touching the rest of
   the device (API 2.36.0).
+- **Turning a central link off now clears long-press forwarding too.**
+  Deactivating the press-event forwarding for a channel now clears both
+  the short-press and long-press usage counters on the device, matching
+  the CCU WebUI's own behaviour — previously a long-press counter could
+  linger and keep the device sending long-press events to the CCU after
+  you switched the link off.
 - **Device admin from the UI.** Renaming a device now persists to the
   CCU (optionally renaming all channels along), single channels can be
   renamed, removing a device offers factory-reset / force options with

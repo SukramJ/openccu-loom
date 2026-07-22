@@ -37,9 +37,19 @@ func NewCentralLinksDomain(r *central.Registry, w *client.ValueWriter) *CentralL
 // resolved.
 var ErrNoCentralLinkBackend = errors.New("central-links: no backend for device")
 
-// ReportValueUsageValueID is the data-id
-// channel; matches `REPORT_VALUE_USAGE_VALUE_ID` in const.py.
+// reportValueUsageValueID is the primary press value-id whose per-channel
+// counter gates central click-event forwarding; matches
+// `REPORT_VALUE_USAGE_VALUE_ID` in const.py.
 const reportValueUsageValueID = "PRESS_SHORT"
+
+// reportValueUsageLongValueID is the second value-id the teardown path
+// zeroes. Deactivating a central link must also drop the PRESS_LONG
+// ref-counter so the device-internal direct link is fully removed. The
+// CCU WebUI removeCentralLink zeroes PRESS_SHORT and PRESS_LONG, while
+// its createCentralLink only ever raises PRESS_SHORT — this deactivate
+// asymmetry is a deliberate divergence from the reference (which only
+// touches PRESS_SHORT on both paths); see docs/parity/by_design.md.
+const reportValueUsageLongValueID = "PRESS_LONG"
 
 // CreateCentralLinks enables click-event routing. When channelAddress
 // is empty every eligible channel of the device is switched on; when it
@@ -127,6 +137,14 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, chann
 		if !ok {
 			return hmapi.CentralLinksReport{}, hmapi.ErrCentralLinksUnsupported
 		}
+		// Activation raises only PRESS_SHORT (matching both the CCU WebUI
+		// createCentralLink and the reference). Teardown zeroes PRESS_SHORT
+		// and PRESS_LONG per channel so the device-internal direct link is
+		// fully removed; see docs/parity/by_design.md.
+		valueIDs := []string{reportValueUsageValueID}
+		if refCounter == 0 {
+			valueIDs = append(valueIDs, reportValueUsageLongValueID)
+		}
 		report := hmapi.CentralLinksReport{}
 		var firstErr error
 		for _, ch := range channels {
@@ -134,9 +152,17 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, chann
 				report.Skipped++
 				continue
 			}
-			if err := caller.ReportValueUsage(ctx, ch.Address, reportValueUsageValueID, refCounter); err != nil {
+			// A channel is counted once regardless of how many value-ids it
+			// takes; the first wire error marks the channel failed.
+			var chErr error
+			for _, valueID := range valueIDs {
+				if err := caller.ReportValueUsage(ctx, ch.Address, valueID, refCounter); err != nil && chErr == nil {
+					chErr = err
+				}
+			}
+			if chErr != nil {
 				if firstErr == nil {
-					firstErr = err
+					firstErr = chErr
 				}
 				report.Failed++
 				continue
