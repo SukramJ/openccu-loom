@@ -59,10 +59,46 @@ type wire struct {
 }
 
 type wireGroup struct {
-	ID              int               `json:"id"`
-	GroupType       wireType          `json:"groupType"`
-	GroupProperties map[string]string `json:"groupProperties"`
-	GroupMembers    []wireMember      `json:"groupMembers"`
+	ID        int      `json:"id"`
+	GroupType wireType `json:"groupType"`
+	// GroupProperties values are decoded lazily: a real CCU returns
+	// FORBID_SINGLE_OPERATION as a JSON boolean while NAME / GROUP_DEVICE_NAME
+	// are strings, so a fixed map[string]string would fail the whole unmarshal.
+	// json.RawMessage keeps each value verbatim; propString / propBool coerce.
+	GroupProperties map[string]json.RawMessage `json:"groupProperties"`
+	GroupMembers    []wireMember               `json:"groupMembers"`
+}
+
+// propString returns a group property as a string, tolerating a JSON string
+// ("foo") or any scalar (bool / number) rendered as its literal text.
+func propString(m map[string]json.RawMessage, key string) string {
+	raw, ok := m[key]
+	if !ok {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+// propBool returns a group property as a bool, tolerating a JSON boolean
+// (true/false — the real CCU format) or the string "true"/"false".
+func propBool(m map[string]json.RawMessage, key string) bool {
+	raw, ok := m[key]
+	if !ok {
+		return false
+	}
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return strings.EqualFold(s, "true")
+	}
+	return false
 }
 
 type wireType struct {
@@ -101,9 +137,9 @@ func ParseGroupList(raw string) ([]Group, error) {
 	for _, wg := range w.Groups {
 		g := Group{
 			ID:                    wg.ID,
-			Name:                  wg.GroupProperties[propName],
-			GroupDeviceName:       wg.GroupProperties[propGroupDeviceName],
-			ForbidSingleOperation: strings.EqualFold(wg.GroupProperties[propForbidSingleOperation], "true"),
+			Name:                  propString(wg.GroupProperties, propName),
+			GroupDeviceName:       propString(wg.GroupProperties, propGroupDeviceName),
+			ForbidSingleOperation: propBool(wg.GroupProperties, propForbidSingleOperation),
 			TypeID:                wg.GroupType.ID,
 			TypeLabel:             wg.GroupType.Label,
 			Members:               make([]Member, 0, len(wg.GroupMembers)),

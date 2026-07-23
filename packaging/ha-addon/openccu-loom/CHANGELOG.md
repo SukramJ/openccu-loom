@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.47.2
+
+- **Heating groups now appear in the UI.** A real CCU returns a boolean group
+  property that broke the group parser, so the Heizungsgruppen view came back
+  empty; it now tolerates both the boolean and string form.
+- **New: per-channel visibility & operation lock (G12).** Hide a channel from
+  the operation surfaces (data-point list, MQTT, Matter) or lock it against
+  control writes, per channel, from the device detail.
+- **Basic/Bearer auth toggle now flags a required restart** in the config editor
+  (it is wired at boot).
+
 ## 0.47.1
 
 - **Fixed the brand logo not showing behind Ingress / the remote app.** The
