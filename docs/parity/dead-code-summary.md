@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: e0be9f88
-HEAD: e0be9f88
+Generated: 5fd864cd
+HEAD: 5fd864cd
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26693 |
-| Reachable | 4628 |
-| Whitelisted | 19256 |
-| **Unreachable** | **2809** |
+| Total Exported | 26749 |
+| Reachable | 4637 |
+| Whitelisted | 19296 |
+| **Unreachable** | **2816** |
 
 ## Top-20 Packages by Dead Code
 
@@ -29,7 +29,7 @@ HEAD: e0be9f88
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
-| internal/model/device | 2 | 43 | 12 |
+| internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
 | internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
@@ -109,7 +109,7 @@ HEAD: e0be9f88
 | internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
-| internal/model/device | 2 | 43 | 12 |
+| internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
 | internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
@@ -129,6 +129,7 @@ HEAD: e0be9f88
 | internal/central/coordinators | 0 | 121 | 4 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |
+| internal/channelflags | 0 | 2 | 0 |
 | internal/client | 0 | 26 | 8 |
 | internal/client/observer | 0 | 3 | 0 |
 | internal/client/transport/jsonrpc | 0 | 13 | 0 |
@@ -192,7 +193,7 @@ HEAD: e0be9f88
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 90 | 28 |
+| internal/store/sqlite | 0 | 93 | 28 |
 | pkg/hmapi | 0 | 125 | 16 |
 | pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
