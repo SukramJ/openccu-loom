@@ -116,6 +116,7 @@ export type IconName =
   | "mdi:arrow-left"
   | "mdi:backup-restore"
   | "mdi:arrow-right"
+  | "mdi:chart-line-variant"
   | "mdi:battery"
   | "mdi:battery-alert"
   | "mdi:bell"
@@ -203,6 +204,7 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:arrow-left": ArrowLeft,
   "mdi:backup-restore": ArchiveRestore,
   "mdi:arrow-right": ArrowRight,
+  "mdi:chart-line-variant": LineChart,
   "mdi:battery": Battery,
   "mdi:battery-alert": BatteryWarning,
   "mdi:bell": Bell,

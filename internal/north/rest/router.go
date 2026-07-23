@@ -203,6 +203,9 @@ type Deps struct {
 	// Preferences backs per-user UI state (favorites, dashboard) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
+	// Diagrams backs the named multi-series diagram CRUD at /diagrams.
+	// Nil disables those routes.
+	Diagrams handlers.DiagramConfigService
 
 	// RoomFunctionAdmin backs room/function entity CRUD at /rooms and
 	// /functions (create/rename/delete). Nil disables those routes;
@@ -672,6 +675,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/me/preferences/{key}", handlers.GetPreference(d.Preferences))
 				pr.Put("/me/preferences/{key}", handlers.PutPreference(d.Preferences))
 				pr.Delete("/me/preferences/{key}", handlers.DeletePreference(d.Preferences))
+			}
+			if d.Diagrams != nil {
+				pr.Get("/diagrams", handlers.ListDiagrams(d.Diagrams))
+				pr.Get("/diagrams/{id}", handlers.GetDiagram(d.Diagrams))
+				pr.With(op).Post("/diagrams", handlers.CreateDiagram(d.Diagrams, d.AuditRecorder))
+				pr.With(op).Put("/diagrams/{id}", handlers.UpdateDiagram(d.Diagrams, d.AuditRecorder))
+				pr.With(op).Delete("/diagrams/{id}", handlers.DeleteDiagram(d.Diagrams, d.AuditRecorder))
 			}
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))

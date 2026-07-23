@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.49.0
+  version: 2.50.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -576,6 +576,124 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /diagrams:
+    get:
+      operationId: listDiagrams
+      summary: List saved diagram definitions (own + shared)
+      tags: [core]
+      description: |
+        Returns the caller's own named multi-series diagram definitions
+        plus every diagram shared by other users (SV03). Diagrams are
+        Loom-native metadata; each references measurement-history data
+        points that the recorder samples.
+      responses:
+        "200":
+          description: The caller's visible diagrams.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [diagrams]
+                properties:
+                  diagrams:
+                    type: array
+                    items: { $ref: "#/components/schemas/DiagramConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createDiagram
+      summary: Create a diagram definition
+      tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiagramWriteRequest" }
+            example:
+              name: Living-room climate
+              visibility: private
+              config:
+                series:
+                  - central: ccu1
+                    interface_id: ccu1-HmIP-RF
+                    channel_address: "0001ABCD:1"
+                    parameter: ACTUAL_TEMPERATURE
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiagramConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /diagrams/{id}:
+    get:
+      operationId: getDiagram
+      summary: Read a diagram definition
+      tags: [core]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The diagram.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiagramConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: updateDiagram
+      summary: Update a diagram definition (owner or admin)
+      tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiagramWriteRequest" }
+            example:
+              name: Living-room climate
+              visibility: shared
+              config: { series: [{ central: ccu1, parameter: ACTUAL_TEMPERATURE }] }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiagramConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteDiagram
+      summary: Delete a diagram definition (owner or admin)
+      tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /links:
     get:
       operationId: listAllLinks
@@ -9749,6 +9867,35 @@ components:
             Owning interface (wire interface id). Populated only by the
             global overview (`GET /links`); empty on the per-device
             listing.
+    DiagramConfig:
+      type: object
+      required: [id, name, visibility, owner, config, created_at_ms, updated_at_ms]
+      description: A named multi-series diagram definition (SV03).
+      properties:
+        id: { type: string }
+        name: { type: string }
+        visibility: { type: string, enum: [private, shared] }
+        owner: { type: string, description: Owner subject. }
+        config:
+          type: object
+          description: >
+            SPA-owned diagram document (series list + default range). Opaque
+            to the daemon except a non-empty central per series.
+        created_at_ms: { type: integer, format: int64 }
+        updated_at_ms: { type: integer, format: int64 }
+    DiagramWriteRequest:
+      type: object
+      required: [name]
+      description: Create or update a diagram definition.
+      properties:
+        name: { type: string }
+        visibility:
+          type: string
+          enum: [private, shared]
+          description: Defaults to private.
+        config:
+          type: object
+          description: SPA-owned diagram document (series list + default range).
     AddLinkRequest:
       type: object
       required: [sender_address, receiver_address]

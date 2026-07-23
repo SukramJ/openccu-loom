@@ -609,12 +609,26 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   (`ivtBinary`/`istAlarm`), Enum in Request/openapi.yaml, SPA-Option.
   *ReGa.*
   **Entscheidung:** `umsetzen`
-- **SV03 — Diagramm-Definitionen (benannte Multi-Serien-Diagramme)** (missing, P2 L)
-  Keine wiederverwendbaren Diagramme, keine zentrale Diagramm-Seite, keine
-  Multi-Serien-Charts. *Empfehlung:* Loom-natives Feature: SQLite-Tabelle
-  `diagram_configs` + REST-CRUD `/diagrams` + Route `#/diagrams`;
-  HistoryChart um mehrere Serien erweitern. Keine CCU-Schnittstelle.
-  **Entscheidung:** `umsetzen`
+- **SV03 — Diagramm-Definitionen (benannte Multi-Serien-Diagramme)** ✅ erledigt
+  (0.47.0, API 2.50.0)
+  Loom-natives Feature: Tabelle `diagram_configs` in der Haupt-DB (Migration
+  029, Owner+Visibility private/shared, config_json mit Serien-Liste,
+  Validierung: nicht-leere `central` je Serie, ≤8 Serien, ≤64 KB) +
+  `DiagramConfigStore` (List own+shared / Get / Create / Update / Delete,
+  Owner-or-Admin). REST-CRUD `/api/v1/diagrams` (Reads jede Rolle,
+  subject-scoped; Writes op-gated; Audit `diagram_config`) via cmd-Adapter
+  (Store-Sentinels → Handler-Sentinels). SPA: neue `MultiSeriesChart`
+  (N Avg-Linien, kategorische Palette, Legende, Per-Serie-Fallback,
+  Bereichs-Toolbar) + `Diagrams.svelte` (Liste + Editor mit Serien-Builder)
+  + `#/diagrams`-Route + Nav + i18n en+de.
+  **Gating (auf Wunsch):** die gesamte Diagramm-Fläche (Nav + Seite) ist an
+  die neue `history.v1`-Info-Capability gebunden und nur sichtbar, wenn die
+  Verlaufsaufzeichnung aktiv ist.
+  Getestet: Store-CRUD/Ownership/Validierung/Multi-CCU, Handler
+  (200/201/204/400/401/403/404/503 + Audit), Contract-Walk-Fake,
+  Diagrams-Gating-vitest.
+  **Follow-up (zurückgestellt):** gebündelter `GET /diagrams/{id}/data`,
+  WS-Commands, Editor-Datenpunkt-Picker statt Freitextfelder, Playwright-Baselines.
 - **SV04 — Diagramm-Anzeige: Langzeit, freier Zeitraum, Zoom, Vergleich** (partial, P2 M)
   `QueryBuckets` liest nur die Raw-Tabelle (Retention 30 d), obwohl
   Hourly-/Daily-Rollups existieren → Tier-Fallback einbauen (dann trägt

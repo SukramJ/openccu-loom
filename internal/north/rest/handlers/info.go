@@ -16,7 +16,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "2.49.0"
+const APIVersion = "2.50.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -54,6 +54,12 @@ const (
 	// (which cannot distinguish a disabled subsystem from an old daemon
 	// or a reverse-proxy misroute).
 	CapabilityAlarm = "alarm.v1"
+	// CapabilityHistory is surfaced when the opt-in measurement-history
+	// feature is enabled (the same flag that mounts /history, /energy and
+	// /history/recording). The SPA gates its history-dependent surfaces —
+	// the Diagrams view (SV03) — on this token so they stay hidden when
+	// recording is off.
+	CapabilityHistory = "history.v1"
 )
 
 // InfoResponse is the body of `GET /api/v1/info`.
@@ -91,6 +97,9 @@ type CapabilityDetector interface {
 	// HasAlarm reports whether the daemon-level alarm service is
 	// mounted (the /alarm routes exist).
 	HasAlarm() bool
+	// HasHistory reports whether the opt-in measurement-history feature
+	// is enabled.
+	HasHistory() bool
 }
 
 // Info serves build metadata plus the daemon's wall-clock uptime.
@@ -148,6 +157,9 @@ func capabilities(d CapabilityDetector) []string {
 	}
 	if d.HasAlarm() {
 		out = append(out, CapabilityAlarm)
+	}
+	if d.HasHistory() {
+		out = append(out, CapabilityHistory)
 	}
 	return out
 }

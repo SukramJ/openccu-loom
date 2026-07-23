@@ -266,6 +266,21 @@ export type BackupEntry = components["schemas"]["BackupEntry"];
 // composite key as (sv.central ?? "") + "/" + sv.name.
 export type SysvarEntry = components["schemas"]["SysvarSummary"];
 export type SysvarUsage = components["schemas"]["SysvarUsage"];
+export type DiagramConfig = components["schemas"]["DiagramConfig"];
+export type DiagramWriteRequest = components["schemas"]["DiagramWriteRequest"];
+// SPA-owned shape of a diagram's config document (SV03).
+export type DiagramSeries = {
+  central: string;
+  interface_id?: string;
+  channel_address?: string;
+  parameter?: string;
+  label?: string;
+  color?: string;
+};
+export type DiagramDocument = {
+  series: DiagramSeries[];
+  default_range_hours?: number;
+};
 
 // ProgramEntry re-exported from the generated ProgramSummary. central is
 // optional (Go json:"central,omitempty"); ProgramList.svelte builds its

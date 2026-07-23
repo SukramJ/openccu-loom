@@ -96,6 +96,11 @@ const (
 	// the operation and target name.
 	ActionRoomFunction Action = "room_function"
 
+	// ActionDiagramConfig records create / update / delete of a named
+	// multi-series diagram definition (SV03). The Note carries the
+	// operation and the diagram name.
+	ActionDiagramConfig Action = "diagram_config"
+
 	// ActionProgramDelete records deletion of a CCU program. The Note
 	// carries the program name and id.
 	ActionProgramDelete Action = "program_delete"

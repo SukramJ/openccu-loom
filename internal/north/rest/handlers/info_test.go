@@ -75,6 +75,7 @@ func (f fakeCapDetector) HasSupervisedRestart() bool { return false }
 func (f fakeCapDetector) HasMCP() bool               { return false }
 func (f fakeCapDetector) HasMCPWrite() bool          { return false }
 func (f fakeCapDetector) HasAlarm() bool             { return f.alarm }
+func (f fakeCapDetector) HasHistory() bool           { return false }
 
 func TestInfo_APIVersionAndAlwaysOnCapabilities(t *testing.T) {
 	t.Parallel()

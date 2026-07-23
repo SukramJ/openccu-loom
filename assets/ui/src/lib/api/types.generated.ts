@@ -698,6 +698,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/diagrams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List saved diagram definitions (own + shared)
+         * @description Returns the caller's own named multi-series diagram definitions
+         *     plus every diagram shared by other users (SV03). Diagrams are
+         *     Loom-native metadata; each references measurement-history data
+         *     points that the recorder samples.
+         */
+        get: operations["listDiagrams"];
+        put?: never;
+        /** Create a diagram definition */
+        post: operations["createDiagram"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/diagrams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a diagram definition */
+        get: operations["getDiagram"];
+        /** Update a diagram definition (owner or admin) */
+        put: operations["updateDiagram"];
+        post?: never;
+        /** Delete a diagram definition (owner or admin) */
+        delete: operations["deleteDiagram"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/links": {
         parameters: {
             query?: never;
@@ -7546,6 +7589,32 @@ export interface components {
             /** @description Owning interface (wire interface id). Populated only by the global overview (`GET /links`); empty on the per-device listing. */
             interface_id?: string;
         };
+        /** @description A named multi-series diagram definition (SV03). */
+        DiagramConfig: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            visibility: "private" | "shared";
+            /** @description Owner subject. */
+            owner: string;
+            /** @description SPA-owned diagram document (series list + default range). Opaque to the daemon except a non-empty central per series. */
+            config: Record<string, never>;
+            /** Format: int64 */
+            created_at_ms: number;
+            /** Format: int64 */
+            updated_at_ms: number;
+        };
+        /** @description Create or update a diagram definition. */
+        DiagramWriteRequest: {
+            name: string;
+            /**
+             * @description Defaults to private.
+             * @enum {string}
+             */
+            visibility?: "private" | "shared";
+            /** @description SPA-owned diagram document (series list + default range). */
+            config?: Record<string, never>;
+        };
         /** @description Create a direct link between a sender and a receiver channel. */
         AddLinkRequest: {
             sender_address: string;
@@ -8312,6 +8381,168 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listDiagrams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's visible diagrams. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        diagrams: components["schemas"]["DiagramConfig"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Living-room climate",
+                 *       "visibility": "private",
+                 *       "config": {
+                 *         "series": [
+                 *           {
+                 *             "central": "ccu1",
+                 *             "interface_id": "ccu1-HmIP-RF",
+                 *             "channel_address": "0001ABCD:1",
+                 *             "parameter": "ACTUAL_TEMPERATURE"
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["DiagramWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The diagram. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramConfig"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Living-room climate",
+                 *       "visibility": "shared",
+                 *       "config": {
+                 *         "series": [
+                 *           {
+                 *             "central": "ccu1",
+                 *             "parameter": "ACTUAL_TEMPERATURE"
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["DiagramWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

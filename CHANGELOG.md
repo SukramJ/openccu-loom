@@ -69,6 +69,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
   HmIP-RF only (`team_supported`). A per-channel team picker appears in
   the device detail.
+- **Named multi-series diagrams.** A new Diagrams view (`#/diagrams`)
+  lets operators compose and save charts that overlay several
+  measurement-history data points — across devices and CCUs — as private
+  or shared definitions. Backed by CRUD REST routes
+  (`GET/POST/PUT/DELETE /api/v1/diagrams`) over a new `diagram_configs`
+  table (owner + visibility, series document validated for a non-empty
+  central); each chart's data comes from the existing history feature.
+  The whole surface (nav + page) is gated on the opt-in history-recording
+  feature via a new `history.v1` info capability, so it stays hidden when
+  recording is off.
 - **Test a direct link at the device.** A new `POST
   /api/v1/devices/{addr}/links/test` endpoint (and the operator WebSocket
   command `links.activate_paramset`) triggers the receiver's LINK

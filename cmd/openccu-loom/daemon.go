@@ -494,6 +494,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if auditDB != nil {
 		prefSvc = sqlitestore.NewUserPreferencesStore(auditDB)
 	}
+	var diagramSvc handlers.DiagramConfigService
+	if auditDB != nil {
+		diagramSvc = newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB))
+	}
 	tokenAdminSvc := rw.tokenAdmin
 	// Wrap the persisted CentralAdminService so POST/PUT/DELETE
 	// /admin/centrals also drive the live orchestrator built above — the
@@ -696,6 +700,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		userSvc:                 userAdminSvc,
 		passwordSvc:             selfPasswordSvc,
 		prefSvc:                 prefSvc,
+		diagramSvc:              diagramSvc,
 		tokenSvc:                tokenAdminSvc,
 		centSvc:                 centralAdminSvc,
 		discovery:               discoveryDeps,

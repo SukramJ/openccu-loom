@@ -67,6 +67,26 @@ func (fakePreferencesService) Get(context.Context, string, string) (string, erro
 func (fakePreferencesService) Set(context.Context, string, string, string) error   { return nil }
 func (fakePreferencesService) Delete(context.Context, string, string) error        { return nil }
 
+type fakeDiagramConfigService struct{}
+
+func (fakeDiagramConfigService) List(context.Context, string) ([]handlers.DiagramConfig, error) {
+	return nil, nil
+}
+
+func (fakeDiagramConfigService) Get(context.Context, string, string, bool) (handlers.DiagramConfig, error) {
+	return handlers.DiagramConfig{}, nil
+}
+
+func (fakeDiagramConfigService) Create(context.Context, string, string, string, string) (handlers.DiagramConfig, error) {
+	return handlers.DiagramConfig{}, nil
+}
+
+func (fakeDiagramConfigService) Update(context.Context, string, string, bool, string, string, string) (handlers.DiagramConfig, error) {
+	return handlers.DiagramConfig{}, nil
+}
+
+func (fakeDiagramConfigService) Delete(context.Context, string, string, bool) error { return nil }
+
 type fakeDeviceIndex struct{}
 
 func (fakeDeviceIndex) Devices() []*device.Device            { return nil }
@@ -560,6 +580,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Config:                  fakeConfigReader{},
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},
+		Diagrams:                fakeDiagramConfigService{},
 		Devices:                 fakeDeviceIndex{},
 		MasterProfiles:          fakeMasterProfilesService{},
 		UISchema:                fakeUISchemaService{},

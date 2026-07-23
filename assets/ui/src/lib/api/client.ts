@@ -54,6 +54,8 @@ import type {
   SuppressedServiceMessage,
   SysvarEntry,
   SysvarUsage,
+  DiagramConfig,
+  DiagramWriteRequest,
   SystemCCUEntry,
   UISchema,
 } from "./types";
@@ -2056,6 +2058,27 @@ export async function getHistory(params: {
     }
     throw err;
   }
+}
+
+// --- Named diagram definitions (SV03) ---
+export async function listDiagrams(): Promise<DiagramConfig[]> {
+  const r = await request<{ diagrams: DiagramConfig[] }>(`/diagrams`);
+  return r.diagrams;
+}
+export function getDiagram(id: string): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`);
+}
+export function createDiagram(body: DiagramWriteRequest): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams`, { method: "POST", body: JSON.stringify(body) });
+}
+export function updateDiagram(id: string, body: DiagramWriteRequest): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+export function deleteDiagram(id: string): Promise<void> {
+  return request<void>(`/diagrams/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 /** Effective per-datapoint recording state (SV10). */

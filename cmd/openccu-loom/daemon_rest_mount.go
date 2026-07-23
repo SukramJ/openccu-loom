@@ -114,6 +114,7 @@ type restMountDeps struct {
 	userSvc     handlers.UserAdminService
 	passwordSvc handlers.SelfPasswordService
 	prefSvc     handlers.UserPreferencesService
+	diagramSvc  handlers.DiagramConfigService
 	tokenSvc    handlers.TokenAdminService
 	centSvc     handlers.CentralAdminService
 	discovery   *handlers.DiscoveryDeps
@@ -240,6 +241,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		SessionRevoker:          d.sessions,
 		TokenPurger:             d.sqTokens,
 		Preferences:             d.prefSvc,
+		Diagrams:                d.diagramSvc,
 		RoomFunctionAdmin:       d.roomFunctionAdmin,
 		TLSCert:                 tlsCertSvc,
 		TokenAdmin:              d.tokenSvc,
@@ -285,6 +287,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// tracks whether the /alarm routes exist, not whether the
 			// engine is armed/healthy.
 			alarm: d.alarm != nil,
+			// History is enabled when the recorder store was wired (the
+			// same opt-in flag that mounts /history and /history/recording).
+			history: d.historyStore != nil,
 		},
 		CORS:       buildCORS(cfg),
 		Idempotent: true,
