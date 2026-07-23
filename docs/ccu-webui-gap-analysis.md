@@ -679,10 +679,12 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   exakt die vom Handler erwartete Form:
   `[{"id":"6924","name":"AAAb","active":true}]` — `DPEnumUsagePrograms()`
   findet die Referenz, ID/`UriEncode`-Name/`active`-Boolean stimmen, JSON-Framing
-  korrekt. Der Inter-Element-Trenner (`WriteLine(',')`) feuert erst ab dem
-  2. Programm auf derselben Sysvar; mit nur einer Referenz nicht ausgelöst,
-  aber der `foreach`-Rumpf (der einzige CCU-seitige Unbekannte) ist damit
-  verifiziert.
+  korrekt. Nach einem zweiten Programm `AAAc` auf derselben Sysvar feuert auch
+  der Inter-Element-Trenner (`WriteLine(',')`):
+  `[{"id":"6924",...,"active":true},\n{"id":"6949","name":"AAAc","active":true}]`
+  — valides JSON (Whitespace zwischen Array-Elementen ist bedeutungslos),
+  `json.Unmarshal` parst sauber zwei Einträge. Damit sind alle drei Fälle
+  (leer / ein Element / mehrere mit Trenner) gegen echte Hardware verifiziert.
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.
