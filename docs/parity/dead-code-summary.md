@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 6edf8a5b
-HEAD: 6edf8a5b
+Generated: e0be9f88
+HEAD: e0be9f88
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26516 |
-| Reachable | 4605 |
-| Whitelisted | 19121 |
-| **Unreachable** | **2790** |
+| Total Exported | 26693 |
+| Reachable | 4628 |
+| Whitelisted | 19256 |
+| **Unreachable** | **2809** |
 
 ## Top-20 Packages by Dead Code
 
@@ -31,7 +31,7 @@ HEAD: 6edf8a5b
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 55 | 40 |
+| internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -111,7 +111,7 @@ HEAD: 6edf8a5b
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 55 | 40 |
+| internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -137,7 +137,7 @@ HEAD: 6edf8a5b
 | internal/configui | 0 | 16 | 0 |
 | internal/diagnostics | 0 | 6 | 4 |
 | internal/health | 0 | 16 | 0 |
-| internal/history | 0 | 12 | 0 |
+| internal/history | 0 | 13 | 0 |
 | internal/i18n | 0 | 2 | 0 |
 | internal/metrics | 0 | 62 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
@@ -192,7 +192,7 @@ HEAD: 6edf8a5b
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 84 | 22 |
+| internal/store/sqlite | 0 | 90 | 28 |
 | pkg/hmapi | 0 | 125 | 16 |
 | pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
