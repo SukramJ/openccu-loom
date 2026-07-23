@@ -3339,6 +3339,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/history/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective per-datapoint recording state (read-only)
+         * @description Reports whether one data point's live values are currently
+         *     persisted to measurement history, and whether that decision comes
+         *     from an explicit override or the parameter-name glob policy. Part
+         *     of the opt-in history feature; 503 when history is disabled.
+         */
+        get: operations["getRecordingOverride"];
+        /**
+         * Set or clear a per-datapoint recording override
+         * @description Forces recording on/off for one data point, or (record: null)
+         *     clears the override so it falls back to the glob policy. Toggling
+         *     affects only future samples; existing rows are untouched. Part of
+         *     the opt-in history feature; 503 when disabled.
+         */
+        put: operations["putRecordingOverride"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/energy": {
         parameters: {
             query?: never;
@@ -5892,6 +5922,25 @@ export interface components {
              * @description Number of raw samples aggregated into this bucket.
              */
             count: number;
+        };
+        /** @description Effective measurement-recording state of one data point. */
+        RecordingState: {
+            /** @description Whether this data point's live values are currently persisted to measurement history. */
+            record: boolean;
+            /**
+             * @description "override" when an explicit per-datapoint toggle decides, "policy" when the parameter-name glob policy decides.
+             * @enum {string}
+             */
+            source: "override" | "policy";
+        };
+        /** @description Set or clear a per-datapoint recording override. A null `record` clears the override (revert to the glob policy). */
+        RecordingWriteRequest: {
+            central: string;
+            interface_id: string;
+            channel: string;
+            parameter: string;
+            /** @description true/false forces recording on/off; null clears the override. */
+            record?: boolean | null;
         };
         /** @description One bucketed point of a device's energy breakdown: the cumulative-counter delta over the bucket (Wh) plus the instantaneous POWER summary (W). */
         EnergyBucket: {
@@ -11150,6 +11199,68 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getRecordingOverride: {
+        parameters: {
+            query: {
+                central: string;
+                interface_id: string;
+                channel: string;
+                parameter: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective recording state for the data point. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordingState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    putRecordingOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "central": "ccu1",
+                 *       "interface_id": "ccu1-HmIP-RF",
+                 *       "channel": "0001ABCD:1",
+                 *       "parameter": "ACTUAL_TEMPERATURE",
+                 *       "record": true
+                 *     }
+                 */
+                "application/json": components["schemas"]["RecordingWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Resulting effective recording state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordingState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

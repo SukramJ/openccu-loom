@@ -636,10 +636,19 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   kanal-scoped Patterns (`ADDR:4/POWER`) im Recorder-Filter + einfache
   Aufnahme-Verwaltung in der SPA. Rein Loom-seitig.
   **Entscheidung:** `offen`
-- **SV10 — Protokoll-Toggle am einzelnen Datenpunkt** (partial, P3 S)
-  *Empfehlung:* „Aufzeichnen"-Toggle im Gerätedetail, der eine
-  per-DP-Allow/Deny-Liste in der History-Config pflegt. Rein Loom-seitig.
-  **Entscheidung:** `umsetzen`
+- **SV10 — Protokoll-Toggle am einzelnen Datenpunkt** ✅ erledigt
+  (0.47.0, API 2.46.0)
+  „Aufzeichnen"-Switch im History-Tab des Gerätedetails, der die
+  Glob-Richtlinie (`Include`/`Exclude`) je Datenpunkt-Instanz überstimmt;
+  „auf Standard zurücksetzen" löscht die Übersteuerung. Persistenz: sparse
+  Tabelle `measurement_recording_overrides` in der History-DB (Migration
+  004), In-Memory-Overlay (`history.RecordingOverrides`) am Recorder-Hot-Path
+  (kein Platten-Read je Event). REST: `GET`/`PUT /api/v1/history/recording`
+  (REST-only wie History/Energy — kein WS). Numeric- + Live-Provenance-Guards
+  bleiben wirksam (Force-On kann keinen Nicht-Numerik-/Nicht-Live-Wert
+  aufzeichnen). Purge bei Geräte-/Zentral-Entfernung mit den Messwerten.
+  Getestet: Store-CRUD/Purge, Overlay + Recorder-Precedence, Handler,
+  RecordToggle-vitest. Gated hinter dem Opt-in-History-Feature (E2E-Skip).
 
 ### 4.8 Systemsteuerung
 

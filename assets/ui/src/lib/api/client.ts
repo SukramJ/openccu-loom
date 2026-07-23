@@ -2038,6 +2038,69 @@ export async function getHistory(params: {
   }
 }
 
+/** Effective per-datapoint recording state (SV10). */
+export type RecordingState = { record: boolean; source: "override" | "policy" };
+
+/**
+ * Read whether a data point's live values are currently recorded to
+ * history, and whether that decision is an explicit override or the glob
+ * policy (GET /api/v1/history/recording). Throws HistoryDisabledError
+ * when the history feature is off (404).
+ */
+export async function getRecordingOverride(params: {
+  central: string;
+  interfaceId: string;
+  channel: string;
+  parameter: string;
+}): Promise<RecordingState> {
+  const qs = new URLSearchParams({
+    central: params.central,
+    interface_id: params.interfaceId,
+    channel: params.channel,
+    parameter: params.parameter,
+  });
+  try {
+    return await request<RecordingState>(`/history/recording?${qs.toString()}`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
+/**
+ * Force recording on/off for a data point, or clear the override
+ * (record: null → revert to the glob policy) via
+ * PUT /api/v1/history/recording. Throws HistoryDisabledError when the
+ * history feature is off (404).
+ */
+export async function setRecordingOverride(params: {
+  central: string;
+  interfaceId: string;
+  channel: string;
+  parameter: string;
+  record: boolean | null;
+}): Promise<RecordingState> {
+  try {
+    return await request<RecordingState>(`/history/recording`, {
+      method: "PUT",
+      body: JSON.stringify({
+        central: params.central,
+        interface_id: params.interfaceId,
+        channel: params.channel,
+        parameter: params.parameter,
+        record: params.record,
+      }),
+    });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
 /**
  * Fetch the per-device power/energy breakdown for a central over a
  * time range (GET /api/v1/energy). Wh on the wire; callers divide by

@@ -70,6 +70,12 @@ const (
 	// The Entry's DeviceAddress carries the channel address.
 	ActionDeviceTeamSet Action = "device_team_set"
 
+	// ActionRecordingToggle records an operator toggling per-datapoint
+	// measurement recording (force on/off) or clearing the override back to
+	// the glob policy. The Entry's DeviceAddress carries the channel and the
+	// Note carries central/interface/parameter and the new state.
+	ActionRecordingToggle Action = "recording_toggle"
+
 	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"

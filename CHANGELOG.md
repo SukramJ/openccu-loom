@@ -69,6 +69,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
   HmIP-RF only (`team_supported`). A per-channel team picker appears in
   the device detail.
+- **Per-datapoint recording toggle.** When measurement history is
+  enabled, the device-detail history tab gains a "Record" switch that
+  forces recording on or off for one specific data point, overriding the
+  parameter-name glob policy; "reset to default" clears the override. New
+  `GET`/`PUT /api/v1/history/recording` endpoints back it, a sparse
+  override table lives in the history database, and the recorder consults
+  an in-memory overlay on its hot path (no per-event disk read). The
+  numeric and live-provenance guards still apply — a force-on cannot
+  record a non-numeric or non-live value. Overrides are purged on
+  device-remove / central-remove alongside the measurements.
 - **Global direct-links overview.** A new `GET /api/v1/links` endpoint
   (and the read-only `links.list_all` WebSocket command) aggregates
   every direct link across all centrals into one flat list; each link

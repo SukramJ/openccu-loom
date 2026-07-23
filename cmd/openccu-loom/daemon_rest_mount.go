@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
@@ -134,8 +135,9 @@ type restMountDeps struct {
 	visibilityUnIgnoreStore handlers.VisibilityUnIgnoreStore
 	visibilityAdapter       *visibilityAdapter
 
-	valuesCacheStore *sqlitestore.ValuesCacheStore
-	historyStore     *sqlitestore.MeasurementStore
+	valuesCacheStore   *sqlitestore.ValuesCacheStore
+	historyStore       *sqlitestore.MeasurementStore
+	recordingOverrides *history.RecordingOverrides
 }
 
 // mountRESTServer stands up the REST router + server (and the optional mDNS
@@ -355,6 +357,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		EnableRestartEndpoint: detectSupervisedRestart(),
 		ValuesCache:           newValuesCacheHandlerAdapter(d.valuesCacheStore),
 		History:               newHistoryHandlerAdapter(d.historyStore),
+		RecordingOverrides:    newRecordingOverrideAdapter(d.recordingOverrides),
 		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),

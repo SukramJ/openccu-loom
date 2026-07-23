@@ -195,6 +195,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	masterValuesStore := si.masterValuesStore
 	valuesCacheStore := si.valuesCacheStore
 	historyStore := si.historyStore
+	recordingOverrides := si.recordingOverrides
+	recordingStore := si.recordingStore
 	wsHub := si.wsHub
 	wsHandler := si.wsHandler
 	valueWriter := si.valueWriter
@@ -384,6 +386,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		descriptorStores:        si.descriptorStores,
 		sqCentrals:              sqCentrals,
 		historyStore:            historyStore,
+		recordingOverrides:      recordingOverrides,
+		recordingStore:          recordingStore,
 		healthTracker:           healthTracker,
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		mqttWiring:              mqttWiring,
@@ -411,7 +415,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// below then leaves the plain SQLite-backed service in place.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 	centralOrch := newCentralOrchestrator(reg, sb.bringUpManager, sbDeps, cfg, logger, instanceName,
-		valuesCacheStore, masterValuesStore, historyStore)
+		valuesCacheStore, masterValuesStore, historyStore, recordingStore)
 	// A runtime-adopted central must join the hub-discovery ready pipeline the
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
@@ -709,6 +713,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visibilityAdapter:       visibilityAdapter,
 		valuesCacheStore:        valuesCacheStore,
 		historyStore:            historyStore,
+		recordingOverrides:      recordingOverrides,
 	})
 	defer restMountTeardown()
 

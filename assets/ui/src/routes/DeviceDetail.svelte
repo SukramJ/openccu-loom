@@ -11,6 +11,7 @@
   import MaintenanceStatusGrid from "$lib/components/device/MaintenanceStatusGrid.svelte";
   import AuditLog from "./AuditLog.svelte";
   import HistoryChart from "$lib/components/HistoryChart.svelte";
+  import RecordToggle from "$lib/components/RecordToggle.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -1194,6 +1195,14 @@
                   <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.loading_parameters")}</span>
                 {:else if historyChannelNo !== null}
                   <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.no_numeric")}</span>
+                {/if}
+                {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
+                  <RecordToggle
+                    central={detail.central}
+                    interfaceId={detail.interface_id}
+                    channel={`${detail.address}:${historyChannelNo}`}
+                    parameter={historyParameter}
+                  />
                 {/if}
               </div>
               {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}

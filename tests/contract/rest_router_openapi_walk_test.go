@@ -160,6 +160,20 @@ func (fakeEnergyService) Energy(context.Context, handlers.EnergyQuery) (handlers
 	return handlers.EnergyResponse{}, nil
 }
 
+type fakeRecordingOverrideService struct{}
+
+func (fakeRecordingOverrideService) Effective(context.Context, string, string, string, string) (record bool, source string, err error) {
+	return true, "policy", nil
+}
+
+func (fakeRecordingOverrideService) Set(context.Context, string, string, string, string, bool, string) error {
+	return nil
+}
+
+func (fakeRecordingOverrideService) Clear(context.Context, string, string, string, string, string) error {
+	return nil
+}
+
 type fakeDeviceAdmin struct{}
 
 // fakeFirmwareRefresher backs the /devices/firmware/refresh route in the
@@ -551,6 +565,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		Schedules:               fakeScheduleService{},
 		Audit:                   fakeAuditService{},
 		History:                 fakeHistoryService{},
+		RecordingOverrides:      fakeRecordingOverrideService{},
 		Energy:                  fakeEnergyService{},
 		DeviceAdmin:             fakeDeviceAdmin{},
 		DeviceReplacer:          fakeDeviceReplacer{},

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.45.0
+  version: 2.46.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3812,6 +3812,57 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /history/recording:
+    get:
+      operationId: getRecordingOverride
+      summary: Effective per-datapoint recording state (read-only)
+      tags: [history]
+      description: |
+        Reports whether one data point's live values are currently
+        persisted to measurement history, and whether that decision comes
+        from an explicit override or the parameter-name glob policy. Part
+        of the opt-in history feature; 503 when history is disabled.
+      parameters:
+        - { in: query, name: central, required: true, schema: { type: string } }
+        - { in: query, name: interface_id, required: true, schema: { type: string } }
+        - { in: query, name: channel, required: true, schema: { type: string } }
+        - { in: query, name: parameter, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Effective recording state for the data point.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecordingState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putRecordingOverride
+      summary: Set or clear a per-datapoint recording override
+      tags: [history]
+      description: |
+        Forces recording on/off for one data point, or (record: null)
+        clears the override so it falls back to the glob policy. Toggling
+        affects only future samples; existing rows are untouched. Part of
+        the opt-in history feature; 503 when disabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecordingWriteRequest" }
+            example:
+              central: ccu1
+              interface_id: ccu1-HmIP-RF
+              channel: "0001ABCD:1"
+              parameter: ACTUAL_TEMPERATURE
+              record: true
+      responses:
+        "200":
+          description: Resulting effective recording state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecordingState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /energy:
     get:
       operationId: getEnergy
@@ -7532,6 +7583,38 @@ components:
           type: integer
           format: int64
           description: Number of raw samples aggregated into this bucket.
+    RecordingState:
+      type: object
+      required: [record, source]
+      description: >
+        Effective measurement-recording state of one data point.
+      properties:
+        record:
+          type: boolean
+          description: >
+            Whether this data point's live values are currently persisted
+            to measurement history.
+        source:
+          type: string
+          enum: [override, policy]
+          description: >
+            "override" when an explicit per-datapoint toggle decides,
+            "policy" when the parameter-name glob policy decides.
+    RecordingWriteRequest:
+      type: object
+      required: [central, interface_id, channel, parameter]
+      description: >
+        Set or clear a per-datapoint recording override. A null `record`
+        clears the override (revert to the glob policy).
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        channel: { type: string }
+        parameter: { type: string }
+        record:
+          type: boolean
+          nullable: true
+          description: true/false forces recording on/off; null clears the override.
     EnergyBucket:
       type: object
       required: [ts, consumed_wh, feed_in_wh, avg_power_w, peak_power_w, reset]

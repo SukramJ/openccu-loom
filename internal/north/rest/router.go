@@ -159,6 +159,10 @@ type Deps struct {
 	// History feeds the measurement-history chart: GET /api/v1/history.
 	// Nil when the opt-in history feature is disabled (the default).
 	History handlers.HistoryService
+	// RecordingOverrides feeds the per-datapoint recording toggle:
+	// GET/PUT /api/v1/history/recording. Nil when the opt-in history
+	// feature is disabled (the same flag /history depends on).
+	RecordingOverrides handlers.RecordingOverrideService
 	// Energy feeds the energy view's per-device power/energy breakdown:
 	// GET /api/v1/energy. Nil when the opt-in history feature is
 	// disabled (the same feature flag /history depends on).
@@ -779,6 +783,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.History != nil {
 				pr.Get("/history", handlers.GetHistory(d.History))
+			}
+			if d.RecordingOverrides != nil {
+				pr.Get("/history/recording", handlers.GetRecordingOverride(d.RecordingOverrides))
+				pr.With(op).Put("/history/recording", handlers.PutRecordingOverride(d.RecordingOverrides, d.AuditRecorder))
 			}
 			if d.Energy != nil {
 				pr.Get("/energy", handlers.GetEnergy(d.Energy))
