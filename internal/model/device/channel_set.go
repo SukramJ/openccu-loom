@@ -35,6 +35,11 @@ var ErrUnknownParameter = errors.New("channel: parameter not in paramset")
 // non-writable through [writableReporter.IsWritable].
 var ErrParameterNotWritable = errors.New("channel: parameter not writable")
 
+// ErrChannelOperationLocked is returned when an operator has locked the
+// channel against control writes (G12). It rejects VALUES-paramset writes
+// only; MASTER/config writes and all reads are unaffected.
+var ErrChannelOperationLocked = errors.New("channel: operation locked")
+
 // ErrValidation wraps a client-side value rejection surfaced by Set/SetMany
 // when opts.Validate is set (type / range / enum / length / writability). It
 // lets callers such as the REST PUT handler tell a value the client got wrong
@@ -225,6 +230,12 @@ func (c *Channel) SetMasterRefreshHook(fn func(addr string, key hmenum.ParamsetK
 // optimistic tracker is staged before the wire call; the tracker is
 // rolled back automatically on wire failure.
 func (c *Channel) Set(ctx context.Context, key hmenum.ParamsetKey, p hmenum.Parameter, v hmtypes.ParamValue, opts SetOptions) error {
+	// Operator lock (G12): reject control writes to a locked channel before
+	// touching the CCU. Scoped to the VALUES paramset so MASTER/config edits
+	// still work.
+	if key == hmenum.ParamsetKeyValues && c.IsLocked() {
+		return ErrChannelOperationLocked
+	}
 	dp := c.paramsetParameterFast(key, p)
 	if dp == nil {
 		return ErrUnknownParameter
@@ -311,6 +322,11 @@ func (c *Channel) Set(ctx context.Context, key hmenum.ParamsetKey, p hmenum.Para
 func (c *Channel) SetMany(ctx context.Context, key hmenum.ParamsetKey, values map[hmenum.Parameter]hmtypes.ParamValue, opts SetOptions) error {
 	if len(values) == 0 {
 		return nil
+	}
+	// Operator lock (G12): reject control writes to a locked channel. Scoped
+	// to the VALUES paramset so MASTER/config edits still work.
+	if key == hmenum.ParamsetKeyValues && c.IsLocked() {
+		return ErrChannelOperationLocked
 	}
 
 	// Validate and look up every DP first, before touching any wire or

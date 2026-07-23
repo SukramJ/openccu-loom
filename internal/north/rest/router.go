@@ -14,6 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -163,6 +164,12 @@ type Deps struct {
 	// GET/PUT /api/v1/history/recording. Nil when the opt-in history
 	// feature is disabled (the same flag /history depends on).
 	RecordingOverrides handlers.RecordingOverrideService
+	// ChannelFlags + ChannelFlagsOverlay back the per-channel operator
+	// override endpoints (G12): GET/PUT
+	// /api/v1/devices/{addr}/channels/{no}/flags. Both nil when there is no
+	// durable DB (the routes are then not mounted).
+	ChannelFlags        handlers.ChannelFlagsWriter
+	ChannelFlagsOverlay *channelflags.Overlay
 	// Energy feeds the energy view's per-device power/energy breakdown:
 	// GET /api/v1/energy. Nil when the opt-in history feature is
 	// disabled (the same feature flag /history depends on).
@@ -696,6 +703,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/devices/{addr}/channels/{no}/data-points/{param}", handlers.GetDataPoint(d.Devices, d.Labels))
 				pr.With(op).Put("/devices/{addr}/channels/{no}/data-points/{param}/value",
 					handlers.PutDataPointValue(d.Devices, d.DPWriter))
+				// Per-channel operator overrides (G12): hidden / locked. Always
+				// mounted; PutChannelFlags returns 503 when there is no durable
+				// store/overlay, GetChannelFlags reads the live channel.
+				pr.Get("/devices/{addr}/channels/{no}/flags",
+					handlers.GetChannelFlags(d.Devices))
+				pr.With(op).Put("/devices/{addr}/channels/{no}/flags",
+					handlers.PutChannelFlags(d.Devices, d.ChannelFlags, d.ChannelFlagsOverlay, d.AuditRecorder))
 				// Custom data points (Phase C).
 				pr.Get("/devices/{addr}/cdps",
 					handlers.ListCustomDataPoints(d.Devices, d.Labels))

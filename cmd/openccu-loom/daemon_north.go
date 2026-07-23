@@ -405,7 +405,7 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 	return client
 }
 
-func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector) *mqttStack {
+func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool) *mqttStack {
 	if !cfg.North.MQTT.Enabled {
 		return nil
 	}
@@ -475,6 +475,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		Locale:             cfg.Locale,
 		HealthSupplier:     bridgeHealthSupplier(cfg, startedAt),
 		Collector:          collector,
+		ChannelHidden:      channelHidden,
 	}, pub)
 	wiring := mqtt.NewWiring(bridge, logger)
 

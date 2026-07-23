@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.50.0
+  version: 2.51.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -440,6 +440,53 @@ paths:
           $ref: "#/components/responses/NotFound"
         "502":
           $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /devices/{addr}/channels/{no}/flags:
+    get:
+      tags: [devices]
+      summary: Get the operator per-channel overrides (G12)
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelFlags" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [devices]
+      summary: Set the operator per-channel overrides (G12)
+      description: |
+        Hide the channel from the operation surfaces (data-point list, MQTT,
+        Matter) and/or lock it against control writes. An absent field keeps
+        its current value.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChannelFlagsRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelFlags" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -7157,6 +7204,27 @@ components:
             channels:
               type: array
               items: { $ref: "#/components/schemas/ChannelSummary" }
+    ChannelFlags:
+      type: object
+      description: Operator per-channel overrides (G12).
+      required: [hidden, locked]
+      properties:
+        hidden:
+          type: boolean
+          description: Channel hidden from the operation surfaces.
+        locked:
+          type: boolean
+          description: Channel locked against control writes.
+    ChannelFlagsRequest:
+      type: object
+      description: |
+        Partial update of the operator per-channel overrides (G12). An absent
+        field keeps its current value.
+      properties:
+        hidden:
+          type: boolean
+        locked:
+          type: boolean
     ChannelSummary:
       type: object
       required: [address, number, paramset_key, data_points_count]
@@ -7252,6 +7320,19 @@ components:
             (group-master) channel of its group — the daemon-derived
             "device primary channel" marker. Omitted when neither
             condition holds.
+        hidden:
+          type: boolean
+          description: |
+            Operator per-channel override (G12): when true the channel is
+            hidden from the operation surfaces (data-point list, MQTT, Matter).
+            The channel stays in the device detail so it remains manageable.
+            Omitted when false.
+        locked:
+          type: boolean
+          description: |
+            Operator per-channel override (G12): when true control writes to
+            the channel's VALUES paramset are rejected (423). Reads and
+            MASTER/config edits are unaffected. Omitted when false.
     MQTTReloadResponse:
       type: object
       required: [reloaded, took_ms]

@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/history"
@@ -136,9 +137,11 @@ type restMountDeps struct {
 	visibilityUnIgnoreStore handlers.VisibilityUnIgnoreStore
 	visibilityAdapter       *visibilityAdapter
 
-	valuesCacheStore   *sqlitestore.ValuesCacheStore
-	historyStore       *sqlitestore.MeasurementStore
-	recordingOverrides *history.RecordingOverrides
+	valuesCacheStore    *sqlitestore.ValuesCacheStore
+	historyStore        *sqlitestore.MeasurementStore
+	recordingOverrides  *history.RecordingOverrides
+	channelFlagsStore   *sqlitestore.ChannelFlagsStore
+	channelFlagsOverlay *channelflags.Overlay
 }
 
 // mountRESTServer stands up the REST router + server (and the optional mDNS
@@ -363,6 +366,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ValuesCache:           newValuesCacheHandlerAdapter(d.valuesCacheStore),
 		History:               newHistoryHandlerAdapter(d.historyStore),
 		RecordingOverrides:    newRecordingOverrideAdapter(d.recordingOverrides),
+		ChannelFlags:          d.channelFlagsStore,
+		ChannelFlagsOverlay:   d.channelFlagsOverlay,
 		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),

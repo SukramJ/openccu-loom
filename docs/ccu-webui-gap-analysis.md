@@ -32,7 +32,7 @@ Wellen 3, 5, 6 sowie die Welle-4-Kernpunkte G11/G14 mit 0.47.0. **Offen
 bleiben** aus den beschlossenen Punkten nur noch der **Gruppen-Konfigurator
 GR02–GR05** (Welle 2, XL, Rekonstruktion abgeschlossen — siehe
 [groups-wave-status](./ccu-webui-groups-wave-status.md)) und die
-**Welle-4-Restposten** G08/G12/G16 (teils Hardware-abhängig,
+**Welle-4-Restposten** G08/G16 (Hardware-abhängig; G12 erledigt mit API 2.51.0,
 `docs/ccu-webui-gap-analysis.md`-§4.4). Der jeweils erledigte Einzelpunkt
 in §4 trägt einen `✅ erledigt (0.4x)`-Vermerk.
 
@@ -440,10 +440,14 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   `POST /devices/{addr}/test` + WS `device.test` über die CCU-ReGa
   `DevStartComTest` (Start+Poll), Radio-Interfaces + SPA-Badge.
   STICKY_UNREACH-Reset und channel-level bleiben Follow-ups.
-- **G12 — Kanal-Sichtbarkeit und Bediensperre** (missing, P3 M)
+- **G12 — Kanal-Sichtbarkeit und Bediensperre** ✅ erledigt (API 2.51.0)
   Kanäle aus Bedienlisten ausblenden / Bedienung sperren (Gast-Ansichten).
-  *Empfehlung:* daemon-eigene Kanal-Flags im SQLite-Store + Filterung in
-  Listen/MQTT/Matter; optional ReGa-Sync (`oChannel.Visible`).
+  Daemon-eigene Kanal-Flags (`channel_flags`-SQLite-Store + In-Memory-Overlay,
+  Schlüssel `(central, channel_address)`); Ingest re-appliziert nach Reconnect.
+  `GET/PUT …/channels/{no}/flags` (Operator, Audit), zwei SPA-Toggles im
+  DeviceDetail. `hidden` filtert Datenpunkt-Liste + MQTT + Matter-Exposition;
+  `locked` weist VALUES-Writes mit 423 ab (MASTER/Reads unberührt).
+  Folge-Schritte: ReGa-Sync (`oChannel.Visible`), Playwright-Baselines.
   **Entscheidung:** `umsetzen`
 - **G13 — Übertragungsmodus Standard vs. gesichert (AES) je Kanal** (partial, P3 S)
   Kein Umschalt-Dialog; AES_ACTIVE ist per Default durch Sichtbarkeitsfilter
@@ -1010,9 +1014,9 @@ GR02 vor GR03–GR05.
 
 **Lieferstand 2026-07-23 (0.47.0):** Wellen **1a–1h ✅** und
 **GR01 ✅** (bis 0.46.0); Wellen **3 ✅, 5 ✅, 6 ✅** sowie die
-Welle-4-Kernpunkte **G11 ✅, G14 ✅** (0.47.0). **Offen:** Welle **2
-GR02–GR05** (Konfigurator, XL) und die Welle-4-Restposten **G08, G12, G16**
-(teils Hardware-abhängig).
+Welle-4-Kernpunkte **G11 ✅, G14 ✅** (0.47.0) sowie **G12 ✅** (Kanal-Sichtbarkeit/
+Sperre, API 2.51.0). **Offen:** Welle **2 GR02–GR05** (Konfigurator, XL) und die
+Welle-4-Restposten **G08, G16** (Hardware-abhängig).
 
 | Welle | Punkte | Inhalt |
 |---|---|---|

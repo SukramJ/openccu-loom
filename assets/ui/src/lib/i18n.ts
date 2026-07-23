@@ -2002,6 +2002,14 @@ const EN: Catalog = {
   "channel.unsaved": "Unsaved changes",
   "channel.saved_short": "Saved.",
   // --- Secured transmission (channel/SecureTransmission.svelte) ---
+  "channel.flags.hidden.title": "Hide channel",
+  "channel.flags.hidden.help":
+    "Removes this channel from the operation surfaces (entity list, MQTT, Matter). It stays visible here so you can unhide it.",
+  "channel.flags.locked.title": "Lock operation",
+  "channel.flags.locked.help":
+    "Blocks control writes to this channel. Reads and configuration are unaffected.",
+  "channel.flags.saved_toast": "Channel overrides saved",
+  "channel.flags.failed": "Could not save channel overrides",
   "channel.secure_transmission.title": "Secured transmission",
   "channel.secure_transmission.help":
     "Sign this channel's radio telegrams (AES). Raises security but also the channel's radio load and, on battery devices, battery drain.",
@@ -4944,6 +4952,14 @@ const DE: Catalog = {
   "channel.unsaved": "Ungespeicherte Änderungen",
   "channel.saved_short": "Gespeichert.",
   // --- Secured transmission (channel/SecureTransmission.svelte) ---
+  "channel.flags.hidden.title": "Kanal ausblenden",
+  "channel.flags.hidden.help":
+    "Entfernt diesen Kanal aus den Bedienflächen (Entitätsliste, MQTT, Matter). Er bleibt hier sichtbar, damit du ihn wieder einblenden kannst.",
+  "channel.flags.locked.title": "Bedienung sperren",
+  "channel.flags.locked.help":
+    "Blockiert Steuer-Schreibzugriffe auf diesen Kanal. Lesen und Konfiguration bleiben unberührt.",
+  "channel.flags.saved_toast": "Kanal-Einstellungen gespeichert",
+  "channel.flags.failed": "Kanal-Einstellungen konnten nicht gespeichert werden",
   "channel.secure_transmission.title": "Gesicherte Übertragung",
   "channel.secure_transmission.help":
     "Funktelegramme dieses Kanals signieren (AES). Erhöht die Sicherheit, steigert aber die Funklast des Kanals und – bei Batteriegeräten – den Batterieverbrauch.",
