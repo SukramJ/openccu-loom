@@ -445,10 +445,9 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Daemon-eigene Kanal-Flags (`channel_flags`-SQLite-Store + In-Memory-Overlay,
   Schlüssel `(central, channel_address)`); Ingest re-appliziert nach Reconnect.
   `GET/PUT …/channels/{no}/flags` (Operator, Audit), zwei SPA-Toggles im
-  DeviceDetail. `hidden` filtert Datenpunkt-Liste + Matter-Exposition; `locked`
-  weist VALUES-Writes mit 423 ab (MASTER/Reads unberührt). Folge-Schritte:
-  MQTT-Hide (Flag durchreichen/DP-Usage-Stempel), ReGa-Sync (`oChannel.Visible`),
-  Playwright-Baselines.
+  DeviceDetail. `hidden` filtert Datenpunkt-Liste + MQTT + Matter-Exposition;
+  `locked` weist VALUES-Writes mit 423 ab (MASTER/Reads unberührt).
+  Folge-Schritte: ReGa-Sync (`oChannel.Visible`), Playwright-Baselines.
   **Entscheidung:** `umsetzen`
 - **G13 — Übertragungsmodus Standard vs. gesichert (AES) je Kanal** (partial, P3 S)
   Kein Umschalt-Dialog; AES_ACTIVE ist per Default durch Sichtbarkeitsfilter

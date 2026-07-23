@@ -9,7 +9,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **Per-channel visibility and operation lock (G12).** An operator can now hide
-  a channel from the operation surfaces (data-point list, Matter exposure) and
+  a channel from the operation surfaces (data-point list, MQTT, Matter) and
   lock it against control writes, per channel, from the device-detail channel
   editor. `GET`/`PUT /api/v1/devices/{addr}/channels/{no}/flags` back the two
   toggles (`hidden`, `locked`); a locked channel rejects VALUES writes with
