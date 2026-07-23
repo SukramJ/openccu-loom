@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.47.1
+
+- **Fixed the brand logo not showing behind Ingress / the remote app.** The
+  wordmark used a root-absolute path that bypassed the Ingress proxy prefix; it
+  now renders both directly and behind the proxy.
+
 ## 0.47.0
 
 - **Rooms and Gewerke can now be assigned per channel**, not just per

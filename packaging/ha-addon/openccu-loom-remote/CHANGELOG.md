@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.47.1
+
+Version ride-along. No changes to the proxy itself; the paired instance's
+SPA fix makes the brand logo render again when accessed through this
+remote proxy (update the instance to 0.47.1 too).
+
 # 0.47.0 (unreleased)
 
 Version ride-along with the OpenCCU-Loom device-workflows wave; no

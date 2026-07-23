@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.47.1]
+
 ### Fixed
 
 - **Brand logo missing behind Home Assistant Ingress / the remote app.** The
