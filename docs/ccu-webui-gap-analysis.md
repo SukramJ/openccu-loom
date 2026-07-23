@@ -673,11 +673,16 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Handler-Anreicherung (200/404/503), WS-Dispatch, SysvarList-vitest.
   godevccu kann `DPEnumUsagePrograms` nicht bedienen (Pattern-Engine) →
   E2E-Skip; godevccu-Handler als späterer Folge-Fix.
-  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** `DPEnumUsagePrograms()`
-  existiert + läuft fehlerfrei über ReGa; Empty-Pfad bestätigt (keine
-  Programm↔Sysvar-Referenz auf der Test-CCU). Nicht-Leer-Trennzeichen
-  mangels Programm nicht auslösbar (mein `foreach` nutzt dasselbe
-  Enum-Muster wie das getestete `get_program_descriptions.fn`).
+  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** Empty-Pfad + Nicht-Leer-Pfad
+  gegen echte Hardware bestätigt. Nach Anlegen eines Programms `AAAb`, das die
+  Sysvar `bbb1_2` referenziert, liefert das unveränderte `usage_by_sysvar.fn`
+  exakt die vom Handler erwartete Form:
+  `[{"id":"6924","name":"AAAb","active":true}]` — `DPEnumUsagePrograms()`
+  findet die Referenz, ID/`UriEncode`-Name/`active`-Boolean stimmen, JSON-Framing
+  korrekt. Der Inter-Element-Trenner (`WriteLine(',')`) feuert erst ab dem
+  2. Programm auf derselben Sysvar; mit nur einer Referenz nicht ausgelöst,
+  aber der `foreach`-Rumpf (der einzige CCU-seitige Unbekannte) ist damit
+  verifiziert.
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.
