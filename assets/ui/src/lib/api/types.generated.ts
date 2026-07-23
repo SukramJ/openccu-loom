@@ -2866,6 +2866,32 @@ export interface paths {
         patch: operations["updateLink"];
         trace?: never;
     };
+    "/devices/{addr}/links/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a direct link at the device (activate link paramset)
+         * @description Triggers the receiver's LINK-paramset behaviour for the given
+         *     sender — the CCU config dialog's "test link" / simulate-keypress
+         *     probe. It PHYSICALLY actuates the receiver (a switch clicks, a
+         *     blind moves), so it is operator-gated and fire-and-forget. Maps to
+         *     XML-RPC `activateLinkParamset(receiver, sender, longPress)`. 501
+         *     when the interface does not support link activation (CUxD /
+         *     Homegear).
+         */
+        post: operations["testLinkAtDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/link-ps/{peer}": {
         parameters: {
             query?: never;
@@ -7527,6 +7553,13 @@ export interface components {
             name?: string;
             description?: string;
         };
+        /** @description Trigger the receiver's LINK paramset for the sender (test link / simulate keypress). Physically actuates the receiver. */
+        TestLinkAtDeviceRequest: {
+            receiver_address: string;
+            sender_address: string;
+            /** @description Select the LONG_* action group instead of SHORT_*. Default false. */
+            long_press?: boolean;
+        };
         /** @description Change the name and/or description of an existing direct link. The two channel addresses identify the link; name and description are written verbatim, so an empty string clears that field on the CCU. */
         UpdateLinkRequest: {
             sender_address: string;
@@ -10368,6 +10401,48 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    testLinkAtDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "receiver_address": "0001ABCD:3",
+                 *       "sender_address": "0002EFGH:1",
+                 *       "long_press": false
+                 *     }
+                 */
+                "application/json": components["schemas"]["TestLinkAtDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description Triggered (the actuator reacts asynchronously). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description Link activation not supported on this interface. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

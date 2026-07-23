@@ -27,3 +27,4 @@ device.test                 -- godevccu has no ReGa DevStartComTest; live CCU ru
 device.team_candidates      -- godevccu has no listTeams; live CCU returns team channels
 device.set_team             -- godevccu has no setTeam; live CCU assigns the team
 sysvars.usage -- godevccu has no DPEnumUsagePrograms; live CCU returns referencing programs
+links.activate_paramset -- godevccu lacks activateLinkParamset; live CCU triggers the actuator

@@ -84,6 +84,10 @@ func (t *testBackendOps) GetLinkParamset(_ context.Context, _, _ string) (map[st
 	return nil, nil
 }
 
+func (t *testBackendOps) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (t *testBackendOps) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }

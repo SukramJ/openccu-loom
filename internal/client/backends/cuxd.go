@@ -190,6 +190,12 @@ func (*CuxdBackend) PutLinkParamset(context.Context, string, string, map[string]
 	return ErrUnsupported
 }
 
+// ActivateLinkParamset implements [Operations]. CUxD has no central-link
+// concept.
+func (*CuxdBackend) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return ErrUnsupported
+}
+
 // ReportValueUsage implements [Operations]. CUxD has no central-link
 // concept — its devices are virtual proxies, and click events flow
 // through the BIN-RPC channel directly.

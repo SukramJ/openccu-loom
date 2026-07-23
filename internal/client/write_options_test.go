@@ -105,6 +105,8 @@ func (s *stubBackend) GetLinkParamset(context.Context, string, string) (map[stri
 	return nil, nil
 }
 
+func (s *stubBackend) ActivateLinkParamset(context.Context, string, string, bool) error { return nil }
+
 func (s *stubBackend) PutLinkParamset(context.Context, string, string, map[string]any) error {
 	return nil
 }

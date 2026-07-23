@@ -69,6 +69,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
   HmIP-RF only (`team_supported`). A per-channel team picker appears in
   the device detail.
+- **Test a direct link at the device.** A new `POST
+  /api/v1/devices/{addr}/links/test` endpoint (and the operator WebSocket
+  command `links.activate_paramset`) triggers the receiver's LINK
+  paramset for a sender — the CCU config dialog's "test link" /
+  simulate-keypress probe (short or long press). It maps to XML-RPC
+  `activateLinkParamset` and **physically actuates the receiver**, so the
+  schedule/link profile editor's new "Test (short/long press)" buttons
+  confirm before firing, and the endpoint is operator-gated. CUxD /
+  Homegear interfaces report `501`. Read-only `links.test_profile` (the
+  embedded profile preview) is unchanged.
 - **Universal-light weekly-program colour preserved.** Editing a
   universal light's (HmIP-RGBW / DRG-DALI / LSC) or HmIP-BSL weekly
   program no longer discards the per-switch-point colour / effect. The

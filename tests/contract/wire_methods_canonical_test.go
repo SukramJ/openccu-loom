@@ -55,6 +55,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"getLinkPeers":            true,
 		"addLink":                 true,
 		"removeLink":              true,
+		"activateLinkParamset":    true,
 		"reportValueUsage":        true,
 		"deleteDevice":            true,
 		"determineParameter":      true,

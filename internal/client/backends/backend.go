@@ -295,6 +295,14 @@ type LinkOps interface {
 	// PutLinkParamset writes LINK paramset values atomically.
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
 
+	// ActivateLinkParamset triggers the receiver's LINK-paramset behaviour
+	// for the given sender — the CCU's "test / simulate keypress" probe.
+	// It PHYSICALLY actuates the receiver (a switch clicks, a blind moves).
+	// longPress selects the LONG_* action group instead of SHORT_*. Maps to
+	// XML-RPC activateLinkParamset(receiver, sender, longPress). Backends
+	// without link support return [ErrUnsupported].
+	ActivateLinkParamset(ctx context.Context, receiverAddress, senderAddress string, longPress bool) error
+
 	// GetLinkInfo returns the name and description of the direct link between
 	// senderAddress and receiverAddress on iface. Returns [ErrUnsupported] when
 	// [Capabilities.LinkOperations] is false.

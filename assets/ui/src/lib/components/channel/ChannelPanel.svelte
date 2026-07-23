@@ -697,6 +697,33 @@
     lockedParams = new Set();
     banner = null;
   }
+
+  // Test the direct link at the device (V03): trigger the receiver
+  // (channelAddress) as if the sender (peer) fired. It physically actuates
+  // the device, so it is confirmed first.
+  let testingLink = $state(false);
+  async function testLinkAtDevice(longPress: boolean) {
+    if (paramset !== "LINK" || !peer) return;
+    const ok = await confirmStore.ask({
+      title: t("links.test.confirm_title"),
+      body: t("links.test.confirm_body"),
+      confirmLabel: longPress ? t("profile.test.long") : t("profile.test.short"),
+    });
+    if (!ok) return;
+    testingLink = true;
+    try {
+      await api.testLinkAtDevice(channelAddress, peer, longPress);
+      toastStore.success(t("links.test.ok"));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 501) {
+        toastStore.error(t("links.test.unsupported"));
+      } else {
+        toastStore.error(t("links.test.error"), friendlyError(err, t));
+      }
+    } finally {
+      testingLink = false;
+    }
+  }
 </script>
 
 <SessionTimeoutWarning dirty={dirtyNames.length > 0} />
@@ -856,6 +883,26 @@
               {t("channel.unlock_label")}
             </button>
           </p>
+        {/if}
+        {#if paramset === "LINK" && peer}
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testingLink}
+              onclick={() => void testLinkAtDevice(false)}
+            >
+              {t("profile.test.short")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testingLink}
+              onclick={() => void testLinkAtDevice(true)}
+            >
+              {t("profile.test.long")}
+            </Button>
+          </div>
         {/if}
       </div>
     {/if}

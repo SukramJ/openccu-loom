@@ -1159,6 +1159,10 @@ type stubLinks struct {
 	putParamsetPeer    string
 	putParamsetValues  map[string]any
 	putParamsetErr     error
+	activateReceiver   string
+	activateSender     string
+	activateLong       bool
+	activateErr        error
 }
 
 func (l *stubLinks) ListLinks(_ context.Context, _ string) ([]map[string]any, error) {
@@ -1208,6 +1212,13 @@ func (l *stubLinks) PutLinkParamset(_ context.Context, addr, peer string, values
 	l.putParamsetPeer = peer
 	l.putParamsetValues = values
 	return l.putParamsetErr
+}
+
+func (l *stubLinks) ActivateLinkParamset(_ context.Context, receiver, sender string, longPress bool) error {
+	l.activateReceiver = receiver
+	l.activateSender = sender
+	l.activateLong = longPress
+	return l.activateErr
 }
 
 type stubSchedules struct {
@@ -1315,6 +1326,38 @@ func TestLinksListAddRemove(t *testing.T) {
 	res = r.Dispatch(opCtx(), "links.remove", removeArgs)
 	if res.Error != nil {
 		t.Fatalf("remove err: %+v", res.Error)
+	}
+}
+
+func TestLinksActivateParamset(t *testing.T) {
+	links := &stubLinks{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+
+	args, _ := json.Marshal(map[string]any{
+		"receiver_channel_address": "RCV:3",
+		"sender_channel_address":   "SND:1",
+		"long_press":               true,
+	})
+	res := r.Dispatch(opCtx(), "links.activate_paramset", args)
+	if res.Error != nil {
+		t.Fatalf("activate err: %+v", res.Error)
+	}
+	if links.activateReceiver != "RCV:3" || links.activateSender != "SND:1" || !links.activateLong {
+		t.Errorf("args not forwarded: %+v", links)
+	}
+	if res.Data.(map[string]any)["long_press"] != true {
+		t.Errorf("result missing long_press: %+v", res.Data)
+	}
+}
+
+func TestLinksActivateParamset_RequiresAddresses(t *testing.T) {
+	links := &stubLinks{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+	res := r.Dispatch(opCtx(), "links.activate_paramset", nil)
+	if res.Error == nil {
+		t.Fatal("expected a bad-request error when addresses are missing")
 	}
 }
 

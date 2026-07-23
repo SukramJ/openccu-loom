@@ -4171,6 +4171,10 @@ type fullFakeLinkOps2 struct {
 	linkPutErr error
 }
 
+func (f *fullFakeLinkOps2) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (f *fullFakeLinkOps2) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return f.linkPutErr
 }
@@ -6048,6 +6052,8 @@ func (b *linksBackend) SetLinkInfo(_ context.Context, iface, sender, receiver, n
 func (b *linksBackend) GetLinkPeers(_ context.Context, _ string) ([]string, error) {
 	return nil, b.getLinkPeersErr
 }
+
+func (b *linksBackend) ActivateLinkParamset(context.Context, string, string, bool) error { return nil }
 
 func (b *linksBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return b.putLinkParamErr
@@ -13244,6 +13250,10 @@ func (f *configFakeOperations) GetLinkParamsetDescription(_ context.Context, _, 
 
 func (f *configFakeOperations) GetLinkParamset(_ context.Context, _, _ string) (map[string]any, error) {
 	return nil, nil
+}
+
+func (f *configFakeOperations) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
 }
 
 func (f *configFakeOperations) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {

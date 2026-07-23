@@ -461,6 +461,20 @@ export const api = {
       },
     );
   },
+  // Test a direct link at the device (V03): trigger the receiver's LINK
+  // paramset for the sender (short/long keypress). Physically actuates the
+  // receiver. The path device is the receiver's device.
+  testLinkAtDevice(receiver: string, sender: string, longPress: boolean) {
+    const deviceAddr = receiver.includes(":") ? receiver.slice(0, receiver.lastIndexOf(":")) : receiver;
+    return request<void>(`/devices/${encodeURIComponent(deviceAddr)}/links/test`, {
+      method: "POST",
+      body: JSON.stringify({
+        receiver_address: receiver,
+        sender_address: sender,
+        long_press: longPress,
+      }),
+    });
+  },
   putParamset(
     channelAddress: string,
     paramset: "VALUES" | "MASTER",

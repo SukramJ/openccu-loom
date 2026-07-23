@@ -505,12 +505,23 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Model-Accessor + Pipeline-Population.
   **Follow-up (optional):** Kanalgruppen (HM-Tastenpaare) +
   HmIP-RGBW-Sonderparameter — siehe W02.
-- **V03 — Verknüpfung am Gerät testen (`activateLinkParamset`)** (missing, P2 M)
-  Profil probeweise am Aktor auslösen, bevor gespeichert wird — fehlt
-  komplett (der heutige `links.test_profile` ist ein Pass-Through ohne
-  Gerätezugriff). *Empfehlung:* XML-RPC-Methode + „Testen"-Button
-  (kurz/lang) im Profileditor. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+- **V03 — Verknüpfung am Gerät testen (`activateLinkParamset`)** ✅ erledigt
+  (0.47.0, API 2.49.0)
+  Neue Operations-Methode `ActivateLinkParamset` (XML-RPC
+  `activateLinkParamset(receiver, sender, longPress)`, CCU-only; CUxD/Homegear
+  → `ErrUnsupported`/501). `LinksDomain.ActivateLink` löst über den
+  **RECEIVER** auf (LINK-Paramset liegt am Empfänger), auditiert
+  `link_activate`. REST `POST /devices/{addr}/links/test` (op-gated, 202) +
+  operator-WS `links.activate_paramset`. SPA: „Test (kurz/langer
+  Tastendruck)"-Buttons im LINK-Profileditor mit **Bestätigungsdialog**
+  (löst den Aktor physisch aus). `links.test_profile` bleibt read-only
+  (unverändert). Getestet: Backend-Dispatch (beide Bool-Werte) +
+  ErrNotWired + CUxD/Homegear-Unsupported, Adapter (Receiver-Auflösung +
+  Audit), Handler (202/400/501/502/503), WS-Dispatch + Write-Klassifizierung.
+  **Offen (Live-CCU, deine Freigabe + benanntes Zielgerät nötig):** reale
+  Auslösung gegen 172.18.4.29 verifizieren (godevccu kennt
+  `activateLinkParamset` nicht → E2E-Skip); optionaler godevccu-No-op-Handler
+  als Folge-Fix. SPA-Button-vitest + Playwright-Baseline zurückgestellt.
 - **V04 — Zentralenverknüpfung pro Kanal** (partial, P2 M)
   Loom schaltet nur geräteweit (alle Press-Kanäle). *Empfehlung:*
   optionalen `channel`-Parameter an den bestehenden Endpunkten + Pro-Kanal-

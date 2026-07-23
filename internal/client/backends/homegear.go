@@ -318,6 +318,13 @@ func (b *HomegearBackend) PutLinkParamset(ctx context.Context, channelAddress, p
 	return err
 }
 
+// ActivateLinkParamset implements Operations. Homegear's XML-RPC does not
+// document activateLinkParamset; return ErrUnsupported until validated
+// against a real Homegear instance rather than risk a spurious fault.
+func (*HomegearBackend) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return ErrUnsupported
+}
+
 // ReportValueUsage implements Operations.
 func (b *HomegearBackend) ReportValueUsage(ctx context.Context, channelAddress, valueID string, refCounter int) error {
 	if b.xml == nil {

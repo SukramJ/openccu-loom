@@ -24,9 +24,14 @@ const (
 	ActionLinkAdd           Action = "link_add"
 	ActionLinkRemove        Action = "link_remove"
 	ActionLinkUpdate        Action = "link_update"
-	ActionScheduleWrite     Action = "schedule_write"
-	ActionActiveProfile     Action = "active_profile"
-	ActionDataPointWrite    Action = "data_point_write"
+	// ActionLinkActivate records a "test link at device" probe: the CCU is
+	// asked to trigger the receiver as if the sender fired (short/long
+	// keypress). It physically actuates the device. DeviceAddress = the
+	// receiver device, Peer = the sender channel, Note = short|long.
+	ActionLinkActivate   Action = "link_activate"
+	ActionScheduleWrite  Action = "schedule_write"
+	ActionActiveProfile  Action = "active_profile"
+	ActionDataPointWrite Action = "data_point_write"
 
 	// ActionDeviceInstallMode records a targeted pairing window opened
 	// for one device. The Entry's DeviceAddress carries the target.

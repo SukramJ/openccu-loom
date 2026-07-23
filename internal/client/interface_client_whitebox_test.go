@@ -457,6 +457,10 @@ func (b *orchBackendStub) GetLinkParamset(context.Context, string, string) (map[
 	return nil, nil
 }
 
+func (b *orchBackendStub) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (b *orchBackendStub) PutLinkParamset(context.Context, string, string, map[string]any) error {
 	return nil
 }

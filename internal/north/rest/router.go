@@ -744,6 +744,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Links != nil {
 				pr.Get("/links", handlers.ListAllLinks(d.Links))
 				pr.Get("/devices/{addr}/links", handlers.ListLinks(d.Links))
+				pr.With(op).Post("/devices/{addr}/links/test", handlers.TestLinkAtDevice(d.Links))
 				pr.With(op).Post("/devices/{addr}/links", handlers.AddLink(d.Links))
 				pr.With(op).Patch("/devices/{addr}/links", handlers.UpdateLink(d.Links))
 				pr.With(op).Delete("/devices/{addr}/links", handlers.RemoveLink(d.Links))

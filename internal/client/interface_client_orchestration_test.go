@@ -81,6 +81,8 @@ func (b *orchBackend) GetLinkParamset(context.Context, string, string) (map[stri
 	return nil, nil
 }
 
+func (b *orchBackend) ActivateLinkParamset(context.Context, string, string, bool) error { return nil }
+
 func (b *orchBackend) PutLinkParamset(context.Context, string, string, map[string]any) error {
 	return nil
 }

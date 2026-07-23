@@ -1817,6 +1817,14 @@ const EN: Catalog = {
   "links.no_matches": "No links match the search.",
   "links.central": "CCU",
   "links.edit_on_device": "Edit on device",
+  "profile.test.short": "Test (short press)",
+  "profile.test.long": "Test (long press)",
+  "links.test.ok": "Link triggered on the device.",
+  "links.test.error": "Could not trigger the link.",
+  "links.test.unsupported": "This interface does not support link testing.",
+  "links.test.confirm_title": "Test link at the device?",
+  "links.test.confirm_body":
+    "This physically triggers the receiver (a switch clicks, a blind moves) as if the sender fired. Continue?",
   // --- Central links ---
   "central.title": "Press events to central",
   "central.subtitle":
@@ -4710,6 +4718,14 @@ const DE: Catalog = {
   "links.no_matches": "Keine Verknüpfung passt zur Suche.",
   "links.central": "CCU",
   "links.edit_on_device": "Am Gerät bearbeiten",
+  "profile.test.short": "Test (kurzer Tastendruck)",
+  "profile.test.long": "Test (langer Tastendruck)",
+  "links.test.ok": "Verknüpfung am Gerät ausgelöst.",
+  "links.test.error": "Verknüpfung konnte nicht ausgelöst werden.",
+  "links.test.unsupported": "Dieses Interface unterstützt keinen Verknüpfungstest.",
+  "links.test.confirm_title": "Verknüpfung am Gerät testen?",
+  "links.test.confirm_body":
+    "Dies löst den Empfänger physisch aus (ein Schalter klickt, ein Rollladen fährt), als hätte der Sender ausgelöst. Fortfahren?",
   "central.title": "Tastendruck an Zentrale",
   "central.subtitle":
     "Steuert, ob die CCU Tastendruck-Ereignisse (PRESS_SHORT/LONG) an OpenCCU-Loom weiterleitet.",

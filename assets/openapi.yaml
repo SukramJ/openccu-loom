@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.48.0
+  version: 2.49.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3020,6 +3020,41 @@ paths:
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/links/test:
+    post:
+      operationId: testLinkAtDevice
+      summary: Test a direct link at the device (activate link paramset)
+      tags: [links]
+      description: |
+        Triggers the receiver's LINK-paramset behaviour for the given
+        sender — the CCU config dialog's "test link" / simulate-keypress
+        probe. It PHYSICALLY actuates the receiver (a switch clicks, a
+        blind moves), so it is operator-gated and fire-and-forget. Maps to
+        XML-RPC `activateLinkParamset(receiver, sender, longPress)`. 501
+        when the interface does not support link activation (CUxD /
+        Homegear).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestLinkAtDeviceRequest" }
+            example:
+              receiver_address: "0001ABCD:3"
+              sender_address: "0002EFGH:1"
+              long_press: false
+      responses:
+        "202": { description: Triggered (the actuator reacts asynchronously). }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "501": { description: Link activation not supported on this interface. }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/link-ps/{peer}:
@@ -9723,6 +9758,18 @@ components:
         receiver_address: { type: string }
         name: { type: string }
         description: { type: string }
+    TestLinkAtDeviceRequest:
+      type: object
+      required: [receiver_address, sender_address]
+      description: >
+        Trigger the receiver's LINK paramset for the sender (test link /
+        simulate keypress). Physically actuates the receiver.
+      properties:
+        receiver_address: { type: string }
+        sender_address: { type: string }
+        long_press:
+          type: boolean
+          description: Select the LONG_* action group instead of SHORT_*. Default false.
     UpdateLinkRequest:
       type: object
       required: [sender_address, receiver_address]

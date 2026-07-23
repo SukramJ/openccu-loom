@@ -12,8 +12,71 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
+
+func TestTestLinkAtDevice_HappyPath_Returns202(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{}
+	body := `{"receiver_address":"RCV:3","sender_address":"SND:1","long_press":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/RCV/links/test", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	TestLinkAtDevice(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.activateReceiver != "RCV:3" || svc.activateSender != "SND:1" || !svc.activateLong {
+		t.Errorf("args not forwarded: %+v", svc)
+	}
+}
+
+func TestTestLinkAtDevice_MissingAddress_Returns400(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{}
+	body := `{"receiver_address":"RCV:3"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/RCV/links/test", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	TestLinkAtDevice(svc).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestTestLinkAtDevice_Unsupported_Returns501(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{activateErr: backends.ErrUnsupported}
+	body := `{"receiver_address":"RCV:3","sender_address":"SND:1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/RCV/links/test", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	TestLinkAtDevice(svc).ServeHTTP(w, req)
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501, got %d", w.Code)
+	}
+}
+
+func TestTestLinkAtDevice_WireError_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{activateErr: errors.New("wire fault -5")}
+	body := `{"receiver_address":"RCV:3","sender_address":"SND:1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/RCV/links/test", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	TestLinkAtDevice(svc).ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", w.Code)
+	}
+}
+
+func TestTestLinkAtDevice_NilService_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/RCV/links/test", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	TestLinkAtDevice(nil).ServeHTTP(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
 
 // stubLinksService is an inline stub for LinksService.
 type stubLinksService struct {
@@ -35,6 +98,12 @@ type stubLinksService struct {
 
 	// Captured arguments of the most recent ListAllLinks call.
 	listAllCentral string
+
+	// ActivateLink capture.
+	activateReceiver string
+	activateSender   string
+	activateLong     bool
+	activateErr      error
 }
 
 func (s *stubLinksService) ListLinks(_ context.Context, _, _ string) ([]Link, error) {
@@ -44,6 +113,13 @@ func (s *stubLinksService) ListLinks(_ context.Context, _, _ string) ([]Link, er
 func (s *stubLinksService) ListAllLinks(_ context.Context, centralName, _ string) ([]Link, error) {
 	s.listAllCentral = centralName
 	return s.listAllResult, s.listAllErr
+}
+
+func (s *stubLinksService) ActivateLink(_ context.Context, receiver, sender string, longPress bool) error {
+	s.activateReceiver = receiver
+	s.activateSender = sender
+	s.activateLong = longPress
+	return s.activateErr
 }
 
 func (s *stubLinksService) AddLink(_ context.Context, _, _, _, _ string) error {

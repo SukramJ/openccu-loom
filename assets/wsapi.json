@@ -662,6 +662,16 @@
     },
     {
       "category": "links",
+      "description": "Test a direct link at the device: trigger the receiver's LINK paramset for the sender (short or long keypress). Physically actuates the receiver.",
+      "name": "links.activate_paramset",
+      "args": {
+        "receiver_channel_address": "string",
+        "sender_channel_address": "string",
+        "long_press": "boolean"
+      }
+    },
+    {
+      "category": "links",
       "description": "Create a new direct link between a sender and a receiver channel.",
       "name": "links.add"
     },

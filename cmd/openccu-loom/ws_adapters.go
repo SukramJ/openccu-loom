@@ -306,6 +306,13 @@ func (w *wsLinkQuery) AddLink(ctx context.Context, sender, receiver, name, descr
 	return w.domain.AddLink(ctx, sender, receiver, name, description)
 }
 
+func (w *wsLinkQuery) ActivateLinkParamset(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.ActivateLink(ctx, receiverChannelAddress, senderChannelAddress, longPress)
+}
+
 func (w *wsLinkQuery) SetLinkInfo(ctx context.Context, sender, receiver, name, description string) error {
 	if w.domain == nil {
 		return errors.New("ws: links domain not wired")

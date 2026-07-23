@@ -121,7 +121,9 @@ func (fakeLinksService) ListLinks(_ context.Context, _, _ string) ([]handlers.Li
 func (fakeLinksService) ListAllLinks(_ context.Context, _, _ string) ([]handlers.Link, error) {
 	return nil, nil
 }
-func (fakeLinksService) AddLink(_ context.Context, _, _, _, _ string) error { return nil }
+
+func (fakeLinksService) ActivateLink(context.Context, string, string, bool) error { return nil }
+func (fakeLinksService) AddLink(_ context.Context, _, _, _, _ string) error       { return nil }
 
 func (fakeLinksService) SetLinkInfo(_ context.Context, _, _, _, _ string) error { return nil }
 func (fakeLinksService) RemoveLink(_ context.Context, _, _ string) error        { return nil }

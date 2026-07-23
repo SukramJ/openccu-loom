@@ -109,6 +109,10 @@ type LinkQuery interface {
 	// keyed by peerAddress. Mirrors Python `ws_put_link_paramset`
 	// (websocket_api.py:1387, `config/put_link_paramset`).
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	// ActivateLinkParamset triggers the receiver's LINK-paramset behaviour
+	// for the given sender (short/long keypress) — the CCU's "test link"
+	// probe. It physically actuates the receiver.
+	ActivateLinkParamset(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error
 }
 
 // ScheduleQuery is the contract the `schedules.*` commands consume.
@@ -368,6 +372,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		router.Register("links.linkable_channels", linksLinkableChannelsHandler(cfg.Links))
 		router.Register("links.get_paramset", linksGetParamsetHandler(cfg.Links))
 		router.Register("links.put_paramset", linksPutParamsetHandler(cfg.Links))
+		router.Register("links.activate_paramset", linksActivateParamsetHandler(cfg.Links))
 	}
 
 	if cfg.Schedules != nil {
@@ -1105,6 +1110,29 @@ func linksPutParamsetHandler(q LinkQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "put_link_paramset: "+err.Error())
 		}
 		return map[string]any{"success": true}, nil
+	}
+}
+
+type linkActivateArgs struct {
+	ReceiverChannelAddress string `json:"receiver_channel_address"`
+	SenderChannelAddress   string `json:"sender_channel_address"`
+	LongPress              bool   `json:"long_press"`
+}
+
+func linksActivateParamsetHandler(q LinkQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args linkActivateArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.ReceiverChannelAddress == "" || args.SenderChannelAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest,
+				"receiver_channel_address and sender_channel_address required")
+		}
+		if err := q.ActivateLinkParamset(ctx, args.ReceiverChannelAddress, args.SenderChannelAddress, args.LongPress); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "activate_link_paramset: "+err.Error())
+		}
+		return map[string]any{"success": true, "long_press": args.LongPress}, nil
 	}
 }
 

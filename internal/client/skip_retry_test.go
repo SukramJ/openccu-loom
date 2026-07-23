@@ -84,6 +84,10 @@ func (b *countingBackend) GetLinkParamset(_ context.Context, _, _ string) (map[s
 	return nil, nil
 }
 
+func (b *countingBackend) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (b *countingBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }

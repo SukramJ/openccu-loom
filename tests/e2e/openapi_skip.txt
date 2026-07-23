@@ -43,3 +43,4 @@ testDeviceCommunication -- godevccu has no ReGa DevStartComTest; live CCU runs t
 getDeviceTeamCandidates -- godevccu has no listTeams; live CCU returns team channels
 setDeviceChannelTeam -- godevccu has no setTeam; live CCU assigns the team
 getSysvarUsage -- godevccu has no DPEnumUsagePrograms; live CCU returns referencing programs
+testLinkAtDevice -- godevccu lacks activateLinkParamset; live CCU triggers the actuator

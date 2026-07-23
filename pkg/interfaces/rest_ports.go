@@ -207,6 +207,10 @@ type LinksService interface {
 	// centrals (or a single central when centralName is non-empty). Each
 	// returned link carries its owning central_name + interface_id.
 	ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error)
+	// ActivateLink triggers the receiver's LINK-paramset behaviour for the
+	// given sender (the "test link at device" probe) — short or long
+	// keypress. It physically actuates the receiver.
+	ActivateLink(ctx context.Context, receiverAddress, senderAddress string, longPress bool) error
 	AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error

@@ -384,6 +384,39 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 	return nil
 }
 
+// ActivateLink triggers the receiver's LINK-paramset behaviour for the
+// given sender — the CCU's "test link" / simulate-keypress probe. It
+// physically actuates the receiver. The LINK paramset lives on the
+// RECEIVER, so the owning central + interface are resolved from the
+// receiver device (unlike AddLink/RemoveLink, which resolve from the
+// sender). longPress selects the LONG_* action group.
+func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error {
+	receiverDev := deviceAddressOf(receiverChannelAddress)
+	c, dev, err := d.lookupDevice(receiverDev)
+	if err != nil {
+		return err
+	}
+	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	if !ok {
+		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
+	}
+	if err := backend.ActivateLinkParamset(ctx, receiverChannelAddress, senderChannelAddress, longPress); err != nil {
+		return err
+	}
+	note := "short"
+	if longPress {
+		note = "long"
+	}
+	d.audit.Record(audit.Entry{
+		Action:        audit.ActionLinkActivate,
+		DeviceAddress: receiverDev,
+		ChannelNo:     channelNumberOf(receiverChannelAddress),
+		Peer:          senderChannelAddress,
+		Note:          note,
+	})
+	return nil
+}
+
 // LinkableChannels walks every device in the central registry and
 // returns the channels that are valid peers for the source channel.
 //

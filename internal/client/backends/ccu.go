@@ -399,6 +399,18 @@ func (b *CcuBackend) PutLinkParamset(ctx context.Context, channelAddress, peerAd
 	return err
 }
 
+// ActivateLinkParamset implements Operations. Maps to the CCU XML-RPC
+// `activateLinkParamset(receiver, sender, longPress)` — it triggers the
+// receiver as if the sender fired (the config dialog's "test link" /
+// simulate-keypress probe). Physically actuates the receiver.
+func (b *CcuBackend) ActivateLinkParamset(ctx context.Context, receiverAddress, senderAddress string, longPress bool) error {
+	if b.xml == nil {
+		return ErrNotWired
+	}
+	_, err := b.xml.Call(ctx, "activateLinkParamset", receiverAddress, senderAddress, longPress)
+	return err
+}
+
 // ReportValueUsage implements Operations. Maps to the CCU XML-RPC
 // `reportValueUsage(channel_address, value_id, ref_counter)`.
 func (b *CcuBackend) ReportValueUsage(ctx context.Context, channelAddress, valueID string, refCounter int) error {

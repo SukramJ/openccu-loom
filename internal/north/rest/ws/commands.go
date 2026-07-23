@@ -82,6 +82,7 @@ var writeCommandRoles = map[string]auth.Role{
 	"install_mode.disable":                auth.RoleOperator,
 	"install_mode.enable":                 auth.RoleOperator,
 	"install_mode.search":                 auth.RoleOperator,
+	"links.activate_paramset":             auth.RoleOperator,
 	"links.add":                           auth.RoleOperator,
 	"links.put_paramset":                  auth.RoleOperator,
 	"links.remove":                        auth.RoleOperator,

@@ -74,6 +74,10 @@ func (f *fakeOperations) GetLinkParamset(_ context.Context, _, _ string) (map[st
 	return nil, nil
 }
 
+func (f *fakeOperations) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (f *fakeOperations) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }
