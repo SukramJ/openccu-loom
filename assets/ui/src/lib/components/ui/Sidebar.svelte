@@ -45,6 +45,7 @@
     | "sysvars"
     | "programs"
     | "groups"
+    | "links"
     | "messages"
     | "audit"
     | "diagnostics"
@@ -181,6 +182,12 @@
           icon: "mdi:home-group",
           label: t("nav.groups"),
           matches: ["groups"],
+        },
+        {
+          href: "#/links",
+          icon: "mdi:link",
+          label: t("nav.links"),
+          matches: ["links"],
         },
       ],
     },

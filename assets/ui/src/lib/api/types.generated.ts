@@ -698,6 +698,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Global direct-link overview (read-only)
+         * @description Returns every direct link (channel-to-channel association)
+         *     across all configured centrals as a single flat list. Each link
+         *     carries its owning `central_name` and `interface_id` so a client
+         *     can render one searchable table over multiple CCUs.
+         *
+         *     The daemon reads the interface-wide link roster with one
+         *     empty-address `getLinks` per (central, interface) — the same call
+         *     the CCU WebUI uses — rather than a per-channel scan. A central
+         *     whose interface backend is offline, missing, or cannot list
+         *     links (e.g. CUxD) contributes nothing rather than failing the
+         *     request.
+         *
+         *     With `central` set the listing is scoped to that central and
+         *     returns 404 when it is unknown. Creating, editing and deleting
+         *     links runs through the per-device `/devices/{addr}/links`
+         *     endpoints.
+         */
+        get: operations["listAllLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/programs": {
         parameters: {
             query?: never;
@@ -7380,6 +7415,10 @@ export interface components {
             peer_device_name?: string;
             peer_device_model?: string;
             direction: string;
+            /** @description Owning central. Populated only by the global overview (`GET /links`); empty on the per-device listing. */
+            central_name?: string;
+            /** @description Owning interface (wire interface id). Populated only by the global overview (`GET /links`); empty on the per-device listing. */
+            interface_id?: string;
         };
         /** @description Create a direct link between a sender and a receiver channel. */
         AddLinkRequest: {
@@ -8135,6 +8174,36 @@ export interface operations {
                 content: {
                     "application/json": {
                         entries: components["schemas"]["GroupCentralEntry"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listAllLinks: {
+        parameters: {
+            query?: {
+                /** @description Scope the listing to one central (matches `SystemCCUEntry.name`). Omit to aggregate over all centrals. */
+                central?: string;
+                /** @description Locale for channel-type labels (default `en`). */
+                locale?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All direct links across the selected centrals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        links: components["schemas"]["Link"][];
                     };
                 };
             };

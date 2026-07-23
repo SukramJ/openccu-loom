@@ -860,6 +860,7 @@ const EN: Catalog = {
   "nav.inbox": "Inbox",
   "nav.fleet": "Fleet",
   "nav.groups": "Groups",
+  "nav.links": "Direct links",
   "favorites.title": "Favorites",
   "favorites.subtitle": "Your pinned devices and system variables, synced across browsers.",
   "favorites.empty": "No favorites yet. Pin a device from its detail page.",
@@ -1807,6 +1808,12 @@ const EN: Catalog = {
   "links.name": "Name",
   "links.description": "Description",
   "links.search": "Search by name, sender, receiver…",
+  "links.count": "{count} links",
+  "links.empty.description":
+    "Direct links let two channels talk to each other without the CCU program. None exist yet.",
+  "links.no_matches": "No links match the search.",
+  "links.central": "CCU",
+  "links.edit_on_device": "Edit on device",
   // --- Central links ---
   "central.title": "Press events to central",
   "central.subtitle":
@@ -2183,6 +2190,7 @@ const EN: Catalog = {
   "page.title.energy": "Energy — OpenCCU-Loom",
   "page.title.fleet": "Fleet — OpenCCU-Loom",
   "page.title.groups": "Heating groups — OpenCCU-Loom",
+  "page.title.links": "Direct links — OpenCCU-Loom",
   "page.title.logs": "Logs — OpenCCU-Loom",
   "page.title.settings": "Settings — OpenCCU-Loom",
   "page.title.about": "About — OpenCCU-Loom",
@@ -3753,6 +3761,7 @@ const DE: Catalog = {
   "nav.inbox": "Posteingang",
   "nav.fleet": "CCUs",
   "nav.groups": "Gruppen",
+  "nav.links": "Direktverknüpfungen",
   "nav.logout": "Abmelden",
   "nav.messages": "Meldungen",
   "nav.programs": "Programme",
@@ -4680,6 +4689,12 @@ const DE: Catalog = {
   "links.name": "Name",
   "links.description": "Beschreibung",
   "links.search": "Suche nach Name, Sender, Empfänger…",
+  "links.count": "{count} Verknüpfungen",
+  "links.empty.description":
+    "Direktverknüpfungen lassen zwei Kanäle ohne CCU-Programm miteinander kommunizieren. Es gibt noch keine.",
+  "links.no_matches": "Keine Verknüpfung passt zur Suche.",
+  "links.central": "CCU",
+  "links.edit_on_device": "Am Gerät bearbeiten",
   "central.title": "Tastendruck an Zentrale",
   "central.subtitle":
     "Steuert, ob die CCU Tastendruck-Ereignisse (PRESS_SHORT/LONG) an OpenCCU-Loom weiterleitet.",
@@ -5064,6 +5079,7 @@ const DE: Catalog = {
   "page.title.energy": "Energie — OpenCCU-Loom",
   "page.title.fleet": "CCUs — OpenCCU-Loom",
   "page.title.groups": "Heizungsgruppen — OpenCCU-Loom",
+  "page.title.links": "Direktverknüpfungen — OpenCCU-Loom",
   "page.title.logs": "Protokoll — OpenCCU-Loom",
   "page.title.settings": "Einstellungen — OpenCCU-Loom",
   "page.title.about": "Info — OpenCCU-Loom",

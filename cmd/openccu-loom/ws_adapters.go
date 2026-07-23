@@ -288,6 +288,17 @@ func (w *wsLinkQuery) ListLinks(ctx context.Context, deviceAddress string) ([]ma
 	return structSliceToMapSlice(links)
 }
 
+func (w *wsLinkQuery) ListAllLinks(ctx context.Context, centralName string) ([]map[string]any, error) {
+	if w.domain == nil {
+		return nil, errors.New("ws: links domain not wired")
+	}
+	links, err := w.domain.ListAllLinks(ctx, centralName, "")
+	if err != nil {
+		return nil, err
+	}
+	return structSliceToMapSlice(links)
+}
+
 func (w *wsLinkQuery) AddLink(ctx context.Context, sender, receiver, name, description string) error {
 	if w.domain == nil {
 		return errors.New("ws: links domain not wired")

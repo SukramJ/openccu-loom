@@ -69,6 +69,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
   HmIP-RF only (`team_supported`). A per-channel team picker appears in
   the device detail.
+- **Global direct-links overview.** A new `GET /api/v1/links` endpoint
+  (and the read-only `links.list_all` WebSocket command) aggregates
+  every direct link across all centrals into one flat list; each link
+  now carries its owning `central_name` and `interface_id`. The daemon
+  reads the interface-wide roster with one empty-address `getLinks` per
+  (central, interface) — the same call the CCU WebUI uses — rather than
+  a per-channel scan. A `?central=<name>` query scopes to one CCU. A new
+  "Direct links" SPA view (`#/links`) renders the roster with search and
+  a per-CCU filter, deep-linking each row to its device for editing.
 
 ### Fixed
 

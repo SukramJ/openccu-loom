@@ -117,6 +117,10 @@ type fakeLinksService struct{}
 func (fakeLinksService) ListLinks(_ context.Context, _, _ string) ([]handlers.Link, error) {
 	return nil, nil
 }
+
+func (fakeLinksService) ListAllLinks(_ context.Context, _, _ string) ([]handlers.Link, error) {
+	return nil, nil
+}
 func (fakeLinksService) AddLink(_ context.Context, _, _, _, _ string) error { return nil }
 
 func (fakeLinksService) SetLinkInfo(_ context.Context, _, _, _, _ string) error { return nil }

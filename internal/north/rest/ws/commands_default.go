@@ -87,6 +87,10 @@ type LinkQuery interface {
 	// ListLinks returns every direct link a device participates in,
 	// sender-first then receiver, both as channel addresses.
 	ListLinks(ctx context.Context, deviceAddress string) ([]map[string]any, error)
+	// ListAllLinks aggregates every direct link across all centrals (or a
+	// single central when non-empty). Each link carries its owning
+	// central_name + interface_id.
+	ListAllLinks(ctx context.Context, central string) ([]map[string]any, error)
 	// AddLink creates a new direct link.
 	AddLink(ctx context.Context, sender, receiver, name, description string) error
 	// SetLinkInfo updates the name and description of an existing link.
@@ -353,6 +357,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 
 	if cfg.Links != nil {
 		router.Register("links.list", linksListHandler(cfg.Links))
+		router.Register("links.list_all", linksListAllHandler(cfg.Links))
 		router.Register("links.add", linksAddHandler(cfg.Links))
 		router.Register("links.set_info", linksSetInfoHandler(cfg.Links))
 		router.Register("links.remove", linksRemoveHandler(cfg.Links))
@@ -932,6 +937,26 @@ func linksListHandler(q LinkQuery) CommandHandler {
 		links, err := q.ListLinks(ctx, args.DeviceAddress)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_links: "+err.Error())
+		}
+		return map[string]any{"links": links}, nil
+	}
+}
+
+// linksListAllArgs is the (all-optional) argument shape of
+// `links.list_all`. A `central` narrows the aggregate to one CCU.
+type linksListAllArgs struct {
+	Central string `json:"central"`
+}
+
+func linksListAllHandler(q LinkQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args linksListAllArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		links, err := q.ListAllLinks(ctx, args.Central)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "list_all_links: "+err.Error())
 		}
 		return map[string]any{"links": links}, nil
 	}

@@ -147,6 +147,121 @@ func (d *LinksDomain) enrichLink(_ context.Context, dev *device.Device, link hmp
 	}
 }
 
+// ListAllLinks aggregates every direct link across all registered
+// centrals (or a single central when centralName is non-empty). It
+// issues one empty-address getLinks per (central, interface) — the
+// interface-wide roster the CCU WebUI's own links.cgi uses — instead of
+// the per-channel loop of [ListLinks], deduplicates per central by the
+// (sender, receiver) pair, and enriches each entry symmetrically (no
+// "queried device", so no relative direction). Every returned link
+// carries its owning central_name + interface_id.
+//
+// An unknown central returns [hmerr.ErrUnknownCentral]; in aggregate
+// mode a central whose interface backend is missing, unsupported
+// (CUxD), or offline contributes nothing rather than aborting the whole
+// listing.
+func (d *LinksDomain) ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error) {
+	if d.registry == nil || d.writer == nil {
+		return nil, ErrNoLinkBackend
+	}
+	var units []*central.Unit
+	if centralName != "" {
+		unit, ok := d.registry.Get(centralName)
+		if !ok || unit == nil {
+			return nil, hmerr.ErrUnknownCentral
+		}
+		units = []*central.Unit{unit}
+	} else {
+		units = d.registry.List()
+	}
+
+	out := make([]hmapi.Link, 0)
+	for _, unit := range units {
+		if unit == nil {
+			continue
+		}
+		// Dedup is scoped per central: BidCos / VCU addresses repeat
+		// across CCUs, so a global key must not collapse them.
+		seen := make(map[string]struct{})
+		for _, ifaceID := range d.linkInterfaceIDs(unit) {
+			backend, ok := d.writer.Backend(unit.Name(), ifaceID)
+			if !ok {
+				continue
+			}
+			raw, err := backend.GetLinks(ctx, "")
+			if err != nil {
+				continue
+			}
+			for _, link := range raw {
+				key := link.Sender + "->" + link.Receiver
+				if _, dup := seen[key]; dup {
+					continue
+				}
+				seen[key] = struct{}{}
+				out = append(out, d.enrichGlobalLink(unit, ifaceID, link, locale))
+			}
+		}
+	}
+	return out, nil
+}
+
+// linkInterfaceIDs returns the distinct interface ids of a central's
+// devices. Derived from the model registry so each id equals the exact
+// [client.ValueWriter.Backend] key (avoids the wire-id vs
+// [hmenum.Interface] mismatch a description-registry enumeration would
+// introduce). A link-bearing interface always has devices, so nothing
+// link-relevant is missed.
+func (d *LinksDomain) linkInterfaceIDs(unit *central.Unit) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, dev := range unit.ModelRegistry.List() {
+		if dev.InterfaceID == "" {
+			continue
+		}
+		if _, dup := seen[dev.InterfaceID]; dup {
+			continue
+		}
+		seen[dev.InterfaceID] = struct{}{}
+		out = append(out, dev.InterfaceID)
+	}
+	return out
+}
+
+// enrichGlobalLink fills the presentation fields of a link for the
+// global overview. Unlike [enrichLink] it has no queried device, so it
+// resolves both endpoints symmetrically and leaves Direction /
+// PeerAddress empty; the SPA renders sender→receiver canonically.
+func (d *LinksDomain) enrichGlobalLink(
+	unit *central.Unit, interfaceID string, link hmproto.LinkDescription, locale string,
+) hmapi.Link {
+	senderDevAddr := deviceAddressOf(link.Sender)
+	receiverDevAddr := deviceAddressOf(link.Receiver)
+	senderDev := d.findDevice(senderDevAddr)
+	receiverDev := d.findDevice(receiverDevAddr)
+	senderChannel := channelOf(senderDev, link.Sender)
+	receiverChannel := channelOf(receiverDev, link.Receiver)
+
+	return hmapi.Link{
+		Sender:                   link.Sender,
+		Receiver:                 link.Receiver,
+		Name:                     link.Name,
+		Description:              link.Description,
+		Flags:                    link.Flags,
+		SenderDeviceName:         deviceNameOr(senderDev, senderDevAddr),
+		SenderDeviceModel:        modelOf(senderDev),
+		SenderChannelType:        channelTypeOf(senderChannel),
+		SenderChannelTypeLabel:   d.channelTypeLabel(locale, senderChannel),
+		SenderChannelName:        channelNameOf(senderChannel),
+		ReceiverDeviceName:       deviceNameOr(receiverDev, receiverDevAddr),
+		ReceiverDeviceModel:      modelOf(receiverDev),
+		ReceiverChannelType:      channelTypeOf(receiverChannel),
+		ReceiverChannelTypeLabel: d.channelTypeLabel(locale, receiverChannel),
+		ReceiverChannelName:      channelNameOf(receiverChannel),
+		CentralName:              unit.Name(),
+		InterfaceID:              interfaceID,
+	}
+}
+
 // AddLink creates a link. name is auto-generated when empty.
 func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error {
 	senderDev := deviceAddressOf(senderAddress)

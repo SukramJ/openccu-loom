@@ -473,12 +473,22 @@ Funktionen je Bereich sind in §5 zusammengefasst.
 
 ### 4.5 Direkte Verknüpfungen & Zentralenverknüpfungen
 
-- **V01 — Globale Verknüpfungsübersicht** (partial, P2 M)
-  Heute nur pro Gerät (Tab im Gerätedetail). *Empfehlung:*
-  `GET /api/v1/links` (XML-RPC `getLinks` liefert mit leerer Adresse ALLE
-  Links pro Interface in einem Call) + Route `#/links` mit globalem
-  Anlegen-Einstieg. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+- **V01 — Globale Verknüpfungsübersicht** ✅ erledigt (0.47.0, API 2.45.0)
+  `GET /api/v1/links` (+ read-only WS `links.list_all`) aggregiert alle
+  Direktverknüpfungen über sämtliche Zentralen in einer flachen Liste;
+  jede Verknüpfung trägt jetzt `central_name` + `interface_id`. Kein
+  Wire-Change: `getLinks` mit leerer Adresse liefert pro (Zentrale,
+  Interface) den interfaceweiten Link-Bestand in einem Call
+  (`LinksDomain.ListAllLinks`, symmetrische Anreicherung, Dedup pro
+  Zentrale, Best-Effort-Skip offline/CUxD). Optionaler `?central=`-Scope
+  (404 bei unbekannter Zentrale). Neue SPA-Ansicht `#/links` mit Suche +
+  Zentral-Filter, jede Zeile verlinkt zum Gerätedetail zum Bearbeiten
+  (Anlegen/Ändern läuft weiter über den bestehenden Geräte-Tab).
+  Getestet: Domain- + Handler- + WS-Unit-Tests, LinkList-vitest,
+  Playwright light+dark-Baselines.
+  **Follow-up (optional):** ein zentralenübergreifender „Neue
+  Verknüpfung"-Einstieg mit Quell-Kanal-Picker direkt aus der Übersicht
+  (heute führt der Weg über das Gerätedetail).
 - **V02 — Rollen-Matching beim Verknüpfung-Anlegen** (partial, P2 M)
   `channelMatchesRole` ignoriert den role-Parameter; jeder link-fähige Kanal
   wird für beide Rollen angeboten. *Empfehlung:*

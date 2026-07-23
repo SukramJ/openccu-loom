@@ -385,6 +385,14 @@ export const api = {
       `/devices/${encodeURIComponent(address)}/links?${qs.toString()}`,
     );
   },
+  // Global direct-link overview (V01) across every central. Each link
+  // carries its owning central_name + interface_id.
+  async listAllLinks(central?: string, locale = "en"): Promise<Link[]> {
+    const qs = new URLSearchParams({ locale });
+    if (central) qs.set("central", central);
+    const r = await request<{ links: Link[] }>(`/links?${qs.toString()}`);
+    return r.links;
+  },
   addLink(
     address: string,
     body: {

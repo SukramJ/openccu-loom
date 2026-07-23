@@ -692,6 +692,11 @@
     },
     {
       "category": "links",
+      "description": "Global direct-link overview across all centrals (or one when 'central' is set). Each link carries its owning central_name and interface_id.",
+      "name": "links.list_all"
+    },
+    {
+      "category": "links",
       "description": "Write values to the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_put_link_paramset (websocket_api.py:1387). Closes parity_audit gap G-04.",
       "name": "links.put_paramset"
     },

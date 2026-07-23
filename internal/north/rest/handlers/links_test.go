@@ -19,6 +19,8 @@ import (
 type stubLinksService struct {
 	listResult     []Link
 	listErr        error
+	listAllResult  []Link
+	listAllErr     error
 	addErr         error
 	setInfoErr     error
 	removeErr      error
@@ -30,10 +32,18 @@ type stubLinksService struct {
 	setReceiver    string
 	setName        string
 	setDescription string
+
+	// Captured arguments of the most recent ListAllLinks call.
+	listAllCentral string
 }
 
 func (s *stubLinksService) ListLinks(_ context.Context, _, _ string) ([]Link, error) {
 	return s.listResult, s.listErr
+}
+
+func (s *stubLinksService) ListAllLinks(_ context.Context, centralName, _ string) ([]Link, error) {
+	s.listAllCentral = centralName
+	return s.listAllResult, s.listAllErr
 }
 
 func (s *stubLinksService) AddLink(_ context.Context, _, _, _, _ string) error {
@@ -102,6 +112,76 @@ func TestListLinks_ServiceError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestListAllLinks_HappyPath(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{
+		listAllResult: []Link{
+			{Sender: "DEV001:1", Receiver: "DEV002:1", CentralName: "ccu-01", InterfaceID: "ccu-01-HmIP-RF"},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/links?central=ccu-01", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAllLinks(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.listAllCentral != "ccu-01" {
+		t.Errorf("central query not forwarded: got %q", svc.listAllCentral)
+	}
+	var body struct {
+		Links []Link `json:"links"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(body.Links))
+	}
+	if body.Links[0].CentralName != "ccu-01" || body.Links[0].InterfaceID != "ccu-01-HmIP-RF" {
+		t.Errorf("link identity fields missing: %+v", body.Links[0])
+	}
+}
+
+func TestListAllLinks_EmptyReturnsArray(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{listAllResult: nil}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/links", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAllLinks(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	// The links array must be present (never null) even when empty.
+	if !strings.Contains(w.Body.String(), `"links":[]`) {
+		t.Errorf("expected an empty links array, got %s", w.Body.String())
+	}
+}
+
+func TestListAllLinks_UnknownCentral_Returns404(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{listAllErr: hmerr.ErrUnknownCentral}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/links?central=nope", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAllLinks(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestListAllLinks_ServiceNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/links", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAllLinks(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
 	}
 }
 

@@ -168,6 +168,7 @@ var readOnlyCommands = map[string]struct{}{
 	"links.get_profiles":          {},
 	"links.linkable_channels":     {},
 	"links.list":                  {},
+	"links.list_all":              {},
 	"links.test_profile":          {},
 	"master_profiles.get":         {},
 	"master_profiles.list":        {},

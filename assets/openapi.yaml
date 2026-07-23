@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.44.0
+  version: 2.45.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -571,6 +571,59 @@ paths:
                   entries:
                     type: array
                     items: { $ref: "#/components/schemas/GroupCentralEntry" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /links:
+    get:
+      operationId: listAllLinks
+      summary: Global direct-link overview (read-only)
+      description: |
+        Returns every direct link (channel-to-channel association)
+        across all configured centrals as a single flat list. Each link
+        carries its owning `central_name` and `interface_id` so a client
+        can render one searchable table over multiple CCUs.
+
+        The daemon reads the interface-wide link roster with one
+        empty-address `getLinks` per (central, interface) — the same call
+        the CCU WebUI uses — rather than a per-channel scan. A central
+        whose interface backend is offline, missing, or cannot list
+        links (e.g. CUxD) contributes nothing rather than failing the
+        request.
+
+        With `central` set the listing is scoped to that central and
+        returns 404 when it is unknown. Creating, editing and deleting
+        links runs through the per-device `/devices/{addr}/links`
+        endpoints.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Scope the listing to one central (matches
+            `SystemCCUEntry.name`). Omit to aggregate over all centrals.
+        - name: locale
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Locale for channel-type labels (default `en`).
+      responses:
+        "200":
+          description: All direct links across the selected centrals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [links]
+                properties:
+                  links:
+                    type: array
+                    items: { $ref: "#/components/schemas/Link" }
         "404":
           $ref: "#/components/responses/NotFound"
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -9486,6 +9539,17 @@ components:
         peer_device_name: { type: string }
         peer_device_model: { type: string }
         direction: { type: string }
+        central_name:
+          type: string
+          description: >
+            Owning central. Populated only by the global overview
+            (`GET /links`); empty on the per-device listing.
+        interface_id:
+          type: string
+          description: >
+            Owning interface (wire interface id). Populated only by the
+            global overview (`GET /links`); empty on the per-device
+            listing.
     AddLinkRequest:
       type: object
       required: [sender_address, receiver_address]

@@ -73,6 +73,41 @@ func ListLinks(svc LinksService) http.HandlerFunc {
 	}
 }
 
+// ListAllLinks serves the global links overview at `GET /api/v1/links`.
+// It returns 200 with a `{"links": [...]}` object aggregating every
+// direct link across all centrals; each link self-identifies via
+// `central_name` + `interface_id`. A `?central=<name>` query narrows to
+// one central and returns 404 when that central is unknown. 503 signals
+// an unwired service.
+func ListAllLinks(svc LinksService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Links service unavailable", ""))
+			return
+		}
+		centralName := r.URL.Query().Get("central")
+		locale := r.URL.Query().Get("locale")
+		if locale == "" {
+			locale = "en"
+		}
+		links, err := svc.ListAllLinks(r.Context(), centralName, locale)
+		if err != nil {
+			if errors.Is(err, hmerr.ErrUnknownCentral) {
+				problem.Write(w, http.StatusNotFound,
+					problem.New(problem.TypeNotFound, r, "Unknown central", centralName))
+				return
+			}
+			problem.WriteFromError(w, r, err)
+			return
+		}
+		if links == nil {
+			links = []Link{}
+		}
+		JSON(w, http.StatusOK, map[string]any{"links": links})
+	}
+}
+
 // AddLink POST /api/v1/devices/{addr}/links
 func AddLink(svc LinksService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

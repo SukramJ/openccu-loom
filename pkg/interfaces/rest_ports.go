@@ -203,6 +203,10 @@ type IncidentsReader interface {
 // LinksService is the narrow facade the /links endpoints depend on.
 type LinksService interface {
 	ListLinks(ctx context.Context, deviceAddress, locale string) ([]hmapi.Link, error)
+	// ListAllLinks aggregates every direct link across all registered
+	// centrals (or a single central when centralName is non-empty). Each
+	// returned link carries its owning central_name + interface_id.
+	ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error)
 	AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error

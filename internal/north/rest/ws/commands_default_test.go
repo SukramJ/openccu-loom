@@ -1121,6 +1121,9 @@ func TestInstallModeEnableWithoutSGTINStillUsesLegacyPath(t *testing.T) {
 
 type stubLinks struct {
 	links            []map[string]any
+	allLinks         []map[string]any
+	listAllErr       error
+	listAllCentral   string
 	linkable         []map[string]any
 	listErr          error
 	addedSender      string
@@ -1149,6 +1152,14 @@ type stubLinks struct {
 }
 
 func (l *stubLinks) ListLinks(_ context.Context, _ string) ([]map[string]any, error) {
+	return l.links, l.listErr
+}
+
+func (l *stubLinks) ListAllLinks(_ context.Context, central string) ([]map[string]any, error) {
+	l.listAllCentral = central
+	if l.allLinks != nil || l.listAllErr != nil {
+		return l.allLinks, l.listAllErr
+	}
 	return l.links, l.listErr
 }
 
@@ -1294,6 +1305,27 @@ func TestLinksListAddRemove(t *testing.T) {
 	res = r.Dispatch(opCtx(), "links.remove", removeArgs)
 	if res.Error != nil {
 		t.Fatalf("remove err: %+v", res.Error)
+	}
+}
+
+func TestLinksListAll(t *testing.T) {
+	links := &stubLinks{allLinks: []map[string]any{
+		{"sender_address": "DEVA:1", "receiver_address": "PEERA:1", "central_name": "ccu-a"},
+	}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+
+	// No device_address required; an optional central is forwarded.
+	args, _ := json.Marshal(map[string]any{"central": "ccu-a"})
+	res := r.Dispatch(context.Background(), "links.list_all", args)
+	if res.Error != nil {
+		t.Fatalf("list_all err: %+v", res.Error)
+	}
+	if got := res.Data.(map[string]any)["links"].([]map[string]any); len(got) != 1 {
+		t.Fatalf("links=%+v", res.Data)
+	}
+	if links.listAllCentral != "ccu-a" {
+		t.Errorf("central not forwarded: got %q", links.listAllCentral)
 	}
 }
 

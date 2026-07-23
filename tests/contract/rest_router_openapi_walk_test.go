@@ -98,6 +98,10 @@ func (fakeLinksService) ListLinks(context.Context, string, string) ([]handlers.L
 	return nil, nil
 }
 
+func (fakeLinksService) ListAllLinks(context.Context, string, string) ([]handlers.Link, error) {
+	return nil, nil
+}
+
 func (fakeLinksService) AddLink(context.Context, string, string, string, string) error { return nil }
 
 func (fakeLinksService) SetLinkInfo(context.Context, string, string, string, string) error {

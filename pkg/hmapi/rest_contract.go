@@ -212,6 +212,12 @@ type Link struct {
 	PeerDeviceName           string `json:"peer_device_name,omitempty"`
 	PeerDeviceModel          string `json:"peer_device_model,omitempty"`
 	Direction                string `json:"direction"`
+	// CentralName and InterfaceID identify the owning CCU and interface
+	// of the link. They are populated only by the global links overview
+	// (`GET /api/v1/links`); the per-device listing leaves them empty so
+	// its response stays byte-identical.
+	CentralName string `json:"central_name,omitempty"`
+	InterfaceID string `json:"interface_id,omitempty"`
 }
 
 // LinkableChannel is one candidate returned by
