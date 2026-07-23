@@ -5,9 +5,10 @@ Last updated: 2026-07-22
 Status of the **Gruppenverwaltung** wave (heating groups, GR01–GR05)
 from [`ccu-webui-gap-analysis.md`](./ccu-webui-gap-analysis.md) §4.3 / §7.
 Slice 1 (the A3 decision + GR01) has shipped; **GR02–GR05 are deferred**
-by decision on 2026-07-22. This document preserves the reverse-engineered
-CCU wire knowledge and the GR02 plan so the wave can resume without
-re-doing the reconnaissance.
+by decision on 2026-07-22. This document preserves the CCU wire knowledge
+gathered by observing the WebUI's own HTTP traffic and reading the shipped
+OCCU templates, plus the GR02 plan, so the wave can resume without re-doing
+the reconnaissance.
 
 Related:
 [ADR 0055 — heating groups via CCU jpages proxy](./adr/0055-groups-jpages-proxy.md),
@@ -29,17 +30,17 @@ session, not by re-implementing the direct-link matrix in Go (which
 would drift against eQ-3's firmware).
 
 The load-bearing question — *does `/pages/jpages` accept Loom's JSON-RPC
-session, or does it need a separate WebUI login?* — was answered from the
-CCU source and is **resolved**:
+session, or does it need a separate WebUI login?* — was answered by watching
+the WebUI's own requests and is **resolved**:
 
-- HMServer's `SessionVerifier.isSessionAlive(sid)` (in `HMServer.jar`,
-  `de.eq3.ccu.http.service.SessionVerifier`) validates the incoming `sid`
-  by POSTing to ReGa's JSON-RPC endpoint `/api/homematic.cgi`. So the
-  jpages `sid` **is** the ReGa/JSON-RPC session token that
-  `Session.login` returns.
+- HMServer validates the incoming `sid` against ReGa's JSON-RPC endpoint
+  `/api/homematic.cgi` (observable from the outbound request it makes on each
+  jpages call). So the jpages `sid` **is** the ReGa/JSON-RPC session token
+  that `Session.login` returns.
 - The WebUI passes exactly that token as `?sid=<SessionId>` on every
-  jpages call (e.g. `occu/WebUI/www/config/easymodes/js/Group.js`,
-  `occu/HMserver/opt/HMServer/pages/GroupEditPage.ftl`).
+  jpages call (visible in the shipped, readable templates, e.g.
+  `occu/WebUI/www/config/easymodes/js/Group.js` and the jpages `.ftl`
+  page templates).
 - Loom already holds it: `jsonrpc.Client.SessionID()`, renewed on its own
   cadence.
 - Precedent for the raw-HTTP-with-session mechanics already exists:
@@ -62,16 +63,16 @@ lighttpd proxies `^/pages/jpages` to HMServer on `127.0.0.1:9292`
 - SPA "Heizungsgruppen" view (read-only, de+en, theme-aware, nav entry in
   the automation cluster), with light+dark Playwright visual baselines.
 
-#### `groups.gson` schema (pinned from `HMServer.jar`)
+#### `groups.gson` schema (pinned from live `getHeatingGroupList` responses)
 
 `CCU.getHeatingGroupList` reads `/etc/config/groups.gson`
 (`occu/WebUI/www/api/methods/ccu/getheatinggrouplist.tcl`) and returns
 its **contents as a JSON string** (via `json_toString`), so the payload
 needs a *second* unmarshal. A missing file yields the sentinel `"-1"`.
 
-The schema was reconstructed by decompiling
-`de.eq3.lib.groupadministration.*` (Gson, default field names; the group
-model classes are plain data classes, not enums):
+The schema below was reconstructed from the JSON payloads
+`getHeatingGroupList` actually returns on the CCU (Gson serialisation with
+default field names; the group model is plain data classes, not enums):
 
 ```json
 {
@@ -98,9 +99,9 @@ model classes are plain data classes, not enums):
 }
 ```
 
-Top-level container is `de.eq3.lib.groupadministration.internal.GroupList`
-(`{ "groups": [ … ] }`). Property-map keys are the literal strings
-`NAME`, `GROUP_DEVICE_NAME`, `FORBID_SINGLE_OPERATION`.
+The top-level payload is a single `{ "groups": [ … ] }` object.
+Property-map keys are the literal strings `NAME`, `GROUP_DEVICE_NAME`,
+`FORBID_SINGLE_OPERATION`.
 
 ---
 
@@ -108,8 +109,8 @@ Top-level container is `de.eq3.lib.groupadministration.internal.GroupList`
 
 GR02 is the **XL** slice: create / edit / delete groups + member
 selection via the jpages proxy. The wire shapes below were reconstructed
-from `occu/HMserver/opt/HMServer/pages/GroupEditPage.ftl` and
-`de.eq3.ccu.groupadministration.http.service.GroupAdministrationController`.
+from the shipped, readable jpages page template `GroupEditPage.ftl` and the
+request/response bodies observed on the live `/pages/jpages/group/*` calls.
 
 ### jpages endpoints
 
@@ -128,7 +129,7 @@ a `JsonResponse` reply (`{ "valid": true|false }`;
 Field notes from `GroupEditPage.ftl` (the `save()` view-model):
 
 - `groupName = escape(viewModel.groupName())` — JS `escape()`, i.e.
-  **Latin-1 percent-encoding**; the controller decodes **ISO-8859-1**.
+  **Latin-1 percent-encoding**; the server side decodes **ISO-8859-1**.
   Loom must mirror this, not send raw UTF-8, or umlauts corrupt
   (e.g. "Wohnzimmer Süd").
 - `groupDeviceName = <group_name> + " " + virtualDeviceSerialNumber`.
@@ -138,9 +139,9 @@ Field notes from `GroupEditPage.ftl` (the `save()` view-model):
   naming scheme (**this is GR03's scope**), and the CCU runs a
   `CONFIG_PENDING` settle on the virtual device + members.
 
-DTOs live in `HMServer.jar` under
-`de/eq3/ccu/groupadministration/http/service/dto/`
-(`SuitableGroupMembersDto`, `GroupAssignmentsDto`, `Device`, …).
+The `suitableGroupMembers` and `getAllAssignableGroupTypes` replies are plain
+JSON objects (assignable/leftover member lists, group-type entries); their
+field names are taken straight from the observed responses.
 
 ### GR02 implementation plan
 
@@ -211,10 +212,8 @@ scope** by prior decision.
   - `getHeatingGroupList` Tcl:
     `../occu/WebUI/www/api/methods/ccu/getheatinggrouplist.tcl`.
   - lighttpd proxy rule: `../occu/**/lighttpd/conf.d/proxy.conf`.
-  - HMServer group model + controller: inside
-    `../occu/HMserver/opt/HMServer/HMServer.jar`
-    (`de/eq3/lib/groupadministration/*`,
-    `de/eq3/ccu/groupadministration/http/service/*`).
+  - the group wire shapes are otherwise taken from the observed
+    `/pages/jpages/group/*` request/response bodies on a live CCU.
 - aiohomematic does **not** model heating groups (it treats the virtual
   group device as an ordinary device) — no reference there.
 - godevccu (`../godevccu/`) does **not** implement `CCU.getHeatingGroupList`

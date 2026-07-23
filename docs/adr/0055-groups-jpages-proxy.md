@@ -28,11 +28,9 @@ distinction decides our approach:
   `/pages/jpages/group/{list,create,save,delete,suitableGroupMembers,
   configureDevices,assignedGroupMembers}`. HMServer builds the virtual
   device, computes the per-type direct-link matrix, maintains
-  `groups.gson`, and sequences the `CONFIG_PENDING` follow-up. The
-  templates are `occu/HMserver/opt/HMServer/pages/GroupListPage.ftl` and
-  `GroupEditPage.ftl`; the controller is
-  `de.eq3.ccu.groupadministration.http.service.GroupAdministrationController`
-  inside `HMServer.jar`. lighttpd proxies `^/pages/jpages` to HMServer on
+  `groups.gson`, and sequences the `CONFIG_PENDING` follow-up. The shipped,
+  readable page templates are `occu/HMserver/opt/HMServer/pages/GroupListPage.ftl`
+  and `GroupEditPage.ftl`; lighttpd proxies `^/pages/jpages` to HMServer on
   `127.0.0.1:9292` (`WebUI/etc/lighttpd/conf.d/proxy.conf`).
 
 Reproducing that matrix natively in Go would mean re-deriving, per group
@@ -47,11 +45,9 @@ whether `/pages/jpages` authenticates with the JSON-RPC session Loom
 already holds, or with a separate WebUI session that Loom would have to
 establish on its own.
 
-It is the JSON-RPC session. HMServer validates the request's `sid` in
-`de.eq3.ccu.http.service.SessionVerifier.isSessionAlive(sid)`, which
-POSTs to ReGa's JSON-RPC endpoint `/api/homematic.cgi` with the `sid`
-substituted into the call — the same endpoint and the same session token
-that `Session.login` returns. The WebUI passes exactly this token to
+It is the JSON-RPC session. HMServer validates the request's `sid` by
+POSTing it to ReGa's JSON-RPC endpoint `/api/homematic.cgi` — the same
+endpoint and the same session token that `Session.login` returns. The WebUI passes exactly this token to
 jpages as a query parameter (`.../group/...?sid=<SessionId>`, e.g.
 `occu/WebUI/www/config/easymodes/js/Group.js`). There is no second login
 and no separate WebUI cookie in the path.
