@@ -44,6 +44,7 @@ export type UIHint = NonNullable<
 export type DeviceDetail = components["schemas"]["DeviceDetail"];
 export type CommunicationTestResult =
   components["schemas"]["CommunicationTestResult"];
+export type TeamCandidate = components["schemas"]["TeamCandidate"];
 
 // RxMode re-exported from generated schema — the named flags decoded from a
 // device's CCU RX_MODE bitmask. The `wakeup` / `lazy_config` bits mark a

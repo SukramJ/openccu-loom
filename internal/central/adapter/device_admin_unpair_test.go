@@ -141,6 +141,14 @@ func (*fakeOperations) SearchDevices(context.Context) (int, error) {
 	return 0, backends.ErrUnsupported
 }
 
+func (*fakeOperations) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
 func (*fakeOperations) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
 	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }

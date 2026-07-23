@@ -83,6 +83,12 @@ type Capabilities struct {
 	// additionally gates on the radio interface.
 	CommunicationTest bool
 
+	// TeamAssignment is true when the backend exposes `setTeam` /
+	// `listTeams` (channel team assignment, e.g. smoke detectors). CCU
+	// only; the caller additionally gates on the interface (BidCos-RF /
+	// HmIP-RF).
+	TeamAssignment bool
+
 	// RequiresPeriodicRefresh is true for backends that cannot push
 	// events and need the periodic-refresh coordinator.
 	RequiresPeriodicRefresh bool
@@ -192,6 +198,7 @@ func CapabilityFor(kind Kind) Capabilities {
 			ReplaceDevice:          true,
 			SearchDevices:          true,
 			CommunicationTest:      true,
+			TeamAssignment:         true,
 			AlarmMessages:          true,
 			Backup:                 true,
 			CreateSystemVariable:   true,

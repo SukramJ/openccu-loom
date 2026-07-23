@@ -141,6 +141,14 @@ func (b *orchBackend) SearchDevices(context.Context) (int, error) {
 	return 0, backends.ErrUnsupported
 }
 
+func (b *orchBackend) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *orchBackend) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
 func (b *orchBackend) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
 	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }

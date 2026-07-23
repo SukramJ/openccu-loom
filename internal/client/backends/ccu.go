@@ -409,6 +409,27 @@ func (b *CcuBackend) ReportValueUsage(ctx context.Context, channelAddress, value
 	return err
 }
 
+// SetTeam implements Operations. Assigns a channel to a team via the
+// XML-RPC `setTeam(address, team)` call; an empty team resets the
+// channel to its own default team.
+func (b *CcuBackend) SetTeam(ctx context.Context, channelAddress, teamChannelAddress string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "setTeam", channelAddress, teamChannelAddress)
+	return err
+}
+
+// ListTeams implements Operations. Returns the team-channel descriptions
+// via the XML-RPC `listTeams()` call, decoded like the replaceable-device
+// list (both are struct arrays of device descriptions).
+func (b *CcuBackend) ListTeams(ctx context.Context) ([]hmproto.DeviceDescription, error) {
+	if b.xml == nil {
+		return nil, ErrUnsupported
+	}
+	return listStructArrayViaCaller(ctx, b.xml, "ccu", "listTeams")
+}
+
 // SearchDevices implements Operations. Triggers the hs485d wired-bus
 // scan via the XML-RPC `searchDevices()` call (no args) and returns the
 // count of devices found. Only the BidCos-Wired interface exposes it.

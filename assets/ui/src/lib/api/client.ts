@@ -35,6 +35,7 @@ import type {
   DataPointSummary,
   DeviceDetail,
   CommunicationTestResult,
+  TeamCandidate,
   DeviceSummary,
   CaptureSummary,
   DiagnosticsEnvelope,
@@ -1233,6 +1234,24 @@ export const api = {
     return request<CommunicationTestResult>(
       `/devices/${encodeURIComponent(address)}/test`,
       { method: "POST" },
+    );
+  },
+  // List the team channels a channel may be assigned to (same team tag).
+  async teamCandidates(address: string, channelNo: number) {
+    const r = await request<{ candidates: TeamCandidate[] }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/team-candidates`,
+    );
+    return r.candidates;
+  },
+  // Assign a channel to a team; null/empty team resets to default.
+  setChannelTeam(address: string, channelNo: number, team: string | null) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/team`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team }),
+      },
     );
   },
   // Ask a CCU to fetch a firmware image onto the central (admin-only).

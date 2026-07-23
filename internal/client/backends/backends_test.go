@@ -510,6 +510,80 @@ func TestHomegearBackendSearchDevicesUnsupported(t *testing.T) {
 	}
 }
 
+func TestCcuBackendSetTeamDispatchesXMLRPC(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{}
+	b := NewCcuBackend(x, nil, nil)
+	if err := b.SetTeam(context.Background(), "ABC:1", "TEAM:1"); err != nil {
+		t.Fatalf("SetTeam: %v", err)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	method, _ := got[0].(string)
+	args, _ := got[1].([]any)
+	if method != "setTeam" || len(args) != 2 || args[0] != "ABC:1" || args[1] != "TEAM:1" {
+		t.Fatalf("wire call = %s %v, want setTeam [ABC:1 TEAM:1]", method, args)
+	}
+}
+
+func TestCcuBackendSetTeamEmptyResetsTeam(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{}
+	b := NewCcuBackend(x, nil, nil)
+	if err := b.SetTeam(context.Background(), "ABC:1", ""); err != nil {
+		t.Fatalf("SetTeam: %v", err)
+	}
+	got, _ := x.lastArg.Load().([]any)
+	args, _ := got[1].([]any)
+	if len(args) != 2 || args[1] != "" {
+		t.Fatalf("reset must send empty team, got %v", args)
+	}
+}
+
+func TestCcuBackendSetTeamWithoutXMLRPCUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(nil, &fakeCaller{}, nil)
+	if err := b.SetTeam(context.Background(), "ABC:1", "TEAM:1"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuBackendListTeamsDecodesStructArray(t *testing.T) {
+	t.Parallel()
+	x := &fakeCaller{reply: []any{
+		map[string]any{"ADDRESS": "TEAM:1", "PARENT": "TEAM", "TEAM_TAG": "SMOKE_DETECTOR"},
+	}}
+	b := NewCcuBackend(x, nil, nil)
+	teams, err := b.ListTeams(context.Background())
+	if err != nil {
+		t.Fatalf("ListTeams: %v", err)
+	}
+	if len(teams) != 1 || teams[0].Address != "TEAM:1" || teams[0].TeamTag != "SMOKE_DETECTOR" {
+		t.Fatalf("teams=%+v", teams)
+	}
+}
+
+func TestCuxdBackendTeamUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	if err := b.SetTeam(context.Background(), "A:1", "T:1"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("SetTeam: expected ErrUnsupported, got %v", err)
+	}
+	if _, err := b.ListTeams(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("ListTeams: expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendTeamUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	if err := b.SetTeam(context.Background(), "A:1", "T:1"); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("SetTeam: expected ErrUnsupported, got %v", err)
+	}
+	if _, err := b.ListTeams(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("ListTeams: expected ErrUnsupported, got %v", err)
+	}
+}
+
 func TestCcuBackendGetParamsetDescriptionMapsStructs(t *testing.T) {
 	x := &fakeCaller{reply: map[string]any{
 		"STATE": map[string]any{"TYPE": "BOOL", "OPERATIONS": 3},

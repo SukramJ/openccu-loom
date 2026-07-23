@@ -24,3 +24,5 @@ device.replace_candidates   -- godevccu has no listReplaceableDevices; live CCU 
 device.replace              -- godevccu has no replaceDevice; live CCU performs the swap
 install_mode.search         -- godevccu has no searchDevices; live CCU scans the wired bus
 device.test                 -- godevccu has no ReGa DevStartComTest; live CCU runs the radio test
+device.team_candidates      -- godevccu has no listTeams; live CCU returns team channels
+device.set_team             -- godevccu has no setTeam; live CCU assigns the team

@@ -208,6 +208,14 @@ func (fakeDeviceCommunicationTest) TestDeviceCommunication(context.Context, stri
 	return hmapi.CommunicationTestResult{}, nil
 }
 
+type fakeDeviceTeam struct{}
+
+func (fakeDeviceTeam) TeamCandidates(context.Context, string, int) ([]hmapi.TeamCandidate, error) {
+	return nil, nil
+}
+
+func (fakeDeviceTeam) SetChannelTeam(context.Context, string, int, string) error { return nil }
+
 type fakeRoomFunctionAdmin struct{}
 
 func (fakeRoomFunctionAdmin) CreateRoom(context.Context, string, string) (int, error) { return 0, nil }
@@ -544,6 +552,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		DeviceReplacer:          fakeDeviceReplacer{},
 		InstallModeSearch:       fakeDeviceSearch{},
 		DeviceCommunicationTest: fakeDeviceCommunicationTest{},
+		DeviceTeam:              fakeDeviceTeam{},
 		FirmwareRefresher:       fakeFirmwareRefresher{},
 		DeviceInstallMode:       fakeDeviceInstallMode{},
 		RoomFunctionAdmin:       fakeRoomFunctionAdmin{},

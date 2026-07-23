@@ -288,6 +288,34 @@ func TestCommunicationTestClassification(t *testing.T) {
 	}
 }
 
+// TestTeamsClassification pins the team-assignment interface set: rfd
+// (BidCos-RF) and HMIPServer (HmIP-RF) implement setTeam/listTeams;
+// BidCos-Wired, CUxD and VirtualDevices do not.
+func TestTeamsClassification(t *testing.T) {
+	t.Parallel()
+
+	wantTrue := []hmenum.Interface{hmenum.InterfaceBidCosRF, hmenum.InterfaceHmIPRF}
+	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceBidCosWired,
+		hmenum.InterfaceVirtualDevices,
+		hmenum.InterfaceCUxD,
+	}
+
+	if got := len(hmenum.InterfacesSupportingTeams); got != 2 {
+		t.Fatalf("InterfacesSupportingTeams len=%d, want 2", got)
+	}
+	for _, iface := range wantTrue {
+		if !iface.SupportsTeams() {
+			t.Errorf("%s.SupportsTeams() = false, want true", iface)
+		}
+	}
+	for _, iface := range wantFalse {
+		if iface.SupportsTeams() {
+			t.Errorf("%s.SupportsTeams() = true, want false", iface)
+		}
+	}
+}
+
 // TestCategoryToTypeCovers ensures every real DataPointCategory maps to
 // a DataPointType. UNDEFINED is intentionally omitted.
 func TestCategoryToTypeCovers(t *testing.T) {

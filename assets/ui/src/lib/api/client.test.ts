@@ -198,6 +198,33 @@ describe("api endpoint paths", () => {
     expect(result.duration_ms).toBe(3000);
     expect(result.timed_out).toBe(false);
   });
+
+  it("teamCandidates GETs the channel team-candidates and unwraps them", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ address: "TEAM:1", current: true }] }),
+    );
+    const cands = await api.teamCandidates("SD001", 1);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/SD001/channels/1/team-candidates");
+    expect(cands).toHaveLength(1);
+    expect(cands[0].address).toBe("TEAM:1");
+  });
+
+  it("setChannelTeam PUTs the team assignment", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelTeam("SD001", 1, "TEAM:2");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/SD001/channels/1/team");
+    expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ team: "TEAM:2" });
+  });
+
+  it("setChannelTeam sends null to reset the team", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelTeam("SD001", 1, null);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ team: null });
+  });
 });
 
 describe("api — deleteDevice reset/force query flags", () => {

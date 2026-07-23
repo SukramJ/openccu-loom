@@ -90,6 +90,11 @@ type DeviceSummary struct {
 	// The SPA gates the "test" action on it.
 	CommunicationTestSupported bool `json:"communication_test_supported"`
 
+	// TeamSupported is true when the device's interface exposes channel
+	// team assignment (setTeam / listTeams — BidCos-RF, HmIP-RF). The
+	// SPA gates the team picker on it.
+	TeamSupported bool `json:"team_supported"`
+
 	// HasSubDevices mirrors [device.Device.HasSubDevices] so SPA / WS
 	// consumers can apply the same per-channel-group split the MQTT
 	// bridge does under the `sub_devices_enabled` toggle.
@@ -876,6 +881,7 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
 		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
 		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),
+		TeamSupported:              d.Interface.SupportsTeams(),
 		HasSubDevices:              d.HasSubDevices(),
 		RxMode:                     rxModeInfo(d.RxMode),
 	}

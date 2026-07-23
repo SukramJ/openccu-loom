@@ -129,6 +129,19 @@ func TestCapabilityFor_CommunicationTest(t *testing.T) {
 	}
 }
 
+func TestCapabilityFor_TeamAssignment(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).TeamAssignment {
+		t.Error("KindCCU: TeamAssignment should be true")
+	}
+	if CapabilityFor(KindCUxD).TeamAssignment {
+		t.Error("KindCUxD: TeamAssignment should be false")
+	}
+	if CapabilityFor(KindHomegear).TeamAssignment {
+		t.Error("KindHomegear: TeamAssignment should be false")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Homegear capability profile
 // ---------------------------------------------------------------------------

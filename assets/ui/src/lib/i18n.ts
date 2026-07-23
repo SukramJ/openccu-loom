@@ -2305,6 +2305,10 @@ const EN: Catalog = {
   "device.communication_test_running": "Testing…",
   "device.communication_test_passed": "Communication OK",
   "device.communication_test_failed": "No response",
+  "device.team.title": "Team",
+  "device.team.reset": "Default team",
+  "device.team.changed": "Team assignment updated.",
+  "device.team.none": "No other teams for this device type.",
   "device.status.paramset_pick": "Read source",
   // --- Maintenance grid ---
   "device.maintenance.title": "Maintenance",
@@ -5177,6 +5181,10 @@ const DE: Catalog = {
   "device.communication_test_running": "Test läuft…",
   "device.communication_test_passed": "Kommunikation OK",
   "device.communication_test_failed": "Keine Antwort",
+  "device.team.title": "Team",
+  "device.team.reset": "Standard-Team",
+  "device.team.changed": "Team-Zuordnung aktualisiert.",
+  "device.team.none": "Keine weiteren Teams für diesen Gerätetyp.",
   "device.status.paramset_pick": "Quelle",
   // --- Wartungs-Grid ---
   "device.maintenance.title": "Wartung",

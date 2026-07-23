@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 790689ce
-HEAD: 790689ce
+Generated: 771611b9
+HEAD: 771611b9
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26452 |
-| Reachable | 4603 |
-| Whitelisted | 19063 |
-| **Unreachable** | **2786** |
+| Total Exported | 26516 |
+| Reachable | 4605 |
+| Whitelisted | 19121 |
+| **Unreachable** | **2790** |
 
 ## Top-20 Packages by Dead Code
 
@@ -67,8 +67,8 @@ HEAD: 790689ce
 | internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 266 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 266 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
@@ -193,8 +193,8 @@ HEAD: 790689ce
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
 | internal/store/sqlite | 0 | 84 | 22 |
-| pkg/hmapi | 0 | 123 | 16 |
-| pkg/hmenum | 0 | 100 | 44 |
+| pkg/hmapi | 0 | 125 | 16 |
+| pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
 | pkg/interfaces | 0 | 81 | 4 |

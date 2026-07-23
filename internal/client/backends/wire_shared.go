@@ -55,26 +55,34 @@ func listDevicesViaCaller(ctx context.Context, caller Caller, prefix string) ([]
 // returns their descriptions. Mirrors [listDevicesViaCaller] but with
 // the one-argument `listReplaceableDevices(newAddress)` method.
 func listReplaceableDevicesViaCaller(ctx context.Context, caller Caller, prefix, newAddress string) ([]hmproto.DeviceDescription, error) {
+	return listStructArrayViaCaller(ctx, caller, prefix, "listReplaceableDevices", newAddress)
+}
+
+// listStructArrayViaCaller runs a wire method returning an array of
+// device-description structs (`listReplaceableDevices`, `listTeams`, …)
+// and decodes each into a [hmproto.DeviceDescription]. args are the
+// positional method arguments (none for listTeams).
+func listStructArrayViaCaller(ctx context.Context, caller Caller, prefix, method string, args ...any) ([]hmproto.DeviceDescription, error) {
 	if caller == nil {
 		return nil, ErrNotWired
 	}
-	raw, err := caller.Call(ctx, "listReplaceableDevices", newAddress)
+	raw, err := caller.Call(ctx, method, args...)
 	if err != nil {
 		return nil, err
 	}
 	list, ok := raw.([]any)
 	if !ok {
-		return nil, fmt.Errorf("%s.ListReplaceableDevices: unexpected type %T", prefix, raw)
+		return nil, fmt.Errorf("%s.%s: unexpected type %T", prefix, method, raw)
 	}
 	out := make([]hmproto.DeviceDescription, 0, len(list))
 	for i, entry := range list {
 		m, ok := entry.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("%s.ListReplaceableDevices[%d]: not a struct", prefix, i)
+			return nil, fmt.Errorf("%s.%s[%d]: not a struct", prefix, method, i)
 		}
 		dd, err := toDeviceDescription(m)
 		if err != nil {
-			return nil, fmt.Errorf("%s.ListReplaceableDevices[%d]: %w", prefix, i, err)
+			return nil, fmt.Errorf("%s.%s[%d]: %w", prefix, method, i, err)
 		}
 		out = append(out, dd)
 	}

@@ -20,6 +20,7 @@ import (
 
 type stubDevices struct {
 	testedDevices    map[string]bool
+	teamSets         map[string]string
 	renamed          map[string]string
 	renamedChannels  map[string]string
 	lastInclude      bool
@@ -133,6 +134,18 @@ func (s *stubDevices) TestDeviceCommunication(_ context.Context, address string)
 	}
 	s.testedDevices[address] = true
 	return hmapi.CommunicationTestResult{Passed: true}, nil
+}
+
+func (s *stubDevices) TeamCandidates(_ context.Context, _ string, _ int) ([]hmapi.TeamCandidate, error) {
+	return []hmapi.TeamCandidate{{Address: "TEAM:1", Current: true}}, nil
+}
+
+func (s *stubDevices) SetChannelTeam(_ context.Context, deviceAddr string, channelNo int, team string) error {
+	if s.teamSets == nil {
+		s.teamSets = map[string]string{}
+	}
+	s.teamSets[deviceAddr+":"+strconv.Itoa(channelNo)] = team
+	return nil
 }
 
 type stubParamsetWriter struct {
@@ -498,6 +511,34 @@ func TestExtendedDeviceTestMissingAddressReturnsBadRequest(t *testing.T) {
 	if len(devs.testedDevices) != 0 {
 		t.Fatalf("domain layer must not be called on validation failure, got %v", devs.testedDevices)
 	}
+}
+
+func TestExtendedDeviceTeamCandidates(t *testing.T) {
+	r, _, _, _, _, _ := newRouterWithExtended()
+	out := dispatch(t, r, "device.team_candidates", map[string]any{
+		"address": "SD001",
+		"channel": 1,
+	}).(map[string]any)
+	if _, ok := out["candidates"]; !ok {
+		t.Fatalf("missing candidates envelope: %+v", out)
+	}
+	dispatchExpectErr(t, r, "device.team_candidates", map[string]any{"address": ""}, "address is required")
+}
+
+func TestExtendedDeviceSetTeam(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+	out := dispatch(t, r, "device.set_team", map[string]any{
+		"address": "SD001",
+		"channel": 1,
+		"team":    "TEAM:2",
+	}).(map[string]any)
+	if out["team"] != "TEAM:2" {
+		t.Fatalf("result=%+v, want team TEAM:2", out)
+	}
+	if devs.teamSets["SD001:1"] != "TEAM:2" {
+		t.Fatalf("team assignment not forwarded: %v", devs.teamSets)
+	}
+	dispatchExpectErr(t, r, "device.set_team", map[string]any{"address": ""}, "address is required")
 }
 
 // TestExtendedDeviceReplaceCandidates exercises `device.replace_candidates`

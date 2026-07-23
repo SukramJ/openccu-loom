@@ -49,6 +49,8 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"listReplaceableDevices":  true,
 		"replaceDevice":           true,
 		"searchDevices":           true,
+		"setTeam":                 true,
+		"listTeams":               true,
 		"getLinks":                true,
 		"getLinkPeers":            true,
 		"addLink":                 true,

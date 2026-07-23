@@ -66,6 +66,10 @@ const (
 	// function test. The Entry's DeviceAddress carries the target.
 	ActionDeviceCommunicationTest Action = "device_communication_test"
 
+	// ActionDeviceTeamSet records a channel team assignment (or reset).
+	// The Entry's DeviceAddress carries the channel address.
+	ActionDeviceTeamSet Action = "device_team_set"
+
 	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"

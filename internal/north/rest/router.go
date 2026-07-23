@@ -68,6 +68,10 @@ type Deps struct {
 	// DeviceCommunicationTest runs the per-device communication test at
 	// POST /devices/{addr}/test. Nil serves the route as 503.
 	DeviceCommunicationTest handlers.DeviceCommunicationTestPort
+	// DeviceTeam backs channel team assignment
+	// (GET .../channels/{no}/team-candidates + PUT .../channels/{no}/team).
+	// Nil serves those routes as 503.
+	DeviceTeam handlers.DeviceTeamPort
 	// DeviceIcons proxies device-type icon images from the CCU for the
 	// device list. Optional — nil answers 404 (SPA uses a glyph).
 	DeviceIcons handlers.DeviceIconProxy
@@ -792,6 +796,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.DeviceCommunicationTest != nil {
 				pr.With(op).Post("/devices/{addr}/test", handlers.TestDeviceCommunication(d.DeviceCommunicationTest, d.AuditRecorder))
+			}
+			if d.DeviceTeam != nil {
+				pr.Get("/devices/{addr}/channels/{no}/team-candidates", handlers.GetDeviceTeamCandidates(d.DeviceTeam))
+				pr.With(op).Put("/devices/{addr}/channels/{no}/team", handlers.SetDeviceChannelTeam(d.DeviceTeam, d.AuditRecorder))
 			}
 			if d.FirmwareRefresher != nil {
 				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))

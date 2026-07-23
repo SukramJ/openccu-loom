@@ -101,6 +101,14 @@ func (i Interface) SupportsCommunicationTest() bool {
 	return ok
 }
 
+// SupportsTeams reports whether channel team assignment (`setTeam` /
+// `listTeams`) is available on this interface. True for BidCos-RF and
+// HmIP-RF; false for BidCos-Wired, CUxD and VirtualDevices.
+func (i Interface) SupportsTeams() bool {
+	_, ok := InterfacesSupportingTeams[i]
+	return ok
+}
+
 // PushesConfigPending reports whether this interface — taken on its
 // own — delivers reliable CONFIG_PENDING events on MASTER writes.
 // True for HmIP-*; false for BidCos-* (CONFIG_PENDING is unreliable;
@@ -223,6 +231,16 @@ var (
 		InterfaceHmIPRF:      {},
 		InterfaceBidCosRF:    {},
 		InterfaceBidCosWired: {},
+	}
+
+	// InterfacesSupportingTeams lists the interfaces whose daemon exposes
+	// `setTeam` / `listTeams` (channel team assignment, e.g. smoke
+	// detectors). rfd (BidCos-RF) and HMIPServer (HmIP-RF) implement it;
+	// BidCos-Wired, CUxD and VirtualDevices do not. HmIP-Wired rides the
+	// HmIP-RF service transitively.
+	InterfacesSupportingTeams = map[Interface]struct{}{
+		InterfaceBidCosRF: {},
+		InterfaceHmIPRF:   {},
 	}
 
 	// InterfacesPushingConfigPending lists the interfaces that emit

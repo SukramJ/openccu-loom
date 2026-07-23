@@ -119,6 +119,18 @@ func (b *CuxdBackend) SearchDevices(context.Context) (int, error) {
 	return 0, ErrUnsupported
 }
 
+// SetTeam implements Operations. CUxD has no team concept; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) SetTeam(context.Context, string, string) error {
+	return ErrUnsupported
+}
+
+// ListTeams implements Operations. CUxD has no team concept; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
 // TestDevice implements Operations. CUxD has no radio com-test; always
 // returns [ErrUnsupported].
 func (b *CuxdBackend) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {

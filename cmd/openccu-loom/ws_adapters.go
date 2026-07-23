@@ -1021,6 +1021,24 @@ func (w *wsDeviceWriter) TestDeviceCommunication(ctx context.Context, address st
 	return w.admin.TestDeviceCommunication(ctx, address)
 }
 
+// TeamCandidates lists the team channels a channel may join via
+// DeviceAdminDomain.TeamCandidates.
+func (w *wsDeviceWriter) TeamCandidates(ctx context.Context, deviceAddr string, channelNo int) ([]hmapi.TeamCandidate, error) {
+	if w.admin == nil {
+		return nil, errors.New("ws: device admin not wired")
+	}
+	return w.admin.TeamCandidates(ctx, deviceAddr, channelNo)
+}
+
+// SetChannelTeam assigns a channel to a team via
+// DeviceAdminDomain.SetChannelTeam.
+func (w *wsDeviceWriter) SetChannelTeam(ctx context.Context, deviceAddr string, channelNo int, teamChannelAddress string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelTeam(ctx, deviceAddr, channelNo, teamChannelAddress)
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // structSliceToMapSlice JSON-encodes a slice of typed structs and decodes them

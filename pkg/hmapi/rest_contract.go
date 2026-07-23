@@ -603,3 +603,16 @@ type CommunicationTestResult struct {
 	DurationMs  int64     `json:"duration_ms"`
 	TimedOut    bool      `json:"timed_out"`
 }
+
+// --- Device team assignment ---
+
+// TeamCandidate is one team-channel a device channel may be assigned to,
+// returned by GET /devices/{addr}/channels/{no}/team-candidates. The
+// candidate list is filtered to channels sharing the target's team tag;
+// Current marks the channel's currently-assigned team.
+type TeamCandidate struct {
+	Address string `json:"address"`
+	Name    string `json:"name,omitempty"`
+	TeamTag string `json:"team_tag,omitempty"`
+	Current bool   `json:"current"`
+}

@@ -2058,6 +2058,69 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/team-candidates:
+    get:
+      operationId: getDeviceTeamCandidates
+      summary: List team channels a channel may be assigned to
+      description: |
+        Returns the team channels that share the target channel's team tag
+        (the candidate list for a team assignment, e.g. a smoke-detector
+        team). Read-only. Supported on BidCos-RF / HmIP-RF; other
+        interfaces return an empty list.
+      tags: [devices]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidates]
+                properties:
+                  candidates:
+                    type: array
+                    items: { $ref: "#/components/schemas/TeamCandidate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/team:
+    put:
+      operationId: setDeviceChannelTeam
+      summary: Assign a channel to a team
+      description: |
+        Assigns the channel to the given team channel (`setTeam`). A null or
+        empty `team` resets the channel to its own default team. Supported
+        on BidCos-RF / HmIP-RF; other interfaces answer 422.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                team:
+                  type: string
+                  nullable: true
+                  description: The team channel address to join; null/empty resets to the default team.
+      responses:
+        "202":
+          description: Team assignment accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/replace-candidates:
     get:
       operationId: listDeviceReplaceCandidates
@@ -6728,6 +6791,12 @@ components:
             True when the device's interface can run the CCU's per-device
             communication test (radio interfaces). The SPA gates the "test"
             action on it. False for VirtualDevices and CUxD.
+        team_supported:
+          type: boolean
+          description: |
+            True when the device's interface exposes channel team assignment
+            (setTeam / listTeams — BidCos-RF, HmIP-RF). The SPA gates the
+            team picker on it.
         has_sub_devices:
           type: boolean
           description: |
@@ -9571,6 +9640,20 @@ components:
         model_matches:
           type: boolean
           description: True when the candidate's model equals the new device's (an exact swap rather than a compatible cross-type one).
+
+    TeamCandidate:
+      type: object
+      required: [address, current]
+      description: |
+        One team channel a device channel may be assigned to, returned by
+        GET /devices/{addr}/channels/{no}/team-candidates.
+      properties:
+        address: { type: string }
+        name: { type: string }
+        team_tag: { type: string }
+        current:
+          type: boolean
+          description: True when this channel is the target channel's currently-assigned team.
 
     CommunicationTestResult:
       type: object

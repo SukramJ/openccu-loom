@@ -34,3 +34,5 @@ listDeviceReplaceCandidates -- godevccu has no listReplaceableDevices; live CCU 
 replaceDevice -- godevccu has no replaceDevice; live CCU performs the swap
 installModeSearch -- godevccu has no searchDevices; live CCU scans the wired bus
 testDeviceCommunication -- godevccu has no ReGa DevStartComTest; live CCU runs the radio test
+getDeviceTeamCandidates -- godevccu has no listTeams; live CCU returns team channels
+setDeviceChannelTeam -- godevccu has no setTeam; live CCU assigns the team

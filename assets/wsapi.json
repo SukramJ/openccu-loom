@@ -398,6 +398,33 @@
     },
     {
       "category": "devices",
+      "description": "List the team channels a channel may be assigned to (same team tag). Supported on BidCos-RF and HmIP-RF only.",
+      "name": "device.team_candidates",
+      "args": {
+        "address": "string",
+        "channel": "integer"
+      },
+      "result": {
+        "candidates": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Assign a channel to a team (e.g. smoke-detector teaming). A null/empty team resets to the channel's default team. BidCos-RF and HmIP-RF only.",
+      "name": "device.set_team",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "team": "string?"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "team": "string"
+      }
+    },
+    {
+      "category": "devices",
       "description": "Run the CCU's per-device communication / function test (radio test frame + ACK). Blocks until complete or the poll window elapses. Radio interfaces only.",
       "name": "device.test",
       "args": {

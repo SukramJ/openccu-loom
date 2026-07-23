@@ -115,6 +115,20 @@ type DeviceOps interface {
 	// [hmenum.Interface.SupportsDeviceSearch].
 	SearchDevices(ctx context.Context) (int, error)
 
+	// SetTeam assigns channelAddress to teamChannelAddress via the
+	// XML-RPC `setTeam(address, team)` call (e.g. smoke-detector teams).
+	// An empty teamChannelAddress resets the channel to its own default
+	// team. Returns [ErrUnsupported] on backends without
+	// [Capabilities.TeamAssignment]; the caller additionally gates on the
+	// interface (BidCos-RF / HmIP-RF).
+	SetTeam(ctx context.Context, channelAddress, teamChannelAddress string) error
+
+	// ListTeams returns the team-channel descriptions used to build the
+	// assignment candidate list via the XML-RPC `listTeams()` call. Each
+	// entry carries ADDRESS / PARENT / TEAM_TAG / PARENT_TYPE. Returns
+	// [ErrUnsupported] on backends without [Capabilities.TeamAssignment].
+	ListTeams(ctx context.Context) ([]hmproto.DeviceDescription, error)
+
 	// TestDevice runs the CCU's per-device communication/function test
 	// (ReGa DevStartComTest) and polls for completion up to maxWaitSecs
 	// (poll every pollIntervalSecs). The CCU sends a radio test frame and

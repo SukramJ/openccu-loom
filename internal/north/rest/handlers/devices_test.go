@@ -238,6 +238,41 @@ func TestGetDevice_CommunicationTestSupportedReflectsInterface(t *testing.T) {
 	}
 }
 
+func TestGetDevice_TeamSupportedReflectsInterface(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		iface hmenum.Interface
+		want  bool
+	}{
+		{hmenum.InterfaceBidCosRF, true},
+		{hmenum.InterfaceHmIPRF, true},
+		{hmenum.InterfaceBidCosWired, false},
+		{hmenum.InterfaceVirtualDevices, false},
+		{hmenum.InterfaceCUxD, false},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.iface), func(t *testing.T) {
+			t.Parallel()
+			d := device.New(device.Config{
+				Address: "0001ABCD", Model: "HM-Sec-SD",
+				Interface: tc.iface, InterfaceID: string(tc.iface), Name: "SD",
+			})
+			idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+			w := httptest.NewRecorder()
+			GetDevice(idx, nil).ServeHTTP(w, req)
+			var body DeviceDetail
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.TeamSupported != tc.want {
+				t.Errorf("%s: team_supported=%v, want %v", tc.iface, body.TeamSupported, tc.want)
+			}
+		})
+	}
+}
+
 func TestGetDevice_NotFound_Returns404(t *testing.T) {
 	t.Parallel()
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{}}

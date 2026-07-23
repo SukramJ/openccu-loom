@@ -157,6 +157,18 @@ func (b *HomegearBackend) SearchDevices(_ context.Context) (int, error) {
 	return 0, ErrUnsupported
 }
 
+// SetTeam implements Operations. Homegear has no team concept; always
+// returns [ErrUnsupported].
+func (b *HomegearBackend) SetTeam(_ context.Context, _, _ string) error {
+	return ErrUnsupported
+}
+
+// ListTeams implements Operations. Homegear has no team concept; always
+// returns [ErrUnsupported].
+func (b *HomegearBackend) ListTeams(_ context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
 // TestDevice implements Operations. Homegear has no CCU com-test;
 // always returns [ErrUnsupported].
 func (b *HomegearBackend) TestDevice(_ context.Context, _ string, _, _ float64) (hmapi.CommunicationTestResult, error) {

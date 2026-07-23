@@ -2286,6 +2286,14 @@ func (f *failOnInstallDevice) TestDeviceCommunication(_ context.Context, _ strin
 	return hmapi.CommunicationTestResult{}, nil
 }
 
+func (f *failOnInstallDevice) TeamCandidates(_ context.Context, _ string, _ int) ([]hmapi.TeamCandidate, error) {
+	return nil, nil
+}
+
+func (f *failOnInstallDevice) SetChannelTeam(_ context.Context, _ string, _ int, _ string) error {
+	return nil
+}
+
 func (f *failOnInstallDevice) ReplaceCandidates(_ context.Context, _, _ string) ([]hmapi.ReplaceCandidate, error) {
 	return nil, nil
 }

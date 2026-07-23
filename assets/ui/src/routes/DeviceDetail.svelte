@@ -3,6 +3,7 @@
   import type { DeviceDetail } from "$lib/api/types";
   import { api, ApiError } from "$lib/api/client";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
+  import TeamPicker from "$lib/components/device/TeamPicker.svelte";
   import DeviceLinks from "$lib/components/links/DeviceLinks.svelte";
   import CentralLinksPanel from "$lib/components/links/CentralLinksPanel.svelte";
   import CdpTilesPanel from "$lib/cdp/CdpTilesPanel.svelte";
@@ -1130,6 +1131,11 @@
                   {/if}
                 </div>
               </div>
+              {#if detail.team_supported}
+                <div class="mb-3">
+                  <TeamPicker address={detail.address} channel={ch.number} />
+                </div>
+              {/if}
               <ChannelPanel
                 address={detail.address}
                 channel={ch.number}

@@ -2176,6 +2176,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/channels/{no}/team-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List team channels a channel may be assigned to
+         * @description Returns the team channels that share the target channel's team tag
+         *     (the candidate list for a team assignment, e.g. a smoke-detector
+         *     team). Read-only. Supported on BidCos-RF / HmIP-RF; other
+         *     interfaces return an empty list.
+         */
+        get: operations["getDeviceTeamCandidates"];
+        /**
+         * Assign a channel to a team
+         * @description Assigns the channel to the given team channel (`setTeam`). A null or
+         *     empty `team` resets the channel to its own default team. Supported
+         *     on BidCos-RF / HmIP-RF; other interfaces answer 422.
+         */
+        put: operations["setDeviceChannelTeam"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/replace-candidates": {
         parameters: {
             query?: never;
@@ -5153,6 +5182,12 @@ export interface components {
              */
             communication_test_supported?: boolean;
             /**
+             * @description True when the device's interface exposes channel team assignment
+             *     (setTeam / listTeams — BidCos-RF, HmIP-RF). The SPA gates the
+             *     team picker on it.
+             */
+            team_supported?: boolean;
+            /**
              * @description True when the device should be split into multiple logical
              *     sub-devices for northbound presentation. The SPA's CdpTilesPanel
              *     uses this flag to switch from a flat tile grid to per-group
@@ -7452,6 +7487,17 @@ export interface components {
             model_matches: boolean;
         };
         /**
+         * @description One team channel a device channel may be assigned to, returned by
+         *     GET /devices/{addr}/channels/{no}/team-candidates.
+         */
+        TeamCandidate: {
+            address: string;
+            name?: string;
+            team_tag?: string;
+            /** @description True when this channel is the target channel's currently-assigned team. */
+            current: boolean;
+        };
+        /**
          * @description Outcome of a per-device communication / function test
          *     (POST /devices/{addr}/test).
          */
@@ -9113,6 +9159,67 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CommunicationTestResult"];
                 };
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDeviceTeamCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        candidates: components["schemas"]["TeamCandidate"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setDeviceChannelTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The team channel address to join; null/empty resets to the default team. */
+                    team?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Team assignment accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["BadRequest"];
             422: components["responses"]["UnprocessableEntity"];

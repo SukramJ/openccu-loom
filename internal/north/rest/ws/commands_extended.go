@@ -56,6 +56,12 @@ type DeviceWriter interface {
 	// TestDeviceCommunication runs the CCU's per-device communication
 	// test. Used by `device.test`.
 	TestDeviceCommunication(ctx context.Context, address string) (hmapi.CommunicationTestResult, error)
+	// TeamCandidates lists the team channels a channel may join.
+	// Read-only; used by `device.team_candidates`.
+	TeamCandidates(ctx context.Context, deviceAddr string, channelNo int) ([]hmapi.TeamCandidate, error)
+	// SetChannelTeam assigns a channel to a team. Used by
+	// `device.set_team`.
+	SetChannelTeam(ctx context.Context, deviceAddr string, channelNo int, teamChannelAddress string) error
 }
 
 // ParamsetWriter mutates a paramset in one shot. Used by `paramset.put`
@@ -263,22 +269,36 @@ type ExtendedCommandsConfig struct {
 // The set complements [RegisterDefaultCommands] — call both at boot
 // to expose the full command surface. Any nil sub-config field skips its
 // commands.
+// registerDeviceCommands registers the device.* WS command family.
+// Extracted from RegisterExtendedCommands to keep it under the funlen
+// budget as the family grows.
+func registerDeviceCommands(router *Router, d DeviceWriter) {
+	if d == nil {
+		return
+	}
+	router.Register("device.rename", deviceRenameHandler(d))
+	router.Register("device.rename_channel", deviceRenameChannelHandler(d))
+	router.Register("device.install_mode", deviceInstallModeHandler(d))
+	router.Register("device.set_channel_rooms", deviceSetChannelRoomsHandler(d))
+	router.Register("device.set_channel_functions", deviceSetChannelFunctionsHandler(d))
+	router.Register("device.restore_config", deviceRestoreConfigHandler(d))
+	router.Register("device.test", deviceTestHandler(d))
+	router.Register("device.team_candidates", deviceTeamCandidatesHandler(d))
+	router.Register("device.set_team", deviceSetTeamHandler(d))
+	router.Register("device.replace_candidates", deviceReplaceCandidatesHandler(d))
+	router.Register("device.replace", deviceReplaceHandler(d))
+}
+
+// RegisterExtendedCommands registers the extended (non-default) WS
+// command families onto router — device lifecycle, paramsets, master
+// profiles, schedules, links and the rest — each guarded by its
+// corresponding non-nil config facade.
 func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if router == nil {
 		return
 	}
 	// --- Schreibpfad zuerst (priorisiert) ---
-	if cfg.Devices != nil {
-		router.Register("device.rename", deviceRenameHandler(cfg.Devices))
-		router.Register("device.rename_channel", deviceRenameChannelHandler(cfg.Devices))
-		router.Register("device.install_mode", deviceInstallModeHandler(cfg.Devices))
-		router.Register("device.set_channel_rooms", deviceSetChannelRoomsHandler(cfg.Devices))
-		router.Register("device.set_channel_functions", deviceSetChannelFunctionsHandler(cfg.Devices))
-		router.Register("device.restore_config", deviceRestoreConfigHandler(cfg.Devices))
-		router.Register("device.test", deviceTestHandler(cfg.Devices))
-		router.Register("device.replace_candidates", deviceReplaceCandidatesHandler(cfg.Devices))
-		router.Register("device.replace", deviceReplaceHandler(cfg.Devices))
-	}
+	registerDeviceCommands(router, cfg.Devices)
 	if cfg.Paramsets != nil {
 		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
 	}
@@ -512,6 +532,53 @@ func deviceTestHandler(d DeviceWriter) CommandHandler {
 			return nil, fmt.Errorf("device.test: %w", err)
 		}
 		return result, nil
+	}
+}
+
+func deviceTeamCandidatesHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+			Channel int    `json:"channel"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		candidates, err := d.TeamCandidates(ctx, p.Address, p.Channel)
+		if err != nil {
+			return nil, fmt.Errorf("device.team_candidates: %w", err)
+		}
+		if candidates == nil {
+			candidates = []hmapi.TeamCandidate{}
+		}
+		return map[string]any{"candidates": candidates}, nil
+	}
+}
+
+func deviceSetTeamHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string  `json:"address"`
+			Channel int     `json:"channel"`
+			Team    *string `json:"team"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		team := ""
+		if p.Team != nil {
+			team = *p.Team
+		}
+		if err := d.SetChannelTeam(ctx, p.Address, p.Channel, team); err != nil {
+			return nil, fmt.Errorf("device.set_team: %w", err)
+		}
+		return map[string]any{"address": p.Address, "channel": p.Channel, "team": team}, nil
 	}
 }
 
