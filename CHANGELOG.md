@@ -50,6 +50,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   direct links, teams and ReGa references; the old device is unpaired.
   Offered from the inbox for BidCos devices only (HmIP does not support
   it); admin-gated and audit-logged.
+- **Wired-bus device search.** `POST /api/v1/install-mode/search` and the
+  `install_mode.search` WebSocket command trigger the BidCos-Wired bus
+  scan (`searchDevices`) and return the count found; the found devices
+  join the inbox for acceptance. Offered from the inbox for a BidCos-Wired
+  interface.
+- **Per-device communication test.** `POST /api/v1/devices/{addr}/test`
+  and the `device.test` WebSocket command run the CCU's per-device
+  communication / function test (a radio test frame + ACK, the same test
+  the CCU inbox runs) and report pass / fail. Surfaced as a "Test" action
+  in the device detail; radio interfaces only
+  (`communication_test_supported`).
+- **Channel team assignment.** `GET
+  /api/v1/devices/{addr}/channels/{no}/team-candidates` lists the team
+  channels a channel may join, and `PUT
+  /api/v1/devices/{addr}/channels/{no}/team` assigns it (or resets to the
+  default team); matching WebSocket commands `device.team_candidates` /
+  `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
+  HmIP-RF only (`team_supported`). A per-channel team picker appears in
+  the device detail.
 
 ## [0.46.0] — 2026-07-22
 

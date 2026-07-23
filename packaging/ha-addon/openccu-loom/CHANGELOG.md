@@ -18,6 +18,14 @@
 - **Replace a device with a new one.** From the inbox you can swap a
   broken or upgraded BidCos device for a new one — the CCU moves the
   links, teams and programs across and unpairs the old device.
+- **Scan the wired bus for new devices.** The inbox gains a "Search wired
+  bus" button for BidCos-Wired that finds newly connected wired devices
+  and lists them for acceptance.
+- **Test whether a device answers.** The device detail gains a "Test"
+  action that sends a radio test frame and reports whether the device
+  responds — the same check the CCU inbox offers.
+- **Assign smoke detectors (and similar) to a team.** The device detail
+  gains a per-channel team picker for BidCos-RF / HmIP-RF devices.
 
 ## 0.46.0
 

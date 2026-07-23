@@ -2191,6 +2191,22 @@ export interface paths {
          *     interfaces return an empty list.
          */
         get: operations["getDeviceTeamCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         /**
          * Assign a channel to a team
          * @description Assigns the channel to the given team channel (`setTeam`). A null or

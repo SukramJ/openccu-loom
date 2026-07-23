@@ -408,7 +408,9 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Bus-Scan für Wired-Geräte in den Posteingang. *Empfehlung:*
   `Operations.SearchDevices` + `POST /install-mode/search`. *XML-RPC an
   hs485d.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0): `POST
+  /install-mode/search` + WS `install_mode.search`, `SearchDevices` nur
+  BidCos-Wired, Inbox-Refresh + SPA-Button.
 - **G10 — Posteingang: Erstkonfiguration beim Accept** (partial, P3 S)
   Name/Raum/Gewerk direkt beim Übernehmen vergeben (heute erst danach im
   Gerätedetail). *Empfehlung:* Accept-Body um `{name, rooms, functions}`
@@ -419,7 +421,10 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Aktiver Test mit OK-Quittung wie im CCU-Posteingang. *Empfehlung:*
   `POST /devices/{addr}/test` (ping bzw. getParamset-Roundtrip, danach
   STICKY_UNREACH zurücksetzen), Ergebnis-Badge. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0, geräteweit):
+  `POST /devices/{addr}/test` + WS `device.test` über die CCU-ReGa
+  `DevStartComTest` (Start+Poll), Radio-Interfaces + SPA-Badge.
+  STICKY_UNREACH-Reset und channel-level bleiben Follow-ups.
 - **G12 — Kanal-Sichtbarkeit und Bediensperre** (missing, P3 M)
   Kanäle aus Bedienlisten ausblenden / Bedienung sperren (Gast-Ansichten).
   *Empfehlung:* daemon-eigene Kanal-Flags im SQLite-Store + Filterung in
@@ -433,7 +438,10 @@ Funktionen je Bereich sind in §5 zusammengefasst.
 - **G14 — Team-Zuordnung (`setTeam`, z. B. Rauchmelder)** (missing, P3 M)
   TEAM wird nur gelesen. *Empfehlung:* `Operations.SetTeam` +
   `PUT /devices/{addr}/channels/{no}/team` + Team-Picker. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0): `setTeam` +
+  `listTeams` (BidCos-RF/HmIP-RF), `GET .../team-candidates` +
+  `PUT .../team` (WS `device.team_candidates`/`device.set_team`),
+  `team_supported` + SPA-Team-Picker.
 - **G15 — „Bestimmen"-Button (`determineParameter`)** (partial, P3 S)
   WS-Kommando `paramset.determine` existiert, hat aber keinen Aufrufer in
   der SPA. *Empfehlung:* determine-fähige Parameter im ui-schema markieren,
