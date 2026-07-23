@@ -1661,6 +1661,9 @@ const EN: Catalog = {
   "sysvars.modified_badge": "modified",
   "sysvars.search": "Search…",
   "sysvars.confirm_remove": 'Really remove sysvar "{name}"?',
+  "sysvars.usage.warning":
+    "Warning: {count} program(s) reference this variable and will be affected by deletion:",
+  "sysvars.usage.internal": "internal",
   "sysvars.removed": "{name} removed.",
   "sysvars.created": "Sysvar created.",
   "sysvars.updated": "{name} updated.",
@@ -4551,6 +4554,9 @@ const DE: Catalog = {
   "sysvars.modified_badge": "geändert",
   "sysvars.search": "Suchen…",
   "sysvars.confirm_remove": "Systemvariable \"{name}\" wirklich entfernen?",
+  "sysvars.usage.warning":
+    "Achtung: {count} Programm(e) verwenden diese Variable und sind vom Löschen betroffen:",
+  "sysvars.usage.internal": "intern",
   "sysvars.removed": "{name} entfernt.",
   "sysvars.created": "Variable erstellt.",
   "sysvars.updated": "{name} aktualisiert.",

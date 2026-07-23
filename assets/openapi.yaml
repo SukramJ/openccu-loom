@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.46.0
+  version: 2.47.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1004,6 +1004,41 @@ paths:
         - openIdConnect: [operator]
       responses:
         "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /sysvars/{name}/usage:
+    get:
+      operationId: getSysvarUsage
+      summary: Programs referencing a system variable (read-only)
+      tags: [hub]
+      description: |
+        Lists the CCU programs that reference a system variable, via the
+        variable object's native `DPEnumUsagePrograms()` — the same call
+        the CCU WebUI uses. Each program is enriched from the hub's
+        program registry (localized name, canonical unique id, internal
+        flag, observed active state) when known. Consumed as a warning in
+        the SPA's delete-confirmation. 503 when no CCU-side reader is
+        wired; 400 when the sysvar name is ambiguous across CCUs.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+          description: System-variable name.
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: Scope to one central (required when the name is ambiguous).
+      responses:
+        "200":
+          description: Programs referencing the variable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SysvarUsage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -7460,6 +7495,32 @@ components:
             Whether the program actually ran. Always true for an
             unconditional execution (check_conditions=false); false for a
             condition-checked execution whose condition was not met.
+    SysvarUsageProgram:
+      type: object
+      required: [id, name]
+      description: One CCU program that references a system variable.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        unique_id:
+          type: string
+          description: Canonical loom routing key when the program is known to the hub.
+        active:
+          type: boolean
+          description: Observed enabled state; omitted when unknown.
+        is_internal:
+          type: boolean
+          description: True for Tmp_*-programs created internally by the CCU.
+    SysvarUsage:
+      type: object
+      required: [sysvar, programs]
+      description: The programs that reference a system variable.
+      properties:
+        central: { type: string }
+        sysvar: { type: string }
+        programs:
+          type: array
+          items: { $ref: "#/components/schemas/SysvarUsageProgram" }
     SysvarSummary:
       type: object
       required: [name, unique_id, value_type, observed]

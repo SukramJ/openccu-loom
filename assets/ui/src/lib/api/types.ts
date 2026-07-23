@@ -265,6 +265,7 @@ export type BackupEntry = components["schemas"]["BackupEntry"];
 // optional (Go json:"central,omitempty"); SysvarList.svelte builds its
 // composite key as (sv.central ?? "") + "/" + sv.name.
 export type SysvarEntry = components["schemas"]["SysvarSummary"];
+export type SysvarUsage = components["schemas"]["SysvarUsage"];
 
 // ProgramEntry re-exported from the generated ProgramSummary. central is
 // optional (Go json:"central,omitempty"); ProgramList.svelte builds its

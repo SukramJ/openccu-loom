@@ -527,6 +527,47 @@ func (w *wsHubQuery) FetchSystemVariables(ctx context.Context, centralName strin
 	return adapter.NewSysvarFetchAdapter(w.registry).FetchSystemVariables(ctx, centralName)
 }
 
+// SysvarUsagePrograms lists the CCU programs referencing a sysvar,
+// resolving the target hub by name (or the single-central convenience
+// case) and enriching each program from the hub's program registry.
+func (w *wsHubQuery) SysvarUsagePrograms(ctx context.Context, centralName, name string) ([]map[string]any, error) {
+	if name == "" {
+		return nil, errors.New("ws: name required")
+	}
+	h := w.hub.HubFor(centralName)
+	if h == nil && centralName == "" {
+		if hubs := w.hub.Hubs(); len(hubs) == 1 {
+			h = hubs[0].Hub
+		} else if len(hubs) > 1 {
+			return nil, errors.New("ws: central_name required (multiple CCUs)")
+		}
+	}
+	if h == nil {
+		return nil, errors.New("ws: hub not found")
+	}
+	usage, err := h.SysvarUsageRemote(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	serial := w.hub.SerialSuffix(h.CentralName)
+	out := make([]map[string]any, 0, len(usage))
+	for _, u := range usage {
+		e := map[string]any{"id": u.ID, "name": u.Name, "active": u.Active}
+		if p, ok := h.Program(u.ID); ok {
+			if p.Name != "" {
+				e["name"] = p.Name
+			}
+			e["unique_id"] = p.CanonicalUniqueID(serial)
+			e["is_internal"] = p.IsInternal
+			if a, observed := p.Active(); observed {
+				e["active"] = a
+			}
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {

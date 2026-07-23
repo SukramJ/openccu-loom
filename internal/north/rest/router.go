@@ -1011,6 +1011,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/sysvars", handlers.ListSysvars(d.Hub))
 				pr.With(op).Post("/sysvars", handlers.CreateSysvar(d.Hub))
 				pr.Get("/sysvars/{name}", handlers.GetSysvar(d.Hub))
+				pr.Get("/sysvars/{name}/usage", handlers.GetSysvarUsage(d.Hub))
 				pr.With(op).Put("/sysvars/{name}", handlers.PutSysvar(d.Hub))
 				pr.With(op).Patch("/sysvars/{name}", handlers.PatchSysvar(d.Hub))
 				pr.With(op).Delete("/sysvars/{name}", handlers.DeleteSysvar(d.Hub))

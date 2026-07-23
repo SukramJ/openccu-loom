@@ -1076,6 +1076,32 @@ export interface paths {
         patch: operations["patchSysvar"];
         trace?: never;
     };
+    "/sysvars/{name}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Programs referencing a system variable (read-only)
+         * @description Lists the CCU programs that reference a system variable, via the
+         *     variable object's native `DPEnumUsagePrograms()` — the same call
+         *     the CCU WebUI uses. Each program is enriched from the hub's
+         *     program registry (localized name, canonical unique id, internal
+         *     flag, observed active state) when known. Consumed as a warning in
+         *     the SPA's delete-confirmation. 503 when no CCU-side reader is
+         *     wired; 400 when the sysvar name is ambiguous across CCUs.
+         */
+        get: operations["getSysvarUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alarm-messages": {
         parameters: {
             query?: never;
@@ -5814,6 +5840,23 @@ export interface components {
              */
             executed: boolean;
         };
+        /** @description One CCU program that references a system variable. */
+        SysvarUsageProgram: {
+            id: string;
+            name: string;
+            /** @description Canonical loom routing key when the program is known to the hub. */
+            unique_id?: string;
+            /** @description Observed enabled state; omitted when unknown. */
+            active?: boolean;
+            /** @description True for Tmp_*-programs created internally by the CCU. */
+            is_internal?: boolean;
+        };
+        /** @description The programs that reference a system variable. */
+        SysvarUsage: {
+            central?: string;
+            sysvar: string;
+            programs: components["schemas"]["SysvarUsageProgram"][];
+        };
         SysvarSummary: {
             /** @description CCU this system variable belongs to. */
             central?: string;
@@ -8449,6 +8492,36 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSysvarUsage: {
+        parameters: {
+            query?: {
+                /** @description Scope to one central (required when the name is ambiguous). */
+                central?: string;
+            };
+            header?: never;
+            path: {
+                /** @description System-variable name. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Programs referencing the variable. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SysvarUsage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

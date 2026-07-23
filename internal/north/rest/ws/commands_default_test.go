@@ -465,6 +465,10 @@ type stubHub struct {
 	setName            string
 	setValue           any
 	setErr             error
+	usagePrograms      []map[string]any
+	usageErr           error
+	usageCentral       string
+	usageName          string
 	gotIncludeInternal *bool // captures the override ListPrograms last received
 
 	fetchCentral string
@@ -534,6 +538,12 @@ func (h *stubHub) SetSysvar(_ context.Context, name string, value any) error {
 func (h *stubHub) FetchSystemVariables(_ context.Context, centralName string) error {
 	h.fetchCentral = centralName
 	return h.fetchErr
+}
+
+func (h *stubHub) SysvarUsagePrograms(_ context.Context, centralName, name string) ([]map[string]any, error) {
+	h.usageCentral = centralName
+	h.usageName = name
+	return h.usagePrograms, h.usageErr
 }
 
 func (h *stubHub) ListAlarmMessages(context.Context) ([]map[string]any, error) {
@@ -2008,6 +2018,38 @@ func TestSysvarsFetch_WithCentralName(t *testing.T) {
 	}
 	if res.Data.(map[string]any)["fetched"] != true {
 		t.Errorf("result does not carry fetched=true: %+v", res.Data)
+	}
+}
+
+func TestSysvarsUsage_Success(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{usagePrograms: []map[string]any{{"id": "P1", "name": "Morning", "active": true}}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"name": "Alarm", "central_name": "ccu-01"})
+	res := r.Dispatch(context.Background(), "sysvars.usage", args)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	if hub.usageName != "Alarm" || hub.usageCentral != "ccu-01" {
+		t.Errorf("args not forwarded: name=%q central=%q", hub.usageName, hub.usageCentral)
+	}
+	data := res.Data.(map[string]any)
+	if data["sysvar"] != "Alarm" || len(data["programs"].([]map[string]any)) != 1 {
+		t.Errorf("result shape wrong: %+v", data)
+	}
+}
+
+func TestSysvarsUsage_RequiresName(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "sysvars.usage", nil)
+	if res.Error == nil {
+		t.Fatal("expected a bad-request error when name is missing")
 	}
 }
 

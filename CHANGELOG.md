@@ -69,6 +69,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
   HmIP-RF only (`team_supported`). A per-channel team picker appears in
   the device detail.
+- **System-variable usage overview + delete warning.** A new `GET
+  /api/v1/sysvars/{name}/usage` endpoint (and the read-only
+  `sysvars.usage` WebSocket command) lists the CCU programs that
+  reference a system variable, via the variable's native
+  `DPEnumUsagePrograms()` — the same call the CCU WebUI uses — enriched
+  from the hub's program registry (localized name, canonical id, internal
+  flag, active state). The SPA's delete-confirmation now warns which
+  programs will be affected before removing a variable; the lookup is
+  best-effort and never blocks the delete.
 - **Per-datapoint recording toggle.** When measurement history is
   enabled, the device-detail history tab gains a "Record" switch that
   forces recording on or off for one specific data point, overriding the

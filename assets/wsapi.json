@@ -988,6 +988,15 @@
       }
     },
     {
+      "category": "sysvars",
+      "description": "List the CCU programs that reference a system variable (native DPEnumUsagePrograms). Optional central_name disambiguates across CCUs.",
+      "name": "sysvars.usage",
+      "args": {
+        "name": "string",
+        "central_name": "string"
+      }
+    },
+    {
       "category": "cdp",
       "description": "List all custom data points of all devices (or a single device when 'device' param is supplied).",
       "name": "cdp.list"

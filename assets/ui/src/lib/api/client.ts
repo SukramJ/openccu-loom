@@ -53,6 +53,7 @@ import type {
   ServiceMessage,
   SuppressedServiceMessage,
   SysvarEntry,
+  SysvarUsage,
   SystemCCUEntry,
   UISchema,
 } from "./types";
@@ -664,6 +665,11 @@ export const api = {
   },
   getSysvar(name: string) {
     return request<SysvarEntry>(`/sysvars/${encodeURIComponent(name)}`);
+  },
+  // Programs that reference a sysvar (SV07) — consumed as a delete warning.
+  getSysvarUsage(name: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<SysvarUsage>(`/sysvars/${encodeURIComponent(name)}/usage${qs}`);
   },
   setSysvar(name: string, value: unknown, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";

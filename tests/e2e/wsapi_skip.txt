@@ -26,3 +26,4 @@ install_mode.search         -- godevccu has no searchDevices; live CCU scans the
 device.test                 -- godevccu has no ReGa DevStartComTest; live CCU runs the radio test
 device.team_candidates      -- godevccu has no listTeams; live CCU returns team channels
 device.set_team             -- godevccu has no setTeam; live CCU assigns the team
+sysvars.usage -- godevccu has no DPEnumUsagePrograms; live CCU returns referencing programs

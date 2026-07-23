@@ -859,6 +859,85 @@ func GetSysvar(idx HubIndex) http.HandlerFunc {
 	}
 }
 
+// SysvarUsageProgramDTO is one CCU program that references a system
+// variable, enriched from the hub's program registry where available.
+type SysvarUsageProgramDTO struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// UniqueID is the canonical loom routing key when the program is known
+	// to the hub registry; empty when only the ReGa-supplied name is known.
+	UniqueID string `json:"unique_id,omitempty"`
+	// Active is the observed enabled state; omitted when unknown.
+	Active *bool `json:"active,omitempty"`
+	// IsInternal marks Tmp_*-programs created internally by the CCU.
+	IsInternal bool `json:"is_internal,omitempty"`
+}
+
+// SysvarUsageResponse is the body of GET /sysvars/{name}/usage.
+type SysvarUsageResponse struct {
+	Central  string                  `json:"central,omitempty"`
+	Sysvar   string                  `json:"sysvar"`
+	Programs []SysvarUsageProgramDTO `json:"programs"`
+}
+
+// GetSysvarUsage lists the CCU programs that reference a system variable
+// (native DPEnumUsagePrograms), enriched against the hub's program
+// registry. Read-only; a delete-confirmation warning consumes it.
+func GetSysvarUsage(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if idx == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
+			return
+		}
+		name := chi.URLParam(r, "name")
+		h := resolveHubForRead(idx, r.URL.Query().Get("central"), func(hh *hub.Hub) bool {
+			_, ok := hh.Sysvar(name)
+			return ok
+		})
+		if h == nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+			return
+		}
+		if _, ok := h.Sysvar(name); !ok {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Sysvar not found", name))
+			return
+		}
+		usage, err := h.SysvarUsageRemote(r.Context(), name)
+		if err != nil {
+			if errors.Is(err, hub.ErrNoSysvarUsageReader) {
+				problem.Write(w, http.StatusServiceUnavailable,
+					problem.New(problem.TypeServiceUnready, r, "Sysvar usage lookup not available", ""))
+				return
+			}
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable,
+				"Sysvar usage lookup failed", err)
+			return
+		}
+		serial := idx.SerialSuffix(h.CentralName)
+		programs := make([]SysvarUsageProgramDTO, 0, len(usage))
+		for _, u := range usage {
+			dto := SysvarUsageProgramDTO{ID: u.ID, Name: u.Name}
+			active := u.Active
+			if p, ok := h.Program(u.ID); ok {
+				if p.Name != "" {
+					dto.Name = p.Name
+				}
+				dto.UniqueID = p.CanonicalUniqueID(serial)
+				dto.IsInternal = p.IsInternal
+				if a, observed := p.Active(); observed {
+					active = a
+				}
+			}
+			dto.Active = &active
+			programs = append(programs, dto)
+		}
+		JSON(w, http.StatusOK, SysvarUsageResponse{Central: h.CentralName, Sysvar: name, Programs: programs})
+	}
+}
+
 // PutSysvar writes a sysvar, routing to the central named by the
 // `?central=` query parameter.
 func PutSysvar(idx HubIndex) http.HandlerFunc {

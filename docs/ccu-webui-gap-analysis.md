@@ -621,11 +621,21 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   hartkodiert -1). *Empfehlung:* Parameter durchreichen + Kanal-Picker im
   Edit-Dialog. *JSON-RPC + ReGa.*
   **Entscheidung:** `umsetzen`
-- **SV07 — Sysvar-Verwendungsübersicht (Programme) + Lösch-Warnung** (missing, P3 M)
-  Vor dem Löschen sehen, welche Programme die Variable referenzieren
-  (OpenCCU 0045). *Empfehlung:* ReGa-Skript (Rule-DPs matchen) als
-  `GET /sysvars/{name}/usage`, Warnung im Lösch-Confirm. *ReGa.*
-  **Entscheidung:** `umsetzen`
+- **SV07 — Sysvar-Verwendungsübersicht (Programme) + Lösch-Warnung** ✅ erledigt
+  (0.47.0, API 2.47.0)
+  `GET /api/v1/sysvars/{name}/usage` (+ read-only WS `sysvars.usage`) über
+  das neue ReGa-Skript `usage_by_sysvar.fn`, das die CCU-native
+  `DPEnumUsagePrograms()` der Variablen nutzt (wie das CCU-WebUI) — erfasst
+  ALLE Referenzen (Bedingungen + Aktivitäten), nicht nur die Root-Regel.
+  Anreicherung aus der Hub-Programmregistry (lokalisierter Name, Unique-ID,
+  `is_internal`, beobachteter Active-Status), ReGa-Name als Fallback. Neues
+  optionales `SysvarUsageReader`-Interface am Hub (via SetMutator
+  type-assert, ohne SysvarMutator zu brechen). SPA: Best-Effort-Warnung im
+  Lösch-Confirm (blockiert das Löschen nie). Getestet: Runner, Skript-Pin
+  (34→35) + Placeholder, Hub-Modell (Reader/no-reader/SetMutator-Wiring),
+  Handler-Anreicherung (200/404/503), WS-Dispatch, SysvarList-vitest.
+  godevccu kann `DPEnumUsagePrograms` nicht bedienen (Pattern-Engine) →
+  E2E-Skip; godevccu-Handler als späterer Folge-Fix.
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.

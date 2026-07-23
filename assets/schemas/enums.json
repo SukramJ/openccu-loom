@@ -3077,6 +3077,10 @@
         {
           "go_name": "RegaScriptUpdateSystemVariable",
           "wire_value": "update_system_variable"
+        },
+        {
+          "go_name": "RegaScriptUsageBySysvar",
+          "wire_value": "usage_by_sysvar"
         }
       ]
     },

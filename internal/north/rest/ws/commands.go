@@ -189,6 +189,7 @@ var readOnlyCommands = map[string]struct{}{
 	"system.user_permissions":     {},
 	"sysvars.fetch":               {},
 	"sysvars.list":                {},
+	"sysvars.usage":               {},
 }
 
 // CommandHandler implements one RPC-style WebSocket command. The returned

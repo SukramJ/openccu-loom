@@ -172,6 +172,10 @@ type HubQuery interface {
 	// every registered central. Mirrors the Python reference's
 	// fetch_system_variables.
 	FetchSystemVariables(ctx context.Context, centralName string) error
+	// SysvarUsagePrograms lists the CCU programs referencing a sysvar.
+	// An empty centralName resolves the single-central convenience case;
+	// with multiple CCUs the name must be supplied.
+	SysvarUsagePrograms(ctx context.Context, centralName, name string) ([]map[string]any, error)
 
 	// ListAlarmMessages returns active CCU alarm messages.
 	ListAlarmMessages(ctx context.Context) ([]map[string]any, error)
@@ -621,6 +625,28 @@ func sysvarsFetchHandler(q HubQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "fetch_sysvars: "+err.Error())
 		}
 		return map[string]any{"fetched": true, "central_name": args.CentralName}, nil
+	}
+}
+
+type sysvarsUsageArgs struct {
+	Name        string `json:"name"`
+	CentralName string `json:"central_name"`
+}
+
+func sysvarsUsageHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args sysvarsUsageArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.Name == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "name required")
+		}
+		programs, err := q.SysvarUsagePrograms(ctx, args.CentralName, args.Name)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "sysvar_usage: "+err.Error())
+		}
+		return map[string]any{"sysvar": args.Name, "central_name": args.CentralName, "programs": programs}, nil
 	}
 }
 
@@ -1113,6 +1139,7 @@ func registerHubCommands(router *Router, q HubQuery) {
 	router.Register("sysvars.list", sysvarsListHandler(q))
 	router.Register("sysvars.set", sysvarsSetHandler(q))
 	router.Register("sysvars.fetch", sysvarsFetchHandler(q))
+	router.Register("sysvars.usage", sysvarsUsageHandler(q))
 	router.Register("alarm_messages.list", alarmMessagesListHandler(q))
 	router.Register("alarm_messages.ack", alarmMessagesAckHandler(q))
 	router.Register("alarm_messages.ack_all", alarmMessagesAckAllHandler(q))

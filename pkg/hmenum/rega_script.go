@@ -51,6 +51,7 @@ const (
 	RegaScriptRebootCCU             RegaScript = "reboot_ccu"
 	RegaScriptCreateBackupStart     RegaScript = "create_backup_start"
 	RegaScriptCreateBackupStatus    RegaScript = "create_backup_status"
+	RegaScriptUsageBySysvar         RegaScript = "usage_by_sysvar"
 )
 
 // String returns the script's internal identifier.
@@ -93,4 +94,5 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptRebootCCU,
 	RegaScriptCreateBackupStart,
 	RegaScriptCreateBackupStatus,
+	RegaScriptUsageBySysvar,
 }

@@ -1840,6 +1840,21 @@ func (w *hubJSONRPCWriter) DeleteSysvar(ctx context.Context, name string) error 
 	}, nil)
 }
 
+// SysvarUsagePrograms lists the CCU programs that reference the named
+// sysvar via the variable's native DPEnumUsagePrograms (usage_by_sysvar.fn).
+// The ReGa-supplied program name is URL-encoded; it is decoded here.
+func (w *hubJSONRPCWriter) SysvarUsagePrograms(ctx context.Context, name string) ([]hub.SysvarUsage, error) {
+	raw, err := w.rega.SysvarUsagePrograms(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]hub.SysvarUsage, 0, len(raw))
+	for _, p := range raw {
+		out = append(out, hub.SysvarUsage{ID: p.ID, Name: decodeRegaField(p.Name), Active: p.Active})
+	}
+	return out, nil
+}
+
 // UpdateSysvar patches the sysvar's metadata (name, unit, bounds, value
 // list, description, binary value labels, visibility and archive flags)
 // without touching its type. Empty strings on the input map leave the
