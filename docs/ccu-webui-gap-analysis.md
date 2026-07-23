@@ -805,13 +805,25 @@ Die Wochenprofil-/Heizprofil-Editoren (HmIP P1–P6, BidCos HM-TC-IT,
 Schalt-Wochenprogramme inkl. Astro/Kopierfunktionen, OpenCCU-0193-Felder)
 sind abgedeckt. Offen:
 
-- **W01 — HM-CC-RT-DN-Temperaturprofil (präfixloses Schema)** (partial, P2 M)
-  Die Hydration erkennt das `ENDTIME_/TEMPERATURE_`-Schema, aber
-  Parser/Builder verlangen den `P[1-6]_`-Präfix → REST 404, SPA „Zeitplan
-  nicht unterstützt" für ein sehr verbreitetes Gerät (gleiche Lücke wie in
-  der Python-Referenz). *Empfehlung:* Bare-Schema als P1-Alias in
-  `rawconvert.go`/`schedules.go`; Integrationstest gegen godevccu.
-  **Entscheidung:** `umsetzen`
+- **W01 — HM-CC-RT-DN-Temperaturprofil (präfixloses Schema)** ✅ erledigt
+  (0.47.0, Layer 1)
+  HM-CC-RT-DN / HM-CC-RT-DN-BoM tragen ihr einziges Wochenprofil als
+  präfixlose `ENDTIME_/TEMPERATURE_`-Keys direkt im geräteweiten
+  MASTER-Paramset (kein `P[1-6]_`-Präfix, kein dedizierter Schedule-Kanal).
+  Der Resolver (`FindScheduleChannel` Path 3 → `device.ChannelNumberDevice`),
+  der Parser (`slotPattern` mit optionalem Präfix → P1) und der Writer
+  (`serializeClimateScheduleBare` + `climateScheduleIsBare`-Erkennung aus
+  der MASTER-Beschreibung) behandeln das Bare-Schema jetzt bidirektional;
+  ein Präfix-Write würde auf der CCU still no-op'en. Keine
+  API-Kontraktänderung (Read `404`→`200`). Getestet: Unit-Tests der Helfer
+  + End-to-End-Round-Trip gegen godevccu
+  (`tests/integration/schedule_bare_e2e_test.go`).
+  **Layer 2 (Follow-up, nicht in 0.47.0):** Der Metadaten-DP
+  (`week_profile`) + MQTT-Wochenprofil-Discovery bleiben still, weil die
+  Normalisierung das Root-Profil ablöst (RT-DN hat `ScheduleChannelNo=nil`).
+  Der architektonisch saubere Fix ist zuerst upstream: HM-CC-RT-DN in
+  aiohomematic auf `schedule_channel_no=BIDCOS_DEVICE_CHANNEL_DUMMY`
+  registrieren, dann Profile regenerieren + Modell-Snapshot neu basieren.
 - **W02 — Universallicht-Wochenprogramm: Farbe/Effekt je Schaltpunkt** (partial, P3 L)
   `WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_*`/`WP_OUTPUT_BEHAVIOUR`
   (HmIP-RGBW/DALI/LSC) fehlen im Schedule-Modell. *Empfehlung:* Felder in

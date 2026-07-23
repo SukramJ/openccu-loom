@@ -154,13 +154,15 @@ func TestCopySchedule_UnknownSourceErrors(t *testing.T) {
 
 // TestCopySchedule_SourceNoScheduleErrors verifies that CopySchedule wraps
 // the ErrNoSchedule error with the "copy read source" prefix when the
-// registered source device has no climate schedule channel.
+// registered source device carries no schedule at all — neither on a
+// dedicated channel nor in its device-root MASTER paramset.
 func TestCopySchedule_SourceNoScheduleErrors(t *testing.T) {
 	t.Parallel()
-	// buildScheduleIOFixture registers "0001ABCD" but without explicit channels,
-	// so FindScheduleChannel cannot locate a schedule channel and returns
-	// ErrNoSchedule.  CopySchedule must wrap this under "copy read source".
-	domain, _ := buildScheduleIOFixture(t, fixtureClimateRawP1Monday())
+	// The backend serves a MASTER paramset with no schedule keys for every
+	// address, so neither the channel probes nor the device-root probe
+	// (Path 3) find a schedule → FindScheduleChannel returns ErrNoSchedule.
+	// CopySchedule must wrap this under "copy read source".
+	domain, _ := buildScheduleIOFixture(t, map[string]any{"GLOBAL_BUTTON_LOCK": false})
 
 	err := domain.CopySchedule(t.Context(), "0001ABCD", "0009XXXX")
 	if err == nil {

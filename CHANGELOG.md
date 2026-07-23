@@ -70,6 +70,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   HmIP-RF only (`team_supported`). A per-channel team picker appears in
   the device detail.
 
+### Fixed
+
+- **Heating schedule for classic BidCos thermostats.** HM-CC-RT-DN and
+  HM-CC-RT-DN-BoM store their single week profile as prefix-less
+  `ENDTIME_*` / `TEMPERATURE_*` keys directly in the device-level MASTER
+  paramset — with no `P<n>_` prefix and no dedicated schedule channel —
+  which the schedule resolver, parser and writer previously did not
+  recognise, so the schedule tab reported "not supported". The daemon
+  now resolves such devices to their device-root paramset, reads the
+  bare schema as the single profile P1, and writes it back with
+  prefix-less keys (a prefixed write would have silently no-op'd on the
+  CCU). No API contract change — a previously `404` schedule read now
+  returns `200`.
+
 ## [0.46.0] — 2026-07-22
 
 ### Added
