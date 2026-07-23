@@ -486,6 +486,10 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   (Anlegen/Ändern läuft weiter über den bestehenden Geräte-Tab).
   Getestet: Domain- + Handler- + WS-Unit-Tests, LinkList-vitest,
   Playwright light+dark-Baselines.
+  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** `getLinks("", 0)` liefert
+  auf HmIP-RF 8 Links mit voller Metadaten (SENDER/RECEIVER/NAME/FLAGS),
+  BidCos-RF leer ohne Fault — genau der interfaceweite Bestand, auf dem
+  `ListAllLinks` aufsetzt.
   **Follow-up (optional):** ein zentralenübergreifender „Neue
   Verknüpfung"-Einstieg mit Quell-Kanal-Picker direkt aus der Übersicht
   (heute führt der Weg über das Gerätedetail).
@@ -503,6 +507,11 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   fällt auf die Präsenzprüfung zurück. Keine Schema-/API-Änderung.
   Getestet: `intersects`, Richtungs-Divergenz, Ausschluss, Präsenz-Regel,
   Model-Accessor + Pipeline-Population.
+  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** reales Token-Vokabular
+  bestätigt — Sender `JEQ0702833:1` (HM-Sen-MDIR-O) `LINK_SOURCE_ROLES =
+  "KEYMATIC SWITCH WINMATIC"` ∩ Empfänger `KEQ0843929:1` (HM-LC-Sw4-DR)
+  `LINK_TARGET_ROLES = "SWITCH WCS_TIPTRONIC_SENSOR WEATHER_CS"` = {SWITCH};
+  MAINTENANCE-Kanäle mit leeren Rollen werden korrekt ausgeschlossen.
   **Follow-up (optional):** Kanalgruppen (HM-Tastenpaare) +
   HmIP-RGBW-Sonderparameter — siehe W02.
 - **V03 — Verknüpfung am Gerät testen (`activateLinkParamset`)** ✅ erledigt
@@ -518,10 +527,13 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   (unverändert). Getestet: Backend-Dispatch (beide Bool-Werte) +
   ErrNotWired + CUxD/Homegear-Unsupported, Adapter (Receiver-Auflösung +
   Audit), Handler (202/400/501/502/503), WS-Dispatch + Write-Klassifizierung.
-  **Offen (Live-CCU, deine Freigabe + benanntes Zielgerät nötig):** reale
-  Auslösung gegen 172.18.4.29 verifizieren (godevccu kennt
-  `activateLinkParamset` nicht → E2E-Skip); optionaler godevccu-No-op-Handler
-  als Folge-Fix. SPA-Button-vitest + Playwright-Baseline zurückgestellt.
+  **Live-CCU-validiert (2026-07-23, CCU 172.18.4.39, HM-LC-Sw4-DR
+  `KEQ0843929:1`, mit Freigabe):** temporäre Verknüpfung angelegt →
+  `activateLinkParamset(receiver, sender, longPress)` kurz+lang **fehlerfrei**,
+  Schalter-STATE physisch False→True → Cleanup (removeLink + STATE=false, CCU
+  im Ausgangszustand). Der Wire-Call ist damit gegen echte Hardware bestätigt
+  (godevccu kennt `activateLinkParamset` nicht → E2E-Skip bleibt). Optionaler
+  godevccu-No-op-Handler + SPA-Button-vitest/Playwright-Baseline zurückgestellt.
 - **V04 — Zentralenverknüpfung pro Kanal** (partial, P2 M)
   Loom schaltet nur geräteweit (alle Press-Kanäle). *Empfehlung:*
   optionalen `channel`-Parameter an den bestehenden Endpunkten + Pro-Kanal-
@@ -661,6 +673,11 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Handler-Anreicherung (200/404/503), WS-Dispatch, SysvarList-vitest.
   godevccu kann `DPEnumUsagePrograms` nicht bedienen (Pattern-Engine) →
   E2E-Skip; godevccu-Handler als späterer Folge-Fix.
+  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** `DPEnumUsagePrograms()`
+  existiert + läuft fehlerfrei über ReGa; Empty-Pfad bestätigt (keine
+  Programm↔Sysvar-Referenz auf der Test-CCU). Nicht-Leer-Trennzeichen
+  mangels Programm nicht auslösbar (mein `foreach` nutzt dasselbe
+  Enum-Muster wie das getestete `get_program_descriptions.fn`).
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.
