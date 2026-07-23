@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Toggling Basic/Bearer auth now flags a required restart.** The
+  `north.rest.auth.basic_enabled` / `north.rest.auth.bearer_enabled` gates are
+  wired into the auth middleware once at boot, so a live change silently did
+  not take effect — an operator who enabled Bearer auth saw injected tokens
+  still rejected with no hint that a restart was needed. Both paths are now in
+  `restartRequiredPaths`, so the config editor shows the restart badge.
+
 ## [0.47.1]
 
 ### Fixed
