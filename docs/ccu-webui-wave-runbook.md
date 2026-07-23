@@ -1,6 +1,6 @@
 # CCU-WebUI-Gap Wave Runbook & Continuation Guide
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 Operational guide for executing the CCU-WebUI-replacement waves from
 [`ccu-webui-gap-analysis.md`](./ccu-webui-gap-analysis.md). This is the
@@ -18,15 +18,16 @@ and the repo root `CLAUDE.md` / `SPECIFICATION.md`.
 
 ---
 
-## 1. Where the work stands (2026-07-22)
+## 1. Where the work stands (2026-07-23)
 
-Release **0.46.0 (unreleased)**. `internal/build/version.go` = `0.46.0`;
-both `packaging/ha-addon/*/config.yaml` = `0.46.0`. REST/WS API version
-in `internal/north/rest/handlers/info.go`.
+Release **0.47.0 (tagged `v0.47.0`, merged)**. `internal/build/version.go`
+= `0.47.0`; both `packaging/ha-addon/*/config.yaml` = `0.47.0`. REST/WS API
+version in `internal/north/rest/handlers/info.go` (`2.50.0` at 0.47.0).
 
-**The tag `v0.46.0` is intentionally NOT set yet** — it is set only after
-the last desired wave of this release train. `release.yml` checks the
-add-on versions against the tag.
+Release-train convention: the tag `vX.Y.Z` is set only after the last
+desired wave of a train, and `release.yml` checks the add-on versions
+against the tag. The 0.47.0 train bundled Wellen 3, 5 and 6 plus the
+Welle-4 core items.
 
 ### Master decision doc
 
@@ -49,27 +50,38 @@ implement** without a fresh decision.
     (heating groups via CCU jpages proxy; session model verified).
   - GR01 read-only heating-group listing (REST `GET /api/v1/groups`,
     WS `groups.list`, `internal/model/group` parser, SPA view).
+- **Welle 3 — COMPLETE** (0.47.0): device workflows — G01 per-channel
+  rooms/functions, G05 keyserver-less SGTIN teach-in, G06 virtual-remote
+  simulation, G04 restore config, G03 guided device replace.
+- **Welle 4 core — COMPLETE** (0.47.0): G11 communication test, G14
+  `setTeam`. **G08/G12/G16 remain open** (G08/G16 hardware-gated).
+- **Welle 5 — COMPLETE** (0.47.0, API up to 2.49.0): V01 global links
+  overview, V02 `LINK_*_ROLES` role matching, V03 `activateLinkParamset`
+  link test (live-CCU verified).
+- **Welle 6 — COMPLETE** (0.47.0, API up to 2.50.0): SV03 diagram
+  definitions, SV07 sysvar-usage overview, SV10 recording toggle, W01
+  bare HM-CC-RT-DN heating schedule, W02 slice 1 universal-light colour.
 
 ### Deferred / next
 
-- **Welle 2 GR02–GR05 — DEFERRED** (decision 2026-07-22). Full
-  reconnaissance + plan preserved in
-  [groups wave status](./ccu-webui-groups-wave-status.md). Order:
-  GR02 (XL configurator via jpages proxy) → GR03 (rename) → GR04
-  (`setOperateGroupOnly`) → GR05 (assign on pairing).
-- **Wellen 3–6** — gap analysis §7, only the `umsetzen`-marked items:
-  - Welle 3: G01, G05, G06, G04, G03 (device workflows).
-  - Welle 4: G08, G09, G11, G12, G14, G16 (device remainder).
-  - Welle 5: V01, V02, V03 (links overview / role matching / link test).
-  - Welle 6: SV03, SV07, SV10, W01, W02 (diagram defs, sysvar-usage,
-    protocol toggle, week-profile gaps).
+- **Welle 2 GR02–GR05 — DEFERRED** (decision 2026-07-22), now the single
+  largest remaining decided (`umsetzen`) block. Full reconnaissance + plan
+  preserved in [groups wave status](./ccu-webui-groups-wave-status.md).
+  Order: GR02 (XL configurator via jpages proxy) → GR03 (rename) → GR04
+  (`setOperateGroupOnly`) → GR05 (assign on pairing). Needs a live-CCU
+  write approval + a named throwaway test group for validation.
+- **Welle 4 remainder** — G08 (`addDevice`/`setTempKey` BidCos-Wired
+  teach-in), G12 (channel visibility/lock), G16 (special dialogs); G08/G16
+  are hardware-gated.
+- **W02 slice 2** — the editable colour/effect widget for the
+  universal-light weekly programme (needs an HmIP-RGBW to validate).
 
 ---
 
 ## 2. Wave-execution runbook (established, works)
 
 Per wave, one PR (or a small set), titled with the release tag suffix
-(currently `(release 0.46.0)`).
+(the next train after `0.47.0`).
 
 ### Per-item loop
 

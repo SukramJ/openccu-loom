@@ -1,6 +1,6 @@
 # CCU-WebUI Groups Wave (Welle 2) — Status & Handoff
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 Status of the **Gruppenverwaltung** wave (heating groups, GR01–GR05)
 from [`ccu-webui-gap-analysis.md`](./ccu-webui-gap-analysis.md) §4.3 / §7.
@@ -198,9 +198,12 @@ GR03, GR04, GR05.**
 - **GR05 — group assignment on pairing** (P3, M). Offer a target group in
   the inbox accept-flow for group-capable device types. Depends on GR02.
 
-After Welle 2: gap analysis §7 Wellen 3–6 (only the `umsetzen`-marked
-items). The Programmeditor items PR01–PR06 remain **explicitly out of
-scope** by prior decision.
+Update 2026-07-23: gap-analysis §7 Wellen **3, 5 and 6 have since shipped
+with 0.47.0** (device workflows, direct-link overview/role-match/test,
+diagram definitions, sysvar-usage, recording toggle, weekly-profile
+gaps), so **GR02 is now the single largest remaining decided (`umsetzen`)
+item** — see the plan in §2 above. The Programmeditor items PR01–PR06
+remain **explicitly out of scope** by prior decision.
 
 ---
 
