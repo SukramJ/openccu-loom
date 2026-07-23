@@ -6,12 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.47.3]
+
 ### Changed
 
 - **Guided diagram series editor.** Composing a diagram series is now a
   searchable device → channel → value picker instead of four free-text fields:
   the central and interface are derived from the picked device and the label is
   auto-suggested, so operators no longer type raw addresses / parameter strings.
+  The value dropdown lists only numeric (plottable) data points and shows their
+  unit.
+- **Energy view is hidden when history recording is off.** The Energy nav item
+  now follows the same opt-in-history gate as Diagrams; the page already showed
+  a "history required" state on direct navigation.
+- **"Edit on device" from the direct-links overview opens the links tab.** The
+  action now deep-links to the device's direct-links sub-tab
+  (`#/devices/{addr}?tab=links`) instead of just opening the device on its
+  default channels view.
+- **Signal-quality list links the device.** The device name links to the device
+  detail, matching the firmware list.
 
 ## [0.47.2]
 

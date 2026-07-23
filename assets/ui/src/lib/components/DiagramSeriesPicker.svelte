@@ -119,12 +119,16 @@
       label: `#${c.number}${c.name ? " " + c.name : c.type_label ? " " + c.type_label : ""}`,
     })),
   ]);
+  // Only numeric data points (CCU descriptor FLOAT / INTEGER) are plottable;
+  // append the unit to the caption when the descriptor carries one.
   const paramOptions = $derived([
     { value: "", label: t("diagrams.picker.param_none") },
-    ...dataPoints.map((d) => ({
-      value: d.parameter,
-      label: d.parameter_label || d.parameter,
-    })),
+    ...dataPoints
+      .filter((d) => d.type === "FLOAT" || d.type === "INTEGER")
+      .map((d) => ({
+        value: d.parameter,
+        label: `${d.parameter_label || d.parameter}${d.unit ? ` (${d.unit})` : ""}`,
+      })),
   ]);
 
   onMount(async () => {

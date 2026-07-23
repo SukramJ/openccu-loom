@@ -34,10 +34,13 @@
   type Props = {
     address: string;
     channel?: number;
+    // Optional deep-link target sub-tab (e.g. "links" from the global
+    // direct-links overview) so the view opens on that tab, not just the device.
+    sub?: string;
     locale: string;
   };
 
-  let { address, channel, locale }: Props = $props();
+  let { address, channel, sub, locale }: Props = $props();
 
   let detail = $state<DeviceDetail | null>(null);
   let error = $state<string | null>(null);
@@ -189,6 +192,16 @@
   }
 
   onMount(load);
+
+  // Deep-link into a specific configure sub-tab (e.g. "links" from the global
+  // direct-links overview's "edit on device" action), so the view opens on the
+  // requested tab instead of the default channels strip.
+  onMount(() => {
+    if (sub === "links" || sub === "schedule" || sub === "device-config") {
+      topTab = "configure";
+      configSub = sub;
+    }
+  });
 
   onMount(() => {
     if (!favoritesStore.loaded) void favoritesStore.load();

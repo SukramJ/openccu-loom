@@ -201,7 +201,7 @@
 
             <div>
               <a
-                href={`#/devices/${encodeURIComponent(deviceOf(link.sender_address))}`}
+                href={`#/devices/${encodeURIComponent(deviceOf(link.sender_address))}?tab=links`}
                 class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
               >
                 <Icon name="mdi:pencil" />
