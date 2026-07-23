@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/model/calculated"
@@ -129,6 +130,11 @@ type DevicePipeline struct {
 	// snapshots; the subsequent fetch_all_device_data pass overwrites
 	// them with live data wherever the CCU returns a fresh value.
 	valuesCache *sqlite.ValuesCacheStore
+
+	// channelFlags, when non-nil, carries the operator-set per-channel
+	// overrides (G12). The second pass re-applies them onto every rebuilt
+	// channel so a hidden/locked channel survives a re-ingest / reconnect.
+	channelFlags *channelflags.Overlay
 
 	// ingestMu serialises every ingest run — the interface bring-up
 	// ([IngestFromBackend]) and the hot-plug path ([IngestNewDevices]).
@@ -288,6 +294,14 @@ func (p *DevicePipeline) WithValuesCacheStore(store *sqlite.ValuesCacheStore, ce
 	return p
 }
 
+// WithChannelFlags attaches the operator per-channel override overlay
+// (G12) so the ingest re-applies hidden/locked onto every rebuilt channel.
+// Pass nil to disable (tests / one-shot tools).
+func (p *DevicePipeline) WithChannelFlags(overlay *channelflags.Overlay) *DevicePipeline {
+	p.channelFlags = overlay
+	return p
+}
+
 // WithVisibility attaches a visibility registry to the pipeline.
 // During [hydrateParamset] every parameter is checked via
 // [visibility.Registry.IsAllowedForChannel]; parameters that fail the check
@@ -355,6 +369,13 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		// without a CCU roundtrip. AddChannel rebuilds a fresh channel on
 		// every (re)ingest, so this re-applies on hot-plug / reconnect.
 		ch.SetLinkRoles([]string(dd.LinkSourceRoles), []string(dd.LinkTargetRoles))
+		// Re-apply the operator per-channel overrides (G12). AddChannel
+		// rebuilds a fresh channel on every (re)ingest, so a hidden/locked
+		// channel would otherwise revert on a reconnect / hot-plug.
+		if p.channelFlags != nil {
+			f := p.channelFlags.Get(p.centralName, dd.Address)
+			ch.SetOperatorFlags(f.Hidden, f.Locked)
+		}
 		if p.names != nil {
 			ch.Name = p.names[dd.Address]
 		}
