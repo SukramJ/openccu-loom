@@ -6,6 +6,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Brand logo missing behind Home Assistant Ingress / the remote app.** The
+  `BrandMark` component built its SVG `src` as a root-absolute `/app/…` path,
+  which resolves against the Home Assistant origin instead of the Ingress proxy
+  prefix, so the wordmark 404'd and did not render under Ingress or the remote
+  proxy. The path now carries `ingressBase()` like every other SPA asset. The
+  unused `mark` variant also pointed at a non-existent file and now references
+  the shipped `mark-loom.svg`.
+
 ## [0.47.0] — unreleased
 
 ### Added

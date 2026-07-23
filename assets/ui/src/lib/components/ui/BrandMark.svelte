@@ -1,8 +1,12 @@
 <script lang="ts">
   // Liefert das OpenCCU-Loom-Branding in zwei Varianten:
-  //   mode="mark"     — nur Bildmarke (Hexhome), für Favicon-große Kontexte
+  //   mode="mark"     — nur Bildmarke, für Favicon-große Kontexte
   //   mode="wordmark" — volle Wortmarke (Bildmarke + Schriftzug)
-  // Die SVGs liegen unter /app/ (Vite kopiert assets/ui/public/* dorthin).
+  // Die SVGs liegen unter <ingress-prefix>/app/ (Vite kopiert
+  // assets/ui/public/* dorthin). Der Pfad MUSS das Ingress-Präfix tragen
+  // (ingressBase()), sonst löst er hinter HA-Ingress gegen den HA-Origin
+  // auf und die Grafik fehlt.
+  import { ingressBase } from "$lib/api/base";
 
   type Props = {
     mode?: "mark" | "wordmark";
@@ -22,7 +26,9 @@
     ariaLabel = "OpenCCU-Loom",
   }: Props = $props();
 
-  const src = $derived(mode === "mark" ? "/app/mark-hexhome.svg" : "/app/wordmark.svg");
+  const src = $derived(
+    `${ingressBase()}${mode === "mark" ? "/app/mark-loom.svg" : "/app/wordmark.svg"}`,
+  );
 </script>
 
 {#if href}
