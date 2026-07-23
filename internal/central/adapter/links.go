@@ -404,13 +404,26 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 // 0.1.0: presence of a LINK paramset peer list on the channel. Refine
 // later when we port the category data.
 func (d *LinksDomain) LinkableChannels(
-	ctx context.Context,
+	_ context.Context,
 	interfaceID, sourceChannelAddress, role, locale string,
 ) ([]hmapi.LinkableChannel, error) {
 	if d.registry == nil {
 		return nil, ErrNoLinkBackend
 	}
-	sourceDev := deviceAddressOf(sourceChannelAddress)
+	// Resolve the source channel once and pick its role set for the
+	// requested direction: a "sender" source is matched by its
+	// LinkSourceRoles against each candidate's LinkTargetRoles; a
+	// "receiver" source by its LinkTargetRoles against LinkSourceRoles.
+	srcCh := channelOf(d.findDevice(deviceAddressOf(sourceChannelAddress)), sourceChannelAddress)
+	var srcRoles []string
+	if srcCh != nil {
+		switch role {
+		case "sender":
+			srcRoles = srcCh.LinkSourceRoles()
+		case "receiver":
+			srcRoles = srcCh.LinkTargetRoles()
+		}
+	}
 	out := make([]hmapi.LinkableChannel, 0)
 	for _, u := range d.registry.List() {
 		for _, dev := range u.ModelRegistry.List() {
@@ -421,7 +434,7 @@ func (d *LinksDomain) LinkableChannels(
 				if ch.Address == sourceChannelAddress {
 					continue
 				}
-				if !d.channelMatchesRole(ctx, u.Name(), dev.InterfaceID, ch.Address, role) {
+				if !channelMatchesRole(role, srcRoles, srcCh != nil, ch) {
 					continue
 				}
 				out = append(out, hmapi.LinkableChannel{
@@ -436,24 +449,59 @@ func (d *LinksDomain) LinkableChannels(
 			}
 		}
 	}
-	_ = sourceDev
 	return out, nil
 }
 
-// channelMatchesRole is the lightweight peer filter used by
-// LinkableChannels. For the MVP we accept any channel that returns
-// a (possibly empty) LinkPeers list — that is, every channel the
-// backend reports as link-capable. Refinement to sender vs receiver
-// roles lands with the per-channel category port.
-func (d *LinksDomain) channelMatchesRole(ctx context.Context, centralName, interfaceID, channelAddress, _ string) bool {
-	backend, ok := d.writer.Backend(centralName, interfaceID)
-	if !ok {
+// channelMatchesRole reports whether a candidate channel can be linked
+// to the source channel in the requested direction. It intersects the
+// raw CCU LINK_*_ROLES tokens exactly like the CCU WebUI's
+// check_role_match (occu WebUI/www/tools/devconfig.cgi:970): a "sender"
+// source is paired with a candidate that can RECEIVE (its
+// LinkTargetRoles), a "receiver" source with a candidate that can SEND
+// (its LinkSourceRoles).
+//
+// A role other than sender/receiver (the device-level WS probe passes
+// "") matches every channel, preserving that path's behaviour. When the
+// source carries roles for the direction a true token intersection is
+// required. When it carries none: a present source that is genuinely
+// role-less for the direction cannot act in it (excluded); a totally
+// absent source channel (the WS device-address probe) degrades to a
+// directional presence check so the list stays useful.
+func channelMatchesRole(role string, srcRoles []string, srcPresent bool, ch *device.Channel) bool {
+	if role != "sender" && role != "receiver" {
+		return true
+	}
+	var candRoles []string
+	if role == "sender" {
+		candRoles = ch.LinkTargetRoles()
+	} else {
+		candRoles = ch.LinkSourceRoles()
+	}
+	if len(srcRoles) > 0 {
+		return intersects(srcRoles, candRoles)
+	}
+	if srcPresent {
 		return false
 	}
-	if _, err := backend.GetLinkPeers(ctx, channelAddress); err != nil {
+	return len(candRoles) > 0
+}
+
+// intersects reports whether a and b share at least one token — the
+// non-empty set intersection the CCU uses to match link roles.
+func intersects(a, b []string) bool {
+	if len(a) == 0 || len(b) == 0 {
 		return false
 	}
-	return true
+	set := make(map[string]struct{}, len(a))
+	for _, x := range a {
+		set[x] = struct{}{}
+	}
+	for _, y := range b {
+		if _, ok := set[y]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *LinksDomain) lookupDevice(deviceAddress string) (*central.Unit, *device.Device, error) {

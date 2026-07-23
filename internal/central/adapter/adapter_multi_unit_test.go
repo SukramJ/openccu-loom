@@ -6290,13 +6290,13 @@ func TestPutLinkParamset_BackendPutError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// channelMatchesRole — GetLinkPeers error (line 309-311)
+// LinkableChannels — a candidate carrying no link roles is excluded
+// even when the source channel is absent (WS device-address probe): the
+// directional presence fallback requires the candidate to have roles.
 // ---------------------------------------------------------------------------
 
-func TestChannelMatchesRole_GetLinkPeersError(t *testing.T) {
+func TestLinkableChannels_RolelessCandidateExcluded(t *testing.T) {
 	t.Parallel()
-	peersErr := errors.New("get peers fail")
-	b := &linksBackend{getLinkPeersErr: peersErr}
 	c, err := central.New(central.Config{Name: "ccu-b26-cmr1"})
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
@@ -6313,62 +6313,21 @@ func TestChannelMatchesRole_GetLinkPeersError(t *testing.T) {
 		Name:        "CMR1DEV01B26",
 	})
 	c.ModelRegistry.Put(d)
+	// Channel carries no LINK_*_ROLES → not a valid link candidate.
 	d.AddChannel("CMR1DEV01B26:1", 1, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
 
 	w := client.NewValueWriter()
-	w.Register("ccu-b26-cmr1", "HmIP-RF", b)
 	domain := NewLinksDomain(reg, w, nil)
 
-	// LinkableChannels will call channelMatchesRole for CMR1DEV01B26:1
-	// GetLinkPeers will return error → channelMatchesRole returns false.
+	// Absent source channel → presence fallback; a role-less candidate
+	// still fails it.
 	result, err := domain.LinkableChannels(context.Background(), "HmIP-RF", "OTHERCHANNEL:1", "sender", "en")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Channel not included because channelMatchesRole returned false.
 	for _, ch := range result {
 		if ch.Address == "CMR1DEV01B26:1" {
-			t.Error("CMR1DEV01B26:1 should not appear in linkable channels when GetLinkPeers fails")
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// channelMatchesRole — backend not found → returns false (line 306-307)
-// ---------------------------------------------------------------------------
-
-func TestChannelMatchesRole_NoBackend(t *testing.T) {
-	t.Parallel()
-	c, err := central.New(central.Config{Name: "ccu-b26-cmr2"})
-	if err != nil {
-		t.Fatalf("central.New: %v", err)
-	}
-	reg := central.NewRegistry()
-	if err := reg.Register(c); err != nil {
-		t.Fatalf("reg.Register: %v", err)
-	}
-	d := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
-		Interface:   hmenum.InterfaceHmIPRF,
-		Address:     "CMR2DEV01B26",
-		Model:       "HmIP-STH",
-		Name:        "CMR2DEV01B26",
-	})
-	c.ModelRegistry.Put(d)
-	d.AddChannel("CMR2DEV01B26:1", 1, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
-
-	// No backend registered.
-	w := client.NewValueWriter()
-	domain := NewLinksDomain(reg, w, nil)
-
-	// channelMatchesRole → writer.Backend not found → false → channel excluded.
-	result, err := domain.LinkableChannels(context.Background(), "HmIP-RF", "OTHERCHANNEL:1", "sender", "en")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	for _, ch := range result {
-		if ch.Address == "CMR2DEV01B26:1" {
-			t.Error("CMR2DEV01B26:1 should not appear when no backend")
+			t.Error("a role-less candidate must not appear in linkable channels")
 		}
 	}
 }

@@ -81,6 +81,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Role matching when creating a direct link.** The linkable-channels
+  picker ignored the requested direction and offered every link-capable
+  channel for both roles. It now intersects the raw CCU
+  `LINK_SOURCE_ROLES` / `LINK_TARGET_ROLES` tokens — exactly like the CCU
+  WebUI — so a `sender` source only lists candidates that can receive
+  and a `receiver` source only lists candidates that can send. The roles
+  are carried onto the channel model during ingest, so the filter needs
+  no CCU roundtrip (it removes one `getLinkPeers` call per candidate).
+  Response shape unchanged; the `receiver` candidate set is now
+  correctly narrower.
 - **Heating schedule for classic BidCos thermostats.** HM-CC-RT-DN and
   HM-CC-RT-DN-BoM store their single week profile as prefix-less
   `ENDTIME_*` / `TEMPERATURE_*` keys directly in the device-level MASTER

@@ -489,13 +489,22 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   **Follow-up (optional):** ein zentralenübergreifender „Neue
   Verknüpfung"-Einstieg mit Quell-Kanal-Picker direkt aus der Übersicht
   (heute führt der Weg über das Gerätedetail).
-- **V02 — Rollen-Matching beim Verknüpfung-Anlegen** (partial, P2 M)
-  `channelMatchesRole` ignoriert den role-Parameter; jeder link-fähige Kanal
-  wird für beide Rollen angeboten. *Empfehlung:*
-  `LINK_SOURCE_ROLES ∩ LINK_TARGET_ROLES` aus der DeviceDescription
-  auswerten (Daten liegen vor, kein CCU-Roundtrip); Folgeausbau
-  Kanalgruppen (HM-Tastenpaare) + HmIP-RGBW-Sonderparameter.
-  **Entscheidung:** `umsetzen`
+- **V02 — Rollen-Matching beim Verknüpfung-Anlegen** ✅ erledigt (0.47.0)
+  `channelMatchesRole` ignorierte den role-Parameter und rief pro Kandidat
+  ein `getLinkPeers` — jeder link-fähige Kanal wurde für beide Rollen
+  angeboten. Jetzt echte Token-Intersektion der rohen CCU
+  `LINK_SOURCE_ROLES` / `LINK_TARGET_ROLES` (wie `check_role_match` in
+  occu `devconfig.cgi`): `sender`-Quelle ∩ Kandidat-`LinkTargetRoles`,
+  `receiver`-Quelle ∩ Kandidat-`LinkSourceRoles`. Die Rollen werden beim
+  Ingest auf das Kanalmodell gestempelt (`Channel.SetLinkRoles`), also
+  kein CCU-Roundtrip mehr (entfernt einen `getLinkPeers`-Call pro
+  Kandidat). Leere Quell-Rollen: vorhandener Kanal ohne Richtungsrolle →
+  ausgeschlossen (CCU-strikt); nur der WS-Geräte-Probe (Quelle abwesend)
+  fällt auf die Präsenzprüfung zurück. Keine Schema-/API-Änderung.
+  Getestet: `intersects`, Richtungs-Divergenz, Ausschluss, Präsenz-Regel,
+  Model-Accessor + Pipeline-Population.
+  **Follow-up (optional):** Kanalgruppen (HM-Tastenpaare) +
+  HmIP-RGBW-Sonderparameter — siehe W02.
 - **V03 — Verknüpfung am Gerät testen (`activateLinkParamset`)** (missing, P2 M)
   Profil probeweise am Aktor auslösen, bevor gespeichert wird — fehlt
   komplett (der heutige `links.test_profile` ist ein Pass-Through ohne
