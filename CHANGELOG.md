@@ -6,6 +6,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Per-channel visibility and operation lock (G12).** An operator can now hide
+  a channel from the operation surfaces (data-point list, Matter exposure) and
+  lock it against control writes, per channel, from the device-detail channel
+  editor. `GET`/`PUT /api/v1/devices/{addr}/channels/{no}/flags` back the two
+  toggles (`hidden`, `locked`); a locked channel rejects VALUES writes with
+  `423`, while reads and MASTER/config edits are unaffected. The overrides are
+  daemon-owned (SQLite `channel_flags`, no CCU write) and re-applied across
+  reconnects; `ChannelSummary` carries `hidden`/`locked`. API version 2.51.0.
+
 ### Fixed
 
 - **Toggling Basic/Bearer auth now flags a required restart.** The
