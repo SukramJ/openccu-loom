@@ -66,9 +66,10 @@ describe("LinkList — rendering", () => {
 
     expect(mockListAllLinks).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Deckenlampe")).toBeInTheDocument();
-    // The sender's device (address before the ':') deep-links to its detail.
+    // The sender's device (address before the ':') deep-links straight to its
+    // Direct-links tab, not just the device detail.
     const edit = screen.getAllByRole("link").find(
-      (a) => a.getAttribute("href") === "#/devices/DEVA",
+      (a) => a.getAttribute("href") === "#/devices/DEVA?tab=links",
     );
     expect(edit).toBeTruthy();
     // Both centrals are shown as badges when more than one is present.
