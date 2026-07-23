@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
@@ -936,15 +937,11 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		if descs, err := runner.GetSystemVariableDescriptions(ctx); err == nil {
 			haveDescs = true
 			for _, d := range descs {
-				if decoded, derr := url.QueryUnescape(d.Description); derr == nil {
-					descByID[d.ID] = decoded
-				} else {
-					descByID[d.ID] = d.Description
-				}
+				descByID[d.ID] = decodeRegaField(d.Description)
 				if d.ChannelAddress == "" {
 					continue
 				}
-				if decoded, derr := url.QueryUnescape(d.ChannelAddress); derr == nil {
+				if decoded := decodeRegaField(d.ChannelAddress); decoded != "" {
 					chanByID[d.ID] = decoded
 				} else {
 					chanByID[d.ID] = d.ChannelAddress
@@ -1312,9 +1309,27 @@ func decodeRegaField(s string) string {
 		return ""
 	}
 	if dec, err := url.QueryUnescape(s); err == nil {
-		return dec
+		s = dec
+	}
+	// ReGa object names are ISO-8859-1 on the CCU, so after URL-unescape a
+	// umlaut is a raw Latin-1 high byte — invalid UTF-8 that renders as U+FFFD
+	// ("Sp�le" for "Spüle" in a program's condition/activity summary).
+	// Transcode when the decoded value is not already valid UTF-8.
+	if !utf8.ValidString(s) {
+		s = latin1ToUTF8String(s)
 	}
 	return s
+}
+
+// latin1ToUTF8String reinterprets an ISO-8859-1 string's bytes as Unicode
+// code points, producing valid UTF-8. ASCII bytes map 1:1, so a mixed string
+// keeps its structure while high bytes become correct multi-byte runes.
+func latin1ToUTF8String(s string) string {
+	runes := make([]rune, len(s))
+	for i := range len(s) {
+		runes[i] = rune(s[i])
+	}
+	return string(runes)
 }
 
 // systemUpdateRefresher is the narrow slice of the HubCoordinator the

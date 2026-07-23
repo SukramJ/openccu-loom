@@ -28,11 +28,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **Umlauts in program names rendered as `�`.** Some CCU JSON-RPC methods (e.g.
-  `Program.getAll`) return an ISO-8859-1 body despite JSON's UTF-8 requirement,
-  so `json.Unmarshal` replaced each high byte with U+FFFD ("Sp�le"). The
-  JSON-RPC client now transcodes a non-UTF-8 response body from ISO-8859-1 to
-  UTF-8 (a valid UTF-8 body passes through untouched).
+- **Umlauts in program condition/activity summaries rendered as `�`.** A
+  program's summary lists the device and channel names it references (e.g.
+  `Wassersensor Sp�le`, `L�ftung Aus`). Those names come from the ReGa script
+  layer, which UriEncodes ISO-8859-1 object names; after `url.QueryUnescape` the
+  high byte was raw Latin-1 (invalid UTF-8) and rendered as U+FFFD. The ReGa
+  field decoder (`decodeRegaField`) now transcodes a non-UTF-8 result from
+  ISO-8859-1 to UTF-8, so `Sp�le` becomes `Spüle` (an already-valid UTF-8 value
+  passes through untouched). Sysvar descriptions and channel addresses from the
+  same ReGa path share the fix. The JSON-RPC client gained the same defensive
+  transcode for any method that returns a Latin-1 body.
 
 ## [0.47.2]
 

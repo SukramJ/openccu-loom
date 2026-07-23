@@ -7,7 +7,7 @@ top-level CHANGELOG.md. Newest version first.
 # 0.47.3
 
 Version ride-along. No changes to the proxy itself; the fixes ship in the
-paired instance (program-name umlauts, diagram picker UX, energy/links/signal
+paired instance (program-summary umlauts, diagram picker UX, energy/links/signal
 UI) — update the instance to 0.47.3 too.
 
 # 0.47.2

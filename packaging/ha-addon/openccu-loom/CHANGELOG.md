@@ -2,8 +2,9 @@
 
 ## 0.47.3
 
-- **Fixed umlauts in program names** (rendered as `�`) — the CCU serves some
-  JSON-RPC responses in ISO-8859-1; they are now transcoded to UTF-8.
+- **Fixed umlauts in program condition/activity summaries** (rendered as `�`,
+  e.g. `Sp�le`) — the device/channel names they list come from the ReGa layer
+  as ISO-8859-1 and are now transcoded to UTF-8.
 - **Guided diagram series editor**: pick device → channel → value from
   dropdowns instead of typing raw addresses; the value list shows only numeric
   data points with their unit.
