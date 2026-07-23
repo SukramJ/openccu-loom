@@ -19,3 +19,12 @@ alarm_messages.ack_all      -- godevccu has no ReGa.runScript; live CCU returns 
 service_messages.ack_all    -- godevccu has no ReGa.runScript; live CCU returns ok
 firmware.update             -- godevccu has no ReGa.runScript; live CCU returns ok
 groups.list                 -- godevccu has no CCU.getHeatingGroupList; live CCU returns groups.gson
+device.restore_config       -- godevccu has no restoreConfigToDevice; live CCU re-transmits config
+device.replace_candidates   -- godevccu has no listReplaceableDevices; live CCU returns candidates
+device.replace              -- godevccu has no replaceDevice; live CCU performs the swap
+install_mode.search         -- godevccu has no searchDevices; live CCU scans the wired bus
+device.test                 -- godevccu has no ReGa DevStartComTest; live CCU runs the radio test
+device.team_candidates      -- godevccu has no listTeams; live CCU returns team channels
+device.set_team             -- godevccu has no setTeam; live CCU assigns the team
+sysvars.usage -- godevccu has no DPEnumUsagePrograms; live CCU returns referencing programs
+links.activate_paramset -- godevccu lacks activateLinkParamset; live CCU triggers the actuator

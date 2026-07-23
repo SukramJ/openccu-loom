@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -144,6 +145,48 @@ func (b *HomegearBackend) UpdateFirmware(_ context.Context, _ string) error {
 	return ErrUnsupported
 }
 
+// RestoreConfigToDevice implements Operations. Homegear has no
+// CCU-style stored-config re-transmit; always returns [ErrUnsupported].
+func (b *HomegearBackend) RestoreConfigToDevice(_ context.Context, _ string) error {
+	return ErrUnsupported
+}
+
+// SearchDevices implements Operations. Homegear has no wired-bus scan;
+// always returns [ErrUnsupported].
+func (b *HomegearBackend) SearchDevices(_ context.Context) (int, error) {
+	return 0, ErrUnsupported
+}
+
+// SetTeam implements Operations. Homegear has no team concept; always
+// returns [ErrUnsupported].
+func (b *HomegearBackend) SetTeam(_ context.Context, _, _ string) error {
+	return ErrUnsupported
+}
+
+// ListTeams implements Operations. Homegear has no team concept; always
+// returns [ErrUnsupported].
+func (b *HomegearBackend) ListTeams(_ context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
+// TestDevice implements Operations. Homegear has no CCU com-test;
+// always returns [ErrUnsupported].
+func (b *HomegearBackend) TestDevice(_ context.Context, _ string, _, _ float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, ErrUnsupported
+}
+
+// ListReplaceableDevices implements Operations. Homegear has no
+// device-replacement concept; always returns [ErrUnsupported].
+func (b *HomegearBackend) ListReplaceableDevices(_ context.Context, _ string) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
+// ReplaceDevice implements Operations. Homegear has no
+// device-replacement concept; always returns [ErrUnsupported].
+func (b *HomegearBackend) ReplaceDevice(_ context.Context, _, _ string) error {
+	return ErrUnsupported
+}
+
 // --- direct links --------------------------------------------------
 
 // GetLinks implements Operations.
@@ -273,6 +316,13 @@ func (b *HomegearBackend) PutLinkParamset(ctx context.Context, channelAddress, p
 	}
 	_, err := b.xml.Call(ctx, "putParamset", channelAddress, peerAddress, values)
 	return err
+}
+
+// ActivateLinkParamset implements Operations. Homegear's XML-RPC does not
+// document activateLinkParamset; return ErrUnsupported until validated
+// against a real Homegear instance rather than risk a spurious fault.
+func (*HomegearBackend) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return ErrUnsupported
 }
 
 // ReportValueUsage implements Operations.
@@ -459,6 +509,12 @@ func (*HomegearBackend) GetInstallMode(context.Context) (int, error) { return 0,
 // SetInstallMode implements Operations. Homegear has no CCU-style
 // install-mode RPC; returns ErrUnsupported.
 func (*HomegearBackend) SetInstallMode(context.Context, bool, int, int, string) error {
+	return ErrUnsupported
+}
+
+// SetInstallModeLocal implements Operations. Homegear has no HmIP
+// LOCAL teach-in; returns ErrUnsupported.
+func (*HomegearBackend) SetInstallModeLocal(context.Context, int, string, string) error {
 	return ErrUnsupported
 }
 

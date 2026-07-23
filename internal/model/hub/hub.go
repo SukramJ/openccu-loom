@@ -135,6 +135,25 @@ type SysvarMutator interface {
 // generic upstream error.
 var ErrNoSysvarMutator = errors.New("hub: no sysvar mutator configured")
 
+// SysvarUsage is one CCU program that references a system variable.
+type SysvarUsage struct {
+	ID     string
+	Name   string
+	Active bool
+}
+
+// SysvarUsageReader is the optional CCU-side reader for the programs that
+// reference a sysvar (the variable object's native DPEnumUsagePrograms).
+// It is intentionally NOT part of [SysvarMutator] so in-memory Mutator
+// fakes keep compiling; SetMutator wires it opportunistically.
+type SysvarUsageReader interface {
+	SysvarUsagePrograms(ctx context.Context, name string) ([]SysvarUsage, error)
+}
+
+// ErrNoSysvarUsageReader is returned by Hub.SysvarUsageRemote when no
+// CCU-side usage reader is wired. The REST handler surfaces this as 503.
+var ErrNoSysvarUsageReader = errors.New("hub: no sysvar usage reader configured")
+
 // ErrSysvarChannelUnknown is returned when a sysvar create/patch carries a
 // channel address that the CCU cannot resolve to a ReGa ise id. The REST
 // handler surfaces it as a 422 (bad request field) rather than a 502, since
@@ -230,6 +249,12 @@ type Hub struct {
 	FirmwareUpdater FirmwareUpdater
 	// InboxAccepter promotes an inbox device.
 	InboxAccepter InboxAccepter
+
+	// sysvarUsageReader is an optional CCU-side reader for the programs
+	// that reference a sysvar. Wired opportunistically by SetMutator when
+	// the mutator also implements [SysvarUsageReader]; nil leaves
+	// SysvarUsageRemote returning [ErrNoSysvarUsageReader].
+	sysvarUsageReader SysvarUsageReader
 
 	mu             sync.RWMutex
 	programs       map[string]*Program
@@ -545,6 +570,11 @@ func (h *Hub) SetMutator(m Mutator) {
 	h.BackupTrigger = m
 	h.FirmwareUpdater = m
 	h.InboxAccepter = m
+	// Opportunistic: the JSON-RPC writer also reads sysvar usage. An
+	// in-memory fake that doesn't implement it leaves the reader nil.
+	if r, ok := m.(SysvarUsageReader); ok {
+		h.sysvarUsageReader = r
+	}
 }
 
 func (h *Hub) sysvarMut() SysvarMutator { h.mu.RLock(); defer h.mu.RUnlock(); return h.SysvarMutator }
@@ -562,6 +592,23 @@ func (h *Hub) firmwareMut() FirmwareUpdater {
 }
 
 func (h *Hub) inboxMut() InboxAccepter { h.mu.RLock(); defer h.mu.RUnlock(); return h.InboxAccepter }
+
+func (h *Hub) sysvarUsageRdr() SysvarUsageReader {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.sysvarUsageReader
+}
+
+// SysvarUsageRemote lists the CCU programs that reference the named
+// system variable. Returns [ErrNoSysvarUsageReader] when no CCU-side
+// reader is wired (the REST handler maps that to 503).
+func (h *Hub) SysvarUsageRemote(ctx context.Context, name string) ([]SysvarUsage, error) {
+	r := h.sysvarUsageRdr()
+	if r == nil {
+		return nil, ErrNoSysvarUsageReader
+	}
+	return r.SysvarUsagePrograms(ctx, name)
+}
 
 // CreateSysvarRemote provisions a sysvar on the CCU. The hub mirror
 // is updated lazily by the periodic sysvar refresh; the REST handler

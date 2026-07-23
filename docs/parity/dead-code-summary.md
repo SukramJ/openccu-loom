@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: aa2a8069
-HEAD: aa2a8069
+Generated: e0be9f88
+HEAD: e0be9f88
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26264 |
-| Reachable | 4585 |
-| Whitelisted | 18913 |
-| **Unreachable** | **2766** |
+| Total Exported | 26693 |
+| Reachable | 4628 |
+| Whitelisted | 19256 |
+| **Unreachable** | **2809** |
 
 ## Top-20 Packages by Dead Code
 
@@ -31,7 +31,7 @@ HEAD: aa2a8069
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 53 | 36 |
+| internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -67,8 +67,8 @@ HEAD: aa2a8069
 | internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 229 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 229 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
@@ -111,7 +111,7 @@ HEAD: aa2a8069
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
 | internal/model/device | 2 | 43 | 12 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 53 | 36 |
+| internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -137,7 +137,7 @@ HEAD: aa2a8069
 | internal/configui | 0 | 16 | 0 |
 | internal/diagnostics | 0 | 6 | 4 |
 | internal/health | 0 | 16 | 0 |
-| internal/history | 0 | 12 | 0 |
+| internal/history | 0 | 13 | 0 |
 | internal/i18n | 0 | 2 | 0 |
 | internal/metrics | 0 | 62 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
@@ -192,9 +192,9 @@ HEAD: aa2a8069
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 84 | 22 |
-| pkg/hmapi | 0 | 119 | 16 |
-| pkg/hmenum | 0 | 100 | 36 |
+| internal/store/sqlite | 0 | 90 | 28 |
+| pkg/hmapi | 0 | 125 | 16 |
+| pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
-| pkg/interfaces | 0 | 81 | 2 |
+| pkg/interfaces | 0 | 81 | 4 |

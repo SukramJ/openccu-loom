@@ -1,0 +1,29 @@
+{
+  "links": [
+    {
+      "sender_address": "000A1B2C3D4E5F:1",
+      "receiver_address": "000A1B2C3D4E60:3",
+      "name": "Flur → Deckenlicht",
+      "description": "Kurzer Tastendruck schaltet das Licht",
+      "sender_device_name": "Taster Flur",
+      "sender_channel_type_label": "Key",
+      "receiver_device_name": "Deckenlampe Flur",
+      "receiver_channel_type_label": "Switch",
+      "peer_address": "",
+      "direction": "",
+      "central_name": "ccu1",
+      "interface_id": "ccu1-HmIP-RF"
+    },
+    {
+      "sender_address": "000A1B2C3D4E70:2",
+      "receiver_address": "000A1B2C3D4E80:1",
+      "name": "Schlafzimmer → Rollladen",
+      "sender_device_name": "Wandtaster Schlafzimmer",
+      "receiver_device_name": "Rollladen Schlafzimmer",
+      "peer_address": "",
+      "direction": "",
+      "central_name": "ccu1",
+      "interface_id": "ccu1-BidCos-RF"
+    }
+  ]
+}

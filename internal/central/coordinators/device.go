@@ -1105,9 +1105,13 @@ func (c *DeviceCoordinator) RefreshFirmwareData(ctx context.Context, fetcher Dev
 // evicted from every registry layer and a DeviceRemovedEvent is emitted, then
 // the replacement device is fetched and ingested via the standard pipeline.
 //
-// Substitution constraint: both devices must share the same interface and
-// model string. If the old device is unknown or the model strings differ the
-// method returns a descriptive error without modifying any state.
+// Substitution constraint: both devices are on the same interface. The
+// CCU (rfd / hs485d) owns the type-compatibility check and legitimately
+// approves compatible cross-type swaps, so a differing model string is
+// logged and proceeds rather than aborting — refusing here would strand
+// the model after the CCU has already performed the swap. If the old
+// device is unknown the method returns a descriptive error without
+// modifying any state.
 func (c *DeviceCoordinator) ReplaceDevice(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
@@ -1124,10 +1128,15 @@ func (c *DeviceCoordinator) ReplaceDevice(
 		return fmt.Errorf("device_coordinator: replace_device: old device %q not found on interface %s", oldAddr, iface)
 	}
 
-	// Pre-fetch new device description to validate model match before mutating state.
-	newDesc, ok := c.descs.Get(iface, newAddr)
-	if ok && newDesc.Type != "" && newDesc.Type != oldEntry.Model {
-		return fmt.Errorf("device_coordinator: replace_device: model mismatch: old=%q new=%q", oldEntry.Model, newDesc.Type)
+	// A cross-type but CCU-approved replacement is legitimate; note it
+	// and proceed rather than reject a swap the CCU already made.
+	if newDesc, ok := c.descs.Get(iface, newAddr); ok && newDesc.Type != "" && newDesc.Type != oldEntry.Model {
+		c.logger.Info("device_coordinator.replace_device.cross_type",
+			slog.String("interface", string(iface)),
+			slog.String("old", oldAddr),
+			slog.String("old_model", oldEntry.Model),
+			slog.String("new", newAddr),
+			slog.String("new_model", newDesc.Type))
 	}
 
 	// Evict old device: remove all channel descriptions + paramsets, then the device entry.

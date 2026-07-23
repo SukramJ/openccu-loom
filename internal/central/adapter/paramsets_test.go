@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -95,6 +96,10 @@ func (f *paramsetFakeOps) GetLinkParamset(_ context.Context, _, _ string) (map[s
 	return map[string]any{}, nil
 }
 
+func (f *paramsetFakeOps) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (f *paramsetFakeOps) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }
@@ -136,6 +141,38 @@ func (*paramsetFakeOps) GetInstallMode(context.Context) (int, error) { return 0,
 
 func (*paramsetFakeOps) SetInstallMode(context.Context, bool, int, int, string) error {
 	return nil
+}
+
+func (*paramsetFakeOps) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*paramsetFakeOps) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (*paramsetFakeOps) GetServiceMessages(context.Context, string) ([]map[string]any, error) {

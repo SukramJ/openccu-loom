@@ -60,6 +60,7 @@ type centralOrchestrator struct {
 	valuesCacheStore  *sqlite.ValuesCacheStore
 	masterValuesStore *sqlite.MasterValuesStore
 	historyStore      *sqlite.MeasurementStore
+	recordingStore    *sqlite.RecordingOverrideStore
 
 	mu      sync.Mutex
 	handles map[string]*centralHandle
@@ -132,6 +133,7 @@ func newCentralOrchestrator(
 	valuesCacheStore *sqlite.ValuesCacheStore,
 	masterValuesStore *sqlite.MasterValuesStore,
 	historyStore *sqlite.MeasurementStore,
+	recordingStore *sqlite.RecordingOverrideStore,
 ) *centralOrchestrator {
 	if bringUp == nil {
 		return nil
@@ -146,6 +148,7 @@ func newCentralOrchestrator(
 		valuesCacheStore:  valuesCacheStore,
 		masterValuesStore: masterValuesStore,
 		historyStore:      historyStore,
+		recordingStore:    recordingStore,
 		handles:           make(map[string]*centralHandle),
 	}
 }
@@ -332,7 +335,7 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
 	}
 
-	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, h.cc, o.logger)
+	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, o.recordingStore, h.cc, o.logger)
 	o.logger.Info("central.remove.live", slog.String("central", name))
 	return nil
 }
@@ -374,6 +377,7 @@ func purgeCentralState(
 	valuesCacheStore *sqlite.ValuesCacheStore,
 	masterValuesStore *sqlite.MasterValuesStore,
 	historyStore *sqlite.MeasurementStore,
+	recordingStore *sqlite.RecordingOverrideStore,
 	cc config.CentralConfig,
 	logger *slog.Logger,
 ) {
@@ -394,6 +398,12 @@ func purgeCentralState(
 	if historyStore != nil {
 		if err := historyStore.DeleteForCentral(ctx, cc.Name); err != nil {
 			logger.Warn("central.remove.purge_history", slog.String("central", cc.Name), slog.String("err", err.Error()))
+		}
+	}
+	if recordingStore != nil {
+		if err := recordingStore.DeleteForCentral(ctx, cc.Name); err != nil {
+			logger.Warn("central.remove.purge_recording_overrides",
+				slog.String("central", cc.Name), slog.String("err", err.Error()))
 		}
 	}
 }

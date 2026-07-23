@@ -93,7 +93,7 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 	}
 
 	cc := config.CentralConfig{Name: removedCentral, Interfaces: []config.InterfaceSpec{{Name: ifaceName}}}
-	purgeCentralState(ctx, valuesStore, masterStore, historyStore, cc, discardTestLogger())
+	purgeCentralState(ctx, valuesStore, masterStore, historyStore, nil, cc, discardTestLogger())
 
 	if rows, err := valuesStore.LoadChannel(ctx, removedCentral, ifaceName, "AAAA0001:1"); err != nil {
 		t.Fatalf("LoadChannel(removed): %v", err)
@@ -131,7 +131,7 @@ func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 func TestPurgeCentralStateNilStoresAreSafe(t *testing.T) {
 	t.Parallel()
 	cc := config.CentralConfig{Name: "x", Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}}}
-	purgeCentralState(context.Background(), nil, nil, nil, cc, discardTestLogger())
+	purgeCentralState(context.Background(), nil, nil, nil, nil, cc, discardTestLogger())
 }
 
 // TestEvictModelRemovesDevicesDescriptionsAndParamsets mirrors
@@ -189,7 +189,7 @@ func TestEvictModelNilSafe(t *testing.T) {
 func TestNewCentralOrchestratorNilBringUpReturnsNil(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
-	orch := newCentralOrchestrator(reg, nil, southboundWiringDeps{reg: reg}, &config.Config{}, discardTestLogger(), "", nil, nil, nil)
+	orch := newCentralOrchestrator(reg, nil, southboundWiringDeps{reg: reg}, &config.Config{}, discardTestLogger(), "", nil, nil, nil, nil)
 	if orch != nil {
 		t.Fatal("newCentralOrchestrator(bringUp=nil) returned a non-nil orchestrator")
 	}
@@ -225,7 +225,7 @@ func buildLiveTestOrchestrator(ctx context.Context, t *testing.T, reg *central.R
 		t.Fatalf("adapter.WireCentrals: %v", err)
 	}
 	t.Cleanup(mgr.Teardown)
-	orch := newCentralOrchestrator(reg, mgr, southboundWiringDeps{reg: reg, logger: logger}, cfg, logger, "", nil, nil, nil)
+	orch := newCentralOrchestrator(reg, mgr, southboundWiringDeps{reg: reg, logger: logger}, cfg, logger, "", nil, nil, nil, nil)
 	if orch == nil {
 		t.Fatal("newCentralOrchestrator returned nil")
 	}

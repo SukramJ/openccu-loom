@@ -268,8 +268,24 @@
   }
 
   async function deleteSv(sv: SysvarEntry) {
+    // Best-effort: warn the operator when programs reference this variable
+    // (the CCU auto-removes it from them on delete). A usage-lookup failure
+    // must never block the delete — fall through to a plain confirm.
+    let body: string | undefined;
+    try {
+      const usage = await api.getSysvarUsage(sv.name, sv.central);
+      if (usage.programs && usage.programs.length > 0) {
+        const names = usage.programs
+          .map((p) => p.name + (p.is_internal ? ` (${t("sysvars.usage.internal")})` : ""))
+          .join(", ");
+        body = t("sysvars.usage.warning", { count: usage.programs.length }) + "\n" + names;
+      }
+    } catch {
+      // Ignore — the confirm proceeds without a usage warning.
+    }
     const ok = await confirmStore.ask({
       title: t("sysvars.confirm_remove", { name: sv.name }),
+      body,
       confirmLabel: t("common.remove"),
       destructive: true,
     });

@@ -150,6 +150,43 @@ func TestInstanceProxyTokenInjection(t *testing.T) {
 	})
 }
 
+func TestInstanceProxySessionCookieStrip(t *testing.T) {
+	t.Run("token mode drops the competing session cookie, keeps others", func(t *testing.T) {
+		upstream, capture := newProxyUpstreamFixture(t, nil)
+		proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: upstream.URL, Token: "tok"}})
+
+		resp := proxyGet(t, proxy.URL+"/", map[string]string{
+			"Cookie": sessionCookieName + "=stale; keep=me",
+		})
+		resp.Body.Close()
+
+		gotCookie := capture.Header().Get("Cookie")
+		if strings.Contains(gotCookie, sessionCookieName) {
+			t.Errorf("session cookie forwarded upstream: %q", gotCookie)
+		}
+		if !strings.Contains(gotCookie, "keep=me") {
+			t.Errorf("unrelated cookie dropped: %q", gotCookie)
+		}
+		if got := capture.Header().Get("Authorization"); got != "Bearer tok" {
+			t.Errorf("Authorization = %q, want %q", got, "Bearer tok")
+		}
+	})
+
+	t.Run("no-token mode preserves the session cookie (proxied login)", func(t *testing.T) {
+		upstream, capture := newProxyUpstreamFixture(t, nil)
+		proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: upstream.URL}})
+
+		resp := proxyGet(t, proxy.URL+"/", map[string]string{
+			"Cookie": sessionCookieName + "=live",
+		})
+		resp.Body.Close()
+
+		if got := capture.Header().Get("Cookie"); !strings.Contains(got, sessionCookieName+"=live") {
+			t.Errorf("session cookie stripped in no-token mode: %q", got)
+		}
+	})
+}
+
 func TestInstanceProxyIngressPathHeader(t *testing.T) {
 	t.Run("multi-instance mount appends the instance prefix", func(t *testing.T) {
 		upstream, capture := newProxyUpstreamFixture(t, nil)

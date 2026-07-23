@@ -36,6 +36,32 @@ type DeviceWriter interface {
 	// SetInstallMode toggles a single device into install mode for the
 	// given duration. Used by `device.install_mode`.
 	SetInstallMode(ctx context.Context, address string, durationSeconds int) error
+	// SetChannelRooms replaces a single channel's room assignments. An
+	// explicit empty slice clears the set. Used by
+	// `device.set_channel_rooms`.
+	SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error
+	// SetChannelFunctions replaces a single channel's function (Gewerk)
+	// assignments. Used by `device.set_channel_functions`.
+	SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error
+	// RestoreConfig re-transmits the centrally stored configuration to
+	// the device after a factory reset. Used by
+	// `device.restore_config`.
+	RestoreConfig(ctx context.Context, address string) error
+	// ReplaceCandidates lists the paired devices the new device may
+	// replace. Read-only; used by `device.replace_candidates`.
+	ReplaceCandidates(ctx context.Context, centralName, newAddress string) ([]hmapi.ReplaceCandidate, error)
+	// ReplaceDevice swaps a paired device for a new one. Used by
+	// `device.replace`.
+	ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error
+	// TestDeviceCommunication runs the CCU's per-device communication
+	// test. Used by `device.test`.
+	TestDeviceCommunication(ctx context.Context, address string) (hmapi.CommunicationTestResult, error)
+	// TeamCandidates lists the team channels a channel may join.
+	// Read-only; used by `device.team_candidates`.
+	TeamCandidates(ctx context.Context, deviceAddr string, channelNo int) ([]hmapi.TeamCandidate, error)
+	// SetChannelTeam assigns a channel to a team. Used by
+	// `device.set_team`.
+	SetChannelTeam(ctx context.Context, deviceAddr string, channelNo int, teamChannelAddress string) error
 }
 
 // ParamsetWriter mutates a paramset in one shot. Used by `paramset.put`
@@ -243,16 +269,36 @@ type ExtendedCommandsConfig struct {
 // The set complements [RegisterDefaultCommands] — call both at boot
 // to expose the full command surface. Any nil sub-config field skips its
 // commands.
+// registerDeviceCommands registers the device.* WS command family.
+// Extracted from RegisterExtendedCommands to keep it under the funlen
+// budget as the family grows.
+func registerDeviceCommands(router *Router, d DeviceWriter) {
+	if d == nil {
+		return
+	}
+	router.Register("device.rename", deviceRenameHandler(d))
+	router.Register("device.rename_channel", deviceRenameChannelHandler(d))
+	router.Register("device.install_mode", deviceInstallModeHandler(d))
+	router.Register("device.set_channel_rooms", deviceSetChannelRoomsHandler(d))
+	router.Register("device.set_channel_functions", deviceSetChannelFunctionsHandler(d))
+	router.Register("device.restore_config", deviceRestoreConfigHandler(d))
+	router.Register("device.test", deviceTestHandler(d))
+	router.Register("device.team_candidates", deviceTeamCandidatesHandler(d))
+	router.Register("device.set_team", deviceSetTeamHandler(d))
+	router.Register("device.replace_candidates", deviceReplaceCandidatesHandler(d))
+	router.Register("device.replace", deviceReplaceHandler(d))
+}
+
+// RegisterExtendedCommands registers the extended (non-default) WS
+// command families onto router — device lifecycle, paramsets, master
+// profiles, schedules, links and the rest — each guarded by its
+// corresponding non-nil config facade.
 func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if router == nil {
 		return
 	}
 	// --- Schreibpfad zuerst (priorisiert) ---
-	if cfg.Devices != nil {
-		router.Register("device.rename", deviceRenameHandler(cfg.Devices))
-		router.Register("device.rename_channel", deviceRenameChannelHandler(cfg.Devices))
-		router.Register("device.install_mode", deviceInstallModeHandler(cfg.Devices))
-	}
+	registerDeviceCommands(router, cfg.Devices)
 	if cfg.Paramsets != nil {
 		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
 	}
@@ -394,6 +440,195 @@ func deviceRenameChannelHandler(d DeviceWriter) CommandHandler {
 			"address": p.Address,
 			"channel": p.Channel,
 			"name":    p.Name,
+		}, nil
+	}
+}
+
+func deviceSetChannelRoomsHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string   `json:"address"`
+			Channel int      `json:"channel"`
+			Rooms   []string `json:"rooms"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Rooms == nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "rooms is required (an empty array clears the assignment)")
+		}
+		if err := d.SetChannelRooms(ctx, p.Address, p.Channel, p.Rooms); err != nil {
+			return nil, fmt.Errorf("device.set_channel_rooms: %w", err)
+		}
+		return map[string]any{
+			"address": p.Address,
+			"channel": p.Channel,
+			"rooms":   p.Rooms,
+		}, nil
+	}
+}
+
+func deviceSetChannelFunctionsHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address   string   `json:"address"`
+			Channel   int      `json:"channel"`
+			Functions []string `json:"functions"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Functions == nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "functions is required (an empty array clears the assignment)")
+		}
+		if err := d.SetChannelFunctions(ctx, p.Address, p.Channel, p.Functions); err != nil {
+			return nil, fmt.Errorf("device.set_channel_functions: %w", err)
+		}
+		return map[string]any{
+			"address":   p.Address,
+			"channel":   p.Channel,
+			"functions": p.Functions,
+		}, nil
+	}
+}
+
+func deviceRestoreConfigHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if err := d.RestoreConfig(ctx, p.Address); err != nil {
+			return nil, fmt.Errorf("device.restore_config: %w", err)
+		}
+		return map[string]any{"address": p.Address}, nil
+	}
+}
+
+func deviceTestHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		result, err := d.TestDeviceCommunication(ctx, p.Address)
+		if err != nil {
+			return nil, fmt.Errorf("device.test: %w", err)
+		}
+		return result, nil
+	}
+}
+
+func deviceTeamCandidatesHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+			Channel int    `json:"channel"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		candidates, err := d.TeamCandidates(ctx, p.Address, p.Channel)
+		if err != nil {
+			return nil, fmt.Errorf("device.team_candidates: %w", err)
+		}
+		if candidates == nil {
+			candidates = []hmapi.TeamCandidate{}
+		}
+		return map[string]any{"candidates": candidates}, nil
+	}
+}
+
+func deviceSetTeamHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string  `json:"address"`
+			Channel int     `json:"channel"`
+			Team    *string `json:"team"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		team := ""
+		if p.Team != nil {
+			team = *p.Team
+		}
+		if err := d.SetChannelTeam(ctx, p.Address, p.Channel, team); err != nil {
+			return nil, fmt.Errorf("device.set_team: %w", err)
+		}
+		return map[string]any{"address": p.Address, "channel": p.Channel, "team": team}, nil
+	}
+}
+
+func deviceReplaceCandidatesHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+			Central string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		candidates, err := d.ReplaceCandidates(ctx, p.Central, p.Address)
+		if err != nil {
+			return nil, fmt.Errorf("device.replace_candidates: %w", err)
+		}
+		if candidates == nil {
+			candidates = []hmapi.ReplaceCandidate{}
+		}
+		return map[string]any{"candidates": candidates}, nil
+	}
+}
+
+func deviceReplaceHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address    string `json:"address"`
+			OldAddress string `json:"old_address"`
+			Central    string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.OldAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "old_address is required")
+		}
+		if err := d.ReplaceDevice(ctx, p.Central, p.OldAddress, p.Address); err != nil {
+			return nil, fmt.Errorf("device.replace: %w", err)
+		}
+		return map[string]any{
+			"status":      "replacing",
+			"old_address": p.OldAddress,
+			"new_address": p.Address,
+			"central":     p.Central,
 		}, nil
 	}
 }

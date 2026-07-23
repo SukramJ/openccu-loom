@@ -8,7 +8,7 @@
 // GetAllDeviceData, GetDeviceDetails, GetDeviceDescription,
 // CreateBackupAndDownload, TriggerFirmwareUpdate, DeleteSystemVariable,
 // GetIseIDByAddress, GetLinkInfo, SetLinkInfo, GetSuppressedServiceMessages,
-// HasProgramIDs.
+// HasProgramIDs, TestDevice.
 
 package backends
 
@@ -17,7 +17,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -135,6 +137,101 @@ func TestCcuSetInstallModeWithoutAddress(t *testing.T) {
 	}
 	if args[0] != false {
 		t.Fatalf("on=%v, want false", args[0])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetInstallModeLocal — keyserver-less HmIP LOCAL teach-in
+// ---------------------------------------------------------------------------
+
+// TestCcuBackendSetInstallModeLocalPayload pins both the JSON-RPC method
+// name and the exact full param map SetInstallModeLocal sends: every key
+// must be present (the CCU-side wrapper dereferences all of them
+// unconditionally) and "keymode"/"installMode" carry the exact casing the
+// wire contract requires.
+func TestCcuBackendSetInstallModeLocalPayload(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: nil}
+	b := NewCcuBackendForInterface(hmenum.InterfaceHmIPRF, &fakeCaller{}, j, nil)
+	if err := b.SetInstallModeLocal(context.Background(), 300, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19"); err != nil {
+		t.Fatalf("SetInstallModeLocal: %v", err)
+	}
+	method, args, ok := loadArgs(j)
+	if !ok || method != "Interface.setInstallModeHMIP" {
+		t.Fatalf("method=%s", method)
+	}
+	if len(args) != 1 {
+		t.Fatalf("want 1 arg (params map), got %d: %v", len(args), args)
+	}
+	params, ok := args[0].(map[string]any)
+	if !ok {
+		t.Fatalf("params not a map: %T", args[0])
+	}
+	want := map[string]any{
+		"interface":   "HmIP-RF",
+		"on":          "true",
+		"time":        300,
+		"installMode": "LOCAL",
+		"address":     "3014F711A061A7D569892A67",
+		"key":         "0110C8531D0952D8D73E1194E95B5F19",
+		"keymode":     "LOCAL",
+	}
+	if len(params) != len(want) {
+		t.Fatalf("params has %d keys, want %d: %v", len(params), len(want), params)
+	}
+	for k, v := range want {
+		if got := params[k]; got != v {
+			t.Errorf("params[%q] = %v, want %v", k, got, v)
+		}
+	}
+}
+
+// TestCcuBackendSetInstallModeLocalNonHmIP verifies that any non-HmIP-RF
+// interface refuses the LOCAL teach-in with ErrUnsupported — the CCU's
+// setInstallModeHMIP wrapper only exists for HmIP.
+func TestCcuBackendSetInstallModeLocalNonHmIP(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: nil}
+	b := NewCcuBackendForInterface(hmenum.InterfaceBidCosRF, &fakeCaller{}, j, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+	if j.called.Load() != 0 {
+		t.Fatal("SetInstallModeLocal must not call JSON-RPC for a non-HmIP interface")
+	}
+}
+
+// TestCcuBackendSetInstallModeLocalNoJSON verifies that a HmIP-RF backend
+// without a wired JSON-RPC caller also refuses with ErrUnsupported.
+func TestCcuBackendSetInstallModeLocalNoJSON(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackendForInterface(hmenum.InterfaceHmIPRF, &fakeCaller{}, nil, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// TestCuxdBackendSetInstallModeLocalUnsupported verifies the CUxD stub:
+// install mode (LOCAL or otherwise) is CCU-only.
+func TestCuxdBackendSetInstallModeLocalUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// TestHomegearBackendSetInstallModeLocalUnsupported verifies the Homegear
+// stub: no HmIP JSON-RPC surface exists on Homegear.
+func TestHomegearBackendSetInstallModeLocalUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	err := b.SetInstallModeLocal(context.Background(), 60, "3014F711A061A7D569892A67", "0110C8531D0952D8D73E1194E95B5F19")
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }
 
@@ -1277,5 +1374,167 @@ func TestCcuListBidcosInterfacesError(t *testing.T) {
 	b := NewCcuBackend(&fakeCaller{}, j, nil)
 	if _, err := b.ListBidcosInterfaces(context.Background(), "BidCos-RF"); err == nil {
 		t.Fatal("expected error to propagate")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestDevice — per-device communication/function test
+// ---------------------------------------------------------------------------
+
+func TestCcuTestDeviceNoRega(t *testing.T) {
+	t.Parallel()
+	// Without a ScriptRunner the operation must return ErrUnsupported —
+	// there is no JSON-RPC method for the com-test, only the ReGa scripts.
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	_, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 1)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuTestDeviceStartFailureReturnsError(t *testing.T) {
+	t.Parallel()
+	runner := &fakeScriptRunner{
+		rawJSON: `{"success":false,"error":"device unreachable"}`,
+	}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	_, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 1)
+	if err == nil {
+		t.Fatal("expected error when start reports failure")
+	}
+	if !strings.Contains(err.Error(), "device unreachable") {
+		t.Errorf("error should surface the CCU-reported message, got: %v", err)
+	}
+}
+
+func TestCcuTestDeviceStartFailureDefaultMessage(t *testing.T) {
+	t.Parallel()
+	// No "error" field on a failed start: the backend substitutes a
+	// generic message rather than returning an empty error string.
+	runner := &fakeScriptRunner{rawJSON: `{"success":false}`}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	_, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 1)
+	if err == nil {
+		t.Fatal("expected error when start reports failure")
+	}
+	if !strings.Contains(err.Error(), "communication test start failed") {
+		t.Errorf("expected default failure message, got: %v", err)
+	}
+}
+
+// TestCcuTestDeviceHappyPathPassesAfterPolling verifies the poll loop:
+// the first poll_com_test reply reports passed:false, the second reports
+// passed:true with a completed timestamp — TestDevice must keep polling
+// until it sees passed:true and parse CompletedAt with the ReGa
+// "%Y-%m-%d %H:%M:%S" layout.
+func TestCcuTestDeviceHappyPathPassesAfterPolling(t *testing.T) {
+	t.Parallel()
+	runner := &multiScriptRunner{replies: []string{
+		`{"success":true,"started":"2026-07-22 10:00:00"}`,
+		`{"passed":false}`,
+		`{"passed":true,"completed":"2026-07-22 10:00:05"}`,
+	}}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	// maxWaitSecs/pollIntervalSecs small so the two poll ticks (false, then
+	// true) fire quickly — the test asserts behaviour, not real timing.
+	result, err := b.TestDevice(context.Background(), "AABBCCDD", 1, 0.01)
+	if err != nil {
+		t.Fatalf("TestDevice: %v", err)
+	}
+	if !result.Passed {
+		t.Fatalf("result=%+v, want Passed=true", result)
+	}
+	if result.TimedOut {
+		t.Fatalf("result=%+v, want TimedOut=false", result)
+	}
+	if result.StartedAt.IsZero() {
+		t.Error("StartedAt must be set")
+	}
+	wantCompleted := "2026-07-22 10:00:05"
+	if got := result.CompletedAt.Format(comTestTimeLayout); got != wantCompleted {
+		t.Errorf("CompletedAt=%q, want %q", got, wantCompleted)
+	}
+	if result.DurationMs < 0 {
+		t.Errorf("DurationMs=%d, want >= 0", result.DurationMs)
+	}
+}
+
+// TestCcuTestDeviceTimeoutWhenNeverPasses verifies that a device that
+// never reports passed:true surfaces TimedOut=true, Passed=false once the
+// poll window elapses — small maxWaitSecs/pollIntervalSecs keep the test
+// fast (tens of milliseconds) without faking the clock.
+func TestCcuTestDeviceTimeoutWhenNeverPasses(t *testing.T) {
+	t.Parallel()
+	runner := &multiScriptRunner{replies: []string{
+		`{"success":true,"started":"2026-07-22 10:00:00"}`,
+		`{"passed":false}`,
+	}}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	start := time.Now()
+	result, err := b.TestDevice(context.Background(), "AABBCCDD", 0.05, 0.01)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("TestDevice: %v", err)
+	}
+	if result.Passed {
+		t.Fatalf("result=%+v, want Passed=false", result)
+	}
+	if !result.TimedOut {
+		t.Fatalf("result=%+v, want TimedOut=true", result)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("timeout test took %v, want well under the 2s test-suite budget", elapsed)
+	}
+}
+
+// TestCcuTestDeviceDefaultsAppliedWhenZeroOrNegative verifies the
+// maxWaitSecs<=0 / pollIntervalSecs<=0 fallback to 30s/2s does not panic
+// or divide by zero — it exercises the branch via a context that is
+// cancelled almost immediately so the test does not actually wait 2s.
+func TestCcuTestDeviceDefaultsAppliedWhenZeroOrNegative(t *testing.T) {
+	t.Parallel()
+	runner := &multiScriptRunner{replies: []string{
+		`{"success":true,"started":"2026-07-22 10:00:00"}`,
+		`{"passed":false}`,
+	}}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := b.TestDevice(ctx, "AABBCCDD", 0, -1)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("want context.DeadlineExceeded (proving the 2s default poll interval is in effect), got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestDevice — CUxD / Homegear always ErrUnsupported (no ReGa surface)
+// ---------------------------------------------------------------------------
+
+func TestCuxdBackendTestDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewCuxdBackend(&fakeCaller{}, nil)
+	_, err := b.TestDevice(context.Background(), "CUX0001", 1, 1)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestHomegearBackendTestDeviceUnsupported(t *testing.T) {
+	t.Parallel()
+	b := NewHomegearBackend(&fakeCaller{}, nil)
+	_, err := b.TestDevice(context.Background(), "HG0001", 1, 1)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
 	}
 }

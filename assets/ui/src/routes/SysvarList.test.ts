@@ -17,6 +17,7 @@ vi.mock("$lib/api/client", () => ({
     patchSysvar: vi.fn(),
     createSysvar: vi.fn(),
     deleteSysvar: vi.fn(),
+    getSysvarUsage: vi.fn(),
     // The channel-assignment picker pulls the shared device store (and,
     // per picked device, the channel list); an empty catalogue keeps the
     // dialogs rendering without a daemon.
@@ -36,8 +37,13 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
+vi.mock("$lib/stores/confirm.svelte", () => ({
+  confirmStore: { ask: vi.fn().mockResolvedValue(false) },
+}));
+
 import { toastStore } from "$lib/stores/toast.svelte";
 import { ApiError, api } from "$lib/api/client";
+import { confirmStore } from "$lib/stores/confirm.svelte";
 import { t } from "$lib/i18n";
 import SysvarList from "./SysvarList.svelte";
 
@@ -56,6 +62,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockListSysvars.mockResolvedValue([alarmStatus]);
   mockFetchSysvars.mockResolvedValue(undefined);
+  vi.mocked(confirmStore.ask).mockResolvedValue(false);
+  vi.mocked(api.getSysvarUsage).mockResolvedValue({ sysvar: "", programs: [] });
 });
 
 afterEach(() => cleanup());
@@ -483,5 +491,36 @@ describe("SysvarList create dialog dispatch", () => {
       expect.objectContaining({ name: "Door", value_name_0: "zu", value_name_1: "offen" }),
       "",
     );
+  });
+
+  it("warns about referencing programs before deleting (SV07)", async () => {
+    vi.mocked(api.getSysvarUsage).mockResolvedValue({
+      sysvar: alarmStatus.name,
+      programs: [{ id: "P1", name: "Morning Routine", is_internal: false }],
+    });
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(mockListSysvars).toHaveBeenCalledTimes(1));
+    const delBtn = () =>
+      container.querySelector('button[title="' + t("sysvars.remove.tooltip") + '"]') as HTMLButtonElement | null;
+    await waitFor(() => expect(delBtn()).not.toBeNull());
+    await fireEvent.click(delBtn()!);
+
+    await waitFor(() => expect(confirmStore.ask).toHaveBeenCalledTimes(1));
+    const arg = vi.mocked(confirmStore.ask).mock.calls[0][0] as { body?: string };
+    expect(arg.body).toContain("Morning Routine");
+  });
+
+  it("still confirms deletion when the usage lookup fails (non-blocking)", async () => {
+    vi.mocked(api.getSysvarUsage).mockRejectedValue(new ApiError(500, null, "boom"));
+    const { container } = render(SysvarList);
+    await waitFor(() => expect(mockListSysvars).toHaveBeenCalledTimes(1));
+    const delBtn = () =>
+      container.querySelector('button[title="' + t("sysvars.remove.tooltip") + '"]') as HTMLButtonElement | null;
+    await waitFor(() => expect(delBtn()).not.toBeNull());
+    await fireEvent.click(delBtn()!);
+
+    // The confirm dialog must still appear — a usage-lookup failure must not
+    // block deletion. ask() resolves false here, so no delete follows.
+    await waitFor(() => expect(confirmStore.ask).toHaveBeenCalledTimes(1));
   });
 });

@@ -6,7 +6,169 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.46.0] — unreleased
+## [0.47.0] — unreleased
+
+### Added
+
+- **Per-channel room and function assignment.** `PATCH
+  /api/v1/devices/{addr}/channels/{no}` now accepts `rooms` and
+  `functions` (alongside `name`), and the new WebSocket commands
+  `device.set_channel_rooms` / `device.set_channel_functions` mirror it.
+  The CCU assigns rooms and Gewerke per channel, not just per device;
+  the device-detail view gains per-channel editors, and
+  `ChannelSummary` now exposes the full `rooms` array. The assignment
+  ReGa scripts resolve their target rename-proof (name lookup, then an
+  address scan), so a renamed device or channel no longer silently
+  fails to update.
+- **HmIP teach-in without internet (SGTIN + key).** The HmIP install
+  mode gains the keyserver-less LOCAL flavour: entering a device's SGTIN
+  and key from its label opens a pairing window restricted to exactly
+  that device. `POST /install-mode/interfaces` and the
+  `install_mode.enable` WebSocket command accept `sgtin` + `key`; the
+  values are normalised server-side (including the Base32 label-form key
+  conversion). The endpoint additionally accepts `central` (multi-CCU
+  disambiguation) and `device_address`.
+- **Virtual-remote key simulation.** The CCU's virtual remotes
+  (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50) render as a key grid with short
+  and long press buttons in the device detail; writable press slots on
+  other devices become interactive too. A press is a single boolean
+  write of `PRESS_SHORT` / `PRESS_LONG`, and a cell flashes on the CCU's
+  echoed press event.
+- **Restore stored device configuration.** A new `POST
+  /api/v1/devices/{addr}/config/restore` endpoint and
+  `device.restore_config` WebSocket command re-transmit the centrally
+  stored configuration (every channel's MASTER paramset plus link
+  peerings) to a device after a factory reset. Admin-gated,
+  audit-logged, and surfaced as a device-detail action for devices whose
+  interface supports it (`config_restore_supported`); HmIP-RF and
+  BidCos-RF only.
+- **Guided device replace.** `GET
+  /api/v1/devices/{addr}/replace-candidates` lists the paired devices a
+  new (inbox) device may replace, and `POST /api/v1/devices/{addr}/replace`
+  performs the swap (matching WebSocket commands
+  `device.replace_candidates` / `device.replace`). The CCU migrates
+  direct links, teams and ReGa references; the old device is unpaired.
+  Offered from the inbox for BidCos devices only (HmIP does not support
+  it); admin-gated and audit-logged.
+- **Wired-bus device search.** `POST /api/v1/install-mode/search` and the
+  `install_mode.search` WebSocket command trigger the BidCos-Wired bus
+  scan (`searchDevices`) and return the count found; the found devices
+  join the inbox for acceptance. Offered from the inbox for a BidCos-Wired
+  interface.
+- **Per-device communication test.** `POST /api/v1/devices/{addr}/test`
+  and the `device.test` WebSocket command run the CCU's per-device
+  communication / function test (a radio test frame + ACK, the same test
+  the CCU inbox runs) and report pass / fail. Surfaced as a "Test" action
+  in the device detail; radio interfaces only
+  (`communication_test_supported`).
+- **Channel team assignment.** `GET
+  /api/v1/devices/{addr}/channels/{no}/team-candidates` lists the team
+  channels a channel may join, and `PUT
+  /api/v1/devices/{addr}/channels/{no}/team` assigns it (or resets to the
+  default team); matching WebSocket commands `device.team_candidates` /
+  `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
+  HmIP-RF only (`team_supported`). A per-channel team picker appears in
+  the device detail.
+- **Named multi-series diagrams.** A new Diagrams view (`#/diagrams`)
+  lets operators compose and save charts that overlay several
+  measurement-history data points — across devices and CCUs — as private
+  or shared definitions. Backed by CRUD REST routes
+  (`GET/POST/PUT/DELETE /api/v1/diagrams`) over a new `diagram_configs`
+  table (owner + visibility, series document validated for a non-empty
+  central); each chart's data comes from the existing history feature.
+  The whole surface (nav + page) is gated on the opt-in history-recording
+  feature via a new `history.v1` info capability, so it stays hidden when
+  recording is off.
+- **Test a direct link at the device.** A new `POST
+  /api/v1/devices/{addr}/links/test` endpoint (and the operator WebSocket
+  command `links.activate_paramset`) triggers the receiver's LINK
+  paramset for a sender — the CCU config dialog's "test link" /
+  simulate-keypress probe (short or long press). It maps to XML-RPC
+  `activateLinkParamset` and **physically actuates the receiver**, so the
+  schedule/link profile editor's new "Test (short/long press)" buttons
+  confirm before firing, and the endpoint is operator-gated. CUxD /
+  Homegear interfaces report `501`. Read-only `links.test_profile` (the
+  embedded profile preview) is unchanged.
+- **Universal-light weekly-program colour preserved.** Editing a
+  universal light's (HmIP-RGBW / DRG-DALI / LSC) or HmIP-BSL weekly
+  program no longer discards the per-switch-point colour / effect. The
+  `HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE` / `_VALUE` and
+  `OUTPUT_BEHAVIOUR` fields are carried through the schedule DTO as opaque
+  values, glued to their switch point's slot so they survive reorder /
+  insert / delete deterministically (previously they could be orphaned or
+  inherited by an unrelated slot). The schedule editor shows a read-only
+  colour badge per switch point on colour-capable devices
+  (`color_capable`). Editing the colour value is a follow-up (its packed
+  layout needs live-device validation).
+- **System-variable usage overview + delete warning.** A new `GET
+  /api/v1/sysvars/{name}/usage` endpoint (and the read-only
+  `sysvars.usage` WebSocket command) lists the CCU programs that
+  reference a system variable, via the variable's native
+  `DPEnumUsagePrograms()` — the same call the CCU WebUI uses — enriched
+  from the hub's program registry (localized name, canonical id, internal
+  flag, active state). The SPA's delete-confirmation now warns which
+  programs will be affected before removing a variable; the lookup is
+  best-effort and never blocks the delete.
+- **Per-datapoint recording toggle.** When measurement history is
+  enabled, the device-detail history tab gains a "Record" switch that
+  forces recording on or off for one specific data point, overriding the
+  parameter-name glob policy; "reset to default" clears the override. New
+  `GET`/`PUT /api/v1/history/recording` endpoints back it, a sparse
+  override table lives in the history database, and the recorder consults
+  an in-memory overlay on its hot path (no per-event disk read). The
+  numeric and live-provenance guards still apply — a force-on cannot
+  record a non-numeric or non-live value. Overrides are purged on
+  device-remove / central-remove alongside the measurements.
+- **Global direct-links overview.** A new `GET /api/v1/links` endpoint
+  (and the read-only `links.list_all` WebSocket command) aggregates
+  every direct link across all centrals into one flat list; each link
+  now carries its owning `central_name` and `interface_id`. The daemon
+  reads the interface-wide roster with one empty-address `getLinks` per
+  (central, interface) — the same call the CCU WebUI uses — rather than
+  a per-channel scan. A `?central=<name>` query scopes to one CCU. A new
+  "Direct links" SPA view (`#/links`) renders the roster with search and
+  a per-CCU filter, deep-linking each row to its device for editing.
+
+### Fixed
+
+- **Intermittent `403 insufficient role` behind the remote-ingress proxy.**
+  A request reaching the daemon with both an injected admin Bearer token and a
+  browser session cookie was silently downgraded to the session's (lower) role:
+  the session resolver overwrote the already-resolved Bearer identity instead of
+  deferring to it. Admin/operator actions (`/diagnostics/*`, `/admin/*`,
+  `/auth/tokens/*`, switching a device) then failed with "insufficient role"
+  whenever a stale lower-role session cookie was present, while reads still
+  worked — and it came and went as the session expired or the `SameSite=Lax`
+  cookie rode along inside the Home Assistant ingress iframe. The session
+  resolver now yields to any Bearer/Basic identity resolved earlier (matching
+  the ingress-passthrough precedence), so a deliberate token always wins. As
+  defence in depth the remote-ingress proxy also drops the competing daemon
+  session cookie on requests where it injects an instance token (no-token
+  login mode keeps the cookie). Fixes the WebSocket handshake too, which pinned
+  the downgraded role for the connection's lifetime.
+- **Role matching when creating a direct link.** The linkable-channels
+  picker ignored the requested direction and offered every link-capable
+  channel for both roles. It now intersects the raw CCU
+  `LINK_SOURCE_ROLES` / `LINK_TARGET_ROLES` tokens — exactly like the CCU
+  WebUI — so a `sender` source only lists candidates that can receive
+  and a `receiver` source only lists candidates that can send. The roles
+  are carried onto the channel model during ingest, so the filter needs
+  no CCU roundtrip (it removes one `getLinkPeers` call per candidate).
+  Response shape unchanged; the `receiver` candidate set is now
+  correctly narrower.
+- **Heating schedule for classic BidCos thermostats.** HM-CC-RT-DN and
+  HM-CC-RT-DN-BoM store their single week profile as prefix-less
+  `ENDTIME_*` / `TEMPERATURE_*` keys directly in the device-level MASTER
+  paramset — with no `P<n>_` prefix and no dedicated schedule channel —
+  which the schedule resolver, parser and writer previously did not
+  recognise, so the schedule tab reported "not supported". The daemon
+  now resolves such devices to their device-root paramset, reads the
+  bare schema as the single profile P1, and writes it back with
+  prefix-less keys (a prefixed write would have silently no-op'd on the
+  CCU). No API contract change — a previously `404` schedule read now
+  returns `200`.
+
+## [0.46.0] — 2026-07-22
 
 ### Added
 

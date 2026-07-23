@@ -50,6 +50,14 @@ test.describe('Visual regression - light mode', () => {
     await expect(page).toHaveScreenshot('groups-light.png');
   });
 
+  test('Links light', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/links');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('links-light.png');
+  });
+
   test('Sysvars empty state light', async ({ page }) => {
     await page.route('**/api/v1/sysvars', async (route) => {
       await route.fulfill({ json: [] });
@@ -128,6 +136,14 @@ test.describe('Visual regression - dark mode', () => {
     await page.waitForTimeout(1500);
     await addStylesForStableScreenshots(page);
     await expect(page).toHaveScreenshot('groups-dark.png');
+  });
+
+  test('Links dark', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/links');
+    await page.waitForSelector('#main');
+    await page.waitForTimeout(1500);
+    await addStylesForStableScreenshots(page);
+    await expect(page).toHaveScreenshot('links-dark.png');
   });
 
   test('Sysvars empty state dark', async ({ page }) => {

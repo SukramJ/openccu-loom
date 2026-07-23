@@ -352,6 +352,44 @@ func TestCcuBackendPutLinkParamsetDispatch(t *testing.T) {
 	}
 }
 
+func TestCcuBackendActivateLinkParamsetDispatch(t *testing.T) {
+	t.Parallel()
+	for _, longPress := range []bool{false, true} {
+		x := &fakeCaller{reply: nil}
+		b := NewCcuBackend(x, nil, nil)
+		if err := b.ActivateLinkParamset(context.Background(), "0001ABCD:3", "0002DCBA:1", longPress); err != nil {
+			t.Fatalf("ActivateLinkParamset: %v", err)
+		}
+		method, args, ok := loadArgs(x)
+		if !ok || method != "activateLinkParamset" {
+			t.Fatalf("method=%s", method)
+		}
+		if len(args) != 3 || args[0] != "0001ABCD:3" || args[1] != "0002DCBA:1" || args[2] != longPress {
+			t.Fatalf("args=%v, want [0001ABCD:3 0002DCBA:1 %v]", args, longPress)
+		}
+	}
+}
+
+func TestCcuBackendActivateLinkParamsetNotWired(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(nil, nil, nil)
+	if err := b.ActivateLinkParamset(context.Background(), "A:1", "B:1", false); err == nil {
+		t.Error("expected ErrNotWired for a nil xml caller")
+	}
+}
+
+func TestCuxdAndHomegearActivateLinkParamsetUnsupported(t *testing.T) {
+	t.Parallel()
+	var cuxd CuxdBackend
+	if err := cuxd.ActivateLinkParamset(context.Background(), "A:1", "B:1", false); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("CUxD: want ErrUnsupported, got %v", err)
+	}
+	var hg HomegearBackend
+	if err := hg.ActivateLinkParamset(context.Background(), "A:1", "B:1", false); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("Homegear: want ErrUnsupported, got %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Init / Deinit — delegate to Announcer
 // ---------------------------------------------------------------------------

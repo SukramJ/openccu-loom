@@ -19,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -79,12 +80,20 @@ var scheduleWeekdays = []string{
 }
 
 // slotPattern matches a single schedule-paramset key. Capture groups:
-//  1. Profile index (1..6)
+//  1. Profile index (1..6) — EMPTY for the prefix-less schema
 //  2. Field (ENDTIME or TEMPERATURE)
 //  3. Weekday name
 //  4. Slot number (1..13)
+//
+// The P<n>_ prefix is optional: classic BidCos thermostats
+// (HM-CC-RT-DN, HM-CC-RT-DN-BoM) carry a single week profile as bare
+// ENDTIME_<DAY>_<N> / TEMPERATURE_<DAY>_<N> keys in the device-level
+// MASTER paramset, with no profile prefix and no dedicated channel.
+// A bare key is treated as profile P1 throughout. The weekday
+// alternation is pinned so bare device-master keys like
+// TEMPERATURE_OFFSET never match.
 var slotPattern = regexp.MustCompile(
-	`^P([1-6])_(ENDTIME|TEMPERATURE)_(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)_([0-9]+)$`,
+	`^(?:P([1-6])_)?(ENDTIME|TEMPERATURE)_(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)_([0-9]+)$`,
 )
 
 // climateScheduleChannelTypes lists the channel types that carry the
@@ -163,6 +172,17 @@ func (s *SchedulesDomain) FindScheduleChannel(ctx context.Context, deviceAddress
 			}
 			if hasScheduleParams(values) || hasSimpleScheduleParams(values) {
 				return ch.Number, nil
+			}
+		}
+		// Path 3: classic BidCos thermostats (HM-CC-RT-DN, HM-CC-RT-DN-BoM)
+		// carry their single week profile as bare ENDTIME_/TEMPERATURE_
+		// keys directly in the device-level MASTER paramset — no P<n>_
+		// prefix and no dedicated channel. Probe the device-root MASTER
+		// as a last resort and address it via the synthetic device
+		// channel number.
+		if root, err := backend.GetParamset(ctx, deviceAddress, hmenum.ParamsetKeyMaster); err == nil {
+			if hasScheduleParams(root) || hasSimpleScheduleParams(root) {
+				return device.ChannelNumberDevice, nil
 			}
 		}
 		return 0, ErrNoSchedule
@@ -363,9 +383,24 @@ func (s *SchedulesDomain) GetClimateSchedule(
 			Kind:          "simple",
 			Domain:        domain,
 			SimpleEntries: entries,
+			ColorCapable:  hasColorScheduleParams(values),
 		}, nil
 	}
 	return nil, ErrNoSchedule
+}
+
+// hasColorScheduleParams reports whether the MASTER values carry any
+// per-switch-point colour/effect field (universal lights) or an
+// OUTPUT_BEHAVIOUR field (HmIP-BSL) — the signal the SPA gates its
+// colour summary on.
+func hasColorScheduleParams(raw map[string]any) bool {
+	for k := range raw {
+		if strings.HasSuffix(k, "_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE") ||
+			strings.HasSuffix(k, "_WP_OUTPUT_BEHAVIOUR") {
+			return true
+		}
+	}
+	return false
 }
 
 // detectScheduleDomain inspects the device's main channel types to
@@ -700,6 +735,12 @@ func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nol
 		rampBaseSeen     bool
 		rampFactor       int
 		rampFactorOK     bool
+		colorType        int
+		colorTypeSeen    bool
+		colorValue       int
+		colorValueSeen   bool
+		outputBehaviour  int
+		outputBehSeen    bool
 		seen             bool
 	}
 	bySlot := make(map[int]*slot)
@@ -780,6 +821,21 @@ func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nol
 				s.rampFactor = i
 				s.rampFactorOK = true
 			}
+		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":
+			if i, ok := coerceInt(v); ok {
+				s.colorType = i
+				s.colorTypeSeen = true
+			}
+		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE":
+			if i, ok := coerceInt(v); ok {
+				s.colorValue = i
+				s.colorValueSeen = true
+			}
+		case "OUTPUT_BEHAVIOUR":
+			if i, ok := coerceInt(v); ok {
+				s.outputBehaviour = i
+				s.outputBehSeen = true
+			}
 		}
 	}
 	keys := make([]int, 0, len(bySlot))
@@ -834,6 +890,20 @@ func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nol
 		}
 		if s.rampBaseSeen && s.rampFactorOK && s.rampFactor > 0 && s.rampFactor <= maxScheduleFactor {
 			entry.RampTime = formatTimeBaseFactor(s.rampBase, s.rampFactor)
+		}
+		// Universal-light colour / effect (opaque, lossless). 0 is a
+		// legitimate value, so presence is tracked separately from value.
+		if s.colorTypeSeen {
+			ct := s.colorType
+			entry.ColorType = &ct
+		}
+		if s.colorValueSeen {
+			cv := s.colorValue
+			entry.ColorValue = &cv
+		}
+		if s.outputBehSeen {
+			ob := s.outputBehaviour
+			entry.OutputBehaviour = &ob
 		}
 		out = append(out, entry)
 	}
@@ -1121,6 +1191,22 @@ func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry) (map[string]an
 			out[prefix+"RAMP_TIME_BASE"] = b
 			out[prefix+"RAMP_TIME_FACTOR"] = f
 		}
+
+		// Universal-light colour / effect (opaque). Emit only when the
+		// caller carried a value (nil = leave the CCU's stored value
+		// untouched via the sparse merge). Writing the read-back value
+		// re-glues the colour to this entry's current slot, so it survives
+		// reorder / insert / delete deterministically. 0 is legitimate and
+		// is written when present.
+		if e.ColorType != nil {
+			out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"] = *e.ColorType
+		}
+		if e.ColorValue != nil {
+			out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"] = *e.ColorValue
+		}
+		if e.OutputBehaviour != nil {
+			out[prefix+"OUTPUT_BEHAVIOUR"] = *e.OutputBehaviour
+		}
 	}
 	// Deactivate every unused slot (1..24) so deleted entries vanish on the CCU.
 	for n := 1; n <= 24; n++ {
@@ -1185,39 +1271,40 @@ func (s *SchedulesDomain) PutClimateSchedule(
 		return errors.New("schedules: nil payload")
 	}
 	var raw map[string]any
+	// The MASTER paramset description drives two decisions below:
+	// which schedule fields the device advertises (unsupported keys are
+	// filtered out), and whether a climate device uses the bare
+	// (prefix-less) schema.
+	descKeys := scheduleDescKeys(ctx, backend, channelAddr)
 	switch sched.Kind {
 	case "simple":
 		raw, err = serializeSimpleScheduleWithDomain(sched.SimpleEntries, sched.Domain)
-		if err == nil && len(raw) > 0 {
+		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
 			// Filter out schedule fields the device does not advertise in its
 			// MASTER paramset description. Devices like HmIP-DLD expose only a
 			// subset of WP_* keys; sending unsupported fields causes the CCU to
 			// silently reject the write and leave CONFIG_PENDING set.
-			if desc, descErr := backend.GetParamsetDescription(ctx, channelAddr, hmenum.ParamsetKeyMaster); descErr == nil {
-				descKeys := make(map[string]struct{}, len(desc))
-				for k := range desc {
-					descKeys[k] = struct{}{}
-				}
-				supported := weekprofile.ExtractSupportedScheduleFields(descKeys)
-				raw = weekprofile.FilterRawScheduleByFields(raw, supported)
-			}
+			supported := weekprofile.ExtractSupportedScheduleFields(descKeys)
+			raw = weekprofile.FilterRawScheduleByFields(raw, supported)
 		}
 	case "climate", "":
-		raw, err = serializeClimateSchedule(sched)
-		if err == nil && len(raw) > 0 {
+		// A bare-schema thermostat (HM-CC-RT-DN) must receive prefix-less
+		// keys — sending the P<n>_ form silently no-ops on the CCU, and
+		// the field filter below does not catch it (ExtractSupportedScheduleFields
+		// only recognises WP_ keys), so this branch is load-bearing.
+		if climateScheduleIsBare(descKeys) {
+			raw, err = serializeClimateScheduleBare(sched)
+		} else {
+			raw, err = serializeClimateSchedule(sched)
+		}
+		if err == nil && len(raw) > 0 && len(descKeys) > 0 {
 			// Filter out climate-schedule fields the device does not expose in
 			// its MASTER paramset description. Devices differ in which
-			// P<n>_ENDTIME_*/P<n>_TEMPERATURE_* keys they support; sending
-			// unsupported keys causes the CCU to reject the write and leave
-			// CONFIG_PENDING set.
-			if desc, descErr := backend.GetParamsetDescription(ctx, channelAddr, hmenum.ParamsetKeyMaster); descErr == nil {
-				descKeys := make(map[string]struct{}, len(desc))
-				for k := range desc {
-					descKeys[k] = struct{}{}
-				}
-				supported := weekprofile.ExtractSupportedScheduleFields(descKeys)
-				raw = weekprofile.FilterRawScheduleByFields(raw, supported)
-			}
+			// ENDTIME_*/TEMPERATURE_* keys they support; sending unsupported
+			// keys causes the CCU to reject the write and leave CONFIG_PENDING
+			// set.
+			supported := weekprofile.ExtractSupportedScheduleFields(descKeys)
+			raw = weekprofile.FilterRawScheduleByFields(raw, supported)
 		}
 	default:
 		return fmt.Errorf("schedules: unknown kind %q", sched.Kind)
@@ -1333,11 +1420,23 @@ func (s *SchedulesDomain) resolve(
 		if !ok {
 			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}
-		return b, fmt.Sprintf("%s:%d", deviceAddress, channelNo), nil
+		return b, scheduleChannelAddress(deviceAddress, channelNo), nil
 	}
 	// Device exists in no central — see FindScheduleChannel for the
 	// rationale; mapped to 404 by the REST handler.
 	return nil, "", fmt.Errorf("%w: device %s", hmerr.ErrDescriptionNotFound, deviceAddress)
+}
+
+// scheduleChannelAddress builds the paramset address for a schedule
+// channel. The synthetic device-root channel ([device.ChannelNumberDevice])
+// addresses the bare device-level MASTER paramset used by classic
+// BidCos thermostats (HM-CC-RT-DN); every other channel gets the usual
+// "<device>:<channel>" form.
+func scheduleChannelAddress(deviceAddress string, channelNo int) string {
+	if channelNo == device.ChannelNumberDevice {
+		return deviceAddress
+	}
+	return fmt.Sprintf("%s:%d", deviceAddress, channelNo)
 }
 
 // --- Parsing ------------------------------------------------------
@@ -1371,7 +1470,12 @@ func parseClimateSchedule(raw map[string]any) (*hmapi.ClimateSchedule, error) {
 		if m == nil {
 			continue
 		}
-		profile, _ := strconv.Atoi(m[1])
+		// A bare (prefix-less) key has an empty profile group and is
+		// treated as the single profile P1.
+		profile := 1
+		if m[1] != "" {
+			profile, _ = strconv.Atoi(m[1])
+		}
 		slot, _ := strconv.Atoi(m[4])
 		k := slotKey{profile: profile, weekday: m[3], slot: slot}
 		sv := collected[k]
@@ -1559,6 +1663,75 @@ func serializeClimateSchedule(sched *hmapi.ClimateSchedule) (map[string]any, err
 		}
 	}
 	return out, nil
+}
+
+// serializeClimateScheduleBare converts the DTO into the bare
+// (prefix-less) CCU paramset shape used by classic BidCos thermostats
+// (HM-CC-RT-DN, HM-CC-RT-DN-BoM). These devices expose exactly one
+// week profile; a non-P1 profile in the payload is rejected rather
+// than silently dropped so callers get a clear error instead of a
+// no-op write.
+func serializeClimateScheduleBare(sched *hmapi.ClimateSchedule) (map[string]any, error) {
+	out := make(map[string]any)
+	for profileID, profile := range sched.Profiles {
+		if profileID != "P1" {
+			return nil, fmt.Errorf(
+				"schedules: device exposes a single profile; cannot write %q", profileID,
+			)
+		}
+		for weekday, wd := range profile.Weekdays {
+			if !isValidWeekdayName(weekday) {
+				return nil, fmt.Errorf("schedules: invalid weekday %q", weekday)
+			}
+			slots, err := expandWeekday(wd)
+			if err != nil {
+				return nil, fmt.Errorf("%s/%s: %w", profileID, weekday, err)
+			}
+			for n, slot := range slots {
+				out[fmt.Sprintf("ENDTIME_%s_%d", weekday, n+1)] = slot.endMin
+				out[fmt.Sprintf("TEMPERATURE_%s_%d", weekday, n+1)] = slot.temp
+			}
+		}
+	}
+	return out, nil
+}
+
+// scheduleDescKeys reads the MASTER paramset description of a channel
+// and returns its key set. Returns nil on error so callers treat an
+// unavailable description as "no filtering and prefixed schema".
+func scheduleDescKeys(
+	ctx context.Context, backend paramsetBackend, channelAddr string,
+) map[string]struct{} {
+	desc, err := backend.GetParamsetDescription(ctx, channelAddr, hmenum.ParamsetKeyMaster)
+	if err != nil {
+		return nil
+	}
+	keys := make(map[string]struct{}, len(desc))
+	for k := range desc {
+		keys[k] = struct{}{}
+	}
+	return keys
+}
+
+// climateScheduleIsBare reports whether a device carries its climate
+// schedule as bare ENDTIME_/TEMPERATURE_ keys in the MASTER paramset
+// (classic BidCos HM-CC-RT-DN) rather than the prefixed P<n>_ form.
+// True iff at least one bare schedule key exists and no prefixed
+// P<n>_ key does; a nil/empty key set (unreadable description) defaults
+// to the prefixed schema.
+func climateScheduleIsBare(descKeys map[string]struct{}) bool {
+	hasBare := false
+	for k := range descKeys {
+		m := slotPattern.FindStringSubmatch(k)
+		if m == nil {
+			continue
+		}
+		if m[1] != "" {
+			return false // a prefixed P<n>_ key exists — not a bare-schema device
+		}
+		hasBare = true
+	}
+	return hasBare
 }
 
 type rawSlot struct {

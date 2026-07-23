@@ -7,11 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -230,6 +232,33 @@ func (a *DeviceAdminDomain) UpdateFirmware(ctx context.Context, address string) 
 	return backend.UpdateFirmware(ctx, address)
 }
 
+// RestoreDeviceConfig re-transmits the centrally stored configuration
+// (MASTER paramsets of every channel plus link peerings) to the device
+// via `restoreConfigToDevice` (XML-RPC). Only rfd (BidCos-RF) and
+// HMIPServer (HmIP-RF) expose the method; devices on any other
+// interface answer [backends.ErrUnsupported] before a wire call is
+// made. The CCU runs the transfer asynchronously (CONFIG_PENDING).
+func (a *DeviceAdminDomain) RestoreDeviceConfig(ctx context.Context, address string) error {
+	if a.registry == nil || a.writer == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		if !dev.Interface.SupportsConfigRestore() {
+			return fmt.Errorf("restore config: interface %s: %w", dev.Interface, backends.ErrUnsupported)
+		}
+		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
+		if !ok {
+			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
+		}
+		return backend.RestoreConfigToDevice(ctx, address)
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
 // InterfaceDutyCycle returns the transmit duty cycle in percent (0..100)
 // of the radio interface the device is paired to, read from the owning
 // central's per-interface BidCos utilisation cache (populated by the
@@ -318,4 +347,92 @@ func (a *DeviceAdminDomain) SetFunctions(
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// SetChannelRooms replaces a single channel's room assignments via the
+// central's hub-writer. The Rega script resolves channel addresses the
+// same way it resolves device addresses, so the write reuses the
+// device-level set_device_rooms path with the channel address. The live
+// model is stamped eagerly: the channel gets the new set verbatim and
+// the parent device's Rooms are recomputed as the union over all
+// channels; device-direct assignments reappear with the next periodic
+// assignment refresh.
+func (a *DeviceAdminDomain) SetChannelRooms(
+	ctx context.Context, deviceAddr string, channelNo int, rooms []string,
+) error {
+	return a.setChannelAssignment(ctx, deviceAddr, channelNo,
+		func(ctx context.Context, u *central.Unit, channelAddress string) error {
+			return u.HubModel.SetDeviceRoomsRemote(ctx, channelAddress, rooms)
+		},
+		func(dev *device.Device, ch *device.Channel) {
+			ch.Rooms = append([]string(nil), rooms...)
+			dev.Rooms = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Rooms })
+		})
+}
+
+// SetChannelFunctions replaces a single channel's function (Gewerk)
+// assignments, mirroring [DeviceAdminDomain.SetChannelRooms].
+func (a *DeviceAdminDomain) SetChannelFunctions(
+	ctx context.Context, deviceAddr string, channelNo int, functions []string,
+) error {
+	return a.setChannelAssignment(ctx, deviceAddr, channelNo,
+		func(ctx context.Context, u *central.Unit, channelAddress string) error {
+			return u.HubModel.SetDeviceFunctionsRemote(ctx, channelAddress, functions)
+		},
+		func(dev *device.Device, ch *device.Channel) {
+			ch.Functions = append([]string(nil), functions...)
+			dev.Functions = unionChannelAssignments(dev, func(c *device.Channel) []string { return c.Functions })
+		})
+}
+
+// setChannelAssignment locates the owning central + channel, dispatches
+// the CCU write and, on success, stamps the live model so reads stay
+// coherent until the next periodic assignment refresh reconciles with
+// the CCU.
+func (a *DeviceAdminDomain) setChannelAssignment(
+	ctx context.Context, deviceAddr string, channelNo int,
+	write func(ctx context.Context, u *central.Unit, channelAddress string) error,
+	stamp func(dev *device.Device, ch *device.Channel),
+) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	channelAddress := deviceAddr + ":" + strconv.Itoa(channelNo)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddr)
+		if !ok {
+			continue
+		}
+		ch := dev.Channel(channelAddress)
+		if ch == nil {
+			return fmt.Errorf("%w: %s", interfaces.ErrChannelNotFound, channelAddress)
+		}
+		if u.HubModel == nil {
+			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, u.Name())
+		}
+		if err := write(ctx, u, channelAddress); err != nil {
+			return err
+		}
+		stamp(dev, ch)
+		return nil
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddr)
+}
+
+// unionChannelAssignments collects the sorted union of a per-channel
+// assignment slice across every channel of the device.
+func unionChannelAssignments(dev *device.Device, pick func(*device.Channel) []string) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, ch := range dev.Channels() {
+		for _, name := range pick(ch) {
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

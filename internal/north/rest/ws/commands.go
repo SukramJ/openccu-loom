@@ -32,10 +32,12 @@ var writeCommandRoles = map[string]auth.Role{
 	// `/backups` and `/admin/cache/clear` routes (both `.With(admin)`).
 	// programs.delete mirrors DELETE /programs/{id} (admin-gated like
 	// DELETE /devices — deletion is irreversible).
-	"backup.trigger":  auth.RoleAdmin,
-	"backups.trigger": auth.RoleAdmin,
-	"ccu.cache_clear": auth.RoleAdmin,
-	"programs.delete": auth.RoleAdmin,
+	"backup.trigger":        auth.RoleAdmin,
+	"backups.trigger":       auth.RoleAdmin,
+	"ccu.cache_clear":       auth.RoleAdmin,
+	"device.replace":        auth.RoleAdmin,
+	"device.restore_config": auth.RoleAdmin,
+	"programs.delete":       auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.
 	"alarm_messages.ack":      auth.RoleOperator,
@@ -68,13 +70,19 @@ var writeCommandRoles = map[string]auth.Role{
 	"config.session.undo":                 auth.RoleOperator,
 	"device.install_mode":                 auth.RoleOperator,
 	"device.rename":                       auth.RoleOperator,
+	"device.set_team":                     auth.RoleOperator,
+	"device.test":                         auth.RoleOperator,
 	"device.rename_channel":               auth.RoleOperator,
+	"device.set_channel_functions":        auth.RoleOperator,
+	"device.set_channel_rooms":            auth.RoleOperator,
 	"firmware.refresh":                    auth.RoleOperator,
 	"firmware.update":                     auth.RoleOperator,
 	"inbox.accept":                        auth.RoleOperator,
 	"incidents.clear":                     auth.RoleOperator,
 	"install_mode.disable":                auth.RoleOperator,
 	"install_mode.enable":                 auth.RoleOperator,
+	"install_mode.search":                 auth.RoleOperator,
+	"links.activate_paramset":             auth.RoleOperator,
 	"links.add":                           auth.RoleOperator,
 	"links.put_paramset":                  auth.RoleOperator,
 	"links.remove":                        auth.RoleOperator,
@@ -145,6 +153,8 @@ var readOnlyCommands = map[string]struct{}{
 	"central.system_health":       {},
 	"change_history.list":         {},
 	"config.session.changes":      {},
+	"device.replace_candidates":   {},
+	"device.team_candidates":      {},
 	"devices.export_definition":   {},
 	"devices.get":                 {},
 	"devices.list":                {},
@@ -159,6 +169,7 @@ var readOnlyCommands = map[string]struct{}{
 	"links.get_profiles":          {},
 	"links.linkable_channels":     {},
 	"links.list":                  {},
+	"links.list_all":              {},
 	"links.test_profile":          {},
 	"master_profiles.get":         {},
 	"master_profiles.list":        {},
@@ -179,6 +190,7 @@ var readOnlyCommands = map[string]struct{}{
 	"system.user_permissions":     {},
 	"sysvars.fetch":               {},
 	"sysvars.list":                {},
+	"sysvars.usage":               {},
 }
 
 // CommandHandler implements one RPC-style WebSocket command. The returned

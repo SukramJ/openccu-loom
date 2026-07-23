@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -28,6 +29,7 @@ type stubDeviceAdmin struct {
 	updateFWErr         error
 	setRoomsErr         error
 	setFunctionsErr     error
+	restoreErr          error
 	lastAddress         string
 	lastNewName         string
 	lastIncludeChannels bool
@@ -87,6 +89,25 @@ func (s *stubDeviceAdmin) SetFunctions(_ context.Context, addr string, functions
 	s.lastAddress = addr
 	s.lastFunctions = functions
 	return s.setFunctionsErr
+}
+
+func (s *stubDeviceAdmin) SetChannelRooms(_ context.Context, deviceAddr string, channelNo int, rooms []string) error {
+	s.lastAddress = deviceAddr
+	s.lastChannelNo = channelNo
+	s.lastRooms = rooms
+	return s.setRoomsErr
+}
+
+func (s *stubDeviceAdmin) SetChannelFunctions(_ context.Context, deviceAddr string, channelNo int, functions []string) error {
+	s.lastAddress = deviceAddr
+	s.lastChannelNo = channelNo
+	s.lastFunctions = functions
+	return s.setFunctionsErr
+}
+
+func (s *stubDeviceAdmin) RestoreDeviceConfig(_ context.Context, addr string) error {
+	s.lastAddress = addr
+	return s.restoreErr
 }
 
 func TestDeleteDevice_HappyPath(t *testing.T) {
@@ -237,7 +258,7 @@ func TestPatchDevice_RenameHappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -253,7 +274,7 @@ func TestPatchDevice_AdminNil_Returns503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(nil).ServeHTTP(w, req)
+	PatchDevice(nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
@@ -267,7 +288,7 @@ func TestPatchDevice_NoFields_Returns422(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d", w.Code)
@@ -280,7 +301,7 @@ func TestPatchDevice_InvalidJSON_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader("NOT JSON"))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -294,7 +315,7 @@ func TestPatchDevice_SetRoomsHappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -687,7 +708,7 @@ func TestPatchDevice_RenameError_Returns502(t *testing.T) {
 		strings.NewReader(`{"name":"NewName"}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001:0"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
@@ -701,7 +722,7 @@ func TestPatchDevice_SetRoomsError_Returns502(t *testing.T) {
 		strings.NewReader(`{"rooms":["Living Room"]}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001:0"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
@@ -715,7 +736,7 @@ func TestPatchDevice_SetFunctionsHappyPath_Returns202(t *testing.T) {
 		strings.NewReader(`{"functions":["Lights"]}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001:0"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -729,7 +750,7 @@ func TestPatchDevice_SetFunctionsError_Returns502(t *testing.T) {
 		strings.NewReader(`{"functions":["Lights"]}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001:0"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
@@ -743,7 +764,7 @@ func TestPatchDevice_RenameIncludeChannels_ForwardsFlag(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -760,7 +781,7 @@ func TestPatchDevice_RenameDefaultsIncludeChannelsFalse(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -777,7 +798,7 @@ func TestPatchDevice_RenameUnsupported_Returns422(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
-	PatchDevice(admin).ServeHTTP(w, req)
+	PatchDevice(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
@@ -791,7 +812,7 @@ func TestPatchChannel_HappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
-	PatchChannel(admin).ServeHTTP(w, req)
+	PatchChannel(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -806,7 +827,7 @@ func TestPatchChannel_NilAdmin_Returns503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
-	PatchChannel(nil).ServeHTTP(w, req)
+	PatchChannel(nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
@@ -819,7 +840,7 @@ func TestPatchChannel_NoName_Returns422(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
-	PatchChannel(admin).ServeHTTP(w, req)
+	PatchChannel(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d", w.Code)
@@ -832,7 +853,7 @@ func TestPatchChannel_InvalidChannelNo_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "abc"}))
 	w := httptest.NewRecorder()
-	PatchChannel(admin).ServeHTTP(w, req)
+	PatchChannel(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -845,7 +866,7 @@ func TestPatchChannel_Unsupported_Returns422(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
-	PatchChannel(admin).ServeHTTP(w, req)
+	PatchChannel(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d", w.Code)
@@ -858,10 +879,239 @@ func TestPatchChannel_Error_Returns502(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"x"}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
-	PatchChannel(admin).ServeHTTP(w, req)
+	PatchChannel(admin, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d", w.Code)
+	}
+}
+
+// --- PatchChannel room/function assignment ---
+
+func TestPatchChannel_SetChannelRoomsHappyPath(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"rooms":["Living Room"]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastAddress != "DEV001" || admin.lastChannelNo != 2 {
+		t.Fatalf("expected addr=DEV001 channel=2, got addr=%q channel=%d", admin.lastAddress, admin.lastChannelNo)
+	}
+	if len(admin.lastRooms) != 1 || admin.lastRooms[0] != "Living Room" {
+		t.Fatalf("expected rooms=[Living Room], got %v", admin.lastRooms)
+	}
+}
+
+func TestPatchChannel_SetChannelFunctionsHappyPath(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"functions":["Lights"]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastAddress != "DEV001" || admin.lastChannelNo != 2 {
+		t.Fatalf("expected addr=DEV001 channel=2, got addr=%q channel=%d", admin.lastAddress, admin.lastChannelNo)
+	}
+	if len(admin.lastFunctions) != 1 || admin.lastFunctions[0] != "Lights" {
+		t.Fatalf("expected functions=[Lights], got %v", admin.lastFunctions)
+	}
+}
+
+// TestPatchChannel_NameAndRoomsCombined verifies that a body naming both
+// `name` and `rooms` drives both the rename and the room-assignment call
+// on the same request — the two fields are independent patchable facets,
+// not mutually exclusive.
+func TestPatchChannel_NameAndRoomsCombined(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"name":"Kitchen Light","rooms":["Living Room"]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastNewName != "Kitchen Light" {
+		t.Fatalf("expected rename to be applied, got name=%q", admin.lastNewName)
+	}
+	if len(admin.lastRooms) != 1 || admin.lastRooms[0] != "Living Room" {
+		t.Fatalf("expected rooms to be applied, got %v", admin.lastRooms)
+	}
+}
+
+// TestPatchChannel_ExplicitEmptyRoomsArray_ForwardsNonNilEmptySlice verifies
+// the channel-level patch preserves the same "explicit empty array clears
+// the assignment" pointer semantics as the device-level patch and
+// AcceptInboxDevice: `"rooms":[]` must decode to a non-nil, zero-length
+// slice, not to nil (which would mean "leave untouched").
+func TestPatchChannel_ExplicitEmptyRoomsArray_ForwardsNonNilEmptySlice(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	body := strings.NewReader(`{"rooms":[]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastRooms == nil {
+		t.Fatal("expected a non-nil empty rooms slice, got nil (would mean untouched)")
+	}
+	if len(admin.lastRooms) != 0 {
+		t.Fatalf("expected zero rooms, got %+v", admin.lastRooms)
+	}
+}
+
+// TestPatchChannel_AllFieldsOmitted_Returns422 pins the room/function patch
+// alongside rename under the same "no patchable field supplied" gate: a
+// body with none of name/rooms/functions set is rejected before any admin
+// call is attempted.
+func TestPatchChannel_AllFieldsOmitted_Returns422(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{}`))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+	if admin.lastAddress != "" {
+		t.Fatal("no admin call must be attempted when every field is omitted")
+	}
+}
+
+// TestPatchChannel_RoomsErrorChannelNotFound_Returns404 verifies that a
+// SetChannelRooms failure wrapping interfaces.ErrChannelNotFound maps to
+// 404 — naming a channel number the device does not have is the caller's
+// mistake, not an upstream failure.
+func TestPatchChannel_RoomsErrorChannelNotFound_Returns404(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{setRoomsErr: fmt.Errorf("%w: DEV001:9", interfaces.ErrChannelNotFound)}
+	body := strings.NewReader(`{"rooms":["Living Room"]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "9"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestPatchChannel_RoomsErrorGeneric_Returns502 verifies that a
+// SetChannelRooms failure NOT wrapping interfaces.ErrChannelNotFound maps
+// to 502 (upstream/CCU failure), matching the device-level SetRooms
+// error-mapping convention.
+func TestPatchChannel_RoomsErrorGeneric_Returns502(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{setRoomsErr: errors.New("ccu unreachable")}
+	body := strings.NewReader(`{"rooms":["Living Room"]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// --- Audit recording for room/function assignment ---
+//
+// captureRecorder is defined in admin_mqtt_reload_test.go and reused here.
+
+// TestPatchChannel_RoomsAudit_RecordsAssignmentEntry verifies a successful
+// channel-level room assignment records exactly one audit entry tagged
+// audit.ActionDeviceAssignment against the "<addr>:<no>" channel address.
+func TestPatchChannel_RoomsAudit_RecordsAssignmentEntry(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	rec := &captureRecorder{}
+	body := strings.NewReader(`{"rooms":["Living Room"]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected exactly 1 audit entry, got %d: %+v", len(rec.entries), rec.entries)
+	}
+	e := rec.entries[0]
+	if e.Action != audit.ActionDeviceAssignment {
+		t.Errorf("expected action=%q, got %q", audit.ActionDeviceAssignment, e.Action)
+	}
+	if e.DeviceAddress != "DEV001:2" {
+		t.Errorf("expected device_address=%q, got %q", "DEV001:2", e.DeviceAddress)
+	}
+}
+
+// TestPatchChannel_NameOnly_RecordsNoAuditEntry verifies a rename-only
+// channel patch records nothing — the name change is already observable
+// through the device model itself.
+func TestPatchChannel_NameOnly_RecordsNoAuditEntry(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	rec := &captureRecorder{}
+	body := strings.NewReader(`{"name":"Kitchen Light"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "2"}))
+	w := httptest.NewRecorder()
+	PatchChannel(admin, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(rec.entries) != 0 {
+		t.Fatalf("expected no audit entry for a rename-only patch, got %+v", rec.entries)
+	}
+}
+
+// TestPatchDevice_RoomsAudit_RecordsAssignmentEntry verifies the
+// device-level twin of TestPatchChannel_RoomsAudit_RecordsAssignmentEntry:
+// a successful device-level room assignment records one audit entry
+// against the bare device address.
+func TestPatchDevice_RoomsAudit_RecordsAssignmentEntry(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{}
+	rec := &captureRecorder{}
+	body := strings.NewReader(`{"rooms":["Living Room"]}`)
+	req := httptest.NewRequest(http.MethodPatch, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	PatchDevice(admin, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected exactly 1 audit entry, got %d: %+v", len(rec.entries), rec.entries)
+	}
+	e := rec.entries[0]
+	if e.Action != audit.ActionDeviceAssignment {
+		t.Errorf("expected action=%q, got %q", audit.ActionDeviceAssignment, e.Action)
+	}
+	if e.DeviceAddress != "DEV001" {
+		t.Errorf("expected device_address=%q, got %q", "DEV001", e.DeviceAddress)
 	}
 }
 

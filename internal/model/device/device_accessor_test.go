@@ -426,6 +426,49 @@ func TestChannelLinkPeerTargetCategoriesAfterSet(t *testing.T) {
 	}
 }
 
+// ─── Channel.LinkRoles (raw CCU LINK_*_ROLES) ────────────────────────
+
+func TestChannelLinkRolesDefaultNil(t *testing.T) {
+	t.Parallel()
+	d := New(Config{Address: "0001ABCD", Model: "HmIP-WRC", Name: "Test"})
+	ch := d.AddChannel("0001ABCD:1", 1, "KEY_TRANSCEIVER", "VALUES")
+	if r := ch.LinkSourceRoles(); r != nil {
+		t.Errorf("LinkSourceRoles() default = %v, want nil", r)
+	}
+	if r := ch.LinkTargetRoles(); r != nil {
+		t.Errorf("LinkTargetRoles() default = %v, want nil", r)
+	}
+}
+
+func TestChannelSetLinkRolesRoundTrip(t *testing.T) {
+	t.Parallel()
+	d := New(Config{Address: "0001ABCD", Model: "HmIP-WRC", Name: "Test"})
+	ch := d.AddChannel("0001ABCD:1", 1, "KEY_TRANSCEIVER", "VALUES")
+	ch.SetLinkRoles([]string{"SWITCH", "REMOTECONTROL_RECEIVER"}, []string{"WEATHER"})
+
+	src := ch.LinkSourceRoles()
+	if len(src) != 2 || src[0] != "SWITCH" || src[1] != "REMOTECONTROL_RECEIVER" {
+		t.Errorf("LinkSourceRoles() = %v", src)
+	}
+	tgt := ch.LinkTargetRoles()
+	if len(tgt) != 1 || tgt[0] != "WEATHER" {
+		t.Errorf("LinkTargetRoles() = %v", tgt)
+	}
+}
+
+func TestChannelLinkRolesReturnsCopy(t *testing.T) {
+	t.Parallel()
+	d := New(Config{Address: "0001ABCD", Model: "HmIP-WRC", Name: "Test"})
+	ch := d.AddChannel("0001ABCD:1", 1, "KEY_TRANSCEIVER", "VALUES")
+	ch.SetLinkRoles([]string{"SWITCH"}, []string{"WEATHER"})
+
+	got := ch.LinkSourceRoles()
+	got[0] = "mutated"
+	if again := ch.LinkSourceRoles(); again[0] == "mutated" {
+		t.Fatal("LinkSourceRoles() must return a copy, not share the slice")
+	}
+}
+
 // ─── Update.Name / Update.FullName ─────────────────────────────
 
 // TestUpdateNameReturnsUpdate verifies DpUpdate.name = "Update".

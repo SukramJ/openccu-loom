@@ -26,6 +26,7 @@ import type {
   FunctionEntry,
   GroupCentralEntry,
   InboxDevice,
+  ReplaceCandidate,
   InstallModeInterfaceEntry,
   RoomEntry,
   UserListEntry,
@@ -33,6 +34,8 @@ import type {
   CustomDPSummary,
   DataPointSummary,
   DeviceDetail,
+  CommunicationTestResult,
+  TeamCandidate,
   DeviceSummary,
   CaptureSummary,
   DiagnosticsEnvelope,
@@ -50,6 +53,9 @@ import type {
   ServiceMessage,
   SuppressedServiceMessage,
   SysvarEntry,
+  SysvarUsage,
+  DiagramConfig,
+  DiagramWriteRequest,
   SystemCCUEntry,
   UISchema,
 } from "./types";
@@ -382,6 +388,14 @@ export const api = {
       `/devices/${encodeURIComponent(address)}/links?${qs.toString()}`,
     );
   },
+  // Global direct-link overview (V01) across every central. Each link
+  // carries its owning central_name + interface_id.
+  async listAllLinks(central?: string, locale = "en"): Promise<Link[]> {
+    const qs = new URLSearchParams({ locale });
+    if (central) qs.set("central", central);
+    const r = await request<{ links: Link[] }>(`/links?${qs.toString()}`);
+    return r.links;
+  },
   addLink(
     address: string,
     body: {
@@ -448,6 +462,20 @@ export const api = {
         body: JSON.stringify(values),
       },
     );
+  },
+  // Test a direct link at the device (V03): trigger the receiver's LINK
+  // paramset for the sender (short/long keypress). Physically actuates the
+  // receiver. The path device is the receiver's device.
+  testLinkAtDevice(receiver: string, sender: string, longPress: boolean) {
+    const deviceAddr = receiver.includes(":") ? receiver.slice(0, receiver.lastIndexOf(":")) : receiver;
+    return request<void>(`/devices/${encodeURIComponent(deviceAddr)}/links/test`, {
+      method: "POST",
+      body: JSON.stringify({
+        receiver_address: receiver,
+        sender_address: sender,
+        long_press: longPress,
+      }),
+    });
   },
   putParamset(
     channelAddress: string,
@@ -525,6 +553,33 @@ export const api = {
       },
     );
   },
+  // setChannelRooms / setChannelFunctions replace a single channel's
+  // room / function assignment sets; an empty array clears the set
+  // (PATCH /devices/{addr}/channels/{no}).
+  setChannelRooms(address: string, channelNo: number, rooms: string[]) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms }),
+      },
+    );
+  },
+  setChannelFunctions(
+    address: string,
+    channelNo: number,
+    functions: string[],
+  ) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ functions }),
+      },
+    );
+  },
   // deleteDevice unpairs a device. reset additionally factory-resets the
   // device during removal; force removes an unreachable device even when the
   // CCU cannot complete the handshake. Both map onto the CCU delete bitmask
@@ -541,6 +596,29 @@ export const api = {
       `/devices/${encodeURIComponent(address)}${suffix}`,
       { method: "DELETE" },
     );
+  },
+  // List the already-paired devices the new (inbox) device may replace
+  // (BidCos-RF / BidCos-Wired only). Read-only.
+  async listReplaceCandidates(address: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    const r = await request<{ candidates: ReplaceCandidate[] }>(
+      `/devices/${encodeURIComponent(address)}/replace-candidates${qs}`,
+    );
+    return r.candidates;
+  },
+  // Swap a paired device (oldAddress) for the new device at address
+  // (admin-only). The CCU migrates links / teams / ReGa references.
+  replaceDevice(address: string, oldAddress: string, central?: string) {
+    return request<{
+      status: string;
+      old_address: string;
+      new_address: string;
+      central?: string;
+    }>(`/devices/${encodeURIComponent(address)}/replace`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ old_address: oldAddress, ...(central ? { central } : {}) }),
+    });
   },
   acceptInboxDevice(
     address: string,
@@ -603,6 +681,11 @@ export const api = {
   },
   getSysvar(name: string) {
     return request<SysvarEntry>(`/sysvars/${encodeURIComponent(name)}`);
+  },
+  // Programs that reference a sysvar (SV07) — consumed as a delete warning.
+  getSysvarUsage(name: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<SysvarUsage>(`/sysvars/${encodeURIComponent(name)}/usage${qs}`);
   },
   setSysvar(name: string, value: unknown, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
@@ -1166,6 +1249,41 @@ export const api = {
       { method: "POST" },
     );
   },
+  // Re-transmit the centrally stored configuration to a device after a
+  // factory reset (admin-only; HmIP-RF / BidCos-RF only). The CCU runs
+  // the transfer asynchronously — watch CONFIG_PENDING for progress.
+  restoreDeviceConfig(address: string) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/config/restore`,
+      { method: "POST" },
+    );
+  },
+  // Run the CCU's per-device communication / function test (radio test
+  // frame + ACK); blocks until complete or the poll window elapses.
+  testDeviceCommunication(address: string) {
+    return request<CommunicationTestResult>(
+      `/devices/${encodeURIComponent(address)}/test`,
+      { method: "POST" },
+    );
+  },
+  // List the team channels a channel may be assigned to (same team tag).
+  async teamCandidates(address: string, channelNo: number) {
+    const r = await request<{ candidates: TeamCandidate[] }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/team-candidates`,
+    );
+    return r.candidates;
+  },
+  // Assign a channel to a team; null/empty team resets to default.
+  setChannelTeam(address: string, channelNo: number, team: string | null) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/team`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team }),
+      },
+    );
+  },
   // Ask a CCU to fetch a firmware image onto the central (admin-only).
   // central is optional for single-CCU deployments.
   downloadSystemFirmware(url: string, central?: string) {
@@ -1264,11 +1382,27 @@ export const api = {
   async listInstallModeInterfaces() {
     return request<InstallModeInterfaceEntry[]>(`/install-mode/interfaces`);
   },
+  // Scan the wired bus (BidCos-Wired) for new devices; the found
+  // devices join the inbox for acceptance.
+  async searchWiredDevices(iface: string, central?: string) {
+    return request<{ central: string; interface: string; found: number }>(
+      `/install-mode/search`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interface: iface,
+          ...(central ? { central } : {}),
+        }),
+      },
+    );
+  },
   async setInstallModeInterface(
     iface: string,
     active: boolean,
     seconds?: number,
     deviceAddress?: string,
+    local?: { sgtin: string; key: string },
   ) {
     await request<void>(`/install-mode/interfaces`, {
       method: "POST",
@@ -1278,6 +1412,7 @@ export const api = {
         active,
         ...(seconds ? { seconds } : {}),
         ...(deviceAddress ? { device_address: deviceAddress } : {}),
+        ...(local ? { sgtin: local.sgtin, key: local.key } : {}),
       }),
     });
     return api.listInstallModeInterfaces();
@@ -1917,6 +2052,90 @@ export async function getHistory(params: {
   try {
     const result = await request<HistoryBucket[]>(`/history?${qs.toString()}`);
     return result ?? [];
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
+// --- Named diagram definitions (SV03) ---
+export async function listDiagrams(): Promise<DiagramConfig[]> {
+  const r = await request<{ diagrams: DiagramConfig[] }>(`/diagrams`);
+  return r.diagrams;
+}
+export function getDiagram(id: string): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`);
+}
+export function createDiagram(body: DiagramWriteRequest): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams`, { method: "POST", body: JSON.stringify(body) });
+}
+export function updateDiagram(id: string, body: DiagramWriteRequest): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+export function deleteDiagram(id: string): Promise<void> {
+  return request<void>(`/diagrams/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** Effective per-datapoint recording state (SV10). */
+export type RecordingState = { record: boolean; source: "override" | "policy" };
+
+/**
+ * Read whether a data point's live values are currently recorded to
+ * history, and whether that decision is an explicit override or the glob
+ * policy (GET /api/v1/history/recording). Throws HistoryDisabledError
+ * when the history feature is off (404).
+ */
+export async function getRecordingOverride(params: {
+  central: string;
+  interfaceId: string;
+  channel: string;
+  parameter: string;
+}): Promise<RecordingState> {
+  const qs = new URLSearchParams({
+    central: params.central,
+    interface_id: params.interfaceId,
+    channel: params.channel,
+    parameter: params.parameter,
+  });
+  try {
+    return await request<RecordingState>(`/history/recording?${qs.toString()}`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
+/**
+ * Force recording on/off for a data point, or clear the override
+ * (record: null → revert to the glob policy) via
+ * PUT /api/v1/history/recording. Throws HistoryDisabledError when the
+ * history feature is off (404).
+ */
+export async function setRecordingOverride(params: {
+  central: string;
+  interfaceId: string;
+  channel: string;
+  parameter: string;
+  record: boolean | null;
+}): Promise<RecordingState> {
+  try {
+    return await request<RecordingState>(`/history/recording`, {
+      method: "PUT",
+      body: JSON.stringify({
+        central: params.central,
+        interface_id: params.interfaceId,
+        channel: params.channel,
+        parameter: params.parameter,
+        record: params.record,
+      }),
+    });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       throw new HistoryDisabledError();

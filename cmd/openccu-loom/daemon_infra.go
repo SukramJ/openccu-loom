@@ -16,6 +16,7 @@ import (
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -41,11 +42,13 @@ type sharedInfra struct {
 	visibilityStore   *sqlite.VisibilityUnIgnoreStore
 	visibilityAdapter *visibilityAdapter
 
-	masterValuesStore *sqlite.MasterValuesStore
-	valuesCacheStore  *sqlite.ValuesCacheStore
-	historyStore      *sqlite.MeasurementStore
-	descriptorStores  adapter.DescriptorStores
-	descriptorDB      *sql.DB
+	masterValuesStore  *sqlite.MasterValuesStore
+	valuesCacheStore   *sqlite.ValuesCacheStore
+	historyStore       *sqlite.MeasurementStore
+	recordingOverrides *history.RecordingOverrides
+	recordingStore     *sqlite.RecordingOverrideStore
+	descriptorStores   adapter.DescriptorStores
+	descriptorDB       *sql.DB
 
 	wsHub       *ws.Hub
 	wsHandler   http.Handler
@@ -125,6 +128,9 @@ func wireSharedInfrastructure(
 	var stopHistoryWAL func()
 	if si.historyStore != nil {
 		stopHistoryWAL = sqlite.StartWALCheckpointLoop(si.historyStore.DB(), 0, logger) //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
+		// Per-datapoint recording overrides live in the same history DB and
+		// steer the recorder's hot-path gate (SV10).
+		si.recordingStore, si.recordingOverrides = wireRecordingOverrides(si.historyStore, cfg, logger) //nolint:contextcheck // helper bounds its own context internally
 	}
 
 	si.wsHub = ws.NewHub()

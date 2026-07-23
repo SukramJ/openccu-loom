@@ -3035,6 +3035,14 @@
           "wire_value": "get_user_level"
         },
         {
+          "go_name": "RegaScriptPollComTest",
+          "wire_value": "poll_com_test"
+        },
+        {
+          "go_name": "RegaScriptRebootCCU",
+          "wire_value": "reboot_ccu"
+        },
+        {
           "go_name": "RegaScriptRenameFunction",
           "wire_value": "rename_function"
         },
@@ -3059,12 +3067,20 @@
           "wire_value": "set_system_variable"
         },
         {
+          "go_name": "RegaScriptStartComTest",
+          "wire_value": "start_com_test"
+        },
+        {
           "go_name": "RegaScriptTriggerFirmwareUpdate",
           "wire_value": "trigger_firmware_update"
         },
         {
           "go_name": "RegaScriptUpdateSystemVariable",
           "wire_value": "update_system_variable"
+        },
+        {
+          "go_name": "RegaScriptUsageBySysvar",
+          "wire_value": "usage_by_sysvar"
         }
       ]
     },
@@ -3097,6 +3113,14 @@
           "wire_value": "ASTRO_TYPE"
         },
         {
+          "go_name": "ScheduleFieldColorType",
+          "wire_value": "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"
+        },
+        {
+          "go_name": "ScheduleFieldColorValue",
+          "wire_value": "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"
+        },
+        {
           "go_name": "ScheduleFieldCondition",
           "wire_value": "CONDITION"
         },
@@ -3123,6 +3147,10 @@
         {
           "go_name": "ScheduleFieldLevel2",
           "wire_value": "LEVEL_2"
+        },
+        {
+          "go_name": "ScheduleFieldOutputBehaviour",
+          "wire_value": "OUTPUT_BEHAVIOUR"
         },
         {
           "go_name": "ScheduleFieldRampTimeBase",

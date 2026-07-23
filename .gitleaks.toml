@@ -11,6 +11,10 @@
 #     key from the Matter/CHIP spec, never a production credential)
 #   - the HmIP device/parameter rule tables, whose long constant strings
 #     (device addresses, parameter names) trip the generic-api-key rule
+#   - SPA `*.test.ts` fixtures (e.g. a made-up HmIP teach-in device key),
+#     the TypeScript peers of the already-exempt `*_test.go` fixtures
+#   - the HmIP label-key Base32 alphabet, a fixed public character set the
+#     generic-api-key rule mis-reads as a high-entropy secret
 #
 # Everything else — runtime/config code — stays scanned, so a genuinely
 # new secret still fails the gate.
@@ -24,6 +28,7 @@ useDefault = true
 description = "test fixtures, docs and generated rule tables — no real secrets"
 paths = [
   '''.*_test\.go$''',
+  '''.*\.test\.ts$''',
   '''.*/testdata/.*''',
   '''^docs/.*''',
   '''^example\.config\.yaml$''',
@@ -31,4 +36,9 @@ paths = [
   '''^internal/north/matter/secure/attestation/testpaa\.go$''',
   '''^internal/north/mqtt/entity_description_rules_sensors\.go$''',
   '''^internal/north/mqtt/entity_descriptions_generated\.go$''',
+]
+regexes = [
+  # HmIP label-key Base32 alphabet (pkg/hmproto/hmip_teachin.go): a fixed
+  # public character set, not a credential.
+  '''0123456789ABCEFGHJKLMNPQRSTUWXYZ''',
 ]

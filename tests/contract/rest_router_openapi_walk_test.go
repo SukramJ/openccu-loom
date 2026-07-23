@@ -33,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -66,6 +67,26 @@ func (fakePreferencesService) Get(context.Context, string, string) (string, erro
 func (fakePreferencesService) Set(context.Context, string, string, string) error   { return nil }
 func (fakePreferencesService) Delete(context.Context, string, string) error        { return nil }
 
+type fakeDiagramConfigService struct{}
+
+func (fakeDiagramConfigService) List(context.Context, string) ([]handlers.DiagramConfig, error) {
+	return nil, nil
+}
+
+func (fakeDiagramConfigService) Get(context.Context, string, string, bool) (handlers.DiagramConfig, error) {
+	return handlers.DiagramConfig{}, nil
+}
+
+func (fakeDiagramConfigService) Create(context.Context, string, string, string, string) (handlers.DiagramConfig, error) {
+	return handlers.DiagramConfig{}, nil
+}
+
+func (fakeDiagramConfigService) Update(context.Context, string, string, bool, string, string, string) (handlers.DiagramConfig, error) {
+	return handlers.DiagramConfig{}, nil
+}
+
+func (fakeDiagramConfigService) Delete(context.Context, string, string, bool) error { return nil }
+
 type fakeDeviceIndex struct{}
 
 func (fakeDeviceIndex) Devices() []*device.Device            { return nil }
@@ -96,6 +117,12 @@ type fakeLinksService struct{}
 func (fakeLinksService) ListLinks(context.Context, string, string) ([]handlers.Link, error) {
 	return nil, nil
 }
+
+func (fakeLinksService) ListAllLinks(context.Context, string, string) ([]handlers.Link, error) {
+	return nil, nil
+}
+
+func (fakeLinksService) ActivateLink(context.Context, string, string, bool) error { return nil }
 
 func (fakeLinksService) AddLink(context.Context, string, string, string, string) error { return nil }
 
@@ -155,6 +182,20 @@ func (fakeEnergyService) Energy(context.Context, handlers.EnergyQuery) (handlers
 	return handlers.EnergyResponse{}, nil
 }
 
+type fakeRecordingOverrideService struct{}
+
+func (fakeRecordingOverrideService) Effective(context.Context, string, string, string, string) (record bool, source string, err error) {
+	return true, "policy", nil
+}
+
+func (fakeRecordingOverrideService) Set(context.Context, string, string, string, string, bool, string) error {
+	return nil
+}
+
+func (fakeRecordingOverrideService) Clear(context.Context, string, string, string, string, string) error {
+	return nil
+}
+
 type fakeDeviceAdmin struct{}
 
 // fakeFirmwareRefresher backs the /devices/firmware/refresh route in the
@@ -173,10 +214,47 @@ func (fakeDeviceAdmin) UpdateFirmware(context.Context, string) error         { r
 func (fakeDeviceAdmin) InterfaceDutyCycle(string) (int, bool)                { return 0, false }
 func (fakeDeviceAdmin) SetRooms(context.Context, string, []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(context.Context, string, []string) error { return nil }
+func (fakeDeviceAdmin) SetChannelRooms(context.Context, string, int, []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) SetChannelFunctions(context.Context, string, int, []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) RestoreDeviceConfig(context.Context, string) error { return nil }
 
 type fakeDeviceInstallMode struct{}
 
 func (fakeDeviceInstallMode) SetInstallMode(context.Context, string, int) error { return nil }
+
+type fakeDeviceReplacer struct{}
+
+func (fakeDeviceReplacer) ReplaceCandidates(context.Context, string, string) ([]hmapi.ReplaceCandidate, error) {
+	return nil, nil
+}
+
+func (fakeDeviceReplacer) ReplaceDevice(context.Context, string, string, string) error { return nil }
+
+type fakeDeviceSearch struct{}
+
+func (fakeDeviceSearch) SearchWiredDevices(context.Context, string, string) (int, error) {
+	return 0, nil
+}
+
+type fakeDeviceCommunicationTest struct{}
+
+func (fakeDeviceCommunicationTest) TestDeviceCommunication(context.Context, string) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, nil
+}
+
+type fakeDeviceTeam struct{}
+
+func (fakeDeviceTeam) TeamCandidates(context.Context, string, int) ([]hmapi.TeamCandidate, error) {
+	return nil, nil
+}
+
+func (fakeDeviceTeam) SetChannelTeam(context.Context, string, int, string) error { return nil }
 
 type fakeRoomFunctionAdmin struct{}
 
@@ -498,51 +576,57 @@ func fullyWiredRouterDeps() rest.Deps {
 		Tokens:   auth.NewMemoryTokenStore(map[string]auth.Identity{}),
 	}
 	return rest.Deps{
-		StartedAt:             time.Now(),
-		Config:                fakeConfigReader{},
-		SelfPassword:          fakeSelfPasswordService{},
-		Preferences:           fakePreferencesService{},
-		Devices:               fakeDeviceIndex{},
-		MasterProfiles:        fakeMasterProfilesService{},
-		UISchema:              fakeUISchemaService{},
-		Links:                 fakeLinksService{},
-		Schedules:             fakeScheduleService{},
-		Audit:                 fakeAuditService{},
-		History:               fakeHistoryService{},
-		Energy:                fakeEnergyService{},
-		DeviceAdmin:           fakeDeviceAdmin{},
-		FirmwareRefresher:     fakeFirmwareRefresher{},
-		DeviceInstallMode:     fakeDeviceInstallMode{},
-		RoomFunctionAdmin:     fakeRoomFunctionAdmin{},
-		RefreshDevices:        fakeRefreshDevicesService{},
-		Reloader:              fakeReloaderService{},
-		CentralLinks:          fakeCentralLinksService{},
-		Incidents:             fakeIncidentsReader{},
-		Alarm:                 mustAlarmPanel(),
-		IncidentsAdmin:        fakeIncidentsClearer{},
-		SystemStatus:          fakeSystemStatusReader{},
-		LogLevels:             fakeLogLevelsService{},
-		LogDefaultLevel:       fakeLogLevelsService{},
-		LogFeed:               fakeLogFeedService{},
-		Introspect:            fakeIntrospectService{},
-		RSSIInfo:              fakeRSSIService{},
-		StartupCapture:        fakeStartupCaptureService{},
-		EnableRestartEndpoint: true,
-		Capture:               fakeCaptureService{},
-		RPCRecorder:           fakeRPCRecorderService{},
-		Metrics:               metrics.NewRegistry(),
-		ValuesCache:           fakeValuesCacheService{},
-		DeviceLookup:          fakeDeviceLookup{},
-		Backup:                fakeBackupService{},
-		Paramsets:             fakeParamsetService{},
-		ParameterDeterminer:   fakeParameterDeterminer{},
-		Hub:                   fakeHubIndex{h: hub.NewHub("test")},
-		SysvarRefresh:         fakeSysvarRefreshService{},
-		Interfaces:            fakeInterfaceIndex{},
-		ConfigAdmin:           fakeConfigAdminService{},
-		UserAdmin:             fakeUserAdminService{},
-		TokenAdmin:            fakeTokenAdminService{},
-		CentralAdmin:          fakeCentralAdminService{},
+		StartedAt:               time.Now(),
+		Config:                  fakeConfigReader{},
+		SelfPassword:            fakeSelfPasswordService{},
+		Preferences:             fakePreferencesService{},
+		Diagrams:                fakeDiagramConfigService{},
+		Devices:                 fakeDeviceIndex{},
+		MasterProfiles:          fakeMasterProfilesService{},
+		UISchema:                fakeUISchemaService{},
+		Links:                   fakeLinksService{},
+		Schedules:               fakeScheduleService{},
+		Audit:                   fakeAuditService{},
+		History:                 fakeHistoryService{},
+		RecordingOverrides:      fakeRecordingOverrideService{},
+		Energy:                  fakeEnergyService{},
+		DeviceAdmin:             fakeDeviceAdmin{},
+		DeviceReplacer:          fakeDeviceReplacer{},
+		InstallModeSearch:       fakeDeviceSearch{},
+		DeviceCommunicationTest: fakeDeviceCommunicationTest{},
+		DeviceTeam:              fakeDeviceTeam{},
+		FirmwareRefresher:       fakeFirmwareRefresher{},
+		DeviceInstallMode:       fakeDeviceInstallMode{},
+		RoomFunctionAdmin:       fakeRoomFunctionAdmin{},
+		RefreshDevices:          fakeRefreshDevicesService{},
+		Reloader:                fakeReloaderService{},
+		CentralLinks:            fakeCentralLinksService{},
+		Incidents:               fakeIncidentsReader{},
+		Alarm:                   mustAlarmPanel(),
+		IncidentsAdmin:          fakeIncidentsClearer{},
+		SystemStatus:            fakeSystemStatusReader{},
+		LogLevels:               fakeLogLevelsService{},
+		LogDefaultLevel:         fakeLogLevelsService{},
+		LogFeed:                 fakeLogFeedService{},
+		Introspect:              fakeIntrospectService{},
+		RSSIInfo:                fakeRSSIService{},
+		StartupCapture:          fakeStartupCaptureService{},
+		EnableRestartEndpoint:   true,
+		Capture:                 fakeCaptureService{},
+		RPCRecorder:             fakeRPCRecorderService{},
+		Metrics:                 metrics.NewRegistry(),
+		ValuesCache:             fakeValuesCacheService{},
+		DeviceLookup:            fakeDeviceLookup{},
+		Backup:                  fakeBackupService{},
+		Paramsets:               fakeParamsetService{},
+		ParameterDeterminer:     fakeParameterDeterminer{},
+		Hub:                     fakeHubIndex{h: hub.NewHub("test")},
+		SysvarRefresh:           fakeSysvarRefreshService{},
+		Interfaces:              fakeInterfaceIndex{},
+		ConfigAdmin:             fakeConfigAdminService{},
+		UserAdmin:               fakeUserAdminService{},
+		TokenAdmin:              fakeTokenAdminService{},
+		CentralAdmin:            fakeCentralAdminService{},
 		Discovery: &handlers.DiscoveryDeps{
 			Discoverer: fakeDiscoveredCentralLister{},
 			Ignore:     fakeDiscoveryIgnoreStore{},

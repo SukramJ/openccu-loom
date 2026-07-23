@@ -196,7 +196,7 @@ func TestReplaceDeviceEvictsOldAndIngestsNew(t *testing.T) {
 // TestReplaceDeviceModelMismatchErrors verifies that when the new device
 // description is already cached but has a different model, ReplaceDevice
 // returns an error and leaves state unchanged.
-func TestReplaceDeviceModelMismatchErrors(t *testing.T) {
+func TestReplaceDeviceCrossTypeProceeds(t *testing.T) {
 	t.Parallel()
 	dc, _, devs, descs, _ := newDCFull(t)
 
@@ -204,19 +204,24 @@ func TestReplaceDeviceModelMismatchErrors(t *testing.T) {
 	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "OLD001", Type: "HM-Sec-SC", Firmware: "1.0"})
 	devs.Put(registry.DeviceEntry{Interface: hmenum.InterfaceBidCosRF, Address: "OLD001", Model: "HM-Sec-SC"})
 
-	// New device already cached with a different model — conflict.
+	// New device already cached with a different model. The CCU (rfd /
+	// hs485d) owns the type-compatibility check and legitimately approves
+	// compatible cross-type swaps, so the coordinator proceeds rather
+	// than reject a swap the CCU already performed.
 	descs.Put(hmenum.InterfaceBidCosRF, hmproto.DeviceDescription{Address: "NEW001", Type: "HM-LC-Sw1", Firmware: "1.0"})
 
 	fetcher := &stubLister{snapshot: []hmproto.DeviceDescription{{Address: "NEW001", Type: "HM-LC-Sw1", Firmware: "1.0"}}}
 
-	err := dc.ReplaceDevice(context.Background(), fetcher, hmenum.InterfaceBidCosRF, "OLD001", "NEW001")
-	if err == nil {
-		t.Fatal("expected error for model mismatch, got nil")
+	if err := dc.ReplaceDevice(context.Background(), fetcher, hmenum.InterfaceBidCosRF, "OLD001", "NEW001"); err != nil {
+		t.Fatalf("cross-type replace must proceed, got error: %v", err)
 	}
 
-	// OLD001 must still be registered — no state change on error.
-	if !devs.Has(hmenum.InterfaceBidCosRF, "OLD001") {
-		t.Error("OLD001 must not be removed on model-mismatch error")
+	// OLD001 is evicted; NEW001 is ingested from the fetcher snapshot.
+	if devs.Has(hmenum.InterfaceBidCosRF, "OLD001") {
+		t.Error("OLD001 must be removed after a successful replace")
+	}
+	if !devs.Has(hmenum.InterfaceBidCosRF, "NEW001") {
+		t.Error("NEW001 must be registered after a successful replace")
 	}
 }
 

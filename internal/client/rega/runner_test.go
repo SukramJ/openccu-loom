@@ -570,6 +570,50 @@ func TestGetProgramDescriptionsParsesRuleSummaries(t *testing.T) {
 	}
 }
 
+func TestSysvarUsagePrograms(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	payload := `[{"id":"1234","name":"Wohnzimmer%20Licht","active":true},` +
+		`{"id":"5678","name":"Flur","active":false}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	progs, err := r.SysvarUsagePrograms(context.Background(), "MyVar")
+	if err != nil {
+		t.Fatalf("SysvarUsagePrograms: %v", err)
+	}
+	if len(progs) != 2 {
+		t.Fatalf("len=%d, want 2", len(progs))
+	}
+	if progs[0].ID != "1234" || !progs[0].Active {
+		t.Errorf("prog[0] = %+v", progs[0])
+	}
+	if progs[1].Active {
+		t.Errorf("prog[1] should be inactive: %+v", progs[1])
+	}
+	// The name arrives URL-encoded.
+	if got, _ := url.QueryUnescape(progs[0].Name); got != "Wohnzimmer Licht" {
+		t.Errorf("name decoded = %q, want %q", got, "Wohnzimmer Licht")
+	}
+	// The ##name## parameter is substituted into the dispatched script.
+	if !strings.Contains(capture.lastScript(), "MyVar") {
+		t.Errorf("dispatched script missing the sysvar name; got %q", capture.lastScript())
+	}
+}
+
+func TestSysvarUsageProgramsPropagatesError(t *testing.T) {
+	t.Parallel()
+	// A non-JSON reply must surface as a parse error, not a silent empty list.
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "not json")
+	defer srv.Close()
+	r := newRunner(t, srv.URL)
+	if _, err := r.SysvarUsagePrograms(context.Background(), "X"); err == nil {
+		t.Error("expected a parse error for a non-JSON reply")
+	}
+}
+
 // TestGetProgramDescriptionsHandlesMissingSummaries verifies a program with
 // no rule (empty summary fields) parses without error and yields empty
 // summaries.

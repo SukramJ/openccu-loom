@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -103,6 +104,110 @@ func (b *CcuBackend) SetInstallMode(ctx context.Context, on bool, duration, mode
 	}
 	_, err := b.xml.Call(ctx, "setInstallMode", on, duration, mode)
 	return err
+}
+
+// SetInstallModeLocal implements Operations. Opens the HmIP pairing
+// window in keyserver-less LOCAL mode: the CCU builds a one-device
+// whitelist from SGTIN + device key and forwards it to the HmIP server
+// as setInstallModeWithWhitelist. Every parameter key must be present
+// on every call and the casing is part of the wire contract (`keymode`
+// all-lowercase, `installMode` camelCase) — the CCU-side JSON-RPC
+// wrapper dereferences all of them unconditionally.
+func (b *CcuBackend) SetInstallModeLocal(ctx context.Context, duration int, sgtin, keyHex string) error {
+	if b.ifaceType != hmenum.InterfaceHmIPRF || b.json == nil {
+		return ErrUnsupported
+	}
+	params := map[string]any{
+		"interface":   string(b.ifaceType),
+		"on":          "true",
+		"time":        duration,
+		"installMode": "LOCAL",
+		"address":     sgtin,
+		"key":         keyHex,
+		"keymode":     "LOCAL",
+	}
+	_, err := b.json.Call(ctx, "Interface.setInstallModeHMIP", params)
+	return err
+}
+
+// comTestTimeLayout is the ReGa `system.Date("%Y-%m-%d %H:%M:%S")` format
+// the com-test scripts emit for the start / completed timestamps.
+const comTestTimeLayout = "2006-01-02 15:04:05"
+
+type comTestStart struct {
+	Success bool   `json:"success"`
+	Started string `json:"started"`
+	Error   string `json:"error"`
+}
+
+type comTestPoll struct {
+	Passed    bool   `json:"passed"`
+	Completed string `json:"completed"`
+}
+
+// TestDevice implements Operations. Starts the CCU's per-device
+// communication test (ReGa DevStartComTest) and polls until the device's
+// last-completed-test time advances past the start, or the window
+// elapses. Mirrors the start+poll shape of CreateBackupAndDownload.
+func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs, pollIntervalSecs float64) (hmapi.CommunicationTestResult, error) {
+	if b.rega == nil {
+		return hmapi.CommunicationTestResult{}, ErrUnsupported
+	}
+	if maxWaitSecs <= 0 {
+		maxWaitSecs = 30
+	}
+	if pollIntervalSecs <= 0 {
+		pollIntervalSecs = 2
+	}
+
+	var start comTestStart
+	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptStartComTest, map[string]string{"address": address}, &start); err != nil {
+		return hmapi.CommunicationTestResult{}, fmt.Errorf("ccu.TestDevice: start: %w", err)
+	}
+	if !start.Success {
+		msg := start.Error
+		if msg == "" {
+			msg = "communication test start failed"
+		}
+		return hmapi.CommunicationTestResult{}, fmt.Errorf("ccu.TestDevice: %s", msg)
+	}
+	startedAt := time.Now()
+
+	deadline := time.Now().Add(time.Duration(maxWaitSecs * float64(time.Second)))
+	ticker := time.NewTicker(time.Duration(pollIntervalSecs * float64(time.Second)))
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return hmapi.CommunicationTestResult{}, ctx.Err()
+		case <-ticker.C:
+		}
+		var poll comTestPoll
+		if err := b.rega.RunJSON(ctx, hmenum.RegaScriptPollComTest,
+			map[string]string{"address": address, "started": start.Started}, &poll); err != nil {
+			return hmapi.CommunicationTestResult{}, fmt.Errorf("ccu.TestDevice: poll: %w", err)
+		}
+		if poll.Passed {
+			completedAt := startedAt
+			if t, perr := time.ParseInLocation(comTestTimeLayout, poll.Completed, time.Local); perr == nil {
+				completedAt = t
+			}
+			return hmapi.CommunicationTestResult{
+				Passed:      true,
+				StartedAt:   startedAt,
+				CompletedAt: completedAt,
+				DurationMs:  time.Since(startedAt).Milliseconds(),
+			}, nil
+		}
+		if !time.Now().Before(deadline) {
+			return hmapi.CommunicationTestResult{
+				Passed:     false,
+				StartedAt:  startedAt,
+				DurationMs: time.Since(startedAt).Milliseconds(),
+				TimedOut:   true,
+			}, nil
+		}
+	}
 }
 
 // --- service / alarm messages -------------------------------------------

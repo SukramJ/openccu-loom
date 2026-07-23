@@ -930,7 +930,7 @@ func TestListInbox_WithEntries(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	h.Inbox.Replace([]hub.InboxDevice{
-		{Address: "0003001122:0", Model: "HmIP-PS", Serial: "00030011"},
+		{Address: "0003001122:0", Model: "HmIP-PS", Serial: "00030011", Interface: "HmIP-RF"},
 	})
 	idx := &testHubIndex{h: h}
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
@@ -949,6 +949,12 @@ func TestListInbox_WithEntries(t *testing.T) {
 	}
 	if body[0].Address != "0003001122:0" {
 		t.Fatalf("expected address=0003001122:0, got %q", body[0].Address)
+	}
+	// The SPA gates the "replace existing device" action on this field
+	// (HmIP interfaces cannot be replaced) — it must survive the DTO
+	// mapping verbatim.
+	if body[0].Interface != "HmIP-RF" {
+		t.Fatalf("expected interface=HmIP-RF, got %q", body[0].Interface)
 	}
 }
 

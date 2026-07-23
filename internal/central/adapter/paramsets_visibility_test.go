@@ -34,6 +34,10 @@ func (b *noopParamsetBackend) GetLinkParamset(_ context.Context, _, _ string) (m
 	return map[string]any{}, nil
 }
 
+func (b *noopParamsetBackend) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (b *noopParamsetBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	b.putLinkCalled = true
 	return nil

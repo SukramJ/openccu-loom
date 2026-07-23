@@ -118,6 +118,12 @@ type DeviceAdmin interface {
 	// [ErrAcceptConfigIncomplete].
 	AcceptInboxDevice(ctx context.Context, address string, opts AcceptInboxOptions) error
 	UpdateFirmware(ctx context.Context, address string) error
+	// RestoreDeviceConfig re-transmits the centrally stored
+	// configuration (all channels' MASTER paramsets + link peerings) to
+	// the device after a factory reset. Supported on HmIP-RF and
+	// BidCos-RF only; other interfaces answer with a
+	// [backends.ErrUnsupported]-class error the handler maps to 422.
+	RestoreDeviceConfig(ctx context.Context, address string) error
 	// InterfaceDutyCycle returns the transmit duty cycle in percent
 	// (0..100) of the radio interface the device identified by address is
 	// paired to, sourced from the per-interface BidCos utilisation poll.
@@ -129,6 +135,13 @@ type DeviceAdmin interface {
 	InterfaceDutyCycle(address string) (int, bool)
 	SetRooms(ctx context.Context, address string, rooms []string) error
 	SetFunctions(ctx context.Context, address string, functions []string) error
+	// SetChannelRooms replaces a single channel's room assignments. The
+	// channel address is resolved as deviceAddr + ":" + channelNo; an
+	// explicit empty slice clears every assignment.
+	SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error
+	// SetChannelFunctions replaces a single channel's function (Gewerk)
+	// assignments, mirroring [DeviceAdmin.SetChannelRooms].
+	SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error
 }
 
 // AcceptInboxOptions carries the optional first-time configuration
@@ -158,6 +171,11 @@ func (o AcceptInboxOptions) HasConfig() bool {
 // only the configuration rather than re-accepting the device.
 var ErrAcceptConfigIncomplete = errors.New("device accepted but initial configuration incomplete")
 
+// ErrChannelNotFound signals that a channel-scoped device-admin
+// operation named a channel number the device does not have. REST maps
+// it to 404 so a typo is distinguishable from an upstream failure.
+var ErrChannelNotFound = errors.New("channel not found")
+
 // DiagnosticsIntrospectService is the facade the live-introspection
 // diagnostics endpoints depend on. It exposes read-only daemon internals
 // that have no other machine-readable surface: per-interface reliability
@@ -185,6 +203,14 @@ type IncidentsReader interface {
 // LinksService is the narrow facade the /links endpoints depend on.
 type LinksService interface {
 	ListLinks(ctx context.Context, deviceAddress, locale string) ([]hmapi.Link, error)
+	// ListAllLinks aggregates every direct link across all registered
+	// centrals (or a single central when centralName is non-empty). Each
+	// returned link carries its owning central_name + interface_id.
+	ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error)
+	// ActivateLink triggers the receiver's LINK-paramset behaviour for the
+	// given sender (the "test link at device" probe) — short or long
+	// keypress. It physically actuates the receiver.
+	ActivateLink(ctx context.Context, receiverAddress, senderAddress string, longPress bool) error
 	AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error

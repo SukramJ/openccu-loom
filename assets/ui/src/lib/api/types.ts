@@ -42,6 +42,9 @@ export type UIHint = NonNullable<
 // device.FirmwareInfo; availability uses the capitalized keys the Go DTO
 // marshals from device.AvailabilityInfo (IsReachable/LastUpdated/...).
 export type DeviceDetail = components["schemas"]["DeviceDetail"];
+export type CommunicationTestResult =
+  components["schemas"]["CommunicationTestResult"];
+export type TeamCandidate = components["schemas"]["TeamCandidate"];
 
 // RxMode re-exported from generated schema — the named flags decoded from a
 // device's CCU RX_MODE bitmask. The `wakeup` / `lazy_config` bits mark a
@@ -262,6 +265,22 @@ export type BackupEntry = components["schemas"]["BackupEntry"];
 // optional (Go json:"central,omitempty"); SysvarList.svelte builds its
 // composite key as (sv.central ?? "") + "/" + sv.name.
 export type SysvarEntry = components["schemas"]["SysvarSummary"];
+export type SysvarUsage = components["schemas"]["SysvarUsage"];
+export type DiagramConfig = components["schemas"]["DiagramConfig"];
+export type DiagramWriteRequest = components["schemas"]["DiagramWriteRequest"];
+// SPA-owned shape of a diagram's config document (SV03).
+export type DiagramSeries = {
+  central: string;
+  interface_id?: string;
+  channel_address?: string;
+  parameter?: string;
+  label?: string;
+  color?: string;
+};
+export type DiagramDocument = {
+  series: DiagramSeries[];
+  default_range_hours?: number;
+};
 
 // ProgramEntry re-exported from the generated ProgramSummary. central is
 // optional (Go json:"central,omitempty"); ProgramList.svelte builds its
@@ -416,6 +435,7 @@ export type EditSessionResponse = components["schemas"]["EditSessionResponse"];
 
 // InboxDevice re-exported from generated schema. central is optional (Go json:"central,omitempty").
 export type InboxDevice = components["schemas"]["InboxDevice"];
+export type ReplaceCandidate = components["schemas"]["ReplaceCandidate"];
 
 // ConfigSnapshot re-exported from generated schema.
 // Generated adds: extras, policies fields — additive, safe.

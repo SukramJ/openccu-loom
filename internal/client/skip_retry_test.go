@@ -17,6 +17,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -83,6 +84,10 @@ func (b *countingBackend) GetLinkParamset(_ context.Context, _, _ string) (map[s
 	return nil, nil
 }
 
+func (b *countingBackend) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (b *countingBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }
@@ -121,6 +126,38 @@ func (b *countingBackend) DetermineParameter(_ context.Context, _, _ string) (an
 func (b *countingBackend) GetInstallMode(_ context.Context) (int, error) { return 0, nil }
 func (b *countingBackend) SetInstallMode(_ context.Context, _ bool, _, _ int, _ string) error {
 	return nil
+}
+
+func (b *countingBackend) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *countingBackend) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *countingBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (b *countingBackend) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *countingBackend) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (b *countingBackend) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *countingBackend) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (b *countingBackend) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (b *countingBackend) GetServiceMessages(_ context.Context, _ string) ([]map[string]any, error) {

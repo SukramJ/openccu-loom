@@ -16,6 +16,7 @@ import (
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -46,6 +47,8 @@ type southboundWiringDeps struct {
 	// discovery recognises configured centrals by serial. Nil disables backfill.
 	sqCentrals              *sqlite.CentralsStore
 	historyStore            *sqlite.MeasurementStore
+	recordingOverrides      *history.RecordingOverrides
+	recordingStore          *sqlite.RecordingOverrideStore
 	healthTracker           *health.Tracker
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
 	mqttWiring              *mqtt.Wiring
@@ -252,7 +255,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	teardowns = append(
 		teardowns,
 		adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger),
-		wireHistoryRecorder(cfg, reg, d.historyStore, d.healthTracker, logger),
+		wireHistoryRecorder(cfg, reg, d.historyStore, d.recordingOverrides, d.healthTracker, logger),
 	)
 	// Surface the values-cache counters as health gauges so the
 	// /diagnostics surface and any Prometheus scraper see how many

@@ -107,6 +107,64 @@ func newHydratingBackend() *paramsetFakeOps {
 	}
 }
 
+// TestIngestPopulatesLinkRoles verifies the second pass stamps the raw
+// CCU LINK_SOURCE_ROLES / LINK_TARGET_ROLES onto the channel model so
+// the direct-link role-matching filter can intersect them without a CCU
+// roundtrip.
+func TestIngestPopulatesLinkRoles(t *testing.T) {
+	t.Parallel()
+
+	c, _ := central.New(central.Config{Name: "ccu-01"})
+	p := NewDevicePipeline(c).WithVisibility(newProductionVisibilityGate())
+
+	b := &paramsetFakeOps{
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: "0001ABCD", Type: "HmIP-WRC"},
+				{
+					Address:         "0001ABCD:1",
+					Parent:          "0001ABCD",
+					Type:            "KEY_TRANSCEIVER",
+					LinkSourceRoles: hmproto.LinkRoles{"SWITCH", "REMOTECONTROL_RECEIVER"},
+					LinkTargetRoles: hmproto.LinkRoles{"WEATHER"},
+				},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			return nil, nil
+		},
+		getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+			return map[string]any{}, nil
+		},
+	}
+	w := client.NewValueWriter()
+	w.Register("ccu-01", "HmIP-RF", b)
+
+	if err := p.IngestFromBackend(
+		context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF,
+		b, &fakeWriter{}, nil, slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestFromBackend: %v", err)
+	}
+
+	dev, ok := c.ModelRegistry.Get("0001ABCD")
+	if !ok {
+		t.Fatal("device not in registry after IngestFromBackend")
+	}
+	ch := dev.Channel("0001ABCD:1")
+	if ch == nil {
+		t.Fatal("channel 0001ABCD:1 not found")
+	}
+	src := ch.LinkSourceRoles()
+	if len(src) != 2 || src[0] != "SWITCH" || src[1] != "REMOTECONTROL_RECEIVER" {
+		t.Errorf("Channel.LinkSourceRoles() = %v, want [SWITCH REMOTECONTROL_RECEIVER]", src)
+	}
+	tgt := ch.LinkTargetRoles()
+	if len(tgt) != 1 || tgt[0] != "WEATHER" {
+		t.Errorf("Channel.LinkTargetRoles() = %v, want [WEATHER]", tgt)
+	}
+}
+
 // TestHydrateChannelInstallsWriterAndRefresher verifies that
 // IngestFromBackend wires Channel.SetWriter and Channel.SetRefresher on
 // every channel. After hydration:

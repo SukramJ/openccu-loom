@@ -3,6 +3,7 @@
   import type { DeviceDetail } from "$lib/api/types";
   import { api, ApiError } from "$lib/api/client";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
+  import TeamPicker from "$lib/components/device/TeamPicker.svelte";
   import DeviceLinks from "$lib/components/links/DeviceLinks.svelte";
   import CentralLinksPanel from "$lib/components/links/CentralLinksPanel.svelte";
   import CdpTilesPanel from "$lib/cdp/CdpTilesPanel.svelte";
@@ -10,6 +11,7 @@
   import MaintenanceStatusGrid from "$lib/components/device/MaintenanceStatusGrid.svelte";
   import AuditLog from "./AuditLog.svelte";
   import HistoryChart from "$lib/components/HistoryChart.svelte";
+  import RecordToggle from "$lib/components/RecordToggle.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -134,6 +136,9 @@
   let renameChannelBusy = $state(false);
   let deleting = $state(false);
   let updatingFw = $state(false);
+  let restoringConfig = $state(false);
+  let testingComm = $state(false);
+  let commTestResult = $state<import("$lib/api/types").CommunicationTestResult | null>(null);
   let exportingDef = $state(false);
 
   // Delete-with-options dialog. The plain confirm becomes a small options
@@ -158,6 +163,14 @@
   let editingFunctions = $state(false);
   let functionsDraft = $state("");
   let functionsBusy = $state(false);
+
+  let editingChannelRooms = $state(false);
+  let channelRoomsDraft = $state("");
+  let channelRoomsBusy = $state(false);
+
+  let editingChannelFunctions = $state(false);
+  let channelFunctionsDraft = $state("");
+  let channelFunctionsBusy = $state(false);
 
   async function load() {
     error = null;
@@ -375,6 +388,46 @@
     }
   }
 
+  async function onRestoreConfig() {
+    if (!detail) return;
+    const ok = await confirmStore.ask({
+      title: t("device.restore_config"),
+      body: t("device.confirm_restore_config_body", {
+        name: detail.name || detail.address,
+      }),
+      confirmLabel: t("device.restore_config"),
+    });
+    if (!ok) return;
+    restoringConfig = true;
+    try {
+      await api.restoreDeviceConfig(address);
+      toastStore.success(t("device.restore_config_triggered"));
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      restoringConfig = false;
+    }
+  }
+
+  async function onTestCommunication() {
+    if (!detail) return;
+    testingComm = true;
+    commTestResult = null;
+    try {
+      const r = await api.testDeviceCommunication(address);
+      commTestResult = r;
+      if (r.passed) {
+        toastStore.success(t("device.communication_test_passed"));
+      } else {
+        toastStore.warn(t("device.communication_test_failed"));
+      }
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      testingComm = false;
+    }
+  }
+
   async function exportDefinition() {
     if (!detail) return;
     exportingDef = true;
@@ -456,11 +509,59 @@
   }
 
   function clickChannelInStrip(ch: { number: number; type?: string }) {
+    editingChannelRooms = false;
+    editingChannelFunctions = false;
     if (isWeekProfileChannel(ch.type) && scheduleSupported) {
       configSub = "schedule";
       return;
     }
     location.hash = `#/devices/${detail?.address}/channels/${ch.number}`;
+  }
+
+  function startEditChannelRooms(rooms: string[] | undefined) {
+    channelRoomsDraft = (rooms ?? []).join(", ");
+    editingChannelRooms = true;
+  }
+
+  function startEditChannelFunctions(functions: string[] | undefined) {
+    channelFunctionsDraft = (functions ?? []).join(", ");
+    editingChannelFunctions = true;
+  }
+
+  async function saveChannelRooms(no: number) {
+    channelRoomsBusy = true;
+    try {
+      const list = channelRoomsDraft
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await api.setChannelRooms(address, no, list);
+      toastStore.success(t("channel.rooms_updated"));
+      editingChannelRooms = false;
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      channelRoomsBusy = false;
+    }
+  }
+
+  async function saveChannelFunctions(no: number) {
+    channelFunctionsBusy = true;
+    try {
+      const list = channelFunctionsDraft
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await api.setChannelFunctions(address, no, list);
+      toastStore.success(t("channel.functions_updated"));
+      editingChannelFunctions = false;
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      channelFunctionsBusy = false;
+    }
   }
 
   // Top-level tabs. Three tabs only — the previous Bedienen/Status
@@ -693,6 +794,41 @@
                 <Icon name="mdi:download" size={14} />
                 {updatingFw ? "…" : t("device.firmware_update")}
               </Button>
+            {/if}
+            {#if detail.config_restore_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onRestoreConfig()}
+                disabled={restoringConfig}
+                title={t("device.restore_config.tooltip")}
+              >
+                <Icon name="mdi:backup-restore" size={14} />
+                {restoringConfig ? "…" : t("device.restore_config")}
+              </Button>
+            {/if}
+            {#if detail.communication_test_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onTestCommunication()}
+                disabled={testingComm}
+                title={t("device.communication_test.tooltip")}
+              >
+                <Icon name="mdi:radio-tower" size={14} />
+                {testingComm
+                  ? t("device.communication_test_running")
+                  : t("device.communication_test")}
+              </Button>
+              {#if commTestResult}
+                <Badge variant={commTestResult.passed ? "success" : "warning"}>
+                  {commTestResult.passed
+                    ? t("device.communication_test_passed")
+                    : t("device.communication_test_failed")}
+                </Badge>
+              {/if}
             {/if}
             <Button
               type="button"
@@ -933,6 +1069,74 @@
                   </Button>
                 {/if}
               </div>
+              <!-- Per-channel room / function assignment. Same comma-list
+                   editor as the device level, persisted via
+                   PATCH /devices/{addr}/channels/{no}. -->
+              <div class="mb-3 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <span class="font-semibold">{t("channel.rooms")}:</span>
+                <div class="flex items-baseline gap-2">
+                  {#if editingChannelRooms}
+                    <div class="flex flex-1 items-center gap-2">
+                      <input
+                        type="text"
+                        bind:value={channelRoomsDraft}
+                        placeholder={t("device.rooms.placeholder")}
+                        aria-label={t("channel.rooms")}
+                        class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      />
+                      <Button type="button" size="sm" onclick={() => void saveChannelRooms(ch.number)} disabled={channelRoomsBusy}>
+                        {t("common.save")}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onclick={() => (editingChannelRooms = false)} disabled={channelRoomsBusy}>
+                        ×
+                      </Button>
+                    </div>
+                  {:else}
+                    <span>{(ch.rooms ?? []).join(", ") || t("common.none")}</span>
+                    <button
+                      type="button"
+                      class="text-brand-600 hover:underline dark:text-brand-400"
+                      onclick={() => startEditChannelRooms(ch.rooms)}
+                    >
+                      {t("common.edit")}
+                    </button>
+                  {/if}
+                </div>
+                <span class="font-semibold">{t("channel.functions")}:</span>
+                <div class="flex items-baseline gap-2">
+                  {#if editingChannelFunctions}
+                    <div class="flex flex-1 items-center gap-2">
+                      <input
+                        type="text"
+                        bind:value={channelFunctionsDraft}
+                        placeholder={t("device.functions.placeholder")}
+                        aria-label={t("channel.functions")}
+                        class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      />
+                      <Button type="button" size="sm" onclick={() => void saveChannelFunctions(ch.number)} disabled={channelFunctionsBusy}>
+                        {t("common.save")}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onclick={() => (editingChannelFunctions = false)} disabled={channelFunctionsBusy}>
+                        ×
+                      </Button>
+                    </div>
+                  {:else}
+                    <span>{(ch.functions ?? []).join(", ") || t("common.none")}</span>
+                    <button
+                      type="button"
+                      class="text-brand-600 hover:underline dark:text-brand-400"
+                      onclick={() => startEditChannelFunctions(ch.functions)}
+                    >
+                      {t("common.edit")}
+                    </button>
+                  {/if}
+                </div>
+              </div>
+              {#if detail.team_supported}
+                <div class="mb-3">
+                  <TeamPicker address={detail.address} channel={ch.number} />
+                </div>
+              {/if}
               <ChannelPanel
                 address={detail.address}
                 channel={ch.number}
@@ -991,6 +1195,14 @@
                   <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.loading_parameters")}</span>
                 {:else if historyChannelNo !== null}
                   <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.no_numeric")}</span>
+                {/if}
+                {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
+                  <RecordToggle
+                    central={detail.central}
+                    interfaceId={detail.interface_id}
+                    channel={`${detail.address}:${historyChannelNo}`}
+                    parameter={historyParameter}
+                  />
                 {/if}
               </div>
               {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}

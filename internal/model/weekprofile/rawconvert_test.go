@@ -507,6 +507,46 @@ func TestSimpleParamsetRoundTrip(t *testing.T) {
 	}
 }
 
+// TestSimpleParamsetColorRoundTrip asserts the universal-light colour
+// fields round-trip losslessly through the model path (parse → build),
+// including a legitimate 0 value, and that a colour-less group emits no
+// colour key.
+func TestSimpleParamsetColorRoundTrip(t *testing.T) {
+	t.Parallel()
+	ct, cv := 2, 524288
+	raw := map[string]any{
+		"03_WP_WEEKDAY":      2,
+		"03_WP_FIXED_HOUR":   7,
+		"03_WP_FIXED_MINUTE": 30,
+		"03_WP_LEVEL":        1.0,
+		"03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":  ct,
+		"03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE": cv,
+	}
+	s, err := ParseSimpleRawParamset(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	entry, ok := s.Entries[3]
+	if !ok {
+		t.Fatal("group 3 missing")
+	}
+	if entry.ColorType == nil || *entry.ColorType != ct || entry.ColorValue == nil || *entry.ColorValue != cv {
+		t.Fatalf("colour not parsed: %+v", entry)
+	}
+
+	out := BuildSimpleRawParamset(s)
+	if out["03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"] != ct ||
+		out["03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"] != cv {
+		t.Errorf("colour not re-emitted: %v / %v",
+			out["03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"],
+			out["03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"])
+	}
+	// A colour-less active group emits no colour key.
+	if _, present := out["01_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"]; present {
+		t.Error("colour-less group must not carry a colour key")
+	}
+}
+
 func TestParseSimpleRawParamsetSkipsInactiveGroups(t *testing.T) {
 	t.Parallel()
 	// Group 5 WEEKDAY = 0 → inactive.

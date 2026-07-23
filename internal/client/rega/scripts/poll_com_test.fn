@@ -1,0 +1,44 @@
+!# openccu-loom — poll_com_test
+!# Params: ##address## (device or channel address), ##started## (the start
+!#         timestamp returned by start_com_test)
+!# Output: JSON { "passed": bool, "completed": "<Y-m-d H:M:S>" }
+!#
+!# Polls whether the device's last-completed-test time advanced past the
+!# start timestamp — the device answered the radio test frame. Same
+!# rename-proof resolution as start_com_test.fn.
+
+string sAddress = "##address##";
+string sStarted = "##started##";
+string sTargetId = "";
+
+object oByName = dom.GetObject(sAddress);
+if (oByName) {
+    if (oByName.Address() == sAddress) {
+        sTargetId = oByName.ID();
+    }
+}
+if (sTargetId == "") {
+    object oDevices = dom.GetObject(ID_DEVICES);
+    if (oDevices) {
+        string sDevId;
+        foreach (sDevId, oDevices.EnumIDs()) {
+            object oDev = dom.GetObject(sDevId);
+            if (oDev) {
+                if (oDev.Address() == sAddress) {
+                    sTargetId = oDev.ID();
+                }
+            }
+        }
+    }
+}
+if (sTargetId == "") {
+    Write("{\"passed\":false}");
+} else {
+    object oDev = dom.GetObject(sTargetId);
+    string sCompleted = oDev.LastTestCompletedTime();
+    if (sCompleted >= sStarted) {
+        Write("{\"passed\":true,\"completed\":\"" # sCompleted # "\"}");
+    } else {
+        Write("{\"passed\":false}");
+    }
+}

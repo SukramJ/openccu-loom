@@ -65,6 +65,50 @@ func (i Interface) SupportsInstallMode() bool {
 	return ok
 }
 
+// SupportsConfigRestore reports whether the stored configuration can be
+// re-transmitted to a device on this interface via
+// `restoreConfigToDevice`. True for HmIP-RF and BidCos-RF (rfd /
+// HMIPServer); false for BidCos-Wired, CUxD and VirtualDevices, which
+// do not expose the method.
+func (i Interface) SupportsConfigRestore() bool {
+	_, ok := InterfacesSupportingConfigRestore[i]
+	return ok
+}
+
+// SupportsReplace reports whether a paired device on this interface can
+// be swapped for a new one via `replaceDevice`. True for BidCos-RF and
+// BidCos-Wired (rfd / hs485d); false for HmIP-* (HMIPServer throws
+// NotImplementedException), CUxD and VirtualDevices.
+func (i Interface) SupportsReplace() bool {
+	_, ok := InterfacesSupportingReplace[i]
+	return ok
+}
+
+// SupportsDeviceSearch reports whether a wired-bus scan (`searchDevices`)
+// can be triggered on this interface. True for BidCos-Wired (hs485d)
+// only; false for every RF / HmIP / CUxD / VirtualDevices interface.
+func (i Interface) SupportsDeviceSearch() bool {
+	_, ok := InterfacesSupportingDeviceSearch[i]
+	return ok
+}
+
+// SupportsCommunicationTest reports whether the CCU's per-device
+// communication/function test can run on this interface. True for the
+// radio interfaces (HmIP-RF, BidCos-RF, BidCos-Wired); false for
+// VirtualDevices and CUxD.
+func (i Interface) SupportsCommunicationTest() bool {
+	_, ok := InterfacesSupportingCommunicationTest[i]
+	return ok
+}
+
+// SupportsTeams reports whether channel team assignment (`setTeam` /
+// `listTeams`) is available on this interface. True for BidCos-RF and
+// HmIP-RF; false for BidCos-Wired, CUxD and VirtualDevices.
+func (i Interface) SupportsTeams() bool {
+	_, ok := InterfacesSupportingTeams[i]
+	return ok
+}
+
 // PushesConfigPending reports whether this interface — taken on its
 // own — delivers reliable CONFIG_PENDING events on MASTER writes.
 // True for HmIP-*; false for BidCos-* (CONFIG_PENDING is unreliable;
@@ -147,6 +191,56 @@ var (
 		InterfaceBidCosRF:    {},
 		InterfaceBidCosWired: {},
 		InterfaceHmIPRF:      {},
+	}
+
+	// InterfacesSupportingConfigRestore lists the interfaces whose
+	// daemon exposes `restoreConfigToDevice`. rfd (BidCos-RF) and
+	// HMIPServer (HmIP-RF) implement it; hs485d (BidCos-Wired) and CUxD
+	// do not. HmIP-Wired has no own interface — it rides the HmIP-RF
+	// service and is covered transitively.
+	InterfacesSupportingConfigRestore = map[Interface]struct{}{
+		InterfaceBidCosRF: {},
+		InterfaceHmIPRF:   {},
+	}
+
+	// InterfacesSupportingReplace lists the interfaces whose daemon
+	// exposes `listReplaceableDevices` / `replaceDevice`. rfd
+	// (BidCos-RF) and hs485d (BidCos-Wired) implement the swap; HMIPServer
+	// (HmIP-*) throws NotImplementedException, and CUxD / VirtualDevices
+	// have no such concept — the CCU WebUI hides "replace device" for
+	// HmIP for the same reason.
+	InterfacesSupportingReplace = map[Interface]struct{}{
+		InterfaceBidCosRF:    {},
+		InterfaceBidCosWired: {},
+	}
+
+	// InterfacesSupportingDeviceSearch lists the interfaces whose daemon
+	// exposes the wired-bus scan `searchDevices`. Only hs485d
+	// (BidCos-Wired) implements it — RF pairing uses setInstallMode +
+	// addDevice, not a bus scan, and HmIP / CUxD / VirtualDevices have no
+	// bus to scan.
+	InterfacesSupportingDeviceSearch = map[Interface]struct{}{
+		InterfaceBidCosWired: {},
+	}
+
+	// InterfacesSupportingCommunicationTest lists the radio interfaces on
+	// which the CCU's per-device communication test can run. HmIP-RF,
+	// BidCos-RF and BidCos-Wired reach real devices over the bus/radio;
+	// VirtualDevices (aggregated groups, no radio) and CUxD are excluded.
+	InterfacesSupportingCommunicationTest = map[Interface]struct{}{
+		InterfaceHmIPRF:      {},
+		InterfaceBidCosRF:    {},
+		InterfaceBidCosWired: {},
+	}
+
+	// InterfacesSupportingTeams lists the interfaces whose daemon exposes
+	// `setTeam` / `listTeams` (channel team assignment, e.g. smoke
+	// detectors). rfd (BidCos-RF) and HMIPServer (HmIP-RF) implement it;
+	// BidCos-Wired, CUxD and VirtualDevices do not. HmIP-Wired rides the
+	// HmIP-RF service transitively.
+	InterfacesSupportingTeams = map[Interface]struct{}{
+		InterfaceBidCosRF: {},
+		InterfaceHmIPRF:   {},
 	}
 
 	// InterfacesPushingConfigPending lists the interfaces that emit

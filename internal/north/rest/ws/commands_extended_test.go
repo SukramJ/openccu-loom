@@ -14,15 +14,31 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 type stubDevices struct {
-	renamed         map[string]string
-	renamedChannels map[string]string
-	lastInclude     bool
-	installModes    map[string]int
-	failOnAddress   string
+	testedDevices    map[string]bool
+	teamSets         map[string]string
+	renamed          map[string]string
+	renamedChannels  map[string]string
+	lastInclude      bool
+	installModes     map[string]int
+	channelRooms     map[string][]string
+	channelFunctions map[string][]string
+	restoredConfigs  map[string]bool
+	failOnAddress    string
+
+	// replace-candidates scripting + recording.
+	replaceCandidatesResult      []hmapi.ReplaceCandidate
+	replaceCandidatesErr         error
+	lastReplaceCandidatesCentral string
+	lastReplaceCandidatesAddress string
+
+	// replace scripting + recording.
+	replaceErr   error
+	replaceCalls []replaceCall
 }
 
 func (s *stubDevices) Rename(_ context.Context, address, name string, includeChannels bool) error {
@@ -53,6 +69,82 @@ func (s *stubDevices) SetInstallMode(_ context.Context, address string, dur int)
 		s.installModes = map[string]int{}
 	}
 	s.installModes[address] = dur
+	return nil
+}
+
+func (s *stubDevices) SetChannelRooms(_ context.Context, deviceAddr string, channelNo int, rooms []string) error {
+	if deviceAddr == s.failOnAddress {
+		return errors.New("device offline")
+	}
+	if s.channelRooms == nil {
+		s.channelRooms = map[string][]string{}
+	}
+	s.channelRooms[deviceAddr+":"+strconv.Itoa(channelNo)] = rooms
+	return nil
+}
+
+func (s *stubDevices) SetChannelFunctions(_ context.Context, deviceAddr string, channelNo int, functions []string) error {
+	if deviceAddr == s.failOnAddress {
+		return errors.New("device offline")
+	}
+	if s.channelFunctions == nil {
+		s.channelFunctions = map[string][]string{}
+	}
+	s.channelFunctions[deviceAddr+":"+strconv.Itoa(channelNo)] = functions
+	return nil
+}
+
+func (s *stubDevices) RestoreConfig(_ context.Context, address string) error {
+	if address == s.failOnAddress {
+		return errors.New("device offline")
+	}
+	if s.restoredConfigs == nil {
+		s.restoredConfigs = map[string]bool{}
+	}
+	s.restoredConfigs[address] = true
+	return nil
+}
+
+// replaceCall records one ReplaceDevice invocation forwarded to the
+// domain layer.
+type replaceCall struct {
+	central, oldAddress, newAddress string
+}
+
+func (s *stubDevices) ReplaceCandidates(_ context.Context, central, newAddress string) ([]hmapi.ReplaceCandidate, error) {
+	s.lastReplaceCandidatesCentral = central
+	s.lastReplaceCandidatesAddress = newAddress
+	if s.replaceCandidatesErr != nil {
+		return nil, s.replaceCandidatesErr
+	}
+	return s.replaceCandidatesResult, nil
+}
+
+func (s *stubDevices) ReplaceDevice(_ context.Context, central, oldAddress, newAddress string) error {
+	if s.replaceErr != nil {
+		return s.replaceErr
+	}
+	s.replaceCalls = append(s.replaceCalls, replaceCall{central: central, oldAddress: oldAddress, newAddress: newAddress})
+	return nil
+}
+
+func (s *stubDevices) TestDeviceCommunication(_ context.Context, address string) (hmapi.CommunicationTestResult, error) {
+	if s.testedDevices == nil {
+		s.testedDevices = map[string]bool{}
+	}
+	s.testedDevices[address] = true
+	return hmapi.CommunicationTestResult{Passed: true}, nil
+}
+
+func (s *stubDevices) TeamCandidates(_ context.Context, _ string, _ int) ([]hmapi.TeamCandidate, error) {
+	return []hmapi.TeamCandidate{{Address: "TEAM:1", Current: true}}, nil
+}
+
+func (s *stubDevices) SetChannelTeam(_ context.Context, deviceAddr string, channelNo int, team string) error {
+	if s.teamSets == nil {
+		s.teamSets = map[string]string{}
+	}
+	s.teamSets[deviceAddr+":"+strconv.Itoa(channelNo)] = team
 	return nil
 }
 
@@ -216,6 +308,138 @@ func TestExtendedDeviceRenameChannelHandler(t *testing.T) {
 	dispatchExpectErr(t, r, "device.rename_channel", map[string]any{"address": "ABC0001", "channel": 1, "name": ""}, "name is required")
 }
 
+// TestExtendedDeviceSetChannelRooms exercises `device.set_channel_rooms`
+// end to end through the Router: the happy path forwards address/channel/
+// rooms to DeviceWriter.SetChannelRooms and echoes them back in the
+// result; a missing address or a nil rooms field is rejected before the
+// domain layer is ever called.
+func TestExtendedDeviceSetChannelRooms(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+		"rooms":   []string{"Wohnzimmer"},
+	}).(map[string]any)
+	if out["address"] != "ABC0001" {
+		t.Fatalf("result address = %v, want ABC0001", out["address"])
+	}
+	if out["channel"] != 1 {
+		t.Fatalf("result channel = %v, want 1", out["channel"])
+	}
+	rooms, ok := out["rooms"].([]string)
+	if !ok || len(rooms) != 1 || rooms[0] != "Wohnzimmer" {
+		t.Fatalf("result rooms = %v", out["rooms"])
+	}
+	if got := devs.channelRooms["ABC0001:1"]; len(got) != 1 || got[0] != "Wohnzimmer" {
+		t.Fatalf("channel rooms not applied to the domain layer: %v", devs.channelRooms)
+	}
+
+	dispatchExpectErr(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "",
+		"channel": 1,
+		"rooms":   []string{"Wohnzimmer"},
+	}, "address is required")
+
+	dispatchExpectErr(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+	}, "rooms is required")
+}
+
+// TestExtendedDeviceSetChannelRoomsEmptyArrayClears verifies the "explicit
+// empty array clears the assignment" contract survives the WS decode path:
+// an explicit `"rooms": []` must reach SetChannelRooms as a non-nil,
+// zero-length slice — distinct from an omitted `rooms` field, which is
+// rejected before the domain layer is called.
+func TestExtendedDeviceSetChannelRoomsEmptyArrayClears(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_rooms", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+		"rooms":   []string{},
+	}).(map[string]any)
+	rooms, ok := out["rooms"].([]string)
+	if !ok {
+		t.Fatalf("expected a rooms slice in the result, got %T: %v", out["rooms"], out["rooms"])
+	}
+	if len(rooms) != 0 {
+		t.Fatalf("expected an empty rooms slice, got %v", rooms)
+	}
+	got, ok := devs.channelRooms["ABC0001:1"]
+	if !ok {
+		t.Fatalf("expected an explicit empty-rooms call to reach the domain layer, got %v", devs.channelRooms)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected zero rooms recorded, got %v", got)
+	}
+}
+
+// TestExtendedDeviceSetChannelFunctions mirrors
+// TestExtendedDeviceSetChannelRooms for `device.set_channel_functions`.
+func TestExtendedDeviceSetChannelFunctions(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_functions", map[string]any{
+		"address":   "ABC0001",
+		"channel":   1,
+		"functions": []string{"Licht"},
+	}).(map[string]any)
+	if out["address"] != "ABC0001" {
+		t.Fatalf("result address = %v, want ABC0001", out["address"])
+	}
+	if out["channel"] != 1 {
+		t.Fatalf("result channel = %v, want 1", out["channel"])
+	}
+	functions, ok := out["functions"].([]string)
+	if !ok || len(functions) != 1 || functions[0] != "Licht" {
+		t.Fatalf("result functions = %v", out["functions"])
+	}
+	if got := devs.channelFunctions["ABC0001:1"]; len(got) != 1 || got[0] != "Licht" {
+		t.Fatalf("channel functions not applied to the domain layer: %v", devs.channelFunctions)
+	}
+
+	dispatchExpectErr(t, r, "device.set_channel_functions", map[string]any{
+		"address": "",
+		"channel": 1,
+		"functions": []string{
+			"Licht",
+		},
+	}, "address is required")
+
+	dispatchExpectErr(t, r, "device.set_channel_functions", map[string]any{
+		"address": "ABC0001",
+		"channel": 1,
+	}, "functions is required")
+}
+
+// TestExtendedDeviceSetChannelFunctionsEmptyArrayClears mirrors
+// TestExtendedDeviceSetChannelRoomsEmptyArrayClears for functions.
+func TestExtendedDeviceSetChannelFunctionsEmptyArrayClears(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.set_channel_functions", map[string]any{
+		"address":   "ABC0001",
+		"channel":   1,
+		"functions": []string{},
+	}).(map[string]any)
+	functions, ok := out["functions"].([]string)
+	if !ok {
+		t.Fatalf("expected a functions slice in the result, got %T: %v", out["functions"], out["functions"])
+	}
+	if len(functions) != 0 {
+		t.Fatalf("expected an empty functions slice, got %v", functions)
+	}
+	got, ok := devs.channelFunctions["ABC0001:1"]
+	if !ok {
+		t.Fatalf("expected an explicit empty-functions call to reach the domain layer, got %v", devs.channelFunctions)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected zero functions recorded, got %v", got)
+	}
+}
+
 func TestExtendedDeviceInstallMode(t *testing.T) {
 	r, devs, _, _, _, _ := newRouterWithExtended()
 	dispatch(t, r, "device.install_mode", map[string]any{"address": "ABC0001", "duration_seconds": 90})
@@ -226,6 +450,163 @@ func TestExtendedDeviceInstallMode(t *testing.T) {
 	dispatch(t, r, "device.install_mode", map[string]any{"address": "DEF0002"})
 	if devs.installModes["DEF0002"] != 60 {
 		t.Fatalf("default duration should be 60, got %d", devs.installModes["DEF0002"])
+	}
+}
+
+// TestExtendedDeviceRestoreConfig exercises `device.restore_config` end to
+// end through the Router: the happy path forwards the address to
+// DeviceWriter.RestoreConfig and echoes it back in the result; a missing
+// address is rejected before the domain layer is ever called.
+func TestExtendedDeviceRestoreConfig(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.restore_config", map[string]any{
+		"address": "ABC0001",
+	}).(map[string]any)
+	if out["address"] != "ABC0001" {
+		t.Fatalf("result address = %v, want ABC0001", out["address"])
+	}
+	if !devs.restoredConfigs["ABC0001"] {
+		t.Fatalf("restore config not applied to the domain layer: %v", devs.restoredConfigs)
+	}
+
+	dispatchExpectErr(t, r, "device.restore_config", map[string]any{
+		"address": "",
+	}, "address is required")
+}
+
+// TestExtendedDeviceTest exercises `device.test` end to end through the
+// Router: the happy path forwards the address to
+// DeviceWriter.TestDeviceCommunication and returns its result verbatim; a
+// missing address is rejected before the domain layer is ever called.
+func TestExtendedDeviceTest(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.test", map[string]any{
+		"address": "ABC0001",
+	}).(hmapi.CommunicationTestResult)
+	if !out.Passed {
+		t.Fatalf("result=%+v, want Passed=true (stubDevices.TestDeviceCommunication canned result)", out)
+	}
+	if !devs.testedDevices["ABC0001"] {
+		t.Fatalf("communication test not forwarded to the domain layer: %v", devs.testedDevices)
+	}
+
+	dispatchExpectErr(t, r, "device.test", map[string]any{
+		"address": "",
+	}, "address is required")
+}
+
+// TestExtendedDeviceTestMissingAddressReturnsBadRequest asserts the error
+// code (not just the message) for the missing-address rejection, mirroring
+// TestExtendedParamsetPut_EditLockEnforced's code-level assertions.
+func TestExtendedDeviceTestMissingAddressReturnsBadRequest(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	raw, _ := json.Marshal(map[string]any{"address": ""})
+	res := r.Dispatch(opCtx(), "device.test", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected code %q, got %+v", CommandErrorBadRequest, res.Error)
+	}
+	if len(devs.testedDevices) != 0 {
+		t.Fatalf("domain layer must not be called on validation failure, got %v", devs.testedDevices)
+	}
+}
+
+func TestExtendedDeviceTeamCandidates(t *testing.T) {
+	r, _, _, _, _, _ := newRouterWithExtended()
+	out := dispatch(t, r, "device.team_candidates", map[string]any{
+		"address": "SD001",
+		"channel": 1,
+	}).(map[string]any)
+	if _, ok := out["candidates"]; !ok {
+		t.Fatalf("missing candidates envelope: %+v", out)
+	}
+	dispatchExpectErr(t, r, "device.team_candidates", map[string]any{"address": ""}, "address is required")
+}
+
+func TestExtendedDeviceSetTeam(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+	out := dispatch(t, r, "device.set_team", map[string]any{
+		"address": "SD001",
+		"channel": 1,
+		"team":    "TEAM:2",
+	}).(map[string]any)
+	if out["team"] != "TEAM:2" {
+		t.Fatalf("result=%+v, want team TEAM:2", out)
+	}
+	if devs.teamSets["SD001:1"] != "TEAM:2" {
+		t.Fatalf("team assignment not forwarded: %v", devs.teamSets)
+	}
+	dispatchExpectErr(t, r, "device.set_team", map[string]any{"address": ""}, "address is required")
+}
+
+// TestExtendedDeviceReplaceCandidates exercises `device.replace_candidates`
+// end to end through the Router: the happy path forwards address/central
+// to DeviceWriter.ReplaceCandidates and wraps its result in a {"candidates":
+// [...]} envelope; a missing address is rejected before the domain layer is
+// ever called.
+func TestExtendedDeviceReplaceCandidates(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+	devs.replaceCandidatesResult = []hmapi.ReplaceCandidate{
+		{Address: "OLD001", Model: "HM-Sec-SC", Interface: "BidCos-RF", ModelMatches: true},
+	}
+
+	out := dispatch(t, r, "device.replace_candidates", map[string]any{
+		"address": "NEW001", "central": "ccu-01",
+	}).(map[string]any)
+	candidates, ok := out["candidates"].([]hmapi.ReplaceCandidate)
+	if !ok || len(candidates) != 1 || candidates[0].Address != "OLD001" {
+		t.Fatalf("candidates = %v", out["candidates"])
+	}
+	if devs.lastReplaceCandidatesAddress != "NEW001" || devs.lastReplaceCandidatesCentral != "ccu-01" {
+		t.Fatalf("forwarded address/central mismatch: address=%q central=%q",
+			devs.lastReplaceCandidatesAddress, devs.lastReplaceCandidatesCentral)
+	}
+
+	dispatchExpectErr(t, r, "device.replace_candidates", map[string]any{"address": ""}, "address is required")
+}
+
+// TestExtendedDeviceReplaceCandidatesEmptyReturnsEmptyArray verifies a nil
+// candidate slice from the domain layer is normalised to a non-nil empty
+// array in the response, never `null`.
+func TestExtendedDeviceReplaceCandidatesEmptyReturnsEmptyArray(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+	devs.replaceCandidatesResult = nil
+
+	out := dispatch(t, r, "device.replace_candidates", map[string]any{"address": "NEW001"}).(map[string]any)
+	candidates, ok := out["candidates"].([]hmapi.ReplaceCandidate)
+	if !ok {
+		t.Fatalf("expected a candidates slice in the result, got %T: %v", out["candidates"], out["candidates"])
+	}
+	if len(candidates) != 0 {
+		t.Fatalf("expected an empty candidates slice, got %v", candidates)
+	}
+}
+
+// TestExtendedDeviceReplace exercises `device.replace` end to end through
+// the Router: the happy path forwards address/old_address/central to
+// DeviceWriter.ReplaceDevice and echoes an acknowledgement; a missing
+// address or old_address is rejected before the domain layer is ever
+// called.
+func TestExtendedDeviceReplace(t *testing.T) {
+	r, devs, _, _, _, _ := newRouterWithExtended()
+
+	out := dispatch(t, r, "device.replace", map[string]any{
+		"address": "NEW001", "old_address": "OLD001", "central": "ccu-01",
+	}).(map[string]any)
+	if out["status"] != "replacing" || out["old_address"] != "OLD001" || out["new_address"] != "NEW001" || out["central"] != "ccu-01" {
+		t.Fatalf("device.replace result = %v", out)
+	}
+	want := replaceCall{central: "ccu-01", oldAddress: "OLD001", newAddress: "NEW001"}
+	if len(devs.replaceCalls) != 1 || devs.replaceCalls[0] != want {
+		t.Fatalf("replace not recorded: got %+v, want [%+v]", devs.replaceCalls, want)
+	}
+
+	dispatchExpectErr(t, r, "device.replace", map[string]any{"address": "NEW001"}, "old_address is required")
+	dispatchExpectErr(t, r, "device.replace", map[string]any{"old_address": "OLD001"}, "address is required")
+	if len(devs.replaceCalls) != 1 {
+		t.Fatalf("invalid requests must not reach the domain layer, got %+v", devs.replaceCalls)
 	}
 }
 

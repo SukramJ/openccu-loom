@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -104,6 +105,8 @@ func (s *stubBackend) GetLinkParamset(context.Context, string, string) (map[stri
 	return nil, nil
 }
 
+func (s *stubBackend) ActivateLinkParamset(context.Context, string, string, bool) error { return nil }
+
 func (s *stubBackend) PutLinkParamset(context.Context, string, string, map[string]any) error {
 	return nil
 }
@@ -142,6 +145,38 @@ func (*stubBackend) GetInstallMode(context.Context) (int, error) { return 0, nil
 
 func (*stubBackend) SetInstallMode(context.Context, bool, int, int, string) error {
 	return nil
+}
+
+func (*stubBackend) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*stubBackend) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*stubBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*stubBackend) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*stubBackend) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (*stubBackend) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*stubBackend) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*stubBackend) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (*stubBackend) GetServiceMessages(context.Context, string) ([]map[string]any, error) {

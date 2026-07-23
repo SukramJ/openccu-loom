@@ -134,6 +134,41 @@ func (p *instanceProxy) rewrite(pr *httputil.ProxyRequest) {
 	}
 	if p.inst.Token != "" && pr.In.Header.Get("Authorization") == "" {
 		pr.Out.Header.Set("Authorization", "Bearer "+p.inst.Token)
+		// The injected token is the sole intended credential in token mode.
+		// Drop any daemon session cookie the browser sends so it cannot compete
+		// with (and, on the daemon, override) the token — a stale lower-role
+		// session would otherwise downgrade the request. No-token mode keeps the
+		// cookie: there the proxied login session IS the credential.
+		stripSessionCookie(pr.Out)
+	}
+}
+
+// sessionCookieName mirrors auth.SessionCookieName (the daemon session cookie).
+// It is duplicated rather than imported so the lean remote-proxy binary does
+// not pull in the auth package's transitive dependencies.
+const sessionCookieName = "openccu_loom_session"
+
+// stripSessionCookie removes the daemon session cookie from req's Cookie header
+// while preserving every other cookie, rebuilding the header from the parsed
+// cookies. A token-mode request must never forward a competing session.
+func stripSessionCookie(req *http.Request) {
+	cookies := req.Cookies()
+	hasSession := false
+	for _, c := range cookies {
+		if c.Name == sessionCookieName {
+			hasSession = true
+			break
+		}
+	}
+	if !hasSession {
+		return
+	}
+	req.Header.Del("Cookie")
+	for _, c := range cookies {
+		if c.Name == sessionCookieName {
+			continue
+		}
+		req.AddCookie(c)
 	}
 }
 
