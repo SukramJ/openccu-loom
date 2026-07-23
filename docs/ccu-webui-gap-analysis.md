@@ -1,6 +1,6 @@
 # CCU-WebUI-Ersatz: Gap-Analyse und offene Punkte
 
-Stand: 2026-07-21 · Basis: OpenCCU-Loom 0.45.0 (`main`), occu (CCU3-WebUI,
+Stand: 2026-07-23 · Basis: OpenCCU-Loom 0.47.0 (`main`), occu (CCU3-WebUI,
 `../occu/WebUI/www/`), OpenCCU (`../OpenCCU/buildroot-external/`).
 `OpenCCU-Base` ist lokal nicht ausgecheckt; die Distributions-Ebene
 (Overlays, occu-Patches, Recovery, Add-on-Ökosystem) ist über das
@@ -25,6 +25,16 @@ wird als Synonym für `ausschließen` gewertet.
 (u. a. der komplette Programmeditor-Block PR01–PR06, Favoriten/Benutzer
 O01–O05, Systemsteuerung SY01–SY20) · 3 × `abgelehnt` (E01, E03, E04).
 Der Umsetzungsplan in §7 enthält nur die beschlossenen Punkte.
+
+**Umsetzungsstand 2026-07-23 (Basis 0.47.0):** Von den beschlossenen
+Wellen (§7) sind **1–6 geliefert** — Wellen 1a–1h + GR01 bis 0.46.0,
+Wellen 3, 5, 6 sowie die Welle-4-Kernpunkte G11/G14 mit 0.47.0. **Offen
+bleiben** aus den beschlossenen Punkten nur noch der **Gruppen-Konfigurator
+GR02–GR05** (Welle 2, XL, Rekonstruktion abgeschlossen — siehe
+[groups-wave-status](./ccu-webui-groups-wave-status.md)) und die
+**Welle-4-Restposten** G08/G12/G16 (teils Hardware-abhängig,
+`docs/ccu-webui-gap-analysis.md`-§4.4). Der jeweils erledigte Einzelpunkt
+in §4 trägt einen `✅ erledigt (0.4x)`-Vermerk.
 
 ---
 
@@ -997,6 +1007,12 @@ Welle 1 besteht aus acht unabhängigen, klein geschnittenen Paketen
 (je 1–2 PRs, parallelisierbar); ab Welle 2 folgen die großen Blöcke.
 Abhängigkeiten: K01 vor G10 (gleiches Paket), A3-ADR vor GR02,
 GR02 vor GR03–GR05.
+
+**Lieferstand 2026-07-23 (0.47.0):** Wellen **1a–1h ✅** und
+**GR01 ✅** (bis 0.46.0); Wellen **3 ✅, 5 ✅, 6 ✅** sowie die
+Welle-4-Kernpunkte **G11 ✅, G14 ✅** (0.47.0). **Offen:** Welle **2
+GR02–GR05** (Konfigurator, XL) und die Welle-4-Restposten **G08, G12, G16**
+(teils Hardware-abhängig).
 
 | Welle | Punkte | Inhalt |
 |---|---|---|
