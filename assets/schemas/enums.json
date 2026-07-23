@@ -3113,6 +3113,14 @@
           "wire_value": "ASTRO_TYPE"
         },
         {
+          "go_name": "ScheduleFieldColorType",
+          "wire_value": "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"
+        },
+        {
+          "go_name": "ScheduleFieldColorValue",
+          "wire_value": "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"
+        },
+        {
           "go_name": "ScheduleFieldCondition",
           "wire_value": "CONDITION"
         },
@@ -3139,6 +3147,10 @@
         {
           "go_name": "ScheduleFieldLevel2",
           "wire_value": "LEVEL_2"
+        },
+        {
+          "go_name": "ScheduleFieldOutputBehaviour",
+          "wire_value": "OUTPUT_BEHAVIOUR"
         },
         {
           "go_name": "ScheduleFieldRampTimeBase",

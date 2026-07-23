@@ -862,12 +862,23 @@ sind abgedeckt. Offen:
   Der architektonisch saubere Fix ist zuerst upstream: HM-CC-RT-DN in
   aiohomematic auf `schedule_channel_no=BIDCOS_DEVICE_CHANNEL_DUMMY`
   registrieren, dann Profile regenerieren + Modell-Snapshot neu basieren.
-- **W02 — Universallicht-Wochenprogramm: Farbe/Effekt je Schaltpunkt** (partial, P3 L)
-  `WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_*`/`WP_OUTPUT_BEHAVIOUR`
-  (HmIP-RGBW/DALI/LSC) fehlen im Schedule-Modell. *Empfehlung:* Felder in
-  SimpleEntry + Roundtrip so erweitern, dass nicht editierte Farbfelder
-  erhalten bleiben; Farb-Widget nur für Kanäle mit den Parametern.
-  **Entscheidung:** `umsetzen`
+- **W02 — Universallicht-Wochenprogramm: Farbe/Effekt je Schaltpunkt** ✅ Slice 1
+  erledigt (0.47.0, API 2.48.0)
+  `WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE/VALUE` (HmIP-RGBW/DALI/LSC)
+  + `WP_OUTPUT_BEHAVIOUR` (HmIP-BSL) werden jetzt als **opake Ints** durch
+  DTO- und Model-Pfad getragen (`SimpleScheduleEntry.color_type/color_value/
+  output_behaviour`, `ScheduleField`-Enum + Filter erweitert). Emit nur bei
+  Vorhandensein (nil ≠ 0), an den aktuellen Slot des Eintrags geklebt →
+  deterministischer Erhalt über Reorder/Insert/Delete (vorher nicht-
+  deterministisch verwaist/vererbt). `ColorCapable`-Flag am Schedule; SPA
+  zeigt eine **read-only Farb-Kategorie-Badge** je Schaltpunkt (Slice-1-sicher,
+  kein Write). Getestet: Round-Trip/Reorder/0-Erhalt (DTO + Model), Filter,
+  Editor-vitest.
+  **Slice 2 (zurückgestellt, braucht Live-RGBW-Gerät + Freigabe):** die
+  20-Bit-`..._VALUE`-Packung (Hue/Sättigung|Kelvin|Effekt) decodieren/encodieren
+  + editierbares Farbwidget. Die Packung ist in occu/aiohomematic nicht
+  dokumentiert → Encode muss gegen ein echtes HmIP-RGBW (172.18.4.29,
+  benanntes Zielgerät + Schreibfreigabe) validiert werden.
 
 ---
 

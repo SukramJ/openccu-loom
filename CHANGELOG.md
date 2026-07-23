@@ -69,6 +69,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
   HmIP-RF only (`team_supported`). A per-channel team picker appears in
   the device detail.
+- **Universal-light weekly-program colour preserved.** Editing a
+  universal light's (HmIP-RGBW / DRG-DALI / LSC) or HmIP-BSL weekly
+  program no longer discards the per-switch-point colour / effect. The
+  `HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE` / `_VALUE` and
+  `OUTPUT_BEHAVIOUR` fields are carried through the schedule DTO as opaque
+  values, glued to their switch point's slot so they survive reorder /
+  insert / delete deterministically (previously they could be orphaned or
+  inherited by an unrelated slot). The schedule editor shows a read-only
+  colour badge per switch point on colour-capable devices
+  (`color_capable`). Editing the colour value is a follow-up (its packed
+  layout needs live-device validation).
 - **System-variable usage overview + delete warning.** A new `GET
   /api/v1/sysvars/{name}/usage` endpoint (and the read-only
   `sysvars.usage` WebSocket command) lists the CCU programs that

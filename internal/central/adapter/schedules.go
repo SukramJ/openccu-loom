@@ -383,9 +383,24 @@ func (s *SchedulesDomain) GetClimateSchedule(
 			Kind:          "simple",
 			Domain:        domain,
 			SimpleEntries: entries,
+			ColorCapable:  hasColorScheduleParams(values),
 		}, nil
 	}
 	return nil, ErrNoSchedule
+}
+
+// hasColorScheduleParams reports whether the MASTER values carry any
+// per-switch-point colour/effect field (universal lights) or an
+// OUTPUT_BEHAVIOUR field (HmIP-BSL) — the signal the SPA gates its
+// colour summary on.
+func hasColorScheduleParams(raw map[string]any) bool {
+	for k := range raw {
+		if strings.HasSuffix(k, "_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE") ||
+			strings.HasSuffix(k, "_WP_OUTPUT_BEHAVIOUR") {
+			return true
+		}
+	}
+	return false
 }
 
 // detectScheduleDomain inspects the device's main channel types to
@@ -720,6 +735,12 @@ func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nol
 		rampBaseSeen     bool
 		rampFactor       int
 		rampFactorOK     bool
+		colorType        int
+		colorTypeSeen    bool
+		colorValue       int
+		colorValueSeen   bool
+		outputBehaviour  int
+		outputBehSeen    bool
 		seen             bool
 	}
 	bySlot := make(map[int]*slot)
@@ -800,6 +821,21 @@ func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nol
 				s.rampFactor = i
 				s.rampFactorOK = true
 			}
+		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":
+			if i, ok := coerceInt(v); ok {
+				s.colorType = i
+				s.colorTypeSeen = true
+			}
+		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE":
+			if i, ok := coerceInt(v); ok {
+				s.colorValue = i
+				s.colorValueSeen = true
+			}
+		case "OUTPUT_BEHAVIOUR":
+			if i, ok := coerceInt(v); ok {
+				s.outputBehaviour = i
+				s.outputBehSeen = true
+			}
 		}
 	}
 	keys := make([]int, 0, len(bySlot))
@@ -854,6 +890,20 @@ func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nol
 		}
 		if s.rampBaseSeen && s.rampFactorOK && s.rampFactor > 0 && s.rampFactor <= maxScheduleFactor {
 			entry.RampTime = formatTimeBaseFactor(s.rampBase, s.rampFactor)
+		}
+		// Universal-light colour / effect (opaque, lossless). 0 is a
+		// legitimate value, so presence is tracked separately from value.
+		if s.colorTypeSeen {
+			ct := s.colorType
+			entry.ColorType = &ct
+		}
+		if s.colorValueSeen {
+			cv := s.colorValue
+			entry.ColorValue = &cv
+		}
+		if s.outputBehSeen {
+			ob := s.outputBehaviour
+			entry.OutputBehaviour = &ob
 		}
 		out = append(out, entry)
 	}
@@ -1140,6 +1190,22 @@ func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry) (map[string]an
 			}
 			out[prefix+"RAMP_TIME_BASE"] = b
 			out[prefix+"RAMP_TIME_FACTOR"] = f
+		}
+
+		// Universal-light colour / effect (opaque). Emit only when the
+		// caller carried a value (nil = leave the CCU's stored value
+		// untouched via the sparse merge). Writing the read-back value
+		// re-glues the colour to this entry's current slot, so it survives
+		// reorder / insert / delete deterministically. 0 is legitimate and
+		// is written when present.
+		if e.ColorType != nil {
+			out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"] = *e.ColorType
+		}
+		if e.ColorValue != nil {
+			out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"] = *e.ColorValue
+		}
+		if e.OutputBehaviour != nil {
+			out[prefix+"OUTPUT_BEHAVIOUR"] = *e.OutputBehaviour
 		}
 	}
 	// Deactivate every unused slot (1..24) so deleted entries vanish on the CCU.

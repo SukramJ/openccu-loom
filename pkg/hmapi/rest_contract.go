@@ -259,6 +259,11 @@ type ClimateSchedule struct {
 	ActiveProfileIndex *int                      `json:"active_profile_index,omitempty"`
 	Profiles           map[string]ClimateProfile `json:"profiles,omitempty"`
 	SimpleEntries      []SimpleScheduleEntry     `json:"simple_entries,omitempty"`
+	// ColorCapable is true when the device advertises per-switch-point
+	// colour/effect fields (universal lights: HmIP-RGBW / DRG-DALI / LSC)
+	// or an OUTPUT_BEHAVIOUR field (HmIP-BSL). The SPA shows a colour
+	// summary per switch point only when this is set.
+	ColorCapable bool `json:"color_capable,omitempty"`
 }
 
 // SimpleScheduleEntry is one switching slot for a non-climate device.
@@ -329,6 +334,18 @@ type SimpleScheduleEntry struct {
 	LockMode   string `json:"lock_mode,omitempty"`
 	LockAction string `json:"lock_action,omitempty"`
 	Permission string `json:"permission,omitempty"`
+
+	// --- Universal-light colour / effect (opaque, lossless) ------
+	// ColorType is the discriminator (0 = hue/saturation, 1 = colour
+	// temperature, 2 = effect); ColorValue is the packed 20-bit value.
+	// Both are carried verbatim as opaque ints so an un-edited switch
+	// point's colour survives a read → write round-trip deterministically
+	// (glued to this entry's SlotNo). OutputBehaviour is the HmIP-BSL
+	// signal-LED field. Nil = absent (never written; preserves the CCU's
+	// sparse-merge). 0 is a legitimate value and is always round-tripped.
+	ColorType       *int `json:"color_type,omitempty"`
+	ColorValue      *int `json:"color_value,omitempty"`
+	OutputBehaviour *int `json:"output_behaviour,omitempty"`
 }
 
 // ScheduleChannelRef identifies the owning channel so the SPA can

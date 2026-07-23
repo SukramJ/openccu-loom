@@ -85,6 +85,14 @@ const (
 	ScheduleFieldRampTimeFactor ScheduleField = "RAMP_TIME_FACTOR"
 	ScheduleFieldTargetChannels ScheduleField = "TARGET_CHANNELS"
 	ScheduleFieldWeekday        ScheduleField = "WEEKDAY"
+	// Universal-light per-switch-point colour/effect fields. ColorType is
+	// the discriminator (0 = hue/saturation, 1 = colour temperature,
+	// 2 = effect); ColorValue is the packed value; both are carried as
+	// opaque ints for a lossless round-trip. OutputBehaviour is the
+	// HmIP-BSL signal-LED field.
+	ScheduleFieldColorType       ScheduleField = "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"
+	ScheduleFieldColorValue      ScheduleField = "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"
+	ScheduleFieldOutputBehaviour ScheduleField = "OUTPUT_BEHAVIOUR"
 )
 
 // String returns the wire representation.

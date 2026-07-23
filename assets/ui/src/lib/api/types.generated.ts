@@ -7401,6 +7401,12 @@ export interface components {
             lock_mode?: string;
             lock_action?: string;
             permission?: string;
+            /** @description Universal-light colour discriminator (0 hue/saturation, 1 colour temperature, 2 effect). Opaque; carried verbatim for a lossless round-trip. Absent on non-colour devices. */
+            color_type?: number;
+            /** @description Packed 20-bit colour/effect value; opaque. 0 is legitimate and is always round-tripped. */
+            color_value?: number;
+            /** @description HmIP-BSL signal-LED behaviour, opaque. */
+            output_behaviour?: number;
         };
         /**
          * @description Unified schedule DTO. ``kind`` is ``climate`` (thermostat
@@ -7418,6 +7424,8 @@ export interface components {
                 [key: string]: components["schemas"]["ClimateProfile"];
             };
             simple_entries?: components["schemas"]["SimpleScheduleEntry"][];
+            /** @description True when the device exposes per-switch-point colour/effect fields (universal lights) or an OUTPUT_BEHAVIOUR field (HmIP-BSL). The SPA shows a colour summary only when set. */
+            color_capable?: boolean;
         };
         /** @description Selects the active climate profile (P1..P6). */
         SetActiveProfileRequest: {

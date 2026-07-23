@@ -146,7 +146,10 @@ func ExtractSupportedScheduleFields(masterParamset map[string]struct{}) []hmenum
 			hmenum.ScheduleFieldRampTimeBase,
 			hmenum.ScheduleFieldRampTimeFactor,
 			hmenum.ScheduleFieldTargetChannels,
-			hmenum.ScheduleFieldWeekday:
+			hmenum.ScheduleFieldWeekday,
+			hmenum.ScheduleFieldColorType,
+			hmenum.ScheduleFieldColorValue,
+			hmenum.ScheduleFieldOutputBehaviour:
 			seen[sf] = struct{}{}
 		}
 	}

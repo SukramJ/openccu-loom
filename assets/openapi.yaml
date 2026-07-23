@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.47.0
+  version: 2.48.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -9557,6 +9557,20 @@ components:
         lock_mode: { type: string }
         lock_action: { type: string }
         permission: { type: string }
+        color_type:
+          type: integer
+          description: >
+            Universal-light colour discriminator (0 hue/saturation,
+            1 colour temperature, 2 effect). Opaque; carried verbatim for
+            a lossless round-trip. Absent on non-colour devices.
+        color_value:
+          type: integer
+          description: >
+            Packed 20-bit colour/effect value; opaque. 0 is legitimate and
+            is always round-tripped.
+        output_behaviour:
+          type: integer
+          description: HmIP-BSL signal-LED behaviour, opaque.
     Schedule:
       type: object
       required: [channel, kind]
@@ -9577,6 +9591,12 @@ components:
         simple_entries:
           type: array
           items: { $ref: "#/components/schemas/SimpleScheduleEntry" }
+        color_capable:
+          type: boolean
+          description: >
+            True when the device exposes per-switch-point colour/effect
+            fields (universal lights) or an OUTPUT_BEHAVIOUR field
+            (HmIP-BSL). The SPA shows a colour summary only when set.
     SetActiveProfileRequest:
       type: object
       required: [profile]
