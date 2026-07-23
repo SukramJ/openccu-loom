@@ -232,6 +232,17 @@ func (s *SessionStore) PurgeExpired(ctx context.Context) (int, error) {
 func SessionMiddleware(store *SessionStore) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// A Bearer/Basic identity resolved by an earlier resolver wins: the
+			// session only fills an otherwise-unauthenticated request. Mirrors
+			// IngressPassthrough's precedence guard and the "a genuine Bearer
+			// token always wins" contract. Without this guard a lower-role
+			// session cookie riding alongside an injected admin Bearer (the
+			// remote-proxy path) would silently overwrite the admin identity and
+			// 403 admin/operator actions with "insufficient role".
+			if _, ok := IdentityFrom(r.Context()); ok {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if store != nil {
 				if c, err := r.Cookie(SessionCookieName); err == nil && c.Value != "" {
 					if sess := store.Lookup(c.Value); sess != nil { //nolint:contextcheck // Lookup is ctx-free by API contract; its best-effort persist uses a background ctx

@@ -131,6 +131,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Intermittent `403 insufficient role` behind the remote-ingress proxy.**
+  A request reaching the daemon with both an injected admin Bearer token and a
+  browser session cookie was silently downgraded to the session's (lower) role:
+  the session resolver overwrote the already-resolved Bearer identity instead of
+  deferring to it. Admin/operator actions (`/diagnostics/*`, `/admin/*`,
+  `/auth/tokens/*`, switching a device) then failed with "insufficient role"
+  whenever a stale lower-role session cookie was present, while reads still
+  worked — and it came and went as the session expired or the `SameSite=Lax`
+  cookie rode along inside the Home Assistant ingress iframe. The session
+  resolver now yields to any Bearer/Basic identity resolved earlier (matching
+  the ingress-passthrough precedence), so a deliberate token always wins. As
+  defence in depth the remote-ingress proxy also drops the competing daemon
+  session cookie on requests where it injects an instance token (no-token
+  login mode keeps the cookie). Fixes the WebSocket handshake too, which pinned
+  the downgraded role for the connection's lifetime.
 - **Role matching when creating a direct link.** The linkable-channels
   picker ignored the requested direction and offered every link-capable
   channel for both roles. It now intersects the raw CCU
