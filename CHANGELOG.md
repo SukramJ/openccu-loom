@@ -6,6 +6,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Guided diagram series editor.** Composing a diagram series is now a
+  searchable device → channel → value picker instead of four free-text fields:
+  the central and interface are derived from the picked device and the label is
+  auto-suggested, so operators no longer type raw addresses / parameter strings.
+
 ## [0.47.2]
 
 ### Added
