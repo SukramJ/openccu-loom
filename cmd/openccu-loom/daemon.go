@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
@@ -80,6 +82,24 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	var auditRead handlers.AuditService = auditBuf
 	if auditDB != nil {
 		auditRead = auditReadService{Buffer: auditBuf, store: sqlitestore.NewAuditStore(auditDB)}
+	}
+	// Per-channel operator overrides (G12): visibility + operation lock, in
+	// the main app DB. The overlay is a save-through read cache the ingest and
+	// control-write paths consult; hydrated once here at boot.
+	var channelFlagsStore *sqlitestore.ChannelFlagsStore
+	channelFlagsOverlay := channelflags.New()
+	if auditDB != nil {
+		channelFlagsStore = sqlitestore.NewChannelFlagsStore(auditDB)
+		loadCtx, cancelLoad := context.WithTimeout(ctx, 10*time.Second)
+		if list, err := channelFlagsStore.List(loadCtx); err != nil {
+			logger.Warn("channel_flags.load_failed", slog.String("err", err.Error()))
+		} else {
+			for _, f := range list {
+				channelFlagsOverlay.Set(f.CentralName, f.ChannelAddress,
+					channelflags.Flags{Hidden: f.Hidden, Locked: f.Locked})
+			}
+		}
+		cancelLoad()
 	}
 	auditDurableStats := ov.durableStats
 	sqUsers := ov.sqUsers
@@ -388,6 +408,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		historyStore:            historyStore,
 		recordingOverrides:      recordingOverrides,
 		recordingStore:          recordingStore,
+		channelFlagsOverlay:     channelFlagsOverlay,
 		healthTracker:           healthTracker,
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		mqttWiring:              mqttWiring,
@@ -719,6 +740,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		valuesCacheStore:        valuesCacheStore,
 		historyStore:            historyStore,
 		recordingOverrides:      recordingOverrides,
+		channelFlagsStore:       channelFlagsStore,
+		channelFlagsOverlay:     channelFlagsOverlay,
 	})
 	defer restMountTeardown()
 

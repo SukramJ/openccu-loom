@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -28,21 +29,22 @@ import (
 // the composition root (callback servers, shared stores, the EventBridge)
 // and threaded through unchanged.
 type southboundWiringDeps struct {
-	cfg               *config.Config
-	reg               *central.Registry
-	logger            *slog.Logger
-	valueWriter       *clientpkg.ValueWriter
-	translations      *ccudata.Translations
-	callbackSrv       *rpcserver.XMLRPCServer
-	callbackPort      int
-	callbackHost      func(*config.CentralConfig) string
-	binRPCSrv         *rpcserver.BINRPCServer
-	binRPCPort        int
-	catalogs          *i18n.Catalogs
-	visReg            *visibility.Registry
-	masterValuesStore *sqlite.MasterValuesStore
-	valuesCacheStore  *sqlite.ValuesCacheStore
-	descriptorStores  adapter.DescriptorStores
+	cfg                 *config.Config
+	reg                 *central.Registry
+	logger              *slog.Logger
+	valueWriter         *clientpkg.ValueWriter
+	translations        *ccudata.Translations
+	callbackSrv         *rpcserver.XMLRPCServer
+	callbackPort        int
+	callbackHost        func(*config.CentralConfig) string
+	binRPCSrv           *rpcserver.BINRPCServer
+	binRPCPort          int
+	catalogs            *i18n.Catalogs
+	visReg              *visibility.Registry
+	masterValuesStore   *sqlite.MasterValuesStore
+	valuesCacheStore    *sqlite.ValuesCacheStore
+	channelFlagsOverlay *channelflags.Overlay
+	descriptorStores    adapter.DescriptorStores
 	// sqCentrals persists per-central serials backfilled at bring-up so SSDP
 	// discovery recognises configured centrals by serial. Nil disables backfill.
 	sqCentrals              *sqlite.CentralsStore
@@ -226,6 +228,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		Backup:               backupAdapter,
 		Visibility:           d.visReg,
 		MasterValues:         d.masterValuesStore,
+		ChannelFlags:         d.channelFlagsOverlay,
 		ValuesCache:          d.valuesCacheStore,
 		Descriptors:          d.descriptorStores,
 		ValuesCacheCentralFilter: func(centralName string) bool {

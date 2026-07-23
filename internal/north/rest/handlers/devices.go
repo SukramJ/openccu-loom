@@ -216,6 +216,12 @@ type ChannelSummary struct {
 	// reconstructs from the device profile — the entity that should carry the
 	// device-level name. False for secondary / non-CDP channels.
 	IsCustomDpPrimary bool `json:"is_custom_dp_primary,omitempty"`
+	// Hidden / Locked are the operator per-channel overrides (G12): hidden
+	// removes the channel from the operation surfaces (data-point list / MQTT
+	// / Matter), locked blocks control writes. Both surface so the SPA can
+	// badge the channel and render the toggles.
+	Hidden bool `json:"hidden,omitempty"`
+	Locked bool `json:"locked,omitempty"`
 }
 
 // DataPointSummary is one entry in `GET .../data-points`.
@@ -691,6 +697,12 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		s.Functions = ch.Functions
 	}
 	s.IsCustomDpPrimary = ch.IsCustomDPPrimaryChannel()
+	// Operator per-channel overrides (G12): surfaced so the SPA can badge a
+	// hidden/locked channel and render the toggles. The channel stays in the
+	// detail list (so it is manageable); the hidden filter applies to the
+	// operation surfaces (data-point list, MQTT, Matter).
+	s.Hidden = ch.IsHidden()
+	s.Locked = ch.IsLocked()
 	return s
 }
 
@@ -709,6 +721,12 @@ func ListDataPoints(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibil
 			return
 		}
 		includeAll := r.URL.Query().Get("include") == "all"
+		// An operator-hidden channel (G12) is excluded from the operation
+		// data-point list; ?include=all still returns it for management.
+		if !includeAll && ch.IsHidden() {
+			JSON(w, http.StatusOK, []DataPointSummary{})
+			return
+		}
 		dps := ch.DataPoints()
 		model := ""
 		if d := ch.Device(); d != nil {

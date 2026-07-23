@@ -81,6 +81,11 @@ const (
 	// Note carries central/interface/parameter and the new state.
 	ActionRecordingToggle Action = "recording_toggle"
 
+	// ActionChannelFlags records an operator setting the per-channel
+	// visibility / operation-lock overrides (G12). The Note carries the
+	// central, channel address, and the new hidden/locked state.
+	ActionChannelFlags Action = "channel_flags"
+
 	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"
