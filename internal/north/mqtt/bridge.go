@@ -89,6 +89,13 @@ type BridgeConfig struct {
 	// disables the gate (all parameters pass through).
 	Visibility VisibilitySet
 
+	// ChannelHidden, when non-nil, reports whether the operator has hidden a
+	// channel (G12). A hidden channel's state (raw + discovery) is skipped so
+	// it disappears from the MQTT plane like it does from the other operation
+	// surfaces. Keyed on (central, channel address) because the bridge is
+	// daemon-global. Nil disables the gate.
+	ChannelHidden func(central, channelAddress string) bool
+
 	// Collector, when non-nil, receives per-publish counter increments
 	// for messages_sent, discovery_sent and publish_errors. Mirrors the
 	// Python py:10).
@@ -713,6 +720,11 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 			return nil
 		}
 	}
+	// Operator-hidden channel (G12): skip the whole publish (raw + discovery)
+	// so a hidden channel disappears from the MQTT plane too.
+	if b.cfg.ChannelHidden != nil && b.cfg.ChannelHidden(ev.Central, ev.ChannelAddress) {
+		return nil
+	}
 	// Per-parameter raw state publish lives on
 	// [EventBridge.publishSlotState] / [Bridge.PublishSlotState],
 	// which owns the canonical `<addr>/<ch>/<bucket>/<param>` shape
@@ -757,6 +769,11 @@ func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 		if !b.cfg.Visibility.VisibleForChannel(ev.Model, ev.ChannelType, ev.ChannelNo, hmenum.ParamsetKeyValues, hmenum.Parameter(ev.Parameter)) {
 			return nil
 		}
+	}
+	// Operator-hidden channel (G12): skip the whole publish (raw + discovery)
+	// so a hidden channel disappears from the MQTT plane too.
+	if b.cfg.ChannelHidden != nil && b.cfg.ChannelHidden(ev.Central, ev.ChannelAddress) {
+		return nil
 	}
 	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
 		return nil

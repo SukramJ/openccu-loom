@@ -222,6 +222,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	valueWriter := si.valueWriter
 	mqttCollector := si.mqttCollector
 	mqttSup := si.mqttSup
+	// G12: let the (re)built MQTT bridge skip operator-hidden channels, so a
+	// hidden channel disappears from the MQTT plane like it does from the REST
+	// operation list and Matter. The overlay is keyed on (central, address).
+	if mqttSup != nil {
+		mqttSup.SetChannelHidden(func(central, channelAddress string) bool {
+			return channelFlagsOverlay.Get(central, channelAddress).Hidden
+		})
+	}
 	mqttWiring := si.mqttWiring
 	// Firmware polling jobs arrive in a second registration pass: their
 	// hooks resolve CCU backends through the ValueWriter, which does not

@@ -43,6 +43,9 @@ type mqttSupervisor struct {
 
 	healthTracker *health.Tracker
 	collector     *metrics.MqttCollector // nil when no metrics registry provided
+	// channelHidden reports whether the operator has hidden a channel (G12) so
+	// the (re)built bridge skips its MQTT state. Nil disables the gate.
+	channelHidden func(central, channelAddress string) bool
 	subBuilder    SubscriberBuilder
 	onConnect     []func(context.Context) // forwarded to every (re)built lifecycle
 
@@ -78,6 +81,15 @@ func newMQTTSupervisor(logger *slog.Logger, healthTracker *health.Tracker) *mqtt
 		logger = slog.Default()
 	}
 	return &mqttSupervisor{logger: logger, healthTracker: healthTracker}
+}
+
+// SetChannelHidden wires the operator-hidden-channel gate (G12) that every
+// (re)built bridge consults. Set once at composition time before the first
+// build; a nil fn disables the gate.
+func (s *mqttSupervisor) SetChannelHidden(fn func(central, channelAddress string) bool) {
+	s.mu.Lock()
+	s.channelHidden = fn
+	s.mu.Unlock()
 }
 
 // SetCollector wires the MqttCollector so per-bridge and per-subscriber
@@ -351,7 +363,7 @@ func (s *mqttSupervisor) buildSwap(ctx context.Context, cfg *config.Config) (*mq
 	s.mu.Lock()
 	col := s.collector
 	s.mu.Unlock()
-	stack := buildMQTT(cfg, s.logger, col)
+	stack := buildMQTT(cfg, s.logger, col, s.channelHidden)
 	if stack == nil {
 		return nil, errors.New("mqtt.supervisor.build: buildMQTT returned nil with MQTT enabled")
 	}
