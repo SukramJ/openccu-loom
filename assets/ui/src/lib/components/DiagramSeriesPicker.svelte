@@ -17,7 +17,11 @@
     DiagramSeries,
   } from "$lib/api/types";
   import Input from "$lib/components/ui/Input.svelte";
-  import Select from "$lib/components/ui/Select.svelte";
+
+  // Shared styling for the native <select>s (channel + value). Native controls
+  // are used deliberately here — see the markup comment on the channel select.
+  const nativeSelectClass =
+    "h-10 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 text-base text-[var(--ha-primary-text-color)] shadow-sm focus-visible:border-[var(--ha-primary-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ha-primary-color)] sm:text-sm";
 
   type Props = {
     series: DiagramSeries;
@@ -195,11 +199,19 @@
         {t("common.loading")}
       </p>
     {:else}
-      <Select
-        options={channelOptions}
+      <!-- Native <select>: iOS Safari renders its reliable wheel picker, where
+           the portaled custom Select would not register a tap on iPad. -->
+      <select
+        class={nativeSelectClass}
+        aria-label={t("diagrams.picker.channel")}
         value={series.channel_address}
-        onValueChange={(v) => void pickChannel(v)}
-      />
+        onchange={(e) =>
+          void pickChannel((e.currentTarget as HTMLSelectElement).value)}
+      >
+        {#each channelOptions as o (o.value)}
+          <option value={o.value}>{o.label}</option>
+        {/each}
+      </select>
     {/if}
   {/if}
 
@@ -210,11 +222,17 @@
         {t("common.loading")}
       </p>
     {:else}
-      <Select
-        options={paramOptions}
+      <select
+        class={nativeSelectClass}
+        aria-label={t("diagrams.picker.value")}
         value={series.parameter}
-        onValueChange={(v) => pickParam(v)}
-      />
+        onchange={(e) =>
+          pickParam((e.currentTarget as HTMLSelectElement).value)}
+      >
+        {#each paramOptions as o (o.value)}
+          <option value={o.value}>{o.label}</option>
+        {/each}
+      </select>
     {/if}
   {/if}
 

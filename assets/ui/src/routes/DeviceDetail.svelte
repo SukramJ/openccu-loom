@@ -13,6 +13,7 @@
   import AuditLog from "./AuditLog.svelte";
   import HistoryChart from "$lib/components/HistoryChart.svelte";
   import RecordToggle from "$lib/components/RecordToggle.svelte";
+  import RoomFunctionSelect from "$lib/components/RoomFunctionSelect.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -160,21 +161,10 @@
     deleteLinkCount > 0 || deleteProgramNames.length > 0,
   );
 
-  let editingRooms = $state(false);
-  let roomsDraft = $state("");
-  let roomsBusy = $state(false);
-
-  let editingFunctions = $state(false);
-  let functionsDraft = $state("");
-  let functionsBusy = $state(false);
-
-  let editingChannelRooms = $state(false);
-  let channelRoomsDraft = $state("");
-  let channelRoomsBusy = $state(false);
-
-  let editingChannelFunctions = $state(false);
-  let channelFunctionsDraft = $state("");
-  let channelFunctionsBusy = $state(false);
+  // Room / function catalogues for the assignment comboboxes. Loaded once
+  // on mount; a created entry is appended locally so it appears immediately.
+  let roomOptions = $state<string[]>([]);
+  let functionOptions = $state<string[]>([]);
 
   async function load() {
     error = null;
@@ -191,7 +181,26 @@
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    void load();
+    void loadRoomFunctionCatalogs();
+  });
+
+  async function loadRoomFunctionCatalogs() {
+    try {
+      const [rooms, functions] = await Promise.all([
+        api.listRooms(),
+        api.listFunctions(),
+      ]);
+      roomOptions = rooms.map((r) => r.name).sort((a, b) => a.localeCompare(b));
+      functionOptions = functions
+        .map((f) => f.name)
+        .sort((a, b) => a.localeCompare(b));
+    } catch {
+      // Non-fatal: current assignments still render; search/create just have
+      // an empty catalogue until the next load.
+    }
+  }
 
   // Deep-link into a specific configure sub-tab (e.g. "links" from the global
   // direct-links overview's "edit on device" action), so the view opens on the
@@ -474,57 +483,54 @@
     }
   }
 
-  function startEditRooms() {
-    roomsDraft = (detail?.rooms ?? []).join(", ");
-    editingRooms = true;
-  }
-
-  function startEditFunctions() {
-    functionsDraft = (detail?.functions ?? []).join(", ");
-    editingFunctions = true;
-  }
-
-  async function saveRooms() {
-    if (!detail) return;
-    roomsBusy = true;
+  // The comboboxes persist each add/remove immediately with an optimistic
+  // local update, rolling back to the previous set if the CCU rejects it.
+  async function updateRooms(next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prev = d.rooms ?? [];
+    detail = { ...d, rooms: next };
     try {
-      const list = roomsDraft
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      await api.setDeviceRooms(detail.address, list);
+      await api.setDeviceRooms(d.address, next);
       toastStore.success(t("device.rooms_updated"));
-      editingRooms = false;
-      await load();
     } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, rooms: prev };
       toastStore.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      roomsBusy = false;
     }
   }
 
-  async function saveFunctions() {
-    if (!detail) return;
-    functionsBusy = true;
+  async function updateFunctions(next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prev = d.functions ?? [];
+    detail = { ...d, functions: next };
     try {
-      const list = functionsDraft
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      await api.setDeviceFunctions(detail.address, list);
+      await api.setDeviceFunctions(d.address, next);
       toastStore.success(t("device.functions_updated"));
-      editingFunctions = false;
-      await load();
     } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, functions: prev };
       toastStore.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      functionsBusy = false;
     }
+  }
+
+  async function createRoomEntry(name: string) {
+    await api.createRoom(name, detail?.central);
+    if (!roomOptions.includes(name))
+      roomOptions = [...roomOptions, name].sort((a, b) => a.localeCompare(b));
+    toastStore.success(t("roomfn.created.room"));
+  }
+  async function createFunctionEntry(name: string) {
+    await api.createFunction(name, detail?.central);
+    if (!functionOptions.includes(name))
+      functionOptions = [...functionOptions, name].sort((a, b) =>
+        a.localeCompare(b),
+      );
+    toastStore.success(t("roomfn.created.function"));
   }
 
   function clickChannelInStrip(ch: { number: number; type?: string }) {
-    editingChannelRooms = false;
-    editingChannelFunctions = false;
     if (isWeekProfileChannel(ch.type) && scheduleSupported) {
       configSub = "schedule";
       return;
@@ -532,49 +538,45 @@
     location.hash = `#/devices/${detail?.address}/channels/${ch.number}`;
   }
 
-  function startEditChannelRooms(rooms: string[] | undefined) {
-    channelRoomsDraft = (rooms ?? []).join(", ");
-    editingChannelRooms = true;
-  }
-
-  function startEditChannelFunctions(functions: string[] | undefined) {
-    channelFunctionsDraft = (functions ?? []).join(", ");
-    editingChannelFunctions = true;
-  }
-
-  async function saveChannelRooms(no: number) {
-    channelRoomsBusy = true;
+  // Per-channel assignment mirrors the device level: optimistic update on the
+  // matching channel, rolled back on a CCU error.
+  async function updateChannelRooms(no: number, next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prevChannels = d.channels;
+    detail = {
+      ...d,
+      channels: d.channels.map((c) =>
+        c.number === no ? { ...c, rooms: next } : c,
+      ),
+    };
     try {
-      const list = channelRoomsDraft
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      await api.setChannelRooms(address, no, list);
+      await api.setChannelRooms(address, no, next);
       toastStore.success(t("channel.rooms_updated"));
-      editingChannelRooms = false;
-      await load();
     } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, channels: prevChannels };
       toastStore.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      channelRoomsBusy = false;
     }
   }
 
-  async function saveChannelFunctions(no: number) {
-    channelFunctionsBusy = true;
+  async function updateChannelFunctions(no: number, next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prevChannels = d.channels;
+    detail = {
+      ...d,
+      channels: d.channels.map((c) =>
+        c.number === no ? { ...c, functions: next } : c,
+      ),
+    };
     try {
-      const list = channelFunctionsDraft
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      await api.setChannelFunctions(address, no, list);
+      await api.setChannelFunctions(address, no, next);
       toastStore.success(t("channel.functions_updated"));
-      editingChannelFunctions = false;
-      await load();
     } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, channels: prevChannels };
       toastStore.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      channelFunctionsBusy = false;
     }
   }
 
@@ -704,63 +706,31 @@
               </Badge>
             {/if}
           </p>
-          <div class="mt-1 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-            <span class="font-semibold">{t("device.rooms")}:</span>
-            <div class="flex items-baseline gap-2">
-              {#if editingRooms}
-                <div class="flex flex-1 items-center gap-2">
-                  <input
-                    type="text"
-                    bind:value={roomsDraft}
-                    placeholder={t("device.rooms.placeholder")}
-                    class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
-                  <Button type="button" size="sm" onclick={() => void saveRooms()} disabled={roomsBusy}>
-                    {t("common.save")}
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onclick={() => (editingRooms = false)} disabled={roomsBusy}>
-                    ×
-                  </Button>
-                </div>
-              {:else}
-                <span>{(detail.rooms ?? []).join(", ") || t("common.none")}</span>
-                <button
-                  type="button"
-                  class="text-brand-600 hover:underline dark:text-brand-400"
-                  onclick={startEditRooms}
-                >
-                  {t("common.edit")}
-                </button>
-              {/if}
-            </div>
-            <span class="font-semibold">{t("device.functions")}:</span>
-            <div class="flex items-baseline gap-2">
-              {#if editingFunctions}
-                <div class="flex flex-1 items-center gap-2">
-                  <input
-                    type="text"
-                    bind:value={functionsDraft}
-                    placeholder={t("device.functions.placeholder")}
-                    class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
-                  <Button type="button" size="sm" onclick={() => void saveFunctions()} disabled={functionsBusy}>
-                    {t("common.save")}
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onclick={() => (editingFunctions = false)} disabled={functionsBusy}>
-                    ×
-                  </Button>
-                </div>
-              {:else}
-                <span>{(detail.functions ?? []).join(", ") || t("common.none")}</span>
-                <button
-                  type="button"
-                  class="text-brand-600 hover:underline dark:text-brand-400"
-                  onclick={startEditFunctions}
-                >
-                  {t("common.edit")}
-                </button>
-              {/if}
-            </div>
+          <div class="mt-1 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+            <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
+            <RoomFunctionSelect
+              id="device-rooms"
+              ariaLabel={t("device.rooms")}
+              selected={detail.rooms ?? []}
+              options={roomOptions}
+              onChange={(next) => void updateRooms(next)}
+              onCreate={createRoomEntry}
+              placeholder={t("roomfn.placeholder.room")}
+              createLabel={(v) => t("roomfn.create.room", { name: v })}
+              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            />
+            <span class="pt-2 font-semibold">{t("device.functions")}:</span>
+            <RoomFunctionSelect
+              id="device-functions"
+              ariaLabel={t("device.functions")}
+              selected={detail.functions ?? []}
+              options={functionOptions}
+              onChange={(next) => void updateFunctions(next)}
+              onCreate={createFunctionEntry}
+              placeholder={t("roomfn.placeholder.function")}
+              createLabel={(v) => t("roomfn.create.function", { name: v })}
+              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            />
           </div>
         </div>
         {#if !renaming}
@@ -1083,68 +1053,34 @@
                   </Button>
                 {/if}
               </div>
-              <!-- Per-channel room / function assignment. Same comma-list
-                   editor as the device level, persisted via
+              <!-- Per-channel room / function assignment. Same combobox as the
+                   device level, persisted per change via
                    PATCH /devices/{addr}/channels/{no}. -->
-              <div class="mb-3 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                <span class="font-semibold">{t("channel.rooms")}:</span>
-                <div class="flex items-baseline gap-2">
-                  {#if editingChannelRooms}
-                    <div class="flex flex-1 items-center gap-2">
-                      <input
-                        type="text"
-                        bind:value={channelRoomsDraft}
-                        placeholder={t("device.rooms.placeholder")}
-                        aria-label={t("channel.rooms")}
-                        class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                      />
-                      <Button type="button" size="sm" onclick={() => void saveChannelRooms(ch.number)} disabled={channelRoomsBusy}>
-                        {t("common.save")}
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onclick={() => (editingChannelRooms = false)} disabled={channelRoomsBusy}>
-                        ×
-                      </Button>
-                    </div>
-                  {:else}
-                    <span>{(ch.rooms ?? []).join(", ") || t("common.none")}</span>
-                    <button
-                      type="button"
-                      class="text-brand-600 hover:underline dark:text-brand-400"
-                      onclick={() => startEditChannelRooms(ch.rooms)}
-                    >
-                      {t("common.edit")}
-                    </button>
-                  {/if}
-                </div>
-                <span class="font-semibold">{t("channel.functions")}:</span>
-                <div class="flex items-baseline gap-2">
-                  {#if editingChannelFunctions}
-                    <div class="flex flex-1 items-center gap-2">
-                      <input
-                        type="text"
-                        bind:value={channelFunctionsDraft}
-                        placeholder={t("device.functions.placeholder")}
-                        aria-label={t("channel.functions")}
-                        class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                      />
-                      <Button type="button" size="sm" onclick={() => void saveChannelFunctions(ch.number)} disabled={channelFunctionsBusy}>
-                        {t("common.save")}
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onclick={() => (editingChannelFunctions = false)} disabled={channelFunctionsBusy}>
-                        ×
-                      </Button>
-                    </div>
-                  {:else}
-                    <span>{(ch.functions ?? []).join(", ") || t("common.none")}</span>
-                    <button
-                      type="button"
-                      class="text-brand-600 hover:underline dark:text-brand-400"
-                      onclick={() => startEditChannelFunctions(ch.functions)}
-                    >
-                      {t("common.edit")}
-                    </button>
-                  {/if}
-                </div>
+              <div class="mb-3 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+                <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
+                <RoomFunctionSelect
+                  id={`ch-${ch.number}-rooms`}
+                  ariaLabel={t("channel.rooms")}
+                  selected={ch.rooms ?? []}
+                  options={roomOptions}
+                  onChange={(next) => void updateChannelRooms(ch.number, next)}
+                  onCreate={createRoomEntry}
+                  placeholder={t("roomfn.placeholder.room")}
+                  createLabel={(v) => t("roomfn.create.room", { name: v })}
+                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                />
+                <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
+                <RoomFunctionSelect
+                  id={`ch-${ch.number}-functions`}
+                  ariaLabel={t("channel.functions")}
+                  selected={ch.functions ?? []}
+                  options={functionOptions}
+                  onChange={(next) => void updateChannelFunctions(ch.number, next)}
+                  onCreate={createFunctionEntry}
+                  placeholder={t("roomfn.placeholder.function")}
+                  createLabel={(v) => t("roomfn.create.function", { name: v })}
+                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                />
               </div>
               {#if detail.team_supported}
                 <div class="mb-3">
