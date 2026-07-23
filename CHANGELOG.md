@@ -26,6 +26,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Signal-quality list links the device.** The device name links to the device
   detail, matching the firmware list.
 
+### Fixed
+
+- **Umlauts in program names rendered as `�`.** Some CCU JSON-RPC methods (e.g.
+  `Program.getAll`) return an ISO-8859-1 body despite JSON's UTF-8 requirement,
+  so `json.Unmarshal` replaced each high byte with U+FFFD ("Sp�le"). The
+  JSON-RPC client now transcodes a non-UTF-8 response body from ISO-8859-1 to
+  UTF-8 (a valid UTF-8 body passes through untouched).
+
 ## [0.47.2]
 
 ### Added
