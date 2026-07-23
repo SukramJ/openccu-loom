@@ -42,6 +42,7 @@ func TestCCUCapabilityFlags(t *testing.T) {
 		{"FirmwareUpdate", caps.FirmwareUpdate, true},
 		{"DeleteSystemVariable", caps.DeleteSystemVariable, true},
 		{"CreateSystemVariable", caps.CreateSystemVariable, true},
+		{"CommunicationTest", caps.CommunicationTest, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -60,6 +61,84 @@ func TestCapabilityFor_CCU_HasMetadataTrue(t *testing.T) {
 	caps := CapabilityFor(KindCCU)
 	if !caps.Metadata {
 		t.Error("KindCCU: Metadata should be true")
+	}
+}
+
+// TestCapabilityFor_InstallModeLocal verifies that the keyserver-less HmIP
+// LOCAL teach-in capability is advertised only for KindCCU — CUxD and
+// Homegear have no HmIP JSON-RPC surface to serve it.
+func TestCapabilityFor_InstallModeLocal(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).InstallModeLocal {
+		t.Error("KindCCU: InstallModeLocal should be true")
+	}
+	if CapabilityFor(KindCUxD).InstallModeLocal {
+		t.Error("KindCUxD: InstallModeLocal should be false")
+	}
+	if CapabilityFor(KindHomegear).InstallModeLocal {
+		t.Error("KindHomegear: InstallModeLocal should be false")
+	}
+}
+
+// TestCapabilityFor_ReplaceDevice verifies that the guided device-replace
+// capability is advertised only for KindCCU — CUxD and Homegear have no
+// listReplaceableDevices/replaceDevice wire method.
+func TestCapabilityFor_ReplaceDevice(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).ReplaceDevice {
+		t.Error("KindCCU: ReplaceDevice should be true")
+	}
+	if CapabilityFor(KindCUxD).ReplaceDevice {
+		t.Error("KindCUxD: ReplaceDevice should be false")
+	}
+	if CapabilityFor(KindHomegear).ReplaceDevice {
+		t.Error("KindHomegear: ReplaceDevice should be false")
+	}
+}
+
+// TestCapabilityFor_SearchDevices verifies that the wired-bus scan
+// capability is advertised only for KindCCU — CUxD and Homegear have no
+// searchDevices wire method (and the interface-level gate on top of it
+// restricts KindCCU further, to BidCos-Wired only).
+func TestCapabilityFor_SearchDevices(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).SearchDevices {
+		t.Error("KindCCU: SearchDevices should be true")
+	}
+	if CapabilityFor(KindCUxD).SearchDevices {
+		t.Error("KindCUxD: SearchDevices should be false")
+	}
+	if CapabilityFor(KindHomegear).SearchDevices {
+		t.Error("KindHomegear: SearchDevices should be false")
+	}
+}
+
+// TestCapabilityFor_CommunicationTest verifies that the per-device
+// communication/function test capability is advertised only for KindCCU —
+// CUxD and Homegear have no ReGa runner to drive the start/poll scripts.
+func TestCapabilityFor_CommunicationTest(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).CommunicationTest {
+		t.Error("KindCCU: CommunicationTest should be true")
+	}
+	if CapabilityFor(KindCUxD).CommunicationTest {
+		t.Error("KindCUxD: CommunicationTest should be false")
+	}
+	if CapabilityFor(KindHomegear).CommunicationTest {
+		t.Error("KindHomegear: CommunicationTest should be false")
+	}
+}
+
+func TestCapabilityFor_TeamAssignment(t *testing.T) {
+	t.Parallel()
+	if !CapabilityFor(KindCCU).TeamAssignment {
+		t.Error("KindCCU: TeamAssignment should be true")
+	}
+	if CapabilityFor(KindCUxD).TeamAssignment {
+		t.Error("KindCUxD: TeamAssignment should be false")
+	}
+	if CapabilityFor(KindHomegear).TeamAssignment {
+		t.Error("KindHomegear: TeamAssignment should be false")
 	}
 }
 
@@ -398,6 +477,8 @@ func TestCCUCapabilityMatrix(t *testing.T) {
 		"GetAllPrograms":         caps.GetAllPrograms,
 		"GetAllSysvars":          caps.GetAllSysvars,
 		"FirmwareUpdate":         caps.FirmwareUpdate,
+		"ConfigRestore":          caps.ConfigRestore,
+		"CommunicationTest":      caps.CommunicationTest,
 		"AlarmMessages":          caps.AlarmMessages,
 		"Backup":                 caps.Backup,
 		"CreateSystemVariable":   caps.CreateSystemVariable,
@@ -447,6 +528,7 @@ func TestHomegearCapabilityMatrix(t *testing.T) {
 		"GetAllPrograms":  caps.GetAllPrograms,
 		"GetAllSysvars":   caps.GetAllSysvars,
 		"FirmwareUpdate":  caps.FirmwareUpdate,
+		"ConfigRestore":   caps.ConfigRestore,
 		"Backup":          caps.Backup,
 		"InstallMode":     caps.InstallMode,
 		"HasSystemUpdate": caps.HasSystemUpdate,
@@ -487,6 +569,7 @@ func TestCUxDCapabilityMatrix(t *testing.T) {
 		"GetAllPrograms":  caps.GetAllPrograms,
 		"GetAllSysvars":   caps.GetAllSysvars,
 		"FirmwareUpdate":  caps.FirmwareUpdate,
+		"ConfigRestore":   caps.ConfigRestore,
 		"Backup":          caps.Backup,
 		"AlarmMessages":   caps.AlarmMessages,
 		"InstallMode":     caps.InstallMode,

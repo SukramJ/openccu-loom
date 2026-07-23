@@ -10,8 +10,12 @@ const mockListInbox = vi.fn();
 const mockListRooms = vi.fn();
 const mockListFunctions = vi.fn();
 const mockAcceptInboxDevice = vi.fn();
+const mockListReplaceCandidates = vi.fn();
+const mockReplaceDevice = vi.fn();
+const mockSearchWiredDevices = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
+const mockConfirmAsk = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Module mocks — hoisted before any import of the component
@@ -23,6 +27,9 @@ vi.mock("$lib/api/client", () => ({
     listRooms: (...args: unknown[]) => mockListRooms(...args),
     listFunctions: (...args: unknown[]) => mockListFunctions(...args),
     acceptInboxDevice: (...args: unknown[]) => mockAcceptInboxDevice(...args),
+    listReplaceCandidates: (...args: unknown[]) => mockListReplaceCandidates(...args),
+    replaceDevice: (...args: unknown[]) => mockReplaceDevice(...args),
+    searchWiredDevices: (...args: unknown[]) => mockSearchWiredDevices(...args),
     listInstallModeInterfaces: vi.fn().mockResolvedValue([]),
     setInstallModeInterface: vi.fn(),
     pairDeviceInstallMode: vi.fn(),
@@ -34,6 +41,10 @@ vi.mock("$lib/api/client", () => ({
       this.status = status;
     }
   },
+}));
+
+vi.mock("$lib/stores/confirm.svelte", () => ({
+  confirmStore: { ask: (...args: unknown[]) => mockConfirmAsk(...args) },
 }));
 
 vi.mock("$lib/i18n", () => ({
@@ -78,8 +89,28 @@ vi.mock("$lib/stores/installMode.svelte", () => ({
 // ---------------------------------------------------------------------------
 
 import Inbox from "./Inbox.svelte";
+// installModeStore is mocked above as a plain object; importing it here
+// (module cache dedup gives the same reference the component sees) lets
+// individual tests populate .interfaces before render so selectedInterface
+// defaults to a chosen interface via the component's own $effect. The real
+// store type exposes `interfaces` as a read-only getter, so writes go
+// through this cast — the mock backing it is a plain writable object.
+import { installModeStore } from "$lib/stores/installMode.svelte";
+import type { InstallModeInterfaceEntry } from "$lib/api/types";
+
+function setStoreInterfaces(list: InstallModeInterfaceEntry[]) {
+  (installModeStore as unknown as { interfaces: InstallModeInterfaceEntry[] }).interfaces =
+    list;
+}
 
 const ONE_DEVICE = [{ address: "0009ABCD", model: "HmIP-STH", central: "" }];
+
+// A BidCos-RF device is the only inbox interface that offers the
+// "replace existing device" action (isReplaceable in Inbox.svelte) — HmIP
+// throws NotImplementedException on the CCU side.
+const REPLACEABLE_DEVICE = [
+  { address: "0009ABCD", model: "HM-Sec-SC", central: "", interface: "BidCos-RF" },
+];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,6 +118,12 @@ beforeEach(() => {
   mockListRooms.mockResolvedValue([{ name: "Kitchen" }, { name: "Living Room" }]);
   mockListFunctions.mockResolvedValue([{ name: "Lights" }, { name: "Heating" }]);
   mockAcceptInboxDevice.mockResolvedValue(undefined);
+  mockListReplaceCandidates.mockResolvedValue([]);
+  mockReplaceDevice.mockResolvedValue(undefined);
+  mockConfirmAsk.mockResolvedValue(true);
+  // Reset the plain-object store mock's mutable state: individual tests in
+  // the "wired bus search" block below populate .interfaces before render.
+  setStoreInterfaces([]);
 });
 
 afterEach(() => {
@@ -222,6 +259,159 @@ describe("Inbox — accept dialog config payload", () => {
     await fireEvent.click(submitButton());
     await waitFor(() => {
       expect(mockAcceptInboxDevice).toHaveBeenCalledWith("0009ABCD", "", undefined);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Guided device replace — isReplaceable gating + confirm/submit flow
+// ---------------------------------------------------------------------------
+// Mirrors the accept-dialog coverage above: Inbox.svelte's replace dialog
+// (openReplace/confirmReplace) is the one piece of client-only logic
+// (interface gating, confirm-then-submit) with no Go-side counterpart.
+
+describe("Inbox — replace workflow", () => {
+  it("hides the replace action for a device on a non-BidCos interface", async () => {
+    mockListInbox.mockResolvedValue([
+      { address: "0009ABCD", model: "HmIP-STH", central: "", interface: "HmIP-RF" },
+    ]);
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.accept")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("inbox.replace.button")).toBeNull();
+  });
+
+  it("opens the replace dialog for a BidCos device and lists candidates", async () => {
+    mockListInbox.mockResolvedValue(REPLACEABLE_DEVICE);
+    mockListReplaceCandidates.mockResolvedValue([
+      { address: "OLD001", name: "Fenster", model: "HM-Sec-SC", model_matches: true },
+    ]);
+
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.replace.button")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.replace.button"));
+
+    await waitFor(() => {
+      expect(mockListReplaceCandidates).toHaveBeenCalledWith("0009ABCD", undefined);
+      expect(screen.getByText("Fenster")).toBeInTheDocument();
+    });
+  });
+
+  it("confirms a replace and forwards the chosen candidate to replaceDevice", async () => {
+    mockListInbox.mockResolvedValue(REPLACEABLE_DEVICE);
+    mockListReplaceCandidates.mockResolvedValue([
+      { address: "OLD001", name: "Fenster", model: "HM-Sec-SC", model_matches: true },
+    ]);
+
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.replace.button")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.replace.button"));
+    await waitFor(() => {
+      expect(screen.getByText("Fenster")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("Fenster"));
+
+    await waitFor(() => {
+      expect(mockConfirmAsk).toHaveBeenCalled();
+      expect(mockReplaceDevice).toHaveBeenCalledWith("0009ABCD", "OLD001", undefined);
+      expect(mockToastSuccess).toHaveBeenCalled();
+    });
+  });
+
+  it("does not call replaceDevice when the confirm dialog is dismissed", async () => {
+    mockConfirmAsk.mockResolvedValue(false);
+    mockListInbox.mockResolvedValue(REPLACEABLE_DEVICE);
+    mockListReplaceCandidates.mockResolvedValue([
+      { address: "OLD001", name: "Fenster", model: "HM-Sec-SC", model_matches: true },
+    ]);
+
+    render(Inbox);
+    await waitFor(() => {
+      expect(screen.getByText("inbox.replace.button")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.replace.button"));
+    await waitFor(() => {
+      expect(screen.getByText("Fenster")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("Fenster"));
+
+    await waitFor(() => {
+      expect(mockConfirmAsk).toHaveBeenCalled();
+    });
+    expect(mockReplaceDevice).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wired-bus device search (BidCos-Wired scan button)
+// ---------------------------------------------------------------------------
+// searchWiredBus (Inbox.svelte) is offered only when the operator has the
+// BidCos-Wired interface selected — install mode itself doesn't apply to
+// the wired bus, a scan does. installModeStore.interfaces seeds
+// selectedInterface via the component's own $effect (defaults to the
+// first entry in the list), so each test below sets it before render.
+
+function installModeInterfaces(iface: string) {
+  return [{ interface: iface, active: false, seconds: 0, observed: true, central: "" }];
+}
+
+describe("Inbox — wired bus search", () => {
+  it("shows the search-wired-bus button when BidCos-Wired is selected", async () => {
+    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
+    });
+  });
+
+  it("hides the search-wired-bus button for a non-wired interface", async () => {
+    setStoreInterfaces(installModeInterfaces("HmIP-RF"));
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.accept")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("inbox.search_wired")).toBeNull();
+  });
+
+  it("clicking the button scans the bus and shows the found count", async () => {
+    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
+    mockSearchWiredDevices.mockResolvedValue({
+      central: "",
+      interface: "BidCos-Wired",
+      found: 2,
+    });
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.search_wired"));
+
+    await waitFor(() => {
+      expect(mockSearchWiredDevices).toHaveBeenCalledWith("BidCos-Wired", undefined);
+      expect(mockToastSuccess).toHaveBeenCalled();
+    });
+  });
+
+  it("surfaces a toast error when the scan fails", async () => {
+    setStoreInterfaces(installModeInterfaces("BidCos-Wired"));
+    mockSearchWiredDevices.mockRejectedValue(new Error("hs485d unreachable"));
+    render(Inbox);
+
+    await waitFor(() => {
+      expect(screen.getByText("inbox.search_wired")).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByText("inbox.search_wired"));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalled();
     });
   });
 });

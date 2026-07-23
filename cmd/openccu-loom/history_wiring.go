@@ -45,6 +45,27 @@ func wireHistoryStore(cfg *config.Config, logger *slog.Logger) *sqlite.Measureme
 	return sqlite.NewMeasurementStore(db)
 }
 
+// wireRecordingOverrides builds the per-datapoint recording overlay and
+// its store from the history DB handle, then loads the sparse override
+// set so the recorder hot path never touches disk. Returns (nil, nil)
+// when history is off. Bounds its own context.
+func wireRecordingOverrides(
+	historyStore *sqlite.MeasurementStore, cfg *config.Config, logger *slog.Logger,
+) (*sqlite.RecordingOverrideStore, *history.RecordingOverrides) {
+	if historyStore == nil || cfg == nil {
+		return nil, nil
+	}
+	store := sqlite.NewRecordingOverrideStore(historyStore.DB())
+	hc := cfg.Persistence.History
+	overlay := history.NewRecordingOverrides(store, hc.Include, hc.Exclude)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := overlay.Load(ctx); err != nil {
+		logger.Warn("history.recording_overrides_load_failed", slog.String("err", err.Error()))
+	}
+	return store, overlay
+}
+
 // wireHistoryRecorder builds the measurement recorder from config and
 // subscribes it to every enabled central. Returns a teardown that stops
 // the recorder (with a final flush). No-op when the store is nil
@@ -53,6 +74,7 @@ func wireHistoryRecorder(
 	cfg *config.Config,
 	reg *central.Registry,
 	store *sqlite.MeasurementStore,
+	overrides *history.RecordingOverrides,
 	healthTracker *health.Tracker,
 	logger *slog.Logger,
 ) func() {
@@ -65,6 +87,7 @@ func wireHistoryRecorder(
 		EnabledFor:      hc.HistoryEnabled,
 		Include:         hc.Include,
 		Exclude:         hc.Exclude,
+		Overrides:       overrides,
 		FlushInterval:   hc.FlushInterval,
 		Retention:       hc.Retention,
 		RetentionHourly: hc.RetentionHourlyOrDefault(),

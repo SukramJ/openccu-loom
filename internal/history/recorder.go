@@ -75,6 +75,7 @@ type Recorder struct {
 	enabledFor      func(centralName string) bool
 	include         []string
 	exclude         []string
+	overrides       *RecordingOverrides
 	flushInterval   time.Duration
 	retention       time.Duration
 	retentionHourly time.Duration
@@ -117,6 +118,10 @@ type Options struct {
 	// Exporter, when non-nil, receives every recorded sample for
 	// forwarding to an external time-series store. Optional.
 	Exporter MeasurementExporter
+	// Overrides, when non-nil, is the per-datapoint recording overlay
+	// consulted on the hot path: a present override wins over the
+	// Include/Exclude glob policy. Nil means "glob policy only".
+	Overrides *RecordingOverrides
 }
 
 // New returns a Recorder backed by store. A nil store yields a Recorder
@@ -128,6 +133,7 @@ func New(store *sqlite.MeasurementStore, opts Options) *Recorder {
 		enabledFor:      opts.EnabledFor,
 		include:         opts.Include,
 		exclude:         opts.Exclude,
+		overrides:       opts.Overrides,
 		flushInterval:   opts.FlushInterval,
 		retention:       opts.Retention,
 		retentionHourly: opts.RetentionHourly,
@@ -275,7 +281,12 @@ func (r *Recorder) onValueChanged(unit *central.Unit, e hmevent.DataPointValueCh
 	if !ok {
 		return
 	}
-	if !allow(e.Key.Parameter, r.include, r.exclude) {
+	// Parameter-name glob policy, then the per-datapoint override overlay:
+	// an explicit override for this exact (central, interface, channel,
+	// parameter) tuple wins over the glob decision. A nil overlay returns
+	// the policy unchanged.
+	policyAllow := allow(e.Key.Parameter, r.include, r.exclude)
+	if !r.overrides.Decide(unit.Name(), e.Key.InterfaceID, e.Key.ChannelAddress, e.Key.Parameter, policyAllow) {
 		return
 	}
 	// Provenance guard (ADR 0040): record only genuine live observations.

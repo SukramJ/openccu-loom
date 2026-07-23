@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, screen, waitFor, fireEvent } from "@testing-library/svelte";
+import { render, cleanup, screen, waitFor, fireEvent, within } from "@testing-library/svelte";
 
 const {
   mockGetDevice,
@@ -9,11 +9,16 @@ const {
   mockPutPreference,
   mockRenameDevice,
   mockRenameChannel,
+  mockSetChannelRooms,
+  mockSetChannelFunctions,
   mockDeleteDevice,
   mockListLinks,
   mockListPrograms,
+  mockRestoreDeviceConfig,
+  mockTestDeviceCommunication,
   mockToastSuccess,
   mockToastError,
+  mockToastWarn,
 } = vi.hoisted(() => ({
   mockGetDevice: vi.fn(),
   mockGetDeviceSchedule: vi.fn(),
@@ -21,11 +26,16 @@ const {
   mockPutPreference: vi.fn(),
   mockRenameDevice: vi.fn(),
   mockRenameChannel: vi.fn(),
+  mockSetChannelRooms: vi.fn(),
+  mockSetChannelFunctions: vi.fn(),
   mockDeleteDevice: vi.fn(),
   mockListLinks: vi.fn(),
   mockListPrograms: vi.fn(),
+  mockRestoreDeviceConfig: vi.fn(),
+  mockTestDeviceCommunication: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
+  mockToastWarn: vi.fn(),
 }));
 
 vi.mock("$lib/api/client", () => ({
@@ -36,9 +46,13 @@ vi.mock("$lib/api/client", () => ({
     putPreference: (...args: unknown[]) => mockPutPreference(...args),
     renameDevice: (...args: unknown[]) => mockRenameDevice(...args),
     renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
+    setChannelRooms: (...args: unknown[]) => mockSetChannelRooms(...args),
+    setChannelFunctions: (...args: unknown[]) => mockSetChannelFunctions(...args),
     deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
     listLinks: (...args: unknown[]) => mockListLinks(...args),
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
+    restoreDeviceConfig: (...args: unknown[]) => mockRestoreDeviceConfig(...args),
+    testDeviceCommunication: (...args: unknown[]) => mockTestDeviceCommunication(...args),
     updateFirmware: vi.fn(),
     setDeviceRooms: vi.fn(),
     setDeviceFunctions: vi.fn(),
@@ -61,6 +75,7 @@ vi.mock("$lib/stores/toast.svelte", () => ({
   toastStore: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
+    warn: (...args: unknown[]) => mockToastWarn(...args),
   },
 }));
 
@@ -83,6 +98,7 @@ vi.mock("./AuditLog.svelte", () => ({ default: () => {} }));
 vi.mock("$lib/components/HistoryChart.svelte", () => ({ default: () => {} }));
 
 import DeviceDetail from "./DeviceDetail.svelte";
+import { confirmStore } from "$lib/stores/confirm.svelte";
 
 function baseDevice(overrides: Record<string, unknown> = {}) {
   return {
@@ -110,9 +126,19 @@ beforeEach(() => {
   );
   mockRenameDevice.mockResolvedValue(undefined);
   mockRenameChannel.mockResolvedValue(undefined);
+  mockSetChannelRooms.mockResolvedValue(undefined);
+  mockSetChannelFunctions.mockResolvedValue(undefined);
   mockDeleteDevice.mockResolvedValue(undefined);
   mockListLinks.mockResolvedValue([]);
   mockListPrograms.mockResolvedValue([]);
+  mockRestoreDeviceConfig.mockResolvedValue(undefined);
+  mockTestDeviceCommunication.mockResolvedValue({
+    passed: true,
+    started_at: "2026-07-22T10:00:00Z",
+    completed_at: "2026-07-22T10:00:03Z",
+    duration_ms: 3000,
+    timed_out: false,
+  });
 });
 
 afterEach(() => cleanup());
@@ -195,6 +221,193 @@ describe("DeviceDetail — happy path", () => {
       expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
     });
     expect(screen.queryByText("device.no_channels")).not.toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — restore device config", () => {
+  it("hides the restore-config button when config_restore_supported is absent", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.restore_config" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the restore-config button when config_restore_supported is false", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: false }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.restore_config" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the restore-config button when config_restore_supported is true", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("confirms, calls the restore API, and shows a success toast", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    vi.mocked(confirmStore.ask).mockResolvedValueOnce(true);
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.restore_config" }));
+
+    await waitFor(() => {
+      expect(mockRestoreDeviceConfig).toHaveBeenCalledWith("0001ABCD");
+    });
+    expect(confirmStore.ask).toHaveBeenCalledOnce();
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.restore_config_triggered");
+  });
+
+  it("does nothing when the user cancels the confirm dialog", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    // confirmStore.ask defaults to "cancelled" (see the file-wide mock above).
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.restore_config" }));
+
+    await waitFor(() => expect(confirmStore.ask).toHaveBeenCalledOnce());
+    expect(mockRestoreDeviceConfig).not.toHaveBeenCalled();
+  });
+
+  it("shows an error toast when the restore call fails", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ config_restore_supported: true }));
+    vi.mocked(confirmStore.ask).mockResolvedValueOnce(true);
+    mockRestoreDeviceConfig.mockRejectedValueOnce(new Error("ccu unreachable"));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.restore_config" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.restore_config" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+  });
+});
+
+describe("DeviceDetail — communication test", () => {
+  it("hides the test button when communication_test_supported is absent", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice());
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.communication_test" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the test button when communication_test_supported is false", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: false }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Wohnzimmer Thermostat").length).toBeGreaterThan(0);
+    });
+    expect(
+      screen.queryByRole("button", { name: "device.communication_test" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the test button when communication_test_supported is true", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("runs the test, shows a success toast, and renders a passed badge", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.communication_test" }));
+
+    await waitFor(() => {
+      expect(mockTestDeviceCommunication).toHaveBeenCalledWith("0001ABCD");
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("device.communication_test_passed");
+    await waitFor(() => {
+      expect(screen.getByText("device.communication_test_passed")).toBeInTheDocument();
+    });
+  });
+
+  it("shows a warning toast and a failed badge when the device does not answer", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    mockTestDeviceCommunication.mockResolvedValueOnce({
+      passed: false,
+      started_at: "2026-07-22T10:00:00Z",
+      duration_ms: 30000,
+      timed_out: true,
+    });
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.communication_test" }));
+
+    await waitFor(() => {
+      expect(mockToastWarn).toHaveBeenCalledWith("device.communication_test_failed");
+    });
+    expect(screen.getByText("device.communication_test_failed")).toBeInTheDocument();
+  });
+
+  it("shows an error toast when the test call fails", async () => {
+    mockGetDevice.mockResolvedValue(baseDevice({ communication_test_supported: true }));
+    mockTestDeviceCommunication.mockRejectedValueOnce(new Error("ccu unreachable"));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "device.communication_test" }),
+      ).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "device.communication_test" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
   });
 });
 
@@ -350,6 +563,128 @@ describe("DeviceDetail — channel rename", () => {
       expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
     });
     expect(screen.getByLabelText("channel.rename")).toBeInTheDocument();
+  });
+});
+
+describe("DeviceDetail — channel room/function assignment", () => {
+  function deviceWithChannelAssignment(overrides: Record<string, unknown> = {}) {
+    return baseDevice({
+      channels: [
+        {
+          address: "0001ABCD:1",
+          number: 1,
+          type: "SWITCH",
+          name: "Kanal 1",
+          data_points_count: 0,
+          rooms: ["Wohnzimmer"],
+          functions: ["Licht"],
+        },
+      ],
+      channels_count: 1,
+      ...overrides,
+    });
+  }
+
+  // The channel-level rooms/functions row sits in its own labelled
+  // sibling `<div>` right after the "channel.rooms:"/"channel.functions:"
+  // heading span — scoping through that sibling (rather than a bare
+  // getByText("common.edit")) avoids matching the device-level rooms/
+  // functions edit buttons rendered in the header above.
+  function assignmentRow(labelText: string): HTMLElement {
+    const label = screen.getByText(labelText);
+    return label.nextElementSibling as HTMLElement;
+  }
+
+  async function openConfigureTab(overrides: Record<string, unknown> = {}) {
+    mockGetDevice.mockResolvedValue(deviceWithChannelAssignment(overrides));
+    render(DeviceDetail, { props: { address: "0001ABCD", locale: "en" } });
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").length).toBeGreaterThan(0);
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "device.toptab.configure" }));
+    await waitFor(() => {
+      expect(screen.getByText("channel.rooms:")).toBeInTheDocument();
+    });
+  }
+
+  it("renders the channel's current room and function assignment", async () => {
+    await openConfigureTab();
+    expect(within(assignmentRow("channel.rooms:")).getByText("Wohnzimmer")).toBeInTheDocument();
+    expect(within(assignmentRow("channel.functions:")).getByText("Licht")).toBeInTheDocument();
+  });
+
+  it("renders common.none when a channel carries no room/function assignment", async () => {
+    await openConfigureTab({
+      channels: [
+        { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "Kanal 1", data_points_count: 0 },
+      ],
+    });
+    expect(within(assignmentRow("channel.rooms:")).getByText("common.none")).toBeInTheDocument();
+    expect(within(assignmentRow("channel.functions:")).getByText("common.none")).toBeInTheDocument();
+  });
+
+  it("opens the rooms editor prefilled with the current assignment and commits on save", async () => {
+    await openConfigureTab();
+    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
+
+    const input = screen.getByLabelText("channel.rooms") as HTMLInputElement;
+    expect(input.value).toBe("Wohnzimmer");
+
+    await fireEvent.input(input, { target: { value: "Wohnzimmer, Küche" } });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockSetChannelRooms).toHaveBeenCalledWith("0001ABCD", 1, ["Wohnzimmer", "Küche"]);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("channel.rooms_updated");
+    await waitFor(() => expect(mockGetDevice).toHaveBeenCalledTimes(2));
+  });
+
+  it("opens the functions editor prefilled with the current assignment and commits on save", async () => {
+    await openConfigureTab();
+    await fireEvent.click(
+      within(assignmentRow("channel.functions:")).getByRole("button", { name: "common.edit" }),
+    );
+
+    const input = screen.getByLabelText("channel.functions") as HTMLInputElement;
+    expect(input.value).toBe("Licht");
+
+    await fireEvent.input(input, { target: { value: "Heizung" } });
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockSetChannelFunctions).toHaveBeenCalledWith("0001ABCD", 1, ["Heizung"]);
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith("channel.functions_updated");
+  });
+
+  it("shows an error toast and keeps the rooms editor open when the write fails", async () => {
+    mockSetChannelRooms.mockRejectedValueOnce(new Error("ccu unreachable"));
+    await openConfigureTab();
+    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
+    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
+    });
+    // Editor stays open on failure — no silent fallback / no silent close.
+    expect(screen.getByLabelText("channel.rooms")).toBeInTheDocument();
+    expect(mockGetDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels the rooms editor via the × button without calling the API", async () => {
+    await openConfigureTab();
+    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("channel.rooms")).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "×" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("channel.rooms")).not.toBeInTheDocument();
+    });
+    expect(mockSetChannelRooms).not.toHaveBeenCalled();
   });
 });
 

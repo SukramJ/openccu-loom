@@ -79,6 +79,22 @@ type DeviceSummary struct {
 	// reload. Sourced from `hmenum.Interface.PushesConfigPending`.
 	MasterPushesConfigPending bool `json:"master_pushes_config_pending"`
 
+	// ConfigRestoreSupported is true when the device's interface
+	// exposes `restoreConfigToDevice` (HmIP-RF, BidCos-RF). The SPA
+	// gates the "restore config" action on it so the button never
+	// shows for a device that cannot serve the write.
+	ConfigRestoreSupported bool `json:"config_restore_supported"`
+
+	// CommunicationTestSupported is true when the device's interface can
+	// run the CCU's per-device communication test (radio interfaces).
+	// The SPA gates the "test" action on it.
+	CommunicationTestSupported bool `json:"communication_test_supported"`
+
+	// TeamSupported is true when the device's interface exposes channel
+	// team assignment (setTeam / listTeams — BidCos-RF, HmIP-RF). The
+	// SPA gates the team picker on it.
+	TeamSupported bool `json:"team_supported"`
+
 	// HasSubDevices mirrors [device.Device.HasSubDevices] so SPA / WS
 	// consumers can apply the same per-channel-group split the MQTT
 	// bridge does under the `sub_devices_enabled` toggle.
@@ -182,6 +198,11 @@ type ChannelSummary struct {
 	// room can be resolved. External clients use it as the
 	// suggested-area of the channel group's sub-device.
 	Room string `json:"room,omitempty"`
+	// Rooms is the channel's full room-assignment set
+	// ([device.Channel.Rooms]) — unlike [ChannelSummary.Room] it is not
+	// collapsed to the unique case, so editors can round-trip the
+	// assignment. Empty when the channel carries no room assignment.
+	Rooms []string `json:"rooms,omitempty"`
 	// Functions are the channel's resolved "Gewerke" (function) labels
 	// ([device.Channel.Functions]) — the channel-level twin of
 	// [DeviceSummary.Functions]. Surfaced so clients can map functions at
@@ -663,6 +684,9 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		}
 	}
 	s.Room = ch.Room()
+	if len(ch.Rooms) > 0 {
+		s.Rooms = ch.Rooms
+	}
 	if len(ch.Functions) > 0 {
 		s.Functions = ch.Functions
 	}
@@ -835,28 +859,31 @@ func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
 
 func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	return DeviceSummary{
-		Address:                   d.Address,
-		Central:                   centralName,
-		Interface:                 string(d.Interface),
-		InterfaceID:               d.InterfaceID,
-		IseID:                     d.IseID,
-		Model:                     d.Model,
-		ModelLabel:                d.ModelLabel,
-		ModelIcon:                 d.ModelIcon,
-		SubModel:                  d.SubModel,
-		Name:                      d.Name,
-		Manufacturer:              string(d.Manufacturer),
-		ProductGroup:              string(d.ProductGroup),
-		IsAvailable:               d.Available(),
-		ChannelsCount:             len(d.Channels()),
-		Updatable:                 d.Updatable,
-		UpdateAvailable:           d.UpdateAvailable(),
-		UpdateStatus:              string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
-		Rooms:                     d.Rooms,
-		Functions:                 d.Functions,
-		MasterPushesConfigPending: hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
-		HasSubDevices:             d.HasSubDevices(),
-		RxMode:                    rxModeInfo(d.RxMode),
+		Address:                    d.Address,
+		Central:                    centralName,
+		Interface:                  string(d.Interface),
+		InterfaceID:                d.InterfaceID,
+		IseID:                      d.IseID,
+		Model:                      d.Model,
+		ModelLabel:                 d.ModelLabel,
+		ModelIcon:                  d.ModelIcon,
+		SubModel:                   d.SubModel,
+		Name:                       d.Name,
+		Manufacturer:               string(d.Manufacturer),
+		ProductGroup:               string(d.ProductGroup),
+		IsAvailable:                d.Available(),
+		ChannelsCount:              len(d.Channels()),
+		Updatable:                  d.Updatable,
+		UpdateAvailable:            d.UpdateAvailable(),
+		UpdateStatus:               string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
+		Rooms:                      d.Rooms,
+		Functions:                  d.Functions,
+		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
+		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
+		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),
+		TeamSupported:              d.Interface.SupportsTeams(),
+		HasSubDevices:              d.HasSubDevices(),
+		RxMode:                     rxModeInfo(d.RxMode),
 	}
 }
 

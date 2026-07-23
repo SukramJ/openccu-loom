@@ -6,6 +6,7 @@ package backends
 import (
 	"context"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -106,6 +107,48 @@ func (b *CuxdBackend) UpdateFirmware(context.Context, string) error {
 	return ErrUnsupported
 }
 
+// RestoreConfigToDevice implements Operations. CUxD has no stored-config
+// re-transmit; always returns [ErrUnsupported].
+func (b *CuxdBackend) RestoreConfigToDevice(context.Context, string) error {
+	return ErrUnsupported
+}
+
+// SearchDevices implements Operations. CUxD has no wired bus; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) SearchDevices(context.Context) (int, error) {
+	return 0, ErrUnsupported
+}
+
+// SetTeam implements Operations. CUxD has no team concept; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) SetTeam(context.Context, string, string) error {
+	return ErrUnsupported
+}
+
+// ListTeams implements Operations. CUxD has no team concept; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
+// TestDevice implements Operations. CUxD has no radio com-test; always
+// returns [ErrUnsupported].
+func (b *CuxdBackend) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, ErrUnsupported
+}
+
+// ListReplaceableDevices implements Operations. CUxD has no
+// device-replacement concept; always returns [ErrUnsupported].
+func (b *CuxdBackend) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, ErrUnsupported
+}
+
+// ReplaceDevice implements Operations. CUxD has no device-replacement
+// concept; always returns [ErrUnsupported].
+func (b *CuxdBackend) ReplaceDevice(context.Context, string, string) error {
+	return ErrUnsupported
+}
+
 // --- direct links (not modelled by CUxD) --------------------------
 //
 // CUxD's virtual devices are composed at runtime and have no peer-to-
@@ -144,6 +187,12 @@ func (*CuxdBackend) GetLinkParamset(context.Context, string, string) (map[string
 
 // PutLinkParamset implements [Operations].
 func (*CuxdBackend) PutLinkParamset(context.Context, string, string, map[string]any) error {
+	return ErrUnsupported
+}
+
+// ActivateLinkParamset implements [Operations]. CUxD has no central-link
+// concept.
+func (*CuxdBackend) ActivateLinkParamset(context.Context, string, string, bool) error {
 	return ErrUnsupported
 }
 
@@ -218,6 +267,12 @@ func (*CuxdBackend) GetInstallMode(context.Context) (int, error) { return 0, Err
 
 // SetInstallMode returns ErrUnsupported on CUxD; install mode is CCU-only.
 func (*CuxdBackend) SetInstallMode(context.Context, bool, int, int, string) error {
+	return ErrUnsupported
+}
+
+// SetInstallModeLocal returns ErrUnsupported on CUxD; the HmIP LOCAL
+// teach-in is CCU-only.
+func (*CuxdBackend) SetInstallModeLocal(context.Context, int, string, string) error {
 	return ErrUnsupported
 }
 

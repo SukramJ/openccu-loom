@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/history"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
@@ -113,6 +114,7 @@ type restMountDeps struct {
 	userSvc     handlers.UserAdminService
 	passwordSvc handlers.SelfPasswordService
 	prefSvc     handlers.UserPreferencesService
+	diagramSvc  handlers.DiagramConfigService
 	tokenSvc    handlers.TokenAdminService
 	centSvc     handlers.CentralAdminService
 	discovery   *handlers.DiscoveryDeps
@@ -134,8 +136,9 @@ type restMountDeps struct {
 	visibilityUnIgnoreStore handlers.VisibilityUnIgnoreStore
 	visibilityAdapter       *visibilityAdapter
 
-	valuesCacheStore *sqlitestore.ValuesCacheStore
-	historyStore     *sqlitestore.MeasurementStore
+	valuesCacheStore   *sqlitestore.ValuesCacheStore
+	historyStore       *sqlitestore.MeasurementStore
+	recordingOverrides *history.RecordingOverrides
 }
 
 // mountRESTServer stands up the REST router + server (and the optional mDNS
@@ -190,59 +193,64 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		}
 	}
 	deps := rest.Deps{
-		Logger:                logger,
-		StartedAt:             time.Now(),
-		Health:                d.healthAdapter,
-		Config:                d.configAdapter,
-		Devices:               d.devicesAdapter,
-		DeviceAdmin:           d.deviceAdminDomain,
-		FirmwareRefresher:     firmwareRefresherFrom(d.firmwareRefresher),
-		DeviceInstallMode:     d.deviceAdminDomain,
-		DeviceIcons:           newDeviceIconProxy(d.reg, centralResolve),
-		RefreshDevices:        d.devicesAdapter,
-		Reloader:              d.deviceReloader,
-		DPWriter:              d.dpWriterAdapter,
-		CustomDPWriter:        d.customDPDispatcher,
-		Paramsets:             d.paramsetsDomain,
-		ParameterDeterminer:   d.parameterDeterminer,
-		Hub:                   d.hubAdapter,
-		WebhookInboundEnabled: cfg.North.Webhook.Inbound.Enabled,
-		WebhookInboundToken:   cfg.North.Webhook.Inbound.Token,
-		SysvarRefresh:         adapter.NewSysvarFetchAdapter(d.reg),
-		Interfaces:            d.ifaceAdapter,
-		Incidents:             d.incidents,
-		IncidentsAdmin:        incidentsClearerFrom(d.incidents),
-		Alarm:                 alarmPanelFrom(d.alarm),
-		AlarmCodes:            alarmCodeAdminFrom(d.alarm),
-		MasterProfiles:        d.masterProfiles,
-		SystemStatus:          d.sysStatusBuf,
-		Labels:                adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
-		DataPointVis:          d.visFilter,
-		Metrics:               d.metricsReg,
-		UISchema:              d.uiSchemaAdapter,
-		Links:                 d.linksDomain,
-		Schedules:             d.schedulesDomain,
-		CentralLinks:          d.centralLinksDomain,
-		DefinitionExport:      d.definitionExportDomain,
-		Audit:                 d.auditRead,
-		Auth:                  d.restAuth,
-		ConfigAdmin:           d.configSvc,
-		RestartPending:        restartState,
-		ConfigChanges:         restartState,
-		UserAdmin:             d.userSvc,
-		SelfPassword:          d.passwordSvc,
-		SessionRevoker:        d.sessions,
-		TokenPurger:           d.sqTokens,
-		Preferences:           d.prefSvc,
-		RoomFunctionAdmin:     d.roomFunctionAdmin,
-		TLSCert:               tlsCertSvc,
-		TokenAdmin:            d.tokenSvc,
-		CentralAdmin:          d.centSvc,
-		Discovery:             d.discovery,
-		MQTTReload:            newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
-		OIDC:                  buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
-		SPAHandler:            ui.SPAHandler(),
-		Bootstrap:             d.bootstrap,
+		Logger:                  logger,
+		StartedAt:               time.Now(),
+		Health:                  d.healthAdapter,
+		Config:                  d.configAdapter,
+		Devices:                 d.devicesAdapter,
+		DeviceAdmin:             d.deviceAdminDomain,
+		DeviceReplacer:          d.deviceAdminDomain,
+		FirmwareRefresher:       firmwareRefresherFrom(d.firmwareRefresher),
+		DeviceInstallMode:       d.deviceAdminDomain,
+		InstallModeSearch:       d.deviceAdminDomain,
+		DeviceCommunicationTest: d.deviceAdminDomain,
+		DeviceTeam:              d.deviceAdminDomain,
+		DeviceIcons:             newDeviceIconProxy(d.reg, centralResolve),
+		RefreshDevices:          d.devicesAdapter,
+		Reloader:                d.deviceReloader,
+		DPWriter:                d.dpWriterAdapter,
+		CustomDPWriter:          d.customDPDispatcher,
+		Paramsets:               d.paramsetsDomain,
+		ParameterDeterminer:     d.parameterDeterminer,
+		Hub:                     d.hubAdapter,
+		WebhookInboundEnabled:   cfg.North.Webhook.Inbound.Enabled,
+		WebhookInboundToken:     cfg.North.Webhook.Inbound.Token,
+		SysvarRefresh:           adapter.NewSysvarFetchAdapter(d.reg),
+		Interfaces:              d.ifaceAdapter,
+		Incidents:               d.incidents,
+		IncidentsAdmin:          incidentsClearerFrom(d.incidents),
+		Alarm:                   alarmPanelFrom(d.alarm),
+		AlarmCodes:              alarmCodeAdminFrom(d.alarm),
+		MasterProfiles:          d.masterProfiles,
+		SystemStatus:            d.sysStatusBuf,
+		Labels:                  adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
+		DataPointVis:            d.visFilter,
+		Metrics:                 d.metricsReg,
+		UISchema:                d.uiSchemaAdapter,
+		Links:                   d.linksDomain,
+		Schedules:               d.schedulesDomain,
+		CentralLinks:            d.centralLinksDomain,
+		DefinitionExport:        d.definitionExportDomain,
+		Audit:                   d.auditRead,
+		Auth:                    d.restAuth,
+		ConfigAdmin:             d.configSvc,
+		RestartPending:          restartState,
+		ConfigChanges:           restartState,
+		UserAdmin:               d.userSvc,
+		SelfPassword:            d.passwordSvc,
+		SessionRevoker:          d.sessions,
+		TokenPurger:             d.sqTokens,
+		Preferences:             d.prefSvc,
+		Diagrams:                d.diagramSvc,
+		RoomFunctionAdmin:       d.roomFunctionAdmin,
+		TLSCert:                 tlsCertSvc,
+		TokenAdmin:              d.tokenSvc,
+		CentralAdmin:            d.centSvc,
+		Discovery:               d.discovery,
+		MQTTReload:              newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
+		OIDC:                    buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
+		SPAHandler:              ui.SPAHandler(),
+		Bootstrap:               d.bootstrap,
 		Setup: &handlers.SetupService{
 			Users:    d.sqUsers,
 			Centrals: d.sqCentrals,
@@ -279,6 +287,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// tracks whether the /alarm routes exist, not whether the
 			// engine is armed/healthy.
 			alarm: d.alarm != nil,
+			// History is enabled when the recorder store was wired (the
+			// same opt-in flag that mounts /history and /history/recording).
+			history: d.historyStore != nil,
 		},
 		CORS:       buildCORS(cfg),
 		Idempotent: true,
@@ -351,6 +362,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		EnableRestartEndpoint: detectSupervisedRestart(),
 		ValuesCache:           newValuesCacheHandlerAdapter(d.valuesCacheStore),
 		History:               newHistoryHandlerAdapter(d.historyStore),
+		RecordingOverrides:    newRecordingOverrideAdapter(d.recordingOverrides),
 		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),

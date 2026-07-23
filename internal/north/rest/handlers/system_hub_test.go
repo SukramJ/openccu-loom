@@ -4,12 +4,15 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 )
 
@@ -85,7 +88,7 @@ func TestInstallModeInterfaces(t *testing.T) {
 
 	// POST without interface → 422.
 	rr = httptest.NewRecorder()
-	PostInstallModeInterface(idx)(rr, httptest.NewRequest(http.MethodPost, "/install-mode/interfaces",
+	PostInstallModeInterface(idx, nil)(rr, httptest.NewRequest(http.MethodPost, "/install-mode/interfaces",
 		strings.NewReader(`{"active":true}`)))
 	if rr.Code != 422 {
 		t.Fatalf("missing interface: status = %d, want 422", rr.Code)
@@ -93,9 +96,230 @@ func TestInstallModeInterfaces(t *testing.T) {
 
 	// POST for an unknown interface → 404.
 	rr = httptest.NewRecorder()
-	PostInstallModeInterface(idx)(rr, httptest.NewRequest(http.MethodPost, "/install-mode/interfaces",
+	PostInstallModeInterface(idx, nil)(rr, httptest.NewRequest(http.MethodPost, "/install-mode/interfaces",
 		strings.NewReader(`{"interface":"BidCos-RF","active":true}`)))
 	if rr.Code != 404 {
 		t.Fatalf("unknown interface: status = %d, want 404", rr.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PostInstallModeInterface — LOCAL teach-in (SGTIN + device key)
+// ---------------------------------------------------------------------------
+
+// fakeInstallWriter implements [hub.InstallModeWriter] for handler tests.
+type fakeInstallWriter struct {
+	gotEnabled  bool
+	gotDuration time.Duration
+	gotDevice   string
+}
+
+func (f *fakeInstallWriter) SetInstallMode(_ context.Context, _ string, enabled bool, duration time.Duration) error {
+	f.gotEnabled = enabled
+	f.gotDuration = duration
+	return nil
+}
+
+// SetInstallModeForDevice satisfies [hub.DeviceInstallModeWriter] so the
+// device_address dispatch path can be pinned without falling back to the
+// plain broadcast SetInstallMode.
+func (f *fakeInstallWriter) SetInstallModeForDevice(_ context.Context, _ string, duration time.Duration, deviceAddress string) error {
+	f.gotEnabled = true
+	f.gotDuration = duration
+	f.gotDevice = deviceAddress
+	return nil
+}
+
+// fakeLocalInstallWriter implements [hub.LocalInstallModeWriter] for
+// handler tests exercising the LOCAL teach-in dispatch.
+type fakeLocalInstallWriter struct {
+	fakeInstallWriter
+	err      error
+	gotSGTIN string
+	gotKey   string
+}
+
+func (f *fakeLocalInstallWriter) SetInstallModeLocal(_ context.Context, _ string, duration time.Duration, sgtin, keyHex string) error {
+	f.gotDuration = duration
+	f.gotSGTIN = sgtin
+	f.gotKey = keyHex
+	return f.err
+}
+
+// postInstallMode is a small helper that dispatches PostInstallModeInterface
+// with the given body and returns the recorder.
+func postInstallMode(idx HubIndex, rec audit.Recorder, body string) *httptest.ResponseRecorder {
+	rr := httptest.NewRecorder()
+	PostInstallModeInterface(idx, rec)(rr, httptest.NewRequest(http.MethodPost, "/install-mode/interfaces", strings.NewReader(body)))
+	return rr
+}
+
+// TestPostInstallModeInterface_ValidationMatrix pins the 422 validation
+// matrix for the LOCAL teach-in fields: key without sgtin, sgtin+key
+// combined with active=false, and sgtin+key combined with device_address.
+func TestPostInstallModeInterface_ValidationMatrix(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hub.NewHub("test-ccu")}
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "key without sgtin",
+			body: `{"interface":"HmIP-RF","active":true,"key":"0110C8531D0952D8D73E1194E95B5F19"}`,
+		},
+		{
+			name: "sgtin+key with active false",
+			body: `{"interface":"HmIP-RF","active":false,"sgtin":"3014F711A061A7D569892A67","key":"0110C8531D0952D8D73E1194E95B5F19"}`,
+		},
+		{
+			name: "sgtin+key with device_address",
+			body: `{"interface":"HmIP-RF","active":true,"sgtin":"3014F711A061A7D569892A67","key":"0110C8531D0952D8D73E1194E95B5F19","device_address":"AABBCCDD"}`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rr := postInstallMode(idx, nil, tc.body)
+			if rr.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want 422, body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
+// TestPostInstallModeInterface_CentralFilterSelectsNamedHub verifies that
+// two centrals exposing the same interface name are disambiguated by the
+// `central` request field: only the named central's install-mode DP is
+// toggled, the other is left untouched.
+func TestPostInstallModeInterface_CentralFilterSelectsNamedHub(t *testing.T) {
+	t.Parallel()
+
+	writerA := &fakeInstallWriter{}
+	hA := hub.NewHub("ccu-a")
+	hA.PutInstallMode(hub.NewInstallMode("HmIP-RF", writerA))
+
+	writerB := &fakeInstallWriter{}
+	hB := hub.NewHub("ccu-b")
+	hB.PutInstallMode(hub.NewInstallMode("HmIP-RF", writerB))
+
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-a", Hub: hA},
+		{Central: "ccu-b", Hub: hB},
+	}}
+
+	rr := postInstallMode(idx, nil, `{"interface":"HmIP-RF","active":true,"seconds":60,"central":"ccu-b"}`)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202, body=%s", rr.Code, rr.Body.String())
+	}
+	if !writerB.gotEnabled {
+		t.Fatal("ccu-b's install-mode writer must have been toggled")
+	}
+	if writerA.gotEnabled {
+		t.Fatal("ccu-a's install-mode writer must NOT have been toggled")
+	}
+}
+
+// TestPostInstallModeInterface_LocalTeachInRecordsAudit verifies the happy
+// LOCAL path: the audit entry carries ActionInstallModeLocal, DeviceAddress
+// equal to the submitted SGTIN, and a Note that never contains the device
+// key — the key is credential material and must never be logged.
+func TestPostInstallModeInterface_LocalTeachInRecordsAudit(t *testing.T) {
+	t.Parallel()
+	writer := &fakeLocalInstallWriter{}
+	h := hub.NewHub("test-ccu")
+	h.PutInstallMode(hub.NewInstallMode("HmIP-RF", writer))
+	idx := &testHubIndex{h: h}
+	rec := &captureRecorder{}
+
+	const (
+		sgtin = "3014-F711-A061-A7D5-6989-2A67"
+		key   = "0110C8531D0952D8D73E1194E95B5F19"
+	)
+	rr := postInstallMode(idx, rec, `{"interface":"HmIP-RF","active":true,"seconds":300,"sgtin":"`+sgtin+`","key":"`+key+`"}`)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202, body=%s", rr.Code, rr.Body.String())
+	}
+	if writer.gotSGTIN != "3014F711A061A7D569892A67" {
+		t.Fatalf("writer got sgtin=%q, want normalised 3014F711A061A7D569892A67", writer.gotSGTIN)
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(rec.entries))
+	}
+	entry := rec.entries[0]
+	if entry.Action != audit.ActionInstallModeLocal {
+		t.Fatalf("Action = %q, want %q", entry.Action, audit.ActionInstallModeLocal)
+	}
+	if entry.DeviceAddress != sgtin {
+		t.Fatalf("DeviceAddress = %q, want the submitted SGTIN %q", entry.DeviceAddress, sgtin)
+	}
+	if strings.Contains(entry.Note, key) {
+		t.Fatalf("audit Note must never contain the device key, got %q", entry.Note)
+	}
+	if strings.Contains(entry.Note, "0110C8531D0952D8D73E1194E95B5F19") {
+		t.Fatal("audit Note must never contain the normalised device key either")
+	}
+}
+
+// TestPostInstallModeInterface_PlainEnableRecordsAudit verifies that the
+// plain broadcast enable path (no sgtin/key) records ActionInstallMode, not
+// ActionInstallModeLocal.
+func TestPostInstallModeInterface_PlainEnableRecordsAudit(t *testing.T) {
+	t.Parallel()
+	writer := &fakeInstallWriter{}
+	h := hub.NewHub("test-ccu")
+	h.PutInstallMode(hub.NewInstallMode("HmIP-RF", writer))
+	idx := &testHubIndex{h: h}
+	rec := &captureRecorder{}
+
+	rr := postInstallMode(idx, rec, `{"interface":"HmIP-RF","active":true,"seconds":60}`)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202, body=%s", rr.Code, rr.Body.String())
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(rec.entries))
+	}
+	if rec.entries[0].Action != audit.ActionInstallMode {
+		t.Fatalf("Action = %q, want %q", rec.entries[0].Action, audit.ActionInstallMode)
+	}
+}
+
+// TestPostInstallModeInterface_DeviceAddressBodyDecodes is a regression test:
+// a request body naming device_address must decode successfully (not 400 —
+// DecodeJSON's DisallowUnknownFields would reject it if the field were
+// missing from InstallModeInterfaceRequest) and dispatch through
+// EnableForDevice.
+func TestPostInstallModeInterface_DeviceAddressBodyDecodes(t *testing.T) {
+	t.Parallel()
+	writer := &fakeInstallWriter{}
+	h := hub.NewHub("test-ccu")
+	h.PutInstallMode(hub.NewInstallMode("HmIP-RF", writer))
+	idx := &testHubIndex{h: h}
+
+	rr := postInstallMode(idx, nil, `{"interface":"HmIP-RF","active":true,"seconds":60,"device_address":"AABBCCDD:1"}`)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (device_address must decode, not 400), body=%s", rr.Code, rr.Body.String())
+	}
+	if writer.gotDevice != "AABBCCDD:1" {
+		t.Fatalf("writer got device=%q, want AABBCCDD:1 (EnableForDevice dispatch)", writer.gotDevice)
+	}
+}
+
+// TestPostInstallModeInterface_LocalUnsupportedIs422 verifies that a
+// hub.ErrLocalInstallModeUnsupported failure (writer without the LOCAL
+// extension) maps to 422, not a generic 502 upstream error — it is an
+// operator-fixable request shape (wrong interface/backend), not a CCU
+// transport failure.
+func TestPostInstallModeInterface_LocalUnsupportedIs422(t *testing.T) {
+	t.Parallel()
+	writer := &fakeInstallWriter{} // no LOCAL extension
+	h := hub.NewHub("test-ccu")
+	h.PutInstallMode(hub.NewInstallMode("HmIP-RF", writer))
+	idx := &testHubIndex{h: h}
+
+	rr := postInstallMode(idx, nil, `{"interface":"HmIP-RF","active":true,"seconds":60,"sgtin":"3014F711A061A7D569892A67","key":"0110C8531D0952D8D73E1194E95B5F19"}`)
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422, body=%s", rr.Code, rr.Body.String())
 	}
 }

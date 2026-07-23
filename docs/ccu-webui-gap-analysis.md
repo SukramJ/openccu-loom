@@ -337,7 +337,12 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   `PATCH /devices/{addr}/channels/{no}` fehlen. Zusatzbefund: openapi.yaml
   dokumentiert bei `patchDevice` nur `name` — Spec-Drift, `rooms`/
   `functions` nachziehen. *ReGa, vorhanden.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `PATCH
+  /devices/{addr}/channels/{no}` akzeptiert `rooms`/`functions`, WS
+  `device.set_channel_rooms` / `device.set_channel_functions`,
+  `ChannelSummary.rooms`, rename-sichere ReGa-Skript-Auflösung,
+  SPA-Kanal-Editoren, Audit `device_assignment`. (Der bei `patchDevice`
+  gemeldete Drift war bereits geschlossen.)
 - **G02 — Gerät löschen mit Optionen (RESET/FORCE + Abhängigkeits-Check)** (partial, P2 S)
   `deleteDevice` wird fest mit `flags=0` gerufen; „ab Werk zurücksetzen"
   (1) und „erzwingen" (2) plus Vorab-Warnung über abhängige Links/Programme
@@ -350,7 +355,14 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   implementiert (`callback_handlers.go:572`) — es fehlt die northbound
   Auslöse-Fläche + LINK-/ReGa-Migration als asynchroner Workflow.
   *XML-RPC + ReGa kombiniert.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `GET
+  /devices/{addr}/replace-candidates` + `POST /devices/{addr}/replace`
+  (WS `device.replace_candidates` / `device.replace`), Southbound
+  `listReplaceableDevices`/`replaceDevice` (nur BidCos-RF/-Wired),
+  Eager-Modell-Swap + relaxierter Cross-Type-Guard, Inbox-Replace-Dialog,
+  Audit `device_replace`. Die CCU migriert Links/Teams/ReGa-Referenzen
+  selbst; die WebUI-seitige Energiezähler-Sysvar-Umbenennung ist eine
+  dokumentierte Restlücke (siehe `docs/parity/by_design.md`).
 - **G04 — Gerätekonfiguration wiederherstellen (`restoreConfigToDevice`)** (missing, P2 M)
   Nach Geräte-Werksreset die zentralseitig gespeicherte Konfiguration
   (MASTER aller Kanäle + Link-Peerings) komplett neu übertragen
@@ -358,17 +370,28 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Capability-Gating. *Empfehlung:* Backend-Op + `POST
   /devices/{addr}/config/restore` + Button im Gerätedetail (CONFIG_PENDING-
   Badge als Fortschritt existiert schon). *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `POST
+  /devices/{addr}/config/restore` (WS `device.restore_config`, admin,
+  Audit), Southbound `restoreConfigToDevice` mit Per-Interface-Gate
+  (HmIP-RF/BidCos-RF), `DeviceSummary.config_restore_supported` +
+  Gerätedetail-Button.
 - **G05 — HmIP-Anlernen ohne Internet (SGTIN + Key)** (missing, P2 M)
   `setInstallModeHMIP` wird fest mit `installMode:"ALL"` gesendet;
   LOCAL-Modus mit SGTIN+Key (inkl. Base32→Base16) fehlt. *Empfehlung:*
   Request erweitern + SPA-Formular im Inbox-Bereich. *JSON-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0):
+  `POST /install-mode/interfaces` + `install_mode.enable` um `sgtin`/`key`
+  erweitert, serverseitige Normalisierung in `pkg/hmproto` (SGTIN +
+  Base32→Base16-Key), kein Broadcast-Fallback, Audit
+  `install_mode`/`install_mode_local`, SPA-Offline-Anlernformular.
 - **G06 — Virtuelle Fernbedienung / Tastensimulation** (partial, P2 S)
   Modell kennt `IsVirtualRemote` bereits; die SPA rendert BUTTON-Kanäle
   read-only. *Empfehlung:* Tastenraster mit Kurz/Lang-Buttons
   (PRESS_SHORT/LONG via vorhandenem setValue) im Gerätedetail.
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (reine SPA, kein
+  API-Bump): `VirtualRemoteKeyGrid` im Gerätedetail + interaktives
+  `ButtonEvent`-Widget (Gate `operations.write && usage==data_point`),
+  Einzel-Bool-`setValue` mit `device.trigger`-Flash-Feedback.
 - **G07 — Servicemeldungen dauerhaft unterdrücken** (partial, P2 M)
   Die komplette Client-Schicht (`SuppressServiceMessage`,
   `GetSuppressedServiceMessages`, Koordinator-Naht) existiert
@@ -380,12 +403,19 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Gezieltes Anlernfenster existiert; es fehlen der aktive
   addDevice-Fetch-Pfad und der Geräte-AES-Key-Dialog bei Key-Mismatch.
   *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **zurückgestellt** (2026-07-23): Recon
+  vollständig (BidCos-RF-only: `addDevice`/`setTempKey`/
+  `getKeyMismatchDevice`). Blocker: der Key-Mismatch-Fault-Code ist nur
+  gegen echte BidCos-RF-Hardware sicher zu mappen, godevccu simuliert
+  kein Anlernen. Reaktivieren, sobald ein BidCos-RF-Gerät + Live-Freigabe
+  vorliegt.
 - **G09 — BidCos-Wired Gerätesuche (`searchDevices`)** (missing, P3 S)
   Bus-Scan für Wired-Geräte in den Posteingang. *Empfehlung:*
   `Operations.SearchDevices` + `POST /install-mode/search`. *XML-RPC an
   hs485d.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0): `POST
+  /install-mode/search` + WS `install_mode.search`, `SearchDevices` nur
+  BidCos-Wired, Inbox-Refresh + SPA-Button.
 - **G10 — Posteingang: Erstkonfiguration beim Accept** (partial, P3 S)
   Name/Raum/Gewerk direkt beim Übernehmen vergeben (heute erst danach im
   Gerätedetail). *Empfehlung:* Accept-Body um `{name, rooms, functions}`
@@ -396,7 +426,10 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Aktiver Test mit OK-Quittung wie im CCU-Posteingang. *Empfehlung:*
   `POST /devices/{addr}/test` (ping bzw. getParamset-Roundtrip, danach
   STICKY_UNREACH zurücksetzen), Ergebnis-Badge. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0, geräteweit):
+  `POST /devices/{addr}/test` + WS `device.test` über die CCU-ReGa
+  `DevStartComTest` (Start+Poll), Radio-Interfaces + SPA-Badge.
+  STICKY_UNREACH-Reset und channel-level bleiben Follow-ups.
 - **G12 — Kanal-Sichtbarkeit und Bediensperre** (missing, P3 M)
   Kanäle aus Bedienlisten ausblenden / Bedienung sperren (Gast-Ansichten).
   *Empfehlung:* daemon-eigene Kanal-Flags im SQLite-Store + Filterung in
@@ -410,7 +443,10 @@ Funktionen je Bereich sind in §5 zusammengefasst.
 - **G14 — Team-Zuordnung (`setTeam`, z. B. Rauchmelder)** (missing, P3 M)
   TEAM wird nur gelesen. *Empfehlung:* `Operations.SetTeam` +
   `PUT /devices/{addr}/channels/{no}/team` + Team-Picker. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0): `setTeam` +
+  `listTeams` (BidCos-RF/HmIP-RF), `GET .../team-candidates` +
+  `PUT .../team` (WS `device.team_candidates`/`device.set_team`),
+  `team_supported` + SPA-Team-Picker.
 - **G15 — „Bestimmen"-Button (`determineParameter`)** (partial, P3 S)
   WS-Kommando `paramset.determine` existiert, hat aber keinen Aufrufer in
   der SPA. *Empfehlung:* determine-fähige Parameter im ui-schema markieren,
@@ -422,7 +458,12 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Fälle wie Klima-Party/RGBW/Display-Text sind abgedeckt). *Empfehlung:*
   priorisiert E-Paper-Editor als CDP-Erweiterung; Kanalgruppen im ui-schema
   als Gruppe mit Write-Fan-out.
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **zurückgestellt** (2026-07-23): Der
+  E-Paper-Kern (HM-Dis-EP-WM55) hängt am SUBMIT-Hexstring-Byte-Layout,
+  das weder in occu noch aiohomematic steht und nur gegen ein echtes
+  HM-Dis-EP-WM55 verifizierbar ist (Gerät nicht verfügbar). Die HmIP-
+  Display-Familie (HmIP-WRCD/SDV) ist bereits über die `textdisplay`-CDP
+  abgedeckt. Reaktivieren nur mit realer HM-Dis-EP-WM55-Validierung.
 - **G17 — Geräte-Firmware: Duty-Cycle-Gate + Download-Trigger nordseitig** (partial, P3 S)
   Übersicht, Update-Trigger und Verteilphasen-Anzeige sind vorhanden; das
   Duty-Cycle-Gate vor dem Update fehlt, und der fertig verdrahtete
@@ -432,25 +473,67 @@ Funktionen je Bereich sind in §5 zusammengefasst.
 
 ### 4.5 Direkte Verknüpfungen & Zentralenverknüpfungen
 
-- **V01 — Globale Verknüpfungsübersicht** (partial, P2 M)
-  Heute nur pro Gerät (Tab im Gerätedetail). *Empfehlung:*
-  `GET /api/v1/links` (XML-RPC `getLinks` liefert mit leerer Adresse ALLE
-  Links pro Interface in einem Call) + Route `#/links` mit globalem
-  Anlegen-Einstieg. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
-- **V02 — Rollen-Matching beim Verknüpfung-Anlegen** (partial, P2 M)
-  `channelMatchesRole` ignoriert den role-Parameter; jeder link-fähige Kanal
-  wird für beide Rollen angeboten. *Empfehlung:*
-  `LINK_SOURCE_ROLES ∩ LINK_TARGET_ROLES` aus der DeviceDescription
-  auswerten (Daten liegen vor, kein CCU-Roundtrip); Folgeausbau
-  Kanalgruppen (HM-Tastenpaare) + HmIP-RGBW-Sonderparameter.
-  **Entscheidung:** `umsetzen`
-- **V03 — Verknüpfung am Gerät testen (`activateLinkParamset`)** (missing, P2 M)
-  Profil probeweise am Aktor auslösen, bevor gespeichert wird — fehlt
-  komplett (der heutige `links.test_profile` ist ein Pass-Through ohne
-  Gerätezugriff). *Empfehlung:* XML-RPC-Methode + „Testen"-Button
-  (kurz/lang) im Profileditor. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+- **V01 — Globale Verknüpfungsübersicht** ✅ erledigt (0.47.0, API 2.45.0)
+  `GET /api/v1/links` (+ read-only WS `links.list_all`) aggregiert alle
+  Direktverknüpfungen über sämtliche Zentralen in einer flachen Liste;
+  jede Verknüpfung trägt jetzt `central_name` + `interface_id`. Kein
+  Wire-Change: `getLinks` mit leerer Adresse liefert pro (Zentrale,
+  Interface) den interfaceweiten Link-Bestand in einem Call
+  (`LinksDomain.ListAllLinks`, symmetrische Anreicherung, Dedup pro
+  Zentrale, Best-Effort-Skip offline/CUxD). Optionaler `?central=`-Scope
+  (404 bei unbekannter Zentrale). Neue SPA-Ansicht `#/links` mit Suche +
+  Zentral-Filter, jede Zeile verlinkt zum Gerätedetail zum Bearbeiten
+  (Anlegen/Ändern läuft weiter über den bestehenden Geräte-Tab).
+  Getestet: Domain- + Handler- + WS-Unit-Tests, LinkList-vitest,
+  Playwright light+dark-Baselines.
+  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** `getLinks("", 0)` liefert
+  auf HmIP-RF 8 Links mit voller Metadaten (SENDER/RECEIVER/NAME/FLAGS),
+  BidCos-RF leer ohne Fault — genau der interfaceweite Bestand, auf dem
+  `ListAllLinks` aufsetzt.
+  **Follow-up (optional):** ein zentralenübergreifender „Neue
+  Verknüpfung"-Einstieg mit Quell-Kanal-Picker direkt aus der Übersicht
+  (heute führt der Weg über das Gerätedetail).
+- **V02 — Rollen-Matching beim Verknüpfung-Anlegen** ✅ erledigt (0.47.0)
+  `channelMatchesRole` ignorierte den role-Parameter und rief pro Kandidat
+  ein `getLinkPeers` — jeder link-fähige Kanal wurde für beide Rollen
+  angeboten. Jetzt echte Token-Intersektion der rohen CCU
+  `LINK_SOURCE_ROLES` / `LINK_TARGET_ROLES` (wie `check_role_match` in
+  occu `devconfig.cgi`): `sender`-Quelle ∩ Kandidat-`LinkTargetRoles`,
+  `receiver`-Quelle ∩ Kandidat-`LinkSourceRoles`. Die Rollen werden beim
+  Ingest auf das Kanalmodell gestempelt (`Channel.SetLinkRoles`), also
+  kein CCU-Roundtrip mehr (entfernt einen `getLinkPeers`-Call pro
+  Kandidat). Leere Quell-Rollen: vorhandener Kanal ohne Richtungsrolle →
+  ausgeschlossen (CCU-strikt); nur der WS-Geräte-Probe (Quelle abwesend)
+  fällt auf die Präsenzprüfung zurück. Keine Schema-/API-Änderung.
+  Getestet: `intersects`, Richtungs-Divergenz, Ausschluss, Präsenz-Regel,
+  Model-Accessor + Pipeline-Population.
+  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** reales Token-Vokabular
+  bestätigt — Sender `JEQ0702833:1` (HM-Sen-MDIR-O) `LINK_SOURCE_ROLES =
+  "KEYMATIC SWITCH WINMATIC"` ∩ Empfänger `KEQ0843929:1` (HM-LC-Sw4-DR)
+  `LINK_TARGET_ROLES = "SWITCH WCS_TIPTRONIC_SENSOR WEATHER_CS"` = {SWITCH};
+  MAINTENANCE-Kanäle mit leeren Rollen werden korrekt ausgeschlossen.
+  **Follow-up (optional):** Kanalgruppen (HM-Tastenpaare) +
+  HmIP-RGBW-Sonderparameter — siehe W02.
+- **V03 — Verknüpfung am Gerät testen (`activateLinkParamset`)** ✅ erledigt
+  (0.47.0, API 2.49.0)
+  Neue Operations-Methode `ActivateLinkParamset` (XML-RPC
+  `activateLinkParamset(receiver, sender, longPress)`, CCU-only; CUxD/Homegear
+  → `ErrUnsupported`/501). `LinksDomain.ActivateLink` löst über den
+  **RECEIVER** auf (LINK-Paramset liegt am Empfänger), auditiert
+  `link_activate`. REST `POST /devices/{addr}/links/test` (op-gated, 202) +
+  operator-WS `links.activate_paramset`. SPA: „Test (kurz/langer
+  Tastendruck)"-Buttons im LINK-Profileditor mit **Bestätigungsdialog**
+  (löst den Aktor physisch aus). `links.test_profile` bleibt read-only
+  (unverändert). Getestet: Backend-Dispatch (beide Bool-Werte) +
+  ErrNotWired + CUxD/Homegear-Unsupported, Adapter (Receiver-Auflösung +
+  Audit), Handler (202/400/501/502/503), WS-Dispatch + Write-Klassifizierung.
+  **Live-CCU-validiert (2026-07-23, CCU 172.18.4.39, HM-LC-Sw4-DR
+  `KEQ0843929:1`, mit Freigabe):** temporäre Verknüpfung angelegt →
+  `activateLinkParamset(receiver, sender, longPress)` kurz+lang **fehlerfrei**,
+  Schalter-STATE physisch False→True → Cleanup (removeLink + STATE=false, CCU
+  im Ausgangszustand). Der Wire-Call ist damit gegen echte Hardware bestätigt
+  (godevccu kennt `activateLinkParamset` nicht → E2E-Skip bleibt). Optionaler
+  godevccu-No-op-Handler + SPA-Button-vitest/Playwright-Baseline zurückgestellt.
 - **V04 — Zentralenverknüpfung pro Kanal** (partial, P2 M)
   Loom schaltet nur geräteweit (alle Press-Kanäle). *Empfehlung:*
   optionalen `channel`-Parameter an den bestehenden Endpunkten + Pro-Kanal-
@@ -538,12 +621,26 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   (`ivtBinary`/`istAlarm`), Enum in Request/openapi.yaml, SPA-Option.
   *ReGa.*
   **Entscheidung:** `umsetzen`
-- **SV03 — Diagramm-Definitionen (benannte Multi-Serien-Diagramme)** (missing, P2 L)
-  Keine wiederverwendbaren Diagramme, keine zentrale Diagramm-Seite, keine
-  Multi-Serien-Charts. *Empfehlung:* Loom-natives Feature: SQLite-Tabelle
-  `diagram_configs` + REST-CRUD `/diagrams` + Route `#/diagrams`;
-  HistoryChart um mehrere Serien erweitern. Keine CCU-Schnittstelle.
-  **Entscheidung:** `umsetzen`
+- **SV03 — Diagramm-Definitionen (benannte Multi-Serien-Diagramme)** ✅ erledigt
+  (0.47.0, API 2.50.0)
+  Loom-natives Feature: Tabelle `diagram_configs` in der Haupt-DB (Migration
+  029, Owner+Visibility private/shared, config_json mit Serien-Liste,
+  Validierung: nicht-leere `central` je Serie, ≤8 Serien, ≤64 KB) +
+  `DiagramConfigStore` (List own+shared / Get / Create / Update / Delete,
+  Owner-or-Admin). REST-CRUD `/api/v1/diagrams` (Reads jede Rolle,
+  subject-scoped; Writes op-gated; Audit `diagram_config`) via cmd-Adapter
+  (Store-Sentinels → Handler-Sentinels). SPA: neue `MultiSeriesChart`
+  (N Avg-Linien, kategorische Palette, Legende, Per-Serie-Fallback,
+  Bereichs-Toolbar) + `Diagrams.svelte` (Liste + Editor mit Serien-Builder)
+  + `#/diagrams`-Route + Nav + i18n en+de.
+  **Gating (auf Wunsch):** die gesamte Diagramm-Fläche (Nav + Seite) ist an
+  die neue `history.v1`-Info-Capability gebunden und nur sichtbar, wenn die
+  Verlaufsaufzeichnung aktiv ist.
+  Getestet: Store-CRUD/Ownership/Validierung/Multi-CCU, Handler
+  (200/201/204/400/401/403/404/503 + Audit), Contract-Walk-Fake,
+  Diagrams-Gating-vitest.
+  **Follow-up (zurückgestellt):** gebündelter `GET /diagrams/{id}/data`,
+  WS-Commands, Editor-Datenpunkt-Picker statt Freitextfelder, Playwright-Baselines.
 - **SV04 — Diagramm-Anzeige: Langzeit, freier Zeitraum, Zoom, Vergleich** (partial, P2 M)
   `QueryBuckets` liest nur die Raw-Tabelle (Retention 30 d), obwohl
   Hourly-/Daily-Rollups existieren → Tier-Fallback einbauen (dann trägt
@@ -561,11 +658,33 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   hartkodiert -1). *Empfehlung:* Parameter durchreichen + Kanal-Picker im
   Edit-Dialog. *JSON-RPC + ReGa.*
   **Entscheidung:** `umsetzen`
-- **SV07 — Sysvar-Verwendungsübersicht (Programme) + Lösch-Warnung** (missing, P3 M)
-  Vor dem Löschen sehen, welche Programme die Variable referenzieren
-  (OpenCCU 0045). *Empfehlung:* ReGa-Skript (Rule-DPs matchen) als
-  `GET /sysvars/{name}/usage`, Warnung im Lösch-Confirm. *ReGa.*
-  **Entscheidung:** `umsetzen`
+- **SV07 — Sysvar-Verwendungsübersicht (Programme) + Lösch-Warnung** ✅ erledigt
+  (0.47.0, API 2.47.0)
+  `GET /api/v1/sysvars/{name}/usage` (+ read-only WS `sysvars.usage`) über
+  das neue ReGa-Skript `usage_by_sysvar.fn`, das die CCU-native
+  `DPEnumUsagePrograms()` der Variablen nutzt (wie das CCU-WebUI) — erfasst
+  ALLE Referenzen (Bedingungen + Aktivitäten), nicht nur die Root-Regel.
+  Anreicherung aus der Hub-Programmregistry (lokalisierter Name, Unique-ID,
+  `is_internal`, beobachteter Active-Status), ReGa-Name als Fallback. Neues
+  optionales `SysvarUsageReader`-Interface am Hub (via SetMutator
+  type-assert, ohne SysvarMutator zu brechen). SPA: Best-Effort-Warnung im
+  Lösch-Confirm (blockiert das Löschen nie). Getestet: Runner, Skript-Pin
+  (34→35) + Placeholder, Hub-Modell (Reader/no-reader/SetMutator-Wiring),
+  Handler-Anreicherung (200/404/503), WS-Dispatch, SysvarList-vitest.
+  godevccu kann `DPEnumUsagePrograms` nicht bedienen (Pattern-Engine) →
+  E2E-Skip; godevccu-Handler als späterer Folge-Fix.
+  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** Empty-Pfad + Nicht-Leer-Pfad
+  gegen echte Hardware bestätigt. Nach Anlegen eines Programms `AAAb`, das die
+  Sysvar `bbb1_2` referenziert, liefert das unveränderte `usage_by_sysvar.fn`
+  exakt die vom Handler erwartete Form:
+  `[{"id":"6924","name":"AAAb","active":true}]` — `DPEnumUsagePrograms()`
+  findet die Referenz, ID/`UriEncode`-Name/`active`-Boolean stimmen, JSON-Framing
+  korrekt. Nach einem zweiten Programm `AAAc` auf derselben Sysvar feuert auch
+  der Inter-Element-Trenner (`WriteLine(',')`):
+  `[{"id":"6924",...,"active":true},\n{"id":"6949","name":"AAAc","active":true}]`
+  — valides JSON (Whitespace zwischen Array-Elementen ist bedeutungslos),
+  `json.Unmarshal` parst sauber zwei Einträge. Damit sind alle drei Fälle
+  (leer / ein Element / mehrere mit Trenner) gegen echte Hardware verifiziert.
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.
@@ -576,10 +695,19 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   kanal-scoped Patterns (`ADDR:4/POWER`) im Recorder-Filter + einfache
   Aufnahme-Verwaltung in der SPA. Rein Loom-seitig.
   **Entscheidung:** `offen`
-- **SV10 — Protokoll-Toggle am einzelnen Datenpunkt** (partial, P3 S)
-  *Empfehlung:* „Aufzeichnen"-Toggle im Gerätedetail, der eine
-  per-DP-Allow/Deny-Liste in der History-Config pflegt. Rein Loom-seitig.
-  **Entscheidung:** `umsetzen`
+- **SV10 — Protokoll-Toggle am einzelnen Datenpunkt** ✅ erledigt
+  (0.47.0, API 2.46.0)
+  „Aufzeichnen"-Switch im History-Tab des Gerätedetails, der die
+  Glob-Richtlinie (`Include`/`Exclude`) je Datenpunkt-Instanz überstimmt;
+  „auf Standard zurücksetzen" löscht die Übersteuerung. Persistenz: sparse
+  Tabelle `measurement_recording_overrides` in der History-DB (Migration
+  004), In-Memory-Overlay (`history.RecordingOverrides`) am Recorder-Hot-Path
+  (kein Platten-Read je Event). REST: `GET`/`PUT /api/v1/history/recording`
+  (REST-only wie History/Energy — kein WS). Numeric- + Live-Provenance-Guards
+  bleiben wirksam (Force-On kann keinen Nicht-Numerik-/Nicht-Live-Wert
+  aufzeichnen). Purge bei Geräte-/Zentral-Entfernung mit den Messwerten.
+  Getestet: Store-CRUD/Purge, Overlay + Recorder-Precedence, Handler,
+  RecordToggle-vitest. Gated hinter dem Opt-in-History-Feature (E2E-Skip).
 
 ### 4.8 Systemsteuerung
 
@@ -764,19 +892,42 @@ Die Wochenprofil-/Heizprofil-Editoren (HmIP P1–P6, BidCos HM-TC-IT,
 Schalt-Wochenprogramme inkl. Astro/Kopierfunktionen, OpenCCU-0193-Felder)
 sind abgedeckt. Offen:
 
-- **W01 — HM-CC-RT-DN-Temperaturprofil (präfixloses Schema)** (partial, P2 M)
-  Die Hydration erkennt das `ENDTIME_/TEMPERATURE_`-Schema, aber
-  Parser/Builder verlangen den `P[1-6]_`-Präfix → REST 404, SPA „Zeitplan
-  nicht unterstützt" für ein sehr verbreitetes Gerät (gleiche Lücke wie in
-  der Python-Referenz). *Empfehlung:* Bare-Schema als P1-Alias in
-  `rawconvert.go`/`schedules.go`; Integrationstest gegen godevccu.
-  **Entscheidung:** `umsetzen`
-- **W02 — Universallicht-Wochenprogramm: Farbe/Effekt je Schaltpunkt** (partial, P3 L)
-  `WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_*`/`WP_OUTPUT_BEHAVIOUR`
-  (HmIP-RGBW/DALI/LSC) fehlen im Schedule-Modell. *Empfehlung:* Felder in
-  SimpleEntry + Roundtrip so erweitern, dass nicht editierte Farbfelder
-  erhalten bleiben; Farb-Widget nur für Kanäle mit den Parametern.
-  **Entscheidung:** `umsetzen`
+- **W01 — HM-CC-RT-DN-Temperaturprofil (präfixloses Schema)** ✅ erledigt
+  (0.47.0, Layer 1)
+  HM-CC-RT-DN / HM-CC-RT-DN-BoM tragen ihr einziges Wochenprofil als
+  präfixlose `ENDTIME_/TEMPERATURE_`-Keys direkt im geräteweiten
+  MASTER-Paramset (kein `P[1-6]_`-Präfix, kein dedizierter Schedule-Kanal).
+  Der Resolver (`FindScheduleChannel` Path 3 → `device.ChannelNumberDevice`),
+  der Parser (`slotPattern` mit optionalem Präfix → P1) und der Writer
+  (`serializeClimateScheduleBare` + `climateScheduleIsBare`-Erkennung aus
+  der MASTER-Beschreibung) behandeln das Bare-Schema jetzt bidirektional;
+  ein Präfix-Write würde auf der CCU still no-op'en. Keine
+  API-Kontraktänderung (Read `404`→`200`). Getestet: Unit-Tests der Helfer
+  + End-to-End-Round-Trip gegen godevccu
+  (`tests/integration/schedule_bare_e2e_test.go`).
+  **Layer 2 (Follow-up, nicht in 0.47.0):** Der Metadaten-DP
+  (`week_profile`) + MQTT-Wochenprofil-Discovery bleiben still, weil die
+  Normalisierung das Root-Profil ablöst (RT-DN hat `ScheduleChannelNo=nil`).
+  Der architektonisch saubere Fix ist zuerst upstream: HM-CC-RT-DN in
+  aiohomematic auf `schedule_channel_no=BIDCOS_DEVICE_CHANNEL_DUMMY`
+  registrieren, dann Profile regenerieren + Modell-Snapshot neu basieren.
+- **W02 — Universallicht-Wochenprogramm: Farbe/Effekt je Schaltpunkt** ✅ Slice 1
+  erledigt (0.47.0, API 2.48.0)
+  `WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE/VALUE` (HmIP-RGBW/DALI/LSC)
+  + `WP_OUTPUT_BEHAVIOUR` (HmIP-BSL) werden jetzt als **opake Ints** durch
+  DTO- und Model-Pfad getragen (`SimpleScheduleEntry.color_type/color_value/
+  output_behaviour`, `ScheduleField`-Enum + Filter erweitert). Emit nur bei
+  Vorhandensein (nil ≠ 0), an den aktuellen Slot des Eintrags geklebt →
+  deterministischer Erhalt über Reorder/Insert/Delete (vorher nicht-
+  deterministisch verwaist/vererbt). `ColorCapable`-Flag am Schedule; SPA
+  zeigt eine **read-only Farb-Kategorie-Badge** je Schaltpunkt (Slice-1-sicher,
+  kein Write). Getestet: Round-Trip/Reorder/0-Erhalt (DTO + Model), Filter,
+  Editor-vitest.
+  **Slice 2 (zurückgestellt, braucht Live-RGBW-Gerät + Freigabe):** die
+  20-Bit-`..._VALUE`-Packung (Hue/Sättigung|Kelvin|Effekt) decodieren/encodieren
+  + editierbares Farbwidget. Die Packung ist in occu/aiohomematic nicht
+  dokumentiert → Encode muss gegen ein echtes HmIP-RGBW (172.18.4.29,
+  benanntes Zielgerät + Schreibfreigabe) validiert werden.
 
 ---
 

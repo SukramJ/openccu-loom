@@ -32,6 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -287,11 +288,29 @@ func (w *wsLinkQuery) ListLinks(ctx context.Context, deviceAddress string) ([]ma
 	return structSliceToMapSlice(links)
 }
 
+func (w *wsLinkQuery) ListAllLinks(ctx context.Context, centralName string) ([]map[string]any, error) {
+	if w.domain == nil {
+		return nil, errors.New("ws: links domain not wired")
+	}
+	links, err := w.domain.ListAllLinks(ctx, centralName, "")
+	if err != nil {
+		return nil, err
+	}
+	return structSliceToMapSlice(links)
+}
+
 func (w *wsLinkQuery) AddLink(ctx context.Context, sender, receiver, name, description string) error {
 	if w.domain == nil {
 		return errors.New("ws: links domain not wired")
 	}
 	return w.domain.AddLink(ctx, sender, receiver, name, description)
+}
+
+func (w *wsLinkQuery) ActivateLinkParamset(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.ActivateLink(ctx, receiverChannelAddress, senderChannelAddress, longPress)
 }
 
 func (w *wsLinkQuery) SetLinkInfo(ctx context.Context, sender, receiver, name, description string) error {
@@ -515,6 +534,47 @@ func (w *wsHubQuery) FetchSystemVariables(ctx context.Context, centralName strin
 	return adapter.NewSysvarFetchAdapter(w.registry).FetchSystemVariables(ctx, centralName)
 }
 
+// SysvarUsagePrograms lists the CCU programs referencing a sysvar,
+// resolving the target hub by name (or the single-central convenience
+// case) and enriching each program from the hub's program registry.
+func (w *wsHubQuery) SysvarUsagePrograms(ctx context.Context, centralName, name string) ([]map[string]any, error) {
+	if name == "" {
+		return nil, errors.New("ws: name required")
+	}
+	h := w.hub.HubFor(centralName)
+	if h == nil && centralName == "" {
+		if hubs := w.hub.Hubs(); len(hubs) == 1 {
+			h = hubs[0].Hub
+		} else if len(hubs) > 1 {
+			return nil, errors.New("ws: central_name required (multiple CCUs)")
+		}
+	}
+	if h == nil {
+		return nil, errors.New("ws: hub not found")
+	}
+	usage, err := h.SysvarUsageRemote(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	serial := w.hub.SerialSuffix(h.CentralName)
+	out := make([]map[string]any, 0, len(usage))
+	for _, u := range usage {
+		e := map[string]any{"id": u.ID, "name": u.Name, "active": u.Active}
+		if p, ok := h.Program(u.ID); ok {
+			if p.Name != "" {
+				e["name"] = p.Name
+			}
+			e["unique_id"] = p.CanonicalUniqueID(serial)
+			e["is_internal"] = p.IsInternal
+			if a, observed := p.Active(); observed {
+				e["active"] = a
+			}
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
@@ -633,6 +693,21 @@ func (w *wsHubQuery) EnableInstallMode(ctx context.Context, interfaceID string, 
 	return m.Enable(ctx, time.Duration(durationSecs)*time.Second)
 }
 
+// EnableInstallModeLocal opens the keyserver-less HmIP LOCAL pairing
+// window (SGTIN + device-key whitelist) via InstallMode.EnableLocal,
+// which normalises both inputs and refuses to fall back to broadcast.
+func (w *wsHubQuery) EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSecs int, sgtin, key string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	m, ok := h.InstallModeDP(interfaceID)
+	if !ok {
+		return fmt.Errorf("ws: install mode for interface %q not registered", interfaceID)
+	}
+	return m.EnableLocal(ctx, time.Duration(durationSecs)*time.Second, sgtin, key)
+}
+
 // DisableInstallMode closes the pairing window for interfaceID.
 func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string) error {
 	h := w.hub.Hub()
@@ -644,6 +719,15 @@ func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string)
 		return fmt.Errorf("ws: install mode for interface %q not registered", interfaceID)
 	}
 	return m.Disable(ctx)
+}
+
+// SearchWiredDevices triggers a wired-bus scan via the device-admin
+// registry scan (multi-CCU safe), not the single-hub path.
+func (w *wsHubQuery) SearchWiredDevices(ctx context.Context, interfaceID, centralName string) (int, error) {
+	if w.deviceAdmin == nil {
+		return 0, errors.New("ws: device admin not wired")
+	}
+	return w.deviceAdmin.SearchWiredDevices(ctx, centralName, interfaceID)
 }
 
 func (w *wsHubQuery) TriggerBackup(ctx context.Context) error {
@@ -938,6 +1022,80 @@ func (w *wsDeviceWriter) SetInstallMode(ctx context.Context, address string, dur
 		return errors.New("ws: device admin not wired")
 	}
 	return w.admin.SetInstallMode(ctx, address, durationSeconds)
+}
+
+// SetChannelRooms replaces a single channel's room assignments via
+// DeviceAdminDomain.SetChannelRooms (Rega `set_device_rooms` with the
+// channel address).
+func (w *wsDeviceWriter) SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelRooms(ctx, deviceAddr, channelNo, rooms)
+}
+
+// SetChannelFunctions replaces a single channel's function (Gewerk)
+// assignments via DeviceAdminDomain.SetChannelFunctions.
+func (w *wsDeviceWriter) SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelFunctions(ctx, deviceAddr, channelNo, functions)
+}
+
+// RestoreConfig re-transmits the stored configuration to the device via
+// DeviceAdminDomain.RestoreDeviceConfig (XML-RPC
+// `restoreConfigToDevice`).
+func (w *wsDeviceWriter) RestoreConfig(ctx context.Context, address string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.RestoreDeviceConfig(ctx, address)
+}
+
+// ReplaceCandidates lists the devices the new device may replace via
+// DeviceAdminDomain.ReplaceCandidates.
+func (w *wsDeviceWriter) ReplaceCandidates(ctx context.Context, centralName, newAddress string) ([]hmapi.ReplaceCandidate, error) {
+	if w.admin == nil {
+		return nil, errors.New("ws: device admin not wired")
+	}
+	return w.admin.ReplaceCandidates(ctx, centralName, newAddress)
+}
+
+// ReplaceDevice swaps a paired device for a new one via
+// DeviceAdminDomain.ReplaceDevice.
+func (w *wsDeviceWriter) ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.ReplaceDevice(ctx, centralName, oldAddress, newAddress)
+}
+
+// TestDeviceCommunication runs the CCU's per-device communication test
+// via DeviceAdminDomain.TestDeviceCommunication.
+func (w *wsDeviceWriter) TestDeviceCommunication(ctx context.Context, address string) (hmapi.CommunicationTestResult, error) {
+	if w.admin == nil {
+		return hmapi.CommunicationTestResult{}, errors.New("ws: device admin not wired")
+	}
+	return w.admin.TestDeviceCommunication(ctx, address)
+}
+
+// TeamCandidates lists the team channels a channel may join via
+// DeviceAdminDomain.TeamCandidates.
+func (w *wsDeviceWriter) TeamCandidates(ctx context.Context, deviceAddr string, channelNo int) ([]hmapi.TeamCandidate, error) {
+	if w.admin == nil {
+		return nil, errors.New("ws: device admin not wired")
+	}
+	return w.admin.TeamCandidates(ctx, deviceAddr, channelNo)
+}
+
+// SetChannelTeam assigns a channel to a team via
+// DeviceAdminDomain.SetChannelTeam.
+func (w *wsDeviceWriter) SetChannelTeam(ctx context.Context, deviceAddr string, channelNo int, teamChannelAddress string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelTeam(ctx, deviceAddr, channelNo, teamChannelAddress)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

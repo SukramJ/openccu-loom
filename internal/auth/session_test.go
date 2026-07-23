@@ -480,3 +480,72 @@ func TestPurgeExpiredNoOpSafeWithNilPersist(t *testing.T) {
 		t.Error("expired session still in memory after PurgeExpired")
 	}
 }
+
+// TestSessionMiddlewareDefersToResolvedIdentity pins the precedence rule that
+// a Bearer/Basic identity resolved by an earlier middleware is NOT overridden
+// by a session cookie. This is the remote-proxy downgrade: the proxy injects
+// an admin Bearer while the browser's lower-role session cookie rides along;
+// the session must not win, or admin/operator actions 403 "insufficient role".
+func TestSessionMiddlewareDefersToResolvedIdentity(t *testing.T) {
+	sessions := NewSessionStore()
+	viewer, err := sessions.Issue(Identity{Subject: "viewer-user", Role: RoleViewer})
+	if err != nil {
+		t.Fatalf("issue viewer session: %v", err)
+	}
+	tokens := NewMemoryTokenStore(map[string]Identity{
+		"admintoken": {Subject: "admin", Role: RoleAdmin},
+	})
+	mw := NewMiddleware(nil, tokens)
+
+	var got Identity
+	var seen bool
+	terminal := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got, seen = IdentityFrom(r.Context())
+	})
+	// The production wiring: Resolve (Bearer/Basic) runs first, then the
+	// session resolver runs inner. Both write the same context key.
+	chain := mw.Resolve(SessionMiddleware(sessions)(terminal))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/diagnostics/rssi", http.NoBody)
+	req.Header.Set("Authorization", "Bearer admintoken")
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: viewer.ID})
+	chain.ServeHTTP(httptest.NewRecorder(), req)
+
+	if !seen {
+		t.Fatal("no identity resolved")
+	}
+	if got.Role != RoleAdmin {
+		t.Fatalf("role=%q scheme=%q, want admin (Bearer must win over session)", got.Role, got.Scheme)
+	}
+	if got.Scheme != SchemeBearer {
+		t.Errorf("scheme=%q, want bearer", got.Scheme)
+	}
+}
+
+// TestSessionMiddlewareResolvesWhenUnauthenticated is the regression guard for
+// the normal cookie-only login flow: with no earlier identity, the session
+// cookie must still resolve to its identity.
+func TestSessionMiddlewareResolvesWhenUnauthenticated(t *testing.T) {
+	sessions := NewSessionStore()
+	sess, err := sessions.Issue(Identity{Subject: "op", Role: RoleOperator})
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	var got Identity
+	var seen bool
+	terminal := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got, seen = IdentityFrom(r.Context())
+	})
+	chain := SessionMiddleware(sessions)(terminal)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
+	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: sess.ID})
+	chain.ServeHTTP(httptest.NewRecorder(), req)
+
+	if !seen || got.Subject != "op" || got.Role != RoleOperator {
+		t.Fatalf("session identity not resolved: seen=%v got=%+v", seen, got)
+	}
+	if got.Scheme != SchemeSession {
+		t.Errorf("scheme=%q, want session", got.Scheme)
+	}
+}

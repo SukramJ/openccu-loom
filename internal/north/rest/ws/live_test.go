@@ -28,6 +28,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/configui"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // --- helpers -----------------------------------------------------------------
@@ -2271,6 +2272,33 @@ func (f *failOnInstallDevice) RenameChannel(_ context.Context, _ string, _ int, 
 func (f *failOnInstallDevice) SetInstallMode(_ context.Context, _ string, _ int) error {
 	return errors.New("install mode failed")
 }
+
+func (f *failOnInstallDevice) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *failOnInstallDevice) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *failOnInstallDevice) RestoreConfig(_ context.Context, _ string) error { return nil }
+func (f *failOnInstallDevice) TestDeviceCommunication(_ context.Context, _ string) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, nil
+}
+
+func (f *failOnInstallDevice) TeamCandidates(_ context.Context, _ string, _ int) ([]hmapi.TeamCandidate, error) {
+	return nil, nil
+}
+
+func (f *failOnInstallDevice) SetChannelTeam(_ context.Context, _ string, _ int, _ string) error {
+	return nil
+}
+
+func (f *failOnInstallDevice) ReplaceCandidates(_ context.Context, _, _ string) ([]hmapi.ReplaceCandidate, error) {
+	return nil, nil
+}
+
+func (f *failOnInstallDevice) ReplaceDevice(_ context.Context, _, _, _ string) error { return nil }
 
 // TestExtendedChangeHistoryListError exercises the error path in changeHistoryListHandler.
 func TestExtendedChangeHistoryListError(t *testing.T) {

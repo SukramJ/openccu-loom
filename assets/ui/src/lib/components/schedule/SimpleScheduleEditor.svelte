@@ -125,6 +125,16 @@
     entries[idx] = { ...entries[idx], weekdays: next };
   }
 
+  // colorLabel renders a read-only category for a universal-light switch
+  // point. The packed color_value is opaque in this slice (its 20-bit
+  // layout is firmware-specific and unvalidated), so only the type is
+  // surfaced — the raw value round-trips verbatim without being decoded.
+  function colorLabel(type: number): string {
+    if (type === 1) return t("schedule.color.temperature");
+    if (type === 2) return t("schedule.color.effect");
+    return t("schedule.color.hue_saturation");
+  }
+
   function patch(idx: number, p: Partial<SimpleScheduleEntry>) {
     entries[idx] = { ...entries[idx], ...p };
   }
@@ -608,6 +618,15 @@
                         })}
                     />
                   </div>
+                </label>
+              {/if}
+
+              {#if schedule.color_capable && entry.color_type != null}
+                <label class="flex items-center gap-2">
+                  <span class="text-slate-600 dark:text-slate-400">
+                    {t("schedule.color")}
+                  </span>
+                  <Badge variant="muted">{colorLabel(entry.color_type)}</Badge>
                 </label>
               {/if}
 

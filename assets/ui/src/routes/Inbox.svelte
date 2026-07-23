@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { InboxDevice } from "$lib/api/types";
+  import type { InboxDevice, ReplaceCandidate } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -10,9 +10,16 @@
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
+  import {
+    isValidHmIPKeyInput,
+    normalizeSgtin,
+    stripLabelSeparators,
+  } from "$lib/hmip";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -104,6 +111,64 @@
     }
   }
 
+  // Keyserver-less HmIP LOCAL teach-in: pairing restricted to exactly
+  // one device by SGTIN + device key from the label — works without
+  // internet/keyserver access. Only offered on HmIP interfaces; the
+  // daemon re-normalises both inputs authoritatively (incl. the Base32
+  // label-form key conversion).
+  let localSgtin = $state("");
+  let localKey = $state("");
+  let localBusy = $state(false);
+  const selectedIsHmIP = $derived(selectedInterface.startsWith("HmIP"));
+  const selectedIsWired = $derived(selectedInterface === "BidCos-Wired");
+  let searchingWired = $state(false);
+  async function searchWiredBus() {
+    searchingWired = true;
+    try {
+      const r = await api.searchWiredDevices(
+        selectedInterface,
+        centralFilter || undefined,
+      );
+      toastStore.success(t("inbox.search_wired_done", { count: r.found }));
+      // Give ReGa a moment to surface the found (not-yet-accepted)
+      // devices in the inbox, then refetch.
+      setTimeout(() => void load(), 1500);
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
+      );
+    } finally {
+      searchingWired = false;
+    }
+  }
+  const localSgtinInvalid = $derived(
+    localSgtin.trim() !== "" && normalizeSgtin(localSgtin) === null,
+  );
+  const localKeyInvalid = $derived(
+    localKey.trim() !== "" && !isValidHmIPKeyInput(localKey),
+  );
+  async function startLocalTeachIn() {
+    const sgtin = normalizeSgtin(localSgtin);
+    if (!sgtin || !isValidHmIPKeyInput(localKey)) return;
+    localBusy = true;
+    try {
+      await api.setInstallModeInterface(selectedInterface, true, 60, undefined, {
+        sgtin,
+        key: stripLabelSeparators(localKey),
+      });
+      toastStore.success(t("inbox.install_mode_local_started"));
+      localSgtin = "";
+      localKey = "";
+      void installModeStore.refresh();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
+      );
+    } finally {
+      localBusy = false;
+    }
+  }
+
   // Accept dialog — first-time configuration (name, rooms, functions)
   // applied right after the CCU accepts the device out of the inbox.
   // A null target means the dialog is closed; leaving every field empty
@@ -114,6 +179,79 @@
   let acceptRooms = $state<Set<string>>(new Set());
   let acceptFunctions = $state<Set<string>>(new Set());
   let acceptSubmitting = $state(false);
+
+  // Replace dialog — swap a paired device for the new (inbox) one.
+  // Mirrors the CCU WebUI: the action lives on the new device's row and
+  // is offered only for BidCos interfaces (HmIP cannot be replaced).
+  let replaceTarget = $state<{ address: string; central: string } | null>(
+    null,
+  );
+  let replaceCandidates = $state<ReplaceCandidate[]>([]);
+  let replaceLoading = $state(false);
+  let replaceLoadError = $state<string | null>(null);
+  let replaceSubmitting = $state(false);
+
+  function isReplaceable(d: InboxDevice): boolean {
+    // The CCU exposes replaceDevice on BidCos only; HmIP throws
+    // NotImplementedException, so hide the action there (the server
+    // still enforces it). An unknown interface stays hidden.
+    return d.interface === "BidCos-RF" || d.interface === "BidCos-Wired";
+  }
+
+  async function openReplace(address: string, central: string) {
+    replaceTarget = { address, central };
+    replaceCandidates = [];
+    replaceLoadError = null;
+    replaceLoading = true;
+    try {
+      replaceCandidates = await api.listReplaceCandidates(
+        address,
+        central || undefined,
+      );
+    } catch (err) {
+      replaceLoadError =
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err);
+    } finally {
+      replaceLoading = false;
+    }
+  }
+
+  function closeReplace() {
+    replaceTarget = null;
+  }
+
+  async function confirmReplace(candidate: ReplaceCandidate) {
+    if (!replaceTarget) return;
+    const target = replaceTarget;
+    const ok = await confirmStore.ask({
+      title: t("inbox.replace.confirm_title"),
+      body: t("inbox.replace.confirm_text", {
+        old: candidate.name || candidate.address,
+        new: target.address,
+      }),
+      confirmLabel: t("inbox.replace.confirm_label"),
+      destructive: true,
+    });
+    if (!ok) return;
+    replaceSubmitting = true;
+    try {
+      await api.replaceDevice(
+        target.address,
+        candidate.address,
+        target.central || undefined,
+      );
+      toastStore.success(t("inbox.replace.success"));
+      closeReplace();
+      await load();
+      installModeStore.refresh();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
+      );
+    } finally {
+      replaceSubmitting = false;
+    }
+  }
 
   // Room / function catalogues for the multi-selects. Loaded lazily the
   // first time the dialog opens; a load failure leaves the lists empty so
@@ -359,6 +497,74 @@
     </Button>
   </form>
 
+  {#if selectedIsHmIP}
+    <!-- Keyserver-less HmIP LOCAL teach-in (SGTIN + device key). -->
+    <form
+      class="mb-4 flex flex-wrap items-center gap-2"
+      onsubmit={(e) => {
+        e.preventDefault();
+        void startLocalTeachIn();
+      }}
+    >
+      <label class="text-xs text-slate-500 dark:text-slate-400" for="inbox-local-sgtin">
+        {t("inbox.install_mode_local_label")}
+      </label>
+      <input
+        id="inbox-local-sgtin"
+        type="text"
+        bind:value={localSgtin}
+        placeholder={t("inbox.install_mode_local_sgtin_placeholder")}
+        aria-label={t("inbox.install_mode_local_sgtin_label")}
+        class="w-64 rounded-md border px-2 py-2 font-mono text-sm shadow-sm focus:outline-none {localSgtinInvalid
+          ? 'border-red-400 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200'
+          : 'border-slate-300 bg-white focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'}"
+        disabled={localBusy}
+      />
+      <input
+        id="inbox-local-key"
+        type="text"
+        bind:value={localKey}
+        placeholder={t("inbox.install_mode_local_key_placeholder")}
+        aria-label={t("inbox.install_mode_local_key_label")}
+        class="w-64 rounded-md border px-2 py-2 font-mono text-sm shadow-sm focus:outline-none {localKeyInvalid
+          ? 'border-red-400 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-200'
+          : 'border-slate-300 bg-white focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'}"
+        disabled={localBusy}
+      />
+      <Button
+        type="submit"
+        variant="outline"
+        disabled={localBusy ||
+          normalizeSgtin(localSgtin) === null ||
+          localKey.trim() === "" ||
+          !isValidHmIPKeyInput(localKey)}
+      >
+        {t("inbox.install_mode_local_submit")}
+      </Button>
+      <span class="w-full text-xs text-slate-400 dark:text-slate-500 sm:w-auto">
+        {t("inbox.install_mode_local_hint")}
+      </span>
+    </form>
+  {/if}
+
+  {#if selectedIsWired}
+    <!-- BidCos-Wired: scan the bus for new devices (no pairing window). -->
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        onclick={() => void searchWiredBus()}
+        disabled={searchingWired}
+        title={t("inbox.search_wired_title")}
+      >
+        {searchingWired ? t("inbox.search_wired_running") : t("inbox.search_wired")}
+      </Button>
+      <span class="text-xs text-slate-400 dark:text-slate-500">
+        {t("inbox.search_wired_hint")}
+      </span>
+    </div>
+  {/if}
+
   {#if installModeStore.active}
     <div class="mb-4 flex items-center gap-2 rounded border border-brand-300 bg-brand-50 p-3 text-sm text-brand-900 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200">
       <Badge variant="default">{t("inbox.install_mode_badge")}</Badge>
@@ -422,6 +628,16 @@
             >
               {accepting === d.address ? "…" : t("inbox.accept")}
             </Button>
+            {#if isReplaceable(d)}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void openReplace(d.address, d.central ?? "")}
+              >
+                {t("inbox.replace.button")}
+              </Button>
+            {/if}
           {/if}
         {/snippet}
       </DataTable>
@@ -552,6 +768,93 @@
           </Button>
         </div>
       </form>
+    </div>
+  </div>
+{/if}
+
+{#if replaceTarget}
+  <!-- Replace dialog: pick the paired device the new device replaces.
+       The CCU migrates links / teams / ReGa references; the old device
+       is unpaired. -->
+  <div
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
+    style="background-color: rgb(0 0 0 / 0.45);"
+    role="dialog"
+    aria-modal="true"
+    aria-label={t("inbox.replace.title")}
+    tabindex="-1"
+    onclick={(e) => {
+      if (e.target === e.currentTarget && !replaceSubmitting) closeReplace();
+    }}
+    onkeydown={(e) => {
+      if (e.key === "Escape" && !replaceSubmitting) closeReplace();
+    }}
+  >
+    <div
+      class="max-h-[90vh] w-full max-w-lg overflow-y-auto p-5"
+      style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
+    >
+      <h2 class="mb-1 text-lg font-semibold">{t("inbox.replace.title")}</h2>
+      <p class="mb-4 text-sm" style="color: var(--ha-secondary-text-color);">
+        {t("inbox.replace.intro", { address: replaceTarget.address })}
+      </p>
+
+      {#if replaceLoading}
+        <LoadingState />
+      {:else if replaceLoadError}
+        <ErrorState
+          message={replaceLoadError}
+          onRetry={() =>
+            void openReplace(replaceTarget!.address, replaceTarget!.central)}
+        />
+      {:else if replaceCandidates.length === 0}
+        <EmptyState
+          message={t("inbox.replace.empty")}
+          description={t("inbox.replace.empty_description")}
+        />
+      {:else}
+        <ul class="flex flex-col gap-2">
+          {#each replaceCandidates as candidate (candidate.address)}
+            <li>
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-3 rounded-md border border-[var(--ha-divider-color)] p-3 text-left transition hover:bg-[var(--ha-secondary-background-color)] disabled:opacity-50"
+                disabled={replaceSubmitting}
+                onclick={() => void confirmReplace(candidate)}
+              >
+                <span class="min-w-0">
+                  <span class="block truncate font-medium">
+                    {candidate.name || candidate.address}
+                  </span>
+                  <span
+                    class="block truncate text-xs"
+                    style="color: var(--ha-secondary-text-color);"
+                  >
+                    <span class="font-mono">{candidate.address}</span>
+                    {#if candidate.model}· {candidate.model}{/if}
+                  </span>
+                </span>
+                <Badge variant={candidate.model_matches ? "success" : "muted"}>
+                  {candidate.model_matches
+                    ? t("inbox.replace.same_type")
+                    : t("inbox.replace.compatible_type")}
+                </Badge>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      <div class="mt-4 flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          onclick={closeReplace}
+          disabled={replaceSubmitting}
+        >
+          {t("common.cancel")}
+        </Button>
+      </div>
     </div>
   </div>
 {/if}

@@ -3815,3 +3815,33 @@ order-preserving JSON decoder; until then it stays unwired.
 CCU's wire order, which the existing flatten-to-map caller discards. Adding
 the ordered path to a transport that never carries descriptions would add
 surface with no reachable caller.
+
+## Device replace — CCU migrates references, energy-counter sysvar rename is a known gap
+
+The guided device-replace workflow (`POST /devices/{addr}/replace`) calls
+the interface daemon's `replaceDevice(old, new)` and lets the CCU do the
+heavy lifting: rfd / hs485d migrate the direct links, teams and link
+paramsets, and ReGa re-binds the existing device/channel objects in place
+(same ise-ID), so programs, names, rooms/functions and sysvar channel
+bindings survive automatically. Loom therefore does **not** re-implement
+any reference migration — it only refreshes its own model (eager swap plus
+the CCU's `replaceDevice` callback, which dedups).
+
+**Known gap (WebUI-only step not reproduced):** the CCU WebUI additionally
+renames the energy-counter system variables whose *names* embed the device
+address (`svEnergyCounter_<chId>_<addr:ch>` / `svEnergyCounterGas_`) for
+POWERMETER / POWERMETER_IGL channels, because those are keyed by name, not
+ise-ID, and so do not follow the swap. A headless Loom-triggered replace
+leaves those name-embedded sysvars pointing at the old address. Porting the
+rename (JSON-RPC `SysVar.getValueByName` / `createFloat` / `setFloat` /
+`deleteSysVarByName` + `system.saveObjectModel`) is a possible follow-up;
+until then it is documented here rather than silently diverging. Loom's own
+MQTT auto-counter sysvar discovery has the same name-embeds-address shape
+and would need the same treatment.
+
+**Model-guard relaxation:** `DeviceCoordinator.ReplaceDevice` no longer
+rejects a model-string mismatch between old and new device. The CCU (rfd /
+hs485d) owns the type-compatibility check and legitimately approves
+compatible cross-type swaps; rejecting one after the CCU already performed
+it would strand Loom's model. A cross-type replace is logged
+(`device_coordinator.replace_device.cross_type`) and proceeds.

@@ -6,16 +6,29 @@ package hub
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
 // ErrInstallModeInvalidDuration is returned for non-positive durations.
 var ErrInstallModeInvalidDuration = errors.New("install mode: duration must be positive")
+
+// ErrLocalInstallModeUnsupported is returned by [InstallMode.EnableLocal]
+// when the installed writer cannot serve the keyserver-less HmIP LOCAL
+// teach-in (non-HmIP interface, or a backend without the HmIP JSON-RPC
+// surface).
+var ErrLocalInstallModeUnsupported = errors.New("install mode: local teach-in not supported on this interface")
+
+// ErrInstallModeInvalidLocalInput wraps SGTIN / device-key normalisation
+// failures so the REST/WS surfaces can answer 422 instead of a generic
+// upstream error.
+var ErrInstallModeInvalidLocalInput = errors.New("install mode: invalid local teach-in input")
 
 // InstallMode captures the CCU's pairing/install-mode state for a
 // single interface. The remaining duration is exposed as a
@@ -187,6 +200,40 @@ func (m *InstallMode) EnableForDevice(ctx context.Context, duration time.Duratio
 	}
 	// Writer does not support targeted pairing — fall back to broadcast.
 	return m.Enable(ctx, duration)
+}
+
+// EnableLocal opens the pairing window restricted to a single device
+// identified by SGTIN + device key — the keyserver-less HmIP LOCAL
+// teach-in. Both inputs are normalised here (the single shared point
+// for REST and WS): label formatting (dashes, spaces, case) is
+// stripped and the shorter Base32 key label form is converted to its
+// 32-hex form. Unlike [InstallMode.EnableForDevice] there is no
+// broadcast fallback — failing loudly beats silently pairing
+// everything when the operator asked for a whitelisted teach-in.
+func (m *InstallMode) EnableLocal(ctx context.Context, duration time.Duration, sgtin, key string) error {
+	if duration <= 0 {
+		return ErrInstallModeInvalidDuration
+	}
+	if m.Writer == nil {
+		return errors.New("install mode: no writer configured")
+	}
+	normalizedSGTIN, err := hmproto.NormalizeSGTIN(sgtin)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInstallModeInvalidLocalInput, err)
+	}
+	normalizedKey, err := hmproto.NormalizeHmIPKey(key)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInstallModeInvalidLocalInput, err)
+	}
+	lw, ok := m.Writer.(LocalInstallModeWriter)
+	if !ok {
+		return ErrLocalInstallModeUnsupported
+	}
+	if err := lw.SetInstallModeLocal(ctx, m.InterfaceID, duration, normalizedSGTIN, normalizedKey); err != nil {
+		return err
+	}
+	m.OnState(true, duration)
+	return nil
 }
 
 // IsActive reports whether install mode is currently enabled and the

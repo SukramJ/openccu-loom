@@ -51,6 +51,10 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// DeviceReplacer backs the guided device-replace workflow
+	// (GET /devices/{addr}/replace-candidates + POST
+	// /devices/{addr}/replace). Nil serves those routes as 503.
+	DeviceReplacer handlers.DeviceReplacePort
 	// FirmwareRefresher backs POST /devices/firmware/refresh (force
 	// re-read of per-device firmware data from every CCU). Nil leaves
 	// the route unmounted.
@@ -58,6 +62,16 @@ type Deps struct {
 	// DeviceInstallMode opens a targeted (per-device / serial) pairing
 	// window at POST /devices/{addr}/install-mode. Nil disables the route.
 	DeviceInstallMode handlers.DeviceInstallModePort
+	// InstallModeSearch triggers a wired-bus device scan at POST
+	// /install-mode/search. Nil serves the route as 503.
+	InstallModeSearch handlers.DeviceSearchPort
+	// DeviceCommunicationTest runs the per-device communication test at
+	// POST /devices/{addr}/test. Nil serves the route as 503.
+	DeviceCommunicationTest handlers.DeviceCommunicationTestPort
+	// DeviceTeam backs channel team assignment
+	// (GET .../channels/{no}/team-candidates + PUT .../channels/{no}/team).
+	// Nil serves those routes as 503.
+	DeviceTeam handlers.DeviceTeamPort
 	// DeviceIcons proxies device-type icon images from the CCU for the
 	// device list. Optional — nil answers 404 (SPA uses a glyph).
 	DeviceIcons handlers.DeviceIconProxy
@@ -145,6 +159,10 @@ type Deps struct {
 	// History feeds the measurement-history chart: GET /api/v1/history.
 	// Nil when the opt-in history feature is disabled (the default).
 	History handlers.HistoryService
+	// RecordingOverrides feeds the per-datapoint recording toggle:
+	// GET/PUT /api/v1/history/recording. Nil when the opt-in history
+	// feature is disabled (the same flag /history depends on).
+	RecordingOverrides handlers.RecordingOverrideService
 	// Energy feeds the energy view's per-device power/energy breakdown:
 	// GET /api/v1/energy. Nil when the opt-in history feature is
 	// disabled (the same feature flag /history depends on).
@@ -185,6 +203,9 @@ type Deps struct {
 	// Preferences backs per-user UI state (favorites, dashboard) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
+	// Diagrams backs the named multi-series diagram CRUD at /diagrams.
+	// Nil disables those routes.
+	Diagrams handlers.DiagramConfigService
 
 	// RoomFunctionAdmin backs room/function entity CRUD at /rooms and
 	// /functions (create/rename/delete). Nil disables those routes;
@@ -655,6 +676,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Put("/me/preferences/{key}", handlers.PutPreference(d.Preferences))
 				pr.Delete("/me/preferences/{key}", handlers.DeletePreference(d.Preferences))
 			}
+			if d.Diagrams != nil {
+				pr.Get("/diagrams", handlers.ListDiagrams(d.Diagrams))
+				pr.Get("/diagrams/{id}", handlers.GetDiagram(d.Diagrams))
+				pr.With(op).Post("/diagrams", handlers.CreateDiagram(d.Diagrams, d.AuditRecorder))
+				pr.With(op).Put("/diagrams/{id}", handlers.UpdateDiagram(d.Diagrams, d.AuditRecorder))
+				pr.With(op).Delete("/diagrams/{id}", handlers.DeleteDiagram(d.Diagrams, d.AuditRecorder))
+			}
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
@@ -724,7 +752,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/devices/{addr}/export-definition",
 				handlers.ExportDeviceDefinition(d.DefinitionExport))
 			if d.Links != nil {
+				pr.Get("/links", handlers.ListAllLinks(d.Links))
 				pr.Get("/devices/{addr}/links", handlers.ListLinks(d.Links))
+				pr.With(op).Post("/devices/{addr}/links/test", handlers.TestLinkAtDevice(d.Links))
 				pr.With(op).Post("/devices/{addr}/links", handlers.AddLink(d.Links))
 				pr.With(op).Patch("/devices/{addr}/links", handlers.UpdateLink(d.Links))
 				pr.With(op).Delete("/devices/{addr}/links", handlers.RemoveLink(d.Links))
@@ -765,15 +795,31 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.History != nil {
 				pr.Get("/history", handlers.GetHistory(d.History))
 			}
+			if d.RecordingOverrides != nil {
+				pr.Get("/history/recording", handlers.GetRecordingOverride(d.RecordingOverrides))
+				pr.With(op).Put("/history/recording", handlers.PutRecordingOverride(d.RecordingOverrides, d.AuditRecorder))
+			}
 			if d.Energy != nil {
 				pr.Get("/energy", handlers.GetEnergy(d.Energy))
 			}
 			if d.DeviceAdmin != nil {
 				pr.With(admin).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))
-				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin))
-				pr.With(op).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin))
+				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(op).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
+				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
+			}
+			if d.DeviceReplacer != nil {
+				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
+				pr.With(admin).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))
+			}
+			if d.DeviceCommunicationTest != nil {
+				pr.With(op).Post("/devices/{addr}/test", handlers.TestDeviceCommunication(d.DeviceCommunicationTest, d.AuditRecorder))
+			}
+			if d.DeviceTeam != nil {
+				pr.Get("/devices/{addr}/channels/{no}/team-candidates", handlers.GetDeviceTeamCandidates(d.DeviceTeam))
+				pr.With(op).Put("/devices/{addr}/channels/{no}/team", handlers.SetDeviceChannelTeam(d.DeviceTeam, d.AuditRecorder))
 			}
 			if d.FirmwareRefresher != nil {
 				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))
@@ -976,6 +1022,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/sysvars", handlers.ListSysvars(d.Hub))
 				pr.With(op).Post("/sysvars", handlers.CreateSysvar(d.Hub))
 				pr.Get("/sysvars/{name}", handlers.GetSysvar(d.Hub))
+				pr.Get("/sysvars/{name}/usage", handlers.GetSysvarUsage(d.Hub))
 				pr.With(op).Put("/sysvars/{name}", handlers.PutSysvar(d.Hub))
 				pr.With(op).Patch("/sysvars/{name}", handlers.PatchSysvar(d.Hub))
 				pr.With(op).Delete("/sysvars/{name}", handlers.DeleteSysvar(d.Hub))
@@ -1005,7 +1052,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub))
 				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
 				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
-				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub))
+				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub, d.AuditRecorder))
+				pr.With(op).Post("/install-mode/search", handlers.PostInstallModeSearch(d.InstallModeSearch, d.AuditRecorder))
 			}
 			if d.Interfaces != nil {
 				pr.Get("/interfaces", handlers.ListInterfaces(d.Interfaces))

@@ -227,6 +227,39 @@ func (b *CcuBackend) UpdateFirmware(ctx context.Context, address string) error {
 	return err
 }
 
+// RestoreConfigToDevice re-transmits the stored configuration to the
+// device via the XML-RPC `restoreConfigToDevice(address)` call. The
+// method name is identical on rfd (BidCos-RF) and HMIPServer (HmIP-RF);
+// the per-interface support gate lives in the adapter.
+func (b *CcuBackend) RestoreConfigToDevice(ctx context.Context, address string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "restoreConfigToDevice", address)
+	return err
+}
+
+// ListReplaceableDevices returns the devices the new device may replace
+// via the XML-RPC `listReplaceableDevices(newDeviceAddress)` call
+// (rfd / hs485d). The per-interface support gate lives in the adapter.
+func (b *CcuBackend) ListReplaceableDevices(ctx context.Context, newDeviceAddress string) ([]hmproto.DeviceDescription, error) {
+	if b.xml == nil {
+		return nil, ErrUnsupported
+	}
+	return listReplaceableDevicesViaCaller(ctx, b.xml, "ccu", newDeviceAddress)
+}
+
+// ReplaceDevice swaps oldDeviceAddress for newDeviceAddress via the
+// XML-RPC `replaceDevice(old, new)` call (rfd / hs485d). The
+// per-interface support gate lives in the adapter.
+func (b *CcuBackend) ReplaceDevice(ctx context.Context, oldDeviceAddress, newDeviceAddress string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "replaceDevice", oldDeviceAddress, newDeviceAddress)
+	return err
+}
+
 // --- direct links --------------------------------------------------
 
 // GetLinks implements Operations. CCU returns the link descriptors
@@ -366,6 +399,18 @@ func (b *CcuBackend) PutLinkParamset(ctx context.Context, channelAddress, peerAd
 	return err
 }
 
+// ActivateLinkParamset implements Operations. Maps to the CCU XML-RPC
+// `activateLinkParamset(receiver, sender, longPress)` — it triggers the
+// receiver as if the sender fired (the config dialog's "test link" /
+// simulate-keypress probe). Physically actuates the receiver.
+func (b *CcuBackend) ActivateLinkParamset(ctx context.Context, receiverAddress, senderAddress string, longPress bool) error {
+	if b.xml == nil {
+		return ErrNotWired
+	}
+	_, err := b.xml.Call(ctx, "activateLinkParamset", receiverAddress, senderAddress, longPress)
+	return err
+}
+
 // ReportValueUsage implements Operations. Maps to the CCU XML-RPC
 // `reportValueUsage(channel_address, value_id, ref_counter)`.
 func (b *CcuBackend) ReportValueUsage(ctx context.Context, channelAddress, valueID string, refCounter int) error {
@@ -374,6 +419,50 @@ func (b *CcuBackend) ReportValueUsage(ctx context.Context, channelAddress, value
 	}
 	_, err := b.xml.Call(ctx, "reportValueUsage", channelAddress, valueID, refCounter)
 	return err
+}
+
+// SetTeam implements Operations. Assigns a channel to a team via the
+// XML-RPC `setTeam(address, team)` call; an empty team resets the
+// channel to its own default team.
+func (b *CcuBackend) SetTeam(ctx context.Context, channelAddress, teamChannelAddress string) error {
+	if b.xml == nil {
+		return ErrUnsupported
+	}
+	_, err := b.xml.Call(ctx, "setTeam", channelAddress, teamChannelAddress)
+	return err
+}
+
+// ListTeams implements Operations. Returns the team-channel descriptions
+// via the XML-RPC `listTeams()` call, decoded like the replaceable-device
+// list (both are struct arrays of device descriptions).
+func (b *CcuBackend) ListTeams(ctx context.Context) ([]hmproto.DeviceDescription, error) {
+	if b.xml == nil {
+		return nil, ErrUnsupported
+	}
+	return listStructArrayViaCaller(ctx, b.xml, "ccu", "listTeams")
+}
+
+// SearchDevices implements Operations. Triggers the hs485d wired-bus
+// scan via the XML-RPC `searchDevices()` call (no args) and returns the
+// count of devices found. Only the BidCos-Wired interface exposes it.
+func (b *CcuBackend) SearchDevices(ctx context.Context) (int, error) {
+	if !b.ifaceType.SupportsDeviceSearch() {
+		return 0, ErrUnsupported
+	}
+	if b.xml == nil {
+		return 0, ErrNotWired
+	}
+	raw, err := b.xml.Call(ctx, "searchDevices")
+	if err != nil {
+		return 0, err
+	}
+	switch v := raw.(type) {
+	case int:
+		return v, nil
+	case float64:
+		return int(v), nil
+	}
+	return 0, nil
 }
 
 // DeleteDevice implements Operations. Maps to the CCU's XML-RPC

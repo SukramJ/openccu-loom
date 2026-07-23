@@ -139,3 +139,61 @@ describe("SimpleScheduleEditor — add / edit / save", () => {
     expect(screen.getByText(/^common\.save$/)).toBeDisabled();
   });
 });
+
+describe("SimpleScheduleEditor — universal-light colour (W02)", () => {
+  function lightSchedule(capable: boolean, colorType: number | null): ClimateSchedule {
+    return {
+      channel: { address: `${ADDRESS}:1`, number: 1, device_address: ADDRESS },
+      kind: "simple",
+      domain: "light",
+      color_capable: capable,
+      simple_entries: [
+        {
+          slot_no: 1,
+          weekdays: ["MONDAY"],
+          time: "07:00",
+          level: 1,
+          ...(colorType != null ? { color_type: colorType, color_value: 524288 } : {}),
+        },
+      ],
+    };
+  }
+
+  it("shows a colour summary when the device is colour-capable", async () => {
+    render(SimpleScheduleEditor, {
+      props: { address: ADDRESS, schedule: lightSchedule(true, 2), onReload: vi.fn() },
+    });
+    // The colour summary lives in the advanced row (next to ramp time).
+    await fireEvent.click(screen.getByText(/schedule\.advanced/));
+    expect(screen.getByText("schedule.color.effect")).toBeInTheDocument();
+  });
+
+  it("hides the colour summary on a non-colour device", async () => {
+    render(SimpleScheduleEditor, {
+      props: { address: ADDRESS, schedule: lightSchedule(false, null), onReload: vi.fn() },
+    });
+    await fireEvent.click(screen.getByText(/schedule\.advanced/));
+    expect(screen.queryByText("schedule.color.effect")).not.toBeInTheDocument();
+    expect(screen.queryByText("schedule.color.hue_saturation")).not.toBeInTheDocument();
+  });
+
+  it("preserves the opaque colour through a save round-trip", async () => {
+    const onReload = vi.fn();
+    render(SimpleScheduleEditor, {
+      props: { address: ADDRESS, schedule: lightSchedule(true, 2), onReload },
+    });
+    // Dirty the entry (add a weekday) so Save enables, then save.
+    const weekdayGroup = screen.getByRole("group", { name: "schedule.aria.weekdays" });
+    await fireEvent.click(within(weekdayGroup).getByText("weekday.short.TUESDAY"));
+    const saveButton = screen.getByText(/^common\.save$/);
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => expect(mockPutDeviceSchedule).toHaveBeenCalledOnce());
+    const [, payload] = mockPutDeviceSchedule.mock.calls[0] as [string, ClimateSchedule];
+    expect(payload.simple_entries?.[0]).toMatchObject({
+      color_type: 2,
+      color_value: 524288,
+    });
+  });
+});

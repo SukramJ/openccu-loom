@@ -350,6 +350,11 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		}
 		chNum := channelNumber(dd.Address)
 		ch := parent.AddChannel(dd.Address, chNum, dd.Type, hmenum.ParamsetKeyValues)
+		// Carry the raw CCU LINK_SOURCE_ROLES / LINK_TARGET_ROLES onto the
+		// channel so the direct-link role-matching filter can intersect them
+		// without a CCU roundtrip. AddChannel rebuilds a fresh channel on
+		// every (re)ingest, so this re-applies on hot-plug / reconnect.
+		ch.SetLinkRoles([]string(dd.LinkSourceRoles), []string(dd.LinkTargetRoles))
 		if p.names != nil {
 			ch.Name = p.names[dd.Address]
 		}

@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -73,6 +74,10 @@ func (f *fakeOperations) GetLinkParamset(_ context.Context, _, _ string) (map[st
 	return nil, nil
 }
 
+func (f *fakeOperations) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (f *fakeOperations) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }
@@ -118,6 +123,38 @@ func (*fakeOperations) GetInstallMode(context.Context) (int, error) { return 0, 
 
 func (*fakeOperations) SetInstallMode(context.Context, bool, int, int, string) error {
 	return nil
+}
+
+func (*fakeOperations) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*fakeOperations) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (*fakeOperations) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*fakeOperations) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (*fakeOperations) GetServiceMessages(context.Context, string) ([]map[string]any, error) {

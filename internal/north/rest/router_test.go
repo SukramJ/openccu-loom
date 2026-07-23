@@ -67,6 +67,15 @@ func (f *fakeAdmin) UpdateFirmware(_ context.Context, _ string) error           
 func (f *fakeAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (f *fakeAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (f *fakeAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
+func (f *fakeAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *fakeAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *fakeAdmin) RestoreDeviceConfig(_ context.Context, _ string) error { return nil }
 
 type fakeIncidents struct{ items []handlers.Incident }
 
@@ -108,7 +117,13 @@ type fakeLinksService struct{}
 func (fakeLinksService) ListLinks(_ context.Context, _, _ string) ([]handlers.Link, error) {
 	return nil, nil
 }
-func (fakeLinksService) AddLink(_ context.Context, _, _, _, _ string) error { return nil }
+
+func (fakeLinksService) ListAllLinks(_ context.Context, _, _ string) ([]handlers.Link, error) {
+	return nil, nil
+}
+
+func (fakeLinksService) ActivateLink(context.Context, string, string, bool) error { return nil }
+func (fakeLinksService) AddLink(_ context.Context, _, _, _, _ string) error       { return nil }
 
 func (fakeLinksService) SetLinkInfo(_ context.Context, _, _, _, _ string) error { return nil }
 func (fakeLinksService) RemoveLink(_ context.Context, _, _ string) error        { return nil }
@@ -327,6 +342,15 @@ func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error        
 func (fakeDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
+func (fakeDeviceAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) RestoreDeviceConfig(_ context.Context, _ string) error { return nil }
 
 // fakeSystemCCUReader is a minimal SystemCCUReader for router-level
 // integration tests; the daemon adapter is exercised elsewhere.

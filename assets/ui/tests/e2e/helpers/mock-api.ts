@@ -68,6 +68,10 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('groups.json') }),
   );
 
+  await page.route('**/api/v1/links*', (route) =>
+    route.fulfill({ json: fixture('links.json') }),
+  );
+
   await page.route('**/api/v1/programs', (route) =>
     route.fulfill({ json: fixture('programs.json') }),
   );
@@ -787,6 +791,128 @@ export async function mockEmptySysvars(page: Page): Promise<void> {
 export async function mockAlarmTriggered(page: Page): Promise<void> {
   await page.route('**/api/v1/alarm/state', (route) =>
     route.fulfill({ json: fixture('alarm-state-triggered.json') }),
+  );
+}
+
+/**
+ * Device address for the virtual-remote (HM-RCV-50) fixture below —
+ * exported so a spec can build the `#/devices/{address}` URL itself.
+ */
+export const VIRTUAL_REMOTE_ADDRESS = '0001RCV50';
+
+/**
+ * Single virtual-remote device (HM-RCV-50) with three KEY channels, for
+ * the device-detail key-simulation grid (VirtualRemoteKeyGrid). Channel 2
+ * carries no CCU name so the "Key {n}" fallback label is also exercised.
+ * Channel 0 is the ordinary MAINTENANCE pseudo-channel and must never
+ * surface as a key cell. Mirrors the applyDeviceMocks() pattern in
+ * device-detail.spec.ts rather than the multi-device details map used by
+ * mockOverviewFleet, since only one device is needed here.
+ */
+export async function mockVirtualRemoteDevice(page: Page): Promise<void> {
+  const address = VIRTUAL_REMOTE_ADDRESS;
+
+  const detail = {
+    address,
+    central: 'ccu1',
+    interface: 'BidCos-RF',
+    interface_id: 'ccu1-BidCos-RF',
+    model: 'HM-RCV-50',
+    model_label: 'Central Remote Control',
+    name: 'Central Remote',
+    available: true,
+    channels_count: 4,
+    updatable: false,
+    update_available: false,
+    master_pushes_config_pending: false,
+    has_sub_devices: false,
+    firmware: {},
+    availability: { IsReachable: true },
+    channels: [
+      {
+        address: `${address}:0`,
+        number: 0,
+        name: '',
+        type: 'MAINTENANCE',
+        type_label: 'Maintenance',
+        paramset_key: 'VALUES',
+        paramset_keys: ['VALUES'],
+        data_points_count: 3,
+      },
+      {
+        address: `${address}:1`,
+        number: 1,
+        name: 'Key 1',
+        type: 'VIRTUAL_KEY',
+        type_label: 'Key',
+        paramset_key: 'VALUES',
+        paramset_keys: ['VALUES'],
+        data_points_count: 2,
+      },
+      {
+        address: `${address}:2`,
+        number: 2,
+        name: '',
+        type: 'VIRTUAL_KEY',
+        type_label: 'Key',
+        paramset_key: 'VALUES',
+        paramset_keys: ['VALUES'],
+        data_points_count: 2,
+      },
+      {
+        address: `${address}:3`,
+        number: 3,
+        name: 'Key 3',
+        type: 'VIRTUAL_KEY',
+        type_label: 'Key',
+        paramset_key: 'VALUES',
+        paramset_keys: ['VALUES'],
+        data_points_count: 2,
+      },
+    ],
+  };
+
+  function pressDPs(channel: number) {
+    return [
+      {
+        parameter: 'PRESS_SHORT',
+        unique_id: `${address}:${channel}/PRESS_SHORT`,
+        observed: false,
+        type: 'ACTION',
+        operations: { read: false, write: true, event: false },
+        usage: 'data_point',
+      },
+      {
+        parameter: 'PRESS_LONG',
+        unique_id: `${address}:${channel}/PRESS_LONG`,
+        observed: false,
+        type: 'ACTION',
+        operations: { read: false, write: true, event: false },
+        usage: 'data_point',
+      },
+    ];
+  }
+
+  const dataPointsByChannel: Record<number, unknown[]> = {
+    0: [],
+    1: pressDPs(1),
+    2: pressDPs(2),
+    3: pressDPs(3),
+  };
+
+  await page.route(`**/api/v1/devices/${address}`, (route) =>
+    route.fulfill({ json: detail }),
+  );
+  await page.route(`**/api/v1/devices/${address}/cdps`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route(/\/api\/v1\/devices\/[^/]+\/channels\/(\d+)\/data-points$/, (route) => {
+    const m = route.request().url().match(/channels\/(\d+)\/data-points/);
+    const channel = m ? Number(m[1]) : -1;
+    return route.fulfill({ json: dataPointsByChannel[channel] ?? [] });
+  });
+  await page.route(`**/api/v1/devices/${address}/schedule`, (route) =>
+    route.fulfill({ status: 404, json: { detail: 'no schedule' } }),
   );
 }
 

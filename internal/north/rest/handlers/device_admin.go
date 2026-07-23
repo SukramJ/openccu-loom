@@ -6,12 +6,15 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -69,12 +72,17 @@ type DevicePatchRequest struct {
 // ChannelPatchRequest is the body of `PATCH /devices/{addr}/channels/{no}`.
 type ChannelPatchRequest struct {
 	Name *string `json:"name,omitempty"`
+	// Rooms / Functions replace the channel's assignment sets. Omitted
+	// fields stay untouched; an explicit empty array clears the set —
+	// the same pointer semantics as the device-level patch.
+	Rooms     *[]string `json:"rooms,omitempty"`
+	Functions *[]string `json:"functions,omitempty"`
 }
 
 // PatchDevice applies partial updates. The MVP supports renaming
 // (optionally cascading to channels), room and function assignment;
 // additional fields are added as the admin surface grows.
-func PatchDevice(admin DeviceAdmin) http.HandlerFunc {
+func PatchDevice(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if admin == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -112,13 +120,15 @@ func PatchDevice(admin DeviceAdmin) http.HandlerFunc {
 				return
 			}
 		}
+		recordAssignment(r, rec, addr, req.Rooms, req.Functions)
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
 
-// PatchChannel renames a single channel. Room and function assignment
-// per channel is out of scope here — only the name is patchable.
-func PatchChannel(admin DeviceAdmin) http.HandlerFunc {
+// PatchChannel applies partial updates to a single channel: rename,
+// room assignment and function assignment, mirroring the device-level
+// patch semantics one level down.
+func PatchChannel(admin DeviceAdmin, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if admin == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -131,7 +141,7 @@ func PatchChannel(admin DeviceAdmin) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if req.Name == nil {
+		if req.Name == nil && req.Rooms == nil && req.Functions == nil {
 			problem.Write(w, http.StatusUnprocessableEntity,
 				problem.New(problem.TypeValidation, r, "No patchable field supplied", ""))
 			return
@@ -142,12 +152,62 @@ func PatchChannel(admin DeviceAdmin) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid channel number", ""))
 			return
 		}
-		if err := admin.RenameChannel(r.Context(), chi.URLParam(r, "addr"), no, *req.Name); err != nil {
-			writeRenameError(w, r, err)
-			return
+		addr := chi.URLParam(r, "addr")
+		if req.Name != nil {
+			if err := admin.RenameChannel(r.Context(), addr, no, *req.Name); err != nil {
+				writeRenameError(w, r, err)
+				return
+			}
 		}
+		if req.Rooms != nil {
+			if err := admin.SetChannelRooms(r.Context(), addr, no, *req.Rooms); err != nil {
+				writeAssignmentError(w, r, "Room assignment failed", err)
+				return
+			}
+		}
+		if req.Functions != nil {
+			if err := admin.SetChannelFunctions(r.Context(), addr, no, *req.Functions); err != nil {
+				writeAssignmentError(w, r, "Function assignment failed", err)
+				return
+			}
+		}
+		recordAssignment(r, rec, addr+":"+strconv.Itoa(no), req.Rooms, req.Functions)
 		w.WriteHeader(http.StatusAccepted)
 	}
+}
+
+// writeAssignmentError maps a room/function assignment failure: naming
+// a channel the device does not have is the caller's mistake (404),
+// everything else is an upstream failure (502).
+func writeAssignmentError(w http.ResponseWriter, r *http.Request, title string, err error) {
+	if errors.Is(err, interfaces.ErrChannelNotFound) {
+		problem.Write(w, http.StatusNotFound,
+			problem.New(problem.TypeNotFound, r, "Channel not found", err.Error()))
+		return
+	}
+	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, title, err)
+}
+
+// recordAssignment appends the audit entry for a successful room /
+// function assignment patch. Rename-only patches record nothing — the
+// name change is already observable through the device model itself.
+func recordAssignment(r *http.Request, rec audit.Recorder, address string, rooms, functions *[]string) {
+	if rec == nil || (rooms == nil && functions == nil) {
+		return
+	}
+	var parts []string
+	if rooms != nil {
+		parts = append(parts, fmt.Sprintf("rooms=%v", *rooms))
+	}
+	if functions != nil {
+		parts = append(parts, fmt.Sprintf("functions=%v", *functions))
+	}
+	rec.Record(audit.Entry{
+		User:          identityFromCtx(r.Context()),
+		Action:        audit.ActionDeviceAssignment,
+		DeviceAddress: address,
+		Note:          strings.Join(parts, " "),
+	})
 }
 
 // writeRenameError maps a rename failure to its HTTP response: a backend

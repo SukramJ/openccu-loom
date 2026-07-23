@@ -212,6 +212,12 @@ type Link struct {
 	PeerDeviceName           string `json:"peer_device_name,omitempty"`
 	PeerDeviceModel          string `json:"peer_device_model,omitempty"`
 	Direction                string `json:"direction"`
+	// CentralName and InterfaceID identify the owning CCU and interface
+	// of the link. They are populated only by the global links overview
+	// (`GET /api/v1/links`); the per-device listing leaves them empty so
+	// its response stays byte-identical.
+	CentralName string `json:"central_name,omitempty"`
+	InterfaceID string `json:"interface_id,omitempty"`
 }
 
 // LinkableChannel is one candidate returned by
@@ -253,6 +259,11 @@ type ClimateSchedule struct {
 	ActiveProfileIndex *int                      `json:"active_profile_index,omitempty"`
 	Profiles           map[string]ClimateProfile `json:"profiles,omitempty"`
 	SimpleEntries      []SimpleScheduleEntry     `json:"simple_entries,omitempty"`
+	// ColorCapable is true when the device advertises per-switch-point
+	// colour/effect fields (universal lights: HmIP-RGBW / DRG-DALI / LSC)
+	// or an OUTPUT_BEHAVIOUR field (HmIP-BSL). The SPA shows a colour
+	// summary per switch point only when this is set.
+	ColorCapable bool `json:"color_capable,omitempty"`
 }
 
 // SimpleScheduleEntry is one switching slot for a non-climate device.
@@ -323,6 +334,18 @@ type SimpleScheduleEntry struct {
 	LockMode   string `json:"lock_mode,omitempty"`
 	LockAction string `json:"lock_action,omitempty"`
 	Permission string `json:"permission,omitempty"`
+
+	// --- Universal-light colour / effect (opaque, lossless) ------
+	// ColorType is the discriminator (0 = hue/saturation, 1 = colour
+	// temperature, 2 = effect); ColorValue is the packed 20-bit value.
+	// Both are carried verbatim as opaque ints so an un-edited switch
+	// point's colour survives a read → write round-trip deterministically
+	// (glued to this entry's SlotNo). OutputBehaviour is the HmIP-BSL
+	// signal-LED field. Nil = absent (never written; preserves the CCU's
+	// sparse-merge). 0 is a legitimate value and is always round-tripped.
+	ColorType       *int `json:"color_type,omitempty"`
+	ColorValue      *int `json:"color_value,omitempty"`
+	OutputBehaviour *int `json:"output_behaviour,omitempty"`
 }
 
 // ScheduleChannelRef identifies the owning channel so the SPA can
@@ -570,4 +593,49 @@ type UISchemaProfile struct {
 	SenderType      string          `json:"sender_type,omitempty"`
 	ActiveProfileID int             `json:"active_profile_id,omitempty"`
 	Raw             json.RawMessage `json:"raw,omitempty"`
+}
+
+// --- Device replace ---
+
+// ReplaceCandidate is one already-paired device a new (inbox) device may
+// replace, as returned by `GET /devices/{addr}/replace-candidates`. The
+// interface daemon (rfd / hs485d) computes type / channel compatibility;
+// ModelMatches is true when the candidate's model equals the new
+// device's, letting the SPA badge an exact swap apart from a compatible
+// cross-type one.
+type ReplaceCandidate struct {
+	Address      string `json:"address"`
+	Name         string `json:"name,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Interface    string `json:"interface,omitempty"`
+	Central      string `json:"central,omitempty"`
+	ModelMatches bool   `json:"model_matches"`
+}
+
+// --- Device communication test ---
+
+// CommunicationTestResult is the outcome of a per-device communication /
+// function test (POST /devices/{addr}/test): the CCU sends a radio test
+// frame to the device and waits for its ACK. Passed is true when the
+// device's last-completed-test time advanced past the test start within
+// the poll window; TimedOut is true when the window elapsed first.
+type CommunicationTestResult struct {
+	Passed      bool      `json:"passed"`
+	StartedAt   time.Time `json:"started_at"`
+	CompletedAt time.Time `json:"completed_at,omitempty"`
+	DurationMs  int64     `json:"duration_ms"`
+	TimedOut    bool      `json:"timed_out"`
+}
+
+// --- Device team assignment ---
+
+// TeamCandidate is one team-channel a device channel may be assigned to,
+// returned by GET /devices/{addr}/channels/{no}/team-candidates. The
+// candidate list is filtered to channels sharing the target's team tag;
+// Current marks the channel's currently-assigned team.
+type TeamCandidate struct {
+	Address string `json:"address"`
+	Name    string `json:"name,omitempty"`
+	TeamTag string `json:"team_tag,omitempty"`
+	Current bool   `json:"current"`
 }

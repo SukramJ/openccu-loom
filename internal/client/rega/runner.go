@@ -364,6 +364,26 @@ func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescripti
 	return descs, nil
 }
 
+// SysvarUsageProgram is one program returned by [Runner.SysvarUsagePrograms].
+// Name is URL-encoded; callers apply url.QueryUnescape before display.
+type SysvarUsageProgram struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Active bool   `json:"active"`
+}
+
+// SysvarUsagePrograms lists the CCU programs that reference the named
+// system variable, via the variable object's native DPEnumUsagePrograms()
+// (usage_by_sysvar.fn). An unknown variable yields an empty slice. Each
+// program's Name is URL-encoded.
+func (r *Runner) SysvarUsagePrograms(ctx context.Context, name string) ([]SysvarUsageProgram, error) {
+	var out []SysvarUsageProgram
+	if err := r.RunJSON(ctx, hmenum.RegaScriptUsageBySysvar, map[string]string{"name": name}, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SystemVariableDescription is one entry returned by
 // [Runner.GetSystemVariableDescriptions].
 type SystemVariableDescription struct {

@@ -57,6 +57,17 @@ type DeviceInstallModeWriter interface {
 	SetInstallModeForDevice(ctx context.Context, interfaceID string, duration time.Duration, deviceAddress string) error
 }
 
+// LocalInstallModeWriter is the optional extension of [InstallModeWriter]
+// for the keyserver-less HmIP LOCAL teach-in: pairing restricted to a
+// single device identified by SGTIN + device key. Unlike
+// [DeviceInstallModeWriter] there is deliberately no broadcast fallback
+// for writers lacking this extension — silently opening an unrestricted
+// pairing window would defeat the whitelist intent.
+type LocalInstallModeWriter interface {
+	InstallModeWriter
+	SetInstallModeLocal(ctx context.Context, interfaceID string, duration time.Duration, sgtin, keyHex string) error
+}
+
 // MessageAcknowledger acknowledges a service- or alarm-message on the
 // CCU. id is the CCU ISE ID of the message.
 type MessageAcknowledger interface {

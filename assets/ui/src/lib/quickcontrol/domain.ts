@@ -99,6 +99,18 @@ export function isOverviewExcluded(args: {
  * thumb is "if the user can't write to it, it doesn't deserve a full
  * tile".
  */
+/**
+ * Virtual-remote models — the CCU-internal 50-key pseudo devices whose
+ * press parameters are real, clickable actions. Mirrors the daemon's
+ * device-model classification so the device detail renders the key grid
+ * for exactly these models.
+ */
+const VIRTUAL_REMOTE_MODELS = new Set(["HM-RCV-50", "HMW-RCV-50", "HmIP-RCV-50"]);
+
+export function isVirtualRemoteModel(model: string | undefined): boolean {
+  return VIRTUAL_REMOTE_MODELS.has((model ?? "").trim());
+}
+
 export function isStatusOnlyChannelType(type: string | undefined): boolean {
   const t = (type ?? "").toUpperCase();
   if (!t) return false;

@@ -45,6 +45,8 @@
     | "sysvars"
     | "programs"
     | "groups"
+    | "links"
+    | "diagrams"
     | "messages"
     | "audit"
     | "diagnostics"
@@ -116,6 +118,11 @@
   };
 
   const matterEnabled = $derived(matterStore.status?.enabled === true);
+  // The Diagrams view charts measurement history — only surface it when
+  // the opt-in history-recording feature is enabled (SV03).
+  const historyEnabled = $derived(
+    infoStore.info?.capabilities?.includes("history.v1") ?? false,
+  );
 
   // Cluster-grouped navigation. Order is opinionated: top cluster
   // surfaces day-to-day work, lowest cluster groups admin / system.
@@ -182,6 +189,12 @@
           label: t("nav.groups"),
           matches: ["groups"],
         },
+        {
+          href: "#/links",
+          icon: "mdi:link",
+          label: t("nav.links"),
+          matches: ["links"],
+        },
       ],
     },
     {
@@ -205,6 +218,16 @@
           label: t("nav.energy"),
           matches: ["energy"],
         },
+        ...(historyEnabled
+          ? [
+              {
+                href: "#/diagrams",
+                icon: "mdi:chart-line-variant" as const,
+                label: t("nav.diagrams"),
+                matches: ["diagrams"] as RouteKind[],
+              },
+            ]
+          : []),
         {
           href: "#/signal",
           icon: "mdi:signal",

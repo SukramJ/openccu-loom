@@ -370,6 +370,116 @@
     },
     {
       "category": "devices",
+      "description": "List the already-paired devices the new (inbox) device may replace. Supported on BidCos-RF and BidCos-Wired only.",
+      "name": "device.replace_candidates",
+      "args": {
+        "address": "string",
+        "central": "string?"
+      },
+      "result": {
+        "candidates": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Swap a paired device for a new one. The CCU migrates direct links, teams and ReGa references; the old device is unpaired. Supported on BidCos-RF and BidCos-Wired only.",
+      "name": "device.replace",
+      "args": {
+        "address": "string",
+        "old_address": "string",
+        "central": "string?"
+      },
+      "result": {
+        "status": "string",
+        "old_address": "string",
+        "new_address": "string",
+        "central": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "List the team channels a channel may be assigned to (same team tag). Supported on BidCos-RF and HmIP-RF only.",
+      "name": "device.team_candidates",
+      "args": {
+        "address": "string",
+        "channel": "integer"
+      },
+      "result": {
+        "candidates": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Assign a channel to a team (e.g. smoke-detector teaming). A null/empty team resets to the channel's default team. BidCos-RF and HmIP-RF only.",
+      "name": "device.set_team",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "team": "string?"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "team": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Run the CCU's per-device communication / function test (radio test frame + ACK). Blocks until complete or the poll window elapses. Radio interfaces only.",
+      "name": "device.test",
+      "args": {
+        "address": "string"
+      },
+      "result": {
+        "passed": "boolean",
+        "started_at": "string",
+        "duration_ms": "integer",
+        "timed_out": "boolean"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Re-transmit the centrally stored configuration (all channels' MASTER paramsets + link peerings) to a device after a factory reset. Supported on HmIP-RF and BidCos-RF only.",
+      "name": "device.restore_config",
+      "args": {
+        "address": "string"
+      },
+      "result": {
+        "address": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Replace a single channel's function (Gewerk) assignments. An empty array clears the set.",
+      "name": "device.set_channel_functions",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "functions": "array"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "functions": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Replace a single channel's room assignments. An empty array clears the set.",
+      "name": "device.set_channel_rooms",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "rooms": "array"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "rooms": "array"
+      }
+    },
+    {
+      "category": "devices",
       "description": "Export a device definition as an aiohomematic-compatible zip (device + paramset descriptions, anonymised). Returns model, filename and base64-encoded zip data.",
       "name": "devices.export_definition",
       "args": {
@@ -523,13 +633,42 @@
     },
     {
       "category": "install_mode",
-      "description": "Open the pairing window for the named interface for a given duration in seconds.",
-      "name": "install_mode.enable"
+      "description": "Scan the wired bus (BidCos-Wired) for new devices; returns the count found (they join the inbox for acceptance).",
+      "name": "install_mode.search",
+      "args": {
+        "interface_id": "string",
+        "central": "string?"
+      },
+      "result": {
+        "interface_id": "string",
+        "found": "integer"
+      }
+    },
+    {
+      "category": "install_mode",
+      "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device.",
+      "name": "install_mode.enable",
+      "args": {
+        "interface_id": "string",
+        "duration_seconds": "integer",
+        "sgtin": "string?",
+        "key": "string?"
+      }
     },
     {
       "category": "install_mode",
       "description": "Report the current pairing-mode state per interface.",
       "name": "install_mode.status"
+    },
+    {
+      "category": "links",
+      "description": "Test a direct link at the device: trigger the receiver's LINK paramset for the sender (short or long keypress). Physically actuates the receiver.",
+      "name": "links.activate_paramset",
+      "args": {
+        "receiver_channel_address": "string",
+        "sender_channel_address": "string",
+        "long_press": "boolean"
+      }
     },
     {
       "category": "links",
@@ -560,6 +699,11 @@
       "category": "links",
       "description": "List all direct links a device participates in.",
       "name": "links.list"
+    },
+    {
+      "category": "links",
+      "description": "Global direct-link overview across all centrals (or one when 'central' is set). Each link carries its owning central_name and interface_id.",
+      "name": "links.list_all"
     },
     {
       "category": "links",
@@ -851,6 +995,15 @@
       "args": {
         "name": "string",
         "value": "any"
+      }
+    },
+    {
+      "category": "sysvars",
+      "description": "List the CCU programs that reference a system variable (native DPEnumUsagePrograms). Optional central_name disambiguates across CCUs.",
+      "name": "sysvars.usage",
+      "args": {
+        "name": "string",
+        "central_name": "string"
       }
     },
     {
