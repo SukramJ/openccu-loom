@@ -583,6 +583,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/channels/{no}/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the operator per-channel overrides (G12) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    addr: components["parameters"]["Address"];
+                    no: components["parameters"]["ChannelNo"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChannelFlags"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Set the operator per-channel overrides (G12)
+         * @description Hide the channel from the operation surfaces (data-point list, MQTT,
+         *     Matter) and/or lock it against control writes. An absent field keeps
+         *     its current value.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    addr: components["parameters"]["Address"];
+                    no: components["parameters"]["ChannelNo"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChannelFlagsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChannelFlags"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                404: components["responses"]["NotFound"];
+                503: components["responses"]["ServiceUnavailable"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/paramsets/{key}": {
         parameters: {
             query?: never;
@@ -5415,6 +5490,21 @@ export interface components {
             };
             channels: components["schemas"]["ChannelSummary"][];
         };
+        /** @description Operator per-channel overrides (G12). */
+        ChannelFlags: {
+            /** @description Channel hidden from the operation surfaces. */
+            hidden: boolean;
+            /** @description Channel locked against control writes. */
+            locked: boolean;
+        };
+        /**
+         * @description Partial update of the operator per-channel overrides (G12). An absent
+         *     field keeps its current value.
+         */
+        ChannelFlagsRequest: {
+            hidden?: boolean;
+            locked?: boolean;
+        };
         ChannelSummary: {
             address: string;
             number: number;
@@ -5502,6 +5592,19 @@ export interface components {
              *     condition holds.
              */
             is_custom_dp_primary?: boolean;
+            /**
+             * @description Operator per-channel override (G12): when true the channel is
+             *     hidden from the operation surfaces (data-point list, MQTT, Matter).
+             *     The channel stays in the device detail so it remains manageable.
+             *     Omitted when false.
+             */
+            hidden?: boolean;
+            /**
+             * @description Operator per-channel override (G12): when true control writes to
+             *     the channel's VALUES paramset are rejected (423). Reads and
+             *     MASTER/config edits are unaffected. Omitted when false.
+             */
+            locked?: boolean;
         };
         MQTTReloadResponse: {
             /** @description Always true on success; the 503 path returns a problem+json document instead. */

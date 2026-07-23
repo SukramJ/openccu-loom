@@ -703,13 +703,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/devices/{addr}/channels/{no}/data-points/{param}", handlers.GetDataPoint(d.Devices, d.Labels))
 				pr.With(op).Put("/devices/{addr}/channels/{no}/data-points/{param}/value",
 					handlers.PutDataPointValue(d.Devices, d.DPWriter))
-				// Per-channel operator overrides (G12): hidden / locked.
-				if d.ChannelFlags != nil && d.ChannelFlagsOverlay != nil {
-					pr.Get("/devices/{addr}/channels/{no}/flags",
-						handlers.GetChannelFlags(d.Devices))
-					pr.With(op).Put("/devices/{addr}/channels/{no}/flags",
-						handlers.PutChannelFlags(d.Devices, d.ChannelFlags, d.ChannelFlagsOverlay, d.AuditRecorder))
-				}
+				// Per-channel operator overrides (G12): hidden / locked. Always
+				// mounted; PutChannelFlags returns 503 when there is no durable
+				// store/overlay, GetChannelFlags reads the live channel.
+				pr.Get("/devices/{addr}/channels/{no}/flags",
+					handlers.GetChannelFlags(d.Devices))
+				pr.With(op).Put("/devices/{addr}/channels/{no}/flags",
+					handlers.PutChannelFlags(d.Devices, d.ChannelFlags, d.ChannelFlagsOverlay, d.AuditRecorder))
 				// Custom data points (Phase C).
 				pr.Get("/devices/{addr}/cdps",
 					handlers.ListCustomDataPoints(d.Devices, d.Labels))
