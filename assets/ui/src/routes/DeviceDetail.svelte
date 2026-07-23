@@ -3,6 +3,7 @@
   import type { DeviceDetail } from "$lib/api/types";
   import { api, ApiError } from "$lib/api/client";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
+  import ChannelFlagsToggles from "$lib/components/channel/ChannelFlagsToggles.svelte";
   import TeamPicker from "$lib/components/device/TeamPicker.svelte";
   import DeviceLinks from "$lib/components/links/DeviceLinks.svelte";
   import CentralLinksPanel from "$lib/components/links/CentralLinksPanel.svelte";
@@ -1137,6 +1138,14 @@
                   <TeamPicker address={detail.address} channel={ch.number} />
                 </div>
               {/if}
+              <div class="mb-3">
+                <ChannelFlagsToggles
+                  address={detail.address}
+                  channelNo={ch.number}
+                  hidden={ch.hidden}
+                  locked={ch.locked}
+                />
+              </div>
               <ChannelPanel
                 address={detail.address}
                 channel={ch.number}

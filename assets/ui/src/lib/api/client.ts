@@ -580,6 +580,23 @@ export const api = {
       },
     );
   },
+  // setChannelFlags sets the operator per-channel overrides (G12): hidden
+  // (drop the channel from the operation surfaces) and/or locked (block
+  // control writes). An omitted field keeps its current value.
+  setChannelFlags(
+    address: string,
+    channelNo: number,
+    flags: { hidden?: boolean; locked?: boolean },
+  ) {
+    return request<{ hidden: boolean; locked: boolean }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/flags`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(flags),
+      },
+    );
+  },
   // deleteDevice unpairs a device. reset additionally factory-resets the
   // device during removal; force removes an unreachable device even when the
   // CCU cannot complete the handshake. Both map onto the CCU delete bitmask
