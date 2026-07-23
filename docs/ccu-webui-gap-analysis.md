@@ -403,7 +403,12 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Gezieltes Anlernfenster existiert; es fehlen der aktive
   addDevice-Fetch-Pfad und der Geräte-AES-Key-Dialog bei Key-Mismatch.
   *XML-RPC.*
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **zurückgestellt** (2026-07-23): Recon
+  vollständig (BidCos-RF-only: `addDevice`/`setTempKey`/
+  `getKeyMismatchDevice`). Blocker: der Key-Mismatch-Fault-Code ist nur
+  gegen echte BidCos-RF-Hardware sicher zu mappen, godevccu simuliert
+  kein Anlernen. Reaktivieren, sobald ein BidCos-RF-Gerät + Live-Freigabe
+  vorliegt.
 - **G09 — BidCos-Wired Gerätesuche (`searchDevices`)** (missing, P3 S)
   Bus-Scan für Wired-Geräte in den Posteingang. *Empfehlung:*
   `Operations.SearchDevices` + `POST /install-mode/search`. *XML-RPC an
@@ -453,7 +458,12 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Fälle wie Klima-Party/RGBW/Display-Text sind abgedeckt). *Empfehlung:*
   priorisiert E-Paper-Editor als CDP-Erweiterung; Kanalgruppen im ui-schema
   als Gruppe mit Write-Fan-out.
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — **zurückgestellt** (2026-07-23): Der
+  E-Paper-Kern (HM-Dis-EP-WM55) hängt am SUBMIT-Hexstring-Byte-Layout,
+  das weder in occu noch aiohomematic steht und nur gegen ein echtes
+  HM-Dis-EP-WM55 verifizierbar ist (Gerät nicht verfügbar). Die HmIP-
+  Display-Familie (HmIP-WRCD/SDV) ist bereits über die `textdisplay`-CDP
+  abgedeckt. Reaktivieren nur mit realer HM-Dis-EP-WM55-Validierung.
 - **G17 — Geräte-Firmware: Duty-Cycle-Gate + Download-Trigger nordseitig** (partial, P3 S)
   Übersicht, Update-Trigger und Verteilphasen-Anzeige sind vorhanden; das
   Duty-Cycle-Gate vor dem Update fehlt, und der fertig verdrahtete
