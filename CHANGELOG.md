@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.47.2]
+
 ### Added
 
 - **Per-channel visibility and operation lock (G12).** An operator can now hide
@@ -19,6 +21,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Heating groups now show up in the UI even when the CCU returns boolean
+  group properties.** A real CCU serialises `FORBID_SINGLE_OPERATION` in
+  `groups.gson` as a JSON boolean, not the string the reconstructed schema
+  assumed. The group parser typed the whole property map as `map[string]string`,
+  so the boolean failed to unmarshal and the entire heating-group list came back
+  empty — the "Heizungsgruppen" view showed nothing. The parser now decodes each
+  property lazily and tolerates both the boolean and the string form.
 - **Toggling Basic/Bearer auth now flags a required restart.** The
   `north.rest.auth.basic_enabled` / `north.rest.auth.bearer_enabled` gates are
   wired into the auth middleware once at boot, so a live change silently did

@@ -205,3 +205,28 @@ func TestParseGroupList_EmptyGroupsArray(t *testing.T) {
 		t.Fatalf("want non-nil empty slice, got %#v", got)
 	}
 }
+
+// TestParseGroupList_BooleanProps reproduces the real CCU wire format
+// (verified against a live CCU): FORBID_SINGLE_OPERATION arrives as a JSON
+// boolean, not the string "true"/"false" the reconstructed schema assumed.
+// The parser must tolerate a groupProperties map whose values are not all
+// strings, or the whole list fails to unmarshal and the UI shows no groups.
+func TestParseGroupList_BooleanProps(t *testing.T) {
+	raw := `{"groups":[` +
+		`{"id":4,"groupMembers":[],"groupType":{"id":"hmip.heating.group","label":"HmIP-Heizungssteuerung","version":131072},"groupProperties":{"FORBID_SINGLE_OPERATION":false,"GROUP_DEVICE_NAME":"HmIP2Grupp2 INT0000004","NAME":"HmIP2Grupp2"}},` +
+		`{"id":5,"groupType":{"id":"HomeMatic.heating","label":"Heating_Control","version":3},"groupProperties":{"FORBID_SINGLE_OPERATION":true,"GROUP_DEVICE_NAME":"Hm-GRP ","NAME":"Hm-GRP"}}` +
+		`]}`
+	got, err := ParseGroupList(raw)
+	if err != nil {
+		t.Fatalf("ParseGroupList: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("groups = %d, want 2", len(got))
+	}
+	if got[0].Name != "HmIP2Grupp2" || got[0].ForbidSingleOperation {
+		t.Errorf("group 0 = %+v, want Name=HmIP2Grupp2 Forbid=false", got[0])
+	}
+	if got[1].Name != "Hm-GRP" || !got[1].ForbidSingleOperation {
+		t.Errorf("group 1 = %+v, want Name=Hm-GRP Forbid=true", got[1])
+	}
+}
