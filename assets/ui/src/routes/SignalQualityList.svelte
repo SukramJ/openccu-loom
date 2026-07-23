@@ -121,7 +121,11 @@
     >
       {#snippet cell(d, col)}
         {#if col.key === "name"}
-          <span class="font-medium">{d.name || d.address}</span>
+          <a
+            href="#/devices/{encodeURIComponent(d.address)}"
+            class="font-medium text-brand-700 hover:underline dark:text-brand-400"
+            >{d.name || d.address}</a
+          >
           <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{d.address}</span>
         {:else if col.key === "interface_id"}
           <span class="font-mono text-xs">{d.interface_id}</span>

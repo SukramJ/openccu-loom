@@ -38,6 +38,12 @@ vi.mock("$lib/stores/toast.svelte", () => ({
 vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: vi.fn().mockResolvedValue(false) },
 }));
+// The series editor mounts DiagramSeriesPicker, which pulls the device store
+// (and, transitively, the real API client). Stub it so the module graph loads
+// without the full client mock — these tests never open the picker.
+vi.mock("$lib/stores/devices.svelte", () => ({
+  deviceStore: { items: [], refresh: vi.fn() },
+}));
 vi.mock("$lib/i18n", () => ({ t: (k: string) => k }));
 
 import Diagrams from "./Diagrams.svelte";

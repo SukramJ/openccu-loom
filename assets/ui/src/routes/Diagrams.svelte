@@ -20,6 +20,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import DiagramSeriesPicker from "$lib/components/DiagramSeriesPicker.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -96,6 +97,10 @@
     if (!draft) return;
     draft.series = draft.series.filter((_, idx) => idx !== i);
   }
+  function updateSeries(i: number, ns: DiagramSeries) {
+    if (!draft) return;
+    draft.series = draft.series.map((s, idx) => (idx === i ? ns : s));
+  }
 
   async function save() {
     if (!draft) return;
@@ -103,7 +108,10 @@
       toastStore.error(t("diagrams.error.name_required"));
       return;
     }
-    const series = draft.series.filter((s) => s.central.trim());
+    // Keep only fully-picked series (device → channel → value all chosen).
+    const series = draft.series.filter(
+      (s) => (s.central ?? "").trim() && (s.channel_address ?? "").trim() && (s.parameter ?? "").trim(),
+    );
     if (series.length === 0) {
       toastStore.error(t("diagrams.error.series_required"));
       return;
@@ -199,14 +207,12 @@
           {t("diagrams.field.series")}
         </span>
         {#each draft.series as s, i (i)}
-          <div class="flex flex-wrap items-center gap-2">
-            <Input bind:value={s.central} placeholder={t("diagrams.series.central")} class="w-32" />
-            <Input bind:value={s.interface_id} placeholder={t("diagrams.series.interface")} class="w-36" />
-            <Input bind:value={s.channel_address} placeholder={t("diagrams.series.channel")} class="w-36" />
-            <Input bind:value={s.parameter} placeholder={t("diagrams.series.parameter")} class="w-40" />
-            <Input bind:value={s.label} placeholder={t("diagrams.series.label")} class="w-32" />
-            <Button variant="ghost" size="sm" onclick={() => removeSeries(i)}>×</Button>
-          </div>
+          <DiagramSeriesPicker
+            series={s}
+            index={i}
+            onChange={(ns) => updateSeries(i, ns)}
+            onRemove={() => removeSeries(i)}
+          />
         {/each}
         <div>
           <Button variant="outline" size="sm" onclick={addSeries}>{t("diagrams.series.add")}</Button>

@@ -6,6 +6,39 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.47.3]
+
+### Changed
+
+- **Guided diagram series editor.** Composing a diagram series is now a
+  searchable device → channel → value picker instead of four free-text fields:
+  the central and interface are derived from the picked device and the label is
+  auto-suggested, so operators no longer type raw addresses / parameter strings.
+  The value dropdown lists only numeric (plottable) data points and shows their
+  unit.
+- **Energy view is hidden when history recording is off.** The Energy nav item
+  now follows the same opt-in-history gate as Diagrams; the page already showed
+  a "history required" state on direct navigation.
+- **"Edit on device" from the direct-links overview opens the links tab.** The
+  action now deep-links to the device's direct-links sub-tab
+  (`#/devices/{addr}?tab=links`) instead of just opening the device on its
+  default channels view.
+- **Signal-quality list links the device.** The device name links to the device
+  detail, matching the firmware list.
+
+### Fixed
+
+- **Umlauts in program condition/activity summaries rendered as `�`.** A
+  program's summary lists the device and channel names it references (e.g.
+  `Wassersensor Sp�le`, `L�ftung Aus`). Those names come from the ReGa script
+  layer, which UriEncodes ISO-8859-1 object names; after `url.QueryUnescape` the
+  high byte was raw Latin-1 (invalid UTF-8) and rendered as U+FFFD. The ReGa
+  field decoder (`decodeRegaField`) now transcodes a non-UTF-8 result from
+  ISO-8859-1 to UTF-8, so `Sp�le` becomes `Spüle` (an already-valid UTF-8 value
+  passes through untouched). Sysvar descriptions and channel addresses from the
+  same ReGa path share the fix. The JSON-RPC client gained the same defensive
+  transcode for any method that returns a Latin-1 body.
+
 ## [0.47.2]
 
 ### Added

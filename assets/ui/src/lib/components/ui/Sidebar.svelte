@@ -212,14 +212,16 @@
           label: t("nav.diagnostics"),
           matches: ["diagnostics"],
         },
-        {
-          href: "#/energy",
-          icon: "mdi:zap",
-          label: t("nav.energy"),
-          matches: ["energy"],
-        },
+        // Energy and Diagrams both chart measurement history — only surface
+        // them when the opt-in history-recording feature is enabled.
         ...(historyEnabled
           ? [
+              {
+                href: "#/energy",
+                icon: "mdi:zap" as const,
+                label: t("nav.energy"),
+                matches: ["energy"] as RouteKind[],
+              },
               {
                 href: "#/diagrams",
                 icon: "mdi:chart-line-variant" as const,

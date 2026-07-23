@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.47.3
+
+- **Fixed umlauts in program condition/activity summaries** (rendered as `�`,
+  e.g. `Sp�le`) — the device/channel names they list come from the ReGa layer
+  as ISO-8859-1 and are now transcoded to UTF-8.
+- **Guided diagram series editor**: pick device → channel → value from
+  dropdowns instead of typing raw addresses; the value list shows only numeric
+  data points with their unit.
+- **Energy view is hidden when history recording is off** (like Diagrams).
+- **"Edit on device"** from the direct-links overview opens the device's links
+  tab; the **signal-quality list links the device**.
+
 ## 0.47.2
 
 - **Heating groups now appear in the UI.** A real CCU returns a boolean group
