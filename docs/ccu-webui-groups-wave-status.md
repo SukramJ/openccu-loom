@@ -70,9 +70,15 @@ lighttpd proxies `^/pages/jpages` to HMServer on `127.0.0.1:9292`
 its **contents as a JSON string** (via `json_toString`), so the payload
 needs a *second* unmarshal. A missing file yields the sentinel `"-1"`.
 
-The schema below was reconstructed from the JSON payloads
-`getHeatingGroupList` actually returns on the CCU (Gson serialisation with
-default field names; the group model is plain data classes, not enums):
+The schema below is confirmed against the JSON payloads a live CCU
+(`172.18.4.39`) returns for `getHeatingGroupList` (Gson serialisation with
+default field names; the group model is plain data classes, not enums).
+**`groupType.version` is an integer and `FORBID_SINGLE_OPERATION` is a JSON
+boolean, not a string** — the property map therefore holds mixed value types,
+so a parser must not type it as `map[string]string` (that regressed GR01: the
+whole list failed to unmarshal and the view showed no groups — fixed in 0.47.2
+by decoding each property lazily). GR02 (which sends `forbidSingleOperation`
+in the save body) must mirror this typing:
 
 ```json
 {
@@ -83,7 +89,7 @@ default field names; the group model is plain data classes, not enums):
       "groupProperties": {
         "NAME": "Wohnzimmer",
         "GROUP_DEVICE_NAME": "…",
-        "FORBID_SINGLE_OPERATION": "false"
+        "FORBID_SINGLE_OPERATION": false
       },
       "groupDefinition": {
         "groupType": { "id": "…", "label": "…", "version": 1 },
