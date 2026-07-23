@@ -52,8 +52,8 @@ type Member struct {
 	TypeID string
 }
 
-// wire mirrors the groups.gson serialization emitted by HMServer's
-// de.eq3.lib.groupadministration model (Gson, default field names).
+// wire mirrors the groups.gson serialization the CCU emits from its
+// getHeatingGroupList method (Gson, default field names).
 type wire struct {
 	Groups []wireGroup `json:"groups"`
 }
@@ -75,8 +75,8 @@ type wireMember struct {
 	MemberType wireType `json:"memberType"`
 }
 
-// groups.gson property keys (the GROUP_PROPERTIE_* constants in
-// de.eq3.lib.groupadministration.Group).
+// groups.gson property-map keys, as they appear verbatim in the
+// getHeatingGroupList payload.
 const (
 	propName                  = "NAME"
 	propGroupDeviceName       = "GROUP_DEVICE_NAME"
