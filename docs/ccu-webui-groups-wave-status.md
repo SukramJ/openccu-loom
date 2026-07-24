@@ -158,12 +158,43 @@ from the earlier reconstruction):
    the GR02 form is fixed (login → `list` / `suitableGroupMembers` with a
    real `sid`).
 
+### Valid-session reads (2026-07-24, against 172.18.4.29)
+
+Confirmed with a real JSON-RPC session on a CCU that has live HmIP heating
+groups (roster: 2 groups, `groupType.id = "hmip.heating.group"`):
+
+- **Data endpoints return the bare data object on success — no wrapper.**
+  `suitableGroupMembers` with `{ "groupTypeId": "hmip.heating.group" }`
+  returns HTTP 200 and
+  `{ "assignableGroupMembers": [ { "id", "serialNumber", "type" } … ],
+  "leftoverGroupMembers": [ … ] }`. `id` is the channel address (e.g.
+  `00109709B1381B:1`), `type` is the member kind (`SENSOR_WINDOW`,
+  `SWITCH_ACTUATOR`, …). So the backend must branch on the body: an object
+  carrying `isSuccessful:false` is the **session/error** wrapper (re-login);
+  otherwise it is the plain data payload — parse it directly.
+- **`group/list` renders the HTML page** (`GroupListPage.ftl`), not a JSON
+  API — keep sourcing the roster from `CCU.getHeatingGroupList`.
+- **`getAllAssignableGroupTypes` 404s even with a valid session** — it is not
+  on this firmware. The one type id GR02 needs for HmIP heating
+  (`hmip.heating.group`) is known from the roster; a full assignable-type
+  enumeration source is still open but low-priority (HmIP heating is the
+  primary case; BidCos heating-group type ids, if needed, come from a
+  roster/`suitableGroupMembers` sample).
+- **Still open — mutation success shape.** The `save` / `delete` **success**
+  response (a mutation) has not been observed; it needs an approved
+  throwaway-group write on `172.18.4.29` (create → observe `save` reply →
+  delete → observe `delete` reply). The session-invalid wrapper
+  `{ isSuccessful:false, errorCode:"42", content:<login html> }` is the only
+  shape seen so far for these endpoints.
+
 ### jpages endpoints
 
 All are `POST … ?sid=<JSON-RPC session>` with a `JSON.stringify` body.
-The reply is a JSON object `{ "isSuccessful": bool, "errorCode": str,
-"content": str }` (live-verified 2026-07-24; the earlier `{ "valid": … }`
-reconstruction is superseded). `errorCode:"42"` == invalid session.
+On an **invalid** session the reply is the wrapper
+`{ "isSuccessful": false, "errorCode": "42", "content": <login html> }`
+(live-verified 2026-07-24; the earlier `{ "valid": … }` reconstruction is
+superseded). On a **valid** session, data endpoints return their bare data
+object (see above); the mutation success wrapper is still to be confirmed.
 
 | Endpoint | Request body | Purpose |
 |---|---|---|
