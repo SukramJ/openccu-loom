@@ -106,6 +106,11 @@ const (
 	// operation and the diagram name.
 	ActionDiagramConfig Action = "diagram_config"
 
+	// ActionGroupAdmin records create / update / delete of a heating group
+	// through the CCU jpages proxy (GR02). The Note carries the operation,
+	// the central, and the group name/id.
+	ActionGroupAdmin Action = "group_admin"
+
 	// ActionProgramDelete records deletion of a CCU program. The Note
 	// carries the program name and id.
 	ActionProgramDelete Action = "program_delete"

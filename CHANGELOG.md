@@ -10,6 +10,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Heating-group administration (GR02).** Create, edit, and delete Homematic
+  heating groups from the SPA — the "Heizungsgruppen" view gains New / Edit /
+  Delete controls and a group editor (type picker → member picker → name +
+  "operate only via group" toggle). Groups are managed through the CCU's own
+  HMServer jpages endpoints, authenticated with Loom's live JSON-RPC session
+  (ADR 0055), so the group-wiring matrix is computed by the CCU and never
+  re-derived in Go. A new group runs the CCU's two-step create → save flow;
+  because the save's HTTP response is slow and can time out even on success,
+  the daemon confirms completion by polling `getHeatingGroupList` rather than
+  the save reply. The write path was verified live against a real HmIP heating
+  group (create → save → delete round-trip).
+  - REST (admin-gated, audited, API 2.53.0): `POST /groups`,
+    `PUT /groups/{id}`, `DELETE /groups/{id}`, plus read helpers
+    `GET /groups/types` and `GET /groups/suitable-members`.
 - **Central links now show their live active state.** The central click-event
   panel (device detail → Direct links) reads the CCU's report-value-usage
   metadata (`getMetadata(<channel>, "reportValueUsageData")`) and marks each

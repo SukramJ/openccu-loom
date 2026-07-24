@@ -766,8 +766,89 @@ export interface paths {
          */
         get: operations["listGroups"];
         put?: never;
+        /**
+         * Create a heating group (admin)
+         * @description Creates a heating group through the CCU jpages proxy (ADR 0055):
+         *     a two-step `GET group/create` → `POST group/save` flow, then a
+         *     roster poll to confirm the group committed (the save response is
+         *     slow and unreliable). Admin-gated and audited. `?central=` selects
+         *     the target CCU (optional when only one is configured).
+         */
+        post: operations["createGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assignable group types for the create form
+         * @description Returns the group types a new group can be created as (parsed from
+         *     the CCU's create page — there is no separate JSON type endpoint on
+         *     the firmware). `?central=` scopes to one CCU.
+         */
+        get: operations["listGroupTypes"];
+        put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/suitable-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Devices assignable to a group of a given type
+         * @description Returns the devices/channels that can be assigned to a group of
+         *     the given `type_id`, split into assignable and leftover buckets.
+         *     `?central=` scopes to one CCU.
+         */
+        get: operations["listSuitableGroupMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The numeric CCU group id. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Edit a heating group (admin)
+         * @description Edits an existing heating group (name, members, "operate only via
+         *     group" flag) through the jpages save path. Admin-gated and audited.
+         */
+        put: operations["updateGroup"];
+        post?: never;
+        /**
+         * Delete a heating group (admin)
+         * @description Deletes a heating group through the jpages delete path. Admin-gated
+         *     and audited.
+         */
+        delete: operations["deleteGroup"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5260,6 +5341,41 @@ export interface components {
             /** @description Member-type key. */
             type_id?: string;
         };
+        /** @description Body of POST /groups. */
+        CreateGroupRequest: {
+            /** @description Group-type key (e.g. the HmIP heating-group type). */
+            type_id: string;
+            /** @description Operator-facing group name. */
+            name: string;
+            /** @description The "operate only via group" flag. */
+            forbid_single_operation?: boolean;
+            /** @description Member channel/device addresses to assign. */
+            members?: string[];
+        };
+        /** @description Body of PUT /groups/{id}. */
+        UpdateGroupRequest: {
+            name: string;
+            forbid_single_operation?: boolean;
+            members?: string[];
+        };
+        /** @description One assignable group type for the create form. */
+        GroupTypeEntry: {
+            id: string;
+            /** @description CCU translation key for the type label. */
+            label_key?: string;
+        };
+        /** @description One device/channel assignable to a group of a given type. */
+        SuitableMemberEntry: {
+            address: string;
+            serial?: string;
+            /** @description Member kind (e.g. SENSOR_WINDOW, SWITCH_ACTUATOR). */
+            type?: string;
+        };
+        /** @description Candidate members for a group type. */
+        SuitableMembersResponse: {
+            assignable: components["schemas"]["SuitableMemberEntry"][];
+            leftover: components["schemas"]["SuitableMemberEntry"][];
+        };
         /**
          * @description One CCU as known to the daemon. `name` is the daemon-local
          *     identifier (config-driven, multi-CCU-safe). The other fields
@@ -8501,6 +8617,153 @@ export interface operations {
                     };
                 };
             };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createGroup: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description The created group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupEntry"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listGroupTypes: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The assignable group types. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        types: components["schemas"]["GroupTypeEntry"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSuitableGroupMembers: {
+        parameters: {
+            query: {
+                type_id: string;
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidate members for the type. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuitableMembersResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateGroup: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The numeric CCU group id. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Group updated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteGroup: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The numeric CCU group id. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Group deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];

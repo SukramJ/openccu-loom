@@ -1,29 +1,29 @@
 # Dead-Code Summary
 
-Generated: 5fd864cd
-HEAD: 5fd864cd
+Generated: 1112a1d6
+HEAD: 1112a1d6
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26749 |
-| Reachable | 4637 |
-| Whitelisted | 19296 |
-| **Unreachable** | **2816** |
+| Total Exported | 26820 |
+| Reachable | 4639 |
+| Whitelisted | 19345 |
+| **Unreachable** | **2836** |
 
 ## Top-20 Packages by Dead Code
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
-| internal/client/backends | 8 | 37 | 4 |
+| internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
 | internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| pkg/hmerr | 4 | 5 | 26 |
+| pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
@@ -97,13 +97,13 @@ HEAD: 5fd864cd
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
-| internal/client/backends | 8 | 37 | 4 |
+| internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
 | internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| pkg/hmerr | 4 | 5 | 26 |
+| pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
 | internal/ccudata | 2 | 31 | 4 |
@@ -154,7 +154,7 @@ HEAD: 5fd864cd
 | internal/model/custom/textdisplay | 0 | 5 | 18 |
 | internal/model/datapoint | 0 | 3 | 0 |
 | internal/model/device/definitionexport | 0 | 6 | 2 |
-| internal/model/group | 0 | 4 | 0 |
+| internal/model/group | 0 | 14 | 0 |
 | internal/model/naming | 0 | 2 | 4 |
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/bridge | 0 | 7 | 0 |

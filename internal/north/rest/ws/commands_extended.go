@@ -263,6 +263,11 @@ type ExtendedCommandsConfig struct {
 	SessionRecorder SessionRecorder
 	// Groups backs `groups.list` — the read-only heating-group listing.
 	Groups GroupsQuery
+	// GroupsAdmin backs the heating-group administration commands (GR02):
+	// groups.create / groups.update / groups.delete plus the groups.types /
+	// groups.suitable_members read helpers. Same cmd-level adapter as the
+	// REST group-admin surface.
+	GroupsAdmin handlers.GroupsWriter
 }
 
 // RegisterExtendedCommands wires the post-MVP command set onto router.
@@ -353,6 +358,15 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		// groups.list — read-only heating-group listing (one entry per
 		// central; optional `central` narrows to one).
 		router.Register("groups.list", groupsListHandler(cfg.Groups))
+	}
+	if cfg.GroupsAdmin != nil {
+		// Heating-group administration (GR02): create / update / delete via
+		// the CCU jpages proxy, plus the type / suitable-member read helpers.
+		router.Register("groups.types", groupsTypesHandler(cfg.GroupsAdmin))
+		router.Register("groups.suitable_members", groupsSuitableMembersHandler(cfg.GroupsAdmin))
+		router.Register("groups.create", groupsCreateHandler(cfg.GroupsAdmin))
+		router.Register("groups.update", groupsUpdateHandler(cfg.GroupsAdmin))
+		router.Register("groups.delete", groupsDeleteHandler(cfg.GroupsAdmin))
 	}
 	if cfg.ExtendedHub != nil {
 		router.Register("service_messages.disable", serviceMessagesDisableHandler(cfg.ExtendedHub))

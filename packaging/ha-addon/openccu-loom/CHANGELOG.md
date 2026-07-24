@@ -2,6 +2,11 @@
 
 ## 0.48.0
 
+- **Manage heating groups from the UI.** The Heizungsgruppen view now lets you
+  create, edit, and delete heating groups (pick a type, choose members, set the
+  name and the "operate only via group" flag). Group changes are applied by the
+  CCU itself (via its HMServer group endpoints), so the wiring stays exactly
+  as the CCU computes it. Admin-only.
 - **Central links now show whether they are active.** The central click-event
   panel (device detail → Direct links) reads the CCU state and marks each
   button channel active or inactive, with a device-wide active count — so you

@@ -1,6 +1,6 @@
 {
-  "generated": "5fd864cd",
-  "head": "5fd864cd",
+  "generated": "1112a1d6",
+  "head": "1112a1d6",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 26749,
-    "reachable": 4480,
-    "whitelisted": 19296,
-    "unreachable": 2973
+    "total_exported": 26820,
+    "reachable": 4482,
+    "whitelisted": 19345,
+    "unreachable": 2993
   },
   "by_package": [
     {
@@ -25,7 +25,7 @@
     {
       "package": "internal/client/backends",
       "unreachable_funcs": 8,
-      "unreachable_types": 37,
+      "unreachable_types": 45,
       "unreachable_other": 4
     },
     {
@@ -50,7 +50,7 @@
       "package": "pkg/hmerr",
       "unreachable_funcs": 6,
       "unreachable_types": 5,
-      "unreachable_other": 26
+      "unreachable_other": 28
     },
     {
       "package": "internal/central/adapter",
@@ -415,7 +415,7 @@
     {
       "package": "internal/model/group",
       "unreachable_funcs": 0,
-      "unreachable_types": 4,
+      "unreachable_types": 14,
       "unreachable_other": 0
     },
     {
@@ -1366,21 +1366,21 @@
       "package": "internal/audit",
       "identifier": "Buffer",
       "file": "internal/audit/audit.go",
-      "line": 226,
+      "line": 231,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 211,
+      "line": 216,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 211,
+      "line": 216,
       "kind": "type"
     },
     {
@@ -1429,14 +1429,14 @@
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 180,
+      "line": 185,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 180,
+      "line": 185,
       "kind": "type"
     },
     {
@@ -1478,28 +1478,28 @@
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 202,
+      "line": 207,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 202,
+      "line": 207,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 219,
+      "line": 224,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 219,
+      "line": 224,
       "kind": "type"
     },
     {
@@ -2381,14 +2381,14 @@
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 479,
+      "line": 480,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 479,
+      "line": 480,
       "kind": "type"
     },
     {
@@ -2892,28 +2892,28 @@
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2202,
+      "line": 2217,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2202,
+      "line": 2217,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2081,
+      "line": 2096,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2081,
+      "line": 2096,
       "kind": "var"
     },
     {
@@ -2983,14 +2983,14 @@
       "package": "internal/central/adapter",
       "identifier": "HubData",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 51,
+      "line": 52,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "HubData",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 51,
+      "line": 52,
       "kind": "type"
     },
     {
@@ -3039,14 +3039,14 @@
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 471,
+      "line": 472,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 471,
+      "line": 472,
       "kind": "type"
     },
     {
@@ -3144,14 +3144,14 @@
       "package": "internal/central/adapter",
       "identifier": "NameMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 44,
+      "line": 45,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "NameMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 44,
+      "line": 45,
       "kind": "type"
     },
     {
@@ -5235,6 +5235,48 @@
     },
     {
       "package": "internal/client/backends",
+      "identifier": "HeatingGroupMember",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 64,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "HeatingGroupMember",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 64,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "HeatingGroupSaveInput",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 79,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "HeatingGroupSaveInput",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 79,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "HeatingGroupType",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 58,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "HeatingGroupType",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 58,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
       "identifier": "HomegearBackend",
       "file": "internal/client/backends/homegear.go",
       "line": 32,
@@ -5350,6 +5392,20 @@
       "identifier": "ScriptRunner",
       "file": "internal/client/backends/caller.go",
       "line": 34,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "SuitableHeatingGroupMembers",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 73,
+      "kind": "type"
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "SuitableHeatingGroupMembers",
+      "file": "internal/client/backends/ccu_groups.go",
+      "line": 73,
       "kind": "type"
     },
     {
@@ -5524,21 +5580,21 @@
       "package": "internal/client/transport/jsonrpc",
       "identifier": "Client",
       "file": "internal/client/transport/jsonrpc/client.go",
-      "line": 116,
+      "line": 117,
       "kind": "type"
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "Config",
       "file": "internal/client/transport/jsonrpc/client.go",
-      "line": 37,
+      "line": 38,
       "kind": "type"
     },
     {
       "package": "internal/client/transport/jsonrpc",
       "identifier": "Config",
       "file": "internal/client/transport/jsonrpc/client.go",
-      "line": 37,
+      "line": 38,
       "kind": "type"
     },
     {
@@ -9267,6 +9323,20 @@
     },
     {
       "package": "internal/model/group",
+      "identifier": "CreateInput",
+      "file": "internal/model/group/write.go",
+      "line": 38,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "CreateInput",
+      "file": "internal/model/group/write.go",
+      "line": 38,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
       "identifier": "Group",
       "file": "internal/model/group/group.go",
       "line": 24,
@@ -9291,6 +9361,62 @@
       "identifier": "Member",
       "file": "internal/model/group/group.go",
       "line": 47,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "MemberCandidate",
+      "file": "internal/model/group/write.go",
+      "line": 21,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "MemberCandidate",
+      "file": "internal/model/group/write.go",
+      "line": 21,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "SuitableMembers",
+      "file": "internal/model/group/write.go",
+      "line": 32,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "SuitableMembers",
+      "file": "internal/model/group/write.go",
+      "line": 32,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "Type",
+      "file": "internal/model/group/write.go",
+      "line": 14,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "Type",
+      "file": "internal/model/group/write.go",
+      "line": 14,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "UpdateInput",
+      "file": "internal/model/group/write.go",
+      "line": 48,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "UpdateInput",
+      "file": "internal/model/group/write.go",
+      "line": 48,
       "kind": "type"
     },
     {
@@ -18194,14 +18320,14 @@
       "package": "pkg/hmapi",
       "identifier": "CentralLinksChannelStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 51,
+      "line": 63,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CentralLinksChannelStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 51,
+      "line": 63,
       "kind": "type"
     },
     {
@@ -18236,13 +18362,20 @@
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 376,
+      "line": 389,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimatePeriod",
       "file": "pkg/hmapi/rest_contract.go",
+      "line": 389,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "ClimateProfile",
+      "file": "pkg/hmapi/rest_contract.go",
       "line": 376,
       "kind": "type"
     },
@@ -18250,112 +18383,105 @@
       "package": "pkg/hmapi",
       "identifier": "ClimateProfile",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 363,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "ClimateProfile",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 363,
+      "line": 376,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateSchedule",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 250,
+      "line": 263,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateSchedule",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 250,
+      "line": 263,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 370,
+      "line": 383,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ClimateWeekday",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 370,
+      "line": 383,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CommunicationTestResult",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 622,
+      "line": 635,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "CommunicationTestResult",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 622,
+      "line": 635,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigCentral",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 93,
+      "line": 106,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigCentral",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 93,
+      "line": 106,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigPorts",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 100,
+      "line": 113,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigPorts",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 100,
+      "line": 113,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigSnapshot",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 75,
+      "line": 88,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ConfigSnapshot",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 75,
+      "line": 88,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "DiagnosticsEvent",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 137,
+      "line": 150,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "DiagnosticsEvent",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 137,
+      "line": 150,
       "kind": "type"
     },
     {
@@ -18376,42 +18502,42 @@
       "package": "pkg/hmapi",
       "identifier": "ErrBadParam",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 112,
+      "line": 125,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrBadParam",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 112,
+      "line": 125,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrCentralLinksChannelNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 67,
+      "line": 80,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrCentralLinksChannelNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 67,
+      "line": 80,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrCentralLinksUnsupported",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 61,
+      "line": 74,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrCentralLinksUnsupported",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 61,
+      "line": 74,
       "kind": "var"
     },
     {
@@ -18446,28 +18572,28 @@
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 385,
+      "line": 398,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUISchemaNotFound",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 385,
+      "line": 398,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUnknownOperation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 109,
+      "line": 122,
       "kind": "var"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ErrUnknownOperation",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 109,
+      "line": 122,
       "kind": "var"
     },
     {
@@ -18488,56 +18614,56 @@
       "package": "pkg/hmapi",
       "identifier": "Incident",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 160,
+      "line": 173,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Incident",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 160,
+      "line": 173,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "InterfaceState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 172,
+      "line": 185,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "InterfaceState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 172,
+      "line": 185,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Link",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 195,
+      "line": 208,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "Link",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 195,
+      "line": 208,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "LinkableChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 225,
+      "line": 238,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "LinkableChannel",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 225,
+      "line": 238,
       "kind": "type"
     },
     {
@@ -18558,294 +18684,294 @@
       "package": "pkg/hmapi",
       "identifier": "RPCRecordingStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 144,
+      "line": 157,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "RPCRecordingStatus",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 144,
+      "line": 157,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ReliabilityState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 124,
+      "line": 137,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ReliabilityState",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 124,
+      "line": 137,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ReplaceCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 606,
+      "line": 619,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ReplaceCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 606,
+      "line": 619,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleChannelRef",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 354,
+      "line": 367,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "ScheduleChannelRef",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 354,
+      "line": 367,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "SimpleScheduleEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 284,
+      "line": 297,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "SimpleScheduleEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 284,
+      "line": 297,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "TeamCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 636,
+      "line": 649,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "TeamCandidate",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 636,
+      "line": 649,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 404,
+      "line": 417,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchema",
       "file": "pkg/hmapi/rest_contract.go",
+      "line": 417,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaChannel",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 459,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaChannel",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 459,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaCrossValidation",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 583,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaCrossValidation",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 583,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaGroup",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 470,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaGroup",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 470,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameter",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 485,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameter",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 485,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterFlags",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 560,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterFlags",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 560,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterOps",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 548,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaParameterOps",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 548,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaPreset",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 526,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaPreset",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 526,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaProfile",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 604,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaProfile",
+      "file": "pkg/hmapi/rest_contract.go",
+      "line": 604,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmapi",
+      "identifier": "UISchemaRequest",
+      "file": "pkg/hmapi/rest_contract.go",
       "line": 404,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
-      "identifier": "UISchemaChannel",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 446,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaChannel",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 446,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaCrossValidation",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 570,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaCrossValidation",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 570,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaGroup",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 457,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaGroup",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 457,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameter",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 472,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameter",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 472,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterFlags",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 547,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterFlags",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 547,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterOps",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 535,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaParameterOps",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 535,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaPreset",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 513,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaPreset",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 513,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaProfile",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 591,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaProfile",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 591,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
       "identifier": "UISchemaRequest",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 391,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmapi",
-      "identifier": "UISchemaRequest",
-      "file": "pkg/hmapi/rest_contract.go",
-      "line": 391,
+      "line": 404,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 429,
+      "line": 442,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetGroup",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 429,
+      "line": 442,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 438,
+      "line": 451,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaSubsetOpt",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 438,
+      "line": 451,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 520,
+      "line": 533,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaTimePreset",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 520,
+      "line": 533,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 528,
+      "line": 541,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaValueListEntry",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 528,
+      "line": 541,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 556,
+      "line": 569,
       "kind": "type"
     },
     {
       "package": "pkg/hmapi",
       "identifier": "UISchemaVisibility",
       "file": "pkg/hmapi/rest_contract.go",
-      "line": 556,
+      "line": 569,
       "kind": "type"
     },
     {
@@ -19944,14 +20070,14 @@
       "package": "pkg/hmerr",
       "identifier": "Context",
       "file": "pkg/hmerr/errors.go",
-      "line": 105,
+      "line": 109,
       "kind": "type"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ContextualError",
       "file": "pkg/hmerr/errors.go",
-      "line": 144,
+      "line": 148,
       "kind": "type"
     },
     {
@@ -20026,6 +20152,20 @@
     },
     {
       "package": "pkg/hmerr",
+      "identifier": "ErrGroupNotFound",
+      "file": "pkg/hmerr/errors.go",
+      "line": 100,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmerr",
+      "identifier": "ErrGroupNotFound",
+      "file": "pkg/hmerr/errors.go",
+      "line": 100,
+      "kind": "var"
+    },
+    {
+      "package": "pkg/hmerr",
       "identifier": "ErrInternalBackendException",
       "file": "pkg/hmerr/errors.go",
       "line": 55,
@@ -20140,35 +20280,35 @@
       "package": "pkg/hmerr",
       "identifier": "ErrorContext",
       "file": "pkg/hmerr/errors.go",
-      "line": 167,
+      "line": 171,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ErrorContext",
       "file": "pkg/hmerr/errors.go",
-      "line": 167,
+      "line": 171,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ExceptionToFailureReason",
       "file": "pkg/hmerr/errors.go",
-      "line": 411,
+      "line": 415,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "ExceptionToFailureReason",
       "file": "pkg/hmerr/errors.go",
-      "line": 411,
+      "line": 415,
       "kind": "func"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "JSONRPCError",
       "file": "pkg/hmerr/errors.go",
-      "line": 436,
+      "line": 440,
       "kind": "type"
     },
     {
@@ -20189,14 +20329,14 @@
       "package": "pkg/hmerr",
       "identifier": "XMLRPCFault",
       "file": "pkg/hmerr/errors.go",
-      "line": 241,
+      "line": 245,
       "kind": "type"
     },
     {
       "package": "pkg/hmerr",
       "identifier": "XMLRPCFaultCode",
       "file": "pkg/hmerr/errors.go",
-      "line": 179,
+      "line": 183,
       "kind": "type"
     },
     {
@@ -28375,14 +28515,14 @@
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 244
+      "line": 249
     },
     {
       "package": "internal/audit",
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 244
+      "line": 249
     },
     {
       "package": "internal/audit",
@@ -33422,35 +33562,35 @@
       "identifier": "TestCentralLinksCreateAllChannels",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 378
+      "line": 383
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksCreateDeviceNotFound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 264
+      "line": 269
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksCreateNilRegistryError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 244
+      "line": 249
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksCreateOnlyRaisesPressShort",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 465
+      "line": 470
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksCreateSingleChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 395
+      "line": 400
     },
     {
       "package": "internal/central/adapter",
@@ -33534,63 +33674,63 @@
       "identifier": "TestCentralLinksNamedChannelWithoutPressEvents",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 597
+      "line": 602
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveFailureCountsChannelsNotCalls",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 505
+      "line": 510
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveMixedChannelFailureContinuesToNextChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 783
+      "line": 796
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveNilRegistryError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 254
+      "line": 259
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveNoBackendRegistered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 683
+      "line": 696
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemovePartialValueIDFailureStillIssuesBoth",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 757
+      "line": 770
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveSingleChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 413
+      "line": 418
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveUnsupportedInterface",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 670
+      "line": 683
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestCentralLinksRemoveZeroesPressShortAndLong",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 437
+      "line": 442
     },
     {
       "package": "internal/central/adapter",
@@ -33604,7 +33744,14 @@
       "identifier": "TestCentralLinksStatusListsChannels",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 617
+      "line": 622
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksStatusMetadataErrorTreatedInactive",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 880
     },
     {
       "package": "internal/central/adapter",
@@ -33612,6 +33759,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
       "line": 134
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestCentralLinksStatusReportsActiveFromMetadata",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/central_links_test.go",
+      "line": 847
     },
     {
       "package": "internal/central/adapter",
@@ -33632,7 +33786,7 @@
       "identifier": "TestCentralLinksUnknownChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/central_links_test.go",
-      "line": 524
+      "line": 529
     },
     {
       "package": "internal/central/adapter",
@@ -34732,6 +34886,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/schedule_coerce_test.go",
       "line": 469
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestDecodeRegaFieldLatin1",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_wiring_charset_test.go",
+      "line": 12
     },
     {
       "package": "internal/central/adapter",
@@ -38459,6 +38620,34 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainCreatePropagatesSaveErrorWhenGroupNeverAppears",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 246
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainCreateReturnsNewGroupAndGrowsRoster",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 213
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainDeleteKnownIDRemovesFromRoster",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 325
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainDeleteUnknownIDReturnsGroupNotFound",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 309
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainList_AggregateBackendFetchErrorSwallowed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_test.go",
@@ -38512,6 +38701,48 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_test.go",
       "line": 69
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainSuitableMembersMapsThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 367
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainTypesMapsThroughDraftTypes",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 346
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainUpdateKnownIDSucceeds",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 287
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainUpdateUnknownIDReturnsGroupNotFound",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 271
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainWriterForSingleCentralResolves",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 396
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainWriterForUnsupportedBackend",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 416
     },
     {
       "package": "internal/central/adapter",
@@ -41389,6 +41620,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/mqtt_fanout_test.go",
       "line": 106
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestMain",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 39
     },
     {
       "package": "internal/central/adapter",
@@ -56680,6 +56918,13 @@
     },
     {
       "package": "internal/client/backends",
+      "identifier": "TestCreateHeatingGroupDraftParsesGroupIDAndTypesFromEditPageHTML",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 58
+    },
+    {
+      "package": "internal/client/backends",
       "identifier": "TestCuxdAcceptDeviceInInbox",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/convert_stubs_test.go",
@@ -57132,6 +57377,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/convert_stubs_test.go",
       "line": 386
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "TestDeleteHeatingGroupSuccess",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 169
     },
     {
       "package": "internal/client/backends",
@@ -57926,6 +58178,13 @@
     },
     {
       "package": "internal/client/backends",
+      "identifier": "TestJsEscapeMirrorsJavaScriptEscape",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 235
+    },
+    {
+      "package": "internal/client/backends",
       "identifier": "TestKindForAllMVPInterfaces",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/backends_test.go",
@@ -58035,6 +58294,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/detection_test.go",
       "line": 208
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "TestPadLeft7ZeroPadsShortIDsAndPassesLongOnesThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 260
     },
     {
       "package": "internal/client/backends",
@@ -58157,6 +58423,20 @@
     },
     {
       "package": "internal/client/backends",
+      "identifier": "TestSaveHeatingGroupPostsFormEncodedJSONBody",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 95
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "TestSaveHeatingGroupSessionExpiredMapsToAuthFailure",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 152
+    },
+    {
+      "package": "internal/client/backends",
       "identifier": "TestSetValueWithRxModeBurst",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/rxmode_test.go",
@@ -58189,6 +58469,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/backends/detection_test.go",
       "line": 118
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "TestSuitableHeatingGroupMembersParsesBarePayload",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 192
+    },
+    {
+      "package": "internal/client/backends",
+      "identifier": "TestSuitableHeatingGroupMembersSessionExpiredMapsToAuthFailure",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/backends/ccu_groups_test.go",
+      "line": 216
     },
     {
       "package": "internal/client/backends",
@@ -62686,6 +62980,13 @@
     },
     {
       "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestClientDecodesLatin1Body",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/client_charset_test.go",
+      "line": 18
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
       "identifier": "TestClientHappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
@@ -62704,6 +63005,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_test.go",
       "line": 144
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestClientKeepsValidUTF8Body",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/client_charset_test.go",
+      "line": 43
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -63488,6 +63796,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
       "line": 473
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestLatin1ToUTF8",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/client_charset_test.go",
+      "line": 63
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -90585,6 +90900,13 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/collector.go",
       "line": 109
+    },
+    {
+      "package": "internal/model/group",
+      "identifier": "TestParseGroupList_BooleanProps",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/group/group_test.go",
+      "line": 214
     },
     {
       "package": "internal/model/group",
@@ -120359,6 +120681,34 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "CreateGroup",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 78
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CreateGroup",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 78
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CreateGroupRequest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 37
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CreateGroupRequest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 37
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "CreateRoom",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/rooms_admin.go",
@@ -120692,6 +121042,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/rooms_admin.go",
       "line": 188
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "DeleteGroup",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 137
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "DeleteGroup",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 137
     },
     {
       "package": "internal/north/rest/handlers",
@@ -122473,6 +122837,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "GroupTypeEntry",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 56
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GroupTypeEntry",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 56
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "GroupsReader",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups.go",
@@ -122484,6 +122862,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups.go",
       "line": 21
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GroupsWriter",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 28
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GroupsWriter",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 28
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123341,6 +123733,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "ListGroupTypes",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 184
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListGroupTypes",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 184
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "ListGroups",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/groups.go",
@@ -123520,6 +123926,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/hub.go",
       "line": 1096
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListSuitableMembers",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 160
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "ListSuitableMembers",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 160
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125956,6 +126376,34 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/diagnostics_logs.go",
       "line": 123
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SuitableMemberEntry",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SuitableMemberEntry",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 62
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SuitableMembersResponse",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 70
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SuitableMembersResponse",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 70
     },
     {
       "package": "internal/north/rest/handlers",
@@ -134919,6 +135367,34 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "UpdateGroup",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 106
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "UpdateGroup",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 106
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "UpdateGroupRequest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 49
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "UpdateGroupRequest",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/groups_write.go",
+      "line": 49
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "UpdateLink",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/links.go",
@@ -136525,67 +137001,74 @@
       "identifier": "CommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 206
+      "line": 214
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 206
+      "line": 214
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorBadRequest",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 222
+      "line": 230
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorBadRequest",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 222
+      "line": 230
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorForbidden",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 227
+      "line": 235
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorForbidden",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 227
+      "line": 235
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorInternal",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 223
+      "line": 231
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorInternal",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 223
+      "line": 231
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorLocked",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 241
+      "line": 249
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorLocked",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 249
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorNotImplemented",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
       "line": 241
@@ -136595,70 +137078,63 @@
       "identifier": "CommandErrorNotImplemented",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 233
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorNotImplemented",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 233
+      "line": 241
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorRateLimited",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 236
+      "line": 244
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorRateLimited",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 236
+      "line": 244
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnauthorized",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 224
+      "line": 232
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnauthorized",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 224
+      "line": 232
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnknownCommand",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 221
+      "line": 229
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnknownCommand",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 221
+      "line": 229
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandHandler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 200
+      "line": 208
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandHandler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 200
+      "line": 208
     },
     {
       "package": "internal/north/rest/ws",
@@ -137043,14 +137519,14 @@
       "identifier": "GroupsQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 1065
+      "line": 1079
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "GroupsQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 1065
+      "line": 1079
     },
     {
       "package": "internal/north/rest/ws",
@@ -137407,14 +137883,14 @@
       "identifier": "NewCommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 215
+      "line": 223
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewCommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 215
+      "line": 223
     },
     {
       "package": "internal/north/rest/ws",
@@ -137491,14 +137967,14 @@
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 278
+      "line": 286
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 278
+      "line": 286
     },
     {
       "package": "internal/north/rest/ws",
@@ -137673,14 +138149,14 @@
       "identifier": "RegisterExtendedCommands",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 296
+      "line": 301
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "RegisterExtendedCommands",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 296
+      "line": 301
     },
     {
       "package": "internal/north/rest/ws",
@@ -137715,28 +138191,28 @@
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 454
+      "line": 462
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 454
+      "line": 462
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 258
+      "line": 266
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 258
+      "line": 266
     },
     {
       "package": "internal/north/rest/ws",
@@ -139025,6 +139501,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/groups_command_test.go",
       "line": 105
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestGroupsWSCommands",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_groups_test.go",
+      "line": 50
     },
     {
       "package": "internal/north/rest/ws",

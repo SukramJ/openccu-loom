@@ -25,6 +25,11 @@ import type {
   EnergyResponse,
   FunctionEntry,
   GroupCentralEntry,
+  GroupEntry,
+  GroupTypeEntry,
+  SuitableMembersResponse,
+  CreateGroupRequest,
+  UpdateGroupRequest,
   InboxDevice,
   ReplaceCandidate,
   InstallModeInterfaceEntry,
@@ -1161,6 +1166,40 @@ export const api = {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     const r = await request<{ entries: GroupCentralEntry[] }>(`/groups${qs}`);
     return r.entries;
+  },
+  // Heating-group administration (GR02) via the CCU jpages proxy. `central`
+  // selects the target CCU (optional when only one is configured).
+  groupTypes(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<{ types: GroupTypeEntry[] }>(`/groups/types${qs}`).then(
+      (r) => r.types,
+    );
+  },
+  groupSuitableMembers(typeId: string, central?: string) {
+    const qs =
+      `?type_id=${encodeURIComponent(typeId)}` +
+      (central ? `&central=${encodeURIComponent(central)}` : "");
+    return request<SuitableMembersResponse>(`/groups/suitable-members${qs}`);
+  },
+  createGroup(req: CreateGroupRequest, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<GroupEntry>(`/groups${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  },
+  updateGroup(id: number, req: UpdateGroupRequest, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/groups/${id}${qs}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  },
+  deleteGroup(id: number, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/groups/${id}${qs}`, { method: "DELETE" });
   },
   // --- CCU system (firmware) update ----------------------------
   getSystemUpdate() {

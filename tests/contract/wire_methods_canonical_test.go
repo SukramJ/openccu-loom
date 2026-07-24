@@ -91,6 +91,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"Interface.setValue":                     true,
 		"Interface.getValue":                     true,
 		"Interface.getMasterValue":               true,
+		"Interface.setMetadata":                  true,
 		"Interface.getDeviceDescription":         true,
 		"Interface.getLinkInfo":                  true,
 		"Interface.setLinkInfo":                  true,
