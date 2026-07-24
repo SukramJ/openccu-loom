@@ -25,6 +25,10 @@ type heatingGroupWriter interface {
 	DeleteHeatingGroup(ctx context.Context, groupID int) error
 	SuitableHeatingGroupMembers(ctx context.Context, typeID string) (backends.SuitableHeatingGroupMembers, error)
 	SetInHeatingGroupMetadata(ctx context.Context, deviceAddress string, inGroup bool) error
+	// GR03 / GR04 post-save side effects.
+	DeviceRegaID(ctx context.Context, address string) (string, error)
+	SetDeviceDisplayName(ctx context.Context, regaID, name string) error
+	SetOperateGroupOnly(ctx context.Context, regaID string, mode bool) error
 }
 
 // Poll cadence for the fire-and-poll save path (var so tests can shrink it).
@@ -136,6 +140,7 @@ func (a *GroupsDomain) Create(ctx context.Context, centralName string, in group.
 		return group.Group{}, err
 	}
 	if ok {
+		a.applyGroupDeviceSettings(ctx, w, g.ID, in.Name, in.ForbidSingleOperation, in.MemberIDs)
 		return g, nil
 	}
 	if saveErr != nil {
@@ -175,7 +180,34 @@ func (a *GroupsDomain) Update(ctx context.Context, centralName string, groupID i
 	if saveErr != nil && !errors.Is(saveErr, context.DeadlineExceeded) {
 		return saveErr
 	}
+	a.applyGroupDeviceSettings(ctx, w, groupID, in.Name, in.ForbidSingleOperation, in.MemberIDs)
 	return nil
+}
+
+// applyGroupDeviceSettings runs the GR03/GR04 post-save side effects, mirroring
+// the CCU WebUI: name the group's virtual device after the group name (GR03),
+// and set each member device's "operate only via group" flag from the group's
+// forbid_single_operation flag (GR04). It uses the operator-supplied values
+// (authoritative) rather than the just-parsed roster, which may not reflect
+// the change until the CCU settle completes. Both calls are best-effort — the
+// group is already created/edited, so a naming or flag failure must not fail
+// the operation. The virtual device serial is "INT" + the zero-padded id.
+func (a *GroupsDomain) applyGroupDeviceSettings(ctx context.Context, w heatingGroupWriter, groupID int, name string, forbidSingle bool, memberIDs []string) {
+	serial := fmt.Sprintf("INT%07d", groupID)
+	if regaID, err := w.DeviceRegaID(ctx, serial); err == nil && regaID != "" {
+		_ = w.SetDeviceDisplayName(ctx, regaID, name)
+	}
+	seen := make(map[string]bool, len(memberIDs))
+	for _, m := range memberIDs {
+		dev := deviceOf(m)
+		if dev == "" || seen[dev] {
+			continue
+		}
+		seen[dev] = true
+		if regaID, err := w.DeviceRegaID(ctx, dev); err == nil && regaID != "" {
+			_ = w.SetOperateGroupOnly(ctx, regaID, forbidSingle)
+		}
+	}
 }
 
 // Delete removes a group by id, 404-ing (ErrGroupNotFound) when the roster

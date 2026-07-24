@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -73,6 +74,12 @@ type fakeGroupWriterOps struct {
 	suitableErr error
 
 	metadataCalls []string
+
+	// GR03/GR04 recording. regaIDs maps address→ReGa id; nil synthesizes
+	// "rega-<address>" so the post-save settings still run.
+	regaIDs      map[string]string
+	setNameCalls []string
+	operateOnly  map[string]bool
 }
 
 func newFakeGroupWriterOps() *fakeGroupWriterOps {
@@ -200,6 +207,32 @@ func (f *fakeGroupWriterOps) SuitableHeatingGroupMembers(_ context.Context, _ st
 func (f *fakeGroupWriterOps) SetInHeatingGroupMetadata(_ context.Context, deviceAddress string, _ bool) error {
 	f.mu.Lock()
 	f.metadataCalls = append(f.metadataCalls, deviceAddress)
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeGroupWriterOps) DeviceRegaID(_ context.Context, address string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.regaIDs == nil {
+		return "rega-" + address, nil
+	}
+	return f.regaIDs[address], nil
+}
+
+func (f *fakeGroupWriterOps) SetDeviceDisplayName(_ context.Context, regaID, name string) error {
+	f.mu.Lock()
+	f.setNameCalls = append(f.setNameCalls, regaID+"="+name)
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeGroupWriterOps) SetOperateGroupOnly(_ context.Context, regaID string, mode bool) error {
+	f.mu.Lock()
+	if f.operateOnly == nil {
+		f.operateOnly = map[string]bool{}
+	}
+	f.operateOnly[regaID] = mode
 	f.mu.Unlock()
 	return nil
 }
@@ -423,5 +456,47 @@ func TestGroupsDomainWriterForUnsupportedBackend(t *testing.T) {
 	_, err := d.writerFor("ccu-01")
 	if !errors.Is(err, backends.ErrUnsupported) {
 		t.Fatalf("err = %v, want backends.ErrUnsupported", err)
+	}
+}
+
+// TestGroupsDomainCreateAppliesNamingAndOperateOnly verifies the GR03/GR04
+// post-save side effects: the group's virtual device is named after the group
+// (Device.setName), and every member device gets the group's
+// forbid_single_operation flag applied (Device.setOperateGroupOnly).
+func TestGroupsDomainCreateAppliesNamingAndOperateOnly(t *testing.T) {
+	t.Parallel()
+	reg := central.NewRegistry()
+	w := clientpkg.NewValueWriter()
+	fb := newFakeGroupWriterOps()
+	registerCentralWithClient(t, reg, w, "ccu-01", fb)
+
+	d := NewGroupsDomain(reg, w)
+	g, err := d.Create(context.Background(), "ccu-01", group.CreateInput{
+		Name:                  "Bad",
+		TypeID:                "hmip.heating.group",
+		ForbidSingleOperation: true,
+		MemberIDs:             []string{"000AAA0000001:1", "000BBB0000002:3"},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// GR03: the virtual device ("INT" + zero-padded id) is renamed to the group.
+	wantName := fmt.Sprintf("rega-INT%07d=Bad", g.ID)
+	found := false
+	for _, c := range fb.setNameCalls {
+		if c == wantName {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("setNameCalls = %v, want to contain %q", fb.setNameCalls, wantName)
+	}
+
+	// GR04: each member device gets operate-only = the group flag.
+	for _, dev := range []string{"000AAA0000001", "000BBB0000002"} {
+		if !fb.operateOnly["rega-"+dev] {
+			t.Errorf("operateOnly[rega-%s] = false, want true", dev)
+		}
 	}
 }

@@ -282,6 +282,48 @@ func (b *CcuBackend) SetInHeatingGroupMetadata(ctx context.Context, deviceAddres
 	return err
 }
 
+// DeviceRegaID resolves a device/serial address to its ReGa id
+// (JSON-RPC Device.getReGaIDByAddress). A CCU "noDeviceFound" (or empty)
+// result yields "" with no error — the caller treats the device as not yet
+// visible. Used to name a group's virtual device (GR03) and to toggle a
+// member's operate-only flag (GR04).
+func (b *CcuBackend) DeviceRegaID(ctx context.Context, address string) (string, error) {
+	if b.json == nil {
+		return "", ErrUnsupported
+	}
+	raw, err := b.json.Call(ctx, "Device.getReGaIDByAddress", map[string]any{"address": address})
+	if err != nil {
+		return "", err
+	}
+	id, _ := raw.(string)
+	if id == "" || id == "noDeviceFound" {
+		return "", nil
+	}
+	return id, nil
+}
+
+// SetDeviceDisplayName renames a device by ReGa id (JSON-RPC Device.setName).
+// Same wire method loom's device rename already uses, so no separate persist
+// (system.saveObjectModel) is needed.
+func (b *CcuBackend) SetDeviceDisplayName(ctx context.Context, regaID, name string) error {
+	if b.json == nil {
+		return ErrUnsupported
+	}
+	_, err := b.json.Call(ctx, "Device.setName", map[string]any{"id": regaID, "name": name})
+	return err
+}
+
+// SetOperateGroupOnly sets a device's "operate only via group" flag by ReGa
+// id (JSON-RPC Device.setOperateGroupOnly). The CCU reports the flag back as
+// the string "true"/"false".
+func (b *CcuBackend) SetOperateGroupOnly(ctx context.Context, regaID string, mode bool) error {
+	if b.json == nil {
+		return ErrUnsupported
+	}
+	_, err := b.json.Call(ctx, "Device.setOperateGroupOnly", map[string]any{"id": regaID, "mode": mode})
+	return err
+}
+
 // --- small helpers ----------------------------------------------------------
 
 func atoiSafe(s string) int {
