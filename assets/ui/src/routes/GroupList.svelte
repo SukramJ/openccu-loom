@@ -1,21 +1,24 @@
 <!--
-  Read-only heating-groups overview (GR01, roadmap "Operations &
-  multi-CCU"). Groups (HmIP / BidCos) are read from the CCU's
-  groups.gson via `CCU.getHeatingGroupList` — this view only mirrors
-  the current roster. Create/edit/delete runs through the CCU jpages
-  proxy (ADR 0055) and is a separate, not-yet-built surface; nothing
-  on this page mutates.
+  Heating-groups view (GR01 read + GR02 admin). Groups (HmIP / BidCos)
+  are read from the CCU's groups.gson via `CCU.getHeatingGroupList`;
+  create / edit / delete run through the CCU jpages proxy (ADR 0055)
+  behind the New / Edit / Delete controls. Admin-gated on the server.
 -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { GroupCentralEntry } from "$lib/api/types";
+  import type { GroupCentralEntry, GroupEntry } from "$lib/api/types";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Button from "$lib/components/ui/Button.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import GroupEditor from "$lib/components/groups/GroupEditor.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
 
@@ -55,6 +58,60 @@
   const totalGroups = $derived(
     entries.reduce((sum, e) => sum + e.groups.length, 0),
   );
+
+  // --- create / edit / delete (GR02) -----------------------------------
+  let editorOpen = $state(false);
+  let editorCentral = $state("");
+  let editorGroup = $state<GroupEntry | undefined>(undefined);
+
+  // The central a new group targets: the active filter, or the sole CCU.
+  const createCentral = $derived(
+    centralFilter || (centrals.length === 1 ? centrals[0] : ""),
+  );
+  const canCreate = $derived(centrals.length > 0);
+
+  function openCreate() {
+    if (!createCentral) {
+      toastStore.error(t("groups.select_ccu_first"));
+      return;
+    }
+    editorCentral = createCentral;
+    editorGroup = undefined;
+    editorOpen = true;
+  }
+
+  function openEdit(central: string, g: GroupEntry) {
+    editorCentral = central;
+    editorGroup = g;
+    editorOpen = true;
+  }
+
+  function closeEditor() {
+    editorOpen = false;
+    editorGroup = undefined;
+  }
+
+  async function onEditorSaved() {
+    closeEditor();
+    await load();
+  }
+
+  async function del(central: string, g: GroupEntry) {
+    const ok = await confirmStore.ask({
+      title: t("groups.delete.title"),
+      body: t("groups.delete.body", { name: g.name }),
+      confirmLabel: t("common.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteGroup(g.id, central);
+      toastStore.success(t("groups.delete.done"));
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    }
+  }
 </script>
 
 <svelte:head>
@@ -78,6 +135,12 @@
             <option value={c}>{c}</option>
           {/each}
         </select>
+      {/if}
+      {#if canCreate}
+        <Button size="sm" onclick={openCreate}>
+          <Icon name="mdi:plus" size={16} />
+          {t("groups.new")}
+        </Button>
       {/if}
     {/snippet}
   </PageHeader>
@@ -162,6 +225,25 @@
                       </ul>
                     {/if}
                   </div>
+
+                  <div class="mt-auto flex justify-end gap-2 border-t border-[var(--ha-divider-color)] pt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onclick={() => openEdit(entry.central, g)}
+                    >
+                      <Icon name="mdi:pencil" size={14} />
+                      {t("common.edit")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onclick={() => void del(entry.central, g)}
+                    >
+                      <Icon name="mdi:trash-can" size={14} />
+                      {t("common.delete")}
+                    </Button>
+                  </div>
                 </Card>
               {/each}
             </div>
@@ -169,5 +251,14 @@
         {/if}
       {/each}
     </div>
+  {/if}
+
+  {#if editorOpen}
+    <GroupEditor
+      central={editorCentral}
+      group={editorGroup}
+      onClose={closeEditor}
+      onSaved={onEditorSaved}
+    />
   {/if}
 </section>

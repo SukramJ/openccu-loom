@@ -465,6 +465,12 @@ export type SystemCCUEntry = components["schemas"]["SystemCCUEntry"];
 export type GroupCentralEntry = components["schemas"]["GroupCentralEntry"];
 export type GroupEntry = components["schemas"]["GroupEntry"];
 export type GroupMemberEntry = components["schemas"]["GroupMemberEntry"];
+export type GroupTypeEntry = components["schemas"]["GroupTypeEntry"];
+export type SuitableMemberEntry = components["schemas"]["SuitableMemberEntry"];
+export type SuitableMembersResponse =
+  components["schemas"]["SuitableMembersResponse"];
+export type CreateGroupRequest = components["schemas"]["CreateGroupRequest"];
+export type UpdateGroupRequest = components["schemas"]["UpdateGroupRequest"];
 
 // Per-device RF reception strength from `GET /diagnostics/rssi`, read from
 // the maintenance-channel RSSI_DEVICE / RSSI_PEER data points (works for HmIP
