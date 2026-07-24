@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { InboxDevice, ReplaceCandidate } from "$lib/api/types";
+  import type { InboxDevice, ReplaceCandidate, GroupEntry } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -180,6 +180,9 @@
   let acceptRooms = $state<Set<string>>(new Set());
   let acceptFunctions = $state<Set<string>>(new Set());
   let acceptSubmitting = $state(false);
+  // GR05: optionally assign the accepted device to a heating group.
+  let acceptGroups = $state<GroupEntry[]>([]);
+  let acceptGroupId = $state<number | "">("");
 
   // Replace dialog — swap a paired device for the new (inbox) one.
   // Mirrors the CCU WebUI: the action lives on the new device's row and
@@ -288,7 +291,50 @@
     acceptIncludeChannels = false;
     acceptRooms = new Set();
     acceptFunctions = new Set();
+    acceptGroups = [];
+    acceptGroupId = "";
     void loadCatalogs();
+    void loadAcceptGroups(central);
+  }
+
+  // GR05: load the target central's heating groups so the accept dialog can
+  // offer one. A failure leaves the picker empty (assignment stays optional).
+  async function loadAcceptGroups(central: string) {
+    try {
+      const entries = await api.getGroups(central);
+      acceptGroups = entries.flatMap((e) => e.groups);
+    } catch {
+      acceptGroups = [];
+    }
+  }
+
+  // Add the just-accepted device to the chosen group: find the device's
+  // channels that are assignable to the group's type and extend the roster.
+  async function assignAcceptedToGroup(deviceAddress: string, central: string) {
+    if (acceptGroupId === "") return;
+    const g = acceptGroups.find((x) => x.id === acceptGroupId);
+    if (!g) return;
+    const suitable = await api.groupSuitableMembers(g.type_id, central);
+    const channels = suitable.assignable
+      .map((m) => m.address)
+      .filter((a) => a.startsWith(deviceAddress + ":"));
+    if (channels.length === 0) {
+      toastStore.error(t("inbox.group_assign.no_channel"));
+      return;
+    }
+    const members = [
+      ...new Set([...(g.members ?? []).map((m) => m.address), ...channels]),
+    ];
+    await api.updateGroup(
+      g.id,
+      {
+        name: g.name,
+        forbid_single_operation: g.forbid_single_operation ?? false,
+        members,
+      },
+      central,
+    );
+    toastStore.success(t("inbox.group_assign.done", { group: g.name }));
   }
 
   function closeAccept() {
@@ -342,6 +388,19 @@
         Object.keys(config).length > 0 ? config : undefined,
       );
       toastStore.success(t("inbox.accepted", { name: name || address }));
+      // GR05: optional heating-group assignment. Best-effort — the device is
+      // already accepted, so a group-assign failure only warns.
+      if (acceptGroupId !== "") {
+        try {
+          await assignAcceptedToGroup(address, central);
+        } catch (err) {
+          toastStore.error(
+            err instanceof ApiError
+              ? `${err.status}: ${err.message}`
+              : t("inbox.group_assign.failed"),
+          );
+        }
+      }
       acceptTarget = null;
       await load();
     } catch (err) {
@@ -739,6 +798,32 @@
             disabled={acceptSubmitting}
           />
         </div>
+
+        {#if acceptGroups.length > 0}
+          <div class="mb-5">
+            <label class="mb-1 block text-sm font-medium" for="inbox-group">
+              {t("inbox.accept_dialog.group_label")}
+            </label>
+            <select
+              id="inbox-group"
+              class="h-10 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 text-sm text-[var(--ha-primary-text-color)]"
+              disabled={acceptSubmitting}
+              value={acceptGroupId === "" ? "" : String(acceptGroupId)}
+              onchange={(e) => {
+                const v = (e.currentTarget as HTMLSelectElement).value;
+                acceptGroupId = v === "" ? "" : Number(v);
+              }}
+            >
+              <option value="">{t("inbox.accept_dialog.group_none")}</option>
+              {#each acceptGroups as g (g.id)}
+                <option value={String(g.id)}>{g.name}</option>
+              {/each}
+            </select>
+            <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">
+              {t("inbox.accept_dialog.group_hint")}
+            </p>
+          </div>
+        {/if}
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
