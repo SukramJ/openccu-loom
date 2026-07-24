@@ -1,6 +1,6 @@
 # CCU-WebUI Groups Wave (Welle 2) — Status & Handoff
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 Status of the **Gruppenverwaltung** wave (heating groups, GR01–GR05)
 from [`ccu-webui-gap-analysis.md`](./ccu-webui-gap-analysis.md) §4.3 / §7.
@@ -118,18 +118,59 @@ selection via the jpages proxy. The wire shapes below were reconstructed
 from the shipped, readable jpages page template `GroupEditPage.ftl` and the
 request/response bodies observed on the live `/pages/jpages/group/*` calls.
 
+### Live re-verification (2026-07-24)
+
+Re-checked before committing to the GR02 build, against the current
+firmware on `172.18.4.39` (reads only, no mutation) and the present code:
+
+- **Transport is already wired per central.** `CcuBackend` carries
+  `baseURL` + `sessionIDFn` (`internal/client/backends/ccu.go`), populated
+  at start-up by `ccuBackend.SetDownloadFirmwareTransport(...)` in
+  `internal/central/adapter/ccu_wiring.go`. GR02 needs **no new transport
+  wiring** — it POSTs to the jpages paths on the same base URL + session.
+- **The save/delete request contract matches the firmware template
+  verbatim** (`GroupEditPage.ftl` lines ~529–542: `groupName=escape(...)`,
+  `groupTypeId`, `forbidSingleOperation`, `assignedDevicesIds`,
+  `isNewGroup`, `groupDeviceName`, `groupId` for edit; `GroupListPage.ftl`
+  ~153–155: `delete` with `{ groupId }`).
+- **HMServer (port 9292) is up and every CRUD endpoint exists and is
+  session-gated.** A `POST …?sid=<dummy>` to `group/{list,save,create,
+  delete,suitableGroupMembers,configureDevices,assignedGroupMembers}` all
+  return HTTP 200 with a **session-invalid** JSON body — confirming ADR
+  0055's load-bearing assumption that a valid JSON-RPC `sid` is all that is
+  required. (`getAllAssignableGroupTypes` returned **404**; see the
+  corrections below.)
+
+**Two corrections to the reconstructed shapes** (the live firmware differs
+from the earlier reconstruction):
+
+1. **Response shape.** The reply is
+   `{ "isSuccessful": true|false, "errorCode": "…", "content": "…" }` — not
+   `{ "valid": … }`. GR02 must key on `isSuccessful`. An invalid/expired
+   session returns `errorCode:"42"` with an HTML login-redirect in
+   `content`; the backend should map that to `ErrAuthFailure` and trigger a
+   JSON-RPC re-login + retry rather than surfacing it as a group error.
+2. **Group-type list source is unconfirmed.**
+   `group/getAllAssignableGroupTypes` 404s on this firmware, so the
+   create-form type list comes from somewhere else (likely a field of the
+   `suitableGroupMembers` / `list` response, or a ReGa/JSON-RPC call). This
+   is the one shape that still needs a **valid-session** live read before
+   the GR02 form is fixed (login → `list` / `suitableGroupMembers` with a
+   real `sid`).
+
 ### jpages endpoints
 
-All are `POST … ?sid=<JSON-RPC session>` with a `JSON.stringify` body and
-a `JsonResponse` reply (`{ "valid": true|false }`;
-`getValidResponse` / `getInvalidResponse` / `getSessionInvalidResponse`).
+All are `POST … ?sid=<JSON-RPC session>` with a `JSON.stringify` body.
+The reply is a JSON object `{ "isSuccessful": bool, "errorCode": str,
+"content": str }` (live-verified 2026-07-24; the earlier `{ "valid": … }`
+reconstruction is superseded). `errorCode:"42"` == invalid session.
 
 | Endpoint | Request body | Purpose |
 |---|---|---|
 | `/pages/jpages/group/save` | `{ groupName, groupTypeId, forbidSingleOperation, assignedDevicesIds: [memberId…], isNewGroup, groupDeviceName, groupId? }` | create (`isNewGroup:true`) **and** edit (`groupId` set) |
 | `/pages/jpages/group/delete` | `{ groupId }` | delete |
 | `/pages/jpages/group/suitableGroupMembers` | `{ groupTypeId }` | assignable + leftover members for a type |
-| `/pages/jpages/group/getAllAssignableGroupTypes` | — | group-type list for the create form |
+| `/pages/jpages/group/getAllAssignableGroupTypes` | — | group-type list for the create form — **404 on the 2026-07-24 live check**; the type list source is unconfirmed (see corrections above) |
 | `/pages/jpages/group/list` | filter object | HMServer's *structured* group list (richer than `getHeatingGroupList`; not needed for GR01) |
 
 Field notes from `GroupEditPage.ftl` (the `save()` view-model):
@@ -152,10 +193,13 @@ field names are taken straight from the observed responses.
 ### GR02 implementation plan
 
 1. **Backend (no new transport wiring).** Add
-   `SaveGroup / DeleteGroup / SuitableGroupMembers / AssignableGroupTypes`
+   `SaveGroup / DeleteGroup / SuitableGroupMembers / GroupTypes`
    to `CcuBackend`, POSTing to the jpages paths using the **existing**
    `b.baseURL` + `b.sessionIDFn()` already set for the firmware download
-   path — the ADR 0055 session finding is what makes this free.
+   path — the ADR 0055 session finding (re-verified 2026-07-24) is what
+   makes this free. Parse the reply on `isSuccessful`; treat
+   `errorCode:"42"` as an expired session (`ErrAuthFailure`) and let the
+   session-managed transport re-login + retry.
 2. **Adapter.** Extend `internal/central/adapter` `GroupsDomain` with the
    write methods (resolve primary backend → jpages call).
 3. **REST.** `POST /api/v1/groups`, `PUT /api/v1/groups/{id}`,
