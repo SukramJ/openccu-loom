@@ -39,7 +39,7 @@ func (s *stubCentralLinksService) RemoveCentralLinks(_ context.Context, _, chann
 	return s.removeReport, s.removeErr
 }
 
-func (s *stubCentralLinksService) CentralLinksStatus(_ string) (CentralLinksStatus, error) {
+func (s *stubCentralLinksService) CentralLinksStatus(_ context.Context, _ string) (CentralLinksStatus, error) {
 	return s.statusResult, s.statusErr
 }
 

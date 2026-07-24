@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.0
+
+- **Central links now show whether they are active.** The central click-event
+  panel (device detail → Direct links) reads the CCU state and marks each
+  button channel active or inactive, with a device-wide active count — so you
+  can see at a glance which channels forward their press events to the central.
+  Reflects changes made in the CCU WebUI too.
+
 ## 0.47.4
 
 - **Rooms & functions are now picked from a searchable dropdown** (device and

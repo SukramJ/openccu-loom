@@ -403,6 +403,10 @@ export type CentralLinksChannelStatus = {
   address: string;
   number: number;
   eligible: boolean;
+  // True when the CCU report-value-usage counter for the channel is raised
+  // (a central link exists). Only meaningful when the enclosing status has
+  // active_state_known set.
+  active?: boolean;
 };
 
 export type CentralLinksStatus = {
@@ -410,6 +414,11 @@ export type CentralLinksStatus = {
   reason?: string;
   eligible_channels?: number;
   channels?: CentralLinksChannelStatus[];
+  // True when the daemon could read the CCU-side report-value-usage metadata,
+  // so each channel's `active` flag reflects the live CCU state.
+  active_state_known?: boolean;
+  // Count of eligible channels whose central link is currently active.
+  active_channels?: number;
 };
 
 export type CentralLinksReport = {

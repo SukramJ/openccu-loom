@@ -134,7 +134,7 @@ func TestChannelHasPressEventsWithoutPressParams(t *testing.T) {
 func TestCentralLinksStatusNilRegistryError(t *testing.T) {
 	t.Parallel()
 	d := NewCentralLinksDomain(nil, nil)
-	_, err := d.CentralLinksStatus("DEV001")
+	_, err := d.CentralLinksStatus(context.Background(), "DEV001")
 	if !errors.Is(err, ErrNoCentralLinkBackend) {
 		t.Fatalf("err = %v, want ErrNoCentralLinkBackend", err)
 	}
@@ -152,7 +152,7 @@ func TestCentralLinksStatusDeviceNotFound(t *testing.T) {
 	_ = reg.Register(c)
 
 	d := NewCentralLinksDomain(reg, nil)
-	_, sErr := d.CentralLinksStatus("MISSING_DEV")
+	_, sErr := d.CentralLinksStatus(context.Background(), "MISSING_DEV")
 	if !errors.Is(sErr, ErrNoCentralLinkBackend) {
 		t.Fatalf("err = %v, want ErrNoCentralLinkBackend", sErr)
 	}
@@ -178,7 +178,7 @@ func TestCentralLinksStatusUnsupportedInterface(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	d := NewCentralLinksDomain(reg, nil)
-	status, sErr := d.CentralLinksStatus("CUX0001")
+	status, sErr := d.CentralLinksStatus(context.Background(), "CUX0001")
 	if sErr != nil {
 		t.Fatalf("CentralLinksStatus: %v", sErr)
 	}
@@ -224,7 +224,7 @@ func TestCentralLinksStatusSupportedDevice(t *testing.T) {
 	c.ModelRegistry.Put(dev)
 
 	d := NewCentralLinksDomain(reg, nil)
-	status, sErr := d.CentralLinksStatus("BRF0001")
+	status, sErr := d.CentralLinksStatus(context.Background(), "BRF0001")
 	if sErr != nil {
 		t.Fatalf("CentralLinksStatus: %v", sErr)
 	}
@@ -233,6 +233,11 @@ func TestCentralLinksStatusSupportedDevice(t *testing.T) {
 	}
 	if status.EligibleChannels != 1 {
 		t.Errorf("EligibleChannels = %d, want 1", status.EligibleChannels)
+	}
+	// No writer wired → no metadata read path → the live active state is
+	// unknown, so clients fall back to eligibility only.
+	if status.ActiveStateKnown {
+		t.Error("ActiveStateKnown = true without a writer, want false")
 	}
 }
 
@@ -617,7 +622,7 @@ func TestCentralLinksNamedChannelWithoutPressEvents(t *testing.T) {
 func TestCentralLinksStatusListsChannels(t *testing.T) {
 	t.Parallel()
 	d, _ := buildTwoPressChannelDomain(t)
-	status, err := d.CentralLinksStatus("CHFILT01")
+	status, err := d.CentralLinksStatus(context.Background(), "CHFILT01")
 	if err != nil {
 		t.Fatalf("CentralLinksStatus: %v", err)
 	}
@@ -631,6 +636,14 @@ func TestCentralLinksStatusListsChannels(t *testing.T) {
 		if !ch.Eligible {
 			t.Errorf("channel %s: Eligible = false, want true", ch.Address)
 		}
+	}
+	// The fake backend resolves (writer wired) but reports empty metadata, so
+	// the active state is known yet no channel is active.
+	if !status.ActiveStateKnown {
+		t.Error("ActiveStateKnown = false, want true (backend resolved)")
+	}
+	if status.ActiveChannels != 0 {
+		t.Errorf("ActiveChannels = %d, want 0 (empty metadata)", status.ActiveChannels)
 	}
 }
 
@@ -801,5 +814,86 @@ func TestCentralLinksRemoveMixedChannelFailureContinuesToNextChannel(t *testing.
 	}
 	if vids := b.valueIDsFor("CHFILT01:2"); len(vids) != 2 || vids[0] != "PRESS_SHORT" || vids[1] != "PRESS_LONG" {
 		t.Errorf("channel :2 value-ids = %v, want [PRESS_SHORT PRESS_LONG] (sibling channel unaffected)", vids)
+	}
+}
+
+// ============================================================
+// CentralLinksStatus active-state resolution tests
+// ============================================================
+
+// metadataFakeBackend embeds the full fake operations surface and returns a
+// per-channel-address metadata struct from getMetadata, so the active-state
+// resolution in CentralLinksStatus can be exercised without a live CCU. A
+// non-nil err makes every read fail (to prove read errors are tolerated).
+type metadataFakeBackend struct {
+	paramsetFakeOps
+	byAddress map[string]any
+	err       error
+}
+
+func (b *metadataFakeBackend) GetMetadata(_ context.Context, address, dataID string) (any, error) {
+	if b.err != nil {
+		return nil, b.err
+	}
+	if dataID != reportValueUsageDataID {
+		return nil, nil
+	}
+	return b.byAddress[address], nil
+}
+
+// TestCentralLinksStatusReportsActiveFromMetadata verifies that the status
+// reads the CCU report-value-usage metadata per eligible channel and marks a
+// channel active exactly when its PRESS_SHORT counter is raised.
+func TestCentralLinksStatusReportsActiveFromMetadata(t *testing.T) {
+	t.Parallel()
+	b := &metadataFakeBackend{byAddress: map[string]any{
+		"CHFILT01:1": map[string]any{"PRESS_SHORT": 1, "PRESS_LONG": 0},
+		"CHFILT01:2": map[string]any{"PRESS_SHORT": 0},
+	}}
+	d := buildTwoPressChannelDomainWithBackend(t, b)
+	status, err := d.CentralLinksStatus(context.Background(), "CHFILT01")
+	if err != nil {
+		t.Fatalf("CentralLinksStatus: %v", err)
+	}
+	if !status.ActiveStateKnown {
+		t.Error("ActiveStateKnown = false, want true")
+	}
+	if status.ActiveChannels != 1 {
+		t.Errorf("ActiveChannels = %d, want 1", status.ActiveChannels)
+	}
+	active := map[string]bool{}
+	for _, ch := range status.Channels {
+		active[ch.Address] = ch.Active
+	}
+	if !active["CHFILT01:1"] {
+		t.Error("CHFILT01:1 must be active (PRESS_SHORT counter raised)")
+	}
+	if active["CHFILT01:2"] {
+		t.Error("CHFILT01:2 must be inactive (PRESS_SHORT counter zero)")
+	}
+}
+
+// TestCentralLinksStatusMetadataErrorTreatedInactive verifies that a
+// getMetadata read error is tolerated: the active state stays known (the
+// backend has a read path) but every channel is reported inactive rather than
+// failing the whole status.
+func TestCentralLinksStatusMetadataErrorTreatedInactive(t *testing.T) {
+	t.Parallel()
+	b := &metadataFakeBackend{err: errors.New("getMetadata boom")}
+	d := buildTwoPressChannelDomainWithBackend(t, b)
+	status, err := d.CentralLinksStatus(context.Background(), "CHFILT01")
+	if err != nil {
+		t.Fatalf("CentralLinksStatus: %v", err)
+	}
+	if !status.ActiveStateKnown {
+		t.Error("ActiveStateKnown = false, want true (backend has a read path)")
+	}
+	if status.ActiveChannels != 0 {
+		t.Errorf("ActiveChannels = %d, want 0 on read error", status.ActiveChannels)
+	}
+	for _, ch := range status.Channels {
+		if ch.Active {
+			t.Errorf("channel %s active despite read error", ch.Address)
+		}
 	}
 }

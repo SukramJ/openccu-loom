@@ -404,3 +404,44 @@ describe("CentralLinksPanel — status rendering edge cases", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });
+
+describe("CentralLinksPanel — active state", () => {
+  const ACTIVE_STATUS = {
+    supported: true,
+    eligible_channels: 2,
+    active_state_known: true,
+    active_channels: 1,
+    channels: [
+      { address: "ABC0000001:4", number: 4, eligible: true, active: true },
+      { address: "ABC0000001:5", number: 5, eligible: true, active: false },
+    ],
+  };
+
+  it("shows the active-count badge and per-channel active/inactive when known", async () => {
+    mockStatus.mockResolvedValue(ACTIVE_STATUS);
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("central.active_count")).toBeInTheDocument();
+    });
+    expect(screen.getByText("central.active")).toBeInTheDocument();
+    expect(screen.getByText("central.inactive")).toBeInTheDocument();
+  });
+
+  it("omits the active indicators when the state is unknown", async () => {
+    mockStatus.mockResolvedValue({
+      supported: true,
+      eligible_channels: 1,
+      active_state_known: false,
+      channels: [{ address: "ABC0000001:4", number: 4, eligible: true }],
+    });
+    render(CentralLinksPanel, { props: { address: "ABC0000001" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("central.per_channel")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("central.active_count")).toBeNull();
+    expect(screen.queryByText("central.active")).toBeNull();
+    expect(screen.queryByText("central.inactive")).toBeNull();
+  });
+});

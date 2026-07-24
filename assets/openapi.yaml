@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.51.0
+  version: 2.52.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10025,6 +10025,19 @@ components:
             entry per eligible (press-event) channel, letting clients
             offer a per-channel toggle alongside the device-wide one.
           items: { $ref: "#/components/schemas/CentralLinksChannelStatus" }
+        active_state_known:
+          type: boolean
+          description: |
+            True when the daemon could read the CCU-side report-value-usage
+            metadata, so each channel's `active` flag reflects the live CCU
+            state. False when the backend has no metadata read path (or the
+            read failed device-wide); clients then show eligibility only,
+            without an active/inactive indicator.
+        active_channels:
+          type: integer
+          description: |
+            Count of eligible channels whose central link is currently
+            active. Only meaningful when `active_state_known` is true.
 
     CentralLinksChannelStatus:
       type: object
@@ -10034,6 +10047,12 @@ components:
         address: { type: string }
         number: { type: integer }
         eligible: { type: boolean }
+        active:
+          type: boolean
+          description: |
+            True when the CCU's report-value-usage counter for the channel is
+            currently raised (a central link exists). Only meaningful when the
+            enclosing status has `active_state_known` set.
 
     # ---- Calculated data points ----
     CalculatedDPSummary:

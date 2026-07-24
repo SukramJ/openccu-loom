@@ -1848,6 +1848,9 @@ const EN: Catalog = {
   "central.unsupported":
     "This interface has no concept of central event routing.",
   "central.eligible": "press channels",
+  "central.active": "Active",
+  "central.inactive": "Inactive",
+  "central.active_count": "{count} active",
   "central.enable": "Enable",
   "central.disable": "Disable",
   "central.unsupported_badge": "unsupported",
@@ -4813,6 +4816,9 @@ const DE: Catalog = {
   "central.unsupported":
     "Diese Schnittstelle unterstützt kein Event-Routing zur Zentrale.",
   "central.eligible": "Tasten-Kanäle",
+  "central.active": "Aktiv",
+  "central.inactive": "Inaktiv",
+  "central.active_count": "{count} aktiv",
   "central.enable": "Aktivieren",
   "central.disable": "Deaktivieren",
   "central.unsupported_badge": "nicht unterstützt",
