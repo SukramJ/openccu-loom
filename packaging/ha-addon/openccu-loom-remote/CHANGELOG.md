@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.47.4
+
+Version ride-along. No changes to the proxy itself; the fixes ship in the
+paired instance (room/function combobox with inline create, iPad diagram
+channel picker) — update the instance to 0.47.4 too.
+
 # 0.47.3
 
 Version ride-along. No changes to the proxy itself; the fixes ship in the

@@ -6,6 +6,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.47.4]
+
+### Changed
+
+- **Room / function assignment is now a searchable combobox with inline
+  create.** The device- and channel-level room / function editors in the
+  device detail view and the inbox accept dialog no longer take a
+  comma-separated free-text string. Instead each shows the current
+  assignment as removable chips and a search field that filters the CCU's
+  existing rooms / functions in an inline dropdown; when the typed text
+  matches no existing entry, a "+ create" action adds a brand-new room /
+  function on the spot (`POST /rooms` / `POST /functions`) and assigns it.
+  The dropdown is a plain inline list (not a portaled popover) and flips
+  above the field when the viewport has more room there — so it stays
+  reliable on touch devices and inside the scrolling accept dialog. Each
+  add / remove persists immediately with an optimistic update that rolls
+  back on a CCU error.
+
+### Fixed
+
+- **Diagram series channel picker did not work on iPad.** The channel and
+  value steps used a custom portaled dropdown whose taps iOS Safari did not
+  register; they are now native selects (the reliable iOS wheel picker),
+  matching the device step's touch-friendly behaviour.
+
 ## [0.47.3]
 
 ### Changed

@@ -7,6 +7,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import RoomFunctionSelect from "$lib/components/RoomFunctionSelect.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
@@ -294,19 +295,21 @@
     acceptTarget = null;
   }
 
-  // Set mutations must reassign so the rune re-tracks the value.
-  function toggleRoom(name: string) {
-    const next = new Set(acceptRooms);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
-    acceptRooms = next;
+  // The combobox may create a brand-new CCU room / function on the spot;
+  // append it to the catalogue so it renders immediately as selected.
+  async function createRoomOption(name: string) {
+    await api.createRoom(name, acceptTarget?.central);
+    if (!roomOptions.includes(name))
+      roomOptions = [...roomOptions, name].sort((a, b) => a.localeCompare(b));
+    toastStore.success(t("roomfn.created.room"));
   }
-
-  function toggleFunction(name: string) {
-    const next = new Set(acceptFunctions);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
-    acceptFunctions = next;
+  async function createFunctionOption(name: string) {
+    await api.createFunction(name, acceptTarget?.central);
+    if (!functionOptions.includes(name))
+      functionOptions = [...functionOptions, name].sort((a, b) =>
+        a.localeCompare(b),
+      );
+    toastStore.success(t("roomfn.created.function"));
   }
 
   async function confirmAccept() {
@@ -707,50 +710,34 @@
 
         <div class="mb-4">
           <span class="mb-1 block text-sm font-medium">{t("inbox.accept_dialog.rooms_label")}</span>
-          {#if roomOptions.length === 0}
-            <p class="text-sm" style="color: var(--ha-secondary-text-color);">
-              {t("inbox.accept_dialog.no_rooms")}
-            </p>
-          {:else}
-            <div class="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border border-[var(--ha-divider-color)] p-2">
-              {#each roomOptions as room (room)}
-                <label class="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={acceptRooms.has(room)}
-                    onchange={() => toggleRoom(room)}
-                    disabled={acceptSubmitting}
-                    class="h-4 w-4 rounded border-[var(--ha-divider-color)] text-brand-600 focus:ring-brand-500"
-                  />
-                  {room}
-                </label>
-              {/each}
-            </div>
-          {/if}
+          <RoomFunctionSelect
+            id="inbox-rooms"
+            ariaLabel={t("inbox.accept_dialog.rooms_label")}
+            selected={Array.from(acceptRooms)}
+            options={roomOptions}
+            onChange={(next) => (acceptRooms = new Set(next))}
+            onCreate={createRoomOption}
+            placeholder={t("roomfn.placeholder.room")}
+            createLabel={(v) => t("roomfn.create.room", { name: v })}
+            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            disabled={acceptSubmitting}
+          />
         </div>
 
         <div class="mb-5">
           <span class="mb-1 block text-sm font-medium">{t("inbox.accept_dialog.functions_label")}</span>
-          {#if functionOptions.length === 0}
-            <p class="text-sm" style="color: var(--ha-secondary-text-color);">
-              {t("inbox.accept_dialog.no_functions")}
-            </p>
-          {:else}
-            <div class="flex max-h-36 flex-wrap gap-2 overflow-y-auto rounded-md border border-[var(--ha-divider-color)] p-2">
-              {#each functionOptions as fn (fn)}
-                <label class="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={acceptFunctions.has(fn)}
-                    onchange={() => toggleFunction(fn)}
-                    disabled={acceptSubmitting}
-                    class="h-4 w-4 rounded border-[var(--ha-divider-color)] text-brand-600 focus:ring-brand-500"
-                  />
-                  {fn}
-                </label>
-              {/each}
-            </div>
-          {/if}
+          <RoomFunctionSelect
+            id="inbox-functions"
+            ariaLabel={t("inbox.accept_dialog.functions_label")}
+            selected={Array.from(acceptFunctions)}
+            options={functionOptions}
+            onChange={(next) => (acceptFunctions = new Set(next))}
+            onCreate={createFunctionOption}
+            placeholder={t("roomfn.placeholder.function")}
+            createLabel={(v) => t("roomfn.create.function", { name: v })}
+            removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            disabled={acceptSubmitting}
+          />
         </div>
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

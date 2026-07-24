@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, screen, fireEvent } from "@testing-library/svelte";
+import { render, cleanup, waitFor, screen, fireEvent, within } from "@testing-library/svelte";
 
 // ---------------------------------------------------------------------------
 // Mutable mock fns
@@ -139,8 +139,9 @@ async function openDialog() {
   });
   await fireEvent.click(screen.getByText("inbox.accept"));
   await waitFor(() => {
-    expect(screen.getByText("Kitchen")).toBeInTheDocument();
-    expect(screen.getByText("Lights")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("inbox.accept_dialog.rooms_label"),
+    ).toBeInTheDocument();
   });
 }
 
@@ -153,6 +154,19 @@ function checkboxNextTo(label: string): HTMLInputElement {
   const input = el.querySelector('input[type="checkbox"]');
   if (!input) throw new Error(`no checkbox found next to label ${label}`);
   return input as HTMLInputElement;
+}
+
+// Selects a catalogue entry through the RoomFunctionSelect combobox: type into
+// the input (id "inbox-rooms" / "inbox-functions"), then click its option.
+async function pickFromCombo(comboId: string, option: string) {
+  const input = document.getElementById(comboId) as HTMLInputElement;
+  await fireEvent.input(input, { target: { value: option } });
+  const list = await waitFor(() => {
+    const el = document.getElementById(`${comboId}-list`);
+    if (!el) throw new Error(`combobox ${comboId} did not open`);
+    return el;
+  });
+  await fireEvent.click(within(list).getByRole("option", { name: option }));
 }
 
 // ---------------------------------------------------------------------------
@@ -182,8 +196,8 @@ describe("Inbox — accept dialog config payload", () => {
     expect(includeChannels.disabled).toBe(false); // enabled now that a name is set
     await fireEvent.click(includeChannels);
 
-    await fireEvent.click(checkboxNextTo("Kitchen"));
-    await fireEvent.click(checkboxNextTo("Lights"));
+    await pickFromCombo("inbox-rooms", "Kitchen");
+    await pickFromCombo("inbox-functions", "Lights");
 
     await fireEvent.click(submitButton());
 
@@ -211,12 +225,14 @@ describe("Inbox — accept dialog config payload", () => {
     expect(checkboxNextTo("inbox.accept_dialog.include_channels").disabled).toBe(true);
   });
 
-  it("un-checking a previously selected room drops it from the payload", async () => {
+  it("removing a previously selected room drops it from the payload", async () => {
     await openDialog();
 
-    const kitchenCheckbox = checkboxNextTo("Kitchen");
-    await fireEvent.click(kitchenCheckbox); // select
-    await fireEvent.click(kitchenCheckbox); // deselect again
+    await pickFromCombo("inbox-rooms", "Kitchen"); // select → chip
+    // Remove the chip via its ✕ button.
+    await fireEvent.click(
+      screen.getByRole("button", { name: "roomfn.remove_named" }),
+    );
 
     await fireEvent.click(submitButton());
 
@@ -251,10 +267,13 @@ describe("Inbox — accept dialog config payload", () => {
         expect.stringContaining("inbox.accept_dialog.catalog_error"),
       );
     });
-    // The dialog itself must still be usable — no rooms/functions to pick,
-    // but a plain accept goes through.
+    // The dialog itself must still be usable — the combobox renders with an
+    // empty catalogue (the operator could still create/type), and a plain
+    // accept goes through.
     await waitFor(() => {
-      expect(screen.getByText("inbox.accept_dialog.no_rooms")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("inbox.accept_dialog.rooms_label"),
+      ).toBeInTheDocument();
     });
     await fireEvent.click(submitButton());
     await waitFor(() => {

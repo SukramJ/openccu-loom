@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.47.4
+
+- **Rooms & functions are now picked from a searchable dropdown** (device and
+  channel detail + the inbox accept dialog) instead of a comma-separated text
+  field — with a "+ create" option to add a brand-new room / function on the
+  spot. Selections show as removable chips and save immediately.
+- **Fixed: the diagram channel picker now works on iPad** — the channel and
+  value dropdowns are native selects (iOS wheel picker) that register taps
+  reliably.
+
 ## 0.47.3
 
 - **Fixed umlauts in program condition/activity summaries** (rendered as `�`,

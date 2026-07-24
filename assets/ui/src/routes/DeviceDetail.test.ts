@@ -11,6 +11,10 @@ const {
   mockRenameChannel,
   mockSetChannelRooms,
   mockSetChannelFunctions,
+  mockListRooms,
+  mockListFunctions,
+  mockCreateRoom,
+  mockCreateFunction,
   mockDeleteDevice,
   mockListLinks,
   mockListPrograms,
@@ -28,6 +32,10 @@ const {
   mockRenameChannel: vi.fn(),
   mockSetChannelRooms: vi.fn(),
   mockSetChannelFunctions: vi.fn(),
+  mockListRooms: vi.fn(),
+  mockListFunctions: vi.fn(),
+  mockCreateRoom: vi.fn(),
+  mockCreateFunction: vi.fn(),
   mockDeleteDevice: vi.fn(),
   mockListLinks: vi.fn(),
   mockListPrograms: vi.fn(),
@@ -48,6 +56,10 @@ vi.mock("$lib/api/client", () => ({
     renameChannel: (...args: unknown[]) => mockRenameChannel(...args),
     setChannelRooms: (...args: unknown[]) => mockSetChannelRooms(...args),
     setChannelFunctions: (...args: unknown[]) => mockSetChannelFunctions(...args),
+    listRooms: (...args: unknown[]) => mockListRooms(...args),
+    listFunctions: (...args: unknown[]) => mockListFunctions(...args),
+    createRoom: (...args: unknown[]) => mockCreateRoom(...args),
+    createFunction: (...args: unknown[]) => mockCreateFunction(...args),
     deleteDevice: (...args: unknown[]) => mockDeleteDevice(...args),
     listLinks: (...args: unknown[]) => mockListLinks(...args),
     listPrograms: (...args: unknown[]) => mockListPrograms(...args),
@@ -128,6 +140,17 @@ beforeEach(() => {
   mockRenameChannel.mockResolvedValue(undefined);
   mockSetChannelRooms.mockResolvedValue(undefined);
   mockSetChannelFunctions.mockResolvedValue(undefined);
+  mockListRooms.mockResolvedValue([
+    { name: "Wohnzimmer" },
+    { name: "Küche" },
+    { name: "Bad" },
+  ]);
+  mockListFunctions.mockResolvedValue([
+    { name: "Licht" },
+    { name: "Heizung" },
+  ]);
+  mockCreateRoom.mockResolvedValue({ id: 9, name: "created" });
+  mockCreateFunction.mockResolvedValue({ id: 9, name: "created" });
   mockDeleteDevice.mockResolvedValue(undefined);
   mockListLinks.mockResolvedValue([]);
   mockListPrograms.mockResolvedValue([]);
@@ -607,84 +630,109 @@ describe("DeviceDetail — channel room/function assignment", () => {
     });
   }
 
-  it("renders the channel's current room and function assignment", async () => {
+  it("renders the channel's current assignment as chips", async () => {
     await openConfigureTab();
     expect(within(assignmentRow("channel.rooms:")).getByText("Wohnzimmer")).toBeInTheDocument();
     expect(within(assignmentRow("channel.functions:")).getByText("Licht")).toBeInTheDocument();
   });
 
-  it("renders common.none when a channel carries no room/function assignment", async () => {
+  it("shows an empty combobox (no chips) when a channel has no assignment", async () => {
     await openConfigureTab({
       channels: [
         { address: "0001ABCD:1", number: 1, type: "SWITCH", name: "Kanal 1", data_points_count: 0 },
       ],
     });
-    expect(within(assignmentRow("channel.rooms:")).getByText("common.none")).toBeInTheDocument();
-    expect(within(assignmentRow("channel.functions:")).getByText("common.none")).toBeInTheDocument();
+    const roomsInput = screen.getByLabelText("channel.rooms") as HTMLInputElement;
+    expect(roomsInput.value).toBe("");
+    expect(
+      within(assignmentRow("channel.rooms:")).queryByText("Wohnzimmer"),
+    ).not.toBeInTheDocument();
   });
 
-  it("opens the rooms editor prefilled with the current assignment and commits on save", async () => {
+  it("adds a room from the catalogue and persists the extended set", async () => {
     await openConfigureTab();
-    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
-
     const input = screen.getByLabelText("channel.rooms") as HTMLInputElement;
-    expect(input.value).toBe("Wohnzimmer");
+    await fireEvent.input(input, { target: { value: "Küche" } });
 
-    await fireEvent.input(input, { target: { value: "Wohnzimmer, Küche" } });
-    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+    const option = await within(assignmentRow("channel.rooms:")).findByRole(
+      "option",
+      { name: "Küche" },
+    );
+    await fireEvent.click(option);
 
     await waitFor(() => {
-      expect(mockSetChannelRooms).toHaveBeenCalledWith("0001ABCD", 1, ["Wohnzimmer", "Küche"]);
+      expect(mockSetChannelRooms).toHaveBeenCalledWith("0001ABCD", 1, [
+        "Wohnzimmer",
+        "Küche",
+      ]);
     });
     expect(mockToastSuccess).toHaveBeenCalledWith("channel.rooms_updated");
-    await waitFor(() => expect(mockGetDevice).toHaveBeenCalledTimes(2));
+    // Optimistic update — no re-fetch of the whole device on success.
+    expect(mockGetDevice).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the functions editor prefilled with the current assignment and commits on save", async () => {
+  it("removes a function chip and persists the reduced set", async () => {
     await openConfigureTab();
+    const row = assignmentRow("channel.functions:");
     await fireEvent.click(
-      within(assignmentRow("channel.functions:")).getByRole("button", { name: "common.edit" }),
+      within(row).getByRole("button", { name: "roomfn.remove_named" }),
     );
 
-    const input = screen.getByLabelText("channel.functions") as HTMLInputElement;
-    expect(input.value).toBe("Licht");
-
-    await fireEvent.input(input, { target: { value: "Heizung" } });
-    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
-
     await waitFor(() => {
-      expect(mockSetChannelFunctions).toHaveBeenCalledWith("0001ABCD", 1, ["Heizung"]);
+      expect(mockSetChannelFunctions).toHaveBeenCalledWith("0001ABCD", 1, []);
     });
     expect(mockToastSuccess).toHaveBeenCalledWith("channel.functions_updated");
   });
 
-  it("shows an error toast and keeps the rooms editor open when the write fails", async () => {
+  it("rolls back the optimistic chip and toasts when the write fails", async () => {
     mockSetChannelRooms.mockRejectedValueOnce(new Error("ccu unreachable"));
     await openConfigureTab();
-    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
-    await fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+    const input = screen.getByLabelText("channel.rooms") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "Bad" } });
+    const option = await within(assignmentRow("channel.rooms:")).findByRole(
+      "option",
+      { name: "Bad" },
+    );
+    await fireEvent.click(option);
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("ccu unreachable");
     });
-    // Editor stays open on failure — no silent fallback / no silent close.
-    expect(screen.getByLabelText("channel.rooms")).toBeInTheDocument();
-    expect(mockGetDevice).toHaveBeenCalledTimes(1);
+    // The optimistic "Bad" chip is rolled back — exactly one chip (the
+    // original "Wohnzimmer") remains. ("Bad" reappears as a dropdown *option*,
+    // so assert on the chip remove-buttons rather than on the text.)
+    await waitFor(() => {
+      expect(
+        within(assignmentRow("channel.rooms:")).getAllByRole("button", {
+          name: "roomfn.remove_named",
+        }),
+      ).toHaveLength(1);
+    });
+    expect(
+      within(assignmentRow("channel.rooms:")).getByText("Wohnzimmer"),
+    ).toBeInTheDocument();
   });
 
-  it("cancels the rooms editor via the × button without calling the API", async () => {
+  it("creates a brand-new room on the spot and assigns it", async () => {
     await openConfigureTab();
-    await fireEvent.click(within(assignmentRow("channel.rooms:")).getByRole("button", { name: "common.edit" }));
-    await waitFor(() => {
-      expect(screen.getByLabelText("channel.rooms")).toBeInTheDocument();
-    });
+    const input = screen.getByLabelText("channel.rooms") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "Flur" } });
 
-    await fireEvent.click(screen.getByRole("button", { name: "×" }));
+    // "Flur" is not in the catalogue → the create affordance is offered.
+    const createBtn = await screen.findByRole("button", {
+      name: "roomfn.create.room",
+    });
+    await fireEvent.click(createBtn);
 
     await waitFor(() => {
-      expect(screen.queryByLabelText("channel.rooms")).not.toBeInTheDocument();
+      expect(mockCreateRoom).toHaveBeenCalledWith("Flur", undefined);
     });
-    expect(mockSetChannelRooms).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockSetChannelRooms).toHaveBeenCalledWith("0001ABCD", 1, [
+        "Wohnzimmer",
+        "Flur",
+      ]);
+    });
   });
 });
 
