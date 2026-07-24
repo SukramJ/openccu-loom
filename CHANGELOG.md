@@ -23,7 +23,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   group (create → save → delete round-trip).
   - REST (admin-gated, audited, API 2.53.0): `POST /groups`,
     `PUT /groups/{id}`, `DELETE /groups/{id}`, plus read helpers
-    `GET /groups/types` and `GET /groups/suitable-members`.
+    `GET /groups/types` and `GET /groups/suitable-members`. The same commands
+    are available over WebSocket (`groups.create/update/delete/types/
+    suitable_members`).
+  - Creating or editing a group now also names its virtual device after the
+    group and applies the "operate only via group" flag to each member device
+    on the CCU (GR03 / GR04), and a device can be assigned to a heating group
+    straight from the inbox accept dialog (GR05). These reuse already-validated
+    CCU calls; the operate-only write was verified live on a real member.
 - **Central links now show their live active state.** The central click-event
   panel (device detail → Direct links) reads the CCU's report-value-usage
   metadata (`getMetadata(<channel>, "reportValueUsageData")`) and marks each

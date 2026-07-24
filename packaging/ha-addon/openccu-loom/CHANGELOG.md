@@ -6,7 +6,9 @@
   create, edit, and delete heating groups (pick a type, choose members, set the
   name and the "operate only via group" flag). Group changes are applied by the
   CCU itself (via its HMServer group endpoints), so the wiring stays exactly
-  as the CCU computes it. Admin-only.
+  as the CCU computes it. Creating/editing also names the group's device and
+  applies the operate-only flag to its members, and you can add a device to a
+  group straight from the inbox when accepting it. Admin-only.
 - **Central links now show whether they are active.** The central click-event
   panel (device detail → Direct links) reads the CCU state and marks each
   button channel active or inactive, with a device-wide active count — so you
