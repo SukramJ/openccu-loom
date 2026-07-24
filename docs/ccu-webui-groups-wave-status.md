@@ -223,11 +223,38 @@ rejected" guess:
    (`Gruppenname:Kanalnr`), `iseDevices.setReadyConfig(regaId)`, and
    `system.saveObjectModel`.
 
-The `delete` success body is still unobserved but is a *minor* unknown: GR02
-confirms deletion by re-reading `getHeatingGroupList`. The session-invalid
-wrapper `{ isSuccessful:false, errorCode:"42", content:<login html> }` is the
-only literal response body captured live so far; the shapes above come from
-the authoritative firmware template.
+### New-group flow + live write CONFIRMED (2026-07-24, 172.18.4.29)
+
+The real reason the earlier saves hung: **creating a group is a two-step
+jpages flow**, and the first step was missing.
+
+1. **`GET /pages/jpages/group/create?sid=…`** allocates the draft group and
+   returns `{ isSuccessful:true, content:<GroupEditPage HTML> }`. The HTML
+   carries the placeholder id (0 for a fresh draft); the real id is assigned
+   on save. (`GroupListPage.ftl` `NewGroup()`.) The virtual-device serial is
+   `"INT" + zeroPad(id, 7)` (`viewmodels.js` `createVirtualDeviceSerialNumber`
+   / `virtualDevicePrefix`).
+2. **`POST /pages/jpages/group/save?sid=…`** then commits it. A `save` with
+   `isNewGroup:true` **without** the preceding `GET group/create` hangs and
+   creates nothing — that was every earlier failure.
+
+**Confirmed end-to-end** with a throwaway `zz_loom_verify` group + one
+window-sensor member (`00109709B1381B:1`): GET create → `isSuccessful:true`;
+POST save → **the group was created server-side (appeared in the roster as
+id 2)** even though the save's HTTP response **did not return within 90 s**;
+DELETE → **`{ "isSuccessful": true, "errorCode": "", "content": "[]" }`** (HTTP
+200, prompt); roster clean afterwards. So a sensor-only HmIP heating group is
+accepted, and create + delete both work.
+
+**The load-bearing implementation fact:** `save` commits server-side but its
+**HTTP response is slow / may never return within a sane timeout** — the
+create succeeded while our client timed out. GR02 therefore **must fire the
+save and treat the new group appearing in `getHeatingGroupList` (with its
+server-assigned id) as the completion signal**, NOT the save HTTP response.
+This is exactly the async design in ADR 0055 §3, now empirically required, not
+just preferred. `delete` (and the reads) return promptly, so only the
+`save`/create leg needs the fire-and-poll treatment. The new group's id for a
+later edit/delete comes from the roster, not from the save reply.
 
 ### jpages endpoints
 
@@ -236,12 +263,15 @@ On an **invalid** session the reply is the wrapper
 `{ "isSuccessful": false, "errorCode": "42", "content": <login html> }`
 (live-verified 2026-07-24; the earlier `{ "valid": … }` reconstruction is
 superseded). On a **valid** session, data endpoints return their bare data
-object (see above); the mutation success wrapper is still to be confirmed.
+object (see above). `delete` returns `{ isSuccessful:true, errorCode:"",
+content:"[]" }`; `save` commits but its response is slow / may time out — see
+the new-group flow above.
 
-| Endpoint | Request body | Purpose |
+| Endpoint | Method + body | Purpose |
 |---|---|---|
-| `/pages/jpages/group/save` | `{ groupName, groupTypeId, forbidSingleOperation, assignedDevicesIds: [memberId…], isNewGroup, groupDeviceName, groupId? }` | create (`isNewGroup:true`) **and** edit (`groupId` set) |
-| `/pages/jpages/group/delete` | `{ groupId }` | delete |
+| `/pages/jpages/group/create` | **GET** (no body) | **precursor for a new group** — allocates the draft, returns the edit-page HTML with the id; a `save` create hangs without it |
+| `/pages/jpages/group/save` | POST `{ groupName, groupTypeId, forbidSingleOperation, assignedDevicesIds: [memberId…], isNewGroup, groupDeviceName, groupId? }` | commit — create (`isNewGroup:true`, after `group/create`) **and** edit (`groupId` set). Response is slow: fire-and-poll `getHeatingGroupList` |
+| `/pages/jpages/group/delete` | POST `{ groupId }` | delete — returns `{ isSuccessful:true, content:"[]" }` promptly |
 | `/pages/jpages/group/suitableGroupMembers` | `{ groupTypeId }` | assignable + leftover members for a type |
 | `/pages/jpages/group/getAllAssignableGroupTypes` | — | group-type list for the create form — **404 on the 2026-07-24 live check**; the type list source is unconfirmed (see corrections above) |
 | `/pages/jpages/group/list` | filter object | HMServer's *structured* group list (richer than `getHeatingGroupList`; not needed for GR01) |
@@ -266,19 +296,28 @@ field names are taken straight from the observed responses.
 ### GR02 implementation plan
 
 1. **Backend (no new transport wiring).** Add
-   `SaveGroup / DeleteGroup / SuitableGroupMembers / GroupTypes`
-   to `CcuBackend`, POSTing to the jpages paths using the **existing**
-   `b.baseURL` + `b.sessionIDFn()` already set for the firmware download
-   path — the ADR 0055 session finding (re-verified 2026-07-24) is what
-   makes this free. Critical details from the `_SaveGroup()` contract above:
-   send the JSON body with **`Content-Type: application/x-www-form-urlencoded`**
-   (Prototype default — `application/json` hangs the save handler); run the
-   per-device `Interface.setMetadata(inHeatingGroup=true/false)` preamble
-   before `save`; parse the reply on `isSuccessful` (success carries
-   `content` → virtual-device serial); treat `errorCode:"42"` as an expired
-   session (`ErrAuthFailure`) → session-managed transport re-login + retry;
-   do **not** hold the request for the settle — confirm completion by
-   re-reading `getHeatingGroupList`.
+   `CreateGroupDraft / SaveGroup / DeleteGroup / SuitableGroupMembers /
+   GroupTypes` to `CcuBackend`, calling the jpages paths using the
+   **existing** `b.baseURL` + `b.sessionIDFn()` already set for the firmware
+   download path — the ADR 0055 session finding (re-verified 2026-07-24) is
+   what makes this free. Critical details, all live-confirmed 2026-07-24:
+   - **New group = two steps.** `GET group/create` first (allocates the
+     draft, returns the edit HTML), **then** `POST group/save`. A `save`
+     create without the `GET group/create` precursor hangs and creates
+     nothing.
+   - **`save` is fire-and-poll.** Its HTTP response is slow / may time out
+     even though the group *is* committed server-side. Do **not** treat the
+     save response as the completion signal — fire it (generous timeout) and
+     poll `getHeatingGroupList` until the group appears with its
+     server-assigned id. `delete` and the reads return promptly.
+   - Match the WebUI on the wire: `POST` bodies use `Content-Type:
+     application/x-www-form-urlencoded` with the JSON string (Prototype
+     default); run the per-device
+     `Interface.setMetadata(inHeatingGroup=true/false)` preamble before
+     `save`; `groupName`/`groupDeviceName` via Latin-1 `escape()`;
+     `groupDeviceName = "<name> INT<zeroPad(id,7)>"`.
+   - Response: `delete` → `{ isSuccessful:true, errorCode:"", content:"[]" }`;
+     `errorCode:"42"` == expired session (`ErrAuthFailure`) → re-login + retry.
 2. **Adapter.** Extend `internal/central/adapter` `GroupsDomain` with the
    write methods (resolve primary backend → jpages call).
 3. **REST.** `POST /api/v1/groups`, `PUT /api/v1/groups/{id}`,
@@ -299,17 +338,18 @@ field names are taken straight from the observed responses.
 1. **String encoding** — mirror `escape()` + ISO-8859-1 for
    `groupName` / `groupDeviceName` (recommended; raw UTF-8 corrupts
    umlauts).
-2. **Sync vs. async** — ship GR02 **synchronous** (save/delete return
-   `{valid}` + a `CONFIG_PENDING` *hint*, mirroring Welle 1's
-   central-links pattern) and add the async progress-broadcast job as a
-   small follow-up; **or** build the full async job up front. Recommended:
-   synchronous first.
-3. **Live validation is blocked on approval.** godevccu has **no** jpages
-   surface, so the write path can only be validated against a real CCU.
-   Per the live-CCU-write rule this needs explicit user approval **and** a
-   named throwaway test group on `172.18.4.29` (create → add member →
-   delete). GR02 ships with mocked-HTTP tests; the live round-trip is a
-   separate, approved step.
+2. **Sync vs. async — RESOLVED: async/fire-and-poll for `save`.** The live
+   test showed `save` commits server-side but its HTTP response can time out,
+   so a synchronous "save returns → done" model is not viable for create.
+   `save` (create) must be fired and completion detected by polling
+   `getHeatingGroupList`; `delete` and reads are prompt and can stay
+   synchronous. This is ADR 0055 §3, now empirically required.
+3. **Live validation — DONE (2026-07-24).** A throwaway `zz_loom_verify`
+   group with a window-sensor member was created and deleted on
+   `172.18.4.29` (GET create → POST save → group appeared as id 2 → delete →
+   roster clean). The write path is confirmed against real HmIP. GR02 still
+   ships with hermetic mocked-HTTP tests; this live round-trip is the
+   one-time human-in-the-loop confirmation the rule requires.
 
 ---
 
