@@ -13,6 +13,9 @@ const mockAcceptInboxDevice = vi.fn();
 const mockListReplaceCandidates = vi.fn();
 const mockReplaceDevice = vi.fn();
 const mockSearchWiredDevices = vi.fn();
+const mockGetGroups = vi.fn();
+const mockGroupSuitable = vi.fn();
+const mockUpdateGroup = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 const mockConfirmAsk = vi.fn();
@@ -30,6 +33,9 @@ vi.mock("$lib/api/client", () => ({
     listReplaceCandidates: (...args: unknown[]) => mockListReplaceCandidates(...args),
     replaceDevice: (...args: unknown[]) => mockReplaceDevice(...args),
     searchWiredDevices: (...args: unknown[]) => mockSearchWiredDevices(...args),
+    getGroups: (...args: unknown[]) => mockGetGroups(...args),
+    groupSuitableMembers: (...args: unknown[]) => mockGroupSuitable(...args),
+    updateGroup: (...args: unknown[]) => mockUpdateGroup(...args),
     listInstallModeInterfaces: vi.fn().mockResolvedValue([]),
     setInstallModeInterface: vi.fn(),
     pairDeviceInstallMode: vi.fn(),
@@ -118,6 +124,9 @@ beforeEach(() => {
   mockListRooms.mockResolvedValue([{ name: "Kitchen" }, { name: "Living Room" }]);
   mockListFunctions.mockResolvedValue([{ name: "Lights" }, { name: "Heating" }]);
   mockAcceptInboxDevice.mockResolvedValue(undefined);
+  mockGetGroups.mockResolvedValue([]);
+  mockGroupSuitable.mockResolvedValue({ assignable: [], leftover: [] });
+  mockUpdateGroup.mockResolvedValue(undefined);
   mockListReplaceCandidates.mockResolvedValue([]);
   mockReplaceDevice.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(true);
@@ -431,6 +440,50 @@ describe("Inbox — wired bus search", () => {
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalled();
+    });
+  });
+});
+
+describe("Inbox — GR05 group assignment on accept", () => {
+  it("adds the accepted device's assignable channel to the chosen group", async () => {
+    mockGetGroups.mockResolvedValue([
+      {
+        central: "ccu",
+        groups: [
+          {
+            id: 5,
+            name: "Heating",
+            type_id: "hmip.heating.group",
+            forbid_single_operation: false,
+            members: [{ address: "OLD0000001:1" }],
+          },
+        ],
+      },
+    ]);
+    mockGroupSuitable.mockResolvedValue({
+      assignable: [{ address: "0009ABCD:1" }],
+      leftover: [],
+    });
+
+    await openDialog();
+    const sel = (await waitFor(() => {
+      const el = document.getElementById("inbox-group");
+      if (!el) throw new Error("group picker not shown");
+      return el as HTMLSelectElement;
+    }));
+    await fireEvent.change(sel, { target: { value: "5" } });
+    await fireEvent.click(submitButton());
+
+    await waitFor(() => {
+      expect(mockUpdateGroup).toHaveBeenCalledWith(
+        5,
+        {
+          name: "Heating",
+          forbid_single_operation: false,
+          members: ["OLD0000001:1", "0009ABCD:1"],
+        },
+        expect.anything(),
+      );
     });
   });
 });

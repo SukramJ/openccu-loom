@@ -1,6 +1,6 @@
 {
-  "generated": "1112a1d6",
-  "head": "1112a1d6",
+  "generated": "6d443e5e",
+  "head": "6d443e5e",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,9 +10,9 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 26820,
+    "total_exported": 26821,
     "reachable": 4639,
-    "whitelisted": 19345,
+    "whitelisted": 19346,
     "unreachable": 2836
   },
   "by_package": [
@@ -37509,31 +37509,38 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestGroupsDomainCreateAppliesNamingAndOperateOnly",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/groups_write_test.go",
+      "line": 466
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainCreatePropagatesSaveErrorWhenGroupNeverAppears",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 246
+      "line": 279
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainCreateReturnsNewGroupAndGrowsRoster",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 213
+      "line": 246
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainDeleteKnownIDRemovesFromRoster",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 325
+      "line": 358
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainDeleteUnknownIDReturnsGroupNotFound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 309
+      "line": 342
     },
     {
       "package": "internal/central/adapter",
@@ -37596,42 +37603,42 @@
       "identifier": "TestGroupsDomainSuitableMembersMapsThrough",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 367
+      "line": 400
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainTypesMapsThroughDraftTypes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 346
+      "line": 379
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainUpdateKnownIDSucceeds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 287
+      "line": 320
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainUpdateUnknownIDReturnsGroupNotFound",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 271
+      "line": 304
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainWriterForSingleCentralResolves",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 396
+      "line": 429
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGroupsDomainWriterForUnsupportedBackend",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 416
+      "line": 449
     },
     {
       "package": "internal/central/adapter",
@@ -40515,7 +40522,7 @@
       "identifier": "TestMain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/groups_write_test.go",
-      "line": 39
+      "line": 40
     },
     {
       "package": "internal/central/adapter",

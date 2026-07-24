@@ -73,6 +73,11 @@ type fakeGroupWriterOps struct {
 	suitableErr error
 
 	metadataCalls []string
+
+	// GR04 recording. regaIDs maps a member address→ReGa id; nil synthesizes
+	// "rega-<address>" so the post-save operate-only flag still runs.
+	regaIDs     map[string]string
+	operateOnly map[string]bool
 }
 
 func newFakeGroupWriterOps() *fakeGroupWriterOps {
@@ -200,6 +205,25 @@ func (f *fakeGroupWriterOps) SuitableHeatingGroupMembers(_ context.Context, _ st
 func (f *fakeGroupWriterOps) SetInHeatingGroupMetadata(_ context.Context, deviceAddress string, _ bool) error {
 	f.mu.Lock()
 	f.metadataCalls = append(f.metadataCalls, deviceAddress)
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeGroupWriterOps) DeviceRegaID(_ context.Context, address string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.regaIDs == nil {
+		return "rega-" + address, nil
+	}
+	return f.regaIDs[address], nil
+}
+
+func (f *fakeGroupWriterOps) SetOperateGroupOnly(_ context.Context, regaID string, mode bool) error {
+	f.mu.Lock()
+	if f.operateOnly == nil {
+		f.operateOnly = map[string]bool{}
+	}
+	f.operateOnly[regaID] = mode
 	f.mu.Unlock()
 	return nil
 }
@@ -423,5 +447,35 @@ func TestGroupsDomainWriterForUnsupportedBackend(t *testing.T) {
 	_, err := d.writerFor("ccu-01")
 	if !errors.Is(err, backends.ErrUnsupported) {
 		t.Fatalf("err = %v, want backends.ErrUnsupported", err)
+	}
+}
+
+// TestGroupsDomainCreateAppliesOperateOnly verifies the GR04 post-save side
+// effect: every member device gets the group's forbid_single_operation flag
+// applied (Device.setOperateGroupOnly), deduplicated per device. The group's
+// own virtual device is intentionally NOT renamed post-save (the CCU labels it
+// from the groupDeviceName the save already sent).
+func TestGroupsDomainCreateAppliesOperateOnly(t *testing.T) {
+	t.Parallel()
+	reg := central.NewRegistry()
+	w := clientpkg.NewValueWriter()
+	fb := newFakeGroupWriterOps()
+	registerCentralWithClient(t, reg, w, "ccu-01", fb)
+
+	d := NewGroupsDomain(reg, w)
+	if _, err := d.Create(context.Background(), "ccu-01", group.CreateInput{
+		Name:                  "Bad",
+		TypeID:                "hmip.heating.group",
+		ForbidSingleOperation: true,
+		MemberIDs:             []string{"000AAA0000001:1", "000BBB0000002:3"},
+	}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// GR04: each member device gets operate-only = the group flag.
+	for _, dev := range []string{"000AAA0000001", "000BBB0000002"} {
+		if !fb.operateOnly["rega-"+dev] {
+			t.Errorf("operateOnly[rega-%s] = false, want true", dev)
+		}
 	}
 }

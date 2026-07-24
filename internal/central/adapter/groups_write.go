@@ -25,6 +25,12 @@ type heatingGroupWriter interface {
 	DeleteHeatingGroup(ctx context.Context, groupID int) error
 	SuitableHeatingGroupMembers(ctx context.Context, typeID string) (backends.SuitableHeatingGroupMembers, error)
 	SetInHeatingGroupMetadata(ctx context.Context, deviceAddress string, inGroup bool) error
+	// Per-member "operate only via group" flag (GR04). DeviceRegaID resolves a
+	// real member device address to its ReGa id; SetOperateGroupOnly toggles the
+	// flag. Both act on member devices, which resolve normally — unlike the
+	// group's own virtual device (INT*), which getReGaIDByAddress never resolves.
+	DeviceRegaID(ctx context.Context, address string) (string, error)
+	SetOperateGroupOnly(ctx context.Context, regaID string, mode bool) error
 }
 
 // Poll cadence for the fire-and-poll save path (var so tests can shrink it).
@@ -136,6 +142,7 @@ func (a *GroupsDomain) Create(ctx context.Context, centralName string, in group.
 		return group.Group{}, err
 	}
 	if ok {
+		a.applyOperateGroupOnly(ctx, w, in.ForbidSingleOperation, in.MemberIDs)
 		return g, nil
 	}
 	if saveErr != nil {
@@ -175,7 +182,36 @@ func (a *GroupsDomain) Update(ctx context.Context, centralName string, groupID i
 	if saveErr != nil && !errors.Is(saveErr, context.DeadlineExceeded) {
 		return saveErr
 	}
+	a.applyOperateGroupOnly(ctx, w, in.ForbidSingleOperation, in.MemberIDs)
 	return nil
+}
+
+// applyOperateGroupOnly runs the GR04 post-save side effect: set each member
+// device's "operate only via group" flag from the group's
+// forbid_single_operation flag, mirroring the CCU WebUI. It uses the
+// operator-supplied value (authoritative) rather than the just-parsed roster,
+// which may not reflect the change until the CCU settle completes. Best-effort
+// — the group is already created/edited, so a flag failure must not fail the
+// operation.
+//
+// The group's own virtual device (INT<id>) is intentionally NOT renamed here:
+// getReGaIDByAddress never resolves virtual-device addresses, and the device
+// does not settle into the ReGa model until well after the request returns, so
+// a synchronous rename is impossible. Instead SaveHeatingGroup sends the bare
+// group name as groupDeviceName, so the CCU labels the virtual device and
+// derives its channel names ("<name>:<n>") itself.
+func (a *GroupsDomain) applyOperateGroupOnly(ctx context.Context, w heatingGroupWriter, forbidSingle bool, memberIDs []string) {
+	seen := make(map[string]bool, len(memberIDs))
+	for _, m := range memberIDs {
+		dev := deviceOf(m)
+		if dev == "" || seen[dev] {
+			continue
+		}
+		seen[dev] = true
+		if regaID, err := w.DeviceRegaID(ctx, dev); err == nil && regaID != "" {
+			_ = w.SetOperateGroupOnly(ctx, regaID, forbidSingle)
+		}
+	}
 }
 
 // Delete removes a group by id, 404-ing (ErrGroupNotFound) when the roster

@@ -105,8 +105,10 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"Channel.hasProgramIds": true,
 
 		// JSON-RPC — Device
-		"Device.setName":       true,
-		"Device.listAllDetail": true,
+		"Device.setName":             true,
+		"Device.getReGaIDByAddress":  true,
+		"Device.setOperateGroupOnly": true,
+		"Device.listAllDetail":       true,
 
 		// JSON-RPC — SysVar
 		"SysVar.createBool":         true,
