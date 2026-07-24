@@ -4,11 +4,12 @@ Last updated: 2026-07-24
 
 Status of the **Gruppenverwaltung** wave (heating groups, GR01–GR05)
 from [`ccu-webui-gap-analysis.md`](./ccu-webui-gap-analysis.md) §4.3 / §7.
-Slice 1 (the A3 decision + GR01) has shipped; **GR02–GR05 are deferred**
-by decision on 2026-07-22. This document preserves the CCU wire knowledge
-gathered by observing the WebUI's own HTTP traffic and reading the shipped
-OCCU templates, plus the GR02 plan, so the wave can resume without re-doing
-the reconnaissance.
+**The whole wave has shipped (0.48.0): GR01 (read-only listing), GR02
+(create/edit/delete via the jpages proxy), GR03 (clean virtual-device label),
+GR04 (per-member "operate only via group"), GR05 (inbox group assignment).**
+This document preserves the CCU wire knowledge gathered by observing the
+WebUI's own HTTP traffic, reading the shipped OCCU templates, and probing the
+live CCU, so the behaviour can be re-derived without re-doing the reconnaissance.
 
 Related:
 [ADR 0055 — heating groups via CCU jpages proxy](./adr/0055-groups-jpages-proxy.md),
@@ -218,10 +219,12 @@ rejected" guess:
    (with a sane timeout), then, like the WebUI, watches the members'
    `CONFIG_PENDING` / re-reads `getHeatingGroupList` for completion + the new
    `groupId`.
-5. **Post-save follow-up (GR03 scope, but wired here).** A new-group success
-   then runs JSON-RPC `Device.setName` / `Channel.setName`
-   (`Gruppenname:Kanalnr`), `iseDevices.setReadyConfig(regaId)`, and
-   `system.saveObjectModel`.
+5. **Post-save follow-up (what the WebUI does).** A new-group success then runs
+   JSON-RPC `Device.setName` / `Channel.setName` (`Gruppenname:Kanalnr`),
+   `iseDevices.setReadyConfig(regaId)`, and `system.saveObjectModel`. Loom does
+   **not** replicate this — see §3 GR03: the naming is instead handled by the
+   bare `groupDeviceName` sent in the save, and the synchronous JSON-RPC rename
+   is impossible on loom's side anyway (virtual device unresolvable + settle lag).
 
 ### New-group flow + live write CONFIRMED (2026-07-24, 172.18.4.29)
 
@@ -282,12 +285,15 @@ Field notes from `GroupEditPage.ftl` (the `save()` view-model):
   **Latin-1 percent-encoding**; the server side decodes **ISO-8859-1**.
   Loom must mirror this, not send raw UTF-8, or umlauts corrupt
   (e.g. "Wohnzimmer Süd").
-- `groupDeviceName = <group_name> + " " + virtualDeviceSerialNumber`.
+- `groupDeviceName` = the virtual-device label. The WebUI sends
+  `<group_name> + " " + virtualDeviceSerialNumber`, but that serial is built
+  from the always-zero draft id, so loom sends the **bare group name** instead
+  (see §3 GR03 for the live rationale and the resulting `<name>:<n>` channels).
 - `assignedDevicesIds` = array of member `id`s (device/channel addresses).
 - After a successful save the WebUI additionally issues JSON-RPC
   `Device.setName` + `Channel.setName` to apply the `Gruppenname:Kanalnr`
-  naming scheme (**this is GR03's scope**), and the CCU runs a
-  `CONFIG_PENDING` settle on the virtual device + members.
+  naming scheme, and the CCU runs a `CONFIG_PENDING` settle on the virtual
+  device + members. Loom does not replicate this JSON-RPC pass (see §3 GR03).
 
 The `suitableGroupMembers` and `getAllAssignableGroupTypes` replies are plain
 JSON objects (assignable/leftover member lists, group-type entries); their
@@ -353,26 +359,44 @@ field names are taken straight from the observed responses.
 
 ---
 
-## 3. Remaining wave items (deferred)
+## 3. Wave items — final status (all shipped, 0.48.0)
 
-Dependency order (gap analysis §7, Welle 2): **A3 ✓ → GR01 ✓ → GR02 →
-GR03, GR04, GR05.**
+Dependency order (gap analysis §7, Welle 2): **A3 ✓ → GR01 ✓ → GR02 ✓ →
+GR03 ✓, GR04 ✓, GR05 ✓.**
 
-- **GR03 — rename incl. channel naming scheme** (P2, S). Via the
-  `group/save` path + JSON-RPC `Device.setName` / `Channel.setName`
-  (`Gruppenname:Kanalnr`), then a device reload. Depends on GR02.
-- **GR04 — "operate only via group"** (`Device.setOperateGroupOnly`, P3,
-  S). Small JSON-RPC pass, a per-member switch in the group detail view.
-  Depends on GR02.
-- **GR05 — group assignment on pairing** (P3, M). Offer a target group in
-  the inbox accept-flow for group-capable device types. Depends on GR02.
+- **GR03 — clean virtual-device label** ✓. The originally-planned
+  `Device.setName` / `Channel.setName` (`Gruppenname:Kanalnr`) post-save pass
+  proved both **impossible synchronously** and **unnecessary**, established by
+  live probing on 2026-07-24:
+  - The `group/create` draft always carries `self.groupId = 0`, so at save
+    time the real group id is unknown; any serial we build is `INT0000000`.
+    HMServer stores the sent `groupDeviceName` **verbatim** (roster
+    `GROUP_DEVICE_NAME` = the exact string), so the earlier `save` that sent
+    `"<name> INT0000000"` wrote a wrong label onto every loom-created group.
+  - `Device.getReGaIDByAddress` / `Interface.getIseIDByAddress` return
+    `noDeviceFound` for `INT*` **virtual-device** addresses, even though the
+    ReGa ids exist (only `Device.listAllDetail` maps them) — so a
+    getReGaIDByAddress-based device rename is a silent no-op.
+  - A freshly created group's virtual device does **not** appear in
+    `Device.listAllDetail` for **>120 s** after the roster shows the group
+    (the ReGa settle lags), so naming it synchronously right after create is
+    impossible; the WebUI names it deferred, after the settle.
+  - **Resolution:** `SaveHeatingGroup` sends the **bare group name** as
+    `groupDeviceName` (no serial suffix). Live-confirmed: the roster
+    `GROUP_DEVICE_NAME` then equals the group name exactly, and the CCU derives
+    the virtual device's channel names as `<name>:<n>` itself — cleaner than
+    the WebUI's `<name> INT<id>:<n>`, and no deferred machinery. The
+    ineffective post-save device-rename was removed.
+- **GR04 — "operate only via group"** ✓ (`Device.setOperateGroupOnly`). A
+  per-member flag applied from the group's `forbid_single_operation`. Note the
+  CCU reports the flag back as the **string** `"true"`/`"false"`; the write
+  itself was verified live (false→true→restore) on a real member device.
+- **GR05 — group assignment on pairing** ✓. The inbox accept dialog offers a
+  target heating group for a group-capable device and assigns the accepted
+  device's channels via `updateGroup`.
 
-Update 2026-07-23: gap-analysis §7 Wellen **3, 5 and 6 have since shipped
-with 0.47.0** (device workflows, direct-link overview/role-match/test,
-diagram definitions, sysvar-usage, recording toggle, weekly-profile
-gaps), so **GR02 is now the single largest remaining decided (`umsetzen`)
-item** — see the plan in §2 above. The Programmeditor items PR01–PR06
-remain **explicitly out of scope** by prior decision.
+The Programmeditor items PR01–PR06 remain **explicitly out of scope** by
+prior decision.
 
 ---
 

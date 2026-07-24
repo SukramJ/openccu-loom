@@ -3,7 +3,7 @@
 
 // Tests for the heating-group jpages proxy in ccu_groups.go:
 // CreateHeatingGroupDraft, SaveHeatingGroup, DeleteHeatingGroup,
-// SuitableHeatingGroupMembers, and the jsEscape / padLeft7 wire helpers.
+// SuitableHeatingGroupMembers, and the jsEscape wire helper.
 // See docs/adr/0055-groups-jpages-proxy.md for the wire contract these
 // tests pin.
 
@@ -141,9 +141,10 @@ func TestSaveHeatingGroupPostsFormEncodedJSONBody(t *testing.T) {
 	if got := gotBody["isNewGroup"]; got != true {
 		t.Errorf("isNewGroup = %v, want true", got)
 	}
-	wantDeviceName := jsEscape(in.Name + " " + virtualDevicePrefix + padLeft7(in.GroupID))
-	if got := gotBody["groupDeviceName"]; got != wantDeviceName {
-		t.Errorf("groupDeviceName = %v, want %q", got, wantDeviceName)
+	// groupDeviceName is the bare group name — no "INT<serial>" suffix (the real
+	// id is unknown at save time; the CCU derives channel names from this name).
+	if got := gotBody["groupDeviceName"]; got != jsEscape(in.Name) {
+		t.Errorf("groupDeviceName = %v, want %q", got, jsEscape(in.Name))
 	}
 }
 
@@ -226,7 +227,7 @@ func TestSuitableHeatingGroupMembersSessionExpiredMapsToAuthFailure(t *testing.T
 }
 
 // ---------------------------------------------------------------------------
-// jsEscape / padLeft7
+// jsEscape
 // ---------------------------------------------------------------------------
 
 // TestJsEscapeMirrorsJavaScriptEscape verifies the Latin-1 %XX escaping
@@ -251,18 +252,5 @@ func TestJsEscapeMirrorsJavaScriptEscape(t *testing.T) {
 				t.Errorf("jsEscape(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
-	}
-}
-
-// TestPadLeft7ZeroPadsShortIDsAndPassesLongOnesThrough verifies the virtual
-// device serial suffix is zero-padded to 7 digits, and left unchanged once
-// the id already spans 7+ digits.
-func TestPadLeft7ZeroPadsShortIDsAndPassesLongOnesThrough(t *testing.T) {
-	t.Parallel()
-	if got := padLeft7(7); got != "0000007" {
-		t.Errorf("padLeft7(7) = %q, want 0000007", got)
-	}
-	if got := padLeft7(12345678); got != "12345678" {
-		t.Errorf("padLeft7(12345678) = %q, want 12345678", got)
 	}
 }

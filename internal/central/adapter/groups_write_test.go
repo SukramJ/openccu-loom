@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -75,11 +74,10 @@ type fakeGroupWriterOps struct {
 
 	metadataCalls []string
 
-	// GR03/GR04 recording. regaIDs maps address→ReGa id; nil synthesizes
-	// "rega-<address>" so the post-save settings still run.
-	regaIDs      map[string]string
-	setNameCalls []string
-	operateOnly  map[string]bool
+	// GR04 recording. regaIDs maps a member address→ReGa id; nil synthesizes
+	// "rega-<address>" so the post-save operate-only flag still runs.
+	regaIDs     map[string]string
+	operateOnly map[string]bool
 }
 
 func newFakeGroupWriterOps() *fakeGroupWriterOps {
@@ -218,13 +216,6 @@ func (f *fakeGroupWriterOps) DeviceRegaID(_ context.Context, address string) (st
 		return "rega-" + address, nil
 	}
 	return f.regaIDs[address], nil
-}
-
-func (f *fakeGroupWriterOps) SetDeviceDisplayName(_ context.Context, regaID, name string) error {
-	f.mu.Lock()
-	f.setNameCalls = append(f.setNameCalls, regaID+"="+name)
-	f.mu.Unlock()
-	return nil
 }
 
 func (f *fakeGroupWriterOps) SetOperateGroupOnly(_ context.Context, regaID string, mode bool) error {
@@ -459,11 +450,12 @@ func TestGroupsDomainWriterForUnsupportedBackend(t *testing.T) {
 	}
 }
 
-// TestGroupsDomainCreateAppliesNamingAndOperateOnly verifies the GR03/GR04
-// post-save side effects: the group's virtual device is named after the group
-// (Device.setName), and every member device gets the group's
-// forbid_single_operation flag applied (Device.setOperateGroupOnly).
-func TestGroupsDomainCreateAppliesNamingAndOperateOnly(t *testing.T) {
+// TestGroupsDomainCreateAppliesOperateOnly verifies the GR04 post-save side
+// effect: every member device gets the group's forbid_single_operation flag
+// applied (Device.setOperateGroupOnly), deduplicated per device. The group's
+// own virtual device is intentionally NOT renamed post-save (the CCU labels it
+// from the groupDeviceName the save already sent).
+func TestGroupsDomainCreateAppliesOperateOnly(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	w := clientpkg.NewValueWriter()
@@ -471,26 +463,13 @@ func TestGroupsDomainCreateAppliesNamingAndOperateOnly(t *testing.T) {
 	registerCentralWithClient(t, reg, w, "ccu-01", fb)
 
 	d := NewGroupsDomain(reg, w)
-	g, err := d.Create(context.Background(), "ccu-01", group.CreateInput{
+	if _, err := d.Create(context.Background(), "ccu-01", group.CreateInput{
 		Name:                  "Bad",
 		TypeID:                "hmip.heating.group",
 		ForbidSingleOperation: true,
 		MemberIDs:             []string{"000AAA0000001:1", "000BBB0000002:3"},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Create: %v", err)
-	}
-
-	// GR03: the virtual device ("INT" + zero-padded id) is renamed to the group.
-	wantName := fmt.Sprintf("rega-INT%07d=Bad", g.ID)
-	found := false
-	for _, c := range fb.setNameCalls {
-		if c == wantName {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("setNameCalls = %v, want to contain %q", fb.setNameCalls, wantName)
 	}
 
 	// GR04: each member device gets operate-only = the group flag.

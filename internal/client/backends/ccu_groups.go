@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,9 +32,6 @@ const (
 	// jpagesSessionExpiredCode is the errorCode HMServer returns when the
 	// sid is missing / expired.
 	jpagesSessionExpiredCode = "42"
-	// virtualDevicePrefix + zero-padded id is the group's virtual device
-	// serial (viewmodels.js createVirtualDeviceSerialNumber).
-	virtualDevicePrefix = "INT"
 	// jpagesSaveTimeout bounds the save POST. HMServer commits the group but
 	// its HTTP response is slow / may not return; the adapter treats a
 	// timeout as "fired" and polls getHeatingGroupList for completion.
@@ -206,11 +202,17 @@ func (b *CcuBackend) CreateHeatingGroupDraft(ctx context.Context) (draftID int, 
 // re-reading getHeatingGroupList. A returned error that is a context timeout
 // therefore does NOT mean the save failed.
 func (b *CcuBackend) SaveHeatingGroup(ctx context.Context, in HeatingGroupSaveInput) error {
-	serial := virtualDevicePrefix + padLeft7(in.GroupID)
 	memberIDs := in.MemberIDs
 	if memberIDs == nil {
 		memberIDs = []string{}
 	}
+	// groupDeviceName is the bare group name (no "INT<serial>" suffix). At save
+	// time the real group id is unknown — HMServer only assigns it on commit —
+	// so any serial we could build here (from the always-zero draft id) would be
+	// INT0000000, a wrong label that HMServer stores verbatim. Sending the bare
+	// name lets the CCU derive the virtual device's channel names as
+	// "<name>:<n>", which is both correct and cleaner. Live-confirmed: the
+	// roster's GROUP_DEVICE_NAME then equals the group name exactly.
 	body := map[string]any{
 		"groupId":               in.GroupID,
 		"groupName":             jsEscape(in.Name),
@@ -218,7 +220,7 @@ func (b *CcuBackend) SaveHeatingGroup(ctx context.Context, in HeatingGroupSaveIn
 		"forbidSingleOperation": in.ForbidSingleOperation,
 		"assignedDevicesIds":    memberIDs,
 		"isNewGroup":            in.IsNew,
-		"groupDeviceName":       jsEscape(in.Name + " " + serial),
+		"groupDeviceName":       jsEscape(in.Name),
 	}
 	raw, err := b.jpagesDo(ctx, http.MethodPost, "save", body, jpagesSaveTimeout)
 	if err != nil {
@@ -302,17 +304,6 @@ func (b *CcuBackend) DeviceRegaID(ctx context.Context, address string) (string, 
 	return id, nil
 }
 
-// SetDeviceDisplayName renames a device by ReGa id (JSON-RPC Device.setName).
-// Same wire method loom's device rename already uses, so no separate persist
-// (system.saveObjectModel) is needed.
-func (b *CcuBackend) SetDeviceDisplayName(ctx context.Context, regaID, name string) error {
-	if b.json == nil {
-		return ErrUnsupported
-	}
-	_, err := b.json.Call(ctx, "Device.setName", map[string]any{"id": regaID, "name": name})
-	return err
-}
-
 // SetOperateGroupOnly sets a device's "operate only via group" flag by ReGa
 // id (JSON-RPC Device.setOperateGroupOnly). The CCU reports the flag back as
 // the string "true"/"false".
@@ -335,14 +326,6 @@ func atoiSafe(s string) int {
 		n = n*10 + int(c-'0')
 	}
 	return n
-}
-
-func padLeft7(id int) string {
-	s := strconv.Itoa(id)
-	if len(s) >= 7 {
-		return s
-	}
-	return strings.Repeat("0", 7-len(s)) + s
 }
 
 func strconvBool(b bool) string {

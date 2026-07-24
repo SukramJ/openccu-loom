@@ -26,11 +26,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `GET /groups/types` and `GET /groups/suitable-members`. The same commands
     are available over WebSocket (`groups.create/update/delete/types/
     suitable_members`).
-  - Creating or editing a group now also names its virtual device after the
-    group and applies the "operate only via group" flag to each member device
-    on the CCU (GR03 / GR04), and a device can be assigned to a heating group
-    straight from the inbox accept dialog (GR05). These reuse already-validated
-    CCU calls; the operate-only write was verified live on a real member.
+  - The group's virtual device now carries a clean CCU label (the bare group
+    name), from which the CCU derives its channel names as `<name>:<n>` — the
+    save no longer writes a bogus `INT0000000` serial suffix (GR03). Creating or
+    editing a group also applies the "operate only via group" flag to each
+    member device on the CCU (GR04), and a device can be assigned to a heating
+    group straight from the inbox accept dialog (GR05). The clean label and the
+    operate-only write were both verified live on the real CCU.
 - **Central links now show their live active state.** The central click-event
   panel (device detail → Direct links) reads the CCU's report-value-usage
   metadata (`getMetadata(<channel>, "reportValueUsageData")`) and marks each
