@@ -19,6 +19,11 @@ alarm_messages.ack_all      -- godevccu has no ReGa.runScript; live CCU returns 
 service_messages.ack_all    -- godevccu has no ReGa.runScript; live CCU returns ok
 firmware.update             -- godevccu has no ReGa.runScript; live CCU returns ok
 groups.list                 -- godevccu has no CCU.getHeatingGroupList; live CCU returns groups.gson
+groups.types                -- godevccu has no jpages group surface; live CCU returns the create-form types
+groups.suitable_members     -- godevccu has no jpages group surface; live CCU returns assignable members
+groups.create               -- godevccu has no jpages group surface; live CCU creates the group
+groups.update               -- godevccu has no jpages group surface; live CCU saves the group
+groups.delete               -- godevccu has no jpages group surface; live CCU deletes the group
 device.restore_config       -- godevccu has no restoreConfigToDevice; live CCU re-transmits config
 device.replace_candidates   -- godevccu has no listReplaceableDevices; live CCU returns candidates
 device.replace              -- godevccu has no replaceDevice; live CCU performs the swap
