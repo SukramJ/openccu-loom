@@ -180,12 +180,22 @@ groups (roster: 2 groups, `groupType.id = "hmip.heating.group"`):
   enumeration source is still open but low-priority (HmIP heating is the
   primary case; BidCos heating-group type ids, if needed, come from a
   roster/`suitableGroupMembers` sample).
-- **Still open — mutation success shape.** The `save` / `delete` **success**
-  response (a mutation) has not been observed; it needs an approved
-  throwaway-group write on `172.18.4.29` (create → observe `save` reply →
-  delete → observe `delete` reply). The session-invalid wrapper
-  `{ isSuccessful:false, errorCode:"42", content:<login html> }` is the only
-  shape seen so far for these endpoints.
+- **`save` is a long-running operation, and an empty create hangs.** An
+  approved throwaway write on `172.18.4.29` creating an **empty** heating
+  group (`assignedDevicesIds:[]`) **did not return within 120 s** and no
+  group appeared (roster stayed clean). Two takeaways: (a) HMServer does not
+  process a member-less heating-group create — a create needs at least one
+  member; (b) a real create runs the HmIP virtual-device build + a
+  `CONFIG_PENDING` settle and is **long-running**, so GR02's write path
+  **must** be the async progress-broadcast job (ADR 0055 §3), not a
+  synchronous request/response. The `save` / `delete` **success** JSON body
+  is therefore still unobserved; it is a *minor* remaining unknown because
+  GR02 re-reads `getHeatingGroupList` for the new `groupId` regardless of
+  what `save` echoes. Capturing it needs a create **with a named member**
+  (a device the operator confirms is safe to wire + unwire), or it falls out
+  naturally during GR02 implementation with the async job in place. The only
+  observed shape for these endpoints so far is the session-invalid wrapper
+  `{ isSuccessful:false, errorCode:"42", content:<login html> }`.
 
 ### jpages endpoints
 
