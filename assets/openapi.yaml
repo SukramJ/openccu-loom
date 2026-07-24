@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.52.0
+  version: 2.53.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -620,6 +620,149 @@ paths:
                     items: { $ref: "#/components/schemas/GroupCentralEntry" }
         "404":
           $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createGroup
+      summary: Create a heating group (admin)
+      description: |
+        Creates a heating group through the CCU jpages proxy (ADR 0055):
+        a two-step `GET group/create` → `POST group/save` flow, then a
+        roster poll to confirm the group committed (the save response is
+        slow and unreliable). Admin-gated and audited. `?central=` selects
+        the target CCU (optional when only one is configured).
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateGroupRequest" }
+      responses:
+        "201":
+          description: The created group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /groups/types:
+    get:
+      operationId: listGroupTypes
+      summary: Assignable group types for the create form
+      description: |
+        Returns the group types a new group can be created as (parsed from
+        the CCU's create page — there is no separate JSON type endpoint on
+        the firmware). `?central=` scopes to one CCU.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: The assignable group types.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items: { $ref: "#/components/schemas/GroupTypeEntry" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /groups/suitable-members:
+    get:
+      operationId: listSuitableGroupMembers
+      summary: Devices assignable to a group of a given type
+      description: |
+        Returns the devices/channels that can be assigned to a group of
+        the given `type_id`, split into assignable and leftover buckets.
+        `?central=` scopes to one CCU.
+      tags: [core]
+      parameters:
+        - name: type_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Candidate members for the type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuitableMembersResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /groups/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+        description: The numeric CCU group id.
+    put:
+      operationId: updateGroup
+      summary: Edit a heating group (admin)
+      description: |
+        Edits an existing heating group (name, members, "operate only via
+        group" flag) through the jpages save path. Admin-gated and audited.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateGroupRequest" }
+      responses:
+        "204": { description: Group updated. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteGroup
+      summary: Delete a heating group (admin)
+      description: |
+        Deletes a heating group through the jpages delete path. Admin-gated
+        and audited.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "204": { description: Group deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -6922,6 +7065,69 @@ components:
         type_id:
           type: string
           description: Member-type key.
+    CreateGroupRequest:
+      type: object
+      required: [type_id, name]
+      description: Body of POST /groups.
+      properties:
+        type_id:
+          type: string
+          description: Group-type key (e.g. the HmIP heating-group type).
+        name:
+          type: string
+          description: Operator-facing group name.
+        forbid_single_operation:
+          type: boolean
+          description: The "operate only via group" flag.
+        members:
+          type: array
+          items: { type: string }
+          description: Member channel/device addresses to assign.
+    UpdateGroupRequest:
+      type: object
+      required: [name]
+      description: Body of PUT /groups/{id}.
+      properties:
+        name:
+          type: string
+        forbid_single_operation:
+          type: boolean
+        members:
+          type: array
+          items: { type: string }
+    GroupTypeEntry:
+      type: object
+      required: [id]
+      description: One assignable group type for the create form.
+      properties:
+        id:
+          type: string
+        label_key:
+          type: string
+          description: CCU translation key for the type label.
+    SuitableMemberEntry:
+      type: object
+      required: [address]
+      description: One device/channel assignable to a group of a given type.
+      properties:
+        address:
+          type: string
+        serial:
+          type: string
+        type:
+          type: string
+          description: Member kind (e.g. SENSOR_WINDOW, SWITCH_ACTUATOR).
+    SuitableMembersResponse:
+      type: object
+      required: [assignable, leftover]
+      description: Candidate members for a group type.
+      properties:
+        assignable:
+          type: array
+          items: { $ref: "#/components/schemas/SuitableMemberEntry" }
+        leftover:
+          type: array
+          items: { $ref: "#/components/schemas/SuitableMemberEntry" }
     SystemCCUEntry:
       type: object
       required: [name, host, available, is_ha_app, configured_interfaces, readiness]

@@ -309,6 +309,10 @@ type Deps struct {
 	// listing (one entry per central; `?central=` scopes to one). Nil
 	// serves the route as 503.
 	Groups handlers.GroupsReader
+	// GroupsWriter backs heating-group administration (GR02): create / edit
+	// / delete plus the suitable-members and types read helpers, via the CCU
+	// jpages proxy. Nil serves those routes as 503.
+	GroupsWriter handlers.GroupsWriter
 	// RateLimit, when non-nil, installs the per-identity REST
 	// rate limiter before the auth-require gate. Nil disables it.
 	RateLimit *middleware.RateLimitConfig
@@ -925,6 +929,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
 			// Read-only heating-group listing (one entry per central).
 			pr.Get("/groups", handlers.ListGroups(d.Groups))
+			// Heating-group administration (GR02) via the CCU jpages proxy.
+			// The type / suitable-member helpers are reads; create / edit /
+			// delete are admin-gated and audited.
+			pr.Get("/groups/types", handlers.ListGroupTypes(d.GroupsWriter))
+			pr.Get("/groups/suitable-members", handlers.ListSuitableMembers(d.GroupsWriter))
+			pr.With(admin).Post("/groups", handlers.CreateGroup(d.GroupsWriter, d.AuditRecorder))
+			pr.With(admin).Put("/groups/{id}", handlers.UpdateGroup(d.GroupsWriter, d.AuditRecorder))
+			pr.With(admin).Delete("/groups/{id}", handlers.DeleteGroup(d.GroupsWriter, d.AuditRecorder))
 			// Persistent "restart required" status for the SPA banner.
 			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
 			// Config fields changed since the daemon started.

@@ -277,6 +277,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		CCUReboot:        d.ccuMaintenanceDomain,
 		FirmwareDownload: d.ccuMaintenanceDomain,
 		Groups:           newGroupsAdapter(d.groupsDomain),
+		GroupsWriter:     newGroupsAdapter(d.groupsDomain),
 		RateLimit:        buildRateLimitConfig(cfg),
 		Capabilities: runtimeCapabilityDetector{
 			mqtt:              d.mqttAvailable,
