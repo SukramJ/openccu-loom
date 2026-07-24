@@ -14496,7 +14496,7 @@ func TestCentralLinksDomain_RemoveCentralLinks_HappyPath(t *testing.T) {
 func TestCentralLinksDomain_CentralLinksStatus_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := &CentralLinksDomain{registry: nil}
-	_, err := d.CentralLinksStatus("DEV006")
+	_, err := d.CentralLinksStatus(context.Background(), "DEV006")
 	if err == nil {
 		t.Error("expected error for nil registry in CentralLinksStatus")
 	}
@@ -14522,7 +14522,7 @@ func TestCentralLinksDomain_CentralLinksStatus_UnsupportedInterface(t *testing.T
 	c.ModelRegistry.Put(dev)
 
 	d := NewCentralLinksDomain(reg, nil)
-	status, err := d.CentralLinksStatus("DEV009")
+	status, err := d.CentralLinksStatus(context.Background(), "DEV009")
 	if err != nil {
 		t.Fatalf("CentralLinksStatus for CUxD: %v", err)
 	}
@@ -14534,7 +14534,7 @@ func TestCentralLinksDomain_CentralLinksStatus_UnsupportedInterface(t *testing.T
 func TestCentralLinksDomain_CentralLinksStatus_EligibleDevice(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	status, err := d.CentralLinksStatus("DEV006")
+	status, err := d.CentralLinksStatus(context.Background(), "DEV006")
 	if err != nil {
 		t.Fatalf("CentralLinksStatus: %v", err)
 	}
@@ -14546,7 +14546,7 @@ func TestCentralLinksDomain_CentralLinksStatus_EligibleDevice(t *testing.T) {
 func TestCentralLinksDomain_CentralLinksStatus_UnknownDevice_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	_, err := d.CentralLinksStatus("UNKNOWN")
+	_, err := d.CentralLinksStatus(context.Background(), "UNKNOWN")
 	if err == nil {
 		t.Error("expected error for unknown device in CentralLinksStatus")
 	}

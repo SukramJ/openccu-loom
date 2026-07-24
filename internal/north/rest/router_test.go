@@ -173,7 +173,7 @@ func (fakeCentralLinksService) RemoveCentralLinks(_ context.Context, _, _ string
 	return handlers.CentralLinksReport{}, nil
 }
 
-func (fakeCentralLinksService) CentralLinksStatus(_ string) (handlers.CentralLinksStatus, error) {
+func (fakeCentralLinksService) CentralLinksStatus(_ context.Context, _ string) (handlers.CentralLinksStatus, error) {
 	return handlers.CentralLinksStatus{}, nil
 }
 

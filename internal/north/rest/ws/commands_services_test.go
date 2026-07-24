@@ -42,7 +42,7 @@ func (f *fakeCentralLinks) RemoveCentralLinks(_ context.Context, deviceAddress, 
 	return f.removeReport, f.removeErr
 }
 
-func (f *fakeCentralLinks) CentralLinksStatus(_ string) (hmapi.CentralLinksStatus, error) {
+func (f *fakeCentralLinks) CentralLinksStatus(_ context.Context, _ string) (hmapi.CentralLinksStatus, error) {
 	return f.status, f.statusErr
 }
 

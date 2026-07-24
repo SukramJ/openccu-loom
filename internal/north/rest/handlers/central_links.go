@@ -31,7 +31,7 @@ func GetCentralLinksStatus(svc CentralLinksService) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Central links unavailable", ""))
 			return
 		}
-		st, err := svc.CentralLinksStatus(chi.URLParam(r, "addr"))
+		st, err := svc.CentralLinksStatus(r.Context(), chi.URLParam(r, "addr"))
 		if err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Central links status failed", err)
 			return

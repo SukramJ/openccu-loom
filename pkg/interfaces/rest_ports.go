@@ -48,7 +48,7 @@ type CentralLinksService interface {
 	// single channel.
 	CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
 	RemoveCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
-	CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error)
+	CentralLinksStatus(ctx context.Context, deviceAddress string) (hmapi.CentralLinksStatus, error)
 }
 
 // ConfigReader is the facade `GET /api/v1/config` depends on.

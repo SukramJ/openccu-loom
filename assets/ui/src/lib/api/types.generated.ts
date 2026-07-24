@@ -7750,12 +7750,31 @@ export interface components {
              *     offer a per-channel toggle alongside the device-wide one.
              */
             channels?: components["schemas"]["CentralLinksChannelStatus"][];
+            /**
+             * @description True when the daemon could read the CCU-side report-value-usage
+             *     metadata, so each channel's `active` flag reflects the live CCU
+             *     state. False when the backend has no metadata read path (or the
+             *     read failed device-wide); clients then show eligibility only,
+             *     without an active/inactive indicator.
+             */
+            active_state_known?: boolean;
+            /**
+             * @description Count of eligible channels whose central link is currently
+             *     active. Only meaningful when `active_state_known` is true.
+             */
+            active_channels?: number;
         };
         /** @description One channel's suitability for central click-event routing. */
         CentralLinksChannelStatus: {
             address: string;
             number: number;
             eligible: boolean;
+            /**
+             * @description True when the CCU's report-value-usage counter for the channel is
+             *     currently raised (a central link exists). Only meaningful when the
+             *     enclosing status has `active_state_known` set.
+             */
+            active?: boolean;
         };
         /** @description A derived/calculated data point on a channel. */
         CalculatedDPSummary: {

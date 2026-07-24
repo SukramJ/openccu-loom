@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.0]
+
+### Added
+
+- **Central links now show their live active state.** The central click-event
+  panel (device detail → Direct links) reads the CCU's report-value-usage
+  metadata (`getMetadata(<channel>, "reportValueUsageData")`) and marks each
+  eligible channel active / inactive, plus a device-wide active count — so an
+  operator can tell at a glance which button channels currently forward their
+  press events to the central, without guessing from the enable / disable
+  buttons. The state is authoritative (it reflects changes made in the CCU
+  WebUI or after a reboot), not a daemon-side approximation. When the backend
+  has no metadata read path the panel falls back to eligibility only
+  (`active_state_known: false`).
+  - REST/WS: `GET /devices/{addr}/central-links` gains `active_state_known`,
+    `active_channels`, and a per-channel `active` flag (API 2.52.0).
+
 ## [0.47.4]
 
 ### Changed

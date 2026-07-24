@@ -135,7 +135,7 @@ type CentralLinksManager interface {
 	// non-empty channelAddress scopes it to that single channel.
 	CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
 	RemoveCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
-	CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error)
+	CentralLinksStatus(ctx context.Context, deviceAddress string) (hmapi.CentralLinksStatus, error)
 }
 
 // SessionRecorder is the diagnostic start/stop/status surface for the
@@ -1225,12 +1225,12 @@ func centralRemoveLinksHandler(m CentralLinksManager) CommandHandler {
 // Request: { "device_address": str } (alias "address").
 // Response: { "supported": bool, "reason"?: str, "eligible_channels"?: int }
 func centralLinksStatusHandler(m CentralLinksManager) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		addr, err := centralLinksAddress(raw)
 		if err != nil {
 			return nil, err
 		}
-		status, err := m.CentralLinksStatus(addr)
+		status, err := m.CentralLinksStatus(ctx, addr)
 		if err != nil {
 			return nil, fmt.Errorf("central.links_status: %w", err)
 		}

@@ -132,10 +132,17 @@
     <h3 class="text-sm font-semibold">{t("central.title")}</h3>
     {#if status}
       {#if status.supported}
-        <Badge variant="muted">
-          {status.eligible_channels ?? 0}
-          {t("central.eligible")}
-        </Badge>
+        <div class="flex items-center gap-1.5">
+          <Badge variant="muted">
+            {status.eligible_channels ?? 0}
+            {t("central.eligible")}
+          </Badge>
+          {#if status.active_state_known}
+            <Badge variant={(status.active_channels ?? 0) > 0 ? "success" : "muted"}>
+              {t("central.active_count", { count: status.active_channels ?? 0 })}
+            </Badge>
+          {/if}
+        </div>
       {:else}
         <Badge variant="muted">{t("central.unsupported_badge")}</Badge>
       {/if}
@@ -211,6 +218,11 @@
                   {t("central.channel_label", { number: ch.number })}
                   <span class="ml-1 font-mono text-[var(--ha-secondary-text-color)]">{ch.address}</span>
                 </span>
+                {#if status.active_state_known}
+                  <Badge variant={ch.active ? "success" : "muted"}>
+                    {ch.active ? t("central.active") : t("central.inactive")}
+                  </Badge>
+                {/if}
                 <Button
                   type="button"
                   size="sm"

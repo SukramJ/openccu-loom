@@ -42,16 +42,29 @@ type CentralLinksStatus struct {
 	Reason           string                      `json:"reason,omitempty"`
 	EligibleChannels int                         `json:"eligible_channels,omitempty"`
 	Channels         []CentralLinksChannelStatus `json:"channels,omitempty"`
+	// ActiveStateKnown is true when the daemon could read the CCU-side
+	// report-value-usage metadata, so each channel's Active flag reflects the
+	// live CCU state. It is false when the backend has no metadata read path
+	// (or the read failed device-wide); clients then show eligibility only,
+	// without an active / inactive indicator.
+	ActiveStateKnown bool `json:"active_state_known"`
+	// ActiveChannels counts eligible channels whose central link is currently
+	// active. Only meaningful when ActiveStateKnown is true.
+	ActiveChannels int `json:"active_channels,omitempty"`
 }
 
 // CentralLinksChannelStatus describes one channel's suitability for
 // central click-event routing. Eligible is true when the channel
 // exposes PRESS_SHORT / PRESS_LONG and can therefore drive central
-// click events.
+// click events. Active is true when the CCU's report-value-usage
+// counter for the channel is currently raised (a central link exists);
+// it is only meaningful when the enclosing status has ActiveStateKnown
+// set.
 type CentralLinksChannelStatus struct {
 	Address  string `json:"address"`
 	Number   int    `json:"number"`
 	Eligible bool   `json:"eligible"`
+	Active   bool   `json:"active"`
 }
 
 // ErrCentralLinksUnsupported is returned by adapters when the device

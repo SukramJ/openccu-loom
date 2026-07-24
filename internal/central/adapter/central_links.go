@@ -70,9 +70,10 @@ func (c *CentralLinksDomain) RemoveCentralLinks(ctx context.Context, deviceAddre
 }
 
 // CentralLinksStatus reports per-device whether central links are
-// applicable / created. The SPA uses it to decide whether to render
-// the buttons and what label to show.
-func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error) {
+// applicable and, where the CCU exposes it, whether each eligible channel's
+// link is currently active. The SPA uses it to decide whether to render the
+// buttons, what label to show, and the live active / inactive indicator.
+func (c *CentralLinksDomain) CentralLinksStatus(ctx context.Context, deviceAddress string) (hmapi.CentralLinksStatus, error) {
 	if c.registry == nil {
 		return hmapi.CentralLinksStatus{}, ErrNoCentralLinkBackend
 	}
@@ -100,13 +101,74 @@ func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (hmapi.Cen
 				Eligible: true,
 			})
 		}
-		return hmapi.CentralLinksStatus{
+		status := hmapi.CentralLinksStatus{
 			Supported:        true,
 			EligibleChannels: eligible,
 			Channels:         channels,
-		}, nil
+		}
+		// Resolve the live active state from the CCU's report-value-usage
+		// metadata when the backend supports the read. A backend without a
+		// metadata path (or an unresolved backend) leaves ActiveStateKnown
+		// false so clients show eligibility only.
+		if reader, ok := c.metadataReaderFor(u, dev); ok {
+			status.ActiveStateKnown = true
+			for i := range status.Channels {
+				if hasCentralLink(ctx, reader, status.Channels[i].Address) {
+					status.Channels[i].Active = true
+					status.ActiveChannels++
+				}
+			}
+		}
+		return status, nil
 	}
 	return hmapi.CentralLinksStatus{}, fmt.Errorf("%w: device %s", ErrNoCentralLinkBackend, deviceAddress)
+}
+
+// metadataReaderFor resolves the backend for a device and narrows it to the
+// metadata-read capability. Returns false when no writer is wired, the
+// backend cannot be resolved, or the backend has no metadata read path
+// (CUxD / Homegear) — all of which mean the live active state is unknown.
+func (c *CentralLinksDomain) metadataReaderFor(u *central.Unit, dev *device.Device) (metadataReader, bool) {
+	if c.writer == nil {
+		return nil, false
+	}
+	backend, ok := c.writer.Backend(u.Name(), dev.InterfaceID)
+	if !ok {
+		return nil, false
+	}
+	reader, ok := backend.(metadataReader)
+	return reader, ok
+}
+
+// hasCentralLink reports whether the channel's central link is currently
+// active, i.e. the CCU's report-value-usage counter for PRESS_SHORT is
+// raised. A read error or empty metadata is treated as "not active" (the
+// counter is only present once a link has been created).
+func hasCentralLink(ctx context.Context, reader metadataReader, channelAddress string) bool {
+	raw, err := reader.GetMetadata(ctx, channelAddress, reportValueUsageDataID)
+	if err != nil || raw == nil {
+		return false
+	}
+	meta, ok := raw.(map[string]any)
+	if !ok {
+		return false
+	}
+	return metadataCounter(meta[reportValueUsageValueID]) > 0
+}
+
+// metadataCounter coerces an XML-RPC metadata value to its integer counter.
+// The wire decoder yields int for XML-RPC <i4>; the other cases guard against
+// a backend that decodes numbers differently.
+func metadataCounter(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	}
+	return 0
 }
 
 func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress, channelAddress string, refCounter int) (hmapi.CentralLinksReport, error) {
@@ -192,6 +254,19 @@ func findChannelByAddress(channels []*device.Channel, address string) *device.Ch
 type centralLinkBackend interface {
 	ReportValueUsage(ctx context.Context, channelAddress, valueID string, refCounter int) error
 }
+
+// metadataReader is the slim slice of backends.Operations the status read
+// needs: the CCU-side metadata struct (getMetadata) that holds the
+// report-value-usage counters. Narrowed so tests need not implement the full
+// backend surface.
+type metadataReader interface {
+	GetMetadata(ctx context.Context, address, dataID string) (any, error)
+}
+
+// reportValueUsageDataID is the metadata data-id under which the CCU stores
+// the per-channel central click-event reference counters. Mirrors
+// `REPORT_VALUE_USAGE_DATA` in const.py.
+const reportValueUsageDataID = "reportValueUsageData"
 
 // IsCentralLinkInterface mirrors
 // `relevant_for_central_link_management`. CUxD and VirtualDevices
