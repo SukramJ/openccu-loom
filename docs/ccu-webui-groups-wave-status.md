@@ -180,22 +180,54 @@ groups (roster: 2 groups, `groupType.id = "hmip.heating.group"`):
   enumeration source is still open but low-priority (HmIP heating is the
   primary case; BidCos heating-group type ids, if needed, come from a
   roster/`suitableGroupMembers` sample).
-- **`save` is a long-running operation, and an empty create hangs.** An
-  approved throwaway write on `172.18.4.29` creating an **empty** heating
-  group (`assignedDevicesIds:[]`) **did not return within 120 s** and no
-  group appeared (roster stayed clean). Two takeaways: (a) HMServer does not
-  process a member-less heating-group create — a create needs at least one
-  member; (b) a real create runs the HmIP virtual-device build + a
-  `CONFIG_PENDING` settle and is **long-running**, so GR02's write path
-  **must** be the async progress-broadcast job (ADR 0055 §3), not a
-  synchronous request/response. The `save` / `delete` **success** JSON body
-  is therefore still unobserved; it is a *minor* remaining unknown because
-  GR02 re-reads `getHeatingGroupList` for the new `groupId` regardless of
-  what `save` echoes. Capturing it needs a create **with a named member**
-  (a device the operator confirms is safe to wire + unwire), or it falls out
-  naturally during GR02 implementation with the async job in place. The only
-  observed shape for these endpoints so far is the session-invalid wrapper
-  `{ isSuccessful:false, errorCode:"42", content:<login html> }`.
+### `save` contract — authoritative from `GroupEditPage.ftl` `_SaveGroup()`
+
+Two approved throwaway writes on `172.18.4.29` (empty create, and a create
+with one confirmed window-sensor member) **both hung for the full client
+timeout** (120 s / 90 s) with **no** group appearing (roster stayed clean).
+Reading the shipped `_SaveGroup()` (lines ~524–615) explains why and pins the
+real contract — this supersedes the earlier "save is long-running / empty is
+rejected" guess:
+
+1. **Transport / content-type (the likely hang cause).** The WebUI sends the
+   save via Prototype `new Ajax.Request(url, {postBody: JSON.stringify(data),
+   onComplete})`. Prototype's default `Content-Type` is
+   **`application/x-www-form-urlencoded`** (charset UTF-8) with the JSON
+   string as the *raw* body. Our probes sent `application/json`; a save
+   handler reading a form-encoded body can block on that mismatch. **GR02
+   must POST the JSON body with `Content-Type:
+   application/x-www-form-urlencoded`, not `application/json`.** (Reads like
+   `suitableGroupMembers` tolerated `application/json`; `save` apparently
+   does not — treat the form content-type as required for all jpages POSTs.)
+2. **Pre-save metadata preamble.** Before the POST, the WebUI issues, per
+   device, JSON-RPC `Interface.setMetadata({objectId: device.id, dataId:
+   "inHeatingGroup", value: "true"|"false"})` — `true` for assigned members,
+   `false` for every other assignable device. GR02's save flow must replicate
+   this preamble.
+3. **Success response shape (confirmed from the code path).** `onComplete`
+   parses `response = JSON.parse(t.responseText)` and branches on
+   `response.isSuccessful`. On success of a **new** group it derives the
+   virtual device serial via `createVirtualDeviceSerialNumber(response.content)`
+   — so success is `{ isSuccessful: true, content: <virtual-device info> }`.
+   On failure, `{ isSuccessful: false, errorCode, content }`;
+   `errorCode == sessionTimeoutErrorCode` ("42") means the session expired.
+4. **`save` returns before the settle finishes.** After a successful reply the
+   WebUI collects `devicesInConfigPending` and tracks the `CONFIG_PENDING`
+   settle **separately** — the HTTP response is not gated on the settle. So
+   GR02 does not need to hold the request open for the settle; it POSTs
+   (with a sane timeout), then, like the WebUI, watches the members'
+   `CONFIG_PENDING` / re-reads `getHeatingGroupList` for completion + the new
+   `groupId`.
+5. **Post-save follow-up (GR03 scope, but wired here).** A new-group success
+   then runs JSON-RPC `Device.setName` / `Channel.setName`
+   (`Gruppenname:Kanalnr`), `iseDevices.setReadyConfig(regaId)`, and
+   `system.saveObjectModel`.
+
+The `delete` success body is still unobserved but is a *minor* unknown: GR02
+confirms deletion by re-reading `getHeatingGroupList`. The session-invalid
+wrapper `{ isSuccessful:false, errorCode:"42", content:<login html> }` is the
+only literal response body captured live so far; the shapes above come from
+the authoritative firmware template.
 
 ### jpages endpoints
 
@@ -238,9 +270,15 @@ field names are taken straight from the observed responses.
    to `CcuBackend`, POSTing to the jpages paths using the **existing**
    `b.baseURL` + `b.sessionIDFn()` already set for the firmware download
    path — the ADR 0055 session finding (re-verified 2026-07-24) is what
-   makes this free. Parse the reply on `isSuccessful`; treat
-   `errorCode:"42"` as an expired session (`ErrAuthFailure`) and let the
-   session-managed transport re-login + retry.
+   makes this free. Critical details from the `_SaveGroup()` contract above:
+   send the JSON body with **`Content-Type: application/x-www-form-urlencoded`**
+   (Prototype default — `application/json` hangs the save handler); run the
+   per-device `Interface.setMetadata(inHeatingGroup=true/false)` preamble
+   before `save`; parse the reply on `isSuccessful` (success carries
+   `content` → virtual-device serial); treat `errorCode:"42"` as an expired
+   session (`ErrAuthFailure`) → session-managed transport re-login + retry;
+   do **not** hold the request for the settle — confirm completion by
+   re-reading `getHeatingGroupList`.
 2. **Adapter.** Extend `internal/central/adapter` `GroupsDomain` with the
    write methods (resolve primary backend → jpages call).
 3. **REST.** `POST /api/v1/groups`, `PUT /api/v1/groups/{id}`,
