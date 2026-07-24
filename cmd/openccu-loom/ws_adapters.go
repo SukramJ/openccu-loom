@@ -149,6 +149,9 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// Groups: wired — read-only heating-group listing. The same
 		// groupsAdapter backs the REST GET /api/v1/groups reader.
 		Groups: newGroupsAdapter(w.groupsDomain),
+		// GroupsAdmin: wired — heating-group create/edit/delete + type /
+		// suitable-member helpers (GR02). Same adapter as the REST writer.
+		GroupsAdmin: newGroupsAdapter(w.groupsDomain),
 		// SessionRecorder: wired — fans recording.start/stop/status across
 		// every central's session.Recorder via the registry.
 		SessionRecorder: wsSessionRecorderFrom(w.registry),

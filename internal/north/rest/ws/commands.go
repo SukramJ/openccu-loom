@@ -38,6 +38,12 @@ var writeCommandRoles = map[string]auth.Role{
 	"device.replace":        auth.RoleAdmin,
 	"device.restore_config": auth.RoleAdmin,
 	"programs.delete":       auth.RoleAdmin,
+	// Heating-group administration (GR02) mirrors the admin-gated REST
+	// POST/PUT/DELETE /groups routes: creating/editing/deleting a group
+	// rewires real devices on the CCU.
+	"groups.create": auth.RoleAdmin,
+	"groups.update": auth.RoleAdmin,
+	"groups.delete": auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.
 	"alarm_messages.ack":      auth.RoleOperator,
@@ -160,6 +166,8 @@ var readOnlyCommands = map[string]struct{}{
 	"devices.list":                {},
 	"firmware.info":               {},
 	"groups.list":                 {},
+	"groups.suitable_members":     {},
+	"groups.types":                {},
 	"inbox.list":                  {},
 	"incidents.get":               {},
 	"incidents.list":              {},

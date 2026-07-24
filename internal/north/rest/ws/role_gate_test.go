@@ -178,6 +178,7 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		ParamsetReader:       paramsets,
 		CentralLinks:         &fakeCentralLinks{},
 		SessionRecorder:      &fakeSessionRecorder{},
+		GroupsAdmin:          &stubGroupsAdmin{},
 	})
 
 	RegisterMissingCommands(r, MissingCommandsConfig{

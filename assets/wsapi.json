@@ -523,6 +523,56 @@
       }
     },
     {
+      "category": "groups",
+      "description": "Create a heating group via the CCU jpages proxy (ADR 0055, GR02). Admin-gated. `central` selects the target CCU (optional when only one is configured). Returns the created group.",
+      "name": "groups.create",
+      "args": {
+        "type_id": "string",
+        "name": "string",
+        "forbid_single_operation": "boolean?",
+        "members": "array?",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "Edit an existing heating group (name, members, operate-only-via-group flag) via the jpages save path. Admin-gated.",
+      "name": "groups.update",
+      "args": {
+        "id": "integer",
+        "name": "string",
+        "forbid_single_operation": "boolean?",
+        "members": "array?",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "Delete a heating group by id via the jpages delete path. Admin-gated.",
+      "name": "groups.delete",
+      "args": {
+        "id": "integer",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "The devices assignable to a group of the given type (assignable + leftover buckets). Read.",
+      "name": "groups.suitable_members",
+      "args": {
+        "type_id": "string",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "The group types a new group can be created as. Read.",
+      "name": "groups.types",
+      "args": {
+        "central": "string?"
+      }
+    },
+    {
       "category": "hub",
       "description": "Server-pushed: a CCU program finished executing (Zentralenprogramm). Topic is scoped per central and per program-id.",
       "kind": "broadcast",
