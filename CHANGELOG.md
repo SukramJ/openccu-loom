@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.2]
+
+### Security
+
+- **Bump `github.com/getkin/kin-openapi` to v0.144.0** (GHSA-r277-6w6q-xmqw,
+  CRITICAL). The OpenAPI request-validation middleware embedded in the daemon
+  used a version whose `ValidationHandler.Load()` could fail open; the release
+  image scan flagged it. No API or behaviour change — dependency bump only.
+
 ## [0.48.1]
 
 ### Fixed

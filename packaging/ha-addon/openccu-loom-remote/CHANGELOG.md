@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.2
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (security bump of a bundled OpenAPI-validation library,
+GHSA-r277-6w6q-xmqw) — update the instance to 0.48.2 too.
+
 # 0.48.1
 
 Version ride-along. No changes to the proxy itself; the fixes ship in the

@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.2
+
+- **Security fix.** Updated a bundled OpenAPI-validation library that could
+  fail open (CRITICAL, GHSA-r277-6w6q-xmqw). No visible change; update
+  recommended.
+
 ## 0.48.1
 
 - **Live status no longer flickers behind a reverse proxy.** The UI's live
