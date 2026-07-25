@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.53.0
+  version: 2.54.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -7109,7 +7109,12 @@ components:
     SuitableMemberEntry:
       type: object
       required: [address]
-      description: One device/channel assignable to a group of a given type.
+      description: >
+        One device/channel assignable to a group of a given type. The fields
+        after `type` are best-effort enrichment resolved from the live device
+        model so a client can identify, group and filter candidates instead of
+        showing a flat address list; they are omitted when the member is not
+        (yet) present in the model.
       properties:
         address:
           type: string
@@ -7118,6 +7123,29 @@ components:
         type:
           type: string
           description: Member kind (e.g. SENSOR_WINDOW, SWITCH_ACTUATOR).
+        device_address:
+          type: string
+          description: Parent device address (address without the channel suffix); group channels by it.
+        device_name:
+          type: string
+          description: CCU-assigned device name.
+        device_model:
+          type: string
+          description: Device model (e.g. HmIP-eTRV-2).
+        channel_name:
+          type: string
+          description: CCU-assigned channel name.
+        channel_no:
+          type: integer
+          description: Channel number within the device.
+        rooms:
+          type: array
+          items: { type: string }
+          description: Rooms the channel (or its device) is assigned to.
+        functions:
+          type: array
+          items: { type: string }
+          description: Functions the channel (or its device) is assigned to.
     SuitableMembersResponse:
       type: object
       required: [assignable, leftover]

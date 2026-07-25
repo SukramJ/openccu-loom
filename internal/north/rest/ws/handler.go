@@ -27,9 +27,11 @@ const handshakeMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 // (scheme+host); cross-site browser handshakes are rejected with 403
 // before the upgrade completes, closing the WebSocket CSRF vector that
 // exists when session cookies are active. Same-origin handshakes (the
-// Origin's host equals the request Host) are always allowed — they are
-// not a CSRF vector — so the embedded SPA connects on any authority the
-// daemon is reached on, not just the localhost self-origin.
+// Origin's host equals the request Host, or the proxy-forwarded
+// X-Forwarded-Host behind a reverse proxy that rewrites Host) are always
+// allowed — they are not a CSRF vector — so the embedded SPA connects on any
+// authority the daemon is reached on (localhost, IP, hostname, or an external
+// proxy host), not just the localhost self-origin. See [sameOriginHost].
 // Requests without an Origin header are allowed even
 // when the list is non-empty: CSRF is a browser-only attack vector and
 // browsers always attach an Origin to WebSocket handshakes, so an absent
@@ -78,7 +80,7 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 			// operator reaches the daemon on — IP, hostname, container name —
 			// not just the localhost self-origin the allow-list derives. The
 			// allow-list still gates genuinely cross-origin browser clients.
-			if !strings.EqualFold(u.Host, r.Host) {
+			if !sameOriginHost(u.Host, r) {
 				normalized := strings.ToLower(u.Scheme + "://" + u.Host)
 				if _, ok := originSet[normalized]; !ok {
 					http.Error(w, "websocket origin not allowed", http.StatusForbidden)
@@ -131,6 +133,34 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 		c.close()
 		<-done
 	})
+}
+
+// sameOriginHost reports whether originHost identifies the same authority the
+// client actually reached. That is the request Host directly, or — behind a
+// reverse proxy that rewrites Host to the internal upstream — the external host
+// the proxy records in X-Forwarded-Host. Without the forwarded-host arm the
+// SPA's live WebSocket 403s in a reconnect loop behind any proxy that does not
+// preserve the original Host header (Origin carries the external authority,
+// r.Host the internal one, so they never match).
+//
+// Honouring X-Forwarded-Host does not open a cross-site hole: a browser cannot
+// set that header on a WebSocket handshake (the WS API exposes no header knob,
+// and the browser fills Origin itself), so a forged cross-origin page still
+// presents its own Origin — which matches neither the request Host nor the
+// proxy's forwarded host — and is rejected.
+func sameOriginHost(originHost string, r *http.Request) bool {
+	if strings.EqualFold(originHost, r.Host) {
+		return true
+	}
+	// X-Forwarded-Host may carry a comma-separated proxy chain; the first entry
+	// is the original client-facing host.
+	if fwd := r.Header.Get("X-Forwarded-Host"); fwd != "" {
+		if first := strings.TrimSpace(strings.SplitN(fwd, ",", 2)[0]); first != "" &&
+			strings.EqualFold(originHost, first) {
+			return true
+		}
+	}
+	return false
 }
 
 func acceptKey(key string) string {

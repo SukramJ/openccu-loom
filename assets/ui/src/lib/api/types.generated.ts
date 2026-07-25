@@ -5364,12 +5364,26 @@ export interface components {
             /** @description CCU translation key for the type label. */
             label_key?: string;
         };
-        /** @description One device/channel assignable to a group of a given type. */
+        /** @description One device/channel assignable to a group of a given type. The fields after `type` are best-effort enrichment resolved from the live device model so a client can identify, group and filter candidates instead of showing a flat address list; they are omitted when the member is not (yet) present in the model. */
         SuitableMemberEntry: {
             address: string;
             serial?: string;
             /** @description Member kind (e.g. SENSOR_WINDOW, SWITCH_ACTUATOR). */
             type?: string;
+            /** @description Parent device address (address without the channel suffix); group channels by it. */
+            device_address?: string;
+            /** @description CCU-assigned device name. */
+            device_name?: string;
+            /** @description Device model (e.g. HmIP-eTRV-2). */
+            device_model?: string;
+            /** @description CCU-assigned channel name. */
+            channel_name?: string;
+            /** @description Channel number within the device. */
+            channel_no?: number;
+            /** @description Rooms the channel (or its device) is assigned to. */
+            rooms?: string[];
+            /** @description Functions the channel (or its device) is assigned to. */
+            functions?: string[];
         };
         /** @description Candidate members for a group type. */
         SuitableMembersResponse: {
@@ -8762,6 +8776,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

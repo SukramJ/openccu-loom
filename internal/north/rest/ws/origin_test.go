@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -17,6 +18,14 @@ import (
 // HTTP status code of the server's response.
 func wsHandshakeStatus(t *testing.T, server *httptest.Server, origin string) int {
 	t.Helper()
+	return wsHandshakeStatusWithHeaders(t, server, origin, nil)
+}
+
+// wsHandshakeStatusWithHeaders is wsHandshakeStatus with additional request
+// headers (e.g. X-Forwarded-Host to simulate a reverse proxy that rewrites the
+// upstream Host).
+func wsHandshakeStatusWithHeaders(t *testing.T, server *httptest.Server, origin string, extra map[string]string) int {
+	t.Helper()
 	wsURL, _ := url.Parse(server.URL)
 	conn, err := net.Dial("tcp", wsURL.Host)
 	if err != nil {
@@ -24,17 +33,21 @@ func wsHandshakeStatus(t *testing.T, server *httptest.Server, origin string) int
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 
-	req := "GET /ws HTTP/1.1\r\n" +
-		"Host: " + wsURL.Host + "\r\n" +
-		"Upgrade: websocket\r\n" +
-		"Connection: Upgrade\r\n" +
-		"Sec-WebSocket-Key: " + genWSKey(t) + "\r\n" +
-		"Sec-WebSocket-Version: 13\r\n"
+	var req strings.Builder
+	req.WriteString("GET /ws HTTP/1.1\r\n")
+	req.WriteString("Host: " + wsURL.Host + "\r\n")
+	req.WriteString("Upgrade: websocket\r\n")
+	req.WriteString("Connection: Upgrade\r\n")
+	req.WriteString("Sec-WebSocket-Key: " + genWSKey(t) + "\r\n")
+	req.WriteString("Sec-WebSocket-Version: 13\r\n")
 	if origin != "" {
-		req += "Origin: " + origin + "\r\n"
+		req.WriteString("Origin: " + origin + "\r\n")
 	}
-	req += "\r\n"
-	if _, err := conn.Write([]byte(req)); err != nil {
+	for k, v := range extra {
+		req.WriteString(k + ": " + v + "\r\n")
+	}
+	req.WriteString("\r\n")
+	if _, err := conn.Write([]byte(req.String())); err != nil {
 		t.Fatalf("write handshake: %v", err)
 	}
 
@@ -93,5 +106,39 @@ func TestWSHandlerSameOriginAllowed(t *testing.T) {
 	sameOrigin := "http://" + wsURL.Host // host matches the request Host header
 	if got := wsHandshakeStatus(t, server, sameOrigin); got != http.StatusSwitchingProtocols {
 		t.Fatalf("same-origin handshake: status = %d, want %d", got, http.StatusSwitchingProtocols)
+	}
+}
+
+// TestWSHandlerForwardedHostAllowed pins the reverse-proxy case: the browser's
+// Origin identifies the external authority (e.g. https://loom.example) while a
+// proxy rewrites the request Host to the internal upstream, so the naive
+// Origin==Host same-origin check fails. When the proxy records the external
+// host in X-Forwarded-Host and that matches the Origin's host, the handshake is
+// same-origin and must be allowed even though the external origin is not in the
+// allow-list. Without this the SPA's live WebSocket 403s in a reconnect loop
+// behind any proxy that does not preserve the original Host header.
+func TestWSHandlerForwardedHostAllowed(t *testing.T) {
+	t.Parallel()
+	hub, _, _, _, _, _ := newTestHub(t)
+	// Allow-list excludes the external origin — only X-Forwarded-Host makes it
+	// same-origin.
+	server := httptest.NewServer(Handler(hub, nil, []string{"http://localhost:9999"}))
+	t.Cleanup(server.Close)
+
+	const externalHost = "loom.example"
+	got := wsHandshakeStatusWithHeaders(t, server,
+		"https://"+externalHost,
+		map[string]string{"X-Forwarded-Host": externalHost})
+	if got != http.StatusSwitchingProtocols {
+		t.Fatalf("proxy-forwarded same-origin handshake: status = %d, want %d", got, http.StatusSwitchingProtocols)
+	}
+
+	// A genuinely cross-site page still fails: its Origin matches neither the
+	// request Host nor the proxy's X-Forwarded-Host.
+	cross := wsHandshakeStatusWithHeaders(t, server,
+		"https://evil.example",
+		map[string]string{"X-Forwarded-Host": externalHost})
+	if cross != http.StatusForbidden {
+		t.Fatalf("cross-site handshake behind proxy: status = %d, want %d", cross, http.StatusForbidden)
 	}
 }

@@ -65,17 +65,17 @@ describe("GroupEditor — create", () => {
       },
     });
 
-    // Members loaded for the sole HmIP type.
-    await waitFor(() => expect(screen.getByText("AAA:1")).toBeInTheDocument());
+    // Members loaded for the sole HmIP type — grouped by device. Unenriched
+    // candidates fall back to a single-channel device labelled by its address.
+    await waitFor(() => expect(screen.getByLabelText("AAA")).toBeInTheDocument());
     expect(mockGroupTypes).toHaveBeenCalledWith("ccu-a");
     expect(mockSuitable).toHaveBeenCalledWith("hmip.heating.group", "ccu-a");
 
-    // Name + one member.
+    // Name + one member: AAA is single-channel, so its tri-state device
+    // checkbox selects the channel directly.
     const name = screen.getByLabelText("groups.editor.name") as HTMLInputElement;
     await fireEvent.input(name, { target: { value: "Bad" } });
-    await fireEvent.click(
-      screen.getByText("AAA:1").closest("label")!.querySelector("input")!,
-    );
+    await fireEvent.click(screen.getByLabelText("AAA"));
 
     await fireEvent.click(screen.getByText("common.save"));
 
@@ -111,7 +111,7 @@ describe("GroupEditor — edit", () => {
       },
     });
 
-    await waitFor(() => expect(screen.getByText("AAA:1")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText("AAA")).toBeInTheDocument());
     // The create-form type picker is absent in edit mode.
     expect(mockGroupTypes).not.toHaveBeenCalled();
 

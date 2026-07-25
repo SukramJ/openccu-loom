@@ -28,7 +28,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/group"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
@@ -425,12 +427,15 @@ func TestGroupsDomainWriterForSingleCentralResolves(t *testing.T) {
 	registerCentralWithClient(t, reg, w, "ccu-only", fb)
 
 	d := NewGroupsDomain(reg, w)
-	got, err := d.writerFor("")
+	got, unit, err := d.writerFor("")
 	if err != nil {
 		t.Fatalf("writerFor: %v", err)
 	}
 	if got == nil {
 		t.Fatal("writerFor returned a nil writer without an error")
+	}
+	if unit == nil {
+		t.Fatal("writerFor returned a nil unit without an error")
 	}
 }
 
@@ -444,7 +449,7 @@ func TestGroupsDomainWriterForUnsupportedBackend(t *testing.T) {
 	registerCentralWithClient(t, reg, w, "ccu-01", &fakeOperations{kind: backends.KindCCU})
 
 	d := NewGroupsDomain(reg, w)
-	_, err := d.writerFor("ccu-01")
+	_, _, err := d.writerFor("ccu-01")
 	if !errors.Is(err, backends.ErrUnsupported) {
 		t.Fatalf("err = %v, want backends.ErrUnsupported", err)
 	}
@@ -477,5 +482,76 @@ func TestGroupsDomainCreateAppliesOperateOnly(t *testing.T) {
 		if !fb.operateOnly["rega-"+dev] {
 			t.Errorf("operateOnly[rega-%s] = false, want true", dev)
 		}
+	}
+}
+
+// TestMapCandidatesEnrichesFromModel verifies that suitable-member candidates
+// are enriched from the live device model (device/channel name, model, channel
+// number) and that room/function fall back to the device when the channel
+// carries none — the data the SPA needs to group and filter a large candidate
+// list instead of showing a flat address list.
+func TestMapCandidatesEnrichesFromModel(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	dev := device.New(device.Config{
+		InterfaceID:  "BidCos-RF",
+		Interface:    hmenum.InterfaceBidCosRF,
+		Address:      "0001BBBB",
+		Name:         "Wohnzimmer Thermostat",
+		Model:        "HmIP-eTRV-2",
+		Rooms:        []string{"Wohnzimmer"},
+		Functions:    []string{"Heizung"},
+		ProductGroup: hmenum.ProductGroupHM,
+	})
+	c.ModelRegistry.Put(dev)
+	ch := dev.AddChannel("0001BBBB:1", 1, "HEATING_CLIMATE_RECEIVER", hmenum.ParamsetKeyValues)
+	ch.Name = "Heizen"
+	// The channel carries no room/function of its own -> device fallback.
+
+	got := mapCandidates(c, []backends.HeatingGroupMember{
+		{ID: "0001BBBB:1", SerialNumber: "0001BBBB", Type: "HEATING_CLIMATE_RECEIVER"},
+	})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	m := got[0]
+	if m.DeviceAddress != "0001BBBB" || m.DeviceName != "Wohnzimmer Thermostat" || m.DeviceModel != "HmIP-eTRV-2" {
+		t.Errorf("device enrichment = %+v", m)
+	}
+	if m.ChannelName != "Heizen" || m.ChannelNo != 1 {
+		t.Errorf("channel enrichment: name=%q no=%d, want Heizen/1", m.ChannelName, m.ChannelNo)
+	}
+	if len(m.Rooms) != 1 || m.Rooms[0] != "Wohnzimmer" {
+		t.Errorf("rooms fallback = %v, want [Wohnzimmer]", m.Rooms)
+	}
+	if len(m.Functions) != 1 || m.Functions[0] != "Heizung" {
+		t.Errorf("functions fallback = %v, want [Heizung]", m.Functions)
+	}
+}
+
+// TestMapCandidatesUnknownMemberLeavesEnrichmentEmpty verifies the best-effort
+// contract: a member not in the model still gets its device address (derived
+// from the channel address) but no model-sourced fields.
+func TestMapCandidatesUnknownMemberLeavesEnrichmentEmpty(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	got := mapCandidates(c, []backends.HeatingGroupMember{
+		{ID: "9999ZZZZ:2", SerialNumber: "9999ZZZZ", Type: "SENSOR"},
+	})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	m := got[0]
+	if m.DeviceAddress != "9999ZZZZ" {
+		t.Errorf("DeviceAddress = %q, want 9999ZZZZ", m.DeviceAddress)
+	}
+	if m.DeviceName != "" || m.ChannelName != "" || len(m.Rooms) != 0 {
+		t.Errorf("unexpected enrichment for unknown member: %+v", m)
 	}
 }

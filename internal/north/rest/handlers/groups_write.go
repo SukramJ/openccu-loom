@@ -58,11 +58,21 @@ type GroupTypeEntry struct {
 	LabelKey string `json:"label_key,omitempty"`
 }
 
-// SuitableMemberEntry is one device/channel assignable to a group type.
+// SuitableMemberEntry is one device/channel assignable to a group type. The
+// fields below Type are best-effort enrichment from the live device model that
+// let the SPA identify, group and filter candidates; they are omitted when the
+// member is not (yet) in the model.
 type SuitableMemberEntry struct {
-	Address string `json:"address"`
-	Serial  string `json:"serial,omitempty"`
-	Type    string `json:"type,omitempty"`
+	Address       string   `json:"address"`
+	Serial        string   `json:"serial,omitempty"`
+	Type          string   `json:"type,omitempty"`
+	DeviceAddress string   `json:"device_address,omitempty"`
+	DeviceName    string   `json:"device_name,omitempty"`
+	DeviceModel   string   `json:"device_model,omitempty"`
+	ChannelName   string   `json:"channel_name,omitempty"`
+	ChannelNo     int      `json:"channel_no,omitempty"`
+	Rooms         []string `json:"rooms,omitempty"`
+	Functions     []string `json:"functions,omitempty"`
 }
 
 // SuitableMembersResponse splits the candidate members into assignable and

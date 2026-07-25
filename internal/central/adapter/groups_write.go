@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/group"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
@@ -39,12 +40,13 @@ var (
 	groupSavePollInterval = 2 * time.Second
 )
 
-// writerFor resolves the group-write capability for a central, or an error:
-// ErrUnknownCentral (no such central) / ErrUnsupported (backend can't manage
-// groups).
-func (a *GroupsDomain) writerFor(centralName string) (heatingGroupWriter, error) {
+// writerFor resolves the group-write capability for a central plus the owning
+// unit (used to enrich member candidates from the live device model), or an
+// error: ErrUnknownCentral (no such central) / ErrUnsupported (backend can't
+// manage groups).
+func (a *GroupsDomain) writerFor(centralName string) (heatingGroupWriter, *central.Unit, error) {
 	if a.registry == nil || a.writer == nil {
-		return nil, hmerr.ErrUnknownCentral
+		return nil, nil, hmerr.ErrUnknownCentral
 	}
 	// A write targets exactly one central. An empty name resolves to the sole
 	// registered central (single-CCU convenience); with several it is
@@ -52,23 +54,23 @@ func (a *GroupsDomain) writerFor(centralName string) (heatingGroupWriter, error)
 	if centralName == "" {
 		units := a.registry.List()
 		if len(units) != 1 || units[0] == nil {
-			return nil, hmerr.ErrUnknownCentral
+			return nil, nil, hmerr.ErrUnknownCentral
 		}
 		centralName = units[0].Name()
 	}
 	unit, ok := a.registry.Get(centralName)
 	if !ok || unit == nil {
-		return nil, hmerr.ErrUnknownCentral
+		return nil, nil, hmerr.ErrUnknownCentral
 	}
 	_, backend, err := primaryBackendOf(unit, a.writer)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	w, ok := backend.(heatingGroupWriter)
 	if !ok {
-		return nil, backends.ErrUnsupported
+		return nil, nil, backends.ErrUnsupported
 	}
-	return w, nil
+	return w, unit, nil
 }
 
 // Types lists the group types a new group can be created as. The firmware
@@ -76,7 +78,7 @@ func (a *GroupsDomain) writerFor(centralName string) (heatingGroupWriter, error)
 // (which allocates a throwaway draft, never persisted) and returns the parsed
 // type list.
 func (a *GroupsDomain) Types(ctx context.Context, centralName string) ([]group.Type, error) {
-	w, err := a.writerFor(centralName)
+	w, _, err := a.writerFor(centralName)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (a *GroupsDomain) Types(ctx context.Context, centralName string) ([]group.T
 
 // SuitableMembers returns the devices assignable to a group of the given type.
 func (a *GroupsDomain) SuitableMembers(ctx context.Context, centralName, typeID string) (group.SuitableMembers, error) {
-	w, err := a.writerFor(centralName)
+	w, unit, err := a.writerFor(centralName)
 	if err != nil {
 		return group.SuitableMembers{}, err
 	}
@@ -102,8 +104,8 @@ func (a *GroupsDomain) SuitableMembers(ctx context.Context, centralName, typeID 
 		return group.SuitableMembers{}, err
 	}
 	return group.SuitableMembers{
-		Assignable: mapCandidates(res.Assignable),
-		Leftover:   mapCandidates(res.Leftover),
+		Assignable: mapCandidates(unit, res.Assignable),
+		Leftover:   mapCandidates(unit, res.Leftover),
 	}, nil
 }
 
@@ -113,7 +115,7 @@ func (a *GroupsDomain) SuitableMembers(ctx context.Context, centralName, typeID 
 // response is unreliable (it may time out even though the group committed),
 // so the roster is the completion signal.
 func (a *GroupsDomain) Create(ctx context.Context, centralName string, in group.CreateInput) (group.Group, error) {
-	w, err := a.writerFor(centralName)
+	w, _, err := a.writerFor(centralName)
 	if err != nil {
 		return group.Group{}, err
 	}
@@ -154,7 +156,7 @@ func (a *GroupsDomain) Create(ctx context.Context, centralName string, in group.
 // Update edits an existing group. The group's type is immutable, so it is
 // carried through from the current roster entry.
 func (a *GroupsDomain) Update(ctx context.Context, centralName string, groupID int, in group.UpdateInput) error {
-	w, err := a.writerFor(centralName)
+	w, _, err := a.writerFor(centralName)
 	if err != nil {
 		return err
 	}
@@ -217,7 +219,7 @@ func (a *GroupsDomain) applyOperateGroupOnly(ctx context.Context, w heatingGroup
 // Delete removes a group by id, 404-ing (ErrGroupNotFound) when the roster
 // does not carry it.
 func (a *GroupsDomain) Delete(ctx context.Context, centralName string, groupID int) error {
-	w, err := a.writerFor(centralName)
+	w, _, err := a.writerFor(centralName)
 	if err != nil {
 		return err
 	}
@@ -309,14 +311,51 @@ func deviceOf(memberAddress string) string {
 	return memberAddress
 }
 
-func mapCandidates(in []backends.HeatingGroupMember) []group.MemberCandidate {
+func mapCandidates(unit *central.Unit, in []backends.HeatingGroupMember) []group.MemberCandidate {
 	out := make([]group.MemberCandidate, 0, len(in))
 	for _, m := range in {
-		out = append(out, group.MemberCandidate{
-			Address: m.ID,
-			Serial:  m.SerialNumber,
-			Type:    m.Type,
-		})
+		c := group.MemberCandidate{
+			Address:       m.ID,
+			Serial:        m.SerialNumber,
+			Type:          m.Type,
+			DeviceAddress: deviceOf(m.ID),
+		}
+		enrichCandidate(&c, unit)
+		out = append(out, c)
 	}
 	return out
+}
+
+// enrichCandidate fills a candidate's identification fields (device/channel
+// name, model, channel number, rooms, functions) from the live device model so
+// the SPA can group and filter hundreds of candidates instead of rendering a
+// flat address list. Best-effort: a member not yet in the model — or a nil unit
+// — leaves the enrichment fields empty and the SPA falls back to the address.
+func enrichCandidate(c *group.MemberCandidate, unit *central.Unit) {
+	if unit == nil {
+		return
+	}
+	ch := unit.GetChannel(c.Address)
+	if ch == nil {
+		return
+	}
+	c.ChannelName = ch.Name
+	c.ChannelNo = ch.Number
+	c.Rooms = append([]string(nil), ch.Rooms...)
+	c.Functions = append([]string(nil), ch.Functions...)
+	dev := ch.Device()
+	if dev == nil {
+		return
+	}
+	c.DeviceAddress = dev.Address
+	c.DeviceName = dev.Name
+	c.DeviceModel = dev.Model
+	// A channel often carries no room/function of its own; fall back to the
+	// device's assignment so every candidate can still be filtered by room.
+	if len(c.Rooms) == 0 {
+		c.Rooms = append([]string(nil), dev.Rooms...)
+	}
+	if len(c.Functions) == 0 {
+		c.Functions = append([]string(nil), dev.Functions...)
+	}
 }
