@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.6
+
+- **Security.** Completed the remote-proxy open-redirect hardening flagged by
+  CodeQL; 0.48.5 covered the final write, this closes the remaining rewrite
+  helpers. No user-visible change.
+
 ## 0.48.5
 
 - **Security & maintenance.** Hardened the remote-proxy against open redirects

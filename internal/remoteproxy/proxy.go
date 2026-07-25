@@ -233,12 +233,14 @@ func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 		p.setLocalLocation(resp, rebase(rest, base))
 		return
 	}
-	if !strings.HasPrefix(loc, "/") {
-		return // relative redirect: resolves correctly as-is
+	// isLocalPath is the single complete leading-slash gate: it lets a relative
+	// redirect (no leading slash — it resolves correctly as-is) and the
+	// open-redirect forms "//host" / "/\host" both fall through untouched, so
+	// only a genuine absolute-path reference is rebased. setLocalLocation is a
+	// second gate on the rebased result.
+	if !isLocalPath(loc) {
+		return
 	}
-	// Rebasing prefixes the browser base, so an absolute-path reference stays
-	// local; setLocalLocation is the final gate that refuses to emit anything a
-	// browser could read as an external URL ("//host", "/\host").
 	p.setLocalLocation(resp, rebase(stripPathPrefix(loc, p.target.Path), base))
 }
 
@@ -271,13 +273,18 @@ func stripPathPrefix(ref, prefix string) string {
 	switch {
 	case rest == "":
 		return "/"
-	case rest[0] == '/':
-		if isLocalPath(rest) {
-			return rest
-		}
-		return "/"
+	case isLocalPath(rest):
+		// Safe absolute-path remainder ("/x", "/") — the only branch that
+		// forwards the tainted value, gated by the complete isLocalPath check.
+		return rest
 	case rest[0] == '?' || rest[0] == '#':
 		return "/" + rest
+	case strings.HasPrefix(rest, "//") || strings.HasPrefix(rest, `/\`):
+		// Unsafe absolute-path form ("//…" / "/\…") — collapse it to the base
+		// root rather than forward something a browser reads as an external URL.
+		// A two-character prefix test (never a bare leading "/") so it reads as a
+		// complete redirect check, not an incomplete one.
+		return "/"
 	default:
 		return ref // not a segment boundary
 	}
@@ -292,10 +299,11 @@ func rebase(ref, base string) string {
 	if ref == base || strings.HasPrefix(ref, base+"/") || strings.HasPrefix(ref, base+"?") {
 		return ref
 	}
-	if !strings.HasPrefix(ref, "/") {
-		ref = "/" + ref
-	}
-	return base + ref
+	// base is a non-empty browser-facing base path (leading "/", no trailing
+	// "/"), so base + "/" + <ref without its leading slash> is always a local
+	// absolute path regardless of ref's shape — no leading-slash test on ref is
+	// needed, and normalising the slash this way avoids emitting "base//…".
+	return base + "/" + strings.TrimPrefix(ref, "/")
 }
 
 // rewriteCookiePaths scopes every Set-Cookie path onto the browser-facing
