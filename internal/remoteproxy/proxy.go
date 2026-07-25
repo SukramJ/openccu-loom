@@ -212,9 +212,12 @@ func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 	if loc == "" {
 		return
 	}
-	if u, err := url.Parse(loc); err == nil && u.IsAbs() {
-		// Absolute URL pointing back at the upstream host: fold it into
-		// the ingress origin. Foreign hosts (OIDC issuers etc.) pass.
+	// url.Parse sets Host for both absolute ("https://host/…") and
+	// protocol-relative ("//host/…") targets. Fold a redirect back at the
+	// upstream host into the ingress origin; leave foreign hosts (OIDC issuers
+	// etc.) untouched. Routing protocol-relative URLs here keeps them out of the
+	// absolute-path branch below, where they would otherwise be reinterpreted.
+	if u, err := url.Parse(loc); err == nil && u.Host != "" {
 		if u.Host != p.target.Host {
 			return
 		}
@@ -227,13 +230,34 @@ func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 		if u.Fragment != "" {
 			rest += "#" + u.EscapedFragment()
 		}
-		resp.Header.Set("Location", rebase(rest, base))
+		p.setLocalLocation(resp, rebase(rest, base))
 		return
 	}
 	if !strings.HasPrefix(loc, "/") {
 		return // relative redirect: resolves correctly as-is
 	}
-	resp.Header.Set("Location", rebase(stripPathPrefix(loc, p.target.Path), base))
+	// Rebasing prefixes the browser base, so an absolute-path reference stays
+	// local; setLocalLocation is the final gate that refuses to emit anything a
+	// browser could read as an external URL ("//host", "/\host").
+	p.setLocalLocation(resp, rebase(stripPathPrefix(loc, p.target.Path), base))
+}
+
+// isLocalPath reports whether s is an absolute-path reference that cannot be
+// reinterpreted by a browser as an external URL: a single leading "/" that is
+// not immediately followed by another "/" or a "\".
+func isLocalPath(s string) bool {
+	if s == "/" {
+		return true
+	}
+	return len(s) > 1 && s[0] == '/' && s[1] != '/' && s[1] != '\\'
+}
+
+// setLocalLocation writes the rewritten Location header only when the computed
+// target is a safe local path, so a rebase can never emit an open redirect.
+func (p *instanceProxy) setLocalLocation(resp *http.Response, loc string) {
+	if isLocalPath(loc) {
+		resp.Header.Set("Location", loc)
+	}
 }
 
 // stripPathPrefix removes the upstream base path from an absolute-path

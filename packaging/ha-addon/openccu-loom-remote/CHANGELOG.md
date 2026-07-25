@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.5
+
+**Security & maintenance.** The proxy's redirect rewriting is hardened against
+open redirects (CodeQL), and dependencies are refreshed. Update the paired
+instance to 0.48.5 too. No user-visible change.
+
 # 0.48.4
 
 **Really fixes the live-connection flicker through this proxy.** 0.48.3's

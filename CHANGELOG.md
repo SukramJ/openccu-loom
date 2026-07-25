@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.5]
+
+### Security
+
+- **Harden the remote-proxy redirect rewriting against open redirects**
+  (CodeQL `go/bad-redirect-check`). The proxy now emits a rewritten `Location`
+  only when the computed target is a genuine local path — a single leading `/`
+  not followed by another `/` or a `\` — so a value such as `//host` or `/\host`
+  can never be turned into a protocol-relative redirect off-site.
+
+### Changed
+
+- **Dependency refresh.** Go and SPA dependencies bumped to their latest
+  compatible releases.
+
 ## [0.48.4]
 
 ### Fixed
