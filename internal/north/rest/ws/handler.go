@@ -64,11 +64,18 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 			http.Error(w, "missing Sec-WebSocket-Key", http.StatusBadRequest)
 			return
 		}
-		// Only validate the Origin when one is present. A missing Origin is a
-		// non-browser client (CSRF is a browser-only vector and browsers always
-		// send Origin on WS handshakes), so it cannot be a forged cross-site
-		// request and is allowed through even with an active allowlist.
-		if origin := r.Header.Get("Origin"); len(originSet) > 0 && origin != "" {
+		// Only validate the Origin for cookie-authenticated browser handshakes.
+		// A request carrying an Authorization header (Bearer/Basic) is never a
+		// CSRF vector — CSRF rides ambient cookie auth, and a browser cannot set
+		// an Authorization header on a WebSocket handshake — so it is exempt,
+		// mirroring the CSRF middleware (auth.CSRFMiddleware). This lets the SPA
+		// connect through the remote-proxy add-on, which injects a Bearer token
+		// and strips the session cookie: across that proxy chain the browser's
+		// external Origin cannot be reconciled with the daemon's internal Host,
+		// yet the handshake is not a CSRF risk. A missing Origin (non-browser
+		// client) is likewise allowed.
+		if origin := r.Header.Get("Origin"); r.Header.Get("Authorization") == "" &&
+			len(originSet) > 0 && origin != "" {
 			u, err := url.Parse(origin)
 			if err != nil {
 				http.Error(w, "websocket origin invalid", http.StatusForbidden)

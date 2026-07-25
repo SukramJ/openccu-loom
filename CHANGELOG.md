@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.4]
+
+### Fixed
+
+- **Heating groups created from the UI are no longer empty.** Saving a group
+  with members created it with **zero members** — HMServer's `group/save`
+  handler expects `assignedDevicesIds` as a JSON-encoded *string*, but the
+  daemon sent a native JSON array, which HMServer silently drops. The daemon
+  now sends the stringified form, matching the CCU WebUI. Root cause captured
+  from the WebUI and live-confirmed both ways (native array → 0 members,
+  stringified → members assigned).
+- **Live WebSocket 403 through the remote-proxy add-on.** When the SPA was
+  reached through a chained proxy (e.g. Traefik → remote-proxy → daemon), the
+  `/api/v1/events` handshake still failed the WebSocket same-origin check
+  because the browser's external Origin cannot be reconciled with the daemon's
+  internal Host across the chain — leaving the live indicator flickering. The
+  origin check now skips any handshake that carries an `Authorization` header
+  (Bearer/Basic), mirroring the CSRF middleware: such a request is not a CSRF
+  vector (CSRF rides ambient cookie auth, and a browser cannot set an
+  Authorization header on a WebSocket handshake), and the remote-proxy injects
+  a Bearer token while stripping the cookie. Cookie-authenticated handshakes
+  keep the origin protection.
+
 ## [0.48.3]
 
 ### Fixed

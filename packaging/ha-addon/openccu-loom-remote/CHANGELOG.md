@@ -4,6 +4,13 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.4
+
+**Really fixes the live-connection flicker through this proxy.** 0.48.3's
+`X-Forwarded-Host` approach did not survive every proxy chain; the daemon now
+accepts the token-authenticated live WebSocket this proxy forwards regardless of
+the forwarded host. Update the paired instance to 0.48.4 too.
+
 # 0.48.3
 
 **Fixes the live-connection flicker behind this proxy.** The proxy now preserves

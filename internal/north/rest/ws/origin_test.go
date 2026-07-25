@@ -142,3 +142,28 @@ func TestWSHandlerForwardedHostAllowed(t *testing.T) {
 		t.Fatalf("cross-site handshake behind proxy: status = %d, want %d", cross, http.StatusForbidden)
 	}
 }
+
+// TestWSHandlerAuthorizationHeaderExemptsOriginCheck pins that a handshake
+// carrying an Authorization header (Bearer/Basic — e.g. injected by the
+// remote-proxy add-on, which strips the session cookie) skips the Origin
+// allow-list entirely: it is not a CSRF vector, so the browser's external
+// Origin need not be reconciled with the daemon's internal Host across a proxy
+// chain. Cookie-path handshakes (no Authorization) keep the CSRF protection.
+func TestWSHandlerAuthorizationHeaderExemptsOriginCheck(t *testing.T) {
+	t.Parallel()
+	hub, _, _, _, _, _ := newTestHub(t)
+	server := httptest.NewServer(Handler(hub, nil, []string{"http://localhost:9999"}))
+	t.Cleanup(server.Close)
+
+	got := wsHandshakeStatusWithHeaders(t, server,
+		"https://evil.example",
+		map[string]string{"Authorization": "Bearer tok"})
+	if got != http.StatusSwitchingProtocols {
+		t.Fatalf("bearer-authenticated cross-origin handshake: status = %d, want %d", got, http.StatusSwitchingProtocols)
+	}
+
+	// Same handshake without Authorization stays rejected (cookie CSRF path).
+	if got := wsHandshakeStatus(t, server, "https://evil.example"); got != http.StatusForbidden {
+		t.Fatalf("cookie-path cross-origin handshake: status = %d, want %d", got, http.StatusForbidden)
+	}
+}

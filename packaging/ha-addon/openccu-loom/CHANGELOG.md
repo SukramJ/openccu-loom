@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.4
+
+- **Heating groups you create in the UI keep their members.** Saving a group
+  with devices created it empty; groups are now saved with their members.
+- **Live status stays connected through the remote-proxy.** When the UI was
+  opened via the remote-proxy add-on (e.g. behind Traefik), the live connection
+  still dropped in a loop; the daemon now accepts the token-authenticated live
+  connection through the proxy chain.
+
 ## 0.48.3
 
 - **Live status stays connected.** The UI's live connection dropped and
