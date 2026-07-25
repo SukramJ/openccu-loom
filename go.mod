@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/SukramJ/godevccu v0.1.8
-	github.com/getkin/kin-openapi v0.142.0
+	github.com/getkin/kin-openapi v0.144.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
