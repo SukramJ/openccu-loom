@@ -1,8 +1,14 @@
 <script lang="ts">
-  // Create / edit a heating group (GR02). Type picker → member picker →
-  // name + "operate only via group" toggle. Backed by the CCU jpages proxy
-  // through the REST API; the create path is fire-and-poll on the daemon
-  // side, so a save can take a moment. Mirrors the CCU WebUI group editor.
+  // Create / edit a heating group (GR02+). Type picker → grouped member picker
+  // → name + "operate only via group" toggle. Backed by the CCU jpages proxy
+  // through the REST API; the create path is fire-and-poll on the daemon side,
+  // so a save can take a moment.
+  //
+  // The member picker groups candidates by device, offers search + room/only-
+  // selected filters, a tri-state per-device checkbox, and a live selection
+  // tray — a flat address list does not scale to the hundreds of channels a
+  // real installation exposes. Candidate identification (device/channel name,
+  // model, room, function) is enriched by the daemon from the live model.
   import { onMount, untrack } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type {
@@ -41,6 +47,12 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
 
+  // Picker UI state.
+  let query = $state("");
+  let roomFilter = $state<string | null>(null);
+  let selectedOnly = $state(false);
+  let openDevices = $state<Set<string>>(new Set());
+
   onMount(async () => {
     try {
       if (!isEdit) {
@@ -69,9 +81,7 @@
           byAddr.set(m.address, { address: m.address, type: m.type_id });
         }
       }
-      candidates = [...byAddr.values()].sort((a, b) =>
-        a.address.localeCompare(b.address),
-      );
+      candidates = [...byAddr.values()];
     } finally {
       loadingMembers = false;
     }
@@ -80,7 +90,118 @@
   async function onTypeChange(next: string) {
     typeId = next;
     selected = new Set();
+    roomFilter = null;
+    query = "";
+    selectedOnly = false;
     await loadMembers(next);
+  }
+
+  // ── grouping / filtering ────────────────────────────────────────────────
+  type Channel = { address: string; name: string; no: number };
+  type DeviceGroup = {
+    deviceAddress: string;
+    deviceName: string;
+    deviceModel: string;
+    memberType: string;
+    rooms: string[];
+    functions: string[];
+    channels: Channel[];
+  };
+
+  function channelLabel(m: SuitableMemberEntry): string {
+    if (m.channel_name) return m.channel_name;
+    const no = m.channel_no ?? Number(m.address.split(":")[1] ?? 0);
+    return t("groups.editor.channel_fallback", { no });
+  }
+
+  const devices = $derived.by<DeviceGroup[]>(() => {
+    const byDev = new Map<string, DeviceGroup>();
+    for (const m of candidates) {
+      const devAddr = m.device_address || m.address.split(":")[0];
+      let g = byDev.get(devAddr);
+      if (!g) {
+        g = {
+          deviceAddress: devAddr,
+          deviceName: m.device_name || devAddr,
+          deviceModel: m.device_model || "",
+          memberType: m.type || "",
+          rooms: [...(m.rooms ?? [])],
+          functions: [...(m.functions ?? [])],
+          channels: [],
+        };
+        byDev.set(devAddr, g);
+      }
+      for (const r of m.rooms ?? []) if (!g.rooms.includes(r)) g.rooms.push(r);
+      for (const f of m.functions ?? [])
+        if (!g.functions.includes(f)) g.functions.push(f);
+      g.channels.push({
+        address: m.address,
+        name: channelLabel(m),
+        no: m.channel_no ?? Number(m.address.split(":")[1] ?? 0),
+      });
+    }
+    const list = [...byDev.values()];
+    for (const g of list) g.channels.sort((a, b) => a.no - b.no);
+    list.sort((a, b) => a.deviceName.localeCompare(b.deviceName));
+    return list;
+  });
+
+  const roomOptions = $derived([
+    ...new Set(devices.flatMap((g) => g.rooms).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b)));
+
+  const filtered = $derived.by<DeviceGroup[]>(() => {
+    const q = query.trim().toLowerCase();
+    return devices.filter((g) => {
+      if (roomFilter && !g.rooms.includes(roomFilter)) return false;
+      if (selectedOnly && !g.channels.some((c) => selected.has(c.address)))
+        return false;
+      if (q) {
+        const hay = [
+          g.deviceName,
+          g.deviceModel,
+          g.memberType,
+          g.deviceAddress,
+          ...g.rooms,
+          ...g.functions,
+          ...g.channels.map((c) => `${c.name} ${c.address}`),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  });
+
+  const selectedDeviceCount = $derived(
+    new Set([...selected].map((a) => a.split(":")[0])).size,
+  );
+  const selectedChips = $derived.by(() => {
+    const out: { address: string; device: string; room: string; suffix: string }[] = [];
+    for (const g of devices) {
+      for (const c of g.channels) {
+        if (selected.has(c.address)) {
+          out.push({
+            address: c.address,
+            device: g.deviceName,
+            room: g.rooms[0] ?? "",
+            suffix: g.channels.length > 1 ? `·${c.no}` : "",
+          });
+        }
+      }
+    }
+    return out;
+  });
+
+  function deviceState(g: DeviceGroup): "none" | "some" | "all" {
+    const on = g.channels.filter((c) => selected.has(c.address)).length;
+    if (on === 0) return "none";
+    return on === g.channels.length ? "all" : "some";
+  }
+
+  function selectedInDevice(g: DeviceGroup): number {
+    return g.channels.filter((c) => selected.has(c.address)).length;
   }
 
   function toggle(addr: string) {
@@ -88,6 +209,30 @@
     if (s.has(addr)) s.delete(addr);
     else s.add(addr);
     selected = s;
+  }
+
+  function toggleDevice(g: DeviceGroup) {
+    const s = new Set(selected);
+    if (deviceState(g) === "all") g.channels.forEach((c) => s.delete(c.address));
+    else g.channels.forEach((c) => s.add(c.address));
+    selected = s;
+  }
+
+  function toggleOpen(addr: string) {
+    const s = new Set(openDevices);
+    if (s.has(addr)) s.delete(addr);
+    else s.add(addr);
+    openDevices = s;
+  }
+
+  function selectVisible() {
+    const s = new Set(selected);
+    for (const g of filtered) for (const c of g.channels) s.add(c.address);
+    selected = s;
+  }
+
+  function clearAll() {
+    selected = new Set();
   }
 
   const canSave = $derived(
@@ -102,11 +247,7 @@
       if (isEdit && group) {
         await api.updateGroup(
           group.id,
-          {
-            name: name.trim(),
-            forbid_single_operation: forbidSingle,
-            members,
-          },
+          { name: name.trim(), forbid_single_operation: forbidSingle, members },
           central,
         );
         toastStore.success(t("groups.editor.updated"));
@@ -124,16 +265,14 @@
       }
       onSaved();
     } catch (err) {
-      toastStore.error(
-        err instanceof ApiError ? err.message : String(err),
-      );
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     } finally {
       saving = false;
     }
   }
 
   function typeLabel(ty: GroupTypeEntry): string {
-    return ty.label_key ? `${ty.id}` : ty.id;
+    return ty.id;
   }
 </script>
 
@@ -148,7 +287,7 @@
   tabindex="-1"
 >
   <div
-    class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg shadow-xl"
+    class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg shadow-xl"
     style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
   >
     <header class="border-b border-[var(--ha-divider-color)] px-5 py-3">
@@ -160,7 +299,7 @@
       {/if}
     </header>
 
-    <div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+    <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
       {#if loading}
         <LoadingState />
       {:else if error}
@@ -168,66 +307,227 @@
           {t("common.error")} {error}
         </p>
       {:else}
-        <div>
-          <label class="mb-1 block text-sm font-medium" for="group-name">
-            {t("groups.editor.name")}
-          </label>
-          <Input id="group-name" bind:value={name} placeholder={t("groups.editor.name")} disabled={saving} />
-        </div>
-
-        {#if !isEdit}
+        <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <span class="mb-1 block text-sm font-medium">{t("groups.type")}</span>
-            {#if types.length <= 1}
-              <p class="text-sm text-[var(--ha-secondary-text-color)]">
-                {types[0] ? typeLabel(types[0]) : typeId || t("groups.editor.no_types")}
-              </p>
-            {:else}
-              <select
-                class="h-10 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 text-sm text-[var(--ha-primary-text-color)]"
-                value={typeId}
-                disabled={saving}
-                onchange={(e) => void onTypeChange((e.currentTarget as HTMLSelectElement).value)}
-              >
-                {#each types as ty (ty.id)}
-                  <option value={ty.id}>{typeLabel(ty)}</option>
-                {/each}
-              </select>
-            {/if}
+            <label class="mb-1 block text-sm font-medium" for="group-name">
+              {t("groups.editor.name")}
+            </label>
+            <Input id="group-name" bind:value={name} placeholder={t("groups.editor.name")} disabled={saving} />
           </div>
-        {/if}
+
+          {#if !isEdit}
+            <div>
+              <span class="mb-1 block text-sm font-medium">{t("groups.type")}</span>
+              {#if types.length <= 1}
+                <p class="flex h-10 items-center text-sm text-[var(--ha-secondary-text-color)]">
+                  {types[0] ? typeLabel(types[0]) : typeId || t("groups.editor.no_types")}
+                </p>
+              {:else}
+                <select
+                  class="h-10 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-3 text-sm text-[var(--ha-primary-text-color)]"
+                  value={typeId}
+                  disabled={saving}
+                  onchange={(e) => void onTypeChange((e.currentTarget as HTMLSelectElement).value)}
+                >
+                  {#each types as ty (ty.id)}
+                    <option value={ty.id}>{typeLabel(ty)}</option>
+                  {/each}
+                </select>
+              {/if}
+            </div>
+          {/if}
+        </div>
 
         <label class="flex items-center justify-between gap-3">
           <span class="text-sm font-medium">{t("groups.operate_only_via_group")}</span>
           <Switch bind:checked={forbidSingle} disabled={saving} />
         </label>
 
-        <div>
-          <span class="mb-1 block text-sm font-medium">
-            {t("groups.editor.members")}
-            <span class="font-normal text-[var(--ha-secondary-text-color)]">({selected.size})</span>
-          </span>
+        <!-- member picker -->
+        <div class="flex min-h-0 flex-col">
+          <div class="mb-2 flex items-baseline justify-between">
+            <span class="text-sm font-medium">{t("groups.editor.members")}</span>
+            <span class="text-xs text-[var(--ha-secondary-text-color)]">
+              {t("groups.editor.selection_summary", {
+                channels: selected.size,
+                devices: selectedDeviceCount,
+              })}
+            </span>
+          </div>
+
           {#if loadingMembers}
             <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
           {:else if candidates.length === 0}
             <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("groups.editor.no_members")}</p>
           {:else}
-            <div class="max-h-56 space-y-1 overflow-y-auto rounded-md border border-[var(--ha-divider-color)] p-2">
-              {#each candidates as m (m.address)}
-                <label class="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-[var(--ha-secondary-background-color)]">
-                  <input
-                    type="checkbox"
-                    class="h-4 w-4"
-                    checked={selected.has(m.address)}
-                    disabled={saving}
-                    onchange={() => toggle(m.address)}
-                  />
-                  <span class="font-mono">{m.address}</span>
-                  {#if m.type}
-                    <span class="text-xs text-[var(--ha-secondary-text-color)]">({m.type})</span>
+            <!-- search + facets -->
+            <div class="mb-2 space-y-2">
+              <input
+                type="search"
+                class="h-10 w-full rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-secondary-background-color)] px-3 text-sm text-[var(--ha-primary-text-color)]"
+                placeholder={t("groups.editor.search_placeholder")}
+                aria-label={t("groups.editor.search_placeholder")}
+                bind:value={query}
+                disabled={saving}
+              />
+              <div class="flex flex-wrap items-center gap-1.5">
+                {#each roomOptions as room (room)}
+                  <button
+                    type="button"
+                    class="rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {roomFilter === room
+                      ? 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]/10 text-[var(--ha-primary-color)]'
+                      : 'border-[var(--ha-divider-color)] text-[var(--ha-secondary-text-color)] hover:bg-[var(--ha-secondary-background-color)]'}"
+                    aria-pressed={roomFilter === room}
+                    onclick={() => (roomFilter = roomFilter === room ? null : room)}
+                  >
+                    {room}
+                  </button>
+                {/each}
+                <button
+                  type="button"
+                  class="rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {selectedOnly
+                    ? 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]/10 text-[var(--ha-primary-color)]'
+                    : 'border-[var(--ha-divider-color)] text-[var(--ha-secondary-text-color)] hover:bg-[var(--ha-secondary-background-color)]'}"
+                  aria-pressed={selectedOnly}
+                  onclick={() => (selectedOnly = !selectedOnly)}
+                >
+                  ★ {t("groups.editor.only_selected")}
+                </button>
+                <span class="flex-1"></span>
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-[var(--ha-primary-color)] hover:underline disabled:opacity-50"
+                  onclick={selectVisible}
+                  disabled={filtered.length === 0}
+                >
+                  {t("groups.editor.select_visible")}
+                </button>
+              </div>
+            </div>
+
+            <!-- grouped device list -->
+            <div class="max-h-64 space-y-1.5 overflow-y-auto rounded-md border border-[var(--ha-divider-color)] p-1.5">
+              {#if filtered.length === 0}
+                <p class="px-2 py-6 text-center text-sm text-[var(--ha-secondary-text-color)]">
+                  {t("groups.editor.no_matches")}
+                </p>
+              {/if}
+              {#each filtered as g (g.deviceAddress)}
+                {@const st = deviceState(g)}
+                {@const multi = g.channels.length > 1}
+                <div
+                  class="overflow-hidden rounded-md border {st === 'some'
+                    ? 'border-[var(--ha-primary-color)]/60'
+                    : 'border-[var(--ha-divider-color)]'}"
+                >
+                  <div class="flex items-center gap-2.5 px-2 py-1.5">
+                    <button
+                      type="button"
+                      class="flex h-5 w-5 flex-none items-center justify-center rounded border text-[11px] font-bold text-white {st ===
+                      'none'
+                        ? 'border-[var(--ha-divider-color)] bg-transparent'
+                        : 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]'}"
+                      role="checkbox"
+                      aria-checked={st === "all" ? "true" : st === "some" ? "mixed" : "false"}
+                      aria-label={g.deviceName}
+                      disabled={saving}
+                      onclick={() => toggleDevice(g)}
+                    >
+                      {#if st === "all"}✓{:else if st === "some"}–{/if}
+                    </button>
+
+                    <button
+                      type="button"
+                      class="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      onclick={() => (multi ? toggleOpen(g.deviceAddress) : toggle(g.channels[0].address))}
+                    >
+                      <span class="min-w-0 flex-1">
+                        <span class="block truncate text-sm font-medium">{g.deviceName}</span>
+                        <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
+                          {#each g.rooms.slice(0, 1) as room (room)}
+                            <span class="rounded-full bg-blue-100 px-1.5 py-0.5 font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">{room}</span>
+                          {/each}
+                          {#each g.functions.slice(0, 1) as fn (fn)}
+                            <span class="rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{fn}</span>
+                          {/each}
+                          {#if g.deviceModel}
+                            <span class="font-mono text-[11px]">{g.deviceModel}</span>
+                          {/if}
+                          <span class="font-mono text-[11px] opacity-70">{g.deviceAddress}</span>
+                        </span>
+                      </span>
+                      {#if multi}
+                        <span class="flex-none font-mono text-xs text-[var(--ha-secondary-text-color)]">
+                          {selectedInDevice(g)}/{g.channels.length}
+                        </span>
+                        <span
+                          class="flex-none text-[var(--ha-secondary-text-color)] transition-transform"
+                          style={openDevices.has(g.deviceAddress) ? "transform: rotate(90deg)" : ""}
+                        >▸</span>
+                      {/if}
+                    </button>
+                  </div>
+
+                  {#if multi && openDevices.has(g.deviceAddress)}
+                    <div class="border-t border-[var(--ha-divider-color)] bg-[var(--ha-secondary-background-color)]">
+                      {#each g.channels as c (c.address)}
+                        <label
+                          class="ml-2 flex cursor-pointer items-center gap-2.5 border-l-2 px-2.5 py-1.5 text-sm {selected.has(
+                            c.address,
+                          )
+                            ? 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]/5'
+                            : 'border-transparent hover:bg-[var(--ha-card-background-color)]'}"
+                        >
+                          <input
+                            type="checkbox"
+                            class="h-4 w-4"
+                            checked={selected.has(c.address)}
+                            disabled={saving}
+                            onchange={() => toggle(c.address)}
+                          />
+                          <span class="flex-1">{c.name}</span>
+                          <span class="font-mono text-[11px] text-[var(--ha-secondary-text-color)]">{c.address}</span>
+                        </label>
+                      {/each}
+                    </div>
                   {/if}
-                </label>
+                </div>
               {/each}
+            </div>
+
+            <!-- selection tray -->
+            <div class="mt-2 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-secondary-background-color)] p-2">
+              <div class="mb-1.5 flex items-center gap-2">
+                <span class="text-sm font-medium">{t("groups.editor.selected")}</span>
+                <span class="flex-1"></span>
+                {#if selected.size > 0}
+                  <button
+                    type="button"
+                    class="text-xs font-semibold text-[var(--ha-primary-color)] hover:underline"
+                    onclick={clearAll}
+                  >
+                    {t("groups.editor.clear_all")}
+                  </button>
+                {/if}
+              </div>
+              {#if selectedChips.length === 0}
+                <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("groups.editor.no_selection")}</p>
+              {:else}
+                <div class="flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
+                  {#each selectedChips as chip (chip.address)}
+                    <span class="inline-flex items-center gap-1.5 rounded-full border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] py-0.5 pl-2 pr-0.5 text-xs">
+                      {#if chip.room}<span class="text-blue-600 dark:text-blue-300">{chip.room}</span>{/if}
+                      <span>{chip.device}{chip.suffix}</span>
+                      <button
+                        type="button"
+                        class="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--ha-secondary-background-color)] text-[var(--ha-secondary-text-color)] hover:text-[var(--ha-primary-text-color)]"
+                        aria-label={t("common.remove")}
+                        onclick={() => toggle(chip.address)}
+                      >✕</button>
+                    </span>
+                  {/each}
+                </div>
+              {/if}
             </div>
           {/if}
         </div>

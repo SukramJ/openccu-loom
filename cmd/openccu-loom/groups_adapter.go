@@ -114,11 +114,19 @@ func (a *groupsAdapter) GroupTypes(ctx context.Context, central string) ([]handl
 
 func mapMemberCandidates(in []group.MemberCandidate) []handlers.SuitableMemberEntry {
 	out := make([]handlers.SuitableMemberEntry, 0, len(in))
-	for _, m := range in {
+	for i := range in {
+		m := &in[i]
 		out = append(out, handlers.SuitableMemberEntry{
-			Address: m.Address,
-			Serial:  m.Serial,
-			Type:    m.Type,
+			Address:       m.Address,
+			Serial:        m.Serial,
+			Type:          m.Type,
+			DeviceAddress: m.DeviceAddress,
+			DeviceName:    m.DeviceName,
+			DeviceModel:   m.DeviceModel,
+			ChannelName:   m.ChannelName,
+			ChannelNo:     m.ChannelNo,
+			Rooms:         m.Rooms,
+			Functions:     m.Functions,
 		})
 	}
 	return out

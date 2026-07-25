@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.1
+
+- **Live status no longer flickers behind a reverse proxy.** The UI's live
+  connection (the "connected" indicator) dropped and reconnected in a loop
+  when the add-on was reached through a proxy that rewrites the request host;
+  the live WebSocket now accepts the proxy's forwarded host and stays
+  connected.
+- **Heating-group member picker redesigned.** Choosing members for a group now
+  groups devices, adds a search box and room / only-selected filters, a
+  select-whole-device checkbox, and a live list of what you have selected — so
+  it stays usable even with hundreds of channels.
+
 ## 0.48.0
 
 - **Manage heating groups from the UI.** The Heizungsgruppen view now lets you

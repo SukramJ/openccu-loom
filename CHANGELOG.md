@@ -6,6 +6,31 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.1]
+
+### Fixed
+
+- **Live WebSocket no longer disconnects behind a reverse proxy.** The
+  `/api/v1/events` handshake rejected the SPA with `403 "websocket origin not
+  allowed"` in a reconnect loop ("live disconnected", log spam) whenever a
+  proxy rewrote the request Host to the internal upstream: the same-origin
+  check compared the browser's Origin only against that internal Host. It now
+  also accepts the proxy-forwarded external host from `X-Forwarded-Host`, which
+  a browser cannot forge on a WebSocket handshake, so the SPA reconnects
+  without weakening the cross-site protection.
+
+### Changed
+
+- **Heating-group member picker redesigned for scale.** The group editor's
+  member list — previously a flat, unfiltered list of raw channel addresses —
+  now groups candidates by device, offers a search box (name / room / type /
+  serial) and room / only-selected filters, a tri-state per-device checkbox
+  (a multi-channel actuator is one expandable row), and a live selection tray
+  showing exactly which members are chosen. The daemon enriches each candidate
+  with device/channel name, model, room and function from the live model
+  (`GET /groups/suitable-members`, `groups.suitable_members`; API 2.54.0), so
+  the picker stays usable across hundreds of channels.
+
 ## [0.48.0]
 
 ### Added

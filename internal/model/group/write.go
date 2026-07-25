@@ -17,7 +17,10 @@ type Type struct {
 }
 
 // MemberCandidate is one device/channel that can be assigned to a group of a
-// given type.
+// given type. The fields below Type are best-effort enrichment resolved from
+// the live device model so the SPA can identify, group and filter candidates
+// (a flat address list does not scale to hundreds of channels); they are empty
+// when the member is not yet present in the model.
 type MemberCandidate struct {
 	// Address is the member channel/device address (e.g. "000ABC…:1").
 	Address string
@@ -25,6 +28,22 @@ type MemberCandidate struct {
 	Serial string
 	// Type is the member kind (e.g. "SENSOR_WINDOW", "SWITCH_ACTUATOR").
 	Type string
+
+	// DeviceAddress is the parent device address (Address without the channel
+	// suffix); the SPA groups channels by it.
+	DeviceAddress string
+	// DeviceName is the CCU-assigned device name.
+	DeviceName string
+	// DeviceModel is the device model (e.g. "HmIP-eTRV-2").
+	DeviceModel string
+	// ChannelName is the CCU-assigned channel name.
+	ChannelName string
+	// ChannelNo is the channel number within the device.
+	ChannelNo int
+	// Rooms / Functions are the channel's assigned rooms and functions (falling
+	// back to the device's when the channel carries none).
+	Rooms     []string
+	Functions []string
 }
 
 // SuitableMembers splits the devices for a group type into the ones that can

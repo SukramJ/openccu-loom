@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.1
+
+Version ride-along. No changes to the proxy itself; the fixes ship in the
+paired instance (live WebSocket reconnect behind a reverse proxy; redesigned
+heating-group member picker) — update the instance to 0.48.1 too.
+
 # 0.48.0
 
 Version ride-along. No changes to the proxy itself; the features ship in the

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -32,20 +33,21 @@ func wsHandshakeStatusWithHeaders(t *testing.T, server *httptest.Server, origin 
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 
-	req := "GET /ws HTTP/1.1\r\n" +
-		"Host: " + wsURL.Host + "\r\n" +
-		"Upgrade: websocket\r\n" +
-		"Connection: Upgrade\r\n" +
-		"Sec-WebSocket-Key: " + genWSKey(t) + "\r\n" +
-		"Sec-WebSocket-Version: 13\r\n"
+	var req strings.Builder
+	req.WriteString("GET /ws HTTP/1.1\r\n")
+	req.WriteString("Host: " + wsURL.Host + "\r\n")
+	req.WriteString("Upgrade: websocket\r\n")
+	req.WriteString("Connection: Upgrade\r\n")
+	req.WriteString("Sec-WebSocket-Key: " + genWSKey(t) + "\r\n")
+	req.WriteString("Sec-WebSocket-Version: 13\r\n")
 	if origin != "" {
-		req += "Origin: " + origin + "\r\n"
+		req.WriteString("Origin: " + origin + "\r\n")
 	}
 	for k, v := range extra {
-		req += k + ": " + v + "\r\n"
+		req.WriteString(k + ": " + v + "\r\n")
 	}
-	req += "\r\n"
-	if _, err := conn.Write([]byte(req)); err != nil {
+	req.WriteString("\r\n")
+	if _, err := conn.Write([]byte(req.String())); err != nil {
 		t.Fatalf("write handshake: %v", err)
 	}
 
