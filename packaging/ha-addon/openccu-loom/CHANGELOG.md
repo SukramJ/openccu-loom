@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.5
+
+- **Security & maintenance.** Hardened the remote-proxy against open redirects
+  (CodeQL) and refreshed bundled dependencies. No user-visible change.
+
 ## 0.48.4
 
 - **Heating groups you create in the UI keep their members.** Saving a group

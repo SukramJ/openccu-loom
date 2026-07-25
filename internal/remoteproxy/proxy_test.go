@@ -718,3 +718,48 @@ func TestInstanceProxyIngressPathTabSpoofRejected(t *testing.T) {
 		}
 	})
 }
+
+// TestIsLocalPath pins the open-redirect guard (go/bad-redirect-check): a
+// rewritten Location may only be emitted when it is an absolute-path reference
+// that a browser cannot reinterpret as an external URL — a single leading "/"
+// not immediately followed by another "/" or a "\".
+func TestIsLocalPath(t *testing.T) {
+	cases := map[string]bool{
+		"/":                true,
+		"/login":           true,
+		"/a/b?x=1":         true,
+		`/prefix/\evil`:    true, // backslash only in the middle is a normal path
+		"//evil.com":       false,
+		`/\evil.com`:       false,
+		"/%2F%2Fevil":      true, // encoded slashes are not a leading "//"
+		"":                 false,
+		"foo":              false,
+		"http://evil.com":  false,
+		"https://evil.com": false,
+	}
+	for s, want := range cases {
+		if got := isLocalPath(s); got != want {
+			t.Errorf("isLocalPath(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
+// TestInstanceProxyProtocolRelativeLocationNotRebased verifies a protocol-
+// relative redirect to a foreign host (//host) is treated like any other
+// foreign redirect — passed through, never fabricated into a base-prefixed
+// local path that still resolves off-site.
+func TestInstanceProxyProtocolRelativeLocationNotRebased(t *testing.T) {
+	const ingressHeader = "/api/hassio_ingress/abc"
+	const base = ingressHeader + "/i/alpha"
+	responder := &proxyLocationResponder{}
+	upstream, _ := newProxyUpstreamFixture(t, responder.handle)
+	proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: upstream.URL}})
+
+	responder.set(http.StatusFound, "//evil.example/x")
+	resp := proxyGet(t, proxy.URL+"/i/alpha/x", map[string]string{ingressPathHeader: ingressHeader})
+	resp.Body.Close()
+
+	if got := resp.Header.Get("Location"); strings.HasPrefix(got, base) {
+		t.Errorf("Location = %q was rebased under the base; a protocol-relative foreign host must not be", got)
+	}
+}
