@@ -11,24 +11,41 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { prefs } from "$lib/stores/preferences.svelte";
+
+  function formatDate(iso: string | null | undefined): string {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US");
+    } catch {
+      return iso;
+    }
+  }
 
   let programs = $state<ProgramEntry[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let centralFilter = $state(loadLS("programs:central"));
   $effect(() => saveLS("programs:central", centralFilter));
+  // showInternal reveals CCU-internal (Tmp_*, prgEnergyCounter_*) programs,
+  // mirroring the CCU WebUI's "show system programs" footer toggle. Off by
+  // default; the choice is persisted locally like the central filter.
+  let showInternal = $state(loadLS("programs:show_internal") === "1");
+  $effect(() => saveLS("programs:show_internal", showInternal ? "1" : "0"));
   let runningId = $state<string | null>(null);
   let togglingId = $state<string | null>(null);
+  let deletingId = $state<string | null>(null);
 
   async function load() {
     loading = true;
     loadError = null;
     try {
-      programs = await api.listPrograms();
+      programs = await api.listPrograms(showInternal);
     } catch (err) {
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
@@ -36,17 +53,28 @@
     }
   }
 
+  function toggleShowInternal(next: boolean) {
+    showInternal = next;
+    void load();
+  }
+
   async function execute(id: string, name: string, central?: string) {
     const ok = await confirmStore.ask({
       title: t("programs.confirm_run", { name }),
       confirmLabel: t("programs.run"),
       destructive: false,
+      checkbox: { label: t("programs.check_conditions"), checked: false },
     });
     if (!ok) return;
+    const checkConditions = confirmStore.checkboxChecked;
     runningId = id;
     try {
-      await api.executeProgram(id, central);
-      toastStore.success(t("programs.executed", { name }));
+      const res = await api.executeProgram(id, central, checkConditions);
+      if (checkConditions && res?.executed === false) {
+        toastStore.info(t("programs.not_executed", { name }));
+      } else {
+        toastStore.success(t("programs.executed", { name }));
+      }
     } catch (err) {
       toastStore.error(
         err instanceof ApiError
@@ -85,6 +113,31 @@
     }
   }
 
+  async function remove(id: string, name: string, central?: string) {
+    const ok = await confirmStore.ask({
+      title: t("programs.confirm_delete", { name }),
+      confirmLabel: t("common.remove"),
+      destructive: true,
+    });
+    if (!ok) return;
+    deletingId = id;
+    try {
+      await api.deleteProgram(id, central);
+      toastStore.success(t("programs.deleted", { name }));
+      await load();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError
+          ? `${err.status}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
+    } finally {
+      deletingId = null;
+    }
+  }
+
   onMount(load);
 
   const centrals = $derived.by(() => {
@@ -102,6 +155,26 @@
   const columns: DataColumn<ProgramEntry>[] = $derived([
     { key: "name", label: t("programs.col.name"), sortable: true, title: true, get: (p) => p.name },
     { key: "status", label: t("programs.col.status"), sortable: true, get: (p) => (p.active === true ? 1 : p.active === false ? 0 : -1) },
+    {
+      key: "condition",
+      label: t("programs.col.condition"),
+      get: (p) => p.condition_summary ?? "",
+      headClass: "hide-narrow",
+      cellClass: "hide-narrow",
+    },
+    {
+      key: "activity",
+      label: t("programs.col.activity"),
+      get: (p) => p.activity_summary ?? "",
+      headClass: "hide-narrow",
+      cellClass: "hide-narrow",
+    },
+    {
+      key: "last_executed",
+      label: t("programs.col.last_executed"),
+      sortable: true,
+      get: (p) => p.last_executed ?? "",
+    },
     { key: "actions", label: t("programs.col.actions"), align: "right", cellClass: "reflow-actions" },
   ]);
 </script>
@@ -112,6 +185,18 @@
     subtitle={loading ? t("common.loading") : t("programs.count", { count: programs.length })}
   >
     {#snippet actions()}
+      <label
+        for="programs-show-internal"
+        class="inline-flex cursor-pointer items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]"
+      >
+        <Switch
+          id="programs-show-internal"
+          checked={showInternal}
+          disabled={loading}
+          onCheckedChange={toggleShowInternal}
+        />
+        <span>{t("programs.show_internal")}</span>
+      </label>
       {#if centrals.length > 1}
         <Select
           class="w-auto"
@@ -167,6 +252,30 @@
             {:else}
               <span class="text-[var(--ha-secondary-text-color)]">—</span>
             {/if}
+          {:else if col.key === "condition"}
+            {#if p.condition_summary}
+              <span
+                class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
+                title={p.condition_summary}>{p.condition_summary}</span>
+            {:else}
+              <span class="text-[var(--ha-secondary-text-color)]">—</span>
+            {/if}
+          {:else if col.key === "activity"}
+            {#if p.activity_summary}
+              <span
+                class="block max-w-[22rem] truncate font-mono text-xs text-slate-600 dark:text-slate-300"
+                title={p.activity_summary}>{p.activity_summary}</span>
+            {:else}
+              <span class="text-[var(--ha-secondary-text-color)]">—</span>
+            {/if}
+          {:else if col.key === "last_executed"}
+            {#if p.last_executed}
+              <span class="text-xs text-slate-600 dark:text-slate-300" title={p.last_executed}>
+                {formatDate(p.last_executed)}
+              </span>
+            {:else}
+              <span class="text-[var(--ha-secondary-text-color)]">{t("programs.never_executed")}</span>
+            {/if}
           {:else if col.key === "actions"}
             <span class="inline-flex items-center justify-end gap-2">
               {#if p.active !== undefined}
@@ -188,6 +297,16 @@
                 disabled={runningId === p.id}
               >
                 {runningId === p.id ? t("programs.running") : t("programs.run")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onclick={() => void remove(p.id, p.name, p.central)}
+                disabled={deletingId === p.id}
+                title={t("programs.delete.tooltip")}
+              >
+                {deletingId === p.id ? "…" : t("common.remove")}
               </Button>
             </span>
           {/if}

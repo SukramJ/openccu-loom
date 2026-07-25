@@ -405,7 +405,7 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 	return client
 }
 
-func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector) *mqttStack {
+func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttCollector, channelHidden func(central, channelAddress string) bool) *mqttStack {
 	if !cfg.North.MQTT.Enabled {
 		return nil
 	}
@@ -475,6 +475,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		Locale:             cfg.Locale,
 		HealthSupplier:     bridgeHealthSupplier(cfg, startedAt),
 		Collector:          collector,
+		ChannelHidden:      channelHidden,
 	}, pub)
 	wiring := mqtt.NewWiring(bridge, logger)
 
@@ -531,6 +532,7 @@ type runtimeCapabilityDetector struct {
 	mcp               bool
 	mcpWrite          bool
 	alarm             bool
+	history           bool
 }
 
 func (r runtimeCapabilityDetector) HasMQTTDiscovery() bool     { return r.mqtt }
@@ -541,6 +543,7 @@ func (r runtimeCapabilityDetector) HasSupervisedRestart() bool { return r.superv
 func (r runtimeCapabilityDetector) HasMCP() bool               { return r.mcp }
 func (r runtimeCapabilityDetector) HasMCPWrite() bool          { return r.mcp && r.mcpWrite }
 func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm }
+func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
 
 // detectSupervisedRestart reports whether the daemon is running
 // under a supervisor that will restart it after a clean shutdown.

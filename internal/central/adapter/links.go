@@ -147,6 +147,121 @@ func (d *LinksDomain) enrichLink(_ context.Context, dev *device.Device, link hmp
 	}
 }
 
+// ListAllLinks aggregates every direct link across all registered
+// centrals (or a single central when centralName is non-empty). It
+// issues one empty-address getLinks per (central, interface) — the
+// interface-wide roster the CCU WebUI's own links.cgi uses — instead of
+// the per-channel loop of [ListLinks], deduplicates per central by the
+// (sender, receiver) pair, and enriches each entry symmetrically (no
+// "queried device", so no relative direction). Every returned link
+// carries its owning central_name + interface_id.
+//
+// An unknown central returns [hmerr.ErrUnknownCentral]; in aggregate
+// mode a central whose interface backend is missing, unsupported
+// (CUxD), or offline contributes nothing rather than aborting the whole
+// listing.
+func (d *LinksDomain) ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error) {
+	if d.registry == nil || d.writer == nil {
+		return nil, ErrNoLinkBackend
+	}
+	var units []*central.Unit
+	if centralName != "" {
+		unit, ok := d.registry.Get(centralName)
+		if !ok || unit == nil {
+			return nil, hmerr.ErrUnknownCentral
+		}
+		units = []*central.Unit{unit}
+	} else {
+		units = d.registry.List()
+	}
+
+	out := make([]hmapi.Link, 0)
+	for _, unit := range units {
+		if unit == nil {
+			continue
+		}
+		// Dedup is scoped per central: BidCos / VCU addresses repeat
+		// across CCUs, so a global key must not collapse them.
+		seen := make(map[string]struct{})
+		for _, ifaceID := range d.linkInterfaceIDs(unit) {
+			backend, ok := d.writer.Backend(unit.Name(), ifaceID)
+			if !ok {
+				continue
+			}
+			raw, err := backend.GetLinks(ctx, "")
+			if err != nil {
+				continue
+			}
+			for _, link := range raw {
+				key := link.Sender + "->" + link.Receiver
+				if _, dup := seen[key]; dup {
+					continue
+				}
+				seen[key] = struct{}{}
+				out = append(out, d.enrichGlobalLink(unit, ifaceID, link, locale))
+			}
+		}
+	}
+	return out, nil
+}
+
+// linkInterfaceIDs returns the distinct interface ids of a central's
+// devices. Derived from the model registry so each id equals the exact
+// [client.ValueWriter.Backend] key (avoids the wire-id vs
+// [hmenum.Interface] mismatch a description-registry enumeration would
+// introduce). A link-bearing interface always has devices, so nothing
+// link-relevant is missed.
+func (d *LinksDomain) linkInterfaceIDs(unit *central.Unit) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	for _, dev := range unit.ModelRegistry.List() {
+		if dev.InterfaceID == "" {
+			continue
+		}
+		if _, dup := seen[dev.InterfaceID]; dup {
+			continue
+		}
+		seen[dev.InterfaceID] = struct{}{}
+		out = append(out, dev.InterfaceID)
+	}
+	return out
+}
+
+// enrichGlobalLink fills the presentation fields of a link for the
+// global overview. Unlike [enrichLink] it has no queried device, so it
+// resolves both endpoints symmetrically and leaves Direction /
+// PeerAddress empty; the SPA renders sender→receiver canonically.
+func (d *LinksDomain) enrichGlobalLink(
+	unit *central.Unit, interfaceID string, link hmproto.LinkDescription, locale string,
+) hmapi.Link {
+	senderDevAddr := deviceAddressOf(link.Sender)
+	receiverDevAddr := deviceAddressOf(link.Receiver)
+	senderDev := d.findDevice(senderDevAddr)
+	receiverDev := d.findDevice(receiverDevAddr)
+	senderChannel := channelOf(senderDev, link.Sender)
+	receiverChannel := channelOf(receiverDev, link.Receiver)
+
+	return hmapi.Link{
+		Sender:                   link.Sender,
+		Receiver:                 link.Receiver,
+		Name:                     link.Name,
+		Description:              link.Description,
+		Flags:                    link.Flags,
+		SenderDeviceName:         deviceNameOr(senderDev, senderDevAddr),
+		SenderDeviceModel:        modelOf(senderDev),
+		SenderChannelType:        channelTypeOf(senderChannel),
+		SenderChannelTypeLabel:   d.channelTypeLabel(locale, senderChannel),
+		SenderChannelName:        channelNameOf(senderChannel),
+		ReceiverDeviceName:       deviceNameOr(receiverDev, receiverDevAddr),
+		ReceiverDeviceModel:      modelOf(receiverDev),
+		ReceiverChannelType:      channelTypeOf(receiverChannel),
+		ReceiverChannelTypeLabel: d.channelTypeLabel(locale, receiverChannel),
+		ReceiverChannelName:      channelNameOf(receiverChannel),
+		CentralName:              unit.Name(),
+		InterfaceID:              interfaceID,
+	}
+}
+
 // AddLink creates a link. name is auto-generated when empty.
 func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error {
 	senderDev := deviceAddressOf(senderAddress)
@@ -175,6 +290,35 @@ func (d *LinksDomain) AddLink(ctx context.Context, senderAddress, receiverAddres
 		ChannelNo:     channelNumberOf(senderAddress),
 		Peer:          receiverAddress,
 		Note:          effectiveName,
+	})
+	return nil
+}
+
+// SetLinkInfo updates the human-readable name and description of an
+// existing direct link between two channels. The sender's device
+// resolves the owning central and interface (mirrors [ListLinks] /
+// [AddLink]); the interface id is forwarded to the JSON-RPC
+// Interface.setLinkInfo call. name and description are written verbatim
+// so an operator can also clear either field by passing an empty string.
+func (d *LinksDomain) SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error {
+	senderDev := deviceAddressOf(senderAddress)
+	c, dev, err := d.lookupDevice(senderDev)
+	if err != nil {
+		return err
+	}
+	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	if !ok {
+		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
+	}
+	if _, err := backend.SetLinkInfo(ctx, dev.InterfaceID, senderAddress, receiverAddress, name, description); err != nil {
+		return err
+	}
+	d.audit.Record(audit.Entry{
+		Action:        audit.ActionLinkUpdate,
+		DeviceAddress: deviceAddressOf(senderAddress),
+		ChannelNo:     channelNumberOf(senderAddress),
+		Peer:          receiverAddress,
+		Note:          name,
 	})
 	return nil
 }
@@ -240,6 +384,39 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 	return nil
 }
 
+// ActivateLink triggers the receiver's LINK-paramset behaviour for the
+// given sender — the CCU's "test link" / simulate-keypress probe. It
+// physically actuates the receiver. The LINK paramset lives on the
+// RECEIVER, so the owning central + interface are resolved from the
+// receiver device (unlike AddLink/RemoveLink, which resolve from the
+// sender). longPress selects the LONG_* action group.
+func (d *LinksDomain) ActivateLink(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error {
+	receiverDev := deviceAddressOf(receiverChannelAddress)
+	c, dev, err := d.lookupDevice(receiverDev)
+	if err != nil {
+		return err
+	}
+	backend, ok := d.writer.Backend(c.Name(), dev.InterfaceID)
+	if !ok {
+		return fmt.Errorf("%w: %s/%s", ErrNoLinkBackend, c.Name(), dev.InterfaceID)
+	}
+	if err := backend.ActivateLinkParamset(ctx, receiverChannelAddress, senderChannelAddress, longPress); err != nil {
+		return err
+	}
+	note := "short"
+	if longPress {
+		note = "long"
+	}
+	d.audit.Record(audit.Entry{
+		Action:        audit.ActionLinkActivate,
+		DeviceAddress: receiverDev,
+		ChannelNo:     channelNumberOf(receiverChannelAddress),
+		Peer:          senderChannelAddress,
+		Note:          note,
+	})
+	return nil
+}
+
 // LinkableChannels walks every device in the central registry and
 // returns the channels that are valid peers for the source channel.
 //
@@ -260,13 +437,26 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 // 0.1.0: presence of a LINK paramset peer list on the channel. Refine
 // later when we port the category data.
 func (d *LinksDomain) LinkableChannels(
-	ctx context.Context,
+	_ context.Context,
 	interfaceID, sourceChannelAddress, role, locale string,
 ) ([]hmapi.LinkableChannel, error) {
 	if d.registry == nil {
 		return nil, ErrNoLinkBackend
 	}
-	sourceDev := deviceAddressOf(sourceChannelAddress)
+	// Resolve the source channel once and pick its role set for the
+	// requested direction: a "sender" source is matched by its
+	// LinkSourceRoles against each candidate's LinkTargetRoles; a
+	// "receiver" source by its LinkTargetRoles against LinkSourceRoles.
+	srcCh := channelOf(d.findDevice(deviceAddressOf(sourceChannelAddress)), sourceChannelAddress)
+	var srcRoles []string
+	if srcCh != nil {
+		switch role {
+		case "sender":
+			srcRoles = srcCh.LinkSourceRoles()
+		case "receiver":
+			srcRoles = srcCh.LinkTargetRoles()
+		}
+	}
 	out := make([]hmapi.LinkableChannel, 0)
 	for _, u := range d.registry.List() {
 		for _, dev := range u.ModelRegistry.List() {
@@ -277,7 +467,7 @@ func (d *LinksDomain) LinkableChannels(
 				if ch.Address == sourceChannelAddress {
 					continue
 				}
-				if !d.channelMatchesRole(ctx, u.Name(), dev.InterfaceID, ch.Address, role) {
+				if !channelMatchesRole(role, srcRoles, srcCh != nil, ch) {
 					continue
 				}
 				out = append(out, hmapi.LinkableChannel{
@@ -292,24 +482,59 @@ func (d *LinksDomain) LinkableChannels(
 			}
 		}
 	}
-	_ = sourceDev
 	return out, nil
 }
 
-// channelMatchesRole is the lightweight peer filter used by
-// LinkableChannels. For the MVP we accept any channel that returns
-// a (possibly empty) LinkPeers list — that is, every channel the
-// backend reports as link-capable. Refinement to sender vs receiver
-// roles lands with the per-channel category port.
-func (d *LinksDomain) channelMatchesRole(ctx context.Context, centralName, interfaceID, channelAddress, _ string) bool {
-	backend, ok := d.writer.Backend(centralName, interfaceID)
-	if !ok {
+// channelMatchesRole reports whether a candidate channel can be linked
+// to the source channel in the requested direction. It intersects the
+// raw CCU LINK_*_ROLES tokens exactly like the CCU WebUI's
+// check_role_match (occu WebUI/www/tools/devconfig.cgi:970): a "sender"
+// source is paired with a candidate that can RECEIVE (its
+// LinkTargetRoles), a "receiver" source with a candidate that can SEND
+// (its LinkSourceRoles).
+//
+// A role other than sender/receiver (the device-level WS probe passes
+// "") matches every channel, preserving that path's behaviour. When the
+// source carries roles for the direction a true token intersection is
+// required. When it carries none: a present source that is genuinely
+// role-less for the direction cannot act in it (excluded); a totally
+// absent source channel (the WS device-address probe) degrades to a
+// directional presence check so the list stays useful.
+func channelMatchesRole(role string, srcRoles []string, srcPresent bool, ch *device.Channel) bool {
+	if role != "sender" && role != "receiver" {
+		return true
+	}
+	var candRoles []string
+	if role == "sender" {
+		candRoles = ch.LinkTargetRoles()
+	} else {
+		candRoles = ch.LinkSourceRoles()
+	}
+	if len(srcRoles) > 0 {
+		return intersects(srcRoles, candRoles)
+	}
+	if srcPresent {
 		return false
 	}
-	if _, err := backend.GetLinkPeers(ctx, channelAddress); err != nil {
+	return len(candRoles) > 0
+}
+
+// intersects reports whether a and b share at least one token — the
+// non-empty set intersection the CCU uses to match link roles.
+func intersects(a, b []string) bool {
+	if len(a) == 0 || len(b) == 0 {
 		return false
 	}
-	return true
+	set := make(map[string]struct{}, len(a))
+	for _, x := range a {
+		set[x] = struct{}{}
+	}
+	for _, y := range b {
+		if _, ok := set[y]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *LinksDomain) lookupDevice(deviceAddress string) (*central.Unit, *device.Device, error) {

@@ -1164,12 +1164,14 @@ version — this line no longer pins a number).
 - [ ] Fully typed, passes `golangci-lint`.
 - [ ] Tests updated (unit + contract where applicable).
 - [ ] `CHANGELOG.md` entry for user-visible changes.
-- [ ] On a version bump / release: update **both** the root `CHANGELOG.md`
-      **and** the HA add-on changelog
-      (`packaging/ha-addon/openccu-loom/CHANGELOG.md`) — Home Assistant shows
-      the latter to users in the add-on store / Update view, so it must not
-      lag the release. Bump it alongside `internal/build/version.go` and
-      `packaging/ha-addon/openccu-loom/config.yaml`.
+- [ ] On a version bump / release: update the root `CHANGELOG.md` **and**
+      the HA add-on changelogs of **both** add-ons
+      (`packaging/ha-addon/openccu-loom/CHANGELOG.md`,
+      `packaging/ha-addon/openccu-loom-remote/CHANGELOG.md`) — Home Assistant
+      shows these to users in the add-on store / Update view, so they must not
+      lag the release. Bump them alongside `internal/build/version.go` and
+      the `config.yaml` of **both** add-ons (release.yml guards both versions
+      against the tag).
 - [ ] `SPECIFICATION.md` updated if the change touches a goal,
       non-goal, hard constraint, or resolved decision; ADR written
       for any architectural shift that future readers will need to

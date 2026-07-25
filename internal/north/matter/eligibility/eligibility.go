@@ -198,6 +198,11 @@ func hideFromMatter(source any, channelHasCustom, exposeSecondary bool) bool {
 }
 
 func collectChannelCandidates(centralName string, dev *device.Device, ch *device.Channel, exposeSecondary bool, out *[]Candidate) {
+	// Operator-hidden channels (G12) are dropped from Matter exposure
+	// entirely, mirroring the operation-list hide on the REST/SPA surface.
+	if ch.IsHidden() {
+		return
+	}
 	displayName := dev.Name
 	if displayName == "" {
 		displayName = dev.Address

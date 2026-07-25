@@ -107,6 +107,64 @@ func newHydratingBackend() *paramsetFakeOps {
 	}
 }
 
+// TestIngestPopulatesLinkRoles verifies the second pass stamps the raw
+// CCU LINK_SOURCE_ROLES / LINK_TARGET_ROLES onto the channel model so
+// the direct-link role-matching filter can intersect them without a CCU
+// roundtrip.
+func TestIngestPopulatesLinkRoles(t *testing.T) {
+	t.Parallel()
+
+	c, _ := central.New(central.Config{Name: "ccu-01"})
+	p := NewDevicePipeline(c).WithVisibility(newProductionVisibilityGate())
+
+	b := &paramsetFakeOps{
+		listDevicesFn: func(_ context.Context) ([]hmproto.DeviceDescription, error) {
+			return []hmproto.DeviceDescription{
+				{Address: "0001ABCD", Type: "HmIP-WRC"},
+				{
+					Address:         "0001ABCD:1",
+					Parent:          "0001ABCD",
+					Type:            "KEY_TRANSCEIVER",
+					LinkSourceRoles: hmproto.LinkRoles{"SWITCH", "REMOTECONTROL_RECEIVER"},
+					LinkTargetRoles: hmproto.LinkRoles{"WEATHER"},
+				},
+			}, nil
+		},
+		getParamsetDescriptionFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error) {
+			return nil, nil
+		},
+		getParamsetFn: func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+			return map[string]any{}, nil
+		},
+	}
+	w := client.NewValueWriter()
+	w.Register("ccu-01", "HmIP-RF", b)
+
+	if err := p.IngestFromBackend(
+		context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF,
+		b, &fakeWriter{}, nil, slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestFromBackend: %v", err)
+	}
+
+	dev, ok := c.ModelRegistry.Get("0001ABCD")
+	if !ok {
+		t.Fatal("device not in registry after IngestFromBackend")
+	}
+	ch := dev.Channel("0001ABCD:1")
+	if ch == nil {
+		t.Fatal("channel 0001ABCD:1 not found")
+	}
+	src := ch.LinkSourceRoles()
+	if len(src) != 2 || src[0] != "SWITCH" || src[1] != "REMOTECONTROL_RECEIVER" {
+		t.Errorf("Channel.LinkSourceRoles() = %v, want [SWITCH REMOTECONTROL_RECEIVER]", src)
+	}
+	tgt := ch.LinkTargetRoles()
+	if len(tgt) != 1 || tgt[0] != "WEATHER" {
+		t.Errorf("Channel.LinkTargetRoles() = %v, want [WEATHER]", tgt)
+	}
+}
+
 // TestHydrateChannelInstallsWriterAndRefresher verifies that
 // IngestFromBackend wires Channel.SetWriter and Channel.SetRefresher on
 // every channel. After hydration:
@@ -212,6 +270,58 @@ func TestDevicePipelineSchemaVersionNilIsZero(t *testing.T) {
 	}
 	if d.SchemaVersion != 0 {
 		t.Fatalf("SchemaVersion = %d, want 0 when VERSION absent", d.SchemaVersion)
+	}
+}
+
+// TestDevicePipelineRxModePropagated verifies that the CCU RX_MODE bitmask
+// on the device description reaches the device model, so the REST DTO can
+// tell WAKEUP / LAZY_CONFIG battery devices apart from mains devices.
+func TestDevicePipelineRxModePropagated(t *testing.T) {
+	t.Parallel()
+	c, _ := central.New(central.Config{Name: "ccu-01"})
+	p := NewDevicePipeline(c)
+
+	// RX_WAKEUP (8) | RX_LAZY_CONFIG (16) = 24 — a battery device.
+	err := p.Ingest(context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+		{Address: "BATT0001", Type: "HmIP-eTRV", RXMode: 24},
+		{Address: "BATT0001:1", Parent: "BATT0001"},
+	})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	d, ok := c.ModelRegistry.Get("BATT0001")
+	if !ok {
+		t.Fatal("device missing after ingest")
+	}
+	if !d.RxMode.Has(hmenum.RxModeWakeup) || !d.RxMode.Has(hmenum.RxModeLazyConfig) {
+		t.Fatalf("RxMode = %d, want WAKEUP|LAZY_CONFIG set", d.RxMode)
+	}
+}
+
+// TestDevicePipelineRxModeUndefinedWhenAbsent verifies that a device
+// description without an RX_MODE field (the Go zero value, 0) propagates as
+// hmenum.RxModeUndefined rather than being mistaken for RX_ALWAYS — the CCU
+// omits RX_MODE for backends that never report it (e.g. some CUxD/Homegear
+// device kinds), and the REST DTO must be able to tell "no rx mode reported"
+// apart from "explicitly mains-powered".
+func TestDevicePipelineRxModeUndefinedWhenAbsent(t *testing.T) {
+	t.Parallel()
+	c, _ := central.New(central.Config{Name: "ccu-01"})
+	p := NewDevicePipeline(c)
+
+	err := p.Ingest(context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF, []hmproto.DeviceDescription{
+		{Address: "NORXM0001", Type: "HmIP-BSM"},
+		{Address: "NORXM0001:1", Parent: "NORXM0001"},
+	})
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	d, ok := c.ModelRegistry.Get("NORXM0001")
+	if !ok {
+		t.Fatal("device missing after ingest")
+	}
+	if d.RxMode != hmenum.RxModeUndefined {
+		t.Fatalf("RxMode = %d, want RxModeUndefined for an absent RX_MODE field", d.RxMode)
 	}
 }
 

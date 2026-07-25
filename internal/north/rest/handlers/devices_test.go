@@ -143,6 +143,136 @@ func TestGetDevice_HappyPath(t *testing.T) {
 	}
 }
 
+// TestGetDevice_ConfigRestoreSupportedReflectsInterface verifies
+// DeviceSummary.ConfigRestoreSupported (JSON: config_restore_supported)
+// mirrors hmenum.Interface.SupportsConfigRestore(): true for HmIP-RF and
+// BidCos-RF (rfd / HMIPServer implement restoreConfigToDevice), false for
+// BidCos-Wired (hs485d does not).
+func TestGetDevice_ConfigRestoreSupportedReflectsInterface(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		iface hmenum.Interface
+		want  bool
+	}{
+		{"HmIP-RF", hmenum.InterfaceHmIPRF, true},
+		{"BidCos-RF", hmenum.InterfaceBidCosRF, true},
+		{"BidCos-Wired", hmenum.InterfaceBidCosWired, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := device.New(device.Config{
+				Address:     "0001ABCD",
+				Model:       "HmIP-BSM",
+				Interface:   tc.iface,
+				InterfaceID: string(tc.iface),
+				Name:        "Test Device",
+			})
+			idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+			w := httptest.NewRecorder()
+			GetDevice(idx, nil).ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+			var body DeviceDetail
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.ConfigRestoreSupported != tc.want {
+				t.Errorf("%s: config_restore_supported=%v, want %v", tc.iface, body.ConfigRestoreSupported, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetDevice_CommunicationTestSupportedReflectsInterface verifies
+// DeviceSummary.CommunicationTestSupported (JSON:
+// communication_test_supported) mirrors
+// hmenum.Interface.SupportsCommunicationTest(): true for the radio
+// interfaces (HmIP-RF, BidCos-RF, BidCos-Wired), false for VirtualDevices
+// and CUxD.
+func TestGetDevice_CommunicationTestSupportedReflectsInterface(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		iface hmenum.Interface
+		want  bool
+	}{
+		{"HmIP-RF", hmenum.InterfaceHmIPRF, true},
+		{"BidCos-RF", hmenum.InterfaceBidCosRF, true},
+		{"BidCos-Wired", hmenum.InterfaceBidCosWired, true},
+		{"VirtualDevices", hmenum.InterfaceVirtualDevices, false},
+		{"CUxD", hmenum.InterfaceCUxD, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := device.New(device.Config{
+				Address:     "0001ABCD",
+				Model:       "HmIP-BSM",
+				Interface:   tc.iface,
+				InterfaceID: string(tc.iface),
+				Name:        "Test Device",
+			})
+			idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+			w := httptest.NewRecorder()
+			GetDevice(idx, nil).ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+			}
+			var body DeviceDetail
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.CommunicationTestSupported != tc.want {
+				t.Errorf("%s: communication_test_supported=%v, want %v", tc.iface, body.CommunicationTestSupported, tc.want)
+			}
+		})
+	}
+}
+
+func TestGetDevice_TeamSupportedReflectsInterface(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		iface hmenum.Interface
+		want  bool
+	}{
+		{hmenum.InterfaceBidCosRF, true},
+		{hmenum.InterfaceHmIPRF, true},
+		{hmenum.InterfaceBidCosWired, false},
+		{hmenum.InterfaceVirtualDevices, false},
+		{hmenum.InterfaceCUxD, false},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.iface), func(t *testing.T) {
+			t.Parallel()
+			d := device.New(device.Config{
+				Address: "0001ABCD", Model: "HM-Sec-SD",
+				Interface: tc.iface, InterfaceID: string(tc.iface), Name: "SD",
+			})
+			idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
+			req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD"}))
+			w := httptest.NewRecorder()
+			GetDevice(idx, nil).ServeHTTP(w, req)
+			var body DeviceDetail
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if body.TeamSupported != tc.want {
+				t.Errorf("%s: team_supported=%v, want %v", tc.iface, body.TeamSupported, tc.want)
+			}
+		})
+	}
+}
+
 func TestGetDevice_NotFound_Returns404(t *testing.T) {
 	t.Parallel()
 	idx := &stubDeviceIndex{devices: map[string]*device.Device{}}
@@ -1534,4 +1664,95 @@ func TestToChannelSummary_IsCustomDpPrimary(t *testing.T) {
 			t.Error("expected IsCustomDpPrimary=false for channel without custom DP")
 		}
 	})
+}
+
+func TestRxModeInfo_DecodesBitmask(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		mode hmenum.RxMode
+		want *RxModeInfo
+	}{
+		{"undefined yields nil", hmenum.RxModeUndefined, nil},
+		{"always only", hmenum.RxModeAlways, &RxModeInfo{Always: true}},
+		{"wakeup only", hmenum.RxModeWakeup, &RxModeInfo{Wakeup: true}},
+		{"lazy config only", hmenum.RxModeLazyConfig, &RxModeInfo{LazyConfig: true}},
+		{
+			"burst plus wakeup",
+			hmenum.RxModeBurst | hmenum.RxModeWakeup,
+			&RxModeInfo{Burst: true, Wakeup: true},
+		},
+		{
+			"config plus lazy config",
+			hmenum.RxModeConfig | hmenum.RxModeLazyConfig,
+			&RxModeInfo{Config: true, LazyConfig: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := rxModeInfo(tc.mode)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("rxModeInfo(%d) = %+v, want nil", tc.mode, got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("rxModeInfo(%d) = nil, want %+v", tc.mode, tc.want)
+			}
+			if *got != *tc.want {
+				t.Fatalf("rxModeInfo(%d) = %+v, want %+v", tc.mode, *got, *tc.want)
+			}
+		})
+	}
+}
+
+func TestToDeviceSummary_RxModeSurfacesWakeup(t *testing.T) {
+	t.Parallel()
+
+	// A mains device (RX_ALWAYS) surfaces rx_mode with wakeup/lazy_config
+	// clear, so the SPA shows no pending-wakeup hint.
+	mains := device.New(device.Config{
+		Address:   "MAINS00001",
+		Model:     "HmIP-PSM",
+		Interface: hmenum.InterfaceHmIPRF,
+		RxMode:    hmenum.RxModeAlways,
+	})
+	ms := toDeviceSummary(mains, "ccu-01")
+	if ms.RxMode == nil {
+		t.Fatal("mains device: expected non-nil rx_mode")
+	}
+	if ms.RxMode.Wakeup || ms.RxMode.LazyConfig {
+		t.Errorf("mains device: expected wakeup/lazy_config false, got %+v", *ms.RxMode)
+	}
+	if !ms.RxMode.Always {
+		t.Error("mains device: expected always=true")
+	}
+
+	// A battery device (RX_WAKEUP|RX_LAZY_CONFIG) surfaces the wakeup bits.
+	battery := device.New(device.Config{
+		Address:   "BATT000001",
+		Model:     "HmIP-eTRV",
+		Interface: hmenum.InterfaceHmIPRF,
+		RxMode:    hmenum.RxModeWakeup | hmenum.RxModeLazyConfig,
+	})
+	bs := toDeviceSummary(battery, "ccu-01")
+	if bs.RxMode == nil {
+		t.Fatal("battery device: expected non-nil rx_mode")
+	}
+	if !bs.RxMode.Wakeup || !bs.RxMode.LazyConfig {
+		t.Errorf("battery device: expected wakeup and lazy_config true, got %+v", *bs.RxMode)
+	}
+
+	// A device with no rx mode (RX_MODE == 0) omits the field entirely.
+	none := device.New(device.Config{
+		Address:   "NONE000001",
+		Model:     "HM-Test",
+		Interface: hmenum.InterfaceVirtualDevices,
+	})
+	ns := toDeviceSummary(none, "ccu-01")
+	if ns.RxMode != nil {
+		t.Errorf("no-rx-mode device: expected nil rx_mode, got %+v", *ns.RxMode)
+	}
 }

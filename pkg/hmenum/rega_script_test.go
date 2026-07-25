@@ -13,21 +13,24 @@ func TestAllRegaScriptsUnique(t *testing.T) {
 		}
 		seen[s] = struct{}{}
 	}
-	// 27 = MVP subset + fetch_all_device_data + lifecycle scripts +
-	// room/function entity CRUD (create/rename/delete × 2) + get_user_level.
+	// 32 = MVP subset + fetch_all_device_data + lifecycle scripts +
+	// room/function entity CRUD (create/rename/delete × 2) + get_user_level
+	// + reboot_ccu + the two bulk message-acknowledge scripts (service +
+	// alarm) + execute_program_conditional + delete_program.
 	// delete_system_variable was dropped in favor of the JSON-RPC
 	// SysVar.deleteSysVarByName call.
-	if len(AllRegaScripts) != 27 {
-		t.Errorf("AllRegaScripts has %d entries, want 27", len(AllRegaScripts))
+	if len(AllRegaScripts) != 35 {
+		t.Errorf("AllRegaScripts has %d entries, want 35", len(AllRegaScripts))
 	}
 }
 
 func TestRegaScriptStringIsStable(t *testing.T) {
 	// Wire-level identifier; changing it breaks recorded sessions.
 	cases := map[RegaScript]string{
-		RegaScriptGetSerial:          "get_serial",
-		RegaScriptSetSystemVariable:  "set_system_variable",
-		RegaScriptAcknowledgeMessage: "acknowledge_message",
+		RegaScriptGetSerial:                 "get_serial",
+		RegaScriptSetSystemVariable:         "set_system_variable",
+		RegaScriptAcknowledgeMessage:        "acknowledge_message",
+		RegaScriptExecuteProgramConditional: "execute_program_conditional",
 	}
 	for s, want := range cases {
 		if got := s.String(); got != want {

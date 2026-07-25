@@ -1,5 +1,302 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.2
+
+- **Security fix.** Updated a bundled OpenAPI-validation library that could
+  fail open (CRITICAL, GHSA-r277-6w6q-xmqw). No visible change; update
+  recommended.
+
+## 0.48.1
+
+- **Live status no longer flickers behind a reverse proxy.** The UI's live
+  connection (the "connected" indicator) dropped and reconnected in a loop
+  when the add-on was reached through a proxy that rewrites the request host;
+  the live WebSocket now accepts the proxy's forwarded host and stays
+  connected.
+- **Heating-group member picker redesigned.** Choosing members for a group now
+  groups devices, adds a search box and room / only-selected filters, a
+  select-whole-device checkbox, and a live list of what you have selected — so
+  it stays usable even with hundreds of channels.
+
+## 0.48.0
+
+- **Manage heating groups from the UI.** The Heizungsgruppen view now lets you
+  create, edit, and delete heating groups (pick a type, choose members, set the
+  name and the "operate only via group" flag). Group changes are applied by the
+  CCU itself (via its HMServer group endpoints), so the wiring stays exactly
+  as the CCU computes it. Creating/editing also names the group's device and
+  applies the operate-only flag to its members, and you can add a device to a
+  group straight from the inbox when accepting it. Admin-only.
+- **Central links now show whether they are active.** The central click-event
+  panel (device detail → Direct links) reads the CCU state and marks each
+  button channel active or inactive, with a device-wide active count — so you
+  can see at a glance which channels forward their press events to the central.
+  Reflects changes made in the CCU WebUI too.
+
+## 0.47.4
+
+- **Rooms & functions are now picked from a searchable dropdown** (device and
+  channel detail + the inbox accept dialog) instead of a comma-separated text
+  field — with a "+ create" option to add a brand-new room / function on the
+  spot. Selections show as removable chips and save immediately.
+- **Fixed: the diagram channel picker now works on iPad** — the channel and
+  value dropdowns are native selects (iOS wheel picker) that register taps
+  reliably.
+
+## 0.47.3
+
+- **Fixed umlauts in program condition/activity summaries** (rendered as `�`,
+  e.g. `Sp�le`) — the device/channel names they list come from the ReGa layer
+  as ISO-8859-1 and are now transcoded to UTF-8.
+- **Guided diagram series editor**: pick device → channel → value from
+  dropdowns instead of typing raw addresses; the value list shows only numeric
+  data points with their unit.
+- **Energy view is hidden when history recording is off** (like Diagrams).
+- **"Edit on device"** from the direct-links overview opens the device's links
+  tab; the **signal-quality list links the device**.
+
+## 0.47.2
+
+- **Heating groups now appear in the UI.** A real CCU returns a boolean group
+  property that broke the group parser, so the Heizungsgruppen view came back
+  empty; it now tolerates both the boolean and string form.
+- **New: per-channel visibility & operation lock (G12).** Hide a channel from
+  the operation surfaces (data-point list, MQTT, Matter) or lock it against
+  control writes, per channel, from the device detail.
+- **Basic/Bearer auth toggle now flags a required restart** in the config editor
+  (it is wired at boot).
+
+## 0.47.1
+
+- **Fixed the brand logo not showing behind Ingress / the remote app.** The
+  wordmark used a root-absolute path that bypassed the Ingress proxy prefix; it
+  now renders both directly and behind the proxy.
+
+## 0.47.0
+
+- **Rooms and Gewerke can now be assigned per channel**, not just per
+  device — the device detail gains an editor on each channel, matching
+  how the CCU organises channels.
+- **Teach in HmIP devices without internet access.** The inbox gains an
+  offline teach-in form: enter a device's SGTIN and key from its label
+  and only that device can pair — no keyserver/internet needed (API
+  2.43.0).
+- **Virtual remotes are now operable.** The CCU's virtual remote-control
+  devices show a key grid with short/long press buttons; pressing a key
+  behaves like a physical button press.
+- **Restore a device's configuration after a factory reset.** A new
+  device-detail action re-sends every stored channel setting and direct
+  link to the device (HmIP-RF / BidCos-RF).
+- **Replace a device with a new one.** From the inbox you can swap a
+  broken or upgraded BidCos device for a new one — the CCU moves the
+  links, teams and programs across and unpairs the old device.
+- **Scan the wired bus for new devices.** The inbox gains a "Search wired
+  bus" button for BidCos-Wired that finds newly connected wired devices
+  and lists them for acceptance.
+- **Test whether a device answers.** The device detail gains a "Test"
+  action that sends a radio test frame and reports whether the device
+  responds — the same check the CCU inbox offers.
+- **Assign smoke detectors (and similar) to a team.** The device detail
+  gains a per-channel team picker for BidCos-RF / HmIP-RF devices.
+
+## 0.46.0
+
+- **Heating groups are now listed (read-only).** OpenCCU-Loom can show the
+  Homematic heating groups (HmIP / BidCos) configured on each CCU —
+  their name, type, members, and the "operate only via group" flag —
+  read straight from the CCU. Creating and editing groups will follow;
+  this first step makes them visible (API 2.42.0).
+- **New help hint on the press-event forwarding panel.** The device-detail
+  Links tab now has an expandable note explaining why an HmIP button can
+  seem to do nothing (without forwarding, many buttons never send their
+  press events) and that turning forwarding on increases the device's
+  radio duty cycle and battery use.
+- **Toggling press-event forwarding now asks first and reports as a
+  toast.** Enabling or disabling the central-link forwarding (whole device
+  or a single channel) opens a confirmation dialog before it acts —
+  disabling warns that CCU-side programs may use these press events and
+  that afterwards neither CCU programs nor OpenCCU-Loom will receive them.
+  The result appears as a toast instead of an inline banner.
+- **Central-link toggle per channel.** The device-detail Links tab keeps
+  the whole-device press-event forwarding switch and now adds a
+  per-channel switch for each eligible channel, so you can route the
+  clicks of a single button to OpenCCU-Loom without touching the rest of
+  the device (API 2.36.0).
+- **Turning a central link off now clears long-press forwarding too.**
+  Deactivating the press-event forwarding for a channel now clears both
+  the short-press and long-press usage counters on the device, matching
+  the CCU WebUI's own behaviour — previously a long-press counter could
+  linger and keep the device sending long-press events to the CCU after
+  you switched the link off.
+- **"Determine" button for channel settings.** Configuration parameters
+  whose live value the device can report on demand now show a "Determine"
+  button in the channel settings editor. Pressing it reads the current
+  value straight from the device and drops it into the field as an
+  unsaved edit you can still adjust or undo before saving. Mirrors the
+  CCU WebUI's per-parameter "Determine" action.
+- **Secured transmission (AES) per channel.** A device channel's
+  configuration now shows a "Secured transmission" switch whenever the
+  channel supports AES-signed telegrams. Turning it on asks first,
+  reminding you that secured transmission increases the channel's radio
+  load and — on battery devices — battery use; turning it off applies
+  right away. This mirrors the CCU WebUI's transmit-mode dialog.
+- **Firmware update warns on a busy radio, plus CCU firmware download.**
+  When you trigger a device firmware update over a saturated radio
+  interface (duty cycle 80 % or more), the confirm dialog now warns that
+  the over-the-air transfer may stall — the update still runs, it is only
+  a heads-up. The System page's CCU update card also gains an admin-only
+  field to have a CCU download a firmware image from a URL onto the
+  central so it is ready to install.
+- **Radio load per interface on the Diagnostics page.** BidCos radio
+  interfaces now show their transmit duty cycle and receive carrier
+  sense right in the interface table — so a pure-BidCos setup or a
+  radio-LAN gateway finally shows how close it is to its transmit budget,
+  not just individual devices. The value updates every minute and is
+  colour-coded (green, yellow from 60 %, red from 80 %). HmIP interfaces,
+  where the CCU reports this per device instead, stay blank here.
+- **Device admin from the UI.** Renaming a device now persists to the
+  CCU (optionally renaming all channels along), single channels can be
+  renamed, removing a device offers factory-reset / force options with
+  a warning when direct links or programs still reference it, and
+  accepting a new device from the inbox can set its name, rooms, and
+  functions in one step.
+- **Reboot a CCU from OpenCCU-Loom.** The Settings → System page gains a
+  "CCU maintenance" card with a per-central reboot button (admin-only).
+  Rebooting persists the CCU's state and restarts it; the connection drops
+  briefly and recovers on its own. This restarts the CCU hardware, not the
+  add-on (API 2.33.0).
+- **Hide service messages permanently.** The Messages view's service
+  messages gain a "Hide permanently" action that durably suppresses the
+  message on the CCU (it stops being raised until you bring it back),
+  plus a new "Suppressed" tab that lists the hidden messages with a
+  "Restore" action. New `GET /service-messages/suppressed` and
+  `POST /service-messages/unsuppress` REST endpoints and matching
+  WebSocket commands back it; "Disable" now suppresses instead of just
+  acknowledging (API 2.32.0).
+- **"Acknowledge all" for messages.** The Messages view gains a per-tab
+  "Acknowledge all" button that clears every quittable service message
+  or every active alarm message in one CCU pass and reports how many
+  were acknowledged. New `POST /service-messages/ack-all` and
+  `POST /alarm-messages/ack-all` REST endpoints and the matching
+  `*.ack_all` WebSocket commands back it (API 2.32.0).
+- **Rename direct links.** The name and description of an existing
+  direct link (Direktverknüpfung) can now be changed after creation —
+  via the new pencil action in the device links view, the REST
+  endpoint `PATCH /devices/{addr}/links`, or the `links.set_info`
+  WebSocket command (API 2.35.0).
+- **Motion-detector brightness helper in the link editor.** When a
+  direct link's sender is a motion detector that reports a brightness
+  reading, the LINK paramset editor now offers a one-click button on
+  the brightness condition thresholds (`SHORT_COND_VALUE_LO`/`_HI` and
+  the `LONG_` variants) that takes the sender's current brightness —
+  no more reading the value off elsewhere and typing it in.
+- **"Wird beim Aufwachen übertragen" hint for battery devices.** After
+  adding or removing a direct link, or saving a LINK paramset, for a
+  battery-powered device (rx mode `WAKEUP`/`LAZY_CONFIG`), the config UI
+  now shows an info notice that the change is queued and only transfers
+  the next time the device wakes up (e.g. on a button press) — instead
+  of a plain "saved" confirmation. Mains devices keep the immediate
+  confirmation.
+- **Delete a program.** The program table gains a Delete action (guarded
+  by a confirmation dialog) that removes a program from the CCU for good.
+  REST/WS clients get the same via `DELETE /api/v1/programs/{id}` and the
+  `programs.delete` command — both admin-only, since deletion is
+  irreversible (API 2.34.0).
+- **Run a program only when its condition is met.** The program table's
+  execute-confirmation dialog gains an "Only run when the condition is
+  met" toggle; the CCU then evaluates the program's condition and runs it
+  only when satisfied, and the result toast tells you whether it actually
+  executed. REST/WS clients get the same via an optional `check_conditions`
+  flag on program execution, with an `executed` result (API 2.34.0).
+- **Program list shows condition, activity and last execution.** The
+  program table now renders a compact, language-neutral summary of each
+  program's root rule — its trigger conditions and resulting activities
+  (symbolic operators, CCU object names) — alongside a Last-executed
+  column. REST clients get the same via new `condition_summary` and
+  `activity_summary` fields on `GET /api/v1/programs` (API 2.34.0).
+- **Show system programs on demand.** The program table gains a "Show
+  system programs" toggle (off by default) that reveals CCU-internal
+  programs (`Tmp_*`, `prgEnergyCounter_*`) without changing the config.
+  REST/WS clients get the same via an optional `include_internal`
+  parameter; without it the `include_internal_programs` setting still
+  governs the default (API 2.34.0).
+- **Assign a system variable to a device channel.** The system-variable
+  create and edit dialogs now offer a searchable device/channel picker to
+  set (or clear) a variable's channel assignment ("Kanalzuordnung"), just
+  like the CCU's own WebUI. An unresolvable channel is rejected.
+- **Create alarm system variables.** The system-variable create form
+  now offers an ALARM type, provisioning a binary, acknowledgeable alarm
+  line on the CCU (just like an alarm variable created in the CCU's own
+  WebUI).
+- **Rename system variables and describe them at creation.** The
+  system-variable editor can now rename a variable, and the create form
+  accepts a description up front (previously the name was fixed and the
+  description could only be added afterwards).
+- **List variables can be edited again.** The edit dialog now shows the
+  value-list field for the CCU's real `LIST`-type variables (it
+  previously only appeared for the create-time `ENUM` alias), so the
+  options of an existing list variable can be changed.
+- **Logic/alarm system variables toggle with a switch.** In the
+  system-variable list and the favorites view, boolean sysvars of the
+  CCU types `LOGIC` and `ALARM` (the most common kind) now render as an
+  on/off switch instead of a free-text field, so they can be flipped
+  with one click. Labelled list variables keep their dropdown.
+- **System-variable state labels, visibility and logging.** A boolean
+  variable's switch now shows the CCU state labels (e.g. "closed" /
+  "open") instead of a bare toggle, and the edit and create dialogs let
+  you set those two labels along with whether the variable is visible in
+  the CCU WebUI and whether its value changes are logged to the
+  measurement archive.
+
+## 0.45.0
+
+- **REST API: complete entity names for primary parameters.** The
+  data-point summary's `translated_name` now also carries the
+  channel-level collapsed name when the label is omitted, so REST
+  clients never compose entity names themselves (API 2.29.0). MQTT
+  discovery is unchanged.
+- **REST API: custom data points ship their entity names.** The CDP
+  summary gains `translated_name` and `parameter_name` — custom
+  channel names, `ch<no>`/`vch<no>` group markers, and button-lock
+  postfix labels are composed by the daemon.
+
+## 0.44.3
+
+- **Cleaner entity names for uniquely named channels.** The `ch<no>`
+  postfix on data point names is now only appended when the channel
+  name alone does not identify the channel (device-derived names,
+  `<name>:<no>` scheme, or duplicate custom names). A channel with a
+  unique custom name keeps its clean name — e.g. `Relay Status State`
+  instead of `Relay Status State ch3`.
+
+## 0.44.2
+
+- Version ride-along with the OpenCCU-Loom Remote name-validation fix;
+  no changes to this add-on.
+
+## 0.44.1
+
+- **New sibling add-on: OpenCCU-Loom Remote.** The store now also
+  offers an ingress proxy that brings the Config UI of one or more
+  **remote** OpenCCU-Loom instances into the HA sidebar — for setups
+  where the daemon runs next to the CCU or at another site. This
+  add-on itself is unchanged.
+
+## 0.44.0
+
+- **Changed: doorbells ring properly in Home Assistant.** Doorbell
+  devices (HM-Sen-DB-PCB, HmIP-DBB, HmIP-DSD-PCB) now fire Home
+  Assistant's standard `ring` event instead of a generic short press —
+  required by HA from 2027.4 and used by its doorbell automations.
+  **Note:** automations triggering on the `press_short` event type of
+  these doorbell entities must be switched to `ring`.
+
+## 0.43.4
+
+- **Fixed: AI clients can actually switch devices now.** MCP write
+  commands (set value, write paramset) failed with a central-ownership
+  error for every real device channel; reads were unaffected.
+
 ## 0.43.3
 
 - **Fixed: MCP access works now.** The MCP endpoint (for AI clients

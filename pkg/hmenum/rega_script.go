@@ -14,6 +14,8 @@ type RegaScript string
 // will land alongside the coordinators that use them.
 const (
 	RegaScriptAcknowledgeMessage            RegaScript = "acknowledge_message"
+	RegaScriptAcknowledgeAllServiceMessages RegaScript = "acknowledge_all_service_messages"
+	RegaScriptAcknowledgeAllAlarmMessages   RegaScript = "acknowledge_all_alarm_messages"
 	RegaScriptFetchAllDeviceData            RegaScript = "fetch_all_device_data"
 	RegaScriptGetAlarmMessages              RegaScript = "get_alarm_messages"
 	RegaScriptGetBackendInfo                RegaScript = "get_backend_info"
@@ -23,6 +25,8 @@ const (
 	RegaScriptGetSystemUpdateInfo           RegaScript = "get_system_update_info"
 	RegaScriptGetSystemVariableDescriptions RegaScript = "get_system_variable_descriptions"
 	RegaScriptSetProgramState               RegaScript = "set_program_state"
+	RegaScriptExecuteProgramConditional     RegaScript = "execute_program_conditional"
+	RegaScriptDeleteProgram                 RegaScript = "delete_program"
 	RegaScriptSetSystemVariable             RegaScript = "set_system_variable"
 	// Lifecycle scripts. Names match
 	// Reference where one exists
@@ -32,6 +36,8 @@ const (
 	RegaScriptUpdateSystemVariable  RegaScript = "update_system_variable"
 	RegaScriptSetDeviceRooms        RegaScript = "set_device_rooms"
 	RegaScriptSetDeviceFunctions    RegaScript = "set_device_functions"
+	RegaScriptStartComTest          RegaScript = "start_com_test"
+	RegaScriptPollComTest           RegaScript = "poll_com_test"
 	RegaScriptGetUserLevel          RegaScript = "get_user_level"
 	RegaScriptCreateRoom            RegaScript = "create_room"
 	RegaScriptRenameRoom            RegaScript = "rename_room"
@@ -42,8 +48,10 @@ const (
 	RegaScriptAcceptDeviceInInbox   RegaScript = "accept_device_in_inbox"
 	RegaScriptGetInboxDevices       RegaScript = "get_inbox_devices"
 	RegaScriptTriggerFirmwareUpdate RegaScript = "trigger_firmware_update"
+	RegaScriptRebootCCU             RegaScript = "reboot_ccu"
 	RegaScriptCreateBackupStart     RegaScript = "create_backup_start"
 	RegaScriptCreateBackupStatus    RegaScript = "create_backup_status"
+	RegaScriptUsageBySysvar         RegaScript = "usage_by_sysvar"
 )
 
 // String returns the script's internal identifier.
@@ -53,6 +61,8 @@ func (s RegaScript) String() string { return string(s) }
 // over this slice.
 var AllRegaScripts = []RegaScript{
 	RegaScriptAcknowledgeMessage,
+	RegaScriptAcknowledgeAllServiceMessages,
+	RegaScriptAcknowledgeAllAlarmMessages,
 	RegaScriptFetchAllDeviceData,
 	RegaScriptGetAlarmMessages,
 	RegaScriptGetBackendInfo,
@@ -62,11 +72,15 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptGetSystemUpdateInfo,
 	RegaScriptGetSystemVariableDescriptions,
 	RegaScriptSetProgramState,
+	RegaScriptExecuteProgramConditional,
+	RegaScriptDeleteProgram,
 	RegaScriptSetSystemVariable,
 	RegaScriptCreateSystemVariable,
 	RegaScriptUpdateSystemVariable,
 	RegaScriptSetDeviceRooms,
 	RegaScriptSetDeviceFunctions,
+	RegaScriptStartComTest,
+	RegaScriptPollComTest,
 	RegaScriptGetUserLevel,
 	RegaScriptCreateRoom,
 	RegaScriptRenameRoom,
@@ -77,6 +91,8 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptAcceptDeviceInInbox,
 	RegaScriptGetInboxDevices,
 	RegaScriptTriggerFirmwareUpdate,
+	RegaScriptRebootCCU,
 	RegaScriptCreateBackupStart,
 	RegaScriptCreateBackupStatus,
+	RegaScriptUsageBySysvar,
 }

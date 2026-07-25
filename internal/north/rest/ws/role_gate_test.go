@@ -43,6 +43,7 @@ var roleGateWriteCommands = []struct {
 	{"backup.trigger", `{}`, auth.RoleAdmin},
 	{"backups.trigger", `{"central_name":"alpha"}`, auth.RoleAdmin},
 	{"ccu.cache_clear", `{}`, auth.RoleAdmin},
+	{"programs.delete", `{"id":"P1"}`, auth.RoleAdmin},
 }
 
 // newRoleGateRouter wires just enough of the command surface to exercise
@@ -177,6 +178,7 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		ParamsetReader:       paramsets,
 		CentralLinks:         &fakeCentralLinks{},
 		SessionRecorder:      &fakeSessionRecorder{},
+		GroupsAdmin:          &stubGroupsAdmin{},
 	})
 
 	RegisterMissingCommands(r, MissingCommandsConfig{

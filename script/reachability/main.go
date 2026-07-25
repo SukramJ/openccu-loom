@@ -181,6 +181,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 
 	patterns := []string{
 		"github.com/SukramJ/openccu-loom/cmd/openccu-loom",
+		"github.com/SukramJ/openccu-loom/cmd/openccu-loom-remote",
 		"github.com/SukramJ/openccu-loom/cmd/hmcli",
 		"github.com/SukramJ/openccu-loom/internal/...",
 		"github.com/SukramJ/openccu-loom/pkg/...",
@@ -223,6 +224,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 		pkgPath := p.Pkg.Path()
 
 		if pkgPath == "github.com/SukramJ/openccu-loom/cmd/openccu-loom" ||
+			pkgPath == "github.com/SukramJ/openccu-loom/cmd/openccu-loom-remote" ||
 			pkgPath == "github.com/SukramJ/openccu-loom/cmd/hmcli" {
 			if fn := p.Func("main"); fn != nil {
 				entryFuncs = append(entryFuncs, fn)

@@ -57,6 +57,38 @@ type Capabilities struct {
 	// triggers.
 	FirmwareUpdate bool
 
+	// ConfigRestore is true when the backend exposes
+	// `restoreConfigToDevice` (re-transmit stored config after a
+	// factory reset). CCU only; the caller additionally gates on the
+	// interface, since hs485d / VirtualDevices under KindCCU do not
+	// expose the method.
+	ConfigRestore bool
+
+	// ReplaceDevice is true when the backend exposes
+	// `listReplaceableDevices` / `replaceDevice` (guided swap of a
+	// paired device for a new one). CCU only; the caller additionally
+	// gates on the interface, since HMIPServer (HmIP-*) throws
+	// NotImplementedException — only rfd (BidCos-RF) and hs485d
+	// (BidCos-Wired) implement it.
+	ReplaceDevice bool
+
+	// SearchDevices is true when the backend exposes the wired-bus scan
+	// `searchDevices`. CCU only; the caller additionally gates on the
+	// interface, since only hs485d (BidCos-Wired) implements it.
+	SearchDevices bool
+
+	// CommunicationTest is true when the backend can run the CCU's
+	// per-device communication/function test (ReGa DevStartComTest +
+	// poll). Requires the ReGa runner, so CCU only; the caller
+	// additionally gates on the radio interface.
+	CommunicationTest bool
+
+	// TeamAssignment is true when the backend exposes `setTeam` /
+	// `listTeams` (channel team assignment, e.g. smoke detectors). CCU
+	// only; the caller additionally gates on the interface (BidCos-RF /
+	// HmIP-RF).
+	TeamAssignment bool
+
 	// RequiresPeriodicRefresh is true for backends that cannot push
 	// events and need the periodic-refresh coordinator.
 	RequiresPeriodicRefresh bool
@@ -94,6 +126,12 @@ type Capabilities struct {
 	// InstallMode is true when the backend supports pairing mode
 	// on/off.
 	InstallMode bool
+
+	// InstallModeLocal is true when the backend supports the
+	// keyserver-less HmIP LOCAL teach-in (SGTIN + device-key
+	// whitelist). Requires the HmIP JSON-RPC surface; the backend
+	// additionally gates on the HmIP-RF interface at call time.
+	InstallModeLocal bool
 
 	// LinkOperations is true when the backend supports direct-link
 	// CRUD.
@@ -156,6 +194,11 @@ func CapabilityFor(kind Kind) Capabilities {
 			GetAllPrograms:         true,
 			GetAllSysvars:          true,
 			FirmwareUpdate:         true,
+			ConfigRestore:          true,
+			ReplaceDevice:          true,
+			SearchDevices:          true,
+			CommunicationTest:      true,
+			TeamAssignment:         true,
 			AlarmMessages:          true,
 			Backup:                 true,
 			CreateSystemVariable:   true,
@@ -165,6 +208,7 @@ func CapabilityFor(kind Kind) Capabilities {
 			HasSystemUpdate:        true,
 			InboxDevices:           true,
 			InstallMode:            true,
+			InstallModeLocal:       true,
 			LinkOperations:         true,
 			ServiceMessages:        true,
 			SetProgramState:        true,

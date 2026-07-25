@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/configui"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -24,11 +25,43 @@ import (
 // and the channel-level paramset-copy flow — see
 // docs/parity/by_design.md (entry "ws-rest-split").
 type DeviceWriter interface {
-	// Rename renames the device (CCU JSON-RPC `Device.setName`).
-	Rename(ctx context.Context, address, name string) error
+	// Rename renames the device (CCU JSON-RPC `Device.setName`). When
+	// includeChannels is true every channel is renamed along with the
+	// "<name>:<channelNo>" pattern.
+	Rename(ctx context.Context, address, name string, includeChannels bool) error
+	// RenameChannel renames a single channel (CCU JSON-RPC
+	// `Channel.setName`). The channel address is resolved as
+	// deviceAddr + ":" + channelNo.
+	RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error
 	// SetInstallMode toggles a single device into install mode for the
 	// given duration. Used by `device.install_mode`.
 	SetInstallMode(ctx context.Context, address string, durationSeconds int) error
+	// SetChannelRooms replaces a single channel's room assignments. An
+	// explicit empty slice clears the set. Used by
+	// `device.set_channel_rooms`.
+	SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error
+	// SetChannelFunctions replaces a single channel's function (Gewerk)
+	// assignments. Used by `device.set_channel_functions`.
+	SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error
+	// RestoreConfig re-transmits the centrally stored configuration to
+	// the device after a factory reset. Used by
+	// `device.restore_config`.
+	RestoreConfig(ctx context.Context, address string) error
+	// ReplaceCandidates lists the paired devices the new device may
+	// replace. Read-only; used by `device.replace_candidates`.
+	ReplaceCandidates(ctx context.Context, centralName, newAddress string) ([]hmapi.ReplaceCandidate, error)
+	// ReplaceDevice swaps a paired device for a new one. Used by
+	// `device.replace`.
+	ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error
+	// TestDeviceCommunication runs the CCU's per-device communication
+	// test. Used by `device.test`.
+	TestDeviceCommunication(ctx context.Context, address string) (hmapi.CommunicationTestResult, error)
+	// TeamCandidates lists the team channels a channel may join.
+	// Read-only; used by `device.team_candidates`.
+	TeamCandidates(ctx context.Context, deviceAddr string, channelNo int) ([]hmapi.TeamCandidate, error)
+	// SetChannelTeam assigns a channel to a team. Used by
+	// `device.set_team`.
+	SetChannelTeam(ctx context.Context, deviceAddr string, channelNo int, teamChannelAddress string) error
 }
 
 // ParamsetWriter mutates a paramset in one shot. Used by `paramset.put`
@@ -74,10 +107,19 @@ type CentralInfo interface {
 	Reconcile(ctx context.Context) error
 }
 
-// ExtendedHub adds the niche service-message operation that was
-// missing from the base [HubQuery] contract.
+// ExtendedHub adds the niche service-message operations that were
+// missing from the base [HubQuery] contract: durable suppression of a
+// message ([ExtendedHub.DisableServiceMessage]), listing the current
+// suppressions, and clearing one.
 type ExtendedHub interface {
 	DisableServiceMessage(ctx context.Context, id string) error
+	// ListSuppressedServiceMessages returns the durably-suppressed
+	// channel parameters across every central.
+	ListSuppressedServiceMessages(ctx context.Context) ([]map[string]any, error)
+	// UnsuppressServiceMessage clears a durable suppression. interfaceID
+	// may be empty (resolved from the stored suppression); an empty
+	// parameter clears every service parameter of the channel.
+	UnsuppressServiceMessage(ctx context.Context, interfaceID, channel, parameter string) error
 }
 
 // CentralLinksManager is the mutating + read surface for the
@@ -88,9 +130,12 @@ type ExtendedHub interface {
 // [adapter.CentralLinksDomain]; the same facade backs the REST
 // `/devices/{addr}/central-links` endpoints.
 type CentralLinksManager interface {
-	CreateCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
-	RemoveCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
-	CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error)
+	// CreateCentralLinks / RemoveCentralLinks toggle click-event routing.
+	// An empty channelAddress scopes the call to the whole device; a
+	// non-empty channelAddress scopes it to that single channel.
+	CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
+	RemoveCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
+	CentralLinksStatus(ctx context.Context, deviceAddress string) (hmapi.CentralLinksStatus, error)
 }
 
 // SessionRecorder is the diagnostic start/stop/status surface for the
@@ -216,21 +261,49 @@ type ExtendedCommandsConfig struct {
 	// SessionRecorder backs `recording.start`, `recording.stop`, and
 	// `recording.status`.
 	SessionRecorder SessionRecorder
+	// Groups backs `groups.list` — the read-only heating-group listing.
+	Groups GroupsQuery
+	// GroupsAdmin backs the heating-group administration commands (GR02):
+	// groups.create / groups.update / groups.delete plus the groups.types /
+	// groups.suitable_members read helpers. Same cmd-level adapter as the
+	// REST group-admin surface.
+	GroupsAdmin handlers.GroupsWriter
 }
 
 // RegisterExtendedCommands wires the post-MVP command set onto router.
 // The set complements [RegisterDefaultCommands] — call both at boot
 // to expose the full command surface. Any nil sub-config field skips its
 // commands.
+// registerDeviceCommands registers the device.* WS command family.
+// Extracted from RegisterExtendedCommands to keep it under the funlen
+// budget as the family grows.
+func registerDeviceCommands(router *Router, d DeviceWriter) {
+	if d == nil {
+		return
+	}
+	router.Register("device.rename", deviceRenameHandler(d))
+	router.Register("device.rename_channel", deviceRenameChannelHandler(d))
+	router.Register("device.install_mode", deviceInstallModeHandler(d))
+	router.Register("device.set_channel_rooms", deviceSetChannelRoomsHandler(d))
+	router.Register("device.set_channel_functions", deviceSetChannelFunctionsHandler(d))
+	router.Register("device.restore_config", deviceRestoreConfigHandler(d))
+	router.Register("device.test", deviceTestHandler(d))
+	router.Register("device.team_candidates", deviceTeamCandidatesHandler(d))
+	router.Register("device.set_team", deviceSetTeamHandler(d))
+	router.Register("device.replace_candidates", deviceReplaceCandidatesHandler(d))
+	router.Register("device.replace", deviceReplaceHandler(d))
+}
+
+// RegisterExtendedCommands registers the extended (non-default) WS
+// command families onto router — device lifecycle, paramsets, master
+// profiles, schedules, links and the rest — each guarded by its
+// corresponding non-nil config facade.
 func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if router == nil {
 		return
 	}
 	// --- Schreibpfad zuerst (priorisiert) ---
-	if cfg.Devices != nil {
-		router.Register("device.rename", deviceRenameHandler(cfg.Devices))
-		router.Register("device.install_mode", deviceInstallModeHandler(cfg.Devices))
-	}
+	registerDeviceCommands(router, cfg.Devices)
 	if cfg.Paramsets != nil {
 		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
 	}
@@ -281,8 +354,24 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("incidents.list", h)
 		router.Register("incidents.get", h)
 	}
+	if cfg.Groups != nil {
+		// groups.list — read-only heating-group listing (one entry per
+		// central; optional `central` narrows to one).
+		router.Register("groups.list", groupsListHandler(cfg.Groups))
+	}
+	if cfg.GroupsAdmin != nil {
+		// Heating-group administration (GR02): create / update / delete via
+		// the CCU jpages proxy, plus the type / suitable-member read helpers.
+		router.Register("groups.types", groupsTypesHandler(cfg.GroupsAdmin))
+		router.Register("groups.suitable_members", groupsSuitableMembersHandler(cfg.GroupsAdmin))
+		router.Register("groups.create", groupsCreateHandler(cfg.GroupsAdmin))
+		router.Register("groups.update", groupsUpdateHandler(cfg.GroupsAdmin))
+		router.Register("groups.delete", groupsDeleteHandler(cfg.GroupsAdmin))
+	}
 	if cfg.ExtendedHub != nil {
 		router.Register("service_messages.disable", serviceMessagesDisableHandler(cfg.ExtendedHub))
+		router.Register("service_messages.suppressed", serviceMessagesSuppressedHandler(cfg.ExtendedHub))
+		router.Register("service_messages.unsuppress", serviceMessagesUnsuppressHandler(cfg.ExtendedHub))
 	}
 	if cfg.UISchema != nil {
 		// paramset.form_schema — full UI schema for one channel/paramset.
@@ -318,7 +407,35 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 func deviceRenameHandler(d DeviceWriter) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
+			Address         string `json:"address"`
+			Name            string `json:"name"`
+			IncludeChannels bool   `json:"include_channels"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Name == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "name is required")
+		}
+		if err := d.Rename(ctx, p.Address, p.Name, p.IncludeChannels); err != nil {
+			return nil, fmt.Errorf("device.rename: %w", err)
+		}
+		return map[string]any{
+			"address":          p.Address,
+			"name":             p.Name,
+			"include_channels": p.IncludeChannels,
+		}, nil
+	}
+}
+
+func deviceRenameChannelHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
 			Address string `json:"address"`
+			Channel int    `json:"channel"`
 			Name    string `json:"name"`
 		}
 		if err := decodeOrEmpty(raw, &p); err != nil {
@@ -330,10 +447,203 @@ func deviceRenameHandler(d DeviceWriter) CommandHandler {
 		if p.Name == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "name is required")
 		}
-		if err := d.Rename(ctx, p.Address, p.Name); err != nil {
-			return nil, fmt.Errorf("device.rename: %w", err)
+		if err := d.RenameChannel(ctx, p.Address, p.Channel, p.Name); err != nil {
+			return nil, fmt.Errorf("device.rename_channel: %w", err)
 		}
-		return map[string]any{"address": p.Address, "name": p.Name}, nil
+		return map[string]any{
+			"address": p.Address,
+			"channel": p.Channel,
+			"name":    p.Name,
+		}, nil
+	}
+}
+
+func deviceSetChannelRoomsHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string   `json:"address"`
+			Channel int      `json:"channel"`
+			Rooms   []string `json:"rooms"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Rooms == nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "rooms is required (an empty array clears the assignment)")
+		}
+		if err := d.SetChannelRooms(ctx, p.Address, p.Channel, p.Rooms); err != nil {
+			return nil, fmt.Errorf("device.set_channel_rooms: %w", err)
+		}
+		return map[string]any{
+			"address": p.Address,
+			"channel": p.Channel,
+			"rooms":   p.Rooms,
+		}, nil
+	}
+}
+
+func deviceSetChannelFunctionsHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address   string   `json:"address"`
+			Channel   int      `json:"channel"`
+			Functions []string `json:"functions"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.Functions == nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "functions is required (an empty array clears the assignment)")
+		}
+		if err := d.SetChannelFunctions(ctx, p.Address, p.Channel, p.Functions); err != nil {
+			return nil, fmt.Errorf("device.set_channel_functions: %w", err)
+		}
+		return map[string]any{
+			"address":   p.Address,
+			"channel":   p.Channel,
+			"functions": p.Functions,
+		}, nil
+	}
+}
+
+func deviceRestoreConfigHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if err := d.RestoreConfig(ctx, p.Address); err != nil {
+			return nil, fmt.Errorf("device.restore_config: %w", err)
+		}
+		return map[string]any{"address": p.Address}, nil
+	}
+}
+
+func deviceTestHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		result, err := d.TestDeviceCommunication(ctx, p.Address)
+		if err != nil {
+			return nil, fmt.Errorf("device.test: %w", err)
+		}
+		return result, nil
+	}
+}
+
+func deviceTeamCandidatesHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+			Channel int    `json:"channel"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		candidates, err := d.TeamCandidates(ctx, p.Address, p.Channel)
+		if err != nil {
+			return nil, fmt.Errorf("device.team_candidates: %w", err)
+		}
+		if candidates == nil {
+			candidates = []hmapi.TeamCandidate{}
+		}
+		return map[string]any{"candidates": candidates}, nil
+	}
+}
+
+func deviceSetTeamHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string  `json:"address"`
+			Channel int     `json:"channel"`
+			Team    *string `json:"team"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		team := ""
+		if p.Team != nil {
+			team = *p.Team
+		}
+		if err := d.SetChannelTeam(ctx, p.Address, p.Channel, team); err != nil {
+			return nil, fmt.Errorf("device.set_team: %w", err)
+		}
+		return map[string]any{"address": p.Address, "channel": p.Channel, "team": team}, nil
+	}
+}
+
+func deviceReplaceCandidatesHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address string `json:"address"`
+			Central string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		candidates, err := d.ReplaceCandidates(ctx, p.Central, p.Address)
+		if err != nil {
+			return nil, fmt.Errorf("device.replace_candidates: %w", err)
+		}
+		if candidates == nil {
+			candidates = []hmapi.ReplaceCandidate{}
+		}
+		return map[string]any{"candidates": candidates}, nil
+	}
+}
+
+func deviceReplaceHandler(d DeviceWriter) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Address    string `json:"address"`
+			OldAddress string `json:"old_address"`
+			Central    string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Address == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "address is required")
+		}
+		if p.OldAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "old_address is required")
+		}
+		if err := d.ReplaceDevice(ctx, p.Central, p.OldAddress, p.Address); err != nil {
+			return nil, fmt.Errorf("device.replace: %w", err)
+		}
+		return map[string]any{
+			"status":      "replacing",
+			"old_address": p.OldAddress,
+			"new_address": p.Address,
+			"central":     p.Central,
+		}, nil
 	}
 }
 
@@ -594,6 +904,39 @@ func serviceMessagesDisableHandler(h ExtendedHub) CommandHandler {
 	}
 }
 
+func serviceMessagesSuppressedHandler(h ExtendedHub) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		items, err := h.ListSuppressedServiceMessages(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("service_messages.suppressed: %w", err)
+		}
+		if items == nil {
+			items = []map[string]any{}
+		}
+		return map[string]any{"items": items}, nil
+	}
+}
+
+func serviceMessagesUnsuppressHandler(h ExtendedHub) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Interface string `json:"interface"`
+			Channel   string `json:"channel"`
+			Parameter string `json:"parameter"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Channel == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "channel is required")
+		}
+		if err := h.UnsuppressServiceMessage(ctx, p.Interface, p.Channel, p.Parameter); err != nil {
+			return nil, fmt.Errorf("service_messages.unsuppress: %w", err)
+		}
+		return map[string]any{"unsuppressed": p.Channel}, nil
+	}
+}
+
 // ccuThrottleStatsHandler implements `ccu.throttle_stats`.
 // Returns per-interface throttle diagnostics (in_flight, waiting,
 // burst_downgrades, waited_for_burst_slot).
@@ -729,6 +1072,35 @@ func incidentsListHandler(l IncidentLister) CommandHandler {
 	}
 }
 
+// GroupsQuery is the read facade the `groups.list` command pulls from.
+// The cmd-level groups adapter satisfies it (the same adapter that backs
+// the REST `GET /api/v1/groups` reader), so the two transports share one
+// implementation. An empty `central` aggregates over all centrals.
+type GroupsQuery interface {
+	List(ctx context.Context, central string) ([]handlers.GroupCentralEntry, error)
+}
+
+// groupsListHandler implements `groups.list`. Request:
+// { "central": str (optional) }. Response: { "entries": [...] }.
+func groupsListHandler(q GroupsQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Central string `json:"central"`
+		}
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		entries, err := q.List(ctx, p.Central)
+		if err != nil {
+			return nil, fmt.Errorf("groups.list: %w", err)
+		}
+		if entries == nil {
+			entries = []handlers.GroupCentralEntry{}
+		}
+		return map[string]any{"entries": entries}, nil
+	}
+}
+
 // paramsetCopyHandler implements `paramset.copy`.
 // Reads the current paramset values from the source channel and writes
 // the (non-empty) value map to the target channel. The paramset_key
@@ -791,36 +1163,47 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter) CommandHandler {
 // or its `address` alias. The two names coexist so SPA and external WS callers
 // can use whichever matches their REST-path convention.
 func centralLinksAddress(raw json.RawMessage) (string, error) {
+	addr, _, err := centralLinksTarget(raw)
+	return addr, err
+}
+
+// centralLinksTarget decodes the device address (see centralLinksAddress)
+// plus the optional `channel` channel address. An empty channel scopes the
+// call to the whole device; a non-empty channel scopes it to that single
+// channel, mirroring the CCU channel-config dialog.
+func centralLinksTarget(raw json.RawMessage) (address, channel string, err error) {
 	var p struct {
 		DeviceAddress string `json:"device_address"`
 		Address       string `json:"address"`
+		Channel       string `json:"channel"`
 	}
-	if err := decodeOrEmpty(raw, &p); err != nil {
-		return "", err
+	if decErr := decodeOrEmpty(raw, &p); decErr != nil {
+		return "", "", decErr
 	}
 	addr := p.DeviceAddress
 	if addr == "" {
 		addr = p.Address
 	}
 	if addr == "" {
-		return "", NewCommandError(CommandErrorBadRequest, "device_address is required")
+		return "", "", NewCommandError(CommandErrorBadRequest, "device_address is required")
 	}
-	return addr, nil
+	return addr, p.Channel, nil
 }
 
 // centralCreateLinksHandler implements `central.create_links`.
-// Enables CCU click-event forwarding for every press-event channel of the
-// device. Mirrors Python create_central_links.
+// Enables CCU click-event forwarding. Without `channel` every press-event
+// channel of the device is switched on; with `channel` only that single
+// channel is touched. Mirrors Python create_central_links.
 //
-// Request: { "device_address": str } (alias "address").
+// Request: { "device_address": str (alias "address"), "channel"?: str }.
 // Response: { "touched": int, "skipped": int, "failed": int }
 func centralCreateLinksHandler(m CentralLinksManager) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		addr, err := centralLinksAddress(raw)
+		addr, channel, err := centralLinksTarget(raw)
 		if err != nil {
 			return nil, err
 		}
-		report, err := m.CreateCentralLinks(ctx, addr)
+		report, err := m.CreateCentralLinks(ctx, addr, channel)
 		if err != nil {
 			return nil, fmt.Errorf("central.create_links: %w", err)
 		}
@@ -829,18 +1212,19 @@ func centralCreateLinksHandler(m CentralLinksManager) CommandHandler {
 }
 
 // centralRemoveLinksHandler implements `central.remove_links`.
-// Tears down CCU click-event forwarding for the device. Mirrors Python
-// remove_central_links.
+// Tears down CCU click-event forwarding. Without `channel` the whole device
+// is switched off; with `channel` only that single channel is touched.
+// Mirrors Python remove_central_links.
 //
-// Request: { "device_address": str } (alias "address").
+// Request: { "device_address": str (alias "address"), "channel"?: str }.
 // Response: { "touched": int, "skipped": int, "failed": int }
 func centralRemoveLinksHandler(m CentralLinksManager) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		addr, err := centralLinksAddress(raw)
+		addr, channel, err := centralLinksTarget(raw)
 		if err != nil {
 			return nil, err
 		}
-		report, err := m.RemoveCentralLinks(ctx, addr)
+		report, err := m.RemoveCentralLinks(ctx, addr, channel)
 		if err != nil {
 			return nil, fmt.Errorf("central.remove_links: %w", err)
 		}
@@ -855,12 +1239,12 @@ func centralRemoveLinksHandler(m CentralLinksManager) CommandHandler {
 // Request: { "device_address": str } (alias "address").
 // Response: { "supported": bool, "reason"?: str, "eligible_channels"?: int }
 func centralLinksStatusHandler(m CentralLinksManager) CommandHandler {
-	return func(_ context.Context, raw json.RawMessage) (any, error) {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		addr, err := centralLinksAddress(raw)
 		if err != nil {
 			return nil, err
 		}
-		status, err := m.CentralLinksStatus(addr)
+		status, err := m.CentralLinksStatus(ctx, addr)
 		if err != nil {
 			return nil, fmt.Errorf("central.links_status: %w", err)
 		}

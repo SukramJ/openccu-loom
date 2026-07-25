@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/model/calculated"
@@ -129,6 +130,11 @@ type DevicePipeline struct {
 	// snapshots; the subsequent fetch_all_device_data pass overwrites
 	// them with live data wherever the CCU returns a fresh value.
 	valuesCache *sqlite.ValuesCacheStore
+
+	// channelFlags, when non-nil, carries the operator-set per-channel
+	// overrides (G12). The second pass re-applies them onto every rebuilt
+	// channel so a hidden/locked channel survives a re-ingest / reconnect.
+	channelFlags *channelflags.Overlay
 
 	// ingestMu serialises every ingest run — the interface bring-up
 	// ([IngestFromBackend]) and the hot-plug path ([IngestNewDevices]).
@@ -288,6 +294,14 @@ func (p *DevicePipeline) WithValuesCacheStore(store *sqlite.ValuesCacheStore, ce
 	return p
 }
 
+// WithChannelFlags attaches the operator per-channel override overlay
+// (G12) so the ingest re-applies hidden/locked onto every rebuilt channel.
+// Pass nil to disable (tests / one-shot tools).
+func (p *DevicePipeline) WithChannelFlags(overlay *channelflags.Overlay) *DevicePipeline {
+	p.channelFlags = overlay
+	return p
+}
+
 // WithVisibility attaches a visibility registry to the pipeline.
 // During [hydrateParamset] every parameter is checked via
 // [visibility.Registry.IsAllowedForChannel]; parameters that fail the check
@@ -350,6 +364,18 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		}
 		chNum := channelNumber(dd.Address)
 		ch := parent.AddChannel(dd.Address, chNum, dd.Type, hmenum.ParamsetKeyValues)
+		// Carry the raw CCU LINK_SOURCE_ROLES / LINK_TARGET_ROLES onto the
+		// channel so the direct-link role-matching filter can intersect them
+		// without a CCU roundtrip. AddChannel rebuilds a fresh channel on
+		// every (re)ingest, so this re-applies on hot-plug / reconnect.
+		ch.SetLinkRoles([]string(dd.LinkSourceRoles), []string(dd.LinkTargetRoles))
+		// Re-apply the operator per-channel overrides (G12). AddChannel
+		// rebuilds a fresh channel on every (re)ingest, so a hidden/locked
+		// channel would otherwise revert on a reconnect / hot-plug.
+		if p.channelFlags != nil {
+			f := p.channelFlags.Get(p.centralName, dd.Address)
+			ch.SetOperatorFlags(f.Hidden, f.Locked)
+		}
 		if p.names != nil {
 			ch.Name = p.names[dd.Address]
 		}
@@ -447,12 +473,17 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 		// HmIP devices only register under the SUBTYPE key ("PSM" → "psm"). Without
 		// SubModel populated, [Translations.DeviceModelLabel] returns empty for the
 		// majority of HmIP devices and HA-Discovery's `model_id` field stays unset.
-		SubModel:      dd.Subtype,
-		Name:          displayName,
-		Manufacturer:  hmenum.ManufacturerEQ3,
-		ProductGroup:  hmenum.ProductGroupForModel(dd.Type, iface),
-		Rooms:         rooms,
-		Functions:     functions,
+		SubModel:     dd.Subtype,
+		Name:         displayName,
+		Manufacturer: hmenum.ManufacturerEQ3,
+		ProductGroup: hmenum.ProductGroupForModel(dd.Type, iface),
+		Rooms:        rooms,
+		Functions:    functions,
+		// RX_MODE is the device's receive-mode bitmask; carrying it lets the
+		// REST device DTO tell WAKEUP / LAZY_CONFIG battery devices apart from
+		// mains devices, so the SPA can surface a "pending wakeup" hint after a
+		// link/config write.
+		RxMode:        hmenum.RxMode(dd.RXMode),
 		IseID:         deviceISEID,
 		SchemaVersion: schemaVersion,
 		Firmware: device.FirmwareInfo{

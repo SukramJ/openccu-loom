@@ -8,10 +8,15 @@
   import { onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
   import type { CustomDPSummary, DeviceDetail } from "$lib/api/types";
-  import { isOverviewExcluded, isStatusOnlyChannelType } from "$lib/quickcontrol/domain";
+  import {
+    isOverviewExcluded,
+    isStatusOnlyChannelType,
+    isVirtualRemoteModel,
+  } from "$lib/quickcontrol/domain";
   import ChannelControl from "$lib/control/ChannelControl.svelte";
   import ChannelStatusBadge from "./ChannelStatusBadge.svelte";
   import ChannelTiles from "./ChannelTiles.svelte";
+  import VirtualRemoteKeyGrid from "./VirtualRemoteKeyGrid.svelte";
   import { cdpWidgetFor, hasCdpWidget } from "./dispatch";
   import { t } from "$lib/i18n";
 
@@ -66,14 +71,21 @@
     unresolved = new Set([...unresolved, addr]);
   }
 
+  // Virtual remotes render as a dedicated key grid instead of 50
+  // incoherent per-channel tiles — every KEY channel is excluded from
+  // the orphan sections below.
+  const isVirtualRemote = $derived(isVirtualRemoteModel(detail.model));
+
   const orphanChannels = $derived(
-    detail.channels.filter(
-      (c) =>
-        !isOverviewExcluded(c) &&
-        c.address.includes(":") &&
-        !cdpChannelNumbers.has(c.number) &&
-        (c.data_points_count ?? 0) > 0,
-    ),
+    isVirtualRemote
+      ? []
+      : detail.channels.filter(
+          (c) =>
+            !isOverviewExcluded(c) &&
+            c.address.includes(":") &&
+            !cdpChannelNumbers.has(c.number) &&
+            (c.data_points_count ?? 0) > 0,
+        ),
   );
 
   // Split orphans into actor channels (full ChannelControl tile) and
@@ -256,6 +268,12 @@
     {/each}
   </div>
 {/snippet}
+
+{#if isVirtualRemote}
+  <div class="mb-4">
+    <VirtualRemoteKeyGrid {detail} />
+  </div>
+{/if}
 
 {#if detail.has_sub_devices && groups.length > 0}
   <!-- Sub-device layout: per-group sections with a coloured accent + tint.

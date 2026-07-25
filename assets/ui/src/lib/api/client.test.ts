@@ -125,6 +125,22 @@ describe("listPrograms / listSysvars — pagination", () => {
     expect(result).toHaveLength(12);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  // include_internal defaults to false (system programs hidden, matching the
+  // CCU WebUI default) and is only forced true on an explicit caller request.
+  it("listPrograms defaults to include_internal=false", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    await api.listPrograms();
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/programs?page=1&per_page=200&include_internal=false");
+  });
+
+  it("listPrograms(true) requests include_internal=true", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    await api.listPrograms(true);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/programs?page=1&per_page=200&include_internal=true");
+  });
 });
 
 describe("api endpoint paths", () => {
@@ -135,6 +151,319 @@ describe("api endpoint paths", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/v1/backups");
     expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  // restoreDeviceConfig re-transmits the stored configuration after a
+  // factory reset (admin-only; HmIP-RF / BidCos-RF only).
+  it("restoreDeviceConfig posts to /devices/{addr}/config/restore", async () => {
+    await api.restoreDeviceConfig("HmIP-X");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/config/restore");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("restoreDeviceConfig percent-encodes the device address", async () => {
+    await api.restoreDeviceConfig("ABC 123");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/ABC%20123/config/restore");
+  });
+
+  // testDeviceCommunication runs the CCU's per-device communication /
+  // function test and returns the CommunicationTestResult it POSTs back.
+  it("testDeviceCommunication posts to /devices/{addr}/test", async () => {
+    await api.testDeviceCommunication("HmIP-X");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/test");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("testDeviceCommunication percent-encodes the device address", async () => {
+    await api.testDeviceCommunication("ABC 123");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/ABC%20123/test");
+  });
+
+  it("testDeviceCommunication returns the CommunicationTestResult body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        passed: true,
+        started_at: "2026-07-22T10:00:00Z",
+        completed_at: "2026-07-22T10:00:03Z",
+        duration_ms: 3000,
+        timed_out: false,
+      }),
+    );
+    const result = await api.testDeviceCommunication("HmIP-X");
+    expect(result.passed).toBe(true);
+    expect(result.duration_ms).toBe(3000);
+    expect(result.timed_out).toBe(false);
+  });
+
+  it("teamCandidates GETs the channel team-candidates and unwraps them", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ address: "TEAM:1", current: true }] }),
+    );
+    const cands = await api.teamCandidates("SD001", 1);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/SD001/channels/1/team-candidates");
+    expect(cands).toHaveLength(1);
+    expect(cands[0].address).toBe("TEAM:1");
+  });
+
+  it("setChannelTeam PUTs the team assignment", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelTeam("SD001", 1, "TEAM:2");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/SD001/channels/1/team");
+    expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ team: "TEAM:2" });
+  });
+
+  it("setChannelTeam sends null to reset the team", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelTeam("SD001", 1, null);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ team: null });
+  });
+});
+
+describe("api — deleteDevice reset/force query flags", () => {
+  it("DELETEs without a query string when no options are given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD");
+    expect((init.method ?? "GET").toUpperCase()).toBe("DELETE");
+  });
+
+  it("omits the query string when reset and force are both explicitly false", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: false, force: false });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD");
+  });
+
+  it("appends only reset=true when force is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?reset=true");
+  });
+
+  it("appends only force=true when reset is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { force: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?force=true");
+  });
+
+  it("appends both flags when reset and force are true", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001ABCD", { reset: true, force: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD?reset=true&force=true");
+  });
+
+  it("percent-encodes the address ahead of the query flags", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.deleteDevice("0001:2", { reset: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2?reset=true");
+  });
+});
+
+// central-links (createCentralLinks/removeCentralLinks) accept an optional
+// `channel` scope: an empty/omitted channel touches the whole device
+// (unchanged historical behaviour), a channel address scopes the call to
+// that single channel exactly like the CCU channel-config dialog. Both
+// verbs build the query string identically, so cover POST and DELETE.
+describe("api — central links channel scoping", () => {
+  it("centralLinksStatus GETs the device's status with no query string", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ supported: true }));
+    await api.centralLinksStatus("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+  });
+
+  it("createCentralLinks POSTs without a query string when no channel is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 2, skipped: 0, failed: 0 }, 202));
+    await api.createCentralLinks("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("createCentralLinks appends ?channel= when a channel address is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 1, skipped: 0, failed: 0 }, 202));
+    await api.createCentralLinks("0001ABCD", "0001ABCD:2");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links?channel=0001ABCD%3A2");
+  });
+
+  it("removeCentralLinks DELETEs without a query string when no channel is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 2, skipped: 0, failed: 0 }, 202));
+    await api.removeCentralLinks("0001ABCD");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+    expect((init.method ?? "GET").toUpperCase()).toBe("DELETE");
+  });
+
+  it("removeCentralLinks appends ?channel= when a channel address is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 1, skipped: 0, failed: 0 }, 202));
+    await api.removeCentralLinks("0001ABCD", "0001ABCD:2");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links?channel=0001ABCD%3A2");
+  });
+
+  it("treats an empty-string channel the same as an omitted channel", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ touched: 2, skipped: 0, failed: 0 }, 202));
+    await api.createCentralLinks("0001ABCD", "");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001ABCD/central-links");
+  });
+});
+
+// Guided device replace: listReplaceCandidates is a read-only GET scoped
+// by an optional `central` query param; replaceDevice is the admin-only
+// POST that swaps a paired device for the new one, carrying old_address
+// (and central, when given) in the JSON body.
+describe("api — device replace workflow", () => {
+  it("listReplaceCandidates GETs the replace-candidates endpoint and unwraps the envelope", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ address: "OLD001", model: "HM-Sec-SC", model_matches: true }] }),
+    );
+    const candidates = await api.listReplaceCandidates("NEW001", "ccu");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/NEW001/replace-candidates?central=ccu");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+    expect(candidates).toEqual([{ address: "OLD001", model: "HM-Sec-SC", model_matches: true }]);
+  });
+
+  it("listReplaceCandidates omits the query string when no central is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ candidates: [] }));
+    await api.listReplaceCandidates("NEW001");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/NEW001/replace-candidates");
+  });
+
+  it("replaceDevice POSTs old_address and central in the JSON body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ status: "replacing", old_address: "OLD001", new_address: "NEW001", central: "ccu" }, 202),
+    );
+    await api.replaceDevice("NEW001", "OLD001", "ccu");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/NEW001/replace");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ old_address: "OLD001", central: "ccu" });
+  });
+
+  it("replaceDevice omits central from the body when not given", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ status: "replacing", old_address: "OLD001", new_address: "NEW001" }, 202),
+    );
+    await api.replaceDevice("NEW001", "OLD001");
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ old_address: "OLD001" });
+  });
+});
+
+// acceptInboxDevice's config body is optional and must stay backward
+// compatible: an empty/omitted config keeps the historical "accept only"
+// POST with no body, so the daemon's `io.EOF` fast-path is exercised. Only
+// a config with at least one defined field switches to a JSON body.
+describe("api — acceptInboxDevice optional config body", () => {
+  it("POSTs with no body when config is omitted", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0009ABCD/accept");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+    expect(init.body).toBeUndefined();
+  });
+
+  it("POSTs with no body when config is an empty object", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "", {});
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBeUndefined();
+  });
+
+  it("scopes to ?central= when a central is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "alpha");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0009ABCD/accept?central=alpha");
+  });
+
+  it("sends a JSON body with only the name when just a name is given", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "", { name: "Kitchen Switch" });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ name: "Kitchen Switch" });
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  it("sends every supplied field, including an explicit empty rooms array", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.acceptInboxDevice("0009ABCD", "", {
+      name: "Kitchen Switch",
+      include_channels: true,
+      rooms: [],
+      functions: ["Lights"],
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "Kitchen Switch",
+      include_channels: true,
+      rooms: [],
+      functions: ["Lights"],
+    });
+  });
+});
+
+// setChannelRooms / setChannelFunctions PATCH the same channel resource as
+// renameChannel, but with a `rooms`/`functions` body instead of `name` —
+// the channel-level twin of the device-level room/function assignment.
+describe("api — setChannelRooms / setChannelFunctions", () => {
+  it("setChannelRooms PATCHes the channel with a rooms body", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelRooms("HmIP-X", 2, ["Wohnzimmer"]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/channels/2");
+    expect((init.method ?? "GET").toUpperCase()).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ rooms: ["Wohnzimmer"] });
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  it("setChannelRooms sends an explicit empty array to clear the assignment", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelRooms("HmIP-X", 2, []);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ rooms: [] });
+  });
+
+  it("setChannelFunctions PATCHes the channel with a functions body", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelFunctions("HmIP-X", 2, ["Licht"]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/HmIP-X/channels/2");
+    expect((init.method ?? "GET").toUpperCase()).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ functions: ["Licht"] });
+  });
+
+  it("setChannelFunctions sends an explicit empty array to clear the assignment", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelFunctions("HmIP-X", 2, []);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ functions: [] });
+  });
+
+  it("percent-encodes the device address in the channel path", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.setChannelRooms("0001:2", 3, ["Küche"]);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2/channels/3");
   });
 });
 
@@ -199,6 +528,29 @@ describe("api paramset writes — edit-lock token header", () => {
     expect(headers["Content-Type"]).toBe("application/json");
   });
 
+  it("getParamset GETs the raw paramset with no edit-lock header", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ AES_ACTIVE: false }));
+    const result = await api.getParamset("00021BE9957782:4", "MASTER");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/00021BE9957782%3A4/paramsets/MASTER");
+    expect((init.method ?? "GET").toUpperCase()).toBe("GET");
+    const headers = headersOf(fetchMock.mock.calls[0]);
+    expect(headers["X-Edit-Token"]).toBeUndefined();
+    expect(result).toEqual({ AES_ACTIVE: false });
+  });
+
+  it("getParamset percent-encodes the channel address for the VALUES paramset", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ STATE: true }));
+    await api.getParamset("0001:2", "VALUES");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2/paramsets/VALUES");
+  });
+
+  it("getParamset propagates the daemon error on a failed read", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "not found" }, 404));
+    await expect(api.getParamset("0001ABCD:1", "MASTER")).rejects.toBeTruthy();
+  });
+
   it("putLinkParamset sends X-Edit-Token when a token is held", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
     await api.putLinkParamset(
@@ -216,6 +568,37 @@ describe("api paramset writes — edit-lock token header", () => {
     expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
     const headers = headersOf(fetchMock.mock.calls[0]);
     expect(headers["X-Edit-Token"]).toBe("tok-xyz");
+  });
+});
+
+describe("api — determineParameter (MASTER editor 'Determine' button)", () => {
+  it("POSTs the parameter name to the channel-scoped determine route (happy path)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ value: 21.5 }));
+    const result = await api.determineParameter("00021BE9957782", 4, "MASTER", "TEMPERATURE");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "/api/v1/devices/00021BE9957782/channels/4/paramsets/MASTER/determine",
+    );
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ parameter: "TEMPERATURE" });
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
+      "application/json",
+    );
+    expect(result).toEqual({ value: 21.5 });
+  });
+
+  it("percent-encodes the device address (edge case: address carrying reserved characters)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ value: 1 }));
+    await api.determineParameter("0001:2", 1, "LINK", "ON_TIME");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/0001%3A2/channels/1/paramsets/LINK/determine");
+  });
+
+  it("propagates the daemon error on a failed determine (error path)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "ccu unreachable" }, 502));
+    await expect(
+      api.determineParameter("00021BE9957782", 4, "MASTER", "TEMPERATURE"),
+    ).rejects.toBeTruthy();
   });
 });
 
@@ -306,5 +689,72 @@ describe("getHistory", () => {
     await getHistory(BASE_PARAMS);
     const headers = headersOf(fetchMock.mock.calls[0]);
     expect(headers["X-CSRF-Token"]).toBeUndefined();
+  });
+});
+
+describe("api.setInstallModeInterface — LOCAL teach-in body shape", () => {
+  // setInstallModeInterface POSTs, then re-fetches the interface list; every
+  // test here mocks both responses so the follow-up GET doesn't throw.
+  beforeEach(() => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    fetchMock.mockResolvedValueOnce(jsonResponse([]));
+  });
+
+  it("includes sgtin and key in the body when a local arg is given", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true, 300, undefined, {
+      sgtin: "3014-F711-A061-A7D5-6989-2A67",
+      key: "0110C8531D0952D8D73E1194E95B5F19",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/install-mode/interfaces");
+    const body = JSON.parse(init.body as string);
+    expect(body.sgtin).toBe("3014-F711-A061-A7D5-6989-2A67");
+    expect(body.key).toBe("0110C8531D0952D8D73E1194E95B5F19");
+    expect(body.interface).toBe("HmIP-RF");
+    expect(body.active).toBe(true);
+    expect(body.seconds).toBe(300);
+  });
+
+  it("omits sgtin and key from the body when no local arg is given", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true, 60);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).not.toHaveProperty("sgtin");
+    expect(body).not.toHaveProperty("key");
+  });
+
+  it("omits sgtin and key from the body for a plain device_address teach-in", async () => {
+    await api.setInstallModeInterface("HmIP-RF", true, 60, "AABBCCDD:1");
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.device_address).toBe("AABBCCDD:1");
+    expect(body).not.toHaveProperty("sgtin");
+    expect(body).not.toHaveProperty("key");
+  });
+});
+
+describe("api.searchWiredDevices — wired-bus scan request", () => {
+  it("POSTs interface + central and returns the found count", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ central: "ccu", interface: "BidCos-Wired", found: 2 }),
+    );
+    const result = await api.searchWiredDevices("BidCos-Wired", "ccu");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/install-mode/search");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ interface: "BidCos-Wired", central: "ccu" });
+    expect(result).toEqual({ central: "ccu", interface: "BidCos-Wired", found: 2 });
+  });
+
+  it("omits central from the body when not provided", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ central: "", interface: "BidCos-Wired", found: 0 }),
+    );
+    await api.searchWiredDevices("BidCos-Wired");
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ interface: "BidCos-Wired" });
+    expect(body).not.toHaveProperty("central");
   });
 });

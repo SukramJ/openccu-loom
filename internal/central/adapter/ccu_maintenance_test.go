@@ -1,0 +1,231 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package adapter
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
+	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+)
+
+// rebootOps is a backends.Operations that also implements the ccuRebooter
+// capability. It records the reboot call and returns a configurable error.
+type rebootOps struct {
+	fakeOperations
+
+	rebootCalls int
+	rebootErr   error
+}
+
+func (r *rebootOps) RebootCCU(_ context.Context) (bool, error) {
+	r.rebootCalls++
+	if r.rebootErr != nil {
+		return false, r.rebootErr
+	}
+	return true, nil
+}
+
+// buildCCUMaintenanceFixture wires a central named centralName with the given
+// backend registered as its primary interface, and returns the domain.
+func buildCCUMaintenanceFixture(t *testing.T, centralName string, ops backends.Operations) *CCUMaintenanceDomain {
+	t.Helper()
+	c, err := central.New(central.Config{Name: centralName})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	w := clientpkg.NewValueWriter()
+	w.Register(centralName, "HmIP-RF", ops)
+	ic := newTestInterfaceClient(t, centralName, "HmIP-RF", 5)
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatalf("Clients.Register: %v", err)
+	}
+	reg := central.NewRegistry()
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	return NewCCUMaintenanceDomain(reg, w)
+}
+
+func TestCCUMaintenanceRebootCCUSuccess(t *testing.T) {
+	t.Parallel()
+	ops := &rebootOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	if err := dom.RebootCCU(context.Background(), "ccu-01"); err != nil {
+		t.Fatalf("RebootCCU: %v", err)
+	}
+	if ops.rebootCalls != 1 {
+		t.Fatalf("expected 1 reboot call, got %d", ops.rebootCalls)
+	}
+}
+
+func TestCCUMaintenanceRebootCCUUnknownCentral(t *testing.T) {
+	t.Parallel()
+	ops := &rebootOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	err := dom.RebootCCU(context.Background(), "does-not-exist")
+	if !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+	if ops.rebootCalls != 0 {
+		t.Fatalf("backend must not be called for an unknown central")
+	}
+}
+
+func TestCCUMaintenanceRebootCCUUnsupportedBackend(t *testing.T) {
+	t.Parallel()
+	// A plain fakeOperations does not implement ccuRebooter (no RebootCCU).
+	ops := &fakeOperations{kind: backends.KindCUxD}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	err := dom.RebootCCU(context.Background(), "ccu-01")
+	if !errors.Is(err, backends.ErrUnsupported) {
+		t.Fatalf("want backends.ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCCUMaintenanceRebootCCUPropagatesBackendError(t *testing.T) {
+	t.Parallel()
+	ops := &rebootOps{
+		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		rebootErr:      errors.New("ccu unreachable"),
+	}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	if err := dom.RebootCCU(context.Background(), "ccu-01"); err == nil {
+		t.Fatal("expected the backend reboot error to propagate")
+	}
+}
+
+func TestCCUMaintenanceRebootCCUNilRegistry(t *testing.T) {
+	t.Parallel()
+	dom := NewCCUMaintenanceDomain(nil, nil)
+	if err := dom.RebootCCU(context.Background(), "ccu-01"); !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+}
+
+// downloadOps records the firmware-download URL passed to the primary
+// backend and returns a configurable error.
+type downloadOps struct {
+	fakeOperations
+
+	downloadCalls int
+	lastURL       string
+	downloadErr   error
+}
+
+func (d *downloadOps) DownloadFirmware(_ context.Context, url string) error {
+	d.downloadCalls++
+	d.lastURL = url
+	return d.downloadErr
+}
+
+func TestCCUMaintenanceDownloadFirmwareSuccess(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); err != nil {
+		t.Fatalf("DownloadFirmware: %v", err)
+	}
+	if ops.downloadCalls != 1 || ops.lastURL != "https://x/fw.tgz" {
+		t.Fatalf("expected one download of the url, got calls=%d url=%q", ops.downloadCalls, ops.lastURL)
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwareSingleCentralDefault(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	// Empty central resolves to the sole registered central.
+	if err := dom.DownloadFirmware(context.Background(), "", "https://x/fw.tgz"); err != nil {
+		t.Fatalf("DownloadFirmware: %v", err)
+	}
+	if ops.downloadCalls != 1 {
+		t.Fatalf("expected the sole central to be used, got calls=%d", ops.downloadCalls)
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwareUnknownCentral(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	err := dom.DownloadFirmware(context.Background(), "nope", "https://x/fw.tgz")
+	if !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+	if ops.downloadCalls != 0 {
+		t.Fatalf("backend must not be called for an unknown central")
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwarePropagatesError(t *testing.T) {
+	t.Parallel()
+	ops := &downloadOps{
+		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		downloadErr:    errors.New("ccu unreachable"),
+	}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); err == nil {
+		t.Fatal("expected the backend download error to propagate")
+	}
+}
+
+func TestCCUMaintenanceDownloadFirmwareNilRegistry(t *testing.T) {
+	t.Parallel()
+	dom := NewCCUMaintenanceDomain(nil, nil)
+	if err := dom.DownloadFirmware(context.Background(), "ccu-01", "https://x/fw.tgz"); !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+}
+
+// TestCCUMaintenanceDownloadFirmwareAmbiguousWithoutCentralName pins the
+// resolveCentral rule that the empty-central convenience only applies to a
+// single-CCU deployment: with two centrals registered, an empty name must
+// not silently pick one — it is ambiguous and must fail closed.
+func TestCCUMaintenanceDownloadFirmwareAmbiguousWithoutCentralName(t *testing.T) {
+	t.Parallel()
+	w := clientpkg.NewValueWriter()
+	reg := central.NewRegistry()
+	opsByCentral := map[string]*downloadOps{}
+	for _, name := range []string{"ccu-01", "ccu-02"} {
+		c, err := central.New(central.Config{Name: name})
+		if err != nil {
+			t.Fatalf("central.New(%s): %v", name, err)
+		}
+		ops := &downloadOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+		opsByCentral[name] = ops
+		w.Register(name, "HmIP-RF", ops)
+		ic := newTestInterfaceClient(t, name, "HmIP-RF", 5)
+		if err := c.Clients.Register(&coordinators.ClientEntry{
+			InterfaceID: "HmIP-RF",
+			Interface:   hmenum.InterfaceHmIPRF,
+			Client:      ic,
+		}); err != nil {
+			t.Fatalf("Clients.Register(%s): %v", name, err)
+		}
+		if err := reg.Register(c); err != nil {
+			t.Fatalf("reg.Register(%s): %v", name, err)
+		}
+	}
+	dom := NewCCUMaintenanceDomain(reg, w)
+
+	err := dom.DownloadFirmware(context.Background(), "", "https://x/fw.tgz")
+	if !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral for an ambiguous default, got %v", err)
+	}
+	for name, ops := range opsByCentral {
+		if ops.downloadCalls != 0 {
+			t.Fatalf("backend for %s must not be called on an ambiguous default", name)
+		}
+	}
+}

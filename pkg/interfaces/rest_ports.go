@@ -5,6 +5,7 @@ package interfaces
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -41,9 +42,13 @@ type SysvarRefreshService interface {
 // on. The implementation lives in central/adapter and routes the request to
 // the per-CCU client backend.
 type CentralLinksService interface {
-	CreateCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
-	RemoveCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
-	CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error)
+	// CreateCentralLinks / RemoveCentralLinks toggle click-event routing.
+	// An empty channelAddress scopes the call to the whole device (every
+	// eligible channel); a non-empty channelAddress scopes it to that
+	// single channel.
+	CreateCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
+	RemoveCentralLinks(ctx context.Context, deviceAddress, channelAddress string) (hmapi.CentralLinksReport, error)
+	CentralLinksStatus(ctx context.Context, deviceAddress string) (hmapi.CentralLinksStatus, error)
 }
 
 // ConfigReader is the facade `GET /api/v1/config` depends on.
@@ -93,13 +98,83 @@ type DataPointWriter interface {
 // operations. Separate from DeviceIndex so read-only deployments
 // can leave it nil.
 type DeviceAdmin interface {
-	UnpairDevice(ctx context.Context, address string) error
-	RenameDevice(ctx context.Context, address, name string) error
-	AcceptInboxDevice(ctx context.Context, address string) error
+	// UnpairDevice removes the device from the CCU. reset additionally
+	// factory-resets the device during removal; force removes an unreachable
+	// device even when the CCU cannot reach it for the handshake. Both map to
+	// the CCU `deleteDevice` delete bitmask.
+	UnpairDevice(ctx context.Context, address string, reset, force bool) error
+	// RenameDevice persists the device name to the CCU. When
+	// includeChannels is true every channel is renamed along with the
+	// pattern "<name>:<channelNo>", matching the CCU WebUI behaviour.
+	RenameDevice(ctx context.Context, address, name string, includeChannels bool) error
+	// RenameChannel persists a single channel name to the CCU. The
+	// channel address is resolved as deviceAddr + ":" + channelNo.
+	RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error
+	// AcceptInboxDevice promotes a pending inbox device into the active
+	// registry. opts carries the optional first-time configuration
+	// (name, rooms, functions) applied best-effort right after the
+	// accept; a zero-value opts accepts only. When a follow-up step
+	// fails the accept has already happened, so the returned error wraps
+	// [ErrAcceptConfigIncomplete].
+	AcceptInboxDevice(ctx context.Context, address string, opts AcceptInboxOptions) error
 	UpdateFirmware(ctx context.Context, address string) error
+	// RestoreDeviceConfig re-transmits the centrally stored
+	// configuration (all channels' MASTER paramsets + link peerings) to
+	// the device after a factory reset. Supported on HmIP-RF and
+	// BidCos-RF only; other interfaces answer with a
+	// [backends.ErrUnsupported]-class error the handler maps to 422.
+	RestoreDeviceConfig(ctx context.Context, address string) error
+	// InterfaceDutyCycle returns the transmit duty cycle in percent
+	// (0..100) of the radio interface the device identified by address is
+	// paired to, sourced from the per-interface BidCos utilisation poll.
+	// The bool is false when the value is unknown: the device is not
+	// found, its interface carries no BidCos gateway (HmIP interfaces
+	// report a device-level DUTY_CYCLE data point instead), or the poll
+	// has not populated the cache yet. It is a cache read — no CCU round
+	// trip — so the firmware-update gate can consult it inline.
+	InterfaceDutyCycle(address string) (int, bool)
 	SetRooms(ctx context.Context, address string, rooms []string) error
 	SetFunctions(ctx context.Context, address string, functions []string) error
+	// SetChannelRooms replaces a single channel's room assignments. The
+	// channel address is resolved as deviceAddr + ":" + channelNo; an
+	// explicit empty slice clears every assignment.
+	SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error
+	// SetChannelFunctions replaces a single channel's function (Gewerk)
+	// assignments, mirroring [DeviceAdmin.SetChannelRooms].
+	SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error
 }
+
+// AcceptInboxOptions carries the optional first-time configuration
+// applied to an inbox device immediately after it is accepted. Every
+// field is optional: an empty Name skips the rename, and nil Rooms /
+// Functions leave those assignments untouched (an explicit empty slice
+// clears them). IncludeChannels only matters together with Name and
+// mirrors the device-rename cascade ("<name>:<channelNo>").
+type AcceptInboxOptions struct {
+	Name            string
+	IncludeChannels bool
+	Rooms           []string
+	Functions       []string
+}
+
+// HasConfig reports whether any optional first-time configuration was
+// requested. When false the accept is a plain promotion with no
+// follow-up steps.
+func (o AcceptInboxOptions) HasConfig() bool {
+	return o.Name != "" || o.Rooms != nil || o.Functions != nil
+}
+
+// ErrAcceptConfigIncomplete signals that an inbox device was accepted
+// successfully but one or more of the optional first-time configuration
+// steps (rename, rooms, functions) failed afterwards. The accept itself
+// is durable — callers should surface this so the operator re-applies
+// only the configuration rather than re-accepting the device.
+var ErrAcceptConfigIncomplete = errors.New("device accepted but initial configuration incomplete")
+
+// ErrChannelNotFound signals that a channel-scoped device-admin
+// operation named a channel number the device does not have. REST maps
+// it to 404 so a typo is distinguishable from an upstream failure.
+var ErrChannelNotFound = errors.New("channel not found")
 
 // DiagnosticsIntrospectService is the facade the live-introspection
 // diagnostics endpoints depend on. It exposes read-only daemon internals
@@ -128,7 +203,16 @@ type IncidentsReader interface {
 // LinksService is the narrow facade the /links endpoints depend on.
 type LinksService interface {
 	ListLinks(ctx context.Context, deviceAddress, locale string) ([]hmapi.Link, error)
+	// ListAllLinks aggregates every direct link across all registered
+	// centrals (or a single central when centralName is non-empty). Each
+	// returned link carries its owning central_name + interface_id.
+	ListAllLinks(ctx context.Context, centralName, locale string) ([]hmapi.Link, error)
+	// ActivateLink triggers the receiver's LINK-paramset behaviour for the
+	// given sender (the "test link at device" probe) — short or long
+	// keypress. It physically actuates the receiver.
+	ActivateLink(ctx context.Context, receiverAddress, senderAddress string, longPress bool) error
 	AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error
+	SetLinkInfo(ctx context.Context, senderAddress, receiverAddress, name, description string) error
 	RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error
 	LinkableChannels(
 		ctx context.Context,
@@ -157,6 +241,22 @@ type ParamsetService interface {
 	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
 	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+}
+
+// ParameterDeterminer backs `POST /devices/{addr}/channels/{no}/paramsets/{key}/determine`.
+// It reads ("determines") the current live value of a single parameter
+// straight from the device via the CCU's determineParameter operation,
+// which auto-selects the paramset. This is a read, not a configuration
+// write — the MASTER editor's "Determine" button uses it to pull the
+// device's current value into an editable field.
+//
+// The interfaceID argument is resolved from the central registry by the
+// implementation ([central/adapter.ParameterDeterminerAdapter], which
+// also backs the WS `paramset.determine` command); the REST handler
+// passes "" for it. Returns nil when the backend does not support the
+// operation (e.g. CUxD).
+type ParameterDeterminer interface {
+	DetermineParameter(ctx context.Context, interfaceID, channelAddress, parameterID string) (any, error)
 }
 
 // RPCRecorderService is the facade the RPC-session-recording endpoints depend

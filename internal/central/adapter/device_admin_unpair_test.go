@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -22,6 +23,7 @@ import (
 // long list of forwarding calls — only the call under test matters.
 type fakeOperations struct {
 	deleteDeviceCalls []string
+	deleteDeviceFlags []int
 	deleteDeviceErr   error
 	kind              backends.Kind
 }
@@ -72,14 +74,19 @@ func (f *fakeOperations) GetLinkParamset(_ context.Context, _, _ string) (map[st
 	return nil, nil
 }
 
+func (f *fakeOperations) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (f *fakeOperations) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }
 
 func (f *fakeOperations) ReportValueUsage(_ context.Context, _, _ string, _ int) error { return nil }
 
-func (f *fakeOperations) DeleteDevice(_ context.Context, address string) error {
+func (f *fakeOperations) DeleteDevice(_ context.Context, address string, flags int) error {
 	f.deleteDeviceCalls = append(f.deleteDeviceCalls, address)
+	f.deleteDeviceFlags = append(f.deleteDeviceFlags, flags)
 	return f.deleteDeviceErr
 }
 
@@ -116,6 +123,38 @@ func (*fakeOperations) GetInstallMode(context.Context) (int, error) { return 0, 
 
 func (*fakeOperations) SetInstallMode(context.Context, bool, int, int, string) error {
 	return nil
+}
+
+func (*fakeOperations) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*fakeOperations) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (*fakeOperations) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*fakeOperations) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*fakeOperations) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (*fakeOperations) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
@@ -240,12 +279,15 @@ func TestUnpairDeviceHappyPath(t *testing.T) {
 	t.Parallel()
 	domain, c, _, fake := buildUnpairFixture(t, nil)
 
-	if err := domain.UnpairDevice(context.Background(), "0001ABCD"); err != nil {
+	if err := domain.UnpairDevice(context.Background(), "0001ABCD", false, false); err != nil {
 		t.Fatalf("UnpairDevice: %v", err)
 	}
-	// Backend received the DeleteDevice call.
+	// Backend received the DeleteDevice call with flags=0 (plain unpair).
 	if len(fake.deleteDeviceCalls) != 1 || fake.deleteDeviceCalls[0] != "0001ABCD" {
 		t.Errorf("deleteDeviceCalls=%v, want [0001ABCD]", fake.deleteDeviceCalls)
+	}
+	if len(fake.deleteDeviceFlags) != 1 || fake.deleteDeviceFlags[0] != 0 {
+		t.Errorf("deleteDeviceFlags=%v, want [0]", fake.deleteDeviceFlags)
 	}
 	// All in-memory caches must be cleared.
 	if _, ok := c.ModelRegistry.Get("0001ABCD"); ok {
@@ -266,9 +308,56 @@ func TestUnpairDeviceUnknownDeviceReturnsErrNoDeviceBackend(t *testing.T) {
 	t.Parallel()
 	domain, _, _, _ := buildUnpairFixture(t, nil)
 
-	err := domain.UnpairDevice(context.Background(), "UNKNOWN")
+	err := domain.UnpairDevice(context.Background(), "UNKNOWN", false, false)
 	if !errors.Is(err, ErrNoDeviceBackend) {
 		t.Fatalf("expected ErrNoDeviceBackend, got %v", err)
+	}
+}
+
+// TestUnpairDeviceForwardsResetAndForceFlags verifies the reset/force options
+// are combined into the CCU delete bitmask handed to the backend.
+func TestUnpairDeviceForwardsResetAndForceFlags(t *testing.T) {
+	t.Parallel()
+	domain, _, _, fake := buildUnpairFixture(t, nil)
+
+	if err := domain.UnpairDevice(context.Background(), "0001ABCD", true, true); err != nil {
+		t.Fatalf("UnpairDevice: %v", err)
+	}
+	want := backends.DeleteFlagReset | backends.DeleteFlagForce
+	if len(fake.deleteDeviceFlags) != 1 || fake.deleteDeviceFlags[0] != want {
+		t.Errorf("deleteDeviceFlags=%v, want [%d]", fake.deleteDeviceFlags, want)
+	}
+}
+
+// TestUnpairDeviceFlagCombinationsAreDistinct verifies reset and force map
+// onto their own dedicated bitmask bits rather than being conflated — each
+// option independently controls its own bit, so a caller asking for only
+// one of them must not accidentally set the other.
+func TestUnpairDeviceFlagCombinationsAreDistinct(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		reset bool
+		force bool
+		want  int
+	}{
+		{name: "neither", reset: false, force: false, want: 0},
+		{name: "reset only", reset: true, force: false, want: backends.DeleteFlagReset},
+		{name: "force only", reset: false, force: true, want: backends.DeleteFlagForce},
+		{name: "both", reset: true, force: true, want: backends.DeleteFlagReset | backends.DeleteFlagForce},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			domain, _, _, fake := buildUnpairFixture(t, nil)
+
+			if err := domain.UnpairDevice(context.Background(), "0001ABCD", tt.reset, tt.force); err != nil {
+				t.Fatalf("UnpairDevice: %v", err)
+			}
+			if len(fake.deleteDeviceFlags) != 1 || fake.deleteDeviceFlags[0] != tt.want {
+				t.Errorf("deleteDeviceFlags=%v, want [%d]", fake.deleteDeviceFlags, tt.want)
+			}
+		})
 	}
 }
 
@@ -276,7 +365,7 @@ func TestUnpairDeviceBackendUnsupportedPropagatesAndDoesNotClearRegistries(t *te
 	t.Parallel()
 	domain, c, _, _ := buildUnpairFixture(t, backends.ErrUnsupported)
 
-	err := domain.UnpairDevice(context.Background(), "0001ABCD")
+	err := domain.UnpairDevice(context.Background(), "0001ABCD", false, false)
 	if !errors.Is(err, backends.ErrUnsupported) {
 		t.Fatalf("expected ErrUnsupported propagation, got %v", err)
 	}
@@ -294,14 +383,14 @@ func TestUnpairDeviceNilRegistryOrWriterReturnsErrNoDeviceBackend(t *testing.T) 
 
 	// nil registry
 	domainNilReg := NewDeviceAdminDomain(nil, client.NewValueWriter())
-	if err := domainNilReg.UnpairDevice(context.Background(), "0001ABCD"); !errors.Is(err, ErrNoDeviceBackend) {
+	if err := domainNilReg.UnpairDevice(context.Background(), "0001ABCD", false, false); !errors.Is(err, ErrNoDeviceBackend) {
 		t.Errorf("nil registry: expected ErrNoDeviceBackend, got %v", err)
 	}
 
 	// nil writer
 	reg := central.NewRegistry()
 	domainNilWriter := NewDeviceAdminDomain(reg, nil)
-	if err := domainNilWriter.UnpairDevice(context.Background(), "0001ABCD"); !errors.Is(err, ErrNoDeviceBackend) {
+	if err := domainNilWriter.UnpairDevice(context.Background(), "0001ABCD", false, false); !errors.Is(err, ErrNoDeviceBackend) {
 		t.Errorf("nil writer: expected ErrNoDeviceBackend, got %v", err)
 	}
 }

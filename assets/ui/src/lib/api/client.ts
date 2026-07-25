@@ -24,7 +24,14 @@ import type {
   EditSessionResponse,
   EnergyResponse,
   FunctionEntry,
+  GroupCentralEntry,
+  GroupEntry,
+  GroupTypeEntry,
+  SuitableMembersResponse,
+  CreateGroupRequest,
+  UpdateGroupRequest,
   InboxDevice,
+  ReplaceCandidate,
   InstallModeInterfaceEntry,
   RoomEntry,
   UserListEntry,
@@ -32,6 +39,8 @@ import type {
   CustomDPSummary,
   DataPointSummary,
   DeviceDetail,
+  CommunicationTestResult,
+  TeamCandidate,
   DeviceSummary,
   CaptureSummary,
   DiagnosticsEnvelope,
@@ -47,7 +56,11 @@ import type {
   RSSIMatrix,
   RpcRecordingStatus,
   ServiceMessage,
+  SuppressedServiceMessage,
   SysvarEntry,
+  SysvarUsage,
+  DiagramConfig,
+  DiagramWriteRequest,
   SystemCCUEntry,
   UISchema,
 } from "./types";
@@ -380,6 +393,14 @@ export const api = {
       `/devices/${encodeURIComponent(address)}/links?${qs.toString()}`,
     );
   },
+  // Global direct-link overview (V01) across every central. Each link
+  // carries its owning central_name + interface_id.
+  async listAllLinks(central?: string, locale = "en"): Promise<Link[]> {
+    const qs = new URLSearchParams({ locale });
+    if (central) qs.set("central", central);
+    const r = await request<{ links: Link[] }>(`/links?${qs.toString()}`);
+    return r.links;
+  },
   addLink(
     address: string,
     body: {
@@ -391,6 +412,21 @@ export const api = {
   ) {
     return request<void>(`/devices/${encodeURIComponent(address)}/links`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+  updateLink(
+    address: string,
+    body: {
+      sender_address: string;
+      receiver_address: string;
+      name?: string;
+      description?: string;
+    },
+  ) {
+    return request<void>(`/devices/${encodeURIComponent(address)}/links`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -432,6 +468,20 @@ export const api = {
       },
     );
   },
+  // Test a direct link at the device (V03): trigger the receiver's LINK
+  // paramset for the sender (short/long keypress). Physically actuates the
+  // receiver. The path device is the receiver's device.
+  testLinkAtDevice(receiver: string, sender: string, longPress: boolean) {
+    const deviceAddr = receiver.includes(":") ? receiver.slice(0, receiver.lastIndexOf(":")) : receiver;
+    return request<void>(`/devices/${encodeURIComponent(deviceAddr)}/links/test`, {
+      method: "POST",
+      body: JSON.stringify({
+        receiver_address: receiver,
+        sender_address: sender,
+        long_press: longPress,
+      }),
+    });
+  },
   putParamset(
     channelAddress: string,
     paramset: "VALUES" | "MASTER",
@@ -450,6 +500,36 @@ export const api = {
       },
     );
   },
+  // Raw paramset read (unfiltered by the visibility store). Used to
+  // surface configuration parameters the UISchema builder hides by
+  // default — e.g. AES_ACTIVE (secured transmission), which carries the
+  // `internal` ui-flag but is a legitimate operator-facing toggle.
+  getParamset(channelAddress: string, paramset: "VALUES" | "MASTER") {
+    return request<Record<string, unknown>>(
+      `/devices/${encodeURIComponent(channelAddress)}/paramsets/${paramset}`,
+    );
+  },
+  // Read one parameter's current live value straight from the device
+  // (the MASTER editor's "Determine" button). A read, so no edit-lock
+  // token — but it triggers a device round-trip. Returns the device's
+  // value; the caller stages it into the editor's working copy so dirty
+  // tracking / undo keep working. Mirrors the WS `paramset.determine`
+  // command, which the SPA cannot call (its WS channel is event-only).
+  determineParameter(
+    address: string,
+    channel: number,
+    paramset: "VALUES" | "MASTER" | "LINK",
+    parameter: string,
+  ) {
+    return request<{ value: unknown }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channel}/paramsets/${paramset}/determine`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parameter }),
+      },
+    );
+  },
   setValue(address: string, channel: number, parameter: string, value: unknown) {
     return request<void>(
       `/devices/${encodeURIComponent(address)}/channels/${channel}/data-points/${parameter}/value`,
@@ -461,23 +541,135 @@ export const api = {
     );
   },
   // --- Device lifecycle -----------------------------------------
-  renameDevice(address: string, name: string) {
+  renameDevice(address: string, name: string, includeChannels = false) {
     return request<void>(`/devices/${encodeURIComponent(address)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, include_channels: includeChannels }),
     });
   },
-  deleteDevice(address: string) {
-    return request<void>(`/devices/${encodeURIComponent(address)}`, {
-      method: "DELETE",
-    });
+  renameChannel(address: string, channelNo: number, name: string) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      },
+    );
   },
-  acceptInboxDevice(address: string, central: string) {
+  // setChannelRooms / setChannelFunctions replace a single channel's
+  // room / function assignment sets; an empty array clears the set
+  // (PATCH /devices/{addr}/channels/{no}).
+  setChannelRooms(address: string, channelNo: number, rooms: string[]) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms }),
+      },
+    );
+  },
+  setChannelFunctions(
+    address: string,
+    channelNo: number,
+    functions: string[],
+  ) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ functions }),
+      },
+    );
+  },
+  // setChannelFlags sets the operator per-channel overrides (G12): hidden
+  // (drop the channel from the operation surfaces) and/or locked (block
+  // control writes). An omitted field keeps its current value.
+  setChannelFlags(
+    address: string,
+    channelNo: number,
+    flags: { hidden?: boolean; locked?: boolean },
+  ) {
+    return request<{ hidden: boolean; locked: boolean }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/flags`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(flags),
+      },
+    );
+  },
+  // deleteDevice unpairs a device. reset additionally factory-resets the
+  // device during removal; force removes an unreachable device even when the
+  // CCU cannot complete the handshake. Both map onto the CCU delete bitmask
+  // via the `reset` / `force` query flags.
+  deleteDevice(
+    address: string,
+    opts: { reset?: boolean; force?: boolean } = {},
+  ) {
+    const qs = new URLSearchParams();
+    if (opts.reset) qs.set("reset", "true");
+    if (opts.force) qs.set("force", "true");
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}${suffix}`,
+      { method: "DELETE" },
+    );
+  },
+  // List the already-paired devices the new (inbox) device may replace
+  // (BidCos-RF / BidCos-Wired only). Read-only.
+  async listReplaceCandidates(address: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    const r = await request<{ candidates: ReplaceCandidate[] }>(
+      `/devices/${encodeURIComponent(address)}/replace-candidates${qs}`,
+    );
+    return r.candidates;
+  },
+  // Swap a paired device (oldAddress) for the new device at address
+  // (admin-only). The CCU migrates links / teams / ReGa references.
+  replaceDevice(address: string, oldAddress: string, central?: string) {
+    return request<{
+      status: string;
+      old_address: string;
+      new_address: string;
+      central?: string;
+    }>(`/devices/${encodeURIComponent(address)}/replace`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ old_address: oldAddress, ...(central ? { central } : {}) }),
+    });
+  },
+  acceptInboxDevice(
+    address: string,
+    central: string,
+    config?: {
+      name?: string;
+      include_channels?: boolean;
+      rooms?: string[];
+      functions?: string[];
+    },
+  ) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    // Only send a body when first-time configuration was supplied; an
+    // empty body keeps the accept-only behaviour (backward compatible).
+    const hasConfig =
+      config !== undefined &&
+      (config.name !== undefined ||
+        config.include_channels !== undefined ||
+        config.rooms !== undefined ||
+        config.functions !== undefined);
     return request<void>(
       `/devices/${encodeURIComponent(address)}/accept${qs}`,
-      { method: "POST" },
+      hasConfig
+        ? {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+          }
+        : { method: "POST" },
     );
   },
   // --- Backups --------------------------------------------------
@@ -512,6 +704,11 @@ export const api = {
   getSysvar(name: string) {
     return request<SysvarEntry>(`/sysvars/${encodeURIComponent(name)}`);
   },
+  // Programs that reference a sysvar (SV07) — consumed as a delete warning.
+  getSysvarUsage(name: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<SysvarUsage>(`/sysvars/${encodeURIComponent(name)}/usage${qs}`);
+  },
   setSysvar(name: string, value: unknown, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(`/sysvars/${encodeURIComponent(name)}${qs}`, {
@@ -527,7 +724,11 @@ export const api = {
       unit?: string;
       min?: string;
       max?: string;
+      description?: string;
       value_list?: string[];
+      value_name_0?: string;
+      value_name_1?: string;
+      channel_address?: string;
     },
     central: string,
   ) {
@@ -541,11 +742,17 @@ export const api = {
   patchSysvar(
     name: string,
     body: {
+      name?: string;
       unit?: string;
       min?: string;
       max?: string;
       value_list?: string[];
       description?: string;
+      value_name_0?: string;
+      value_name_1?: string;
+      is_visible?: boolean;
+      is_logged?: boolean;
+      channel_address?: string;
     },
     central?: string,
   ) {
@@ -569,16 +776,22 @@ export const api = {
       body: JSON.stringify({ rooms }),
     });
   },
-  listPrograms() {
+  listPrograms(includeInternal = false) {
     return fetchAllPages<ProgramEntry>((page, perPage) =>
-      request<ProgramEntry[]>(`/programs?page=${page}&per_page=${perPage}`),
+      request<ProgramEntry[]>(
+        `/programs?page=${page}&per_page=${perPage}&include_internal=${includeInternal}`,
+      ),
     );
   },
-  executeProgram(id: string, central?: string) {
+  executeProgram(id: string, central?: string, checkConditions = false) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
-    return request<void>(
+    return request<{ executed: boolean }>(
       `/programs/${encodeURIComponent(id)}/execute${qs}`,
-      { method: "POST" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ check_conditions: checkConditions }),
+      },
     );
   },
   setProgramEnabled(id: string, active: boolean, central?: string) {
@@ -591,6 +804,12 @@ export const api = {
         body: JSON.stringify({ active }),
       },
     );
+  },
+  deleteProgram(id: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/programs/${encodeURIComponent(id)}${qs}`, {
+      method: "DELETE",
+    });
   },
   listAlarmMessages() {
     return request<AlarmMessage[]>(`/alarm-messages`);
@@ -940,6 +1159,48 @@ export const api = {
     const r = await request<{ entries: SystemCCUEntry[] }>(`/system/ccu`);
     return r.entries;
   },
+  // Read-only heating-group roster (GR01), grouped by central. Groups
+  // themselves are read from the CCU's groups.gson; create/edit/delete
+  // runs through the CCU jpages proxy, not this surface (ADR 0055).
+  async getGroups(central?: string): Promise<GroupCentralEntry[]> {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    const r = await request<{ entries: GroupCentralEntry[] }>(`/groups${qs}`);
+    return r.entries;
+  },
+  // Heating-group administration (GR02) via the CCU jpages proxy. `central`
+  // selects the target CCU (optional when only one is configured).
+  groupTypes(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<{ types: GroupTypeEntry[] }>(`/groups/types${qs}`).then(
+      (r) => r.types,
+    );
+  },
+  groupSuitableMembers(typeId: string, central?: string) {
+    const qs =
+      `?type_id=${encodeURIComponent(typeId)}` +
+      (central ? `&central=${encodeURIComponent(central)}` : "");
+    return request<SuitableMembersResponse>(`/groups/suitable-members${qs}`);
+  },
+  createGroup(req: CreateGroupRequest, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<GroupEntry>(`/groups${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  },
+  updateGroup(id: number, req: UpdateGroupRequest, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/groups/${id}${qs}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  },
+  deleteGroup(id: number, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/groups/${id}${qs}`, { method: "DELETE" });
+  },
   // --- CCU system (firmware) update ----------------------------
   getSystemUpdate() {
     return request<SystemUpdateEntry[]>(`/system/update`);
@@ -947,6 +1208,16 @@ export const api = {
   installSystemUpdate(central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(`/system/update/install${qs}`, { method: "POST" });
+  },
+  // --- CCU maintenance -----------------------------------------
+  // Reboot one CCU host (admin-only). This reboots the CCU hardware, not
+  // the OpenCCU-Loom daemon; the southbound connection drops for the reboot
+  // and recovers automatically.
+  rebootCCU(central: string) {
+    return request<void>(
+      `/system/ccu/${encodeURIComponent(central)}/reboot`,
+      { method: "POST" },
+    );
   },
   // --- Messages: ack / clear -----------------------------------
   ackAlarm(id: string, central?: string) {
@@ -963,6 +1234,40 @@ export const api = {
       { method: "POST" },
     );
   },
+  ackAllAlarms(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<{ acknowledged: number }>(`/alarm-messages/ack-all${qs}`, {
+      method: "POST",
+    });
+  },
+  ackAllServices(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<{ acknowledged: number }>(`/service-messages/ack-all${qs}`, {
+      method: "POST",
+    });
+  },
+  // --- Service messages: permanent suppression ------------------
+  disableService(id: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(
+      `/service-messages/${encodeURIComponent(id)}/disable${qs}`,
+      { method: "POST" },
+    );
+  },
+  listSuppressedServices() {
+    return request<SuppressedServiceMessage[]>(`/service-messages/suppressed`);
+  },
+  unsuppressService(
+    body: { interface?: string; channel: string; parameter?: string },
+    central?: string,
+  ) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/service-messages/unsuppress${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
   // --- Backup restore ------------------------------------------
   restoreBackup(id: string) {
     return request<{ id: string }>(
@@ -976,24 +1281,73 @@ export const api = {
       `/devices/${encodeURIComponent(address)}/central-links`,
     );
   },
-  createCentralLinks(address: string) {
+  createCentralLinks(address: string, channel?: string) {
+    const qs = channel ? `?channel=${encodeURIComponent(channel)}` : "";
     return request<CentralLinksReport>(
-      `/devices/${encodeURIComponent(address)}/central-links`,
+      `/devices/${encodeURIComponent(address)}/central-links${qs}`,
       { method: "POST" },
     );
   },
-  removeCentralLinks(address: string) {
+  removeCentralLinks(address: string, channel?: string) {
+    const qs = channel ? `?channel=${encodeURIComponent(channel)}` : "";
     return request<CentralLinksReport>(
-      `/devices/${encodeURIComponent(address)}/central-links`,
+      `/devices/${encodeURIComponent(address)}/central-links${qs}`,
       { method: "DELETE" },
     );
   },
   // --- Firmware update -----------------------------------------
+  // The 202 body carries `duty_cycle_warning` (interface duty cycle in
+  // percent) only when the device's radio interface is saturated — the
+  // update is scheduled regardless; the field is advisory.
   updateFirmware(address: string) {
-    return request<{ status: string }>(
+    return request<{ status: string; duty_cycle_warning?: number }>(
       `/devices/${encodeURIComponent(address)}/firmware/update`,
       { method: "POST" },
     );
+  },
+  // Re-transmit the centrally stored configuration to a device after a
+  // factory reset (admin-only; HmIP-RF / BidCos-RF only). The CCU runs
+  // the transfer asynchronously — watch CONFIG_PENDING for progress.
+  restoreDeviceConfig(address: string) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/config/restore`,
+      { method: "POST" },
+    );
+  },
+  // Run the CCU's per-device communication / function test (radio test
+  // frame + ACK); blocks until complete or the poll window elapses.
+  testDeviceCommunication(address: string) {
+    return request<CommunicationTestResult>(
+      `/devices/${encodeURIComponent(address)}/test`,
+      { method: "POST" },
+    );
+  },
+  // List the team channels a channel may be assigned to (same team tag).
+  async teamCandidates(address: string, channelNo: number) {
+    const r = await request<{ candidates: TeamCandidate[] }>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/team-candidates`,
+    );
+    return r.candidates;
+  },
+  // Assign a channel to a team; null/empty team resets to default.
+  setChannelTeam(address: string, channelNo: number, team: string | null) {
+    return request<void>(
+      `/devices/${encodeURIComponent(address)}/channels/${channelNo}/team`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team }),
+      },
+    );
+  },
+  // Ask a CCU to fetch a firmware image onto the central (admin-only).
+  // central is optional for single-CCU deployments.
+  downloadSystemFirmware(url: string, central?: string) {
+    return request<void>(`/system/firmware/download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(central ? { url, central } : { url }),
+    });
   },
   // Force a re-read of per-device firmware data from every CCU so the
   // firmware overview reflects updates the CCU performed, without
@@ -1084,11 +1438,27 @@ export const api = {
   async listInstallModeInterfaces() {
     return request<InstallModeInterfaceEntry[]>(`/install-mode/interfaces`);
   },
+  // Scan the wired bus (BidCos-Wired) for new devices; the found
+  // devices join the inbox for acceptance.
+  async searchWiredDevices(iface: string, central?: string) {
+    return request<{ central: string; interface: string; found: number }>(
+      `/install-mode/search`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interface: iface,
+          ...(central ? { central } : {}),
+        }),
+      },
+    );
+  },
   async setInstallModeInterface(
     iface: string,
     active: boolean,
     seconds?: number,
     deviceAddress?: string,
+    local?: { sgtin: string; key: string },
   ) {
     await request<void>(`/install-mode/interfaces`, {
       method: "POST",
@@ -1098,6 +1468,7 @@ export const api = {
         active,
         ...(seconds ? { seconds } : {}),
         ...(deviceAddress ? { device_address: deviceAddress } : {}),
+        ...(local ? { sgtin: local.sgtin, key: local.key } : {}),
       }),
     });
     return api.listInstallModeInterfaces();
@@ -1737,6 +2108,90 @@ export async function getHistory(params: {
   try {
     const result = await request<HistoryBucket[]>(`/history?${qs.toString()}`);
     return result ?? [];
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
+// --- Named diagram definitions (SV03) ---
+export async function listDiagrams(): Promise<DiagramConfig[]> {
+  const r = await request<{ diagrams: DiagramConfig[] }>(`/diagrams`);
+  return r.diagrams;
+}
+export function getDiagram(id: string): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`);
+}
+export function createDiagram(body: DiagramWriteRequest): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams`, { method: "POST", body: JSON.stringify(body) });
+}
+export function updateDiagram(id: string, body: DiagramWriteRequest): Promise<DiagramConfig> {
+  return request<DiagramConfig>(`/diagrams/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+export function deleteDiagram(id: string): Promise<void> {
+  return request<void>(`/diagrams/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** Effective per-datapoint recording state (SV10). */
+export type RecordingState = { record: boolean; source: "override" | "policy" };
+
+/**
+ * Read whether a data point's live values are currently recorded to
+ * history, and whether that decision is an explicit override or the glob
+ * policy (GET /api/v1/history/recording). Throws HistoryDisabledError
+ * when the history feature is off (404).
+ */
+export async function getRecordingOverride(params: {
+  central: string;
+  interfaceId: string;
+  channel: string;
+  parameter: string;
+}): Promise<RecordingState> {
+  const qs = new URLSearchParams({
+    central: params.central,
+    interface_id: params.interfaceId,
+    channel: params.channel,
+    parameter: params.parameter,
+  });
+  try {
+    return await request<RecordingState>(`/history/recording?${qs.toString()}`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
+/**
+ * Force recording on/off for a data point, or clear the override
+ * (record: null → revert to the glob policy) via
+ * PUT /api/v1/history/recording. Throws HistoryDisabledError when the
+ * history feature is off (404).
+ */
+export async function setRecordingOverride(params: {
+  central: string;
+  interfaceId: string;
+  channel: string;
+  parameter: string;
+  record: boolean | null;
+}): Promise<RecordingState> {
+  try {
+    return await request<RecordingState>(`/history/recording`, {
+      method: "PUT",
+      body: JSON.stringify({
+        central: params.central,
+        interface_id: params.interfaceId,
+        channel: params.channel,
+        parameter: params.parameter,
+        record: params.record,
+      }),
+    });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       throw new HistoryDisabledError();

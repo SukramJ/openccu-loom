@@ -221,6 +221,100 @@ func TestBuildDataPointName_MultiChannelWithTranslation(t *testing.T) {
 	}
 }
 
+func TestBuildDataPointName_UniqueCustomNameSkipsPostfix(t *testing.T) {
+	t.Parallel()
+	// STATE exists on multiple channels, but channel 3 carries a unique
+	// custom name that already identifies it — no " chN" postfix. The
+	// derived-name sibling keeps the postfix.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch3 := d.AddChannel("000ABC:3", 3, "", hmenum.ParamsetKeyValues)
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch3.Put(newValuesDP("000ABC:3", "STATE"))
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch3.Name = "Relay Status"
+
+	nd := BuildDataPointName(ch3, "STATE", "Status")
+	if nd.ParameterName != "State" {
+		t.Errorf("unique custom name: ParameterName = %q, want %q", nd.ParameterName, "State")
+	}
+	if nd.TranslatedParameterName != "Status" {
+		t.Errorf("unique custom name: TranslatedParameterName = %q, want %q",
+			nd.TranslatedParameterName, "Status")
+	}
+	if nd.ChannelName != "Relay Status" {
+		t.Errorf("unique custom name: ChannelName = %q, want %q", nd.ChannelName, "Relay Status")
+	}
+
+	nd4 := BuildDataPointName(ch4, "STATE", "")
+	if nd4.ParameterName != "State ch4" {
+		t.Errorf("derived sibling: ParameterName = %q, want %q", nd4.ParameterName, "State ch4")
+	}
+}
+
+func TestBuildDataPointName_CustomNameWithChannelNoKeepsPostfix(t *testing.T) {
+	t.Parallel()
+	// A custom name following the <name>:<no> scheme is treated like a
+	// derived name: the :N suffix is stripped for the channel base and the
+	// " chN" postfix stays.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch5 := d.AddChannel("000ABC:5", 5, "", hmenum.ParamsetKeyValues)
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch5.Put(newValuesDP("000ABC:5", "STATE"))
+	ch5.Name = "Relay:1"
+
+	nd := BuildDataPointName(ch5, "STATE", "")
+	if nd.ChannelName != "Relay" {
+		t.Errorf("ChannelName = %q, want %q", nd.ChannelName, "Relay")
+	}
+	if nd.ParameterName != "State ch5" {
+		t.Errorf("ParameterName = %q, want %q", nd.ParameterName, "State ch5")
+	}
+}
+
+func TestBuildDataPointName_DuplicateCustomNamesKeepPostfix(t *testing.T) {
+	t.Parallel()
+	// Two channels providing the same parameter share a custom name — the
+	// name alone cannot identify either channel, so both keep the postfix.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch6 := d.AddChannel("000ABC:6", 6, "", hmenum.ParamsetKeyValues)
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch6.Put(newValuesDP("000ABC:6", "STATE"))
+	ch4.Name = "Relay Twin"
+	ch6.Name = "Relay Twin"
+
+	nd4 := BuildDataPointName(ch4, "STATE", "")
+	if nd4.ParameterName != "State ch4" {
+		t.Errorf("ch4 ParameterName = %q, want %q", nd4.ParameterName, "State ch4")
+	}
+	nd6 := BuildDataPointName(ch6, "STATE", "")
+	if nd6.ParameterName != "State ch6" {
+		t.Errorf("ch6 ParameterName = %q, want %q", nd6.ParameterName, "State ch6")
+	}
+}
+
+func TestBuildDataPointName_SameNameSiblingWithoutParameterNotAmbiguous(t *testing.T) {
+	t.Parallel()
+	// A sibling channel shares the custom name but does NOT provide the
+	// parameter — the name still uniquely identifies the parameter-carrying
+	// channel, so no postfix. The parameter is multi-channel via a third,
+	// derived-name channel.
+	d := makeDevice("Wohnzimmer", "HmIP-BSM", "000ABC")
+	ch3 := d.AddChannel("000ABC:3", 3, "", hmenum.ParamsetKeyValues)
+	ch4 := d.AddChannel("000ABC:4", 4, "", hmenum.ParamsetKeyValues)
+	ch5 := d.AddChannel("000ABC:5", 5, "", hmenum.ParamsetKeyValues)
+	ch3.Put(newValuesDP("000ABC:3", "STATE"))
+	ch4.Put(newValuesDP("000ABC:4", "STATE"))
+	ch3.Name = "Status"
+	ch5.Name = "Status" // no STATE on this channel
+
+	nd := BuildDataPointName(ch3, "STATE", "")
+	if nd.ParameterName != "State" {
+		t.Errorf("ParameterName = %q, want %q", nd.ParameterName, "State")
+	}
+}
+
 func TestBuildDataPointName_ExplicitChannelName(t *testing.T) {
 	t.Parallel()
 	// Channel has a real operator-set name — no :N suffix to strip.
@@ -246,5 +340,131 @@ func TestBuildDataPointName_AutoDefaultChannelName(t *testing.T) {
 	// baseChannelName returns "Wohnzimmer:1"; stripChannelAddressSuffix yields "Wohnzimmer".
 	if nd.ChannelName != "Wohnzimmer" {
 		t.Errorf("ChannelName = %q, want %q", nd.ChannelName, "Wohnzimmer")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BuildCustomDataPointName
+// ---------------------------------------------------------------------------
+
+// attachCustomStub binds a fakeHAComponentDP to the channel.
+func attachCustomStub(ch *Channel, component string) {
+	ch.SetCustomDataPoint(&fakeHAComponentDP{
+		key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
+		},
+		haComponent: component,
+	})
+}
+
+func TestBuildCustomDataPointName_NilChannel(t *testing.T) {
+	t.Parallel()
+	if got := BuildCustomDataPointName(nil, "", ""); got != naming.EmptyNameData {
+		t.Fatalf("nil channel must return EmptyNameData, got %+v", got)
+	}
+}
+
+func TestBuildCustomDataPointName_SinglePrimaryCollapses(t *testing.T) {
+	t.Parallel()
+	// HmIP-PSM shape: one switch primary (group master ch3) with two
+	// secondaries — the primary collapses to the device name.
+	d := makeDevice("Steckdose", "HmIP-PSM", "000ABC")
+	ch3 := d.AddChannel("000ABC:3", 3, "SWITCH", hmenum.ParamsetKeyValues)
+	ch4 := d.AddChannel("000ABC:4", 4, "SWITCH", hmenum.ParamsetKeyValues)
+	ch3.GroupNo, ch4.GroupNo = 3, 3
+	attachCustomStub(ch3, "switch")
+	attachCustomStub(ch4, "switch")
+
+	nd := BuildCustomDataPointName(ch3, "", "")
+	if nd.TranslatedName() != "" || nd.ParameterName != "" {
+		t.Fatalf("single primary: TranslatedName=%q ParameterName=%q, want empty/empty",
+			nd.TranslatedName(), nd.ParameterName)
+	}
+
+	// The secondary keeps its vch marker.
+	nd4 := BuildCustomDataPointName(ch4, "", "")
+	if nd4.TranslatedName() != "vch4" || nd4.ParameterName != "vch4" {
+		t.Fatalf("secondary: TranslatedName=%q ParameterName=%q, want vch4/vch4",
+			nd4.TranslatedName(), nd4.ParameterName)
+	}
+}
+
+func TestBuildCustomDataPointName_MultiPrimaryGetsChMarker(t *testing.T) {
+	t.Parallel()
+	// HmIP-DRSI4 shape: several switch primaries → each carries chN.
+	d := makeDevice("Schalter Dachboden", "HmIP-DRSI4", "000ABC")
+	ch6 := d.AddChannel("000ABC:6", 6, "SWITCH", hmenum.ParamsetKeyValues)
+	ch10 := d.AddChannel("000ABC:10", 10, "SWITCH", hmenum.ParamsetKeyValues)
+	ch6.GroupNo, ch10.GroupNo = 6, 10
+	attachCustomStub(ch6, "switch")
+	attachCustomStub(ch10, "switch")
+
+	if got := BuildCustomDataPointName(ch6, "", "").TranslatedName(); got != "ch6" {
+		t.Fatalf("multi primary ch6: TranslatedName=%q, want %q", got, "ch6")
+	}
+	if got := BuildCustomDataPointName(ch10, "", "").TranslatedName(); got != "ch10" {
+		t.Fatalf("multi primary ch10: TranslatedName=%q, want %q", got, "ch10")
+	}
+}
+
+func TestBuildCustomDataPointName_CustomChannelNames(t *testing.T) {
+	t.Parallel()
+	// HmIP-BSL shape: primary ch4 custom-named, secondary ch5 named with
+	// the <name>:<no> scheme.
+	d := makeDevice("Signalleuchte FL", "HmIP-BSL", "000ABC")
+	ch4 := d.AddChannel("000ABC:4", 4, "SWITCH", hmenum.ParamsetKeyValues)
+	ch5 := d.AddChannel("000ABC:5", 5, "SWITCH", hmenum.ParamsetKeyValues)
+	ch4.GroupNo, ch5.GroupNo = 4, 4
+	attachCustomStub(ch4, "switch")
+	attachCustomStub(ch5, "switch")
+	ch4.Name = "Treppe"
+	ch5.Name = "Treppe:5"
+
+	// A custom name without :N is used verbatim — no marker.
+	if got := BuildCustomDataPointName(ch4, "", "").TranslatedName(); got != "Treppe" {
+		t.Fatalf("custom primary name: TranslatedName=%q, want %q", got, "Treppe")
+	}
+	// The <name>:<no> scheme keeps the group marker.
+	if got := BuildCustomDataPointName(ch5, "", "").TranslatedName(); got != "Treppe vch5" {
+		t.Fatalf("custom secondary name: TranslatedName=%q, want %q", got, "Treppe vch5")
+	}
+}
+
+func TestBuildCustomDataPointName_MarkerDigitsFollowNameSuffix(t *testing.T) {
+	t.Parallel()
+	// The marker number mirrors the channel-name suffix, not the channel
+	// number (Python-reference parity: p_name comes from the name split).
+	d := makeDevice("Steuerung", "HmIP-DRSI4", "000ABC")
+	ch5 := d.AddChannel("000ABC:5", 5, "SWITCH", hmenum.ParamsetKeyValues)
+	ch6 := d.AddChannel("000ABC:6", 6, "SWITCH", hmenum.ParamsetKeyValues)
+	ch5.GroupNo, ch6.GroupNo = 5, 6
+	attachCustomStub(ch5, "switch")
+	attachCustomStub(ch6, "switch")
+	ch5.Name = "Relais:9"
+
+	if got := BuildCustomDataPointName(ch5, "", "").TranslatedName(); got != "Relais ch9" {
+		t.Fatalf("suffix-digit marker: TranslatedName=%q, want %q", got, "Relais ch9")
+	}
+}
+
+func TestBuildCustomDataPointName_PostfixOnSinglePrimary(t *testing.T) {
+	t.Parallel()
+	// Button-lock shape: single lock primary on channel 0 with the
+	// BUTTON_LOCK postfix; the translation wins for the display name.
+	d := makeDevice("Wandthermostat", "HmIP-BWTH", "000ABC")
+	ch0 := d.AddChannel("000ABC:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	attachCustomStub(ch0, "lock")
+
+	nd := BuildCustomDataPointName(ch0, "BUTTON_LOCK", "Tastensperre")
+	if nd.ParameterName != "Button Lock" {
+		t.Errorf("ParameterName = %q, want %q", nd.ParameterName, "Button Lock")
+	}
+	if nd.TranslatedName() != "Tastensperre" {
+		t.Errorf("TranslatedName = %q, want %q", nd.TranslatedName(), "Tastensperre")
+	}
+	if nd.Name() != "Button Lock" {
+		t.Errorf("Name = %q, want %q", nd.Name(), "Button Lock")
 	}
 }

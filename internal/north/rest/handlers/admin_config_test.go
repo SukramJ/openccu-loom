@@ -82,6 +82,26 @@ func TestGetConfigSchema_IncludesMCP(t *testing.T) {
 	}
 }
 
+// TestAuthSchemeTogglesAreRestartRequired guards that the Basic and Bearer
+// scheme gates are flagged restart-required. Both are wired into the auth
+// middleware once at boot (cmd/openccu-loom/daemon_north.go only passes a
+// credential store when its gate is on), so a live toggle silently does not
+// take effect until a restart. Omitting the flag makes the SPA save the change
+// with no hint and an operator who just enabled Bearer auth sees injected
+// tokens still rejected until the daemon restarts.
+func TestAuthSchemeTogglesAreRestartRequired(t *testing.T) {
+	t.Parallel()
+
+	for _, p := range []string{
+		"north.rest.auth.basic_enabled",
+		"north.rest.auth.bearer_enabled",
+	} {
+		if _, ok := restartRequiredPaths[p]; !ok {
+			t.Errorf("%s must be in restartRequiredPaths — the auth middleware is boot-wired", p)
+		}
+	}
+}
+
 // TestValidateSection_CCUAuth confirms the north.rest.auth.ccu section is
 // structurally validated (so PutConfigSection accepts it) and that unknown
 // fields are rejected by the strict decoder.

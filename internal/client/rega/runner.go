@@ -134,6 +134,33 @@ func (r *Runner) AcknowledgeMessage(ctx context.Context, messageID string) (bool
 	return resp.Success, nil
 }
 
+// AcknowledgeAllServiceMessages acknowledges every quittable service message
+// on the CCU in a single ReGa pass and returns the number acknowledged. Only
+// messages whose trigger data point is writable are acknowledged; the rest are
+// left untouched (mirroring the single-message writability gate).
+func (r *Runner) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
+	var resp struct {
+		Acknowledged int `json:"acknowledged"`
+	}
+	if err := r.RunJSON(ctx, hmenum.RegaScriptAcknowledgeAllServiceMessages, nil, &resp); err != nil {
+		return 0, fmt.Errorf("rega.AcknowledgeAllServiceMessages: %w", err)
+	}
+	return resp.Acknowledged, nil
+}
+
+// AcknowledgeAllAlarmMessages acknowledges every active alarm message on the
+// CCU in a single ReGa pass and returns the number acknowledged. Alarm
+// messages are acknowledged unconditionally.
+func (r *Runner) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
+	var resp struct {
+		Acknowledged int `json:"acknowledged"`
+	}
+	if err := r.RunJSON(ctx, hmenum.RegaScriptAcknowledgeAllAlarmMessages, nil, &resp); err != nil {
+		return 0, fmt.Errorf("rega.AcknowledgeAllAlarmMessages: %w", err)
+	}
+	return resp.Acknowledged, nil
+}
+
 // SetProgramState activates or deactivates the CCU automation program
 // identified by its ISE-ID (pid). state=true enables the program, false
 // disables it. Returns without error when the CCU accepted the change.
@@ -150,6 +177,26 @@ func (r *Runner) SetProgramState(ctx context.Context, pid string, state bool) er
 		"state": stateStr,
 	})
 	return err
+}
+
+// ExecuteProgramConditional evaluates the CCU automation program's "if"
+// condition (identified by its ISE-ID pid) and runs the program only when
+// the condition is currently satisfied. It returns whether the program
+// actually executed.
+//
+// Implemented as a ReGa script (execute_program_conditional.fn) because the
+// CCU's JSON-RPC Program.execute runs unconditionally and exposes no
+// condition-gated variant.
+func (r *Runner) ExecuteProgramConditional(ctx context.Context, pid string) (bool, error) {
+	var resp struct {
+		Executed bool `json:"executed"`
+	}
+	if err := r.RunJSON(ctx, hmenum.RegaScriptExecuteProgramConditional, map[string]string{
+		"id": pid,
+	}, &resp); err != nil {
+		return false, fmt.Errorf("rega.ExecuteProgramConditional(%s): %w", pid, err)
+	}
+	return resp.Executed, nil
 }
 
 // SystemUpdateInfo holds the result of [Runner.GetSystemUpdateInfo].
@@ -293,11 +340,21 @@ func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 type ProgramDescription struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
+	// ConditionSummary is a compact, language-neutral rendering of the
+	// program's root-rule trigger conditions (object names joined by the
+	// symbolic operators ==, >=, <=, >, <, &&, ||). Empty when the program
+	// has no rule. URL-encoded on the wire.
+	ConditionSummary string `json:"condition_summary"`
+	// ActivitySummary is a compact, language-neutral rendering of the
+	// program's root-rule activities (object name := value, joined by "; ").
+	// Empty when the program has no rule. URL-encoded on the wire.
+	ActivitySummary string `json:"activity_summary"`
 }
 
-// GetProgramDescriptions returns the URI-encoded description string for every
-// CCU automation program by running the get_program_descriptions.fn ReGa
-// script. The Description field values are URL-encoded; callers should apply
+// GetProgramDescriptions returns the URI-encoded description string and the
+// compact rule summaries for every CCU automation program by running the
+// get_program_descriptions.fn ReGa script. The Description, ConditionSummary,
+// and ActivitySummary field values are URL-encoded; callers should apply
 // url.QueryUnescape before display.
 func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescription, error) {
 	var descs []ProgramDescription
@@ -305,6 +362,26 @@ func (r *Runner) GetProgramDescriptions(ctx context.Context) ([]ProgramDescripti
 		return nil, err
 	}
 	return descs, nil
+}
+
+// SysvarUsageProgram is one program returned by [Runner.SysvarUsagePrograms].
+// Name is URL-encoded; callers apply url.QueryUnescape before display.
+type SysvarUsageProgram struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Active bool   `json:"active"`
+}
+
+// SysvarUsagePrograms lists the CCU programs that reference the named
+// system variable, via the variable object's native DPEnumUsagePrograms()
+// (usage_by_sysvar.fn). An unknown variable yields an empty slice. Each
+// program's Name is URL-encoded.
+func (r *Runner) SysvarUsagePrograms(ctx context.Context, name string) ([]SysvarUsageProgram, error) {
+	var out []SysvarUsageProgram
+	if err := r.RunJSON(ctx, hmenum.RegaScriptUsageBySysvar, map[string]string{"name": name}, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // SystemVariableDescription is one entry returned by

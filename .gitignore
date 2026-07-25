@@ -151,3 +151,4 @@ site/
 __pycache__/
 *-read-only.env
 test-results/
+.ccu_cred

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -311,6 +312,68 @@ func TestListPrograms_NoExecution_LastExecutedOmitted(t *testing.T) {
 	}
 }
 
+// TestListPrograms_RuleSummary verifies the DTO mapping surfaces the
+// condition and activity summaries set on the hub program.
+func TestListPrograms_RuleSummary(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	prog := hub.NewProgram("test-ccu", "P-RULE", "Heater", "", false, nil)
+	prog.SetRuleSummary("Wohnzimmer >= 20.00", "Bücherregal := 1.00")
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []ProgramSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 program, got %d", len(body))
+	}
+	if body[0].ConditionSummary != "Wohnzimmer >= 20.00" {
+		t.Errorf("condition_summary = %q, want %q", body[0].ConditionSummary, "Wohnzimmer >= 20.00")
+	}
+	if body[0].ActivitySummary != "Bücherregal := 1.00" {
+		t.Errorf("activity_summary = %q, want %q", body[0].ActivitySummary, "Bücherregal := 1.00")
+	}
+}
+
+// TestListPrograms_NoRuleSummary_Omitted pins that a program without a
+// resolved rule summary omits both summary fields from the JSON.
+func TestListPrograms_NoRuleSummary_Omitted(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.PutProgram(hub.NewProgram("test-ccu", "P-BARE", "Bare", "", false, nil))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	w := httptest.NewRecorder()
+	ListPrograms(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var raw []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("expected 1 program, got %d", len(raw))
+	}
+	if _, present := raw[0]["condition_summary"]; present {
+		t.Error("condition_summary must be omitted when no rule summary was resolved")
+	}
+	if _, present := raw[0]["activity_summary"]; present {
+		t.Error("activity_summary must be omitted when no rule summary was resolved")
+	}
+}
+
 // ── H-033 SysvarSummary.min / max ──────────────────────────────────────────
 
 // TestListSysvars_MinMaxExposed pins H-033: a sysvar with declared bounds
@@ -604,6 +667,128 @@ func TestExecuteProgram_NotFound_Returns404(t *testing.T) {
 	}
 }
 
+// --- DeleteProgram ---
+
+// deletableProgramWriter implements hub.ProgramDeleter. deleteErr, when set,
+// is returned by DeleteProgram so tests can drive the upstream-failure path.
+type deletableProgramWriter struct {
+	deleteErr  error
+	deleteCall int
+}
+
+func (d *deletableProgramWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (d *deletableProgramWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
+
+func (d *deletableProgramWriter) DeleteProgram(_ context.Context, _ string) error {
+	d.deleteCall++
+	return d.deleteErr
+}
+
+// executeOnlyProgramWriter implements hub.ProgramWriter but NOT
+// hub.ProgramDeleter, so Program.Delete surfaces ErrProgramDeleteUnsupported.
+type executeOnlyProgramWriter struct{}
+
+func (executeOnlyProgramWriter) ExecuteProgram(context.Context, string) error { return nil }
+
+func (executeOnlyProgramWriter) SetProgramEnabled(context.Context, string, bool) error { return nil }
+
+func TestDeleteProgram_HubNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(nil, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestDeleteProgram_NotFound_Returns404(t *testing.T) {
+	t.Parallel()
+	idx, _ := newTestHubWithProgram(t)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/NOTFOUND", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "NOTFOUND"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestDeleteProgram_HappyPath_Returns204AndRemovesAndAudits(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &deletableProgramWriter{}
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, writer))
+	idx := &testHubIndex{h: h}
+	rec := &captureRecorder{}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, rec).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.deleteCall != 1 {
+		t.Fatalf("expected exactly one CCU delete call, got %d", writer.deleteCall)
+	}
+	if _, ok := h.Program("P1"); ok {
+		t.Fatal("program still present in hub cache after delete")
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionProgramDelete {
+		t.Fatalf("expected one program_delete audit entry, got %+v", rec.entries)
+	}
+	if !strings.Contains(rec.entries[0].Note, "P1") || !strings.Contains(rec.entries[0].Note, "Morning Routine") {
+		t.Fatalf("audit note missing id/name: %q", rec.entries[0].Note)
+	}
+}
+
+func TestDeleteProgram_WriterUnsupported_Returns503(t *testing.T) {
+	t.Parallel()
+	// The default fakeProgramWriter (execute + set-enabled) does NOT implement
+	// hub.ProgramDeleter, so Delete must surface as 503 and never drop the entry.
+	h := hub.NewHub("test-ccu")
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, executeOnlyProgramWriter{}))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := h.Program("P1"); !ok {
+		t.Fatal("program dropped from cache despite failed delete")
+	}
+}
+
+func TestDeleteProgram_UpstreamFailure_Returns502AndKeepsEntry(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &deletableProgramWriter{deleteErr: errors.New("ccu unreachable")}
+	h.PutProgram(hub.NewProgram("test-ccu", "P1", "Morning Routine", "", false, writer))
+	idx := &testHubIndex{h: h}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	DeleteProgram(idx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := h.Program("P1"); !ok {
+		t.Fatal("program dropped from cache despite upstream failure")
+	}
+}
+
 // --- PatchSysvar ---
 
 func TestPatchSysvar_HubNil_Returns503(t *testing.T) {
@@ -745,7 +930,7 @@ func TestListInbox_WithEntries(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	h.Inbox.Replace([]hub.InboxDevice{
-		{Address: "0003001122:0", Model: "HmIP-PS", Serial: "00030011"},
+		{Address: "0003001122:0", Model: "HmIP-PS", Serial: "00030011", Interface: "HmIP-RF"},
 	})
 	idx := &testHubIndex{h: h}
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
@@ -764,6 +949,12 @@ func TestListInbox_WithEntries(t *testing.T) {
 	}
 	if body[0].Address != "0003001122:0" {
 		t.Fatalf("expected address=0003001122:0, got %q", body[0].Address)
+	}
+	// The SPA gates the "replace existing device" action on this field
+	// (HmIP interfaces cannot be replaced) — it must survive the DTO
+	// mapping verbatim.
+	if body[0].Interface != "HmIP-RF" {
+		t.Fatalf("expected interface=HmIP-RF, got %q", body[0].Interface)
 	}
 }
 
@@ -893,6 +1084,86 @@ func TestListInterfaces_WithEntries(t *testing.T) {
 	}
 }
 
+// TestListInterfaces_DutyCycleSerialization verifies that a BidCos interface's
+// duty cycle (including a legitimate 0) round-trips as duty_cycle while an
+// interface without radio-utilisation data omits the field entirely.
+func TestListInterfaces_DutyCycleSerialization(t *testing.T) {
+	t.Parallel()
+	zero := 0
+	dc := 42
+	idx := &testFullInterfaceIndex{
+		ifaces: []InterfaceState{
+			{ID: "BidCos-RF", Name: "BidCos", Connected: true, Interface: "BidCos-RF", DutyCycle: &dc},
+			{ID: "BidCos-Wired", Name: "wired", Connected: true, Interface: "BidCos-Wired", DutyCycle: &zero},
+			{ID: "HmIP-RF", Name: "HmIP", Connected: true, Interface: "HmIP-RF"},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	ListInterfaces(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"duty_cycle":42`) {
+		t.Errorf("expected duty_cycle:42 in body, got %s", body)
+	}
+	if !strings.Contains(body, `"duty_cycle":0`) {
+		t.Errorf("expected a legitimate duty_cycle:0 to be serialized, got %s", body)
+	}
+
+	// The HmIP-RF entry has a nil DutyCycle → the field must be absent.
+	var states []InterfaceState
+	if err := json.Unmarshal(w.Body.Bytes(), &states); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, s := range states {
+		if s.ID == "HmIP-RF" && s.DutyCycle != nil {
+			t.Errorf("HmIP-RF DutyCycle should be nil, got %v", *s.DutyCycle)
+		}
+	}
+}
+
+// TestListInterfaces_CarrierSenseSerialization verifies that a present
+// carrier_sense value round-trips and that an absent one is omitted from
+// the JSON body. carrier_sense is commonly absent (most CCU firmwares do
+// not report it over JSON-RPC), so both branches need explicit coverage.
+func TestListInterfaces_CarrierSenseSerialization(t *testing.T) {
+	t.Parallel()
+	cs := 17
+	idx := &testFullInterfaceIndex{
+		ifaces: []InterfaceState{
+			{ID: "BidCos-RF", Name: "BidCos", Connected: true, Interface: "BidCos-RF", CarrierSense: &cs},
+			{ID: "HmIP-RF", Name: "HmIP", Connected: true, Interface: "HmIP-RF"},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	ListInterfaces(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"carrier_sense":17`) {
+		t.Errorf("expected carrier_sense:17 in body, got %s", body)
+	}
+
+	var states []InterfaceState
+	if err := json.Unmarshal(w.Body.Bytes(), &states); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, s := range states {
+		if s.ID == "HmIP-RF" && s.CarrierSense != nil {
+			t.Errorf("HmIP-RF CarrierSense should be nil (absent), got %v", *s.CarrierSense)
+		}
+		if s.ID == "BidCos-RF" && (s.CarrierSense == nil || *s.CarrierSense != 17) {
+			t.Errorf("BidCos-RF CarrierSense = %v, want 17", s.CarrierSense)
+		}
+	}
+}
+
 // --- CreateSysvar with hub and valid request ---
 
 func TestCreateSysvar_HappyPath_Returns202(t *testing.T) {
@@ -949,32 +1220,175 @@ func TestListServiceMessages_NilHub_ReturnsEmptyArray(t *testing.T) {
 	}
 }
 
-// --- ListPrograms with IsInternal flag ---
+// --- ListPrograms internal-program delivery filter ---
 
-func TestListPrograms_InternalFlag(t *testing.T) {
-	t.Parallel()
-	h := hub.NewHub("ccu01")
-	p := hub.NewProgram("ccu01", "Tmp_001", "Tmp_001", "", false, nil)
-	p.IsInternal = true
-	h.PutProgram(p)
-	idx := &testHubIndex{h: h}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+// listProgramsBody drives ListPrograms with the given query string and
+// returns the decoded body plus the HTTP status code.
+func listProgramsBody(t *testing.T, idx HubIndex, query string) (int, []ProgramSummary) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs"+query, http.NoBody)
 	w := httptest.NewRecorder()
 	ListPrograms(idx).ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
 	var body []ProgramSummary
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if w.Code == http.StatusOK {
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+	}
+	return w.Code, body
+}
+
+// hubWithInternalProgram builds a hub carrying one normal and one internal
+// program, with the given per-central default for internal visibility.
+func hubWithInternalProgram(t *testing.T, includeDefault bool) *hub.Hub {
+	t.Helper()
+	h := hub.NewHub("ccu01")
+	h.SetIncludeInternalProgramsDefault(includeDefault)
+	h.PutProgram(hub.NewProgram("ccu01", "P-Normal", "Normal", "", false, nil))
+	internal := hub.NewProgram("ccu01", "Tmp_001", "Tmp_001", "", false, nil)
+	internal.IsInternal = true
+	h.PutProgram(internal)
+	return h
+}
+
+func TestListPrograms_InternalHiddenByDefault(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, body := listProgramsBody(t, idx, "")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
 	}
 	if len(body) != 1 {
-		t.Fatalf("expected 1 program, got %d", len(body))
+		t.Fatalf("expected only the non-internal program, got %d", len(body))
 	}
-	if !body[0].IsInternal {
-		t.Error("expected is_internal=true for Tmp_ programs")
+	if body[0].IsInternal {
+		t.Error("the surviving program must be the non-internal one")
+	}
+}
+
+func TestListPrograms_InternalShownWhenConfigDefaultsOn(t *testing.T) {
+	t.Parallel()
+	// No query parameter → the central's include_internal_programs default
+	// (true) governs delivery: both programs are listed.
+	idx := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	code, body := listProgramsBody(t, idx, "")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected both programs, got %d", len(body))
+	}
+}
+
+func TestListPrograms_IncludeInternalQueryOverridesDefault(t *testing.T) {
+	t.Parallel()
+	// include_internal=true reveals internal programs even when the central
+	// default hides them; the is_internal flag still propagates.
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, body := listProgramsBody(t, idx, "?include_internal=true")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected both programs, got %d", len(body))
+	}
+	var sawInternal bool
+	for _, p := range body {
+		if p.IsInternal {
+			sawInternal = true
+		}
+	}
+	if !sawInternal {
+		t.Error("expected is_internal=true program in the include_internal=true response")
+	}
+
+	// include_internal=false hides internal programs even when the central
+	// default would show them.
+	idxOn := &testHubIndex{h: hubWithInternalProgram(t, true)}
+	code, body = listProgramsBody(t, idxOn, "?include_internal=false")
+	if code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", code)
+	}
+	if len(body) != 1 || body[0].IsInternal {
+		t.Fatalf("include_internal=false must hide internal programs, got %d", len(body))
+	}
+}
+
+func TestListPrograms_InvalidIncludeInternalIsBadRequest(t *testing.T) {
+	t.Parallel()
+	idx := &testHubIndex{h: hubWithInternalProgram(t, false)}
+	code, _ := listProgramsBody(t, idx, "?include_internal=maybe")
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a non-boolean include_internal, got %d", code)
+	}
+}
+
+// --- parseOptionalBoolQuery / effectiveBool unit tests ---
+
+func TestParseOptionalBoolQuery_AbsentReturnsNil(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
+	got, err := parseOptionalBoolQuery(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for an absent parameter, got %v", *got)
+	}
+}
+
+func TestParseOptionalBoolQuery_ParsesRecognisedLiterals(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		raw  string
+		want bool
+	}{
+		{"true", true},
+		{"false", false},
+		{"1", true},
+		{"0", false},
+		{"True", true},
+		{"FALSE", false},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs?include_internal="+tc.raw, http.NoBody)
+		got, err := parseOptionalBoolQuery(req)
+		if err != nil {
+			t.Fatalf("include_internal=%q: unexpected error: %v", tc.raw, err)
+		}
+		if got == nil || *got != tc.want {
+			t.Fatalf("include_internal=%q: got %v, want %v", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestParseOptionalBoolQuery_InvalidLiteralErrors(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{"maybe", "yes", "on", "2"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs?include_internal="+raw, http.NoBody)
+		if _, err := parseOptionalBoolQuery(req); err == nil {
+			t.Fatalf("include_internal=%q: expected a parse error, got none", raw)
+		}
+	}
+}
+
+func TestEffectiveBool_OverrideWinsOverDefault(t *testing.T) {
+	t.Parallel()
+	yes, no := true, false
+	if got := effectiveBool(&yes, false); !got {
+		t.Fatal("override=true, def=false: expected true")
+	}
+	if got := effectiveBool(&no, true); got {
+		t.Fatal("override=false, def=true: expected false")
+	}
+}
+
+func TestEffectiveBool_NilOverrideFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	if got := effectiveBool(nil, true); !got {
+		t.Fatal("nil override, def=true: expected true")
+	}
+	if got := effectiveBool(nil, false); got {
+		t.Fatal("nil override, def=false: expected false")
 	}
 }
 
@@ -1012,11 +1426,11 @@ func TestToSysvarSummary_WithValue(t *testing.T) {
 // errSysvarMutator implements hub.SysvarMutator and always returns an error.
 type errSysvarMutator struct{ err error }
 
-func (e *errSysvarMutator) CreateSysvar(_ context.Context, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) CreateSysvar(_ context.Context, _ hub.SysvarCreateSpec) error {
 	return e.err
 }
 
-func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _, _, _, _, _ string, _ []string) error {
+func (e *errSysvarMutator) UpdateSysvar(_ context.Context, _ hub.SysvarUpdateSpec) error {
 	return e.err
 }
 
@@ -1038,6 +1452,37 @@ func (e *errMessageAcknowledger) AcknowledgeMessage(_ context.Context, _ string)
 type okMessageAcknowledger struct{}
 
 func (okMessageAcknowledger) AcknowledgeMessage(_ context.Context, _ string) error { return nil }
+
+// okBulkAck implements hub.BulkMessageAcknowledger and reports a fixed count.
+type okBulkAck struct{ n int }
+
+func (b okBulkAck) AcknowledgeAllServiceMessages(context.Context) (int, error) { return b.n, nil }
+func (b okBulkAck) AcknowledgeAllAlarmMessages(context.Context) (int, error)   { return b.n, nil }
+
+// errBulkAck implements hub.BulkMessageAcknowledger and always errors.
+type errBulkAck struct{ err error }
+
+func (b errBulkAck) AcknowledgeAllServiceMessages(context.Context) (int, error) { return 0, b.err }
+func (b errBulkAck) AcknowledgeAllAlarmMessages(context.Context) (int, error)   { return 0, b.err }
+
+// stubBulkAckCounter implements hub.BulkMessageAcknowledger and records how
+// many times each method was invoked, so a test can assert a central-scoped
+// bulk acknowledge left an out-of-scope central's acker untouched.
+type stubBulkAckCounter struct {
+	n            int
+	serviceCalls int
+	alarmCalls   int
+}
+
+func (b *stubBulkAckCounter) AcknowledgeAllServiceMessages(context.Context) (int, error) {
+	b.serviceCalls++
+	return b.n, nil
+}
+
+func (b *stubBulkAckCounter) AcknowledgeAllAlarmMessages(context.Context) (int, error) {
+	b.alarmCalls++
+	return b.n, nil
+}
 
 // errProgramWriter implements hub.ProgramWriter and always returns an error.
 type errProgramWriter struct{ err error }
@@ -1082,6 +1527,410 @@ func TestPatchSysvar_HappyPath_Returns202(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// recordingSysvarMutator captures the arguments of the last UpdateSysvar
+// call so a handler test can assert the request body threaded through.
+type recordingSysvarMutator struct {
+	name          string
+	newName       string
+	createName    string
+	createType    string
+	createDescrip string
+	createVN0     string
+	createVN1     string
+	createChannel string
+	updateVN0     string
+	updateVN1     string
+	updateVisible *bool
+	updateLogged  *bool
+	updateChannel *string
+}
+
+func (r *recordingSysvarMutator) CreateSysvar(_ context.Context, spec hub.SysvarCreateSpec) error {
+	r.createName = spec.Name
+	r.createType = spec.ValueType
+	r.createDescrip = spec.Description
+	r.createVN0 = spec.ValueName0
+	r.createVN1 = spec.ValueName1
+	r.createChannel = spec.Channel
+	return nil
+}
+
+func (r *recordingSysvarMutator) UpdateSysvar(_ context.Context, spec hub.SysvarUpdateSpec) error {
+	r.name = spec.Name
+	r.newName = spec.NewName
+	r.updateVN0 = spec.ValueName0
+	r.updateVN1 = spec.ValueName1
+	r.updateVisible = spec.Visible
+	r.updateLogged = spec.Logged
+	r.updateChannel = spec.Channel
+	return nil
+}
+
+func (r *recordingSysvarMutator) DeleteSysvar(_ context.Context, _ string) error { return nil }
+
+// A `name` field in the PATCH body reaches the mutator as the rename
+// target while the path {name} stays the current name.
+func TestPatchSysvar_Rename_PassesNewName(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"name":"NewName"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "OldName"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "OldName" || mut.newName != "NewName" {
+		t.Fatalf("mutator got name=%q newName=%q, want OldName/NewName", mut.name, mut.newName)
+	}
+}
+
+// Omitting `name` from the PATCH body (the common case: only unit/min/max/
+// description/value_list change) must not synthesize a rename — the
+// mutator's newName parameter stays empty so UpdateSysvar's ##newname##
+// slot resolves to "" and the CCU leaves the variable's name untouched.
+func TestPatchSysvar_NameOmitted_DoesNotRename(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "OldName"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "OldName" || mut.newName != "" {
+		t.Fatalf("mutator got name=%q newName=%q, want OldName/\"\"", mut.name, mut.newName)
+	}
+}
+
+// A `description` in the POST body reaches CreateSysvar so the variable
+// carries its help text from creation.
+func TestCreateSysvar_Description_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","description":"a helpful note"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createName != "Flag" || mut.createDescrip != "a helpful note" {
+		t.Fatalf("mutator got name=%q description=%q", mut.createName, mut.createDescrip)
+	}
+}
+
+// An ALARM value_type is accepted and reaches the mutator unchanged so
+// the Rega create script can provision a binary alarm line.
+func TestCreateSysvar_Alarm_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Einbruch","value_type":"ALARM"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createName != "Einbruch" || mut.createType != "ALARM" {
+		t.Fatalf("mutator got name=%q type=%q, want Einbruch/ALARM", mut.createName, mut.createType)
+	}
+}
+
+// A channel_address in the POST body reaches CreateSysvar as the channel to
+// bind the new variable to.
+func TestCreateSysvar_ChannelAddress_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","channel_address":"ABC0000001:3"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createChannel != "ABC0000001:3" {
+		t.Fatalf("mutator got channel=%q, want ABC0000001:3", mut.createChannel)
+	}
+}
+
+// An unresolvable channel address on create surfaces as 422 (bad request
+// field), not 502 — the fault is the caller's address, not the CCU.
+func TestCreateSysvar_ChannelUnknown_Returns422(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: hub.ErrSysvarChannelUnknown}
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Flag","value_type":"BOOL","channel_address":"BAD:9"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// A channel_address in the PATCH body reaches UpdateSysvar as a non-nil
+// pointer so the tri-state assign/clear/untouched semantics survive.
+func TestPatchSysvar_ChannelAddress_PassesThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":"ABC0000001:3"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel == nil || *mut.updateChannel != "ABC0000001:3" {
+		t.Fatalf("mutator got channel=%v, want ABC0000001:3", mut.updateChannel)
+	}
+}
+
+// An empty-string channel_address is the explicit "clear the assignment"
+// signal — it must reach the mutator as a non-nil pointer to "".
+func TestPatchSysvar_ChannelClear_PassesEmptyPointer(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":""}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel == nil || *mut.updateChannel != "" {
+		t.Fatalf("clear must pass a non-nil empty pointer, got %v", mut.updateChannel)
+	}
+}
+
+// Omitting channel_address must leave the mutator's Channel pointer nil so the
+// CCU assignment is left untouched.
+func TestPatchSysvar_ChannelOmitted_LeavesPointerNil(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateChannel != nil {
+		t.Fatalf("omitted channel_address must leave the pointer nil, got %v", *mut.updateChannel)
+	}
+}
+
+// An unresolvable channel address on PATCH surfaces as 422, not 502.
+func TestPatchSysvar_ChannelUnknown_Returns422(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: hub.ErrSysvarChannelUnknown}
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"channel_address":"BAD:9"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "X"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// Binary value labels in the POST body reach CreateSysvar so a new
+// BOOL/ALARM variable can carry operator-chosen state text from creation.
+func TestCreateSysvar_ValueLabels_PassThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Tuer","value_type":"BOOL","value_name_0":"zu","value_name_1":"offen"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.createVN0 != "zu" || mut.createVN1 != "offen" {
+		t.Fatalf("mutator got labels %q/%q, want zu/offen", mut.createVN0, mut.createVN1)
+	}
+}
+
+// The PATCH body's value labels and visibility / archive flags reach
+// UpdateSysvar. The flags are tri-state pointers so an explicit true/false
+// survives, and an omitted flag stays nil (leave the CCU value untouched).
+func TestPatchSysvar_LabelsAndFlags_PassThrough(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	body := `{"value_name_0":"zu","value_name_1":"offen","is_visible":true,"is_logged":false}`
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(body))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "Tuer"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.name != "Tuer" || mut.updateVN0 != "zu" || mut.updateVN1 != "offen" {
+		t.Fatalf("mutator got name=%q labels=%q/%q", mut.name, mut.updateVN0, mut.updateVN1)
+	}
+	if mut.updateVisible == nil || !*mut.updateVisible {
+		t.Fatalf("is_visible not threaded through as true: %v", mut.updateVisible)
+	}
+	if mut.updateLogged == nil || *mut.updateLogged {
+		t.Fatalf("is_logged not threaded through as false: %v", mut.updateLogged)
+	}
+}
+
+// Omitting the flags entirely from the PATCH body leaves the mutator's
+// tri-state pointers nil so UpdateSysvar's script slots resolve to "" and
+// the CCU flags stay as-is.
+func TestPatchSysvar_FlagsOmitted_StayNil(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	mut := &recordingSysvarMutator{}
+	h.SysvarMutator = mut
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"unit":"°C"}`))
+	req = req.WithContext(chiContext(req, map[string]string{"name": "Tuer"}))
+	w := httptest.NewRecorder()
+	PatchSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if mut.updateVisible != nil || mut.updateLogged != nil {
+		t.Fatalf("omitted flags must stay nil, got visible=%v logged=%v", mut.updateVisible, mut.updateLogged)
+	}
+}
+
+// An unknown value_type is rejected with 422 before any CCU call, so a
+// garbage type never reaches the Rega script (which would silently
+// create a type-less variable). LOGIC/NUMBER/LIST are read-side codes,
+// not create codes, and are rejected too; the check is case-sensitive
+// and does not trim surrounding whitespace.
+func TestCreateSysvar_InvalidType_Returns422(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		valueType string
+	}{
+		{"read_side_logic", "LOGIC"},
+		{"read_side_number", "NUMBER"},
+		{"read_side_list", "LIST"},
+		{"lowercase_alarm", "alarm"},
+		{"mixed_case_alarm", "Alarm"},
+		{"trailing_space", "BOOL "},
+		{"leading_space", " BOOL"},
+		{"unknown_garbage", "NOT_A_TYPE"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := hub.NewHub("test-ccu")
+			mut := &recordingSysvarMutator{}
+			h.SysvarMutator = mut
+			idx := &testHubIndex{h: h}
+			body := `{"name":"Flag","value_type":"` + tc.valueType + `"}`
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			CreateSysvar(idx).ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("value_type=%q: expected 422, got %d body=%s", tc.valueType, w.Code, w.Body.String())
+			}
+			if mut.createName != "" {
+				t.Fatalf("value_type=%q: mutator was called with name=%q despite invalid type", tc.valueType, mut.createName)
+			}
+		})
+	}
+}
+
+// Every accepted value_type — including ALARM — reaches the mutator
+// unchanged and yields 202. This table complements the single-case
+// TestCreateSysvar_Alarm_PassesThrough by pinning the full accepted
+// vocabulary in one place.
+func TestCreateSysvar_ValidTypes_Returns202(t *testing.T) {
+	t.Parallel()
+	for _, vt := range []string{"BOOL", "INTEGER", "FLOAT", "STRING", "ENUM", "ALARM"} {
+		t.Run(vt, func(t *testing.T) {
+			t.Parallel()
+			h := hub.NewHub("test-ccu")
+			mut := &recordingSysvarMutator{}
+			h.SysvarMutator = mut
+			idx := &testHubIndex{h: h}
+			body := `{"name":"Flag","value_type":"` + vt + `"}`
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			w := httptest.NewRecorder()
+			CreateSysvar(idx).ServeHTTP(w, req)
+
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("value_type=%q: expected 202, got %d body=%s", vt, w.Code, w.Body.String())
+			}
+			if mut.createType != vt {
+				t.Fatalf("value_type=%q: mutator got type=%q", vt, mut.createType)
+			}
+		})
+	}
+}
+
+// A CCU-side error on the ALARM create path (e.g. the Rega script
+// failed to create the OT_ALARMDP object) must surface as 502, exactly
+// like every other value_type's error path.
+func TestCreateSysvar_Alarm_MutatorError_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.SysvarMutator = &errSysvarMutator{err: errors.New("rega down")}
+	idx := &testHubIndex{h: h}
+	body := `{"name":"Einbruch","value_type":"ALARM"}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	CreateSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -1179,7 +2028,7 @@ func TestExecuteProgram_ExecuteError_Returns502(t *testing.T) {
 	}
 }
 
-func TestExecuteProgram_HappyPath_Returns202(t *testing.T) {
+func TestExecuteProgram_HappyPath_ReturnsAcceptedExecuted(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	prog := hub.NewProgram("test-ccu", "P-ok", "Ok", "", false,
@@ -1193,6 +2042,143 @@ func TestExecuteProgram_HappyPath_Returns202(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true for unconditional run")
+	}
+}
+
+// condProgramWriter implements hub.ConditionalProgramWriter; ExecuteProgramConditional
+// returns the configured executed flag so the handler's check_conditions branch
+// can be exercised without a live CCU.
+type condProgramWriter struct {
+	executed  bool
+	err       error
+	condCalls int
+	execCalls int
+}
+
+func (c *condProgramWriter) ExecuteProgram(_ context.Context, _ string) error {
+	c.execCalls++
+	return c.err
+}
+
+func (c *condProgramWriter) SetProgramEnabled(_ context.Context, _ string, _ bool) error {
+	return c.err
+}
+
+func (c *condProgramWriter) ExecuteProgramConditional(_ context.Context, _ string) (bool, error) {
+	c.condCalls++
+	if c.err != nil {
+		return false, c.err
+	}
+	return c.executed, nil
+}
+
+func TestExecuteProgram_CheckConditions_ConditionMet(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: true}
+	prog := hub.NewProgram("test-ccu", "P-cond", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true (condition met)")
+	}
+	if writer.condCalls != 1 {
+		t.Fatalf("condCalls=%d, want 1 (conditional path must be used)", writer.condCalls)
+	}
+	if writer.execCalls != 0 {
+		t.Fatalf("execCalls=%d, want 0 (unconditional path must not run)", writer.execCalls)
+	}
+}
+
+func TestExecuteProgram_CheckConditions_ConditionNotMet(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: false}
+	prog := hub.NewProgram("test-ccu", "P-cond", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramExecuteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Executed {
+		t.Fatalf("executed=true, want false (condition not met)")
+	}
+}
+
+// TestExecuteProgram_CheckConditions_WriterError_Returns502 verifies that a
+// CCU-side failure on the condition-checked path (the ReGa script call
+// itself erroring, e.g. a transport failure) surfaces as 502 — the same
+// mapping as the unconditional path — rather than being swallowed as
+// executed=false.
+func TestExecuteProgram_CheckConditions_WriterError_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{err: errors.New("rega call failed")}
+	prog := hub.NewProgram("test-ccu", "P-cond-err", "Conditional", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"check_conditions":true}`))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-cond-err"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.condCalls != 1 {
+		t.Fatalf("condCalls=%d, want 1 (conditional path must be used)", writer.condCalls)
+	}
+}
+
+// TestExecuteProgram_InvalidJSONBody_Returns400 verifies that a malformed
+// (non-empty, non-JSON) request body is rejected with 400 before any writer
+// call is attempted — the empty-body-is-optional convenience of
+// decodeOptionalJSON must not swallow genuinely malformed input.
+func TestExecuteProgram_InvalidJSONBody_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	writer := &condProgramWriter{executed: true}
+	prog := hub.NewProgram("test-ccu", "P-badjson", "BadJSON", "", false, writer)
+	h.PutProgram(prog)
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("NOT JSON"))
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P-badjson"}))
+	w := httptest.NewRecorder()
+	ExecuteProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if writer.execCalls != 0 || writer.condCalls != 0 {
+		t.Fatalf("no writer call expected on decode failure, got exec=%d cond=%d", writer.execCalls, writer.condCalls)
 	}
 }
 
@@ -1265,7 +2251,11 @@ func TestDisableServiceMessage_HappyPath_Returns202(t *testing.T) {
 	t.Parallel()
 	h := hub.NewHub("test-ccu")
 	h.ServiceMessages = hub.NewServiceMessages(okMessageAcknowledger{})
-	h.ServiceMessages.Replace([]hub.ServiceMessage{{ID: "S1", Timestamp: time.Now()}})
+	h.ServiceMessages.SetSuppressor(noopSuppressor{})
+	h.ServiceMessages.Replace([]hub.ServiceMessage{{
+		ID: "S1", Address: "ABC:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
 	idx := &testHubIndex{h: h}
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"id": "S1"}))
@@ -1281,6 +2271,185 @@ func TestDisableServiceMessage_HappyPath_Returns202(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// AckAllAlarmMessages / AckAllServiceMessages — bulk acknowledge
+// ---------------------------------------------------------------------------
+
+func TestAckAllAlarmMessages_HubNil_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(nil).ServeHTTP(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestAckAllAlarmMessages_HappyPath_ReturnsCount(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Messages.SetAcknowledgers(nil, okBulkAck{n: 3})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 3 {
+		t.Fatalf("acknowledged=%d, want 3", got.Acknowledged)
+	}
+}
+
+func TestAckAllAlarmMessages_Error_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Messages.SetAcknowledgers(nil, errBulkAck{err: errors.New("rega down")})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAckAllServiceMessages_HappyPath_ReturnsCount(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages.SetAcknowledgers(nil, okBulkAck{n: 5})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 5 {
+		t.Fatalf("acknowledged=%d, want 5", got.Acknowledged)
+	}
+}
+
+func TestAckAllServiceMessages_Error_Returns502(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages.SetAcknowledgers(nil, errBulkAck{err: errors.New("rega down")})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestAckAllServiceMessages_UnknownCentral_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.ServiceMessages.SetAcknowledgers(nil, okBulkAck{n: 5})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/?central=does-not-exist", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestAckAllAlarmMessages_UnknownCentral_Returns400 mirrors the service-side
+// unknown-central case for the alarm endpoint.
+func TestAckAllAlarmMessages_UnknownCentral_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Messages.SetAcknowledgers(nil, okBulkAck{n: 5})
+	idx := &testHubIndex{h: h}
+	req := httptest.NewRequest(http.MethodPost, "/?central=does-not-exist", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestAckAllAlarmMessages_MultiCentral_SumsAcrossHubs verifies that omitting
+// ?central= acknowledges every registered central and sums their individual
+// counts into one response, rather than only acting on the first hub.
+func TestAckAllAlarmMessages_MultiCentral_SumsAcrossHubs(t *testing.T) {
+	t.Parallel()
+	h1 := hub.NewHub("ccu-alpha")
+	h1.Messages.SetAcknowledgers(nil, okBulkAck{n: 2})
+	h2 := hub.NewHub("ccu-beta")
+	h2.Messages.SetAcknowledgers(nil, okBulkAck{n: 3})
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-alpha", Hub: h1},
+		{Central: "ccu-beta", Hub: h2},
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllAlarmMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 5 {
+		t.Fatalf("acknowledged=%d, want 5 (2+3 summed across both centrals)", got.Acknowledged)
+	}
+}
+
+// TestAckAllServiceMessages_ScopedCentral_OnlyActsOnNamedHub verifies that a
+// ?central= query parameter restricts the bulk acknowledge to the named
+// central: the other central's bulk acknowledger must not be invoked and its
+// count must not be added to the total.
+func TestAckAllServiceMessages_ScopedCentral_OnlyActsOnNamedHub(t *testing.T) {
+	t.Parallel()
+	h1 := hub.NewHub("ccu-alpha")
+	alphaBulk := &stubBulkAckCounter{n: 2}
+	h1.ServiceMessages.SetAcknowledgers(nil, alphaBulk)
+	h2 := hub.NewHub("ccu-beta")
+	betaBulk := &stubBulkAckCounter{n: 7}
+	h2.ServiceMessages.SetAcknowledgers(nil, betaBulk)
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-alpha", Hub: h1},
+		{Central: "ccu-beta", Hub: h2},
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, "/?central=ccu-alpha", http.NoBody)
+	w := httptest.NewRecorder()
+	AckAllServiceMessages(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var got AckAllResult
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if got.Acknowledged != 2 {
+		t.Fatalf("acknowledged=%d, want 2 (only ccu-alpha scoped)", got.Acknowledged)
+	}
+	if alphaBulk.serviceCalls != 1 {
+		t.Errorf("ccu-alpha bulk acker called %d times, want 1", alphaBulk.serviceCalls)
+	}
+	if betaBulk.serviceCalls != 0 {
+		t.Errorf("ccu-beta bulk acker called %d times, want 0 (must not be invoked when central= scopes to alpha)", betaBulk.serviceCalls)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // CreateSysvar — error path (mutator error → 502)
 // ---------------------------------------------------------------------------
 
@@ -1289,7 +2458,7 @@ func TestCreateSysvar_MutatorError_Returns502(t *testing.T) {
 	h := hub.NewHub("test-ccu")
 	h.SysvarMutator = &errSysvarMutator{err: errors.New("rega down")}
 	idx := &testHubIndex{h: h}
-	body := `{"name":"Flag","value_type":"LOGIC"}`
+	body := `{"name":"Flag","value_type":"BOOL"}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	CreateSysvar(idx).ServeHTTP(w, req)
@@ -1548,6 +2717,30 @@ func TestToSysvarSummary_UniqueID(t *testing.T) {
 	}
 	if !strings.HasPrefix(s.UniqueID, "loom_") {
 		t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
+	}
+}
+
+// TestToSysvarSummary_LabelsAndFlags verifies that toSysvarSummary carries
+// the CCU value labels and the visibility/archive flags from the model
+// Sysvar onto the wire SysvarSummary unchanged, including the false/false
+// case (the DTO must not default the flags to true).
+func TestToSysvarSummary_LabelsAndFlags(t *testing.T) {
+	t.Parallel()
+	sv := hub.NewSysvar("ccu01", "Tuer", "", hmenum.HubValueTypeLogic, nil)
+	sv.IsVisible = true
+	sv.IsLogged = false
+	sv.ValueName0 = "zu"
+	sv.ValueName1 = "offen"
+
+	s := toSysvarSummary(sv, "vccu0000000")
+	if !s.IsVisible {
+		t.Error("IsVisible = false, want true")
+	}
+	if s.IsLogged {
+		t.Error("IsLogged = true, want false")
+	}
+	if s.ValueName0 != "zu" || s.ValueName1 != "offen" {
+		t.Fatalf("labels = %q/%q, want zu/offen", s.ValueName0, s.ValueName1)
 	}
 }
 

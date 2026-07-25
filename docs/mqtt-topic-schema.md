@@ -33,6 +33,16 @@ degenerate case with one entry under that segment.
 > the channel number. `<param>` is the wire-parameter name. `<area>`
 > is an alarm-area id, or the reserved pseudo-area id `master`.
 
+> The channel press-event topic carries a JSON envelope
+> `{"event_type": "<type>", "available": true, "modified_at": "…"}`.
+> `<type>` is the lower-cased press parameter (`press_short`,
+> `press_long`, …) — except on the curated doorbell models
+> (`HM-Sen-DB-PCB`, `HmIP-DBB`, `HmIP-DSD-PCB`, shared via the
+> upstream data package's `device_semantics` extract), where the
+> short press fires as Home Assistant's standard **`ring`** event
+> type, matching the announced `event_types` of the discovered
+> doorbell entity.
+
 ### State topics
 
 | Topic class | Topic |
@@ -41,6 +51,7 @@ degenerate case with one entry under that segment.
 | Per-DP MASTER state | `<base>/<central>/<iface>/<addr>/<ch>/master/<param>` |
 | Per-DP CALCULATED state | `<base>/<central>/<iface>/<addr>/<ch>/calculated/<param>` |
 | Custom-DP derived state | `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>` |
+| Channel press event (not retained) | `<base>/<central>/<iface>/<addr>/<ch>/event` |
 | Device availability | `<base>/<central>/<iface>/<addr>/availability` |
 | Device info snapshot | `<base>/<central>/<iface>/<addr>/info` |
 | Device diagnostics | `<base>/<central>/<iface>/<addr>/diagnostics` |

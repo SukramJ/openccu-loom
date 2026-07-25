@@ -515,8 +515,16 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"TokenStore:DeleteBySubject":  "reason: tokens table is daemon-global; subject is the natural key, not a CCU",
 		"UserPreferencesStore:Get":    "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
 		"UserPreferencesStore:Delete": "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
-		"ConfigSectionStore:Get":      "reason: config_sections is daemon-global; section is the natural key",
-		"ConfigSectionStore:Delete":   "reason: config_sections is daemon-global; section is the natural key",
+		// diagram_configs is per-user daemon-global metadata; a diagram
+		// spans multiple centrals (each series carries its own central), so
+		// the owner subject / diagram id is the natural key, not a CCU.
+		"DiagramConfigStore:List":   "reason: diagram_configs is per-user daemon-global; owner subject is the key, and a diagram spans centrals",
+		"DiagramConfigStore:Get":    "reason: diagram_configs is per-user daemon-global; diagram id is the key, and a diagram spans centrals",
+		"DiagramConfigStore:Create": "reason: diagram_configs is per-user daemon-global; owner subject is the key, and a diagram spans centrals",
+		"DiagramConfigStore:Update": "reason: diagram_configs is per-user daemon-global; diagram id is the key, and a diagram spans centrals",
+		"DiagramConfigStore:Delete": "reason: diagram_configs is per-user daemon-global; diagram id is the key, and a diagram spans centrals",
+		"ConfigSectionStore:Get":    "reason: config_sections is daemon-global; section is the natural key",
+		"ConfigSectionStore:Delete": "reason: config_sections is daemon-global; section is the natural key",
 		// auth_sessions is daemon-global, not per-CCU: a login session
 		// belongs to a user in the single auth realm, never to a CCU.
 		// DeleteSession's natural key is the session id; the purge sweep

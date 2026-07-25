@@ -45,10 +45,17 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"setInstallMode":          true,
 		"installFirmware":         true,
 		"updateFirmware":          true,
+		"restoreConfigToDevice":   true,
+		"listReplaceableDevices":  true,
+		"replaceDevice":           true,
+		"searchDevices":           true,
+		"setTeam":                 true,
+		"listTeams":               true,
 		"getLinks":                true,
 		"getLinkPeers":            true,
 		"addLink":                 true,
 		"removeLink":              true,
+		"activateLinkParamset":    true,
 		"reportValueUsage":        true,
 		"deleteDevice":            true,
 		"determineParameter":      true,
@@ -69,6 +76,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		// JSON-RPC — CCU
 		"CCU.getAuthEnabled":          true,
 		"CCU.getHttpsRedirectEnabled": true,
+		"CCU.getHeatingGroupList":     true,
 
 		// JSON-RPC — Interface
 		"Interface.getInstallMode":               true,
@@ -83,20 +91,24 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"Interface.setValue":                     true,
 		"Interface.getValue":                     true,
 		"Interface.getMasterValue":               true,
+		"Interface.setMetadata":                  true,
 		"Interface.getDeviceDescription":         true,
 		"Interface.getLinkInfo":                  true,
 		"Interface.setLinkInfo":                  true,
 		"Interface.suppressServiceMessages":      true,
 		"Interface.getSuppressedServiceMessages": true,
 		"Interface.getIseIDByAddress":            true,
+		"Interface.listBidcosInterfaces":         true,
 
 		// JSON-RPC — Channel
 		"Channel.setName":       true,
 		"Channel.hasProgramIds": true,
 
 		// JSON-RPC — Device
-		"Device.setName":       true,
-		"Device.listAllDetail": true,
+		"Device.setName":             true,
+		"Device.getReGaIDByAddress":  true,
+		"Device.setOperateGroupOnly": true,
+		"Device.listAllDetail":       true,
 
 		// JSON-RPC — SysVar
 		"SysVar.createBool":         true,

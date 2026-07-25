@@ -953,3 +953,63 @@ func TestCatalogue_ReadToolsPresentWriteToolsAbsentWhenWritesDisabled(t *testing
 		}
 	}
 }
+
+// ─── channel-address ownership (writes always target channels) ───────────────
+
+// TestWriteTools_ChannelAddressPassesOwnershipCheck pins the
+// device-vs-channel ownership resolution: real writes always target a
+// channel address (`ADDR:n`) while CentralOf tracks device addresses.
+// The guard must strip the channel suffix before the lookup — with the
+// raw channel address every write was rejected with
+// `belongs to central ""`, making the write surface unusable.
+func TestWriteTools_ChannelAddressPassesOwnershipCheck(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	writer := &fakeWriter{}
+	ps := newFakeParamsets()
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:     devs,
+		Writer:      writer,
+		Paramsets:   ps,
+		Audit:       audit.NewBuffer(100),
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "set_datapoint", map[string]any{
+		"central_name": "ccu1",
+		"address":      "ADDR001:3",
+		"parameter":    "STATE",
+		"value":        true,
+	})
+	if res.IsError {
+		t.Fatalf("set_datapoint with channel address returned error: %v", res.Content)
+	}
+	if writer.last.address != "ADDR001:3" {
+		t.Errorf("writer must receive the channel address untouched: got %q", writer.last.address)
+	}
+
+	res = callTool(t, cs, "write_paramset", map[string]any{
+		"central_name": "ccu1",
+		"address":      "ADDR001:3",
+		"key":          "VALUES",
+		"values":       map[string]any{"STATE": true},
+	})
+	if res.IsError {
+		t.Fatalf("write_paramset with channel address returned error: %v", res.Content)
+	}
+
+	// The wrong central must still be rejected — suffix stripping must
+	// not weaken the multi-CCU guard.
+	res = callTool(t, cs, "set_datapoint", map[string]any{
+		"central_name": "ccu2",
+		"address":      "ADDR001:3",
+		"parameter":    "STATE",
+		"value":        true,
+	})
+	if !res.IsError {
+		t.Fatal("set_datapoint must reject a central that does not own the device")
+	}
+}

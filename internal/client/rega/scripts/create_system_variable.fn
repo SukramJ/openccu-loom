@@ -1,12 +1,22 @@
 !# openccu-loom — create_system_variable
-!# Params: ##name## (sysvar name), ##type## (BOOL|FLOAT|INTEGER|STRING|ENUM),
+!# Params: ##name## (sysvar name), ##type## (BOOL|FLOAT|INTEGER|STRING|ENUM|ALARM),
 !#         ##unit## (optional unit string), ##min## / ##max## (FLOAT/INTEGER bounds)
 !#         ##values## (semicolon-separated ENUM keys, ignored otherwise)
+!#         ##description## (optional description text; "" leaves it empty)
+!#         ##valuename0## / ##valuename1## (BOOL/ALARM false/true labels;
+!#           caller supplies the CCU "false"/"true" defaults when unset)
+!#         ##channel## (channel ise id for the "Kanalzuordnung"; "" or a
+!#           non-positive value leaves the variable unassigned)
 !# Output: the new sysvar's serial id, or an empty string on failure.
 !#
 !# Creates a system variable on the CCU. Silent no-op if a sysvar with
 !# the same name already exists — the caller checks the existing value
 !# afterwards via getSysVar.
+!#
+!# ALARM is a binary alarm line: it is backed by an OT_ALARMDP object
+!# (not the OT_VARDP that every other type uses) so the CCU treats it as
+!# a real, acknowledgeable alarm variable, wiring up the binary alarm
+!# condition and marking it as a system alarm.
 
 string sName = "##name##";
 string sType = "##type##";
@@ -14,6 +24,10 @@ string sUnit = "##unit##";
 string sMin = "##min##";
 string sMax = "##max##";
 string sValues = "##values##";
+string sDescription = "##description##";
+string sValueName0 = "##valuename0##";
+string sValueName1 = "##valuename1##";
+string sChannel = "##channel##";
 
 object oSv = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
 if (oSv) {
@@ -21,14 +35,28 @@ if (oSv) {
     quit;
 }
 
-object oNew = dom.CreateObject(OT_VARDP);
+object oNew;
+if (sType == "ALARM") {
+    oNew = dom.CreateObject(OT_ALARMDP);
+} else {
+    oNew = dom.CreateObject(OT_VARDP);
+}
 if (oNew) {
     oNew.Name(sName);
+    if (sType == "ALARM") {
+        oNew.AlSetBinaryCondition();
+        oNew.ValueType(ivtBinary);
+        oNew.ValueSubType(istAlarm);
+        oNew.ValueName0(sValueName0);
+        oNew.ValueName1(sValueName1);
+        oNew.AlType(atSystem);
+        oNew.AlArm(true);
+    }
     if (sType == "BOOL") {
         oNew.ValueType(ivtBinary);
         oNew.ValueSubType(istBool);
-        oNew.ValueName0("false");
-        oNew.ValueName1("true");
+        oNew.ValueName0(sValueName0);
+        oNew.ValueName1(sValueName1);
     }
     if (sType == "INTEGER") {
         oNew.ValueType(ivtInteger);
@@ -52,6 +80,11 @@ if (oNew) {
         oNew.ValueList(sValues);
     }
     if (sUnit != "") { oNew.ValueUnit(sUnit); }
+    if (sDescription != "") { oNew.DPInfo(sDescription); }
+    if (sChannel != "") {
+        integer iChnId = sChannel.ToInteger();
+        if (iChnId > 0) { oNew.Channel(iChnId); }
+    }
     oNew.Internal(false);
     oNew.Visible(true);
     dom.GetObject(ID_SYSTEM_VARIABLES).Add(oNew.ID());

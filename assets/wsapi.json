@@ -37,6 +37,14 @@
     },
     {
       "category": "alarms",
+      "description": "Acknowledge (clear) every active alarm message in one pass. The response carries the number acknowledged.",
+      "name": "alarm_messages.ack_all",
+      "result": {
+        "acknowledged": "integer"
+      }
+    },
+    {
+      "category": "alarms",
       "description": "List all active CCU alarm messages.",
       "name": "alarm_messages.list"
     },
@@ -130,10 +138,11 @@
     {
       "args": {
         "address": "string?",
+        "channel": "string?",
         "device_address": "string?"
       },
       "category": "central",
-      "description": "Enable CCU click-event forwarding for a device's press-event channels. Mirrors Python create_central_links.",
+      "description": "Enable CCU click-event forwarding. Without channel every press-event channel of the device is switched on; with channel (a channel address) only that single channel is touched. Mirrors Python create_central_links.",
       "name": "central.create_links",
       "result": {
         "failed": "integer",
@@ -152,9 +161,10 @@
         "device_address": "string?"
       },
       "category": "central",
-      "description": "Report whether a device supports central links and how many channels are eligible.",
+      "description": "Report whether a device supports central links, how many channels are eligible, and which channels (address, number, eligible) can drive central click events.",
       "name": "central.links_status",
       "result": {
+        "channels": "array?",
         "eligible_channels": "integer?",
         "reason": "string?",
         "supported": "boolean"
@@ -168,10 +178,11 @@
     {
       "args": {
         "address": "string?",
+        "channel": "string?",
         "device_address": "string?"
       },
       "category": "central",
-      "description": "Tear down CCU click-event forwarding for a device's press-event channels. Mirrors Python remove_central_links.",
+      "description": "Tear down CCU click-event forwarding. Without channel the whole device is switched off; with channel (a channel address) only that single channel is touched. Mirrors Python remove_central_links.",
       "name": "central.remove_links",
       "result": {
         "failed": "integer",
@@ -329,15 +340,142 @@
     },
     {
       "category": "devices",
-      "description": "Rename a device on the CCU.",
+      "description": "Rename a device on the CCU. When include_channels is true every channel is renamed along with the '<name>:<channelNo>' pattern.",
       "name": "device.rename",
       "args": {
         "address": "string",
+        "name": "string",
+        "include_channels": "boolean?"
+      },
+      "result": {
+        "address": "string",
+        "name": "string",
+        "include_channels": "boolean"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Rename a single channel on the CCU.",
+      "name": "device.rename_channel",
+      "args": {
+        "address": "string",
+        "channel": "integer",
         "name": "string"
       },
       "result": {
         "address": "string",
+        "channel": "integer",
         "name": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "List the already-paired devices the new (inbox) device may replace. Supported on BidCos-RF and BidCos-Wired only.",
+      "name": "device.replace_candidates",
+      "args": {
+        "address": "string",
+        "central": "string?"
+      },
+      "result": {
+        "candidates": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Swap a paired device for a new one. The CCU migrates direct links, teams and ReGa references; the old device is unpaired. Supported on BidCos-RF and BidCos-Wired only.",
+      "name": "device.replace",
+      "args": {
+        "address": "string",
+        "old_address": "string",
+        "central": "string?"
+      },
+      "result": {
+        "status": "string",
+        "old_address": "string",
+        "new_address": "string",
+        "central": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "List the team channels a channel may be assigned to (same team tag). Supported on BidCos-RF and HmIP-RF only.",
+      "name": "device.team_candidates",
+      "args": {
+        "address": "string",
+        "channel": "integer"
+      },
+      "result": {
+        "candidates": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Assign a channel to a team (e.g. smoke-detector teaming). A null/empty team resets to the channel's default team. BidCos-RF and HmIP-RF only.",
+      "name": "device.set_team",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "team": "string?"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "team": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Run the CCU's per-device communication / function test (radio test frame + ACK). Blocks until complete or the poll window elapses. Radio interfaces only.",
+      "name": "device.test",
+      "args": {
+        "address": "string"
+      },
+      "result": {
+        "passed": "boolean",
+        "started_at": "string",
+        "duration_ms": "integer",
+        "timed_out": "boolean"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Re-transmit the centrally stored configuration (all channels' MASTER paramsets + link peerings) to a device after a factory reset. Supported on HmIP-RF and BidCos-RF only.",
+      "name": "device.restore_config",
+      "args": {
+        "address": "string"
+      },
+      "result": {
+        "address": "string"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Replace a single channel's function (Gewerk) assignments. An empty array clears the set.",
+      "name": "device.set_channel_functions",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "functions": "array"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "functions": "array"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Replace a single channel's room assignments. An empty array clears the set.",
+      "name": "device.set_channel_rooms",
+      "args": {
+        "address": "string",
+        "channel": "integer",
+        "rooms": "array"
+      },
+      "result": {
+        "address": "string",
+        "channel": "integer",
+        "rooms": "array"
       }
     },
     {
@@ -375,6 +513,64 @@
       "category": "firmware",
       "description": "Trigger the CCU firmware update and reboot sequence.",
       "name": "firmware.update"
+    },
+    {
+      "category": "groups",
+      "description": "List Homematic heating groups (HmIP / BidCos), grouped by central, read from each CCU's groups.gson via CCU.getHeatingGroupList. Read-only; omit `central` to aggregate over all centrals or set it to scope to one. Creating/editing/deleting groups runs through the CCU jpages proxy (ADR 0055) and is a separate surface.",
+      "name": "groups.list",
+      "args": {
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "Create a heating group via the CCU jpages proxy (ADR 0055, GR02). Admin-gated. `central` selects the target CCU (optional when only one is configured). Returns the created group.",
+      "name": "groups.create",
+      "args": {
+        "type_id": "string",
+        "name": "string",
+        "forbid_single_operation": "boolean?",
+        "members": "array?",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "Edit an existing heating group (name, members, operate-only-via-group flag) via the jpages save path. Admin-gated.",
+      "name": "groups.update",
+      "args": {
+        "id": "integer",
+        "name": "string",
+        "forbid_single_operation": "boolean?",
+        "members": "array?",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "Delete a heating group by id via the jpages delete path. Admin-gated.",
+      "name": "groups.delete",
+      "args": {
+        "id": "integer",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "The devices assignable to a group of the given type (assignable + leftover buckets). Read.",
+      "name": "groups.suitable_members",
+      "args": {
+        "type_id": "string",
+        "central": "string?"
+      }
+    },
+    {
+      "category": "groups",
+      "description": "The group types a new group can be created as. Read.",
+      "name": "groups.types",
+      "args": {
+        "central": "string?"
+      }
     },
     {
       "category": "hub",
@@ -465,8 +661,15 @@
     },
     {
       "category": "inbox",
-      "description": "Promote a paired-but-unconfigured inbox device into the active device set.",
-      "name": "inbox.accept"
+      "description": "Promote a paired-but-unconfigured inbox device into the active device set. Optional first-time configuration (name, include_channels, rooms, functions) is applied best-effort right after the accept; omit them to only accept.",
+      "name": "inbox.accept",
+      "args": {
+        "device_address": "string",
+        "name": "string?",
+        "include_channels": "boolean?",
+        "rooms": "array?",
+        "functions": "array?"
+      }
     },
     {
       "category": "inbox",
@@ -480,13 +683,42 @@
     },
     {
       "category": "install_mode",
-      "description": "Open the pairing window for the named interface for a given duration in seconds.",
-      "name": "install_mode.enable"
+      "description": "Scan the wired bus (BidCos-Wired) for new devices; returns the count found (they join the inbox for acceptance).",
+      "name": "install_mode.search",
+      "args": {
+        "interface_id": "string",
+        "central": "string?"
+      },
+      "result": {
+        "interface_id": "string",
+        "found": "integer"
+      }
+    },
+    {
+      "category": "install_mode",
+      "description": "Open the pairing window for the named interface for a given duration in seconds. Passing sgtin + key (together) requests the keyserver-less HmIP LOCAL teach-in restricted to that one device.",
+      "name": "install_mode.enable",
+      "args": {
+        "interface_id": "string",
+        "duration_seconds": "integer",
+        "sgtin": "string?",
+        "key": "string?"
+      }
     },
     {
       "category": "install_mode",
       "description": "Report the current pairing-mode state per interface.",
       "name": "install_mode.status"
+    },
+    {
+      "category": "links",
+      "description": "Test a direct link at the device: trigger the receiver's LINK paramset for the sender (short or long keypress). Physically actuates the receiver.",
+      "name": "links.activate_paramset",
+      "args": {
+        "receiver_channel_address": "string",
+        "sender_channel_address": "string",
+        "long_press": "boolean"
+      }
     },
     {
       "category": "links",
@@ -520,6 +752,11 @@
     },
     {
       "category": "links",
+      "description": "Global direct-link overview across all centrals (or one when 'central' is set). Each link carries its owning central_name and interface_id.",
+      "name": "links.list_all"
+    },
+    {
+      "category": "links",
       "description": "Write values to the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_put_link_paramset (websocket_api.py:1387). Closes parity_audit gap G-04.",
       "name": "links.put_paramset"
     },
@@ -527,6 +764,17 @@
       "category": "links",
       "description": "Delete an existing direct link between a sender and a receiver channel.",
       "name": "links.remove"
+    },
+    {
+      "category": "links",
+      "args": {
+        "sender": "string",
+        "receiver": "string",
+        "name": "string?",
+        "description": "string?"
+      },
+      "description": "Change the name and/or description of an existing direct link.",
+      "name": "links.set_info"
     },
     {
       "category": "links",
@@ -606,13 +854,36 @@
     },
     {
       "category": "programs",
-      "description": "Execute a CCU program by id.",
-      "name": "programs.execute"
+      "description": "Execute a CCU program by id. When `check_conditions` is true the CCU evaluates the program's \"if\" condition and runs the program only when it is satisfied; when false (the default) the program runs unconditionally. `executed` reports whether the program actually ran — always true for an unconditional run, false for a condition-checked run whose condition was not met.",
+      "name": "programs.execute",
+      "args": {
+        "id": "string",
+        "check_conditions": "boolean?"
+      },
+      "result": {
+        "id": "string",
+        "executed": "boolean"
+      }
     },
     {
       "category": "programs",
-      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card.",
-      "name": "programs.list"
+      "description": "Delete a CCU program by id. Removes the program from the CCU (dom.DeleteObject) and drops it from the hub mirror. Admin-gated, mirroring the REST DELETE /programs/{id} route (deletion is irreversible).",
+      "name": "programs.delete",
+      "args": {
+        "id": "string"
+      },
+      "result": {
+        "deleted": "boolean",
+        "id": "string"
+      }
+    },
+    {
+      "category": "programs",
+      "description": "List all CCU programs. Each entry carries optional `channel` / `device_address` fields when the program is associated with a device (device identifier in the program name); absent fields mean the entity belongs on the central hub card. `include_internal` overrides whether internal (Tmp_*) programs are listed; when omitted the central's include_internal_programs config default applies.",
+      "name": "programs.list",
+      "args": {
+        "include_internal": "boolean?"
+      }
     },
     {
       "category": "recording",
@@ -700,13 +971,31 @@
     },
     {
       "category": "alarms",
-      "description": "Disable (suppress) a single service message by id.",
+      "description": "Disable (permanently suppress) a single service message by id. Resolves the message's channel + service parameter and suppresses it on the CCU via Interface.suppressServiceMessages until cleared via service_messages.unsuppress.",
       "name": "service_messages.disable"
+    },
+    {
+      "category": "alarms",
+      "description": "List the permanently-suppressed service-message channel parameters across every central. Reconciled against each CCU's live Interface.getSuppressedServiceMessages.",
+      "name": "service_messages.suppressed"
+    },
+    {
+      "category": "alarms",
+      "description": "Clear a permanent service-message suppression. Params: channel (required), parameter (empty = all parameters of the channel), interface (optional, resolved from the stored suppression).",
+      "name": "service_messages.unsuppress"
     },
     {
       "category": "alarms",
       "description": "Acknowledge (clear) a single service message by id.",
       "name": "service_messages.ack"
+    },
+    {
+      "category": "alarms",
+      "description": "Acknowledge (clear) every quittable service message in one pass. The response carries the number acknowledged.",
+      "name": "service_messages.ack_all",
+      "result": {
+        "acknowledged": "integer"
+      }
     },
     {
       "category": "alarms",
@@ -756,6 +1045,15 @@
       "args": {
         "name": "string",
         "value": "any"
+      }
+    },
+    {
+      "category": "sysvars",
+      "description": "List the CCU programs that reference a system variable (native DPEnumUsagePrograms). Optional central_name disambiguates across CCUs.",
+      "name": "sysvars.usage",
+      "args": {
+        "name": "string",
+        "central_name": "string"
       }
     },
     {

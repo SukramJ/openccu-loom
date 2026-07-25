@@ -7,6 +7,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import ProfileSelector from "./ProfileSelector.svelte";
   import SubsetGroupSelector from "./SubsetGroupSelector.svelte";
+  import SecureTransmission from "./SecureTransmission.svelte";
   import {
     validateCrossRules,
     visibleParameters,
@@ -22,8 +23,14 @@
     undo,
     type ChangeStackState,
   } from "$lib/channel/change-stack";
+  import {
+    coerceNumber,
+    isBrightnessDataPoint,
+    pickBrightnessReading,
+  } from "$lib/channel/brightness-helper";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { notifyWakeupPending } from "$lib/links/wakeup-hint";
   import { subscribe } from "$lib/stores/events.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
   import type { DataPointChangedEvent } from "$lib/api/types";
@@ -180,6 +187,67 @@
         values = { ...values, [p.parameter]: p.value };
       }
     });
+  });
+
+  // Motion-detector brightness helper (LINK only). When the peer (the
+  // link's sender channel) exposes a brightness / illuminance reading,
+  // we surface it so the receiver's SHORT_/LONG_ COND_VALUE_LO/_HI
+  // threshold fields can be filled with one click. Mirrors the CCU
+  // WebUI's config/ic_md.cgi, which drops the sender's current
+  // BRIGHTNESS into SHORT_COND_VALUE_LO/_HI. We read the peer channel's
+  // data points once, then follow its live pushes so the value stays
+  // current. Null hides the helper (no reading yet, or not a LINK).
+  let senderBrightness = $state<{
+    parameter: string;
+    value: number;
+    unit: string | null;
+  } | null>(null);
+  const brightnessSource = $derived(
+    senderBrightness
+      ? { value: senderBrightness.value, unit: senderBrightness.unit }
+      : null,
+  );
+  $effect(() => {
+    if (paramset !== "LINK" || !peer) {
+      senderBrightness = null;
+      return;
+    }
+    const senderAddress = peer;
+    const [senderDev, senderChStr] = senderAddress.split(":");
+    const senderCh = Number(senderChStr ?? 0);
+    let cancelled = false;
+    (async () => {
+      try {
+        const dps = await api.listDataPoints(senderDev, senderCh);
+        if (!cancelled) senderBrightness = pickBrightnessReading(dps);
+      } catch {
+        // Sender data points are optional context; a fetch failure just
+        // means the helper stays hidden. The link editor works without it.
+        if (!cancelled) senderBrightness = null;
+      }
+    })();
+    // Follow live brightness pushes from the sender channel so the
+    // one-click value reflects the current reading, not a boot snapshot.
+    const unsub = subscribe((ev) => {
+      if (ev.type !== "data_point") return;
+      const p = ev.payload as DataPointChangedEvent;
+      if (p.channel_address !== senderAddress) return;
+      if (!isBrightnessDataPoint(p.parameter)) return;
+      // Ignore a second brightness DP once we have locked onto one, so a
+      // channel with both BRIGHTNESS and ILLUMINATION does not flip.
+      if (senderBrightness && senderBrightness.parameter !== p.parameter) return;
+      const n = coerceNumber(p.value);
+      if (n === null) return;
+      senderBrightness = {
+        parameter: p.parameter,
+        value: n,
+        unit: senderBrightness?.unit ?? null,
+      };
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   });
 
   // MASTER reload after CONFIG_PENDING / UPDATE_PENDING resolves on
@@ -439,7 +507,11 @@
       // working copy (the callback server will also stream the event
       // through, but a refresh is simpler for the initial scope).
       await load(address, channel, paramset, locale, peer, expertMode);
-      toastStore.success(t("channel.saved_short"));
+      // A LINK paramset write goes to a battery device only on its next
+      // wakeup; surface that hint in place of the plain success toast.
+      const wakeupShown =
+        paramset === "LINK" ? await notifyWakeupPending([address]) : false;
+      if (!wakeupShown) toastStore.success(t("channel.saved_short"));
       banner = null;
     } catch (err) {
       // 423 Locked: our edit lock lapsed (heartbeat missed, taken over,
@@ -462,6 +534,36 @@
     lockedParams = new Set();
     banner = null;
   }
+
+  // Determine one parameter's live value from the device and stage it
+  // into the working copy through onParamChange, so dirty tracking + undo
+  // apply exactly as for a manual edit. Errors surface as a toast; the
+  // ParameterField owns the button spinner (it awaits this promise). Only
+  // wired for MASTER — the CCU's determineParameter auto-selects the
+  // paramset, which is unambiguous for MASTER but not for per-peer LINK.
+  async function determineParam(name: string) {
+    try {
+      const res = await api.determineParameter(address, channel, paramset, name);
+      if (res.value === null || res.value === undefined) {
+        toastStore.error(
+          t("parameter.determine.failed"),
+          t("parameter.determine.unsupported"),
+        );
+        return;
+      }
+      onParamChange(name, res.value);
+      toastStore.success(t("parameter.determine.done", { name }));
+    } catch (err) {
+      toastStore.error(t("parameter.determine.failed"), friendlyError(err, t));
+    }
+  }
+
+  // MASTER-only: the "Determine" button reads the current configuration
+  // value from the device. Passed as undefined for VALUES/LINK so the
+  // button never renders there.
+  const determineHandler = $derived(
+    paramset === "MASTER" ? determineParam : undefined,
+  );
 
   async function runAction(name: string) {
     saving = true;
@@ -594,6 +696,33 @@
   function unlockProfile() {
     lockedParams = new Set();
     banner = null;
+  }
+
+  // Test the direct link at the device (V03): trigger the receiver
+  // (channelAddress) as if the sender (peer) fired. It physically actuates
+  // the device, so it is confirmed first.
+  let testingLink = $state(false);
+  async function testLinkAtDevice(longPress: boolean) {
+    if (paramset !== "LINK" || !peer) return;
+    const ok = await confirmStore.ask({
+      title: t("links.test.confirm_title"),
+      body: t("links.test.confirm_body"),
+      confirmLabel: longPress ? t("profile.test.long") : t("profile.test.short"),
+    });
+    if (!ok) return;
+    testingLink = true;
+    try {
+      await api.testLinkAtDevice(channelAddress, peer, longPress);
+      toastStore.success(t("links.test.ok"));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 501) {
+        toastStore.error(t("links.test.unsupported"));
+      } else {
+        toastStore.error(t("links.test.error"), friendlyError(err, t));
+      }
+    } finally {
+      testingLink = false;
+    }
   }
 </script>
 
@@ -755,6 +884,26 @@
             </button>
           </p>
         {/if}
+        {#if paramset === "LINK" && peer}
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testingLink}
+              onclick={() => void testLinkAtDevice(false)}
+            >
+              {t("profile.test.short")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={testingLink}
+              onclick={() => void testLinkAtDevice(true)}
+            >
+              {t("profile.test.long")}
+            </Button>
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -770,6 +919,15 @@
     {/if}
 
     {#if paramset === "MASTER"}
+      <!-- Secured-transmission (AES_ACTIVE) toggle. Rendered from the raw
+           MASTER paramset independent of the visibility store, since the
+           parameter carries the `internal` ui-flag and is filtered out of
+           the schema. Writes through the same edit-locked MASTER path. -->
+      <SecureTransmission
+        {channelAddress}
+        editToken={lockSession?.token}
+        disabled={!!lockedByOther || lockLost}
+      />
       <label class="mb-4 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
         <input
           type="checkbox"
@@ -818,8 +976,10 @@
               errors={crossErrors}
               {locale}
               locked={lockedParams}
+              brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
+              onDetermine={determineHandler}
             />
           </section>
         {:else}
@@ -847,8 +1007,10 @@
             errors={crossErrors}
             {locale}
             locked={lockedParams}
+            brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
+            onDetermine={determineHandler}
           />
         </section>
       {/if}
@@ -873,8 +1035,10 @@
               errors={crossErrors}
               {locale}
               locked={lockedParams}
+              brightnessSource={brightnessSource}
               {onParamChange}
               onAction={runAction}
+              onDetermine={determineHandler}
             />
           </section>
         {/if}
@@ -898,8 +1062,10 @@
             errors={crossErrors}
             {locale}
             locked={lockedParams}
+            brightnessSource={brightnessSource}
             {onParamChange}
             onAction={runAction}
+            onDetermine={determineHandler}
           />
         </section>
       {/if}
@@ -911,8 +1077,10 @@
         errors={crossErrors}
         {locale}
         locked={lockedParams}
+        brightnessSource={brightnessSource}
         {onParamChange}
         onAction={runAction}
+        onDetermine={determineHandler}
       />
     {/if}
 

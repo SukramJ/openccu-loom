@@ -194,6 +194,15 @@ func TestWSLinkQuery_NilDomain_AddLink_Errors(t *testing.T) {
 	}
 }
 
+func TestWSLinkQuery_NilDomain_SetLinkInfo_Errors(t *testing.T) {
+	t.Parallel()
+	q := &wsLinkQuery{domain: nil, registry: nil}
+	err := q.SetLinkInfo(nil, "A:0", "B:0", "name", "desc") //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	if err == nil {
+		t.Fatal("expected error when domain is nil")
+	}
+}
+
 func TestWSLinkQuery_NilDomain_RemoveLink_Errors(t *testing.T) {
 	t.Parallel()
 	q := &wsLinkQuery{domain: nil, registry: nil}
@@ -263,7 +272,16 @@ func TestWSParamsetWriter_NilDomain_Errors(t *testing.T) {
 func TestWSDeviceWriter_NilAdmin_Rename_Errors(t *testing.T) {
 	t.Parallel()
 	w := &wsDeviceWriter{admin: nil}
-	err := w.Rename(nil, "DEV", "newname") //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	err := w.Rename(nil, "DEV", "newname", false) //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
+	if err == nil {
+		t.Fatal("expected error when admin is nil")
+	}
+}
+
+func TestWSDeviceWriter_NilAdmin_RenameChannel_Errors(t *testing.T) {
+	t.Parallel()
+	w := &wsDeviceWriter{admin: nil}
+	err := w.RenameChannel(nil, "DEV", 1, "newname") //nolint:staticcheck // nil ctx is intentional to exercise nil-guard path without a real context
 	if err == nil {
 		t.Fatal("expected error when admin is nil")
 	}

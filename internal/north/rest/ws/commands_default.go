@@ -87,8 +87,14 @@ type LinkQuery interface {
 	// ListLinks returns every direct link a device participates in,
 	// sender-first then receiver, both as channel addresses.
 	ListLinks(ctx context.Context, deviceAddress string) ([]map[string]any, error)
+	// ListAllLinks aggregates every direct link across all centrals (or a
+	// single central when non-empty). Each link carries its owning
+	// central_name + interface_id.
+	ListAllLinks(ctx context.Context, central string) ([]map[string]any, error)
 	// AddLink creates a new direct link.
 	AddLink(ctx context.Context, sender, receiver, name, description string) error
+	// SetLinkInfo updates the name and description of an existing link.
+	SetLinkInfo(ctx context.Context, sender, receiver, name, description string) error
 	// RemoveLink deletes an existing link.
 	RemoveLink(ctx context.Context, sender, receiver string) error
 	// LinkableChannels reports the channels eligible to be linked
@@ -103,6 +109,10 @@ type LinkQuery interface {
 	// keyed by peerAddress. Mirrors Python `ws_put_link_paramset`
 	// (websocket_api.py:1387, `config/put_link_paramset`).
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
+	// ActivateLinkParamset triggers the receiver's LINK-paramset behaviour
+	// for the given sender (short/long keypress) — the CCU's "test link"
+	// probe. It physically actuates the receiver.
+	ActivateLinkParamset(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error
 }
 
 // ScheduleQuery is the contract the `schedules.*` commands consume.
@@ -143,10 +153,20 @@ type ScheduleQuery interface {
 // supplies the concrete implementation against `internal/model/hub`;
 // tests use a stub.
 type HubQuery interface {
-	// ListPrograms returns one entry per CCU program.
-	ListPrograms(ctx context.Context) ([]map[string]any, error)
-	// ExecuteProgram runs a CCU program by id.
-	ExecuteProgram(ctx context.Context, id string) error
+	// ListPrograms returns one entry per CCU program. includeInternal
+	// overrides the per-central default for internal (Tmp_*) programs:
+	// nil applies the central's include_internal_programs config default,
+	// a non-nil value forces the choice.
+	ListPrograms(ctx context.Context, includeInternal *bool) ([]map[string]any, error)
+	// ExecuteProgram runs a CCU program by id. When checkConditions is true
+	// the program's "if" condition is evaluated on the CCU and the program
+	// runs only when satisfied; the returned bool reports whether it
+	// executed. When checkConditions is false the program runs
+	// unconditionally and the bool is always true on a clean round-trip.
+	ExecuteProgram(ctx context.Context, id string, checkConditions bool) (executed bool, err error)
+	// DeleteProgram removes a CCU program by id and drops it from the hub
+	// mirror. Returns a not-found error when the id is unknown.
+	DeleteProgram(ctx context.Context, id string) error
 	// ListSysvars returns one entry per system variable.
 	ListSysvars(ctx context.Context) ([]map[string]any, error)
 	// SetSysvar updates a system variable's value.
@@ -156,16 +176,26 @@ type HubQuery interface {
 	// every registered central. Mirrors the Python reference's
 	// fetch_system_variables.
 	FetchSystemVariables(ctx context.Context, centralName string) error
+	// SysvarUsagePrograms lists the CCU programs referencing a sysvar.
+	// An empty centralName resolves the single-central convenience case;
+	// with multiple CCUs the name must be supplied.
+	SysvarUsagePrograms(ctx context.Context, centralName, name string) ([]map[string]any, error)
 
 	// ListAlarmMessages returns active CCU alarm messages.
 	ListAlarmMessages(ctx context.Context) ([]map[string]any, error)
 	// AcknowledgeAlarmMessage clears one alarm message by id.
 	AcknowledgeAlarmMessage(ctx context.Context, id string) error
+	// AcknowledgeAllAlarmMessages clears every active alarm message and
+	// returns the number acknowledged.
+	AcknowledgeAllAlarmMessages(ctx context.Context) (int, error)
 	// ListServiceMessages returns active CCU service messages
 	// (UNREACH, low-battery, config-pending, …).
 	ListServiceMessages(ctx context.Context) ([]map[string]any, error)
 	// AcknowledgeServiceMessage clears one service message by id.
 	AcknowledgeServiceMessage(ctx context.Context, id string) error
+	// AcknowledgeAllServiceMessages clears every quittable service message
+	// and returns the number acknowledged.
+	AcknowledgeAllServiceMessages(ctx context.Context) (int, error)
 
 	// InstallModeStatus reports the current pairing-mode state per
 	// interface.
@@ -173,8 +203,14 @@ type HubQuery interface {
 	// EnableInstallMode opens the pairing window for the named
 	// interface for the given duration in seconds.
 	EnableInstallMode(ctx context.Context, interfaceID string, durationSeconds int) error
+	// EnableInstallModeLocal opens the keyserver-less HmIP LOCAL
+	// pairing window restricted to one device (SGTIN + device key).
+	EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSeconds int, sgtin, key string) error
 	// DisableInstallMode closes the pairing window.
 	DisableInstallMode(ctx context.Context, interfaceID string) error
+	// SearchWiredDevices triggers a wired-bus scan on interfaceID of the
+	// (optionally named) central and returns the count of devices found.
+	SearchWiredDevices(ctx context.Context, interfaceID, central string) (int, error)
 
 	// TriggerBackup kicks off a CCU configuration backup (OpenCCU
 	// only). Returns immediately — callers poll `backup.status`.
@@ -193,8 +229,21 @@ type HubQuery interface {
 	// but that have not yet been accepted into the configuration.
 	InboxDevices(ctx context.Context) ([]map[string]any, error)
 	// AcceptInboxDevice promotes a paired-but-unconfigured device
-	// into the active set.
-	AcceptInboxDevice(ctx context.Context, deviceAddress string) error
+	// into the active set. opts carries the optional first-time
+	// configuration (name, rooms, functions) applied best-effort right
+	// after the accept; a zero-value opts accepts only.
+	AcceptInboxDevice(ctx context.Context, deviceAddress string, opts InboxAcceptOptions) error
+}
+
+// InboxAcceptOptions is the WS-side mirror of the REST accept body: the
+// optional first-time configuration applied to a device right after it
+// is promoted out of the inbox. Every field is optional — a zero value
+// accepts only.
+type InboxAcceptOptions struct {
+	Name            string
+	IncludeChannels bool
+	Rooms           []string
+	Functions       []string
 }
 
 // BackupsService is the minimal contract the `backups.trigger` command
@@ -307,24 +356,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 	}
 
 	if cfg.Hub != nil {
-		router.Register("programs.list", programsListHandler(cfg.Hub))
-		router.Register("programs.execute", programsExecuteHandler(cfg.Hub))
-		router.Register("sysvars.list", sysvarsListHandler(cfg.Hub))
-		router.Register("sysvars.set", sysvarsSetHandler(cfg.Hub))
-		router.Register("sysvars.fetch", sysvarsFetchHandler(cfg.Hub))
-		router.Register("alarm_messages.list", alarmMessagesListHandler(cfg.Hub))
-		router.Register("alarm_messages.ack", alarmMessagesAckHandler(cfg.Hub))
-		router.Register("service_messages.list", serviceMessagesListHandler(cfg.Hub))
-		router.Register("service_messages.ack", serviceMessagesAckHandler(cfg.Hub))
-		router.Register("install_mode.status", installModeStatusHandler(cfg.Hub))
-		router.Register("install_mode.enable", installModeEnableHandler(cfg.Hub))
-		router.Register("install_mode.disable", installModeDisableHandler(cfg.Hub))
-		router.Register("backup.trigger", backupTriggerHandler(cfg.Hub))
-		router.Register("backup.status", backupStatusHandler(cfg.Hub))
-		router.Register("firmware.info", firmwareInfoHandler(cfg.Hub))
-		router.Register("firmware.update", firmwareUpdateHandler(cfg.Hub))
-		router.Register("inbox.list", inboxListHandler(cfg.Hub))
-		router.Register("inbox.accept", inboxAcceptHandler(cfg.Hub))
+		registerHubCommands(router, cfg.Hub)
 	}
 
 	if cfg.Backups != nil {
@@ -333,11 +365,14 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 
 	if cfg.Links != nil {
 		router.Register("links.list", linksListHandler(cfg.Links))
+		router.Register("links.list_all", linksListAllHandler(cfg.Links))
 		router.Register("links.add", linksAddHandler(cfg.Links))
+		router.Register("links.set_info", linksSetInfoHandler(cfg.Links))
 		router.Register("links.remove", linksRemoveHandler(cfg.Links))
 		router.Register("links.linkable_channels", linksLinkableChannelsHandler(cfg.Links))
 		router.Register("links.get_paramset", linksGetParamsetHandler(cfg.Links))
 		router.Register("links.put_paramset", linksPutParamsetHandler(cfg.Links))
+		router.Register("links.activate_paramset", linksActivateParamsetHandler(cfg.Links))
 	}
 
 	if cfg.Schedules != nil {
@@ -488,6 +523,16 @@ func paramsetGetHandler(q DeviceQuery) CommandHandler {
 
 type programIDArgs struct {
 	ID string `json:"id"`
+	// CheckConditions gates execution on the program's "if" condition when
+	// true; when false (the default) the program runs unconditionally.
+	CheckConditions bool `json:"check_conditions"`
+}
+
+// programsListArgs carries the optional include_internal override for
+// programs.list. A nil pointer (field absent) applies the central's
+// configured default; a non-nil value forces the choice.
+type programsListArgs struct {
+	IncludeInternal *bool `json:"include_internal"`
 }
 
 type sysvarSetArgs struct {
@@ -496,8 +541,12 @@ type sysvarSetArgs struct {
 }
 
 func programsListHandler(q HubQuery) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		progs, err := q.ListPrograms(ctx)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args programsListArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		progs, err := q.ListPrograms(ctx, args.IncludeInternal)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_programs: "+err.Error())
 		}
@@ -514,10 +563,27 @@ func programsExecuteHandler(q HubQuery) CommandHandler {
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
 		}
-		if err := q.ExecuteProgram(ctx, args.ID); err != nil {
+		executed, err := q.ExecuteProgram(ctx, args.ID, args.CheckConditions)
+		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "execute_program: "+err.Error())
 		}
-		return map[string]any{"executed": true, "id": args.ID}, nil
+		return map[string]any{"executed": executed, "id": args.ID}, nil
+	}
+}
+
+func programsDeleteHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args programIDArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.ID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "id required")
+		}
+		if err := q.DeleteProgram(ctx, args.ID); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "delete_program: "+err.Error())
+		}
+		return map[string]any{"deleted": true, "id": args.ID}, nil
 	}
 }
 
@@ -564,6 +630,28 @@ func sysvarsFetchHandler(q HubQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "fetch_sysvars: "+err.Error())
 		}
 		return map[string]any{"fetched": true, "central_name": args.CentralName}, nil
+	}
+}
+
+type sysvarsUsageArgs struct {
+	Name        string `json:"name"`
+	CentralName string `json:"central_name"`
+}
+
+func sysvarsUsageHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args sysvarsUsageArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.Name == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "name required")
+		}
+		programs, err := q.SysvarUsagePrograms(ctx, args.CentralName, args.Name)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "sysvar_usage: "+err.Error())
+		}
+		return map[string]any{"sysvar": args.Name, "central_name": args.CentralName, "programs": programs}, nil
 	}
 }
 
@@ -625,11 +713,35 @@ func serviceMessagesAckHandler(q HubQuery) CommandHandler {
 	}
 }
 
+func alarmMessagesAckAllHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		n, err := q.AcknowledgeAllAlarmMessages(ctx)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "ack_all_alarm: "+err.Error())
+		}
+		return map[string]any{"acknowledged": n}, nil
+	}
+}
+
+func serviceMessagesAckAllHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		n, err := q.AcknowledgeAllServiceMessages(ctx)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "ack_all_service: "+err.Error())
+		}
+		return map[string]any{"acknowledged": n}, nil
+	}
+}
+
 // --- install_mode.* ---
 
 type installModeEnableArgs struct {
 	InterfaceID     string `json:"interface_id"`
 	DurationSeconds int    `json:"duration_seconds"`
+	// SGTIN + Key request the keyserver-less HmIP LOCAL teach-in
+	// (one-device whitelist). Both must come together.
+	SGTIN string `json:"sgtin,omitempty"`
+	Key   string `json:"key,omitempty"`
 }
 
 type installModeIfaceArgs struct {
@@ -658,6 +770,15 @@ func installModeEnableHandler(q HubQuery) CommandHandler {
 		if args.DurationSeconds <= 0 {
 			return nil, NewCommandError(CommandErrorBadRequest, "duration_seconds must be > 0")
 		}
+		if (args.SGTIN != "") != (args.Key != "") {
+			return nil, NewCommandError(CommandErrorBadRequest, "sgtin and key must be supplied together")
+		}
+		if args.SGTIN != "" {
+			if err := q.EnableInstallModeLocal(ctx, args.InterfaceID, args.DurationSeconds, args.SGTIN, args.Key); err != nil {
+				return nil, NewCommandError(CommandErrorInternal, "enable_install_mode_local: "+err.Error())
+			}
+			return map[string]any{"enabled": true, "interface_id": args.InterfaceID, "duration_seconds": args.DurationSeconds, "local": true}, nil
+		}
 		if err := q.EnableInstallMode(ctx, args.InterfaceID, args.DurationSeconds); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "enable_install_mode: "+err.Error())
 		}
@@ -681,10 +802,38 @@ func installModeDisableHandler(q HubQuery) CommandHandler {
 	}
 }
 
+type installModeSearchArgs struct {
+	InterfaceID string `json:"interface_id"`
+	Central     string `json:"central,omitempty"`
+}
+
+func installModeSearchHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args installModeSearchArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.InterfaceID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "interface_id required")
+		}
+		found, err := q.SearchWiredDevices(ctx, args.InterfaceID, args.Central)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "search_devices: "+err.Error())
+		}
+		return map[string]any{"interface_id": args.InterfaceID, "found": found}, nil
+	}
+}
+
 // --- backup.* / firmware.* / inbox.* ---
 
 type inboxAcceptArgs struct {
 	DeviceAddress string `json:"device_address"`
+	// Optional first-time configuration, mirroring the REST accept body.
+	// Omitted fields leave the corresponding step untouched.
+	Name            string   `json:"name,omitempty"`
+	IncludeChannels bool     `json:"include_channels,omitempty"`
+	Rooms           []string `json:"rooms,omitempty"`
+	Functions       []string `json:"functions,omitempty"`
 }
 
 func backupTriggerHandler(q HubQuery) CommandHandler {
@@ -769,7 +918,13 @@ func inboxAcceptHandler(q HubQuery) CommandHandler {
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
 		}
-		if err := q.AcceptInboxDevice(ctx, args.DeviceAddress); err != nil {
+		opts := InboxAcceptOptions{
+			Name:            args.Name,
+			IncludeChannels: args.IncludeChannels,
+			Rooms:           args.Rooms,
+			Functions:       args.Functions,
+		}
+		if err := q.AcceptInboxDevice(ctx, args.DeviceAddress, opts); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "inbox_accept: "+err.Error())
 		}
 		return map[string]any{"accepted": true, "device_address": args.DeviceAddress}, nil
@@ -794,6 +949,13 @@ type linkRemoveArgs struct {
 	Receiver string `json:"receiver"`
 }
 
+type linkSetInfoArgs struct {
+	Sender      string `json:"sender"`
+	Receiver    string `json:"receiver"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 func linksListHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linksDeviceArgs
@@ -806,6 +968,26 @@ func linksListHandler(q LinkQuery) CommandHandler {
 		links, err := q.ListLinks(ctx, args.DeviceAddress)
 		if err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "list_links: "+err.Error())
+		}
+		return map[string]any{"links": links}, nil
+	}
+}
+
+// linksListAllArgs is the (all-optional) argument shape of
+// `links.list_all`. A `central` narrows the aggregate to one CCU.
+type linksListAllArgs struct {
+	Central string `json:"central"`
+}
+
+func linksListAllHandler(q LinkQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args linksListAllArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		links, err := q.ListAllLinks(ctx, args.Central)
+		if err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "list_all_links: "+err.Error())
 		}
 		return map[string]any{"links": links}, nil
 	}
@@ -824,6 +1006,22 @@ func linksAddHandler(q LinkQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "add_link: "+err.Error())
 		}
 		return map[string]any{"added": true, "sender": args.Sender, "receiver": args.Receiver}, nil
+	}
+}
+
+func linksSetInfoHandler(q LinkQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args linkSetInfoArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.Sender == "" || args.Receiver == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "sender and receiver required")
+		}
+		if err := q.SetLinkInfo(ctx, args.Sender, args.Receiver, args.Name, args.Description); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "set_link_info: "+err.Error())
+		}
+		return map[string]any{"updated": true, "sender": args.Sender, "receiver": args.Receiver}, nil
 	}
 }
 
@@ -915,6 +1113,29 @@ func linksPutParamsetHandler(q LinkQuery) CommandHandler {
 	}
 }
 
+type linkActivateArgs struct {
+	ReceiverChannelAddress string `json:"receiver_channel_address"`
+	SenderChannelAddress   string `json:"sender_channel_address"`
+	LongPress              bool   `json:"long_press"`
+}
+
+func linksActivateParamsetHandler(q LinkQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args linkActivateArgs
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
+		}
+		if args.ReceiverChannelAddress == "" || args.SenderChannelAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest,
+				"receiver_channel_address and sender_channel_address required")
+		}
+		if err := q.ActivateLinkParamset(ctx, args.ReceiverChannelAddress, args.SenderChannelAddress, args.LongPress); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "activate_link_paramset: "+err.Error())
+		}
+		return map[string]any{"success": true, "long_press": args.LongPress}, nil
+	}
+}
+
 // --- schedules.* ---
 
 type scheduleChannelArgs struct {
@@ -934,6 +1155,37 @@ type scheduleActiveProfileArgs struct {
 // registerScheduleCommands wires the schedules.* command family onto
 // router. Extracted from RegisterDefaultCommands to keep that function
 // within the statement-count budget.
+
+// registerHubCommands wires every hub-backed command family
+// (programs, sysvars, messages, install mode, backup, firmware, inbox).
+// Split out of RegisterDefaultCommands to keep that function within the
+// linter's statement budget.
+func registerHubCommands(router *Router, q HubQuery) {
+	router.Register("programs.list", programsListHandler(q))
+	router.Register("programs.execute", programsExecuteHandler(q))
+	router.Register("programs.delete", programsDeleteHandler(q))
+	router.Register("sysvars.list", sysvarsListHandler(q))
+	router.Register("sysvars.set", sysvarsSetHandler(q))
+	router.Register("sysvars.fetch", sysvarsFetchHandler(q))
+	router.Register("sysvars.usage", sysvarsUsageHandler(q))
+	router.Register("alarm_messages.list", alarmMessagesListHandler(q))
+	router.Register("alarm_messages.ack", alarmMessagesAckHandler(q))
+	router.Register("alarm_messages.ack_all", alarmMessagesAckAllHandler(q))
+	router.Register("service_messages.list", serviceMessagesListHandler(q))
+	router.Register("service_messages.ack", serviceMessagesAckHandler(q))
+	router.Register("service_messages.ack_all", serviceMessagesAckAllHandler(q))
+	router.Register("install_mode.status", installModeStatusHandler(q))
+	router.Register("install_mode.enable", installModeEnableHandler(q))
+	router.Register("install_mode.disable", installModeDisableHandler(q))
+	router.Register("install_mode.search", installModeSearchHandler(q))
+	router.Register("backup.trigger", backupTriggerHandler(q))
+	router.Register("backup.status", backupStatusHandler(q))
+	router.Register("firmware.info", firmwareInfoHandler(q))
+	router.Register("firmware.update", firmwareUpdateHandler(q))
+	router.Register("inbox.list", inboxListHandler(q))
+	router.Register("inbox.accept", inboxAcceptHandler(q))
+}
+
 func registerScheduleCommands(router *Router, q ScheduleQuery) {
 	router.Register("schedules.climate.get", schedulesClimateGetHandler(q))
 	router.Register("schedules.climate.set", schedulesClimateSetHandler(q))

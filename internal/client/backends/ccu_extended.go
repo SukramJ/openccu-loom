@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -103,6 +104,110 @@ func (b *CcuBackend) SetInstallMode(ctx context.Context, on bool, duration, mode
 	}
 	_, err := b.xml.Call(ctx, "setInstallMode", on, duration, mode)
 	return err
+}
+
+// SetInstallModeLocal implements Operations. Opens the HmIP pairing
+// window in keyserver-less LOCAL mode: the CCU builds a one-device
+// whitelist from SGTIN + device key and forwards it to the HmIP server
+// as setInstallModeWithWhitelist. Every parameter key must be present
+// on every call and the casing is part of the wire contract (`keymode`
+// all-lowercase, `installMode` camelCase) — the CCU-side JSON-RPC
+// wrapper dereferences all of them unconditionally.
+func (b *CcuBackend) SetInstallModeLocal(ctx context.Context, duration int, sgtin, keyHex string) error {
+	if b.ifaceType != hmenum.InterfaceHmIPRF || b.json == nil {
+		return ErrUnsupported
+	}
+	params := map[string]any{
+		"interface":   string(b.ifaceType),
+		"on":          "true",
+		"time":        duration,
+		"installMode": "LOCAL",
+		"address":     sgtin,
+		"key":         keyHex,
+		"keymode":     "LOCAL",
+	}
+	_, err := b.json.Call(ctx, "Interface.setInstallModeHMIP", params)
+	return err
+}
+
+// comTestTimeLayout is the ReGa `system.Date("%Y-%m-%d %H:%M:%S")` format
+// the com-test scripts emit for the start / completed timestamps.
+const comTestTimeLayout = "2006-01-02 15:04:05"
+
+type comTestStart struct {
+	Success bool   `json:"success"`
+	Started string `json:"started"`
+	Error   string `json:"error"`
+}
+
+type comTestPoll struct {
+	Passed    bool   `json:"passed"`
+	Completed string `json:"completed"`
+}
+
+// TestDevice implements Operations. Starts the CCU's per-device
+// communication test (ReGa DevStartComTest) and polls until the device's
+// last-completed-test time advances past the start, or the window
+// elapses. Mirrors the start+poll shape of CreateBackupAndDownload.
+func (b *CcuBackend) TestDevice(ctx context.Context, address string, maxWaitSecs, pollIntervalSecs float64) (hmapi.CommunicationTestResult, error) {
+	if b.rega == nil {
+		return hmapi.CommunicationTestResult{}, ErrUnsupported
+	}
+	if maxWaitSecs <= 0 {
+		maxWaitSecs = 30
+	}
+	if pollIntervalSecs <= 0 {
+		pollIntervalSecs = 2
+	}
+
+	var start comTestStart
+	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptStartComTest, map[string]string{"address": address}, &start); err != nil {
+		return hmapi.CommunicationTestResult{}, fmt.Errorf("ccu.TestDevice: start: %w", err)
+	}
+	if !start.Success {
+		msg := start.Error
+		if msg == "" {
+			msg = "communication test start failed"
+		}
+		return hmapi.CommunicationTestResult{}, fmt.Errorf("ccu.TestDevice: %s", msg)
+	}
+	startedAt := time.Now()
+
+	deadline := time.Now().Add(time.Duration(maxWaitSecs * float64(time.Second)))
+	ticker := time.NewTicker(time.Duration(pollIntervalSecs * float64(time.Second)))
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return hmapi.CommunicationTestResult{}, ctx.Err()
+		case <-ticker.C:
+		}
+		var poll comTestPoll
+		if err := b.rega.RunJSON(ctx, hmenum.RegaScriptPollComTest,
+			map[string]string{"address": address, "started": start.Started}, &poll); err != nil {
+			return hmapi.CommunicationTestResult{}, fmt.Errorf("ccu.TestDevice: poll: %w", err)
+		}
+		if poll.Passed {
+			completedAt := startedAt
+			if t, perr := time.ParseInLocation(comTestTimeLayout, poll.Completed, time.Local); perr == nil {
+				completedAt = t
+			}
+			return hmapi.CommunicationTestResult{
+				Passed:      true,
+				StartedAt:   startedAt,
+				CompletedAt: completedAt,
+				DurationMs:  time.Since(startedAt).Milliseconds(),
+			}, nil
+		}
+		if !time.Now().Before(deadline) {
+			return hmapi.CommunicationTestResult{
+				Passed:     false,
+				StartedAt:  startedAt,
+				DurationMs: time.Since(startedAt).Milliseconds(),
+				TimedOut:   true,
+			}, nil
+		}
+	}
 }
 
 // --- service / alarm messages -------------------------------------------
@@ -231,6 +336,26 @@ func (b *CcuBackend) GetAlarmMessages(ctx context.Context) ([]map[string]any, er
 		})
 	}
 	return out, nil
+}
+
+// --- BidCos interfaces --------------------------------------------------
+
+// ListBidcosInterfaces returns the BidCos gateways attached to the named
+// interface together with their radio-utilisation state. It is a
+// read-only JSON-RPC query and generates no radio traffic. Each returned
+// map carries the CCU-defined keys "address", "description", "dutyCycle",
+// "isConnected", "isDefault", "fwVersion", and "type".
+//
+// Wire: Interface.listBidcosInterfaces, params: {interface: iface}.
+func (b *CcuBackend) ListBidcosInterfaces(ctx context.Context, iface string) ([]map[string]any, error) {
+	if b.json == nil {
+		return nil, ErrUnsupported
+	}
+	raw, err := b.json.Call(ctx, "Interface.listBidcosInterfaces", map[string]any{"interface": iface})
+	if err != nil {
+		return nil, err
+	}
+	return toSliceOfMaps(raw, "ListBidcosInterfaces")
 }
 
 // --- rooms / functions --------------------------------------------------
@@ -389,6 +514,26 @@ func (b *CcuBackend) GetAllSystemVariables(ctx context.Context) ([]map[string]an
 		return nil, err
 	}
 	return toSliceOfMaps(raw, "GetAllSystemVariables")
+}
+
+// GetHeatingGroupList implements the heating-group read capability.
+// It calls CCU.getHeatingGroupList, which returns the raw contents of
+// the CCU's /etc/config/groups.gson as a JSON string (or the sentinel
+// "-1" when the file is absent). The string is returned verbatim; the
+// caller parses it via internal/model/group.ParseGroupList.
+func (b *CcuBackend) GetHeatingGroupList(ctx context.Context) (string, error) {
+	if b.json == nil {
+		return "", ErrUnsupported
+	}
+	raw, err := b.json.Call(ctx, "CCU.getHeatingGroupList")
+	if err != nil {
+		return "", err
+	}
+	s, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("GetHeatingGroupList: unexpected result type %T", raw)
+	}
+	return s, nil
 }
 
 // --- bulk device data ---------------------------------------------------
@@ -686,6 +831,29 @@ func (b *CcuBackend) TriggerFirmwareUpdate(ctx context.Context) (bool, error) {
 	// when no ScriptRunner is wired; the canonical path is the ReGa script above.
 	_, err := b.json.Call(ctx, "System.runFirmwareUpdate")
 	return err == nil, err
+}
+
+// --- reboot CCU --------------------------------------------------------
+
+// RebootCCU reboots the CCU. It runs the reboot_ccu ReGa script, which
+// persists runtime state (system.Save) and then triggers /sbin/reboot in
+// the background. Requires a wired ScriptRunner (via
+// [CcuBackend.SetScriptRunner]); without one it returns [ErrUnsupported]
+// because no JSON-RPC method reboots the box.
+//
+// Modelled on [CcuBackend.TriggerFirmwareUpdate].
+func (b *CcuBackend) RebootCCU(ctx context.Context) (bool, error) {
+	if b.rega == nil {
+		return false, ErrUnsupported
+	}
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptRebootCCU, nil, &resp); err != nil {
+		return false, err
+	}
+	return resp.Success, nil
 }
 
 // --- system variable deletion ------------------------------------------

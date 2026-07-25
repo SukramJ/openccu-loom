@@ -84,7 +84,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 			Max:        cloneRaw(pd.Max),
 			Default:    cloneRaw(pd.Default),
 			Control:    pd.Control,
-			Operations: hmapi.UISchemaParameterOps{Read: pd.IsReadable(), Write: pd.IsWritable(), Event: pd.IsEvent()},
+			Operations: hmapi.UISchemaParameterOps{Read: pd.IsReadable(), Write: pd.IsWritable(), Event: pd.IsEvent(), Determine: pd.IsDeterminable()},
 			Flags:      hmapi.UISchemaParameterFlags{Visible: pd.IsVisible(), Internal: pd.IsInternal(), Service: pd.IsService()},
 		}
 		if entry.Label == "" {

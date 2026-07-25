@@ -6,6 +6,817 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.2]
+
+### Security
+
+- **Bump `github.com/getkin/kin-openapi` to v0.144.0** (GHSA-r277-6w6q-xmqw,
+  CRITICAL). The OpenAPI request-validation middleware embedded in the daemon
+  used a version whose `ValidationHandler.Load()` could fail open; the release
+  image scan flagged it. No API or behaviour change — dependency bump only.
+
+## [0.48.1]
+
+### Fixed
+
+- **Live WebSocket no longer disconnects behind a reverse proxy.** The
+  `/api/v1/events` handshake rejected the SPA with `403 "websocket origin not
+  allowed"` in a reconnect loop ("live disconnected", log spam) whenever a
+  proxy rewrote the request Host to the internal upstream: the same-origin
+  check compared the browser's Origin only against that internal Host. It now
+  also accepts the proxy-forwarded external host from `X-Forwarded-Host`, which
+  a browser cannot forge on a WebSocket handshake, so the SPA reconnects
+  without weakening the cross-site protection.
+
+### Changed
+
+- **Heating-group member picker redesigned for scale.** The group editor's
+  member list — previously a flat, unfiltered list of raw channel addresses —
+  now groups candidates by device, offers a search box (name / room / type /
+  serial) and room / only-selected filters, a tri-state per-device checkbox
+  (a multi-channel actuator is one expandable row), and a live selection tray
+  showing exactly which members are chosen. The daemon enriches each candidate
+  with device/channel name, model, room and function from the live model
+  (`GET /groups/suitable-members`, `groups.suitable_members`; API 2.54.0), so
+  the picker stays usable across hundreds of channels.
+
+## [0.48.0]
+
+### Added
+
+- **Heating-group administration (GR02).** Create, edit, and delete Homematic
+  heating groups from the SPA — the "Heizungsgruppen" view gains New / Edit /
+  Delete controls and a group editor (type picker → member picker → name +
+  "operate only via group" toggle). Groups are managed through the CCU's own
+  HMServer jpages endpoints, authenticated with Loom's live JSON-RPC session
+  (ADR 0055), so the group-wiring matrix is computed by the CCU and never
+  re-derived in Go. A new group runs the CCU's two-step create → save flow;
+  because the save's HTTP response is slow and can time out even on success,
+  the daemon confirms completion by polling `getHeatingGroupList` rather than
+  the save reply. The write path was verified live against a real HmIP heating
+  group (create → save → delete round-trip).
+  - REST (admin-gated, audited, API 2.53.0): `POST /groups`,
+    `PUT /groups/{id}`, `DELETE /groups/{id}`, plus read helpers
+    `GET /groups/types` and `GET /groups/suitable-members`. The same commands
+    are available over WebSocket (`groups.create/update/delete/types/
+    suitable_members`).
+  - The group's virtual device now carries a clean CCU label (the bare group
+    name), from which the CCU derives its channel names as `<name>:<n>` — the
+    save no longer writes a bogus `INT0000000` serial suffix (GR03). Creating or
+    editing a group also applies the "operate only via group" flag to each
+    member device on the CCU (GR04), and a device can be assigned to a heating
+    group straight from the inbox accept dialog (GR05). The clean label and the
+    operate-only write were both verified live on the real CCU.
+- **Central links now show their live active state.** The central click-event
+  panel (device detail → Direct links) reads the CCU's report-value-usage
+  metadata (`getMetadata(<channel>, "reportValueUsageData")`) and marks each
+  eligible channel active / inactive, plus a device-wide active count — so an
+  operator can tell at a glance which button channels currently forward their
+  press events to the central, without guessing from the enable / disable
+  buttons. The state is authoritative (it reflects changes made in the CCU
+  WebUI or after a reboot), not a daemon-side approximation. When the backend
+  has no metadata read path the panel falls back to eligibility only
+  (`active_state_known: false`).
+  - REST/WS: `GET /devices/{addr}/central-links` gains `active_state_known`,
+    `active_channels`, and a per-channel `active` flag (API 2.52.0).
+
+## [0.47.4]
+
+### Changed
+
+- **Room / function assignment is now a searchable combobox with inline
+  create.** The device- and channel-level room / function editors in the
+  device detail view and the inbox accept dialog no longer take a
+  comma-separated free-text string. Instead each shows the current
+  assignment as removable chips and a search field that filters the CCU's
+  existing rooms / functions in an inline dropdown; when the typed text
+  matches no existing entry, a "+ create" action adds a brand-new room /
+  function on the spot (`POST /rooms` / `POST /functions`) and assigns it.
+  The dropdown is a plain inline list (not a portaled popover) and flips
+  above the field when the viewport has more room there — so it stays
+  reliable on touch devices and inside the scrolling accept dialog. Each
+  add / remove persists immediately with an optimistic update that rolls
+  back on a CCU error.
+
+### Fixed
+
+- **Diagram series channel picker did not work on iPad.** The channel and
+  value steps used a custom portaled dropdown whose taps iOS Safari did not
+  register; they are now native selects (the reliable iOS wheel picker),
+  matching the device step's touch-friendly behaviour.
+
+## [0.47.3]
+
+### Changed
+
+- **Guided diagram series editor.** Composing a diagram series is now a
+  searchable device → channel → value picker instead of four free-text fields:
+  the central and interface are derived from the picked device and the label is
+  auto-suggested, so operators no longer type raw addresses / parameter strings.
+  The value dropdown lists only numeric (plottable) data points and shows their
+  unit.
+- **Energy view is hidden when history recording is off.** The Energy nav item
+  now follows the same opt-in-history gate as Diagrams; the page already showed
+  a "history required" state on direct navigation.
+- **"Edit on device" from the direct-links overview opens the links tab.** The
+  action now deep-links to the device's direct-links sub-tab
+  (`#/devices/{addr}?tab=links`) instead of just opening the device on its
+  default channels view.
+- **Signal-quality list links the device.** The device name links to the device
+  detail, matching the firmware list.
+
+### Fixed
+
+- **Umlauts in program condition/activity summaries rendered as `�`.** A
+  program's summary lists the device and channel names it references (e.g.
+  `Wassersensor Sp�le`, `L�ftung Aus`). Those names come from the ReGa script
+  layer, which UriEncodes ISO-8859-1 object names; after `url.QueryUnescape` the
+  high byte was raw Latin-1 (invalid UTF-8) and rendered as U+FFFD. The ReGa
+  field decoder (`decodeRegaField`) now transcodes a non-UTF-8 result from
+  ISO-8859-1 to UTF-8, so `Sp�le` becomes `Spüle` (an already-valid UTF-8 value
+  passes through untouched). Sysvar descriptions and channel addresses from the
+  same ReGa path share the fix. The JSON-RPC client gained the same defensive
+  transcode for any method that returns a Latin-1 body.
+
+## [0.47.2]
+
+### Added
+
+- **Per-channel visibility and operation lock (G12).** An operator can now hide
+  a channel from the operation surfaces (data-point list, MQTT, Matter) and
+  lock it against control writes, per channel, from the device-detail channel
+  editor. `GET`/`PUT /api/v1/devices/{addr}/channels/{no}/flags` back the two
+  toggles (`hidden`, `locked`); a locked channel rejects VALUES writes with
+  `423`, while reads and MASTER/config edits are unaffected. The overrides are
+  daemon-owned (SQLite `channel_flags`, no CCU write) and re-applied across
+  reconnects; `ChannelSummary` carries `hidden`/`locked`. API version 2.51.0.
+
+### Fixed
+
+- **Heating groups now show up in the UI even when the CCU returns boolean
+  group properties.** A real CCU serialises `FORBID_SINGLE_OPERATION` in
+  `groups.gson` as a JSON boolean, not the string the reconstructed schema
+  assumed. The group parser typed the whole property map as `map[string]string`,
+  so the boolean failed to unmarshal and the entire heating-group list came back
+  empty — the "Heizungsgruppen" view showed nothing. The parser now decodes each
+  property lazily and tolerates both the boolean and the string form.
+- **Toggling Basic/Bearer auth now flags a required restart.** The
+  `north.rest.auth.basic_enabled` / `north.rest.auth.bearer_enabled` gates are
+  wired into the auth middleware once at boot, so a live change silently did
+  not take effect — an operator who enabled Bearer auth saw injected tokens
+  still rejected with no hint that a restart was needed. Both paths are now in
+  `restartRequiredPaths`, so the config editor shows the restart badge.
+
+## [0.47.1]
+
+### Fixed
+
+- **Brand logo missing behind Home Assistant Ingress / the remote app.** The
+  `BrandMark` component built its SVG `src` as a root-absolute `/app/…` path,
+  which resolves against the Home Assistant origin instead of the Ingress proxy
+  prefix, so the wordmark 404'd and did not render under Ingress or the remote
+  proxy. The path now carries `ingressBase()` like every other SPA asset. The
+  unused `mark` variant also pointed at a non-existent file and now references
+  the shipped `mark-loom.svg`.
+
+## [0.47.0] — unreleased
+
+### Added
+
+- **Per-channel room and function assignment.** `PATCH
+  /api/v1/devices/{addr}/channels/{no}` now accepts `rooms` and
+  `functions` (alongside `name`), and the new WebSocket commands
+  `device.set_channel_rooms` / `device.set_channel_functions` mirror it.
+  The CCU assigns rooms and Gewerke per channel, not just per device;
+  the device-detail view gains per-channel editors, and
+  `ChannelSummary` now exposes the full `rooms` array. The assignment
+  ReGa scripts resolve their target rename-proof (name lookup, then an
+  address scan), so a renamed device or channel no longer silently
+  fails to update.
+- **HmIP teach-in without internet (SGTIN + key).** The HmIP install
+  mode gains the keyserver-less LOCAL flavour: entering a device's SGTIN
+  and key from its label opens a pairing window restricted to exactly
+  that device. `POST /install-mode/interfaces` and the
+  `install_mode.enable` WebSocket command accept `sgtin` + `key`; the
+  values are normalised server-side (including the Base32 label-form key
+  conversion). The endpoint additionally accepts `central` (multi-CCU
+  disambiguation) and `device_address`.
+- **Virtual-remote key simulation.** The CCU's virtual remotes
+  (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50) render as a key grid with short
+  and long press buttons in the device detail; writable press slots on
+  other devices become interactive too. A press is a single boolean
+  write of `PRESS_SHORT` / `PRESS_LONG`, and a cell flashes on the CCU's
+  echoed press event.
+- **Restore stored device configuration.** A new `POST
+  /api/v1/devices/{addr}/config/restore` endpoint and
+  `device.restore_config` WebSocket command re-transmit the centrally
+  stored configuration (every channel's MASTER paramset plus link
+  peerings) to a device after a factory reset. Admin-gated,
+  audit-logged, and surfaced as a device-detail action for devices whose
+  interface supports it (`config_restore_supported`); HmIP-RF and
+  BidCos-RF only.
+- **Guided device replace.** `GET
+  /api/v1/devices/{addr}/replace-candidates` lists the paired devices a
+  new (inbox) device may replace, and `POST /api/v1/devices/{addr}/replace`
+  performs the swap (matching WebSocket commands
+  `device.replace_candidates` / `device.replace`). The CCU migrates
+  direct links, teams and ReGa references; the old device is unpaired.
+  Offered from the inbox for BidCos devices only (HmIP does not support
+  it); admin-gated and audit-logged.
+- **Wired-bus device search.** `POST /api/v1/install-mode/search` and the
+  `install_mode.search` WebSocket command trigger the BidCos-Wired bus
+  scan (`searchDevices`) and return the count found; the found devices
+  join the inbox for acceptance. Offered from the inbox for a BidCos-Wired
+  interface.
+- **Per-device communication test.** `POST /api/v1/devices/{addr}/test`
+  and the `device.test` WebSocket command run the CCU's per-device
+  communication / function test (a radio test frame + ACK, the same test
+  the CCU inbox runs) and report pass / fail. Surfaced as a "Test" action
+  in the device detail; radio interfaces only
+  (`communication_test_supported`).
+- **Channel team assignment.** `GET
+  /api/v1/devices/{addr}/channels/{no}/team-candidates` lists the team
+  channels a channel may join, and `PUT
+  /api/v1/devices/{addr}/channels/{no}/team` assigns it (or resets to the
+  default team); matching WebSocket commands `device.team_candidates` /
+  `device.set_team`. Backed by `setTeam` / `listTeams`; BidCos-RF and
+  HmIP-RF only (`team_supported`). A per-channel team picker appears in
+  the device detail.
+- **Named multi-series diagrams.** A new Diagrams view (`#/diagrams`)
+  lets operators compose and save charts that overlay several
+  measurement-history data points — across devices and CCUs — as private
+  or shared definitions. Backed by CRUD REST routes
+  (`GET/POST/PUT/DELETE /api/v1/diagrams`) over a new `diagram_configs`
+  table (owner + visibility, series document validated for a non-empty
+  central); each chart's data comes from the existing history feature.
+  The whole surface (nav + page) is gated on the opt-in history-recording
+  feature via a new `history.v1` info capability, so it stays hidden when
+  recording is off.
+- **Test a direct link at the device.** A new `POST
+  /api/v1/devices/{addr}/links/test` endpoint (and the operator WebSocket
+  command `links.activate_paramset`) triggers the receiver's LINK
+  paramset for a sender — the CCU config dialog's "test link" /
+  simulate-keypress probe (short or long press). It maps to XML-RPC
+  `activateLinkParamset` and **physically actuates the receiver**, so the
+  schedule/link profile editor's new "Test (short/long press)" buttons
+  confirm before firing, and the endpoint is operator-gated. CUxD /
+  Homegear interfaces report `501`. Read-only `links.test_profile` (the
+  embedded profile preview) is unchanged.
+- **Universal-light weekly-program colour preserved.** Editing a
+  universal light's (HmIP-RGBW / DRG-DALI / LSC) or HmIP-BSL weekly
+  program no longer discards the per-switch-point colour / effect. The
+  `HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE` / `_VALUE` and
+  `OUTPUT_BEHAVIOUR` fields are carried through the schedule DTO as opaque
+  values, glued to their switch point's slot so they survive reorder /
+  insert / delete deterministically (previously they could be orphaned or
+  inherited by an unrelated slot). The schedule editor shows a read-only
+  colour badge per switch point on colour-capable devices
+  (`color_capable`). Editing the colour value is a follow-up (its packed
+  layout needs live-device validation).
+- **System-variable usage overview + delete warning.** A new `GET
+  /api/v1/sysvars/{name}/usage` endpoint (and the read-only
+  `sysvars.usage` WebSocket command) lists the CCU programs that
+  reference a system variable, via the variable's native
+  `DPEnumUsagePrograms()` — the same call the CCU WebUI uses — enriched
+  from the hub's program registry (localized name, canonical id, internal
+  flag, active state). The SPA's delete-confirmation now warns which
+  programs will be affected before removing a variable; the lookup is
+  best-effort and never blocks the delete.
+- **Per-datapoint recording toggle.** When measurement history is
+  enabled, the device-detail history tab gains a "Record" switch that
+  forces recording on or off for one specific data point, overriding the
+  parameter-name glob policy; "reset to default" clears the override. New
+  `GET`/`PUT /api/v1/history/recording` endpoints back it, a sparse
+  override table lives in the history database, and the recorder consults
+  an in-memory overlay on its hot path (no per-event disk read). The
+  numeric and live-provenance guards still apply — a force-on cannot
+  record a non-numeric or non-live value. Overrides are purged on
+  device-remove / central-remove alongside the measurements.
+- **Global direct-links overview.** A new `GET /api/v1/links` endpoint
+  (and the read-only `links.list_all` WebSocket command) aggregates
+  every direct link across all centrals into one flat list; each link
+  now carries its owning `central_name` and `interface_id`. The daemon
+  reads the interface-wide roster with one empty-address `getLinks` per
+  (central, interface) — the same call the CCU WebUI uses — rather than
+  a per-channel scan. A `?central=<name>` query scopes to one CCU. A new
+  "Direct links" SPA view (`#/links`) renders the roster with search and
+  a per-CCU filter, deep-linking each row to its device for editing.
+
+### Fixed
+
+- **Intermittent `403 insufficient role` behind the remote-ingress proxy.**
+  A request reaching the daemon with both an injected admin Bearer token and a
+  browser session cookie was silently downgraded to the session's (lower) role:
+  the session resolver overwrote the already-resolved Bearer identity instead of
+  deferring to it. Admin/operator actions (`/diagnostics/*`, `/admin/*`,
+  `/auth/tokens/*`, switching a device) then failed with "insufficient role"
+  whenever a stale lower-role session cookie was present, while reads still
+  worked — and it came and went as the session expired or the `SameSite=Lax`
+  cookie rode along inside the Home Assistant ingress iframe. The session
+  resolver now yields to any Bearer/Basic identity resolved earlier (matching
+  the ingress-passthrough precedence), so a deliberate token always wins. As
+  defence in depth the remote-ingress proxy also drops the competing daemon
+  session cookie on requests where it injects an instance token (no-token
+  login mode keeps the cookie). Fixes the WebSocket handshake too, which pinned
+  the downgraded role for the connection's lifetime.
+- **Role matching when creating a direct link.** The linkable-channels
+  picker ignored the requested direction and offered every link-capable
+  channel for both roles. It now intersects the raw CCU
+  `LINK_SOURCE_ROLES` / `LINK_TARGET_ROLES` tokens — exactly like the CCU
+  WebUI — so a `sender` source only lists candidates that can receive
+  and a `receiver` source only lists candidates that can send. The roles
+  are carried onto the channel model during ingest, so the filter needs
+  no CCU roundtrip (it removes one `getLinkPeers` call per candidate).
+  Response shape unchanged; the `receiver` candidate set is now
+  correctly narrower.
+- **Heating schedule for classic BidCos thermostats.** HM-CC-RT-DN and
+  HM-CC-RT-DN-BoM store their single week profile as prefix-less
+  `ENDTIME_*` / `TEMPERATURE_*` keys directly in the device-level MASTER
+  paramset — with no `P<n>_` prefix and no dedicated schedule channel —
+  which the schedule resolver, parser and writer previously did not
+  recognise, so the schedule tab reported "not supported". The daemon
+  now resolves such devices to their device-root paramset, reads the
+  bare schema as the single profile P1, and writes it back with
+  prefix-less keys (a prefixed write would have silently no-op'd on the
+  CCU). No API contract change — a previously `404` schedule read now
+  returns `200`.
+
+## [0.46.0] — 2026-07-22
+
+### Added
+
+- **Heating-group listing (read-only).** A new `GET /api/v1/groups`
+  endpoint and `groups.list` WebSocket command surface the Homematic
+  heating groups (HmIP / BidCos) configured on each CCU, grouped by
+  central. The listing is read from each CCU's `groups.gson` via the
+  `CCU.getHeatingGroupList` JSON-RPC method and joined into a typed
+  shape (id, name, type, "operate only via group" flag, and member
+  addresses). Omitting the `central` query aggregates over all
+  centrals; a non-CCU or offline central contributes an empty roster
+  rather than failing the request. This is the first slice of the
+  group-administration work; creating, editing, and deleting groups
+  will run through the CCU jpages proxy (see the new
+  [ADR 0055](docs/adr/0055-groups-jpages-proxy.md)) and lands
+  separately. API version 2.42.0.
+  The device-detail Links tab now carries an expandable info hint that
+  explains why an HmIP button can look dead — without press-event
+  forwarding many buttons never send their events to the CCU or
+  OpenCCU-Loom — and that enabling forwarding raises the device's radio
+  duty cycle and battery consumption. Mirrors the CCU channel-config
+  "info" dialog. Fully localized (de + en); no API change.
+- **Central-link (press-event forwarding) toggle can now target a single
+  channel.** `POST` / `DELETE /devices/{addr}/central-links` (and the
+  WebSocket commands `central.create_links` / `central.remove_links`)
+  accept an optional `channel` (a channel address such as `ABC0000001:4`);
+  without it the whole device is switched as before, with it only that one
+  channel is touched — mirroring the CCU channel-config dialog, which
+  scopes the switch to the opened channel. `GET /devices/{addr}/central-links`
+  (and `central.links_status`) now also return a per-channel `channels`
+  list (address, number, eligibility). The device-detail Links tab keeps
+  the device-wide switch and adds a per-channel switch for each eligible
+  channel. REST `APIVersion` 2.36.0.
+- **"Determine" button in the channel MASTER editor.** Determine-capable
+  MASTER parameters — the ones the firmware spells out as
+  `operations="read,write,determine"`, i.e. OPERATIONS bit `0x08` — now
+  render a "Determine" button that reads the parameter's current value
+  straight from the device and stages it into the editor, dirty-tracked
+  and undoable exactly like a manual edit (an error surfaces as a toast; a
+  spinner shows while the read is in flight). The channel ui-schema now
+  exposes the capability per parameter (`operations.determine`), and a new
+  additive endpoint `POST
+  /devices/{addr}/channels/{no}/paramsets/{key}/determine` backs the
+  button — a read, so it carries no edit-lock token. The REST route shares
+  the registry-resolved backend path with the existing WS
+  `paramset.determine` command; the SPA uses REST because its WebSocket
+  channel is event-only. Mirrors the CCU WebUI's per-parameter "Determine"
+  link (`config/ic_ifacecmd.cgi`).
+- **Secured-transmission (AES) toggle per channel.** The channel MASTER
+  configuration panel now shows a dedicated "Secured transmission" row
+  with a switch for every channel whose MASTER paramset carries
+  `AES_ACTIVE` (the per-channel AES signing flag). The switch reads its
+  state straight from the raw paramset — independent of the visibility /
+  un-ignore store, since `AES_ACTIVE` carries the `internal` ui-flag and
+  is filtered out of the normal schema — and writes through the existing
+  edit-locked `PUT /devices/{addr}/paramsets/MASTER` path. Enabling asks
+  for confirmation first, warning that secured transmission raises the
+  channel's radio load and battery drain; disabling applies immediately.
+  No REST or ReGa change: writing `AES_ACTIVE` on the interface is the
+  authoritative mechanism (the CCU WebUI's ReGa `setTransMode` only adds
+  a WebUI-cache refresh the daemon neither uses nor needs).
+- **Firmware update duty-cycle warning + CCU firmware download.** The
+  device firmware-update endpoint (`POST
+  /devices/{addr}/firmware/update`) now checks the device's radio
+  interface against the per-interface duty-cycle poll and, when it is
+  saturated (≥ 80 %), returns an advisory `duty_cycle_warning` in the
+  202 body — it never blocks the update, mirroring the CCU WebUI's
+  non-blocking warning. The firmware overview surfaces the same warning
+  in the update-confirm dialog. A new admin-only endpoint `POST
+  /api/v1/system/firmware/download` (audited) tells a CCU to fetch a
+  firmware image from a URL onto the central so it can be staged for
+  installation; the CCU system-update panel gains a download field for
+  it. REST `APIVersion` 2.40.0.
+- **Per-radio-interface duty cycle and carrier sense on the Diagnostics
+  page.** BidCos radio interfaces now surface their transmit duty cycle
+  and receive carrier-sense load directly in the interface table, so
+  pure-BidCos installations and radio-LAN gateways — which have no
+  device that exposes `DUTY_CYCLE` — finally show their radio budget.
+  A new per-central poll (60 s, pure JSON-RPC, no radio traffic) reads
+  the CCU's `Interface.listBidcosInterfaces` and caches the result;
+  `GET /api/v1/interfaces` gains optional `duty_cycle` and
+  `carrier_sense` fields (percent, absent when the CCU does not report
+  them, e.g. for HmIP-RF, which the device-level data points still
+  cover). The SPA renders each as a threshold badge — green, yellow
+  from 60 %, red from 80 %. REST `APIVersion` 2.39.0.
+- **First-time configuration when accepting an inbox device.**
+  `POST /devices/{addr}/accept` (and the WebSocket command
+  `inbox.accept`) now take an optional body — `name`,
+  `include_channels`, `rooms`, `functions` — applied to the device right
+  after it is accepted out of the inbox: the name is persisted to the
+  CCU (optionally cascading to every channel), and the room / function
+  (Gewerk) assignments go through the ReGa hub-writer. An empty or
+  omitted body keeps the plain accept-only behaviour, so the change is
+  backward compatible. The follow-up steps are best-effort but never
+  swallow errors: if the accept succeeds and a follow-up step fails the
+  response is a 502 whose title states the device was already accepted,
+  so only the configuration needs re-applying. The SPA's "Accept" action
+  now opens a dialog with a name field, room and function multi-selects
+  (populated from `GET /rooms` and `GET /functions`) and a
+  "rename channels" toggle; leaving everything blank just accepts. REST
+  `APIVersion` 2.32.0.
+- **Channel rename over REST + WebSocket.** A new
+  `PATCH /devices/{addr}/channels/{no}` endpoint (and WebSocket command
+  `device.rename_channel`) renames a single channel; the SPA exposes it
+  via a pencil affordance on each channel in the device detail view.
+- **Delete device with factory-reset / force options and a dependency
+  warning.** `DELETE /devices/{addr}` gains optional `reset` and `force`
+  query flags that map onto the CCU `deleteDevice` delete bitmask —
+  `reset` also factory-resets the device during removal, `force` removes
+  an unreachable device even when the CCU cannot complete the handshake
+  (both default to off, preserving the plain-unpair behaviour). The SPA
+  remove action becomes a small options dialog (unregister-only vs.
+  factory-reset radio plus a force checkbox) that warns up front when
+  direct links or CCU programs still reference the device. A backend
+  without a pairing concept (CUxD) now answers 422 instead of 502. REST
+  `APIVersion` 2.31.0.
+
+### Changed
+
+- **Toggling press-event forwarding now asks for confirmation and reports
+  through a toast.** The device-detail Links tab used to enable/disable the
+  central-link forwarding immediately and show the result in an inline
+  banner. Every toggle (device-wide and per-channel, enable and disable)
+  now runs through the shared confirm dialog first — disable uses the
+  destructive variant and warns that CCU-side programs may consume the
+  press events and that after disabling neither CCU programs nor
+  OpenCCU-Loom will receive them — matching the CCU WebUI's yes/no safety
+  question in both directions. The touched/skipped/failed result is now a
+  toast (a warning toast when any channel failed), and the inline banner is
+  gone. SPA-only; no REST surface change.
+
+### Fixed
+
+- **Deactivating a central link now clears PRESS_LONG too.** Removing the
+  press-event forwarding for a channel (`DELETE /devices/{addr}/central-links`
+  and the `central.remove_links` WebSocket command) used to zero only the
+  `PRESS_SHORT` usage counter, leaving a lingering `PRESS_LONG` counter that
+  could keep the device forwarding long-press events to the CCU after the
+  user switched the link off. Teardown now issues a second
+  `Interface.reportValueUsage` for `PRESS_LONG` (ref-counter 0) per channel,
+  matching the CCU WebUI's own deactivate behaviour so the device-internal
+  direct link is fully removed. Activation is unchanged (it still raises only
+  `PRESS_SHORT`). No REST surface change.
+- **Device and channel renames now persist to the CCU.** A rename used
+  to mutate only the in-memory model and was silently lost on the next
+  device reload. `PATCH /devices/{addr}` and the WebSocket
+  `device.rename` command now dispatch to the CCU's `Device.setName` /
+  `Channel.setName` JSON-RPC methods (resolving the ReGa ISE-ID first),
+  and propagate the CCU error instead of swallowing it. A backend
+  without JSON-RPC (Homegear, CUxD) answers 422 rather than pretending
+  success. `PATCH /devices/{addr}` and `device.rename` gain an optional
+  `include_channels` flag that also renames every channel with the
+  `"<name>:<channelNo>"` pattern (the CCU WebUI convention); the SPA
+  rename dialog offers it as a toggle, on by default. REST `APIVersion`
+  2.30.0.
+- **Reboot a CCU from the daemon.** A new admin-only endpoint
+  `POST /api/v1/system/ccu/{central}/reboot` reboots one CCU host: it runs
+  a ReGa script (`reboot_ccu`) that persists the CCU's state
+  (`system.Save()`) and then triggers `/sbin/reboot`. The southbound
+  connection to that central drops for the duration of the reboot and
+  recovers automatically once the CCU is back (the readiness gate re-runs
+  the bring-up). The SPA surfaces this as a new **CCU maintenance** card
+  under Settings → System with a per-central reboot button behind the
+  shared destructive-confirm dialog and a toast result. This reboots the
+  CCU hardware — distinct from `POST /system/restart`, which restarts the
+  OpenCCU-Loom daemon itself. REST `APIVersion` 2.33.0.
+- **Permanently suppress service messages.** "Disable" now durably
+  suppresses a service message's channel parameter on the CCU via
+  `Interface.suppressServiceMessages` instead of merely acknowledging it
+  once — the device stops raising the message until the suppression is
+  cleared. `POST /api/v1/service-messages/{id}/disable` resolves the
+  message's channel + service parameter and suppresses it; the new
+  `GET /api/v1/service-messages/suppressed` lists the active suppressions
+  (reconciled against each CCU's live
+  `Interface.getSuppressedServiceMessages`); and `POST
+  /api/v1/service-messages/unsuppress` (body `channel` + optional
+  `parameter` / `interface`, optional `central` query) clears one. The
+  matching `service_messages.suppressed` / `service_messages.unsuppress`
+  WebSocket commands mirror the REST surface. This closes a long-standing
+  gap: the client-layer suppression path
+  (`InterfaceClient.SuppressServiceMessage` /
+  `GetSuppressedServiceMessages`) and the `HubCoordinator` seam existed
+  but were never wired — central bring-up now installs the suppressor so
+  the calls reach the CCU. The Config UI Messages view gains a "Hide
+  permanently" action per service message (confirm dialog + toast) and a
+  new "Suppressed" tab listing active suppressions with a "Restore"
+  action. REST `APIVersion` 2.32.0.
+- **Bulk acknowledge for service and alarm messages ("Acknowledge
+  all").** New `POST /api/v1/service-messages/ack-all` and
+  `POST /api/v1/alarm-messages/ack-all` endpoints (and the matching
+  `service_messages.ack_all` / `alarm_messages.ack_all` WebSocket
+  commands) clear every quittable message of a class in a single CCU
+  pass and return the number acknowledged (`{"acknowledged": n}`). Both
+  accept an optional `central` query parameter to scope the operation to
+  one CCU; when omitted every registered central is acknowledged. Two
+  new ReGa scripts drive the wire pass — service messages honour the
+  per-message writability gate, alarm messages are acknowledged
+  unconditionally, mirroring the CCU WebUI's "acknowledge all" loop. The
+  Config UI Messages view gains an "Acknowledge all" button per tab,
+  shown only when acknowledgeable messages exist, guarded by a confirm
+  dialog and reporting the acknowledged count via a toast. REST
+  `APIVersion` 2.32.0.
+- **Rename a direct link after it has been created.** A link's name
+  and description were previously settable only at creation time. The
+  daemon now exposes the CCU's `Interface.setLinkInfo` call end to end:
+  a new `LinksDomain.SetLinkInfo` (interface resolved from the sender
+  device, like `ListLinks`/`AddLink`, with an audit `link_update`
+  entry), the REST endpoint `PATCH /api/v1/devices/{addr}/links`
+  (body `{sender_address, receiver_address, name, description}`), the
+  WebSocket command `links.set_info`, and a per-row rename action
+  (pencil) in the SPA device-links view with a small name/description
+  editor. Name and description are written verbatim, so either field
+  can be cleared with an empty string. REST `APIVersion` 2.35.0.
+- **Take the sender's current brightness into a motion-detector link
+  threshold.** When a direct link's sender channel reports a brightness
+  or illuminance reading (`BRIGHTNESS`, `ILLUMINATION`, …), the LINK
+  paramset editor now shows a one-click helper on the
+  `SHORT_COND_VALUE_LO`/`_HI` (and `LONG_` variant) condition-threshold
+  fields that fills them with the sender's live value — so the operator
+  no longer has to read the brightness off elsewhere and type it in.
+  The value follows the sender's live pushes, and the edit is tracked
+  and undoable like any manual change. SPA-only, mirroring the CCU
+  WebUI's `config/ic_md.cgi` "Aktuelle Helligkeit übernehmen" helper.
+- **"Pending wakeup" hint after link operations on battery devices.**
+  A battery-powered device only applies a new/removed direct link or a
+  written LINK paramset the next time it wakes up (a button press, a
+  cyclic wake interval); mains devices apply it immediately. The device
+  detail DTO now decodes the CCU `RX_MODE` bitmask into a new `rx_mode`
+  object (`always`/`burst`/`config`/`wakeup`/`lazy_config` flags), and
+  after a successful add-link, remove-link, or LINK-paramset save the
+  SPA checks the affected device(s) and — when one carries a
+  `wakeup`/`lazy_config` rx mode — replaces the plain success toast with
+  an info toast reminding the operator the change transfers only on the
+  next wakeup. Mirrors the CCU WebUI's
+  `config/ic_ifacecmd.cgi` `cmd_ShowConfigPendingMsg`. REST `APIVersion`
+  2.35.0.
+- **Delete a CCU program.** `DELETE /api/v1/programs/{id}` removes a
+  program from the CCU (`dom.DeleteObject`, via a new `delete_program`
+  ReGa script) and drops the local mirror once the call lands. It is
+  admin-gated and irreversible — parity with `DELETE /devices/{addr}` —
+  returns 204 on success, 404 for an unknown id, and records an audit
+  entry (`program_delete`). The optional `central` query parameter scopes
+  the target when several CCUs are configured. The WS `programs.delete`
+  command (admin role) exposes the same operation, and the Config UI's
+  program table gains a Delete action guarded by the shared destructive
+  confirm dialog with a result toast. REST `APIVersion` 2.34.0.
+
+- **Run a program only when its condition is met.**
+  `POST /api/v1/programs/{id}/execute` gains an optional body field
+  `check_conditions` (boolean, default false). When true the CCU
+  evaluates the program's "if" condition — via a new
+  `execute_program_conditional` ReGa script — and runs the program only
+  when the condition is currently satisfied; the response now reports
+  `executed` (always true for an unconditional run, false for a
+  condition-checked run whose condition was not met). When false (the
+  default, and when the body is omitted) the program runs unconditionally,
+  preserving existing behaviour. The WS `programs.execute` command gains
+  the same `check_conditions` argument and returns `executed`. The Config
+  UI's execute-confirmation dialog adds an "Only run when the condition is
+  met" toggle and the result toast now distinguishes executed from
+  not-executed. Mirrors OpenCCU's program-execution-with-condition-check
+  WebUI extension. REST `APIVersion` 2.34.0.
+
+- **Program list shows the rule at a glance: condition + activity
+  summary and last execution.** `GET /api/v1/programs` (and the single
+  `GET /api/v1/programs/{id}`) gain two nullable fields,
+  `condition_summary` and `activity_summary` — a compact,
+  language-neutral rendering of each program's root rule. Object names
+  come from the CCU (channel and system-variable names); comparison and
+  logical operators render as symbols (`==`, `>=`, `<=`, `>`, `<`,
+  `&&`, `||`) and activities as `name := value`, so the strings need no
+  translation. They are built by extending the
+  `get_program_descriptions` ReGa script with a bounded root-rule
+  traversal (one extra ReGa round-trip, capped at ~200 characters with
+  an ellipsis). The Config UI program table adds Condition and Activity
+  columns (collapsible on narrow viewports) plus a Last-executed column.
+  REST `APIVersion` 2.34.0.
+- **Reveal system-internal programs at runtime — no config change
+  needed.** The daemon now always loads internal programs (`Tmp_*`,
+  `prgEnergyCounter_*`) into the hub and filters them at delivery, so
+  they can be shown on demand. `GET /api/v1/programs` and the WS
+  `programs.list` command gain an optional `include_internal` override;
+  when omitted the central's `include_internal_programs` config remains
+  the default (hidden), preserving existing behaviour for MQTT and other
+  clients. The Config UI program table adds a "Show system programs"
+  toggle (off by default, persisted locally), mirroring the CCU WebUI's
+  footer button. REST `APIVersion` 2.34.0.
+- **A system variable's channel assignment is writable.** `POST /sysvars`
+  and `PATCH /sysvars/{name}` now accept an optional `channel_address`
+  ("ADDR:idx", the CCU "Kanalzuordnung"). The address is resolved to the
+  channel's ReGa ise id via `Interface.getIseIDByAddress` before it reaches
+  the CCU; `CreateSysvar` no longer hard-codes `chn_id: -1`, and the
+  `update_system_variable` Rega script gained `oSv.Channel()`. On PATCH the
+  field is tri-state (omit = leave untouched, empty string = clear the
+  assignment, an address = assign it); an address the CCU cannot resolve is
+  rejected with 422. The system-variable create and edit dialogs offer a
+  searchable device/channel picker to set or clear the assignment. REST
+  `APIVersion` 2.31.0.
+
+- **Alarm system variables can be created.** `POST /sysvars` now accepts
+  `value_type: "ALARM"`, provisioning a binary, acknowledgeable alarm
+  line on the CCU. The Rega `create_system_variable` script backs it
+  with an `OT_ALARMDP` object (not the `OT_VARDP` every other type uses)
+  and wires up the binary alarm condition, so the new variable reads,
+  writes and acknowledges like any hand-created CCU alarm. The
+  system-variable create form offers ALARM in its type dropdown, and the
+  handler now validates `value_type` against the known create set
+  (rejecting read-side wire codes such as `LOGIC`/`NUMBER`/`LIST`).
+
+- **System variables can be renamed, and carry a description from
+  creation.** `PATCH /sysvars/{name}` now accepts an optional `name`
+  field that renames the variable in place (the CCU-side rename runs
+  through the `update_system_variable` Rega script; the local cache is
+  re-keyed the moment the call lands so the new name shows before the
+  next periodic refresh). `POST /sysvars` gained an optional
+  `description` field, so a variable's help text can be set at creation
+  instead of only via a follow-up patch. The system-variable editor
+  surfaces both: the edit dialog has a rename field, the create form a
+  description field.
+
+- **System variables expose their value labels and visibility / logging
+  flags.** The sysvar catalogue read from the CCU (`SysVar.getAll`) now
+  parses the fields it already ships — the binary `valueName0`/
+  `valueName1` state labels (for `LOGIC`/`ALARM` variables) and the
+  `isVisible` / `isLogged` flags. They surface as `value_name_0`,
+  `value_name_1`, `is_visible` and `is_logged` on `SysvarSummary` (REST
+  `GET /sysvars` and the WS `sysvars.list`). `POST /sysvars` accepts the
+  two value labels (empty adopts the CCU's own `false`/`true` defaults; a
+  custom label routes creation through the Rega script since the native
+  `SysVar.createBool` has no label parameter), and `PATCH /sysvars/{name}`
+  accepts the two labels plus tri-state `is_visible` / `is_logged`
+  toggles (backed by the CCU-side `Visible()` / `DPArchive()` settings).
+  In the SPA, a boolean sysvar's switch now shows the operator-visible
+  state label instead of a bare toggle, and the edit and create dialogs
+  offer the value-label fields plus the visibility and logging switches.
+
+### Fixed
+
+- **The system-variable edit dialog now patches the value list of real
+  CCU list variables.** The dialog gated its value-list field on
+  `value_type === "ENUM"`, but the daemon delivers the CCU wire type
+  `LIST` — so editing the options of an existing list variable silently
+  did nothing. The dialog now keys off the real wire types
+  (`LOGIC`/`LIST`/`FLOAT`/`INTEGER`/`STRING`/`ALARM`), showing the
+  value-list field for `LIST` and the min/max fields for the numeric
+  types.
+
+- **Logic and alarm system variables are now flipped with a switch.**
+  The system-variable list and the favorites view rendered a switch
+  only for the `BOOL` alias, so the CCU's real boolean sysvar types —
+  `LOGIC` (a plain logic value) and `ALARM` (an alarm flag), by far the
+  most common — fell through to the free-text field and could only be
+  changed by typing `true`/`false`. Both views now derive the inline
+  control from one shared dispatch: `BOOL`/`LOGIC`/`ALARM` render a
+  switch (a two-entry label list on an alarm variable no longer hides
+  the toggle), a labelled `LIST` renders a dropdown, and a label-less
+  `LIST` renders a numeric-index field. Read/write path only — the
+  edit dialog is unchanged. REST `APIVersion` 2.31.0.
+
+## [0.45.0] — 2026-07-20
+
+### Changed
+
+- **REST is the single naming authority: `translated_name` now also
+  carries the collapsed name for label-omitted data points.** When
+  `label_omitted` is true (the "primary parameter" marker), the
+  data-point summary's `translated_name` no longer arrives empty — it
+  holds the channel-level collapsed name (channel name plus
+  multi-channel `chN` marker, device prefix stripped; empty only when
+  the collapse reduces to the device name alone). REST consumers such
+  as `openccu-loom-client` no longer need any client-side entity-name
+  composition. The MQTT discovery plane is unchanged (`name: null` on
+  omitted labels). REST `APIVersion` 2.29.0 (2.28.0 + 2.29.0 across the two naming PRs).
+- **Custom data points ship their entity names too.** The CDP summary
+  gains `translated_name` (the fully composed channel-level display
+  name: custom channel names verbatim, `ch<no>`/`vch<no>` group
+  markers for derived names, locale-aware postfix labels for button
+  locks; empty on the device-name collapse) and `parameter_name` (the
+  untranslated marker/postfix portion). Composition lives in the new
+  `device.BuildCustomDataPointName`, mirroring the reference's
+  `get_custom_data_point_name` — including the marker digits following
+  the channel-name suffix and the single-primary collapse applying
+  only on the primary channel.
+
+## [0.44.3] — 2026-07-20
+
+### Fixed
+
+- **Multi-channel postfix no longer overrides unique custom channel
+  names.** The `ch<no>` postfix for parameters that exist on multiple
+  channels of a device is now only appended when the channel name alone
+  does not identify the channel — i.e. for device-derived names, names
+  following the `<name>:<no>` scheme, or when several channels providing
+  the same parameter share the same custom name. A channel with a unique
+  custom name (e.g. a status channel named `<sub device> Status`) keeps
+  its clean data point name. Mirrors aiohomematic 2026.7.10.
+
+## [0.44.2] — 2026-07-19
+
+### Fixed
+
+- **OpenCCU-Loom Remote: instance names accept mixed case.** The
+  add-on schema and the proxy rejected names like `OttoLoom`
+  (lowercase-only slug); the constraint is relaxed to
+  `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` — the name stays a single URL
+  path segment, but capital letters are fine everywhere it is used
+  (mount path, tile label, DOM id, cookie scope). Surrounding
+  whitespace (a classic paste mistake) is trimmed instead of rejected,
+  by the schema and the proxy alike.
+
+## [0.44.1] — 2026-07-19
+
+### Added
+
+- **New HA add-on: OpenCCU-Loom Remote** (ADR 0054) — an ingress proxy
+  that brings the Config UI of one or more **remote** OpenCCU-Loom
+  instances into the Home Assistant sidebar, without running a local
+  daemon. Multiple instances mount under one panel (overview page with
+  live status tiles — health, version — when more than one is
+  configured); an optional per-instance API token logs HA admins into
+  the remote UI without a second credential, and without a token the
+  remote login page is proxied through (session cookies are scoped per
+  instance). Upstreams may be `http://` or `https://` (per-instance
+  `tls_insecure` for self-signed certificates); WebSockets and the
+  HA theme bridge work through the proxy. Ships as
+  `ghcr.io/sukramj/openccu-loom-remote-ha-{arch}` from
+  `packaging/ha-addon/openccu-loom-remote/`; the
+  `openccu-loom-remote` binary also rides in the release image and
+  archives.
+
+## [0.44.0] — 2026-07-19
+
+### Changed
+
+- **CCU metadata now ships as the versioned go-openccu-data module**
+  (ADR 0053) — the extracts (translations, easymodes, profiles,
+  curated overlays, device semantics) come from
+  `github.com/SukramJ/go-openccu-data` instead of a hand-synced
+  `internal/ccudata/embedded/` copy. Regeneration is automated on
+  every upstream release (repository_dispatch → module PR → dependabot
+  bump); `make bump-ccudata` is the manual fallback, the old
+  `update-ccu-data`/`refresh-ccudata` targets, `MANIFEST.json` and the
+  drift-check script are gone. The migration surfaced (and upstreamed)
+  loom-only curation: the 0.42.9 BWTH parameter labels now live in the
+  shared source of truth.
+
+- **Doorbells ring — with the shared curated model list** — press
+  events of the doorbell devices now follow Home Assistant's doorbell
+  contract: the discovered `event` entity announces (and the event
+  topic fires) HA's standard `ring` type instead of `press_short`
+  (mandatory for doorbell event entities from HA 2027.4; mirrors the
+  reference stack's ring-event fix). Other press types are unchanged.
+  The doorbell classification now comes from the upstream data
+  package's new curated `device_semantics` extract — one source of
+  truth shared with the reference stack — and gains the classic
+  `HM-Sen-DB-PCB` alongside `HmIP-DBB` and `HmIP-DSD-PCB`.
+  **Breaking:** consumers of the raw channel `/event` topic of these
+  three models receive `{"event_type":"ring"}` for the short press
+  now; HA automations triggering on the entity's `press_short` event
+  type must switch to `ring`.
+
+## [0.43.4] — 2026-07-19
+
+### Fixed
+
+- **MCP write tools rejected every real write** — `set_datapoint` and
+  `write_paramset` checked device ownership by passing the raw target
+  address to the per-device lookup; real writes always target a
+  channel (`ADDR:n`), so the lookup missed and every write failed with
+  `device … belongs to central ""`. The guard now strips the channel
+  suffix before the ownership lookup — and still rejects a
+  `central_name` that does not own the device. Found live on the first
+  agent-driven switch attempt; the previous test only covered a
+  device-level address.
+
 ## [0.43.3] — 2026-07-18
 
 ### Fixed

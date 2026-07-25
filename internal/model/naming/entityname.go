@@ -33,6 +33,26 @@ func EntityDisplayName(label string, labelOmitted bool, parameter string) (name 
 	return TitleCaseParameter(parameter), false
 }
 
+// ComposedEntityName is the always-populated variant of
+// [EntityDisplayName], used by wire surfaces (REST) whose consumers
+// must never compose entity names themselves: instead of suppressing
+// the name when the label is omitted, it returns the channel-level
+// collapsed name ([NameData.CollapsedName]). The omitted flag is
+// reported unchanged so consumers can still distinguish the collapse
+// (the name may be empty when it reduces to the device name alone).
+//
+// The two functions are the complete set of naming policies: MQTT
+// discovery and Matter suppress on omission (the controller falls back
+// to the device name), REST ships the composed name. Adapters pick a
+// policy; the composition rules stay in this package.
+func ComposedEntityName(nd NameData, labelOmitted bool, parameter string) (name string, omitted bool) {
+	name, omitted = EntityDisplayName(nd.TranslatedName(), labelOmitted, parameter)
+	if omitted {
+		name = nd.CollapsedName()
+	}
+	return name, omitted
+}
+
 // TitleCaseParameter mirrors Python's `str.title().replace("_", " ")`
 // for HM parameter names: each underscore-delimited segment becomes
 // title-cased and joined with spaces.

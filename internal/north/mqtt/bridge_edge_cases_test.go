@@ -1920,7 +1920,7 @@ func TestBridgePublishChannelEventStateRawDisabled(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: false}, mp)
-	err := b.PublishChannelEventState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, "PRESS_SHORT")
+	err := b.PublishChannelEventState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, "HmIP-WRC2", "PRESS_SHORT")
 	if err != nil {
 		t.Fatalf("PublishChannelEventState disabled: %v", err)
 	}
@@ -1933,7 +1933,7 @@ func TestBridgePublishChannelEventStateRawEnabled(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true, CentralName: "ccu"}, mp)
-	err := b.PublishChannelEventState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, "PRESS_SHORT")
+	err := b.PublishChannelEventState(context.Background(), "ccu", "HmIP-RF", "0001ABCD", 1, "HmIP-WRC2", "PRESS_SHORT")
 	if err != nil {
 		t.Fatalf("PublishChannelEventState: %v", err)
 	}

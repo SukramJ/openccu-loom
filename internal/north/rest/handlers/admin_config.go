@@ -179,6 +179,14 @@ var restartRequiredPaths = map[string]struct{}{
 	"north.rest.auth.ccu.central":        {},
 	"north.rest.auth.ccu.min_user_level": {},
 	"north.rest.auth.ccu.role_mapping":   {},
+	// The Basic/Bearer scheme gates decide at boot which credential stores
+	// are wired into the auth middleware (cmd/openccu-loom/daemon_north.go
+	// only passes a store when its gate is on), so toggling either takes
+	// effect only after a restart. Without this flag the SPA saves the
+	// change with no hint and an operator who just enabled Bearer auth sees
+	// injected tokens still rejected until the daemon is restarted.
+	"north.rest.auth.basic_enabled":  {},
+	"north.rest.auth.bearer_enabled": {},
 	// HA Ingress auth passthrough: the auth middleware is wired once at
 	// boot (ADR 0044), so any field in the block is restart-required.
 	"north.rest.auth.ha_ingress.enabled":            {},

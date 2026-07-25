@@ -13,6 +13,7 @@ import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  ArchiveRestore,
   ArrowLeft,
   ArrowRight,
   BarChart3,
@@ -49,6 +50,7 @@ import {
   Gauge,
   Globe,
   Grid3x3,
+  Group,
   Hand,
   Hash,
   History,
@@ -112,7 +114,9 @@ export type IconName =
   | "mdi:alert-circle"
   | "mdi:alert-triangle"
   | "mdi:arrow-left"
+  | "mdi:backup-restore"
   | "mdi:arrow-right"
+  | "mdi:chart-line-variant"
   | "mdi:battery"
   | "mdi:battery-alert"
   | "mdi:bell"
@@ -140,6 +144,7 @@ export type IconName =
   | "mdi:globe"
   | "mdi:history"
   | "mdi:home"
+  | "mdi:home-group"
   | "mdi:import"
   | "mdi:information-outline"
   | "mdi:key"
@@ -197,7 +202,9 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:alert-circle": CircleAlert,
   "mdi:alert-triangle": AlertTriangle,
   "mdi:arrow-left": ArrowLeft,
+  "mdi:backup-restore": ArchiveRestore,
   "mdi:arrow-right": ArrowRight,
+  "mdi:chart-line-variant": LineChart,
   "mdi:battery": Battery,
   "mdi:battery-alert": BatteryWarning,
   "mdi:bell": Bell,
@@ -225,6 +232,7 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:globe": Globe,
   "mdi:history": History,
   "mdi:home": Home,
+  "mdi:home-group": Group,
   "mdi:import": FileUp,
   "mdi:information-outline": Info,
   "mdi:key": KeyRound,

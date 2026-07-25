@@ -30,12 +30,24 @@ import (
 var writeCommandRoles = map[string]auth.Role{
 	// Admin-tier: backup + cache invalidation mirror the REST
 	// `/backups` and `/admin/cache/clear` routes (both `.With(admin)`).
-	"backup.trigger":  auth.RoleAdmin,
-	"backups.trigger": auth.RoleAdmin,
-	"ccu.cache_clear": auth.RoleAdmin,
+	// programs.delete mirrors DELETE /programs/{id} (admin-gated like
+	// DELETE /devices — deletion is irreversible).
+	"backup.trigger":        auth.RoleAdmin,
+	"backups.trigger":       auth.RoleAdmin,
+	"ccu.cache_clear":       auth.RoleAdmin,
+	"device.replace":        auth.RoleAdmin,
+	"device.restore_config": auth.RoleAdmin,
+	"programs.delete":       auth.RoleAdmin,
+	// Heating-group administration (GR02) mirrors the admin-gated REST
+	// POST/PUT/DELETE /groups routes: creating/editing/deleting a group
+	// rewires real devices on the CCU.
+	"groups.create": auth.RoleAdmin,
+	"groups.update": auth.RoleAdmin,
+	"groups.delete": auth.RoleAdmin,
 
 	// Operator-tier: every real device / config / schedule / link mutation.
 	"alarm_messages.ack":      auth.RoleOperator,
+	"alarm_messages.ack_all":  auth.RoleOperator,
 	"alarm_panel.acknowledge": auth.RoleOperator,
 	"alarm_panel.arm":         auth.RoleOperator,
 	"alarm_panel.disarm":      auth.RoleOperator,
@@ -64,15 +76,23 @@ var writeCommandRoles = map[string]auth.Role{
 	"config.session.undo":                 auth.RoleOperator,
 	"device.install_mode":                 auth.RoleOperator,
 	"device.rename":                       auth.RoleOperator,
+	"device.set_team":                     auth.RoleOperator,
+	"device.test":                         auth.RoleOperator,
+	"device.rename_channel":               auth.RoleOperator,
+	"device.set_channel_functions":        auth.RoleOperator,
+	"device.set_channel_rooms":            auth.RoleOperator,
 	"firmware.refresh":                    auth.RoleOperator,
 	"firmware.update":                     auth.RoleOperator,
 	"inbox.accept":                        auth.RoleOperator,
 	"incidents.clear":                     auth.RoleOperator,
 	"install_mode.disable":                auth.RoleOperator,
 	"install_mode.enable":                 auth.RoleOperator,
+	"install_mode.search":                 auth.RoleOperator,
+	"links.activate_paramset":             auth.RoleOperator,
 	"links.add":                           auth.RoleOperator,
 	"links.put_paramset":                  auth.RoleOperator,
 	"links.remove":                        auth.RoleOperator,
+	"links.set_info":                      auth.RoleOperator,
 	"master_profiles.apply":               auth.RoleOperator,
 	"paramset.copy":                       auth.RoleOperator,
 	"paramset.put":                        auth.RoleOperator,
@@ -87,7 +107,9 @@ var writeCommandRoles = map[string]auth.Role{
 	"schedules.device.set":                auth.RoleOperator,
 	"schedules.set_enabled":               auth.RoleOperator,
 	"service_messages.ack":                auth.RoleOperator,
+	"service_messages.ack_all":            auth.RoleOperator,
 	"service_messages.disable":            auth.RoleOperator,
+	"service_messages.unsuppress":         auth.RoleOperator,
 	"sysvars.set":                         auth.RoleOperator,
 }
 
@@ -137,10 +159,15 @@ var readOnlyCommands = map[string]struct{}{
 	"central.system_health":       {},
 	"change_history.list":         {},
 	"config.session.changes":      {},
+	"device.replace_candidates":   {},
+	"device.team_candidates":      {},
 	"devices.export_definition":   {},
 	"devices.get":                 {},
 	"devices.list":                {},
 	"firmware.info":               {},
+	"groups.list":                 {},
+	"groups.suitable_members":     {},
+	"groups.types":                {},
 	"inbox.list":                  {},
 	"incidents.get":               {},
 	"incidents.list":              {},
@@ -150,6 +177,7 @@ var readOnlyCommands = map[string]struct{}{
 	"links.get_profiles":          {},
 	"links.linkable_channels":     {},
 	"links.list":                  {},
+	"links.list_all":              {},
 	"links.test_profile":          {},
 	"master_profiles.get":         {},
 	"master_profiles.list":        {},
@@ -164,11 +192,13 @@ var readOnlyCommands = map[string]struct{}{
 	"schedules.device.get":        {},
 	"schedules.list_devices":      {},
 	"service_messages.list":       {},
+	"service_messages.suppressed": {},
 	"system.commands":             {},
 	"system.health":               {},
 	"system.user_permissions":     {},
 	"sysvars.fetch":               {},
 	"sysvars.list":                {},
+	"sysvars.usage":               {},
 }
 
 // CommandHandler implements one RPC-style WebSocket command. The returned

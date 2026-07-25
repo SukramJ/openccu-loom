@@ -213,7 +213,7 @@ func TestChannelEventStatePayloadFormat(t *testing.T) {
 	}, pub)
 
 	ctx := context.Background()
-	if err := bridge.PublishChannelEventState(ctx, "ccu", "HmIP-RF", "0034WRC2", 1, "PRESS_SHORT"); err != nil {
+	if err := bridge.PublishChannelEventState(ctx, "ccu", "HmIP-RF", "0034WRC2", 1, "HmIP-WRC2", "PRESS_SHORT"); err != nil {
 		t.Fatalf("PublishChannelEventState: %v", err)
 	}
 
@@ -252,6 +252,38 @@ func TestChannelEventStatePayloadFormat(t *testing.T) {
 	// modified_at must be present.
 	if _, present := body["modified_at"]; !present {
 		t.Error("modified_at missing from channel event state payload")
+	}
+}
+
+// TestChannelEventStatePayloadDoorbellModelMapsRing verifies that
+// Bridge.PublishChannelEventState publishes `event_type: "ring"` — not
+// the raw "press_short" — when the channel belongs to a curated
+// doorbell model (HmIP-DBB here). The non-doorbell case is pinned by
+// TestChannelEventStatePayloadFormat above.
+func TestChannelEventStatePayloadDoorbellModelMapsRing(t *testing.T) {
+	t.Parallel()
+	pub := &mockPublisher{}
+	bridge := NewBridge(BridgeConfig{
+		Base: "gh", CentralName: "ccu", RawEnabled: true,
+	}, pub)
+
+	ctx := context.Background()
+	if err := bridge.PublishChannelEventState(ctx, "ccu", "HmIP-RF", "0034WRC2", 1, "HmIP-DBB", "PRESS_SHORT"); err != nil {
+		t.Fatalf("PublishChannelEventState: %v", err)
+	}
+
+	if len(pub.sent) == 0 {
+		t.Fatal("expected 1 publish; got 0")
+	}
+	rec := pub.sent[0]
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(rec.payload), &body); err != nil {
+		t.Fatalf("payload not valid JSON: %v; payload=%q", err, rec.payload)
+	}
+
+	if et, _ := body["event_type"].(string); et != "ring" {
+		t.Errorf("event_type=%q want \"ring\"", et)
 	}
 }
 

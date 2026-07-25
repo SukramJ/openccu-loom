@@ -68,6 +68,17 @@ func (w *installModeWriter) SetInstallModeForDevice(ctx context.Context, interfa
 	return b.SetInstallMode(ctx, true, int(duration.Seconds()), installModeNormal, deviceAddress)
 }
 
+// SetInstallModeLocal opens the keyserver-less HmIP LOCAL pairing
+// window (SGTIN + device-key whitelist) on interfaceID's backend.
+// Backends without the capability answer [backends.ErrUnsupported].
+func (w *installModeWriter) SetInstallModeLocal(ctx context.Context, interfaceID string, duration time.Duration, sgtin, keyHex string) error {
+	b, err := w.backend(interfaceID)
+	if err != nil {
+		return err
+	}
+	return b.SetInstallModeLocal(ctx, int(duration.Seconds()), sgtin, keyHex)
+}
+
 // WireInstallModeDPs registers one install-mode data point per
 // pairing-capable radio interface on unit's hub model. install mode on the
 // CCU is always per-interface (there is no CCU-wide toggle), so each

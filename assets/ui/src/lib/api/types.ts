@@ -42,6 +42,14 @@ export type UIHint = NonNullable<
 // device.FirmwareInfo; availability uses the capitalized keys the Go DTO
 // marshals from device.AvailabilityInfo (IsReachable/LastUpdated/...).
 export type DeviceDetail = components["schemas"]["DeviceDetail"];
+export type CommunicationTestResult =
+  components["schemas"]["CommunicationTestResult"];
+export type TeamCandidate = components["schemas"]["TeamCandidate"];
+
+// RxMode re-exported from generated schema — the named flags decoded from a
+// device's CCU RX_MODE bitmask. The `wakeup` / `lazy_config` bits mark a
+// battery device that only applies pending configuration on its next wakeup.
+export type RxMode = components["schemas"]["RxMode"];
 
 // Paginated is generic — not generated (openapi-typescript generates per-endpoint
 // response types, not a generic wrapper). Keep hand-written.
@@ -134,7 +142,15 @@ export type UISchemaParameter = {
   max?: unknown;
   default?: unknown;
   value_list?: UISchemaValueListEntry[];
-  operations: { read: boolean; write: boolean; event: boolean };
+  // `determine` (OPERATIONS bit 0x08) marks a parameter whose live value
+  // can be read from the device on demand; the MASTER editor renders a
+  // "Determine" button for it. Omitted (falsey) when the bit is unset.
+  operations: {
+    read: boolean;
+    write: boolean;
+    event: boolean;
+    determine?: boolean;
+  };
   flags: { visible: boolean; internal: boolean; service: boolean };
   control?: string;
   value?: unknown;
@@ -249,6 +265,22 @@ export type BackupEntry = components["schemas"]["BackupEntry"];
 // optional (Go json:"central,omitempty"); SysvarList.svelte builds its
 // composite key as (sv.central ?? "") + "/" + sv.name.
 export type SysvarEntry = components["schemas"]["SysvarSummary"];
+export type SysvarUsage = components["schemas"]["SysvarUsage"];
+export type DiagramConfig = components["schemas"]["DiagramConfig"];
+export type DiagramWriteRequest = components["schemas"]["DiagramWriteRequest"];
+// SPA-owned shape of a diagram's config document (SV03).
+export type DiagramSeries = {
+  central: string;
+  interface_id?: string;
+  channel_address?: string;
+  parameter?: string;
+  label?: string;
+  color?: string;
+};
+export type DiagramDocument = {
+  series: DiagramSeries[];
+  default_range_hours?: number;
+};
 
 // ProgramEntry re-exported from the generated ProgramSummary. central is
 // optional (Go json:"central,omitempty"); ProgramList.svelte builds its
@@ -278,6 +310,11 @@ export type AlarmMessage = components["schemas"]["AlarmMessage"];
 // required (the Go DTO always emits it). MessageList.svelte builds its composite
 // key as (s.central ?? "") + "/" + s.id.
 export type ServiceMessage = components["schemas"]["ServiceMessage"];
+
+// SuppressedServiceMessage re-exported from generated schema — one
+// permanently-suppressed channel parameter (`GET /service-messages/suppressed`).
+export type SuppressedServiceMessage =
+  components["schemas"]["SuppressedServiceMessage"];
 
 // InterfaceInfo re-exported from generated InterfaceState — same shape.
 export type InterfaceInfo = components["schemas"]["InterfaceState"];
@@ -362,10 +399,26 @@ export type DiagnosticsEnvelope = {
   log_levels?: LogLevelsResponse;
 };
 
+export type CentralLinksChannelStatus = {
+  address: string;
+  number: number;
+  eligible: boolean;
+  // True when the CCU report-value-usage counter for the channel is raised
+  // (a central link exists). Only meaningful when the enclosing status has
+  // active_state_known set.
+  active?: boolean;
+};
+
 export type CentralLinksStatus = {
   supported: boolean;
   reason?: string;
   eligible_channels?: number;
+  channels?: CentralLinksChannelStatus[];
+  // True when the daemon could read the CCU-side report-value-usage metadata,
+  // so each channel's `active` flag reflects the live CCU state.
+  active_state_known?: boolean;
+  // Count of eligible channels whose central link is currently active.
+  active_channels?: number;
 };
 
 export type CentralLinksReport = {
@@ -391,6 +444,7 @@ export type EditSessionResponse = components["schemas"]["EditSessionResponse"];
 
 // InboxDevice re-exported from generated schema. central is optional (Go json:"central,omitempty").
 export type InboxDevice = components["schemas"]["InboxDevice"];
+export type ReplaceCandidate = components["schemas"]["ReplaceCandidate"];
 
 // ConfigSnapshot re-exported from generated schema.
 // Generated adds: extras, policies fields — additive, safe.
@@ -404,6 +458,19 @@ export type LinkableChannel = components["schemas"]["LinkableChannel"];
 // interfaces) served by GET /api/v1/system/ccu. Backs the read-only
 // cross-CCU overview (Fleet.svelte).
 export type SystemCCUEntry = components["schemas"]["SystemCCUEntry"];
+
+// Heating-group types re-exported from generated schema — one central's
+// roster (`GET /api/v1/groups`), read-only (GR01). Create/edit/delete
+// runs through the CCU jpages proxy and is exposed separately (ADR 0055).
+export type GroupCentralEntry = components["schemas"]["GroupCentralEntry"];
+export type GroupEntry = components["schemas"]["GroupEntry"];
+export type GroupMemberEntry = components["schemas"]["GroupMemberEntry"];
+export type GroupTypeEntry = components["schemas"]["GroupTypeEntry"];
+export type SuitableMemberEntry = components["schemas"]["SuitableMemberEntry"];
+export type SuitableMembersResponse =
+  components["schemas"]["SuitableMembersResponse"];
+export type CreateGroupRequest = components["schemas"]["CreateGroupRequest"];
+export type UpdateGroupRequest = components["schemas"]["UpdateGroupRequest"];
 
 // Per-device RF reception strength from `GET /diagnostics/rssi`, read from
 // the maintenance-channel RSSI_DEVICE / RSSI_PEER data points (works for HmIP

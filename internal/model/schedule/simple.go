@@ -124,6 +124,15 @@ type SimpleEntry struct {
 	LockMode   LockMode
 	LockAction LockAction
 	Permission LockPermission
+
+	// Universal-light per-switch-point colour/effect fields, carried as
+	// opaque ints for a lossless round-trip (nil = absent, 0 = valid).
+	// ColorType discriminates (0 hue/sat, 1 colour temperature, 2 effect);
+	// ColorValue is the packed value; OutputBehaviour is the HmIP-BSL
+	// signal-LED field. Excluded from the domain validation rules.
+	ColorType       *int
+	ColorValue      *int
+	OutputBehaviour *int
 }
 
 // --- validation ---

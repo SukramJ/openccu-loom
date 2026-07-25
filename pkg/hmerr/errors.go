@@ -89,6 +89,15 @@ var (
 	// this sentinel locally; the pkg-level sentinel makes it accessible to the
 	// full error chain so any layer can wrap or test with errors.Is.
 	ErrValidation = errors.New("validation failed")
+
+	// ErrUnknownCentral signals that an operation named a central that is not
+	// present in the registry. North-bound adapters map it to a 404 / Not
+	// Found status rather than a generic upstream failure.
+	ErrUnknownCentral = errors.New("unknown central")
+
+	// ErrGroupNotFound signals that a heating-group edit/delete named a group
+	// id the central's roster does not carry. Mapped to 404 / Not Found.
+	ErrGroupNotFound = errors.New("group not found")
 )
 
 // Context carries structured metadata for a transport error. Populated by the

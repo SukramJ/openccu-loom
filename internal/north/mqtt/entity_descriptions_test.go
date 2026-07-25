@@ -4,6 +4,7 @@
 package mqtt
 
 import (
+	"reflect"
 	"testing"
 	"unicode/utf8"
 )
@@ -312,9 +313,10 @@ func TestEntityDescriptionLookupRuleCount(t *testing.T) {
 // EventDeviceClassForModel — doorbell vs. generic button
 // ---------------------------------------------------------------------------
 
-// TestEventDeviceClassForModel pins the doorbell/button split:
-// HmIP-DBB (wireless doorbell button) and HmIP-DSD-PCB (doorbell sensor
-// PCB) report device_class "doorbell"; every other model — including the
+// TestEventDeviceClassForModel pins the doorbell/button split: the
+// curated set — HM-Sen-DB-PCB (classic wired doorbell PCB), HmIP-DBB
+// (wireless doorbell button), and HmIP-DSD-PCB (doorbell sensor PCB) —
+// reports device_class "doorbell"; every other model — including the
 // empty string — falls back to the generic "button".
 func TestEventDeviceClassForModel(t *testing.T) {
 	t.Parallel()
@@ -323,6 +325,7 @@ func TestEventDeviceClassForModel(t *testing.T) {
 		model string
 		want  string
 	}{
+		{model: "HM-Sen-DB-PCB", want: "doorbell"},
 		{model: "HmIP-DBB", want: "doorbell"},
 		{model: "HmIP-DSD-PCB", want: "doorbell"},
 		{model: "HmIP-WRC2", want: "button"},
@@ -334,6 +337,91 @@ func TestEventDeviceClassForModel(t *testing.T) {
 			t.Parallel()
 			if got := EventDeviceClassForModel(tc.model); got != tc.want {
 				t.Errorf("EventDeviceClassForModel(%q) = %q, want %q", tc.model, got, tc.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MapDoorbellEventTypes — announced event_types rewriting
+// ---------------------------------------------------------------------------
+
+// TestMapDoorbellEventTypesRewritesPressShortToRing verifies that for a
+// doorbell-class model, only "press_short" is rewritten to the standard
+// "ring" event type; the other PRESS_* types are left untouched, and the
+// input slice itself is not mutated (a fresh slice is returned).
+func TestMapDoorbellEventTypesRewritesPressShortToRing(t *testing.T) {
+	t.Parallel()
+
+	in := []string{"press_short", "press_long", "press_long_release", "press_long_start"}
+	inSnapshot := append([]string(nil), in...)
+
+	got := MapDoorbellEventTypes("HmIP-DBB", in)
+	want := []string{"ring", "press_long", "press_long_release", "press_long_start"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("MapDoorbellEventTypes(HmIP-DBB, %v) = %v, want %v", in, got, want)
+	}
+	if !reflect.DeepEqual(in, inSnapshot) {
+		t.Errorf("MapDoorbellEventTypes mutated its input slice: got %v, want unchanged %v", in, inSnapshot)
+	}
+}
+
+// TestMapDoorbellEventTypesClassicModelAlsoRewrites confirms the newly
+// curated HM-Sen-DB-PCB (classic wired doorbell PCB) gets the same
+// press_short → ring rewrite as the HmIP doorbell models.
+func TestMapDoorbellEventTypesClassicModelAlsoRewrites(t *testing.T) {
+	t.Parallel()
+
+	got := MapDoorbellEventTypes("HM-Sen-DB-PCB", []string{"press_short"})
+	want := []string{"ring"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("MapDoorbellEventTypes(HM-Sen-DB-PCB, [press_short]) = %v, want %v", got, want)
+	}
+}
+
+// TestMapDoorbellEventTypesNonDoorbellPassesThrough verifies that a
+// non-doorbell model's event_types list passes through completely
+// unchanged, including a literal "press_short" entry (which only gets
+// the doorbell treatment for curated models).
+func TestMapDoorbellEventTypesNonDoorbellPassesThrough(t *testing.T) {
+	t.Parallel()
+
+	in := []string{"press_short", "press_long"}
+	got := MapDoorbellEventTypes("HmIP-WRC2", in)
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("MapDoorbellEventTypes(HmIP-WRC2, %v) = %v, want unchanged %v", in, got, in)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DoorbellEventType — single runtime press-type mapping
+// ---------------------------------------------------------------------------
+
+// TestDoorbellEventType covers the runtime per-event mapping: PRESS_SHORT
+// becomes "ring" only for curated doorbell models; every other
+// combination lower-cases the press type and passes it through,
+// including PRESS_SHORT itself on a non-doorbell model.
+func TestDoorbellEventType(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		model     string
+		pressType string
+		want      string
+	}{
+		{name: "doorbell PRESS_SHORT becomes ring", model: "HmIP-DBB", pressType: "PRESS_SHORT", want: "ring"},
+		{name: "classic doorbell PRESS_SHORT becomes ring", model: "HM-Sen-DB-PCB", pressType: "press_short", want: "ring"},
+		{name: "doorbell PRESS_LONG lower-cases, no ring rewrite", model: "HmIP-DBB", pressType: "PRESS_LONG", want: "press_long"},
+		{name: "non-doorbell PRESS_SHORT lower-cases only", model: "HmIP-WRC2", pressType: "PRESS_SHORT", want: "press_short"},
+		{name: "non-doorbell PRESS_LONG lower-cases only", model: "HmIP-WRC2", pressType: "PRESS_LONG", want: "press_long"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := DoorbellEventType(tc.model, tc.pressType); got != tc.want {
+				t.Errorf("DoorbellEventType(%q, %q) = %q, want %q", tc.model, tc.pressType, got, tc.want)
 			}
 		})
 	}

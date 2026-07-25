@@ -33,7 +33,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // ---------------------------------------------------------------------------
@@ -46,15 +48,34 @@ type fakeAdmin struct {
 	accepts int
 }
 
-func (f *fakeAdmin) UnpairDevice(_ context.Context, _ string) error    { f.unpairs++; return nil }
-func (f *fakeAdmin) RenameDevice(_ context.Context, _, _ string) error { f.renames++; return nil }
-func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string) error {
+func (f *fakeAdmin) UnpairDevice(_ context.Context, _ string, _, _ bool) error {
+	f.unpairs++
+	return nil
+}
+
+func (f *fakeAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) error {
+	f.renames++
+	return nil
+}
+
+func (f *fakeAdmin) RenameChannel(_ context.Context, _ string, _ int, _ string) error { return nil }
+func (f *fakeAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.AcceptInboxOptions) error {
 	f.accepts++
 	return nil
 }
 func (f *fakeAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
+func (f *fakeAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (f *fakeAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (f *fakeAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
+func (f *fakeAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *fakeAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (f *fakeAdmin) RestoreDeviceConfig(_ context.Context, _ string) error { return nil }
 
 type fakeIncidents struct{ items []handlers.Incident }
 
@@ -96,8 +117,16 @@ type fakeLinksService struct{}
 func (fakeLinksService) ListLinks(_ context.Context, _, _ string) ([]handlers.Link, error) {
 	return nil, nil
 }
-func (fakeLinksService) AddLink(_ context.Context, _, _, _, _ string) error { return nil }
-func (fakeLinksService) RemoveLink(_ context.Context, _, _ string) error    { return nil }
+
+func (fakeLinksService) ListAllLinks(_ context.Context, _, _ string) ([]handlers.Link, error) {
+	return nil, nil
+}
+
+func (fakeLinksService) ActivateLink(context.Context, string, string, bool) error { return nil }
+func (fakeLinksService) AddLink(_ context.Context, _, _, _, _ string) error       { return nil }
+
+func (fakeLinksService) SetLinkInfo(_ context.Context, _, _, _, _ string) error { return nil }
+func (fakeLinksService) RemoveLink(_ context.Context, _, _ string) error        { return nil }
 func (fakeLinksService) LinkableChannels(_ context.Context, _, _, _, _ string) ([]handlers.LinkableChannel, error) {
 	return nil, nil
 }
@@ -136,15 +165,15 @@ func (fakeScheduleService) CopyClimateProfile(_ context.Context, _ string, _ int
 
 type fakeCentralLinksService struct{}
 
-func (fakeCentralLinksService) CreateCentralLinks(_ context.Context, _ string) (handlers.CentralLinksReport, error) {
+func (fakeCentralLinksService) CreateCentralLinks(_ context.Context, _, _ string) (handlers.CentralLinksReport, error) {
 	return handlers.CentralLinksReport{}, nil
 }
 
-func (fakeCentralLinksService) RemoveCentralLinks(_ context.Context, _ string) (handlers.CentralLinksReport, error) {
+func (fakeCentralLinksService) RemoveCentralLinks(_ context.Context, _, _ string) (handlers.CentralLinksReport, error) {
 	return handlers.CentralLinksReport{}, nil
 }
 
-func (fakeCentralLinksService) CentralLinksStatus(_ string) (handlers.CentralLinksStatus, error) {
+func (fakeCentralLinksService) CentralLinksStatus(_ context.Context, _ string) (handlers.CentralLinksStatus, error) {
 	return handlers.CentralLinksStatus{}, nil
 }
 
@@ -272,6 +301,12 @@ func (fakeParamsetService) PutLinkParamset(_ context.Context, _, _ string, _ map
 	return nil
 }
 
+type fakeParameterDeterminerService struct{}
+
+func (fakeParameterDeterminerService) DetermineParameter(_ context.Context, _, _, _ string) (any, error) {
+	return 21.5, nil
+}
+
 type fakeRefreshDevicesService struct{}
 
 func (fakeRefreshDevicesService) RefreshDevices(_ context.Context) error { return nil }
@@ -294,18 +329,47 @@ func (fakeConfigExportService) WriteParamset(_ context.Context, _, _, _ string, 
 
 type fakeDeviceAdmin struct{}
 
-func (fakeDeviceAdmin) UnpairDevice(_ context.Context, _ string) error             { return nil }
-func (fakeDeviceAdmin) RenameDevice(_ context.Context, _, _ string) error          { return nil }
-func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string) error        { return nil }
+func (fakeDeviceAdmin) UnpairDevice(_ context.Context, _ string, _, _ bool) error { return nil }
+func (fakeDeviceAdmin) RenameDevice(_ context.Context, _, _ string, _ bool) error { return nil }
+func (fakeDeviceAdmin) RenameChannel(_ context.Context, _ string, _ int, _ string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) AcceptInboxDevice(_ context.Context, _ string, _ interfaces.AcceptInboxOptions) error {
+	return nil
+}
 func (fakeDeviceAdmin) UpdateFirmware(_ context.Context, _ string) error           { return nil }
+func (fakeDeviceAdmin) InterfaceDutyCycle(_ string) (int, bool)                    { return 0, false }
 func (fakeDeviceAdmin) SetRooms(_ context.Context, _ string, _ []string) error     { return nil }
 func (fakeDeviceAdmin) SetFunctions(_ context.Context, _ string, _ []string) error { return nil }
+func (fakeDeviceAdmin) SetChannelRooms(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) SetChannelFunctions(_ context.Context, _ string, _ int, _ []string) error {
+	return nil
+}
+
+func (fakeDeviceAdmin) RestoreDeviceConfig(_ context.Context, _ string) error { return nil }
 
 // fakeSystemCCUReader is a minimal SystemCCUReader for router-level
 // integration tests; the daemon adapter is exercised elsewhere.
 type fakeSystemCCUReader struct{ entries []handlers.SystemCCUEntry }
 
 func (f fakeSystemCCUReader) List(_ context.Context) []handlers.SystemCCUEntry { return f.entries }
+
+// fakeCCURebootService is a minimal CCURebootPort for router-level
+// integration tests; it records the last central it was asked to reboot
+// and returns a configurable error.
+type fakeCCURebootService struct {
+	lastCentral string
+	err         error
+}
+
+func (f *fakeCCURebootService) RebootCCU(_ context.Context, central string) error {
+	f.lastCentral = central
+	return f.err
+}
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -1003,6 +1067,31 @@ func TestRouter_Paramsets_route(t *testing.T) {
 	}
 }
 
+// TestRouter_ParameterDetermine_route verifies the MASTER editor's
+// "Determine" button route (POST .../paramsets/{key}/determine) is
+// guarded behind the ParameterDeterminer dep, exactly like the sibling
+// Paramsets routes above.
+func TestRouter_ParameterDetermine_route(t *testing.T) {
+	t.Parallel()
+	body := func() io.Reader { return bytes.NewBufferString(`{"parameter":"TEMPERATURE"}`) }
+
+	withDep := NewRouter(Deps{StartedAt: time.Now(), ParameterDeterminer: fakeParameterDeterminerService{}})
+	rr := httptest.NewRecorder()
+	withDep.ServeHTTP(rr, httptest.NewRequest(http.MethodPost,
+		"/api/v1/devices/A/channels/1/paramsets/MASTER/determine", body()))
+	if rr.Code == http.StatusNotFound {
+		t.Fatal("paramsets/determine route not mounted")
+	}
+
+	withoutDep := NewRouter(Deps{StartedAt: time.Now()})
+	rr = httptest.NewRecorder()
+	withoutDep.ServeHTTP(rr, httptest.NewRequest(http.MethodPost,
+		"/api/v1/devices/A/channels/1/paramsets/MASTER/determine", body()))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 without ParameterDeterminer dep, got %d", rr.Code)
+	}
+}
+
 // TestRouter_EditSessions_route verifies sessions/edit routes are guarded.
 func TestRouter_EditSessions_route(t *testing.T) {
 	t.Parallel()
@@ -1138,6 +1227,136 @@ func TestRouter_SystemCCU(t *testing.T) {
 	}
 }
 
+// TestRouter_CCUReboot_route locks POST /system/ccu/{central}/reboot behind
+// the admin role (mirrors TestRouter_Audit_RequiresAdmin) and verifies the
+// unknown-central 404, the happy-path 202, and that the reboot is recorded
+// in the audit log end-to-end through the router — not just at the handler
+// unit-test level.
+func TestRouter_CCUReboot_route(t *testing.T) {
+	t.Parallel()
+	mw := auth.NewMiddleware(nil, nil)
+	rebooter := &fakeCCURebootService{}
+	rec := audit.NewBuffer(10)
+	build := func(role auth.Role) http.Handler {
+		return NewRouter(Deps{
+			StartedAt:     time.Now(),
+			CCUReboot:     rebooter,
+			AuditRecorder: rec,
+			AuthResolve: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			},
+			AuthRequire:  mw.Require,
+			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+		})
+	}
+
+	rr := httptest.NewRecorder()
+	build(auth.RoleViewer).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/ccu/home/reboot", http.NoBody))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("viewer must be forbidden from reboot, got %d", rr.Code)
+	}
+
+	rebooter.err = hmerr.ErrUnknownCentral
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/ccu/nope/reboot", http.NoBody))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unknown central must return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	rebooter.err = nil
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/ccu/home/reboot", http.NoBody))
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("admin reboot must return 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if rebooter.lastCentral != "home" {
+		t.Fatalf("expected reboot dispatched for central=home, got %q", rebooter.lastCentral)
+	}
+	if entries := rec.List(10); len(entries) != 1 || entries[0].Action != audit.ActionSystemCCUReboot || entries[0].Note != "home" {
+		t.Fatalf("expected 1 system_ccu_reboot audit entry for home, got %+v", entries)
+	}
+}
+
+// fakeFirmwareDownloadService is a minimal FirmwareDownloadPort for
+// router-level integration tests; it records the last (central, url) pair
+// it was asked to download and returns a configurable error.
+type fakeFirmwareDownloadService struct {
+	lastCentral string
+	lastURL     string
+	err         error
+}
+
+func (f *fakeFirmwareDownloadService) DownloadFirmware(_ context.Context, central, url string) error {
+	f.lastCentral = central
+	f.lastURL = url
+	return f.err
+}
+
+// TestRouter_FirmwareDownload_route locks POST /system/firmware/download
+// behind the admin role (mirrors TestRouter_CCUReboot_route) and verifies
+// the unknown-central 404, the happy-path 202, and that the download is
+// recorded in the audit log end-to-end through the router — not just at
+// the handler unit-test level.
+func TestRouter_FirmwareDownload_route(t *testing.T) {
+	t.Parallel()
+	mw := auth.NewMiddleware(nil, nil)
+	svc := &fakeFirmwareDownloadService{}
+	rec := audit.NewBuffer(10)
+	build := func(role auth.Role) http.Handler {
+		return NewRouter(Deps{
+			StartedAt:        time.Now(),
+			FirmwareDownload: svc,
+			AuditRecorder:    rec,
+			AuthResolve: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			},
+			AuthRequire:  mw.Require,
+			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+		})
+	}
+	firmwareDownloadBody := func(central string) io.Reader {
+		body := `{"url":"https://x/fw.tgz"`
+		if central != "" {
+			body += `,"central":"` + central + `"`
+		}
+		body += `}`
+		return strings.NewReader(body)
+	}
+
+	rr := httptest.NewRecorder()
+	build(auth.RoleViewer).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/firmware/download", firmwareDownloadBody("")))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("viewer must be forbidden from a firmware download, got %d", rr.Code)
+	}
+
+	svc.err = hmerr.ErrUnknownCentral
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/firmware/download", firmwareDownloadBody("nope")))
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unknown central must return 404, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	svc.err = nil
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/v1/system/firmware/download", firmwareDownloadBody("home")))
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("admin download must return 202, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if svc.lastCentral != "home" || svc.lastURL != "https://x/fw.tgz" {
+		t.Fatalf("expected download dispatched for central=home url=https://x/fw.tgz, got central=%q url=%q", svc.lastCentral, svc.lastURL)
+	}
+	if entries := rec.List(10); len(entries) != 1 || entries[0].Action != audit.ActionSystemFirmwareDownload ||
+		entries[0].Note != "home https://x/fw.tgz" {
+		t.Fatalf("expected 1 system_firmware_download audit entry for home, got %+v", entries)
+	}
+}
+
 func TestRouter_AuthTokensCreate(t *testing.T) {
 	t.Parallel()
 	tokens := auth.NewMemoryTokenStore(map[string]auth.Identity{})
@@ -1231,6 +1450,18 @@ func TestPatchDeviceRename(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusAccepted || admin.renames != 1 {
 		t.Fatalf("code=%d renames=%d", rr.Code, admin.renames)
+	}
+}
+
+func TestPatchDeviceChannelRename(t *testing.T) {
+	admin := &fakeAdmin{}
+	r := NewRouter(Deps{DeviceAdmin: admin})
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/devices/0001ABCD/channels/1",
+		strings.NewReader(`{"name":"Kitchen Light"}`))
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("code=%d", rr.Code)
 	}
 }
 

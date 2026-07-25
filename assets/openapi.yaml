@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.27.0
+  version: 2.54.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -165,6 +165,13 @@ paths:
     delete:
       operationId: deleteDevice
       summary: Remove a device from the registry (admin)
+      description: |
+        Unpairs the device via the CCU `deleteDevice` call. Two optional
+        query flags map onto the CCU delete bitmask: `reset=true` also
+        factory-resets the device during removal, and `force=true` removes
+        an unreachable device even when the CCU cannot complete the
+        handshake. Both default to false (plain unpair). A backend without a
+        pairing concept (CUxD) answers 422.
       tags: [devices]
       security:
         - basicAuth: []
@@ -172,14 +179,36 @@ paths:
         - openIdConnect: [admin]
       parameters:
         - $ref: "#/components/parameters/Address"
+        - name: reset
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: >-
+            Also reset the device to factory defaults during removal
+            (CCU DELETE_FLAG_RESET).
+        - name: force
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: >-
+            Force removal even when the device is unreachable
+            (CCU DELETE_FLAG_FORCE).
       responses:
         "202":
           description: Unpair dispatched asynchronously
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     patch:
       operationId: patchDevice
       summary: Update mutable device metadata (name, room assignment)
+      description: |
+        Renames persist to the CCU (JSON-RPC `Device.setName`). Set
+        `include_channels: true` to also rename every channel with the
+        `"<name>:<channelNo>"` pattern the CCU WebUI applies. Omitted, it
+        defaults to false (device name only). Room / function assignment
+        is applied via the Rega hub-writer. A backend without JSON-RPC
+        (Homegear, CUxD) answers 422.
       tags: [devices]
       security:
         - basicAuth: []
@@ -195,6 +224,17 @@ paths:
               type: object
               properties:
                 name: { type: string }
+                include_channels:
+                  type: boolean
+                  description: >-
+                    Also rename each channel to "<name>:<channelNo>".
+                    Only consulted together with name. Defaults to false.
+                rooms:
+                  type: array
+                  items: { type: string }
+                functions:
+                  type: array
+                  items: { type: string }
       responses:
         "202":
           description: Update accepted
@@ -257,6 +297,53 @@ paths:
               schema: { $ref: "#/components/schemas/ChannelSummary" }
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: patchChannel
+      summary: Update a single channel (rename, rooms, functions)
+      description: |
+        Applies partial updates to a single channel: rename (JSON-RPC
+        `Channel.setName`), room assignment and function (Gewerk)
+        assignment — the channel-level twin of `PATCH /devices/{addr}`.
+        Omitted fields stay untouched; an explicit empty array clears
+        the assignment set. Naming a channel number the device does not
+        have answers 404; a backend without JSON-RPC (Homegear, CUxD)
+        answers 422.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                rooms:
+                  type: array
+                  items: { type: string }
+                  description: |
+                    Replaces the channel's room assignments. Room names
+                    unknown to the CCU are silently skipped.
+                functions:
+                  type: array
+                  items: { type: string }
+                  description: |
+                    Replaces the channel's function (Gewerk)
+                    assignments. Unknown names are silently skipped.
+      responses:
+        "202":
+          description: Update accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /devices/{addr}/channels/{no}/event-groups:
     get:
@@ -356,6 +443,53 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /devices/{addr}/channels/{no}/flags:
+    get:
+      tags: [devices]
+      summary: Get the operator per-channel overrides (G12)
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelFlags" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [devices]
+      summary: Set the operator per-channel overrides (G12)
+      description: |
+        Hide the channel from the operation surfaces (data-point list, MQTT,
+        Matter) and/or lock it against control writes. An absent field keeps
+        its current value.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChannelFlagsRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelFlags" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
   /devices/{addr}/paramsets/{key}:
     parameters:
       - $ref: "#/components/parameters/Address"
@@ -443,12 +577,383 @@ paths:
           $ref: "#/components/responses/BadGateway"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /groups:
+    get:
+      operationId: listGroups
+      summary: Heating-group listing (read-only)
+      description: |
+        Returns Homematic heating groups (HmIP / BidCos), grouped by
+        central. Read from each CCU's groups.gson via the
+        `CCU.getHeatingGroupList` JSON-RPC method.
+
+        Without a `central` query the response aggregates over every
+        configured central, one `entries` object each; a central whose
+        backend cannot read groups (offline, or a non-CCU backend)
+        contributes an empty `groups` array rather than failing the
+        request. With `central` set, the listing is scoped to that
+        central and returns 404 when it is unknown or cannot serve
+        groups.
+
+        This is the read surface only. Creating, editing, and deleting
+        groups runs through the CCU jpages proxy (ADR 0055) and is
+        exposed separately.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Scope the listing to one central (matches
+            `SystemCCUEntry.name`). Omit to aggregate over all centrals.
+      responses:
+        "200":
+          description: Heating groups grouped by central
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/GroupCentralEntry" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createGroup
+      summary: Create a heating group (admin)
+      description: |
+        Creates a heating group through the CCU jpages proxy (ADR 0055):
+        a two-step `GET group/create` → `POST group/save` flow, then a
+        roster poll to confirm the group committed (the save response is
+        slow and unreliable). Admin-gated and audited. `?central=` selects
+        the target CCU (optional when only one is configured).
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateGroupRequest" }
+      responses:
+        "201":
+          description: The created group.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupEntry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /groups/types:
+    get:
+      operationId: listGroupTypes
+      summary: Assignable group types for the create form
+      description: |
+        Returns the group types a new group can be created as (parsed from
+        the CCU's create page — there is no separate JSON type endpoint on
+        the firmware). `?central=` scopes to one CCU.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: The assignable group types.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types:
+                    type: array
+                    items: { $ref: "#/components/schemas/GroupTypeEntry" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /groups/suitable-members:
+    get:
+      operationId: listSuitableGroupMembers
+      summary: Devices assignable to a group of a given type
+      description: |
+        Returns the devices/channels that can be assigned to a group of
+        the given `type_id`, split into assignable and leftover buckets.
+        `?central=` scopes to one CCU.
+      tags: [core]
+      parameters:
+        - name: type_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Candidate members for the type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuitableMembersResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /groups/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+        description: The numeric CCU group id.
+    put:
+      operationId: updateGroup
+      summary: Edit a heating group (admin)
+      description: |
+        Edits an existing heating group (name, members, "operate only via
+        group" flag) through the jpages save path. Admin-gated and audited.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateGroupRequest" }
+      responses:
+        "204": { description: Group updated. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteGroup
+      summary: Delete a heating group (admin)
+      description: |
+        Deletes a heating group through the jpages delete path. Admin-gated
+        and audited.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "204": { description: Group deleted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /diagrams:
+    get:
+      operationId: listDiagrams
+      summary: List saved diagram definitions (own + shared)
+      tags: [core]
+      description: |
+        Returns the caller's own named multi-series diagram definitions
+        plus every diagram shared by other users (SV03). Diagrams are
+        Loom-native metadata; each references measurement-history data
+        points that the recorder samples.
+      responses:
+        "200":
+          description: The caller's visible diagrams.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [diagrams]
+                properties:
+                  diagrams:
+                    type: array
+                    items: { $ref: "#/components/schemas/DiagramConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createDiagram
+      summary: Create a diagram definition
+      tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiagramWriteRequest" }
+            example:
+              name: Living-room climate
+              visibility: private
+              config:
+                series:
+                  - central: ccu1
+                    interface_id: ccu1-HmIP-RF
+                    channel_address: "0001ABCD:1"
+                    parameter: ACTUAL_TEMPERATURE
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiagramConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /diagrams/{id}:
+    get:
+      operationId: getDiagram
+      summary: Read a diagram definition
+      tags: [core]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The diagram.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiagramConfig" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: updateDiagram
+      summary: Update a diagram definition (owner or admin)
+      tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiagramWriteRequest" }
+            example:
+              name: Living-room climate
+              visibility: shared
+              config: { series: [{ central: ccu1, parameter: ACTUAL_TEMPERATURE }] }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiagramConfig" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteDiagram
+      summary: Delete a diagram definition (owner or admin)
+      tags: [core]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /links:
+    get:
+      operationId: listAllLinks
+      summary: Global direct-link overview (read-only)
+      description: |
+        Returns every direct link (channel-to-channel association)
+        across all configured centrals as a single flat list. Each link
+        carries its owning `central_name` and `interface_id` so a client
+        can render one searchable table over multiple CCUs.
+
+        The daemon reads the interface-wide link roster with one
+        empty-address `getLinks` per (central, interface) — the same call
+        the CCU WebUI uses — rather than a per-channel scan. A central
+        whose interface backend is offline, missing, or cannot list
+        links (e.g. CUxD) contributes nothing rather than failing the
+        request.
+
+        With `central` set the listing is scoped to that central and
+        returns 404 when it is unknown. Creating, editing and deleting
+        links runs through the per-device `/devices/{addr}/links`
+        endpoints.
+      tags: [core]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Scope the listing to one central (matches
+            `SystemCCUEntry.name`). Omit to aggregate over all centrals.
+        - name: locale
+          in: query
+          required: false
+          schema: { type: string }
+          description: >
+            Locale for channel-type labels (default `en`).
+      responses:
+        "200":
+          description: All direct links across the selected centrals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [links]
+                properties:
+                  links:
+                    type: array
+                    items: { $ref: "#/components/schemas/Link" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /programs:
     get:
       tags: [hub]
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
+        - name: include_internal
+          in: query
+          required: false
+          description: |
+            Overrides whether internal (Tmp_*, prgEnergyCounter_*) programs
+            are listed. When omitted, each central applies its
+            `include_internal_programs` config default (hidden by default,
+            mirroring the CCU WebUI's "show system programs" toggle). The
+            daemon always knows every program; this only steers delivery.
+          schema: { type: boolean }
       responses:
         "200":
           description: OK
@@ -470,6 +975,14 @@ paths:
         scenes, so a double-execution under client retry can produce
         observable side effects. Supply the optional `Idempotency-Key`
         header to suppress that risk.
+
+        The optional body carries `check_conditions`: when `true` the CCU
+        evaluates the program's "if" condition and runs the program only
+        when the condition is currently satisfied. When `false` (the
+        default, and when the body is omitted) the program runs
+        unconditionally. The response reports `executed` — always `true`
+        for an unconditional run, and `false` for a condition-checked run
+        whose condition was not met.
       security:
         - basicAuth: []
         - bearerAuth: []
@@ -480,9 +993,18 @@ paths:
           required: true
           schema: { type: string }
         - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProgramExecuteRequest" }
       responses:
         "202":
-          description: Accepted
+          description: Execution result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgramExecuteResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404":
           $ref: "#/components/responses/NotFound"
         "502": { $ref: "#/components/responses/BadGateway" }
@@ -571,6 +1093,61 @@ paths:
         - basicAuth: []
         - bearerAuth: []
         - openIdConnect: [operator]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, value_type]
+              properties:
+                name:
+                  type: string
+                  description: Name of the new system variable.
+                value_type:
+                  type: string
+                  enum: [BOOL, INTEGER, FLOAT, STRING, ENUM, ALARM]
+                  description: >
+                    Value kind of the new variable. ALARM provisions a
+                    binary, acknowledgeable alarm line (backed by an
+                    OT_ALARMDP on the CCU) and always routes through the
+                    Rega create script.
+                unit:
+                  type: string
+                  description: Physical unit string (e.g. "°C", "%").
+                min:
+                  type: string
+                  description: Minimum value (as string, CCU convention).
+                max:
+                  type: string
+                  description: Maximum value (as string, CCU convention).
+                description:
+                  type: string
+                  description: >
+                    Human-readable label shown in the CCU UI. When set,
+                    creation routes through the Rega script (the native
+                    JSON-RPC create methods carry no description parameter).
+                value_list:
+                  type: array
+                  items: { type: string }
+                  description: Ordered list of enum labels for ENUM-type sysvars.
+                value_name_0:
+                  type: string
+                  description: >
+                    False-state label for a binary (BOOL/ALARM) variable.
+                    Empty adopts the CCU's own "false" default. Setting a
+                    custom label routes creation through the Rega script.
+                value_name_1:
+                  type: string
+                  description: >
+                    True-state label for a binary (BOOL/ALARM) variable.
+                    Empty adopts the CCU's own "true" default.
+                channel_address:
+                  type: string
+                  description: >
+                    Bind the new variable to a device channel ("ADDR:idx",
+                    the CCU "Kanalzuordnung"). Empty leaves it unassigned.
+                    The address is resolved to the channel's ReGa ise id;
+                    an address the CCU cannot resolve is rejected with 422.
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -651,9 +1228,10 @@ paths:
     patch:
       operationId: patchSysvar
       summary: >
-        Update the sysvar metadata (description, unit, value_list, min, max).
+        Update the sysvar metadata (name, description, unit, value_list, min, max).
         Triggers the Rega update_system_variable script via JSON-RPC.
         All fields are optional — omitted fields leave CCU metadata unchanged.
+        A non-empty name renames the variable in place.
         Type changes are not supported; delete and recreate the sysvar instead.
       tags: [hub]
       security:
@@ -667,6 +1245,12 @@ paths:
             schema:
               type: object
               properties:
+                name:
+                  type: string
+                  description: >
+                    New name for the variable. When present and non-empty
+                    the sysvar is renamed in place (the path {name} stays
+                    the current name). Omit or leave empty to keep the name.
                 description:
                   type: string
                   description: Human-readable label shown in the CCU UI.
@@ -682,11 +1266,41 @@ paths:
                 value_list:
                   type: array
                   items: { type: string }
-                  description: Ordered list of enum labels for ENUM-type sysvars.
+                  description: Ordered list of enum labels for LIST/ENUM-type sysvars.
+                value_name_0:
+                  type: string
+                  description: >
+                    New false-state label for a binary (LOGIC/ALARM)
+                    variable. An empty string leaves the label untouched.
+                value_name_1:
+                  type: string
+                  description: >
+                    New true-state label for a binary (LOGIC/ALARM)
+                    variable. An empty string leaves the label untouched.
+                is_visible:
+                  type: boolean
+                  description: >
+                    Toggle the CCU WebUI-visibility flag. Omit to leave it
+                    unchanged.
+                is_logged:
+                  type: boolean
+                  description: >
+                    Toggle the archive flag (CCU DPArchive) that records
+                    value changes to the measurement history. Omit to leave
+                    it unchanged.
+                channel_address:
+                  type: string
+                  description: >
+                    Reassign the CCU "Kanalzuordnung". Tri-state: omit to
+                    leave the assignment untouched, send an empty string to
+                    clear it, or a channel address ("ADDR:idx") to assign it.
+                    The address is resolved to the channel's ReGa ise id; an
+                    address the CCU cannot resolve is rejected with 422.
       responses:
         "202":
           description: Accepted — Rega script dispatched asynchronously.
         "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:
@@ -699,6 +1313,41 @@ paths:
         - openIdConnect: [operator]
       responses:
         "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /sysvars/{name}/usage:
+    get:
+      operationId: getSysvarUsage
+      summary: Programs referencing a system variable (read-only)
+      tags: [hub]
+      description: |
+        Lists the CCU programs that reference a system variable, via the
+        variable object's native `DPEnumUsagePrograms()` — the same call
+        the CCU WebUI uses. Each program is enriched from the hub's
+        program registry (localized name, canonical unique id, internal
+        flag, observed active state) when known. Consumed as a warning in
+        the SPA's delete-confirmation. 503 when no CCU-side reader is
+        wired; 400 when the sysvar name is ambiguous across CCUs.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+          description: System-variable name.
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: Scope to one central (required when the name is ambiguous).
+      responses:
+        "200":
+          description: Programs referencing the variable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SysvarUsage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -772,6 +1421,47 @@ paths:
           description: Accepted
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /install-mode/search:
+    post:
+      operationId: installModeSearch
+      summary: Scan the wired bus for new devices (BidCos-Wired)
+      description: |
+        Triggers a synchronous wired-bus scan (`searchDevices`) on the
+        given BidCos-Wired interface and returns the count of devices
+        found. The found devices join the inbox (not yet accepted) for
+        the operator to accept. Only BidCos-Wired supports it; other
+        interfaces answer 422.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [interface]
+              properties:
+                interface: { type: string, description: The BidCos-Wired interface to scan. }
+                central: { type: string, description: Disambiguates the CCU; optional for single-CCU setups. }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [interface, found]
+                properties:
+                  central: { type: string }
+                  interface: { type: string }
+                  found: { type: integer, description: Number of devices the bus scan found. }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -903,6 +1593,39 @@ paths:
                   entries:
                     type: array
                     items: { $ref: "#/components/schemas/SystemCCUEntry" }
+
+  /system/ccu/{central}/reboot:
+    post:
+      operationId: rebootSystemCCU
+      summary: Reboot one CCU (admin-only)
+      description: |
+        Reboots the named CCU. The daemon runs a ReGa script that
+        persists the CCU's state (`system.Save()`) and then triggers
+        `/sbin/reboot`. The southbound connection to that central drops
+        for the duration of the reboot and recovers automatically once
+        the CCU is back (the readiness gate re-runs the bring-up).
+
+        Unrelated to `POST /system/restart`, which restarts the
+        OpenCCU-Loom daemon itself — this reboots the CCU hardware.
+      tags: [system]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: central
+          in: path
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Reboot triggered
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /system/restart-pending:
     get:
@@ -1564,6 +2287,17 @@ paths:
     post:
       operationId: acceptInboxDevice
       summary: Promote a pending pairing into the registry
+      description: |
+        Accepts a device waiting in the inbox. The optional body applies
+        first-time configuration right after the accept: `name` renames
+        the device (persisted to the CCU), `include_channels` cascades
+        that rename to every channel (`"<name>:<channelNo>"`), and
+        `rooms` / `functions` assign the device to rooms and functions
+        (Gewerke). An empty or omitted body accepts the device with no
+        configuration (backward compatible). The follow-up steps run only
+        after the accept succeeds; if the accept succeeds but a follow-up
+        step fails the response is a 502 whose title states the device
+        was accepted so only the configuration needs re-applying.
       tags: [devices]
       security:
         - basicAuth: []
@@ -1571,9 +2305,29 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                include_channels:
+                  type: boolean
+                  description: >-
+                    Also rename each channel to "<name>:<channelNo>".
+                    Only consulted together with name. Defaults to false.
+                rooms:
+                  type: array
+                  items: { type: string }
+                functions:
+                  type: array
+                  items: { type: string }
       responses:
         "202":
           description: Accept dispatched
+        "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/firmware/refresh:
@@ -1618,7 +2372,273 @@ paths:
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "202":
-          description: Update scheduled
+          description: |
+            Update scheduled. When the device's radio interface reports a
+            high transmit duty cycle the body carries an advisory
+            `duty_cycle_warning` (the update is never rejected on that
+            basis, mirroring the CCU WebUI's non-blocking warning).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: scheduled
+                  duty_cycle_warning:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                    description: >
+                      Transmit duty cycle in percent of the device's radio
+                      interface, present only when it is at or above the
+                      warning threshold (80%). Absent when unknown or below.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/config/restore:
+    post:
+      operationId: restoreDeviceConfig
+      summary: Re-transmit stored configuration to a device (admin-only)
+      description: |
+        Asks the CCU to re-send every channel's stored MASTER paramset
+        plus the device's direct-link peerings — the recovery path after
+        a device factory reset. The transfer runs asynchronously on the
+        radio (watch the device's CONFIG_PENDING state for progress), so
+        the endpoint returns 202 once the request was accepted. Supported
+        on HmIP-RF and BidCos-RF only; other interfaces (BidCos-Wired,
+        CUxD, VirtualDevices) answer 422. Consult
+        `DeviceSummary.config_restore_supported` before offering the
+        action.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202":
+          description: |
+            Restore dispatched; the configuration transfer continues
+            asynchronously (watch CONFIG_PENDING).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/test:
+    post:
+      operationId: testDeviceCommunication
+      summary: Run the per-device communication / function test
+      description: |
+        Asks the CCU to send a radio test frame to the device and reports
+        whether the device answered within the poll window (the same test
+        the CCU inbox runs). Blocks until the test completes or the window
+        elapses. Supported on the radio interfaces (HmIP-RF, BidCos-RF,
+        BidCos-Wired); VirtualDevices and CUxD answer 422. Consult
+        `DeviceSummary.communication_test_supported` before offering the
+        action.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommunicationTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/team-candidates:
+    get:
+      operationId: getDeviceTeamCandidates
+      summary: List team channels a channel may be assigned to
+      description: |
+        Returns the team channels that share the target channel's team tag
+        (the candidate list for a team assignment, e.g. a smoke-detector
+        team). Read-only. Supported on BidCos-RF / HmIP-RF; other
+        interfaces return an empty list.
+      tags: [devices]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidates]
+                properties:
+                  candidates:
+                    type: array
+                    items: { $ref: "#/components/schemas/TeamCandidate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/team:
+    put:
+      operationId: setDeviceChannelTeam
+      summary: Assign a channel to a team
+      description: |
+        Assigns the channel to the given team channel (`setTeam`). A null or
+        empty `team` resets the channel to its own default team. Supported
+        on BidCos-RF / HmIP-RF; other interfaces answer 422.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                team:
+                  type: string
+                  nullable: true
+                  description: The team channel address to join; null/empty resets to the default team.
+      responses:
+        "202":
+          description: Team assignment accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/replace-candidates:
+    get:
+      operationId: listDeviceReplaceCandidates
+      summary: List devices the new device may replace
+      description: |
+        Returns the already-paired devices the new (inbox) device at
+        `{addr}` may replace — the interface daemon (rfd / hs485d)
+        computes type / channel compatibility. `model_matches` flags an
+        exact-model swap apart from a compatible cross-type one. A pure
+        CCU read. Supported on BidCos-RF and BidCos-Wired only; HmIP
+        devices cannot be replaced (the CCU WebUI hides the action for
+        them too).
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: query, name: central, required: false, schema: { type: string }, description: "Disambiguates the CCU; optional for single-CCU setups." }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [candidates]
+                properties:
+                  candidates:
+                    type: array
+                    items: { $ref: "#/components/schemas/ReplaceCandidate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/replace:
+    post:
+      operationId: replaceDevice
+      summary: Replace a paired device with a new one (admin-only)
+      description: |
+        Swaps the paired `old_address` for the new device at `{addr}`.
+        The interface daemon migrates direct links, teams and link
+        paramsets; ReGa re-binds the existing object in place (same
+        ise-ID, so programs, names and rooms survive) and the old device
+        is unpaired. Returns 202 once the swap is applied — the radio
+        config transfer to the new device continues CCU-side afterwards.
+        Supported on BidCos-RF and BidCos-Wired only.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_address]
+              properties:
+                old_address:
+                  type: string
+                  description: The paired device the new device replaces.
+                central:
+                  type: string
+                  description: Disambiguates the CCU; optional for single-CCU setups.
+      responses:
+        "202":
+          description: |
+            Replace applied; the device's radio configuration transfer
+            continues asynchronously.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, old_address, new_address]
+                properties:
+                  status: { type: string, example: replacing }
+                  old_address: { type: string }
+                  new_address: { type: string }
+                  central: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /system/firmware/download:
+    post:
+      operationId: downloadSystemFirmware
+      summary: Download a firmware image onto a CCU (admin-only)
+      description: |
+        Instructs one CCU to fetch a firmware image from the supplied
+        http/https URL onto the central (posting to the CCU's maintenance
+        CGI) so it can be staged for a later install. The CCU performs the
+        transfer asynchronously; the endpoint returns 202 once the request
+        was accepted.
+      tags: [system]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: http/https firmware image the CCU should fetch.
+                central:
+                  type: string
+                  description: Target central (optional for single-CCU deployments).
+      responses:
+        "202":
+          description: Download triggered
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/install-mode:
@@ -1649,6 +2669,55 @@ paths:
           description: Pairing window opened
         "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/paramsets/{key}/determine:
+    post:
+      operationId: determineParameter
+      summary: Read one parameter's live value from the device
+      description: |
+        Reads ("determines") the current value of a single parameter straight
+        from the device via the CCU's determineParameter operation — the MASTER
+        editor's "Determine" button. This is a read (no edit-lock token
+        required), but it triggers a device round-trip, so the parameter is
+        named in the request body. The {key} path segment scopes the request to
+        the paramset being edited; the CCU auto-selects the paramset on the
+        wire. Shares the backend path with the WS `paramset.determine` command.
+      tags: [paramsets]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+        - { in: path, name: key, required: true, schema: { type: string, enum: [VALUES, MASTER, LINK] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parameter]
+              properties:
+                parameter:
+                  type: string
+                  description: Name of the parameter to determine (e.g. "TEMPERATURE").
+      responses:
+        "200":
+          description: The value the device reported for the parameter.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [value]
+                properties:
+                  value:
+                    description: |
+                      The determined value. Type follows the parameter's
+                      declared TYPE (bool / number / string); null when the
+                      backend does not support the operation (e.g. CUxD).
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502":
+          description: CCU read error
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/ui-schema:
     get:
@@ -2225,6 +3294,26 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    patch:
+      operationId: updateLink
+      summary: Rename a direct link (change name / description)
+      tags: [links]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateLinkRequest" }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     delete:
       operationId: removeLink
       summary: Remove a direct link
@@ -2240,6 +3329,41 @@ paths:
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/links/test:
+    post:
+      operationId: testLinkAtDevice
+      summary: Test a direct link at the device (activate link paramset)
+      tags: [links]
+      description: |
+        Triggers the receiver's LINK-paramset behaviour for the given
+        sender — the CCU config dialog's "test link" / simulate-keypress
+        probe. It PHYSICALLY actuates the receiver (a switch clicks, a
+        blind moves), so it is operator-gated and fire-and-forget. Maps to
+        XML-RPC `activateLinkParamset(receiver, sender, longPress)`. 501
+        when the interface does not support link activation (CUxD /
+        Homegear).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestLinkAtDeviceRequest" }
+            example:
+              receiver_address: "0001ABCD:3"
+              sender_address: "0002EFGH:1"
+              long_press: false
+      responses:
+        "202": { description: Triggered (the actuator reacts asynchronously). }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "501": { description: Link activation not supported on this interface. }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/link-ps/{peer}:
@@ -2301,6 +3425,11 @@ paths:
     post:
       operationId: createCentralLinks
       summary: Enable central click-event forwarding
+      description: |
+        Enables CCU click-event forwarding. Without `channel` every
+        eligible (press-event) channel of the device is switched on;
+        with `channel` (a channel address such as ABC0000001:4) only
+        that single channel is touched.
       tags: [links]
       security:
         - basicAuth: []
@@ -2308,6 +3437,11 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+        - in: query
+          name: channel
+          required: false
+          schema: { type: string }
+          description: Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device.
       responses:
         "202": { description: Report }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -2316,6 +3450,10 @@ paths:
     delete:
       operationId: removeCentralLinks
       summary: Disable central click-event forwarding
+      description: |
+        Disables CCU click-event forwarding. Without `channel` the whole
+        device is switched off; with `channel` (a channel address such as
+        ABC0000001:4) only that single channel is touched.
       tags: [links]
       security:
         - basicAuth: []
@@ -2323,6 +3461,11 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+        - in: query
+          name: channel
+          required: false
+          schema: { type: string }
+          description: Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device.
       responses:
         "202": { description: Report }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
@@ -2555,6 +3698,27 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteProgram
+      summary: Delete a program from the CCU (admin)
+      description: >-
+        Removes the program from the CCU (dom.DeleteObject) and drops the
+        local mirror once the call lands. Irreversible, therefore admin-gated
+        like DELETE /devices/{addr}. The optional `central` query parameter
+        scopes the target to one CCU when several are configured.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: query, name: central, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /alarm-messages/{id}/ack:
     post:
       operationId: ackAlarm
@@ -2585,17 +3749,72 @@ paths:
         "202": { description: Scheduled }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /alarm-messages/ack-all:
+    post:
+      operationId: ackAllAlarmMessages
+      summary: Acknowledge all alarm messages
+      description: |
+        Acknowledges every active alarm message in a single CCU pass.
+        An optional `central` query parameter scopes the operation to
+        one CCU; when omitted the acknowledge runs across every
+        registered central. The response carries the total number of
+        messages acknowledged.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AckAllResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /service-messages/ack-all:
+    post:
+      operationId: ackAllServiceMessages
+      summary: Acknowledge all quittable service messages
+      description: |
+        Acknowledges every quittable service message in a single CCU
+        pass (non-quittable messages are left untouched, mirroring the
+        single-message writability gate). An optional `central` query
+        parameter scopes the operation to one CCU; when omitted the
+        acknowledge runs across every registered central. The response
+        carries the total number of messages acknowledged.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AckAllResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /service-messages/{id}/disable:
     post:
       operationId: disableServiceMessage
-      summary: Disable (suppress) a service message
+      summary: Disable (permanently suppress) a service message
       description: |
-        The CCU exposes exactly one dismiss primitive for service
-        messages — there is no separate wire-level "disable/suppress
-        forever" operation — so this shares the same domain call as
-        `POST .../ack` (`hub.ServiceMessages.Disable` delegates to
-        `Acknowledge`). Exposed as its own operation (rather than an
-        alias) so callers can name the intent, and shares the domain
+        Durably suppresses the service message's channel parameter on the
+        CCU via `Interface.suppressServiceMessages`. Unlike `POST .../ack`
+        (a one-shot dismiss that returns as soon as the condition
+        re-triggers), the CCU stops raising service messages for the
+        resolved channel + service parameter until it is unsuppressed via
+        `POST /service-messages/unsuppress`. The channel and parameter are
+        resolved from the stored message; the suppression is recorded and
+        surfaced by `GET /service-messages/suppressed`. Shares the domain
         call with the WS `service_messages.disable` command.
       tags: [hub]
       security:
@@ -2606,6 +3825,81 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
         "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /service-messages/suppressed:
+    get:
+      operationId: listSuppressedServiceMessages
+      summary: List permanently suppressed service messages
+      description: |
+        Returns the service-message channel parameters that have been
+        durably suppressed via `POST /service-messages/{id}/disable`,
+        aggregated across every central. The list is reconciled against
+        each CCU's live `Interface.getSuppressedServiceMessages`, so an
+        entry cleared elsewhere (e.g. the CCU WebUI) drops out. Each entry
+        can be cleared via `POST /service-messages/unsuppress`.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200":
+          description: Suppressed service messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SuppressedServiceMessage"
+
+  /service-messages/unsuppress:
+    post:
+      operationId: unsuppressServiceMessage
+      summary: Clear a permanent service-message suppression
+      description: |
+        Clears a durable suppression for a channel parameter via
+        `Interface.suppressServiceMessages` (suppress=false). The optional
+        `central` query parameter selects the target central (required
+        when more than one CCU is registered). The request body names the
+        channel (required) and the service parameter (omit or empty to
+        clear every service parameter of the channel); the interface is
+        optional and resolved from the stored suppression when omitted.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                interface:
+                  type: string
+                  description: >
+                    CCU interface the channel lives on (e.g. "HmIP-RF").
+                    Optional — resolved from the stored suppression when
+                    omitted.
+                channel:
+                  type: string
+                  description: Channel address ("ADDR:chn").
+                parameter:
+                  type: string
+                  description: >
+                    Service parameter to unsuppress (e.g. "LOWBAT"). Omit
+                    or empty to clear every service parameter of the
+                    channel.
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -2896,6 +4190,57 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "500":
           $ref: "#/components/responses/InternalError"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /history/recording:
+    get:
+      operationId: getRecordingOverride
+      summary: Effective per-datapoint recording state (read-only)
+      tags: [history]
+      description: |
+        Reports whether one data point's live values are currently
+        persisted to measurement history, and whether that decision comes
+        from an explicit override or the parameter-name glob policy. Part
+        of the opt-in history feature; 503 when history is disabled.
+      parameters:
+        - { in: query, name: central, required: true, schema: { type: string } }
+        - { in: query, name: interface_id, required: true, schema: { type: string } }
+        - { in: query, name: channel, required: true, schema: { type: string } }
+        - { in: query, name: parameter, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Effective recording state for the data point.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecordingState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putRecordingOverride
+      summary: Set or clear a per-datapoint recording override
+      tags: [history]
+      description: |
+        Forces recording on/off for one data point, or (record: null)
+        clears the override so it falls back to the glob policy. Toggling
+        affects only future samples; existing rows are untouched. Part of
+        the opt-in history feature; 503 when disabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecordingWriteRequest" }
+            example:
+              central: ccu1
+              interface_id: ccu1-HmIP-RF
+              channel: "0001ABCD:1"
+              parameter: ACTUAL_TEMPERATURE
+              record: true
+      responses:
+        "200":
+          description: Resulting effective recording state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecordingState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /energy:
     get:
@@ -5518,6 +6863,23 @@ components:
             value the WS `custom_data_point.state_changed` payload
             carries. Lets a client build its entity registry from the
             summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+        translated_name:
+          type: string
+          description: |
+            Channel-level entity display name, fully composed by the
+            daemon: a custom channel name verbatim, the `ch<no>` /
+            `vch<no>` channel-group marker for derived names, or the
+            locale-aware postfix label (button locks). Device-name
+            prefix stripped; empty when the name collapses to the
+            device name alone. Consumers render it verbatim — the
+            daemon is the single naming authority.
+        parameter_name:
+          type: string
+          description: |
+            Untranslated marker / postfix portion of the entity name
+            (`ch6`, `vch5`, `Button Lock`); empty when the entity is
+            named after the channel or device alone. Mirrors the
+            reference schema's `DataPointNameData.parameter_name`.
     Problem:
       type: object
       description: |
@@ -5652,6 +7014,149 @@ components:
               - mqtt.discovery.v1
               - matter.bridge.v1
               - auth.oidc.v1
+    GroupCentralEntry:
+      type: object
+      required: [central, groups]
+      description: One central's heating-group roster.
+      properties:
+        central:
+          type: string
+          description: Daemon-local central name the groups belong to.
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/GroupEntry" }
+    GroupEntry:
+      type: object
+      required: [id, name, forbid_single_operation, type_id, members]
+      description: |
+        One Homematic heating group (HmIP / BidCos), as read from the
+        CCU's groups.gson via `CCU.getHeatingGroupList`. Read-only — the
+        create / edit / delete surface runs through the CCU jpages proxy
+        (see ADR 0055) and is exposed separately.
+      properties:
+        id:
+          type: integer
+          description: Numeric CCU group id.
+        name:
+          type: string
+          description: Operator-facing group name.
+        group_device_name:
+          type: string
+          description: Label of the backing virtual device; often empty.
+        forbid_single_operation:
+          type: boolean
+          description: The "operate only via group" flag.
+        type_id:
+          type: string
+          description: Group-type key.
+        type_label:
+          type: string
+          description: CCU-provided type label (may be a translation key).
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/GroupMemberEntry" }
+    GroupMemberEntry:
+      type: object
+      required: [address]
+      description: One device or channel wired into a heating group.
+      properties:
+        address:
+          type: string
+          description: Member device or channel address.
+        type_id:
+          type: string
+          description: Member-type key.
+    CreateGroupRequest:
+      type: object
+      required: [type_id, name]
+      description: Body of POST /groups.
+      properties:
+        type_id:
+          type: string
+          description: Group-type key (e.g. the HmIP heating-group type).
+        name:
+          type: string
+          description: Operator-facing group name.
+        forbid_single_operation:
+          type: boolean
+          description: The "operate only via group" flag.
+        members:
+          type: array
+          items: { type: string }
+          description: Member channel/device addresses to assign.
+    UpdateGroupRequest:
+      type: object
+      required: [name]
+      description: Body of PUT /groups/{id}.
+      properties:
+        name:
+          type: string
+        forbid_single_operation:
+          type: boolean
+        members:
+          type: array
+          items: { type: string }
+    GroupTypeEntry:
+      type: object
+      required: [id]
+      description: One assignable group type for the create form.
+      properties:
+        id:
+          type: string
+        label_key:
+          type: string
+          description: CCU translation key for the type label.
+    SuitableMemberEntry:
+      type: object
+      required: [address]
+      description: >
+        One device/channel assignable to a group of a given type. The fields
+        after `type` are best-effort enrichment resolved from the live device
+        model so a client can identify, group and filter candidates instead of
+        showing a flat address list; they are omitted when the member is not
+        (yet) present in the model.
+      properties:
+        address:
+          type: string
+        serial:
+          type: string
+        type:
+          type: string
+          description: Member kind (e.g. SENSOR_WINDOW, SWITCH_ACTUATOR).
+        device_address:
+          type: string
+          description: Parent device address (address without the channel suffix); group channels by it.
+        device_name:
+          type: string
+          description: CCU-assigned device name.
+        device_model:
+          type: string
+          description: Device model (e.g. HmIP-eTRV-2).
+        channel_name:
+          type: string
+          description: CCU-assigned channel name.
+        channel_no:
+          type: integer
+          description: Channel number within the device.
+        rooms:
+          type: array
+          items: { type: string }
+          description: Rooms the channel (or its device) is assigned to.
+        functions:
+          type: array
+          items: { type: string }
+          description: Functions the channel (or its device) is assigned to.
+    SuitableMembersResponse:
+      type: object
+      required: [assignable, leftover]
+      description: Candidate members for a group type.
+      properties:
+        assignable:
+          type: array
+          items: { $ref: "#/components/schemas/SuitableMemberEntry" }
+        leftover:
+          type: array
+          items: { $ref: "#/components/schemas/SuitableMemberEntry" }
     SystemCCUEntry:
       type: object
       required: [name, host, available, is_ha_app, configured_interfaces, readiness]
@@ -5848,6 +7353,24 @@ components:
             for the true→false transition before refreshing MASTER. False for
             BidCos-*, VirtualDevices, CUxD — those rely on the save-path
             reload because CONFIG_PENDING never fires (or fires unreliably).
+        config_restore_supported:
+          type: boolean
+          description: |
+            True when the device's interface exposes `restoreConfigToDevice`
+            (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
+            it. False for BidCos-Wired, CUxD and VirtualDevices.
+        communication_test_supported:
+          type: boolean
+          description: |
+            True when the device's interface can run the CCU's per-device
+            communication test (radio interfaces). The SPA gates the "test"
+            action on it. False for VirtualDevices and CUxD.
+        team_supported:
+          type: boolean
+          description: |
+            True when the device's interface exposes channel team assignment
+            (setTeam / listTeams — BidCos-RF, HmIP-RF). The SPA gates the
+            team picker on it.
         has_sub_devices:
           type: boolean
           description: |
@@ -5855,6 +7378,33 @@ components:
             sub-devices for northbound presentation. The SPA's CdpTilesPanel
             uses this flag to switch from a flat tile grid to per-group
             sections.
+        rx_mode:
+          $ref: "#/components/schemas/RxMode"
+    RxMode:
+      type: object
+      description: |
+        Named flags decoded from the device's CCU RX_MODE bitmask. The
+        `wakeup` / `lazy_config` bits mark a battery-powered device that only
+        applies pending configuration when it next wakes up — the SPA shows a
+        "pending wakeup" hint after a link/config write to such a device. Only
+        set bits are present; the whole object is omitted when the CCU reports
+        no rx mode (RX_MODE == 0).
+      properties:
+        always:
+          type: boolean
+          description: Mains-powered, permanently reachable (RX_ALWAYS); applies configuration immediately.
+        burst:
+          type: boolean
+          description: Reachable via burst wakeup (RX_BURST).
+        config:
+          type: boolean
+          description: Reachable in its configuration window (RX_CONFIG).
+        wakeup:
+          type: boolean
+          description: Battery device that only accepts pending configuration on its next wakeup (RX_WAKEUP).
+        lazy_config:
+          type: boolean
+          description: Battery device whose configuration transfer is deferred until its next wakeup (RX_LAZY_CONFIG).
     DeviceList:
       type: object
       required: [items, page, per_page, total]
@@ -5889,6 +7439,27 @@ components:
             channels:
               type: array
               items: { $ref: "#/components/schemas/ChannelSummary" }
+    ChannelFlags:
+      type: object
+      description: Operator per-channel overrides (G12).
+      required: [hidden, locked]
+      properties:
+        hidden:
+          type: boolean
+          description: Channel hidden from the operation surfaces.
+        locked:
+          type: boolean
+          description: Channel locked against control writes.
+    ChannelFlagsRequest:
+      type: object
+      description: |
+        Partial update of the operator per-channel overrides (G12). An absent
+        field keeps its current value.
+      properties:
+        hidden:
+          type: boolean
+        locked:
+          type: boolean
     ChannelSummary:
       type: object
       required: [address, number, paramset_key, data_points_count]
@@ -5960,6 +7531,14 @@ components:
             fallback applied. Empty when no unique room can be
             resolved. External clients use it as the suggested area of
             the channel group's sub-device.
+        rooms:
+          type: array
+          items: { type: string }
+          description: |
+            The channel's full room-assignment set. Unlike `room` it is
+            not collapsed to the unique case, so assignment editors can
+            round-trip it. Omitted when the channel carries no room
+            assignment.
         functions:
           type: array
           items: { type: string }
@@ -5976,6 +7555,19 @@ components:
             (group-master) channel of its group — the daemon-derived
             "device primary channel" marker. Omitted when neither
             condition holds.
+        hidden:
+          type: boolean
+          description: |
+            Operator per-channel override (G12): when true the channel is
+            hidden from the operation surfaces (data-point list, MQTT, Matter).
+            The channel stays in the device detail so it remains manageable.
+            Omitted when false.
+        locked:
+          type: boolean
+          description: |
+            Operator per-channel override (G12): when true control writes to
+            the channel's VALUES paramset are rejected (423). Reads and
+            MASTER/config edits are unaffected. Omitted when false.
     MQTTReloadResponse:
       type: object
       required: [reloaded, took_ms]
@@ -6126,17 +7718,24 @@ components:
           description: |
             Locale-aware per-entity name a north-bound consumer (HA via
             MQTT discovery or the REST drop-in) assigns to this data
-            point. Identical to the MQTT discovery `name` field — both
-            resolve through the same naming primitive. The parameter
-            portion only; HA prepends the device name. Empty when
-            `label_omitted` is true.
+            point, resolved through the same naming primitives as the
+            MQTT discovery `name` field. The parameter portion only; HA
+            prepends the device name. When `label_omitted` is true it
+            instead carries the channel-level collapsed name (channel
+            name plus multi-channel `chN` marker, device prefix
+            stripped) — possibly empty when the collapse reduces to the
+            device name alone. Consumers therefore never need to
+            compose entity names themselves; the daemon is the single
+            naming authority.
         label_omitted:
           type: boolean
           description: |
             True when the parameter is flagged "primary" in the embedded
             translation_custom catalogue (translation key present, value
-            empty). Consumers then collapse the entity name to the device
-            name alone (MQTT discovery emits `name: null`).
+            empty). The entity is then named after the channel:
+            `translated_name` holds the collapsed channel-level name,
+            falling back to the device name when empty (MQTT discovery
+            instead emits `name: null`).
         control:
           type: string
           description: |
@@ -6295,6 +7894,21 @@ components:
         last_executed:
           type: string
           description: RFC3339 timestamp of the most recent execution.
+        condition_summary:
+          type: string
+          description: |
+            Compact, language-neutral rendering of the program's root-rule
+            trigger conditions — object names from the ReGa DOM joined by
+            symbolic operators (==, >=, <=, >, <, &&, ||). Capped at ~200
+            characters with an ellipsis. Absent when the program has no rule
+            or the CCU-side scan produced nothing.
+        activity_summary:
+          type: string
+          description: |
+            Compact, language-neutral rendering of the program's root-rule
+            activities (object name := value, joined by "; "). Capped at
+            ~200 characters with an ellipsis. Absent when the program has no
+            rule.
         is_internal:
           type: boolean
           description: |
@@ -6328,6 +7942,54 @@ components:
             Device part of `channel` (before the ":"). Clients use it to
             group the entity under the owning physical device; absent
             together with `channel` (entity belongs on the hub card).
+    ProgramExecuteRequest:
+      type: object
+      description: Optional body for POST /programs/{id}/execute.
+      properties:
+        check_conditions:
+          type: boolean
+          default: false
+          description: |
+            When true, the CCU evaluates the program's "if" condition and
+            runs the program only when the condition is currently
+            satisfied. When false (the default) the program runs
+            unconditionally.
+    ProgramExecuteResponse:
+      type: object
+      required: [executed]
+      properties:
+        executed:
+          type: boolean
+          description: |
+            Whether the program actually ran. Always true for an
+            unconditional execution (check_conditions=false); false for a
+            condition-checked execution whose condition was not met.
+    SysvarUsageProgram:
+      type: object
+      required: [id, name]
+      description: One CCU program that references a system variable.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        unique_id:
+          type: string
+          description: Canonical loom routing key when the program is known to the hub.
+        active:
+          type: boolean
+          description: Observed enabled state; omitted when unknown.
+        is_internal:
+          type: boolean
+          description: True for Tmp_*-programs created internally by the CCU.
+    SysvarUsage:
+      type: object
+      required: [sysvar, programs]
+      description: The programs that reference a system variable.
+      properties:
+        central: { type: string }
+        sysvar: { type: string }
+        programs:
+          type: array
+          items: { $ref: "#/components/schemas/SysvarUsageProgram" }
     SysvarSummary:
       type: object
       required: [name, unique_id, value_type, observed]
@@ -6356,6 +8018,30 @@ components:
             Mirrors the CCU's isInternal flag. Internal variables back
             CCU bookkeeping; clients skip them for HA entities unless
             opted in (aiohomematic's INTERNAL description marker).
+        is_visible:
+          type: boolean
+          description: |
+            Mirrors the CCU's isVisible flag — whether the variable is
+            shown in the CCU WebUI. Always present (a real CCU reports it
+            for every variable).
+        is_logged:
+          type: boolean
+          description: |
+            Mirrors the CCU's isLogged flag (backed by the CCU-side
+            DPArchive setting) — whether value changes are recorded to the
+            measurement archive. Always present.
+        value_name_0:
+          type: string
+          description: |
+            False-state value label for a binary (LOGIC/ALARM) variable —
+            the operator-visible text for value 0. Absent for non-binary
+            variables.
+        value_name_1:
+          type: string
+          description: |
+            True-state value label for a binary (LOGIC/ALARM) variable —
+            the operator-visible text for value 1. Absent for non-binary
+            variables.
         is_extended:
           type: boolean
           description: |
@@ -6427,6 +8113,38 @@ components:
           type: integer
           format: int64
           description: Number of raw samples aggregated into this bucket.
+    RecordingState:
+      type: object
+      required: [record, source]
+      description: >
+        Effective measurement-recording state of one data point.
+      properties:
+        record:
+          type: boolean
+          description: >
+            Whether this data point's live values are currently persisted
+            to measurement history.
+        source:
+          type: string
+          enum: [override, policy]
+          description: >
+            "override" when an explicit per-datapoint toggle decides,
+            "policy" when the parameter-name glob policy decides.
+    RecordingWriteRequest:
+      type: object
+      required: [central, interface_id, channel, parameter]
+      description: >
+        Set or clear a per-datapoint recording override. A null `record`
+        clears the override (revert to the glob policy).
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        channel: { type: string }
+        parameter: { type: string }
+        record:
+          type: boolean
+          nullable: true
+          description: true/false forces recording on/off; null clears the override.
     EnergyBucket:
       type: object
       required: [ts, consumed_wh, feed_in_wh, avg_power_w, peak_power_w, reset]
@@ -6614,6 +8332,38 @@ components:
         display_name:
           type: string
           description: Human-readable translation of the message code.
+    SuppressedServiceMessage:
+      type: object
+      required: [channel]
+      properties:
+        central:
+          type: string
+          description: CCU this suppression belongs to (multi-central grouping).
+        interface:
+          type: string
+          description: CCU interface the channel lives on (e.g. "HmIP-RF").
+        channel:
+          type: string
+          description: Suppressed channel address ("ADDR:chn").
+        parameter:
+          type: string
+          description: >
+            Suppressed service parameter (e.g. "LOWBAT"). Empty means every
+            service parameter of the channel is suppressed.
+        device_name:
+          type: string
+          description: Human-readable channel/device name, when known.
+        name:
+          type: string
+          description: Raw CCU message name that was suppressed, when known.
+    AckAllResult:
+      type: object
+      required: [acknowledged]
+      properties:
+        acknowledged:
+          type: integer
+          description: |
+            Number of messages acknowledged across the scoped centrals.
     InstallModeInterfaceEntry:
       type: object
       required: [interface, active, seconds, observed]
@@ -6642,6 +8392,34 @@ components:
           type: integer
           minimum: 0
           description: Install-mode duration; defaults to 60 when omitted.
+        central:
+          type: string
+          description: |
+            Disambiguates the CCU when several centrals expose the same
+            interface name. Omitted matches the first interface entry
+            across all centrals.
+        device_address:
+          type: string
+          description: |
+            Restricts pairing to one already-known device address
+            (targeted teach-in / re-pairing by serial). Only meaningful
+            with active=true; ignored on stop. Note that HmIP radios
+            have no address-targeted pairing on the CCU side — use
+            sgtin + key there instead.
+        sgtin:
+          type: string
+          description: |
+            HmIP SGTIN for the keyserver-less LOCAL teach-in. Formatted
+            label input (dashes, spaces, lowercase) is accepted and
+            normalised server-side to 24 hex characters. Requires key,
+            active=true, and is mutually exclusive with device_address.
+        key:
+          type: string
+          format: password
+          description: |
+            HmIP device key from the label: 32 hex characters, or the
+            shorter Base32 label form (converted automatically). Never
+            logged or audited.
     SystemUpdateEntry:
       type: object
       required: [update_available, in_progress, observed]
@@ -6727,6 +8505,19 @@ components:
         central_id: { type: string }
         host: { type: string }
         note: { type: string }
+        duty_cycle:
+          type: integer
+          description: |
+            Transmit duty cycle in percent (0..100) for BidCos radio
+            interfaces, sourced from the CCU's listBidcosInterfaces poll.
+            Absent when unknown or when the interface carries no BidCos
+            gateway (e.g. HmIP-RF, covered by device-level DUTY_CYCLE
+            data points).
+        carrier_sense:
+          type: integer
+          description: |
+            Receive carrier-sense load in percent (0..100). Absent when
+            the CCU does not report it (the common case over JSON-RPC).
     Snapshot:
       type: object
       required: [generated_at, devices]
@@ -8235,6 +10026,20 @@ components:
         lock_mode: { type: string }
         lock_action: { type: string }
         permission: { type: string }
+        color_type:
+          type: integer
+          description: >
+            Universal-light colour discriminator (0 hue/saturation,
+            1 colour temperature, 2 effect). Opaque; carried verbatim for
+            a lossless round-trip. Absent on non-colour devices.
+        color_value:
+          type: integer
+          description: >
+            Packed 20-bit colour/effect value; opaque. 0 is legitimate and
+            is always round-tripped.
+        output_behaviour:
+          type: integer
+          description: HmIP-BSL signal-LED behaviour, opaque.
     Schedule:
       type: object
       required: [channel, kind]
@@ -8255,6 +10060,12 @@ components:
         simple_entries:
           type: array
           items: { $ref: "#/components/schemas/SimpleScheduleEntry" }
+        color_capable:
+          type: boolean
+          description: >
+            True when the device exposes per-switch-point colour/effect
+            fields (universal lights) or an OUTPUT_BEHAVIOUR field
+            (HmIP-BSL). The SPA shows a colour summary only when set.
     SetActiveProfileRequest:
       type: object
       required: [profile]
@@ -8361,10 +10172,74 @@ components:
         peer_device_name: { type: string }
         peer_device_model: { type: string }
         direction: { type: string }
+        central_name:
+          type: string
+          description: >
+            Owning central. Populated only by the global overview
+            (`GET /links`); empty on the per-device listing.
+        interface_id:
+          type: string
+          description: >
+            Owning interface (wire interface id). Populated only by the
+            global overview (`GET /links`); empty on the per-device
+            listing.
+    DiagramConfig:
+      type: object
+      required: [id, name, visibility, owner, config, created_at_ms, updated_at_ms]
+      description: A named multi-series diagram definition (SV03).
+      properties:
+        id: { type: string }
+        name: { type: string }
+        visibility: { type: string, enum: [private, shared] }
+        owner: { type: string, description: Owner subject. }
+        config:
+          type: object
+          description: >
+            SPA-owned diagram document (series list + default range). Opaque
+            to the daemon except a non-empty central per series.
+        created_at_ms: { type: integer, format: int64 }
+        updated_at_ms: { type: integer, format: int64 }
+    DiagramWriteRequest:
+      type: object
+      required: [name]
+      description: Create or update a diagram definition.
+      properties:
+        name: { type: string }
+        visibility:
+          type: string
+          enum: [private, shared]
+          description: Defaults to private.
+        config:
+          type: object
+          description: SPA-owned diagram document (series list + default range).
     AddLinkRequest:
       type: object
       required: [sender_address, receiver_address]
       description: Create a direct link between a sender and a receiver channel.
+      properties:
+        sender_address: { type: string }
+        receiver_address: { type: string }
+        name: { type: string }
+        description: { type: string }
+    TestLinkAtDeviceRequest:
+      type: object
+      required: [receiver_address, sender_address]
+      description: >
+        Trigger the receiver's LINK paramset for the sender (test link /
+        simulate keypress). Physically actuates the receiver.
+      properties:
+        receiver_address: { type: string }
+        sender_address: { type: string }
+        long_press:
+          type: boolean
+          description: Select the LONG_* action group instead of SHORT_*. Default false.
+    UpdateLinkRequest:
+      type: object
+      required: [sender_address, receiver_address]
+      description: >-
+        Change the name and/or description of an existing direct link. The
+        two channel addresses identify the link; name and description are
+        written verbatim, so an empty string clears that field on the CCU.
       properties:
         sender_address: { type: string }
         receiver_address: { type: string }
@@ -8378,6 +10253,41 @@ components:
         supported: { type: boolean }
         reason: { type: string }
         eligible_channels: { type: integer }
+        channels:
+          type: array
+          description: |
+            Per-channel suitability for central click-event routing. One
+            entry per eligible (press-event) channel, letting clients
+            offer a per-channel toggle alongside the device-wide one.
+          items: { $ref: "#/components/schemas/CentralLinksChannelStatus" }
+        active_state_known:
+          type: boolean
+          description: |
+            True when the daemon could read the CCU-side report-value-usage
+            metadata, so each channel's `active` flag reflects the live CCU
+            state. False when the backend has no metadata read path (or the
+            read failed device-wide); clients then show eligibility only,
+            without an active/inactive indicator.
+        active_channels:
+          type: integer
+          description: |
+            Count of eligible channels whose central link is currently
+            active. Only meaningful when `active_state_known` is true.
+
+    CentralLinksChannelStatus:
+      type: object
+      required: [address, number, eligible]
+      description: One channel's suitability for central click-event routing.
+      properties:
+        address: { type: string }
+        number: { type: integer }
+        eligible: { type: boolean }
+        active:
+          type: boolean
+          description: |
+            True when the CCU's report-value-usage counter for the channel is
+            currently raised (a central link exists). Only meaningful when the
+            enclosing status has `active_state_known` set.
 
     # ---- Calculated data points ----
     CalculatedDPSummary:
@@ -8462,9 +10372,62 @@ components:
         central: { type: string, description: CCU that reported this pending device. }
         address: { type: string }
         model: { type: string }
+        interface:
+          type: string
+          description: |
+            CCU interface the device was detected through. The SPA hides
+            the "replace existing device" action for HmIP interfaces,
+            which do not support the swap.
         serial: { type: string }
         manufacturer: { type: string }
         first_seen: { type: integer, format: int64 }
+
+    ReplaceCandidate:
+      type: object
+      required: [address, model_matches]
+      description: |
+        One already-paired device a new (inbox) device may replace,
+        returned by GET /devices/{addr}/replace-candidates.
+      properties:
+        address: { type: string }
+        name: { type: string }
+        model: { type: string }
+        interface: { type: string }
+        central: { type: string }
+        model_matches:
+          type: boolean
+          description: True when the candidate's model equals the new device's (an exact swap rather than a compatible cross-type one).
+
+    TeamCandidate:
+      type: object
+      required: [address, current]
+      description: |
+        One team channel a device channel may be assigned to, returned by
+        GET /devices/{addr}/channels/{no}/team-candidates.
+      properties:
+        address: { type: string }
+        name: { type: string }
+        team_tag: { type: string }
+        current:
+          type: boolean
+          description: True when this channel is the target channel's currently-assigned team.
+
+    CommunicationTestResult:
+      type: object
+      required: [passed, started_at, duration_ms, timed_out]
+      description: |
+        Outcome of a per-device communication / function test
+        (POST /devices/{addr}/test).
+      properties:
+        passed:
+          type: boolean
+          description: True when the device answered the radio test frame within the poll window.
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+        duration_ms: { type: integer, format: int64 }
+        timed_out:
+          type: boolean
+          description: True when the poll window elapsed before the device answered.
 
     LinkableChannel:
       type: object

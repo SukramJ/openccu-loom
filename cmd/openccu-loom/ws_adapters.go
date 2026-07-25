@@ -32,8 +32,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // wsCommandWiring bundles every domain adapter + auxiliary deps the
@@ -46,6 +48,7 @@ type wsCommandWiring struct {
 	linksDomain      *adapter.LinksDomain
 	schedulesDomain  *adapter.SchedulesDomain
 	centralLinks     *adapter.CentralLinksDomain
+	groupsDomain     *adapter.GroupsDomain
 	definitionExport *adapter.DefinitionExportDomain
 	deviceAdmin      *adapter.DeviceAdminDomain
 	paramsets        *adapter.ParamsetsDomain
@@ -106,7 +109,7 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		Health:           w.health, // *adapter.HealthAdapter directly satisfies ws.HealthSnapshotProvider
 		Devices:          deviceQuery,
 		DefinitionExport: w.definitionExport,
-		Hub:              &wsHubQuery{hub: w.hub, registry: w.registry},
+		Hub:              &wsHubQuery{hub: w.hub, registry: w.registry, deviceAdmin: w.deviceAdmin},
 		Links:            &wsLinkQuery{domain: w.linksDomain, registry: w.registry},
 		// ScheduleQueryAdapter already satisfies ws.ScheduleQuery — no wrapper needed.
 		Schedules: schedQueryAdapter,
@@ -143,6 +146,12 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// ws.CentralLinksManager directly. Backs central.create_links /
 		// central.remove_links / central.links_status.
 		CentralLinks: w.centralLinks,
+		// Groups: wired — read-only heating-group listing. The same
+		// groupsAdapter backs the REST GET /api/v1/groups reader.
+		Groups: newGroupsAdapter(w.groupsDomain),
+		// GroupsAdmin: wired — heating-group create/edit/delete + type /
+		// suitable-member helpers (GR02). Same adapter as the REST writer.
+		GroupsAdmin: newGroupsAdapter(w.groupsDomain),
 		// SessionRecorder: wired — fans recording.start/stop/status across
 		// every central's session.Recorder via the registry.
 		SessionRecorder: wsSessionRecorderFrom(w.registry),
@@ -282,11 +291,36 @@ func (w *wsLinkQuery) ListLinks(ctx context.Context, deviceAddress string) ([]ma
 	return structSliceToMapSlice(links)
 }
 
+func (w *wsLinkQuery) ListAllLinks(ctx context.Context, centralName string) ([]map[string]any, error) {
+	if w.domain == nil {
+		return nil, errors.New("ws: links domain not wired")
+	}
+	links, err := w.domain.ListAllLinks(ctx, centralName, "")
+	if err != nil {
+		return nil, err
+	}
+	return structSliceToMapSlice(links)
+}
+
 func (w *wsLinkQuery) AddLink(ctx context.Context, sender, receiver, name, description string) error {
 	if w.domain == nil {
 		return errors.New("ws: links domain not wired")
 	}
 	return w.domain.AddLink(ctx, sender, receiver, name, description)
+}
+
+func (w *wsLinkQuery) ActivateLinkParamset(ctx context.Context, receiverChannelAddress, senderChannelAddress string, longPress bool) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.ActivateLink(ctx, receiverChannelAddress, senderChannelAddress, longPress)
+}
+
+func (w *wsLinkQuery) SetLinkInfo(ctx context.Context, sender, receiver, name, description string) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.SetLinkInfo(ctx, sender, receiver, name, description)
 }
 
 func (w *wsLinkQuery) RemoveLink(ctx context.Context, sender, receiver string) error {
@@ -350,16 +384,32 @@ func (w *wsLinkQuery) PutLinkParamset(ctx context.Context, channelAddress, peerA
 type wsHubQuery struct {
 	hub      *adapter.HubAdapter
 	registry *central.Registry
+	// deviceAdmin drives the inbox.accept follow-up orchestration
+	// (accept + optional rename/rooms/functions) through the same
+	// multi-CCU-safe path the REST accept endpoint uses. Left nil in
+	// minimal wirings, in which case AcceptInboxDevice falls back to a
+	// plain accept via the first central's hub.
+	deviceAdmin *adapter.DeviceAdminDomain
 }
 
-func (w *wsHubQuery) ListPrograms(_ context.Context) ([]map[string]any, error) {
+func (w *wsHubQuery) ListPrograms(_ context.Context, includeInternal *bool) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
 		return []map[string]any{}, nil
 	}
+	// An explicit include_internal wins; absent, the central's configured
+	// include_internal_programs default applies. The hub always holds
+	// internal (Tmp_*) programs, so this only steers what is delivered.
+	include := includeInternal != nil && *includeInternal
+	if includeInternal == nil {
+		include = h.IncludeInternalProgramsDefault()
+	}
 	progs := h.Programs()
 	out := make([]map[string]any, 0, len(progs))
 	for _, p := range progs {
+		if p.IsInternal && !include {
+			continue
+		}
 		active, observed := p.Active()
 		e := map[string]any{
 			"id":          p.ID,
@@ -385,16 +435,30 @@ func (w *wsHubQuery) ListPrograms(_ context.Context) ([]map[string]any, error) {
 	return out, nil
 }
 
-func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string) error {
+func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string, checkConditions bool) (bool, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return false, errors.New("ws: hub not available")
+	}
+	p, ok := h.Program(id)
+	if !ok {
+		return false, fmt.Errorf("ws: program not found: %s", id)
+	}
+	if checkConditions {
+		return p.ExecuteWithConditionCheck(ctx)
+	}
+	if err := p.Execute(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (w *wsHubQuery) DeleteProgram(ctx context.Context, id string) error {
 	h := w.hub.Hub()
 	if h == nil {
 		return errors.New("ws: hub not available")
 	}
-	p, ok := h.Program(id)
-	if !ok {
-		return fmt.Errorf("ws: program not found: %s", id)
-	}
-	return p.Execute(ctx)
+	return h.DeleteProgramRemote(ctx, id)
 }
 
 func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
@@ -411,6 +475,16 @@ func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
 			"unit":        s.Unit,
 			"value_type":  string(s.ValueType),
 			"value_list":  s.ValueList,
+			"is_visible":  s.IsVisible,
+			"is_logged":   s.IsLogged,
+		}
+		// Binary value labels are present only for LOGIC/ALARM variables;
+		// mirror the REST SysvarSummary by omitting them when empty.
+		if s.ValueName0 != "" {
+			e["value_name_0"] = s.ValueName0
+		}
+		if s.ValueName1 != "" {
+			e["value_name_1"] = s.ValueName1
 		}
 		if v, ok := s.Value(); ok {
 			e["value"] = v.Unwrap()
@@ -463,6 +537,47 @@ func (w *wsHubQuery) FetchSystemVariables(ctx context.Context, centralName strin
 	return adapter.NewSysvarFetchAdapter(w.registry).FetchSystemVariables(ctx, centralName)
 }
 
+// SysvarUsagePrograms lists the CCU programs referencing a sysvar,
+// resolving the target hub by name (or the single-central convenience
+// case) and enriching each program from the hub's program registry.
+func (w *wsHubQuery) SysvarUsagePrograms(ctx context.Context, centralName, name string) ([]map[string]any, error) {
+	if name == "" {
+		return nil, errors.New("ws: name required")
+	}
+	h := w.hub.HubFor(centralName)
+	if h == nil && centralName == "" {
+		if hubs := w.hub.Hubs(); len(hubs) == 1 {
+			h = hubs[0].Hub
+		} else if len(hubs) > 1 {
+			return nil, errors.New("ws: central_name required (multiple CCUs)")
+		}
+	}
+	if h == nil {
+		return nil, errors.New("ws: hub not found")
+	}
+	usage, err := h.SysvarUsageRemote(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	serial := w.hub.SerialSuffix(h.CentralName)
+	out := make([]map[string]any, 0, len(usage))
+	for _, u := range usage {
+		e := map[string]any{"id": u.ID, "name": u.Name, "active": u.Active}
+		if p, ok := h.Program(u.ID); ok {
+			if p.Name != "" {
+				e["name"] = p.Name
+			}
+			e["unique_id"] = p.CanonicalUniqueID(serial)
+			e["is_internal"] = p.IsInternal
+			if a, observed := p.Active(); observed {
+				e["active"] = a
+			}
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
 func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
@@ -496,6 +611,14 @@ func (w *wsHubQuery) AcknowledgeAlarmMessage(ctx context.Context, id string) err
 	return h.Messages.Acknowledge(ctx, id)
 }
 
+func (w *wsHubQuery) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return 0, errors.New("ws: hub not available")
+	}
+	return h.Messages.AcknowledgeAll(ctx)
+}
+
 func (w *wsHubQuery) ListServiceMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {
@@ -527,6 +650,14 @@ func (w *wsHubQuery) AcknowledgeServiceMessage(ctx context.Context, id string) e
 		return errors.New("ws: hub not available")
 	}
 	return h.ServiceMessages.Acknowledge(ctx, id)
+}
+
+func (w *wsHubQuery) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return 0, errors.New("ws: hub not available")
+	}
+	return h.ServiceMessages.AcknowledgeAll(ctx)
 }
 
 // InstallModeStatus returns the per-interface install-mode state by
@@ -565,6 +696,21 @@ func (w *wsHubQuery) EnableInstallMode(ctx context.Context, interfaceID string, 
 	return m.Enable(ctx, time.Duration(durationSecs)*time.Second)
 }
 
+// EnableInstallModeLocal opens the keyserver-less HmIP LOCAL pairing
+// window (SGTIN + device-key whitelist) via InstallMode.EnableLocal,
+// which normalises both inputs and refuses to fall back to broadcast.
+func (w *wsHubQuery) EnableInstallModeLocal(ctx context.Context, interfaceID string, durationSecs int, sgtin, key string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	m, ok := h.InstallModeDP(interfaceID)
+	if !ok {
+		return fmt.Errorf("ws: install mode for interface %q not registered", interfaceID)
+	}
+	return m.EnableLocal(ctx, time.Duration(durationSecs)*time.Second, sgtin, key)
+}
+
 // DisableInstallMode closes the pairing window for interfaceID.
 func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string) error {
 	h := w.hub.Hub()
@@ -576,6 +722,15 @@ func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string)
 		return fmt.Errorf("ws: install mode for interface %q not registered", interfaceID)
 	}
 	return m.Disable(ctx)
+}
+
+// SearchWiredDevices triggers a wired-bus scan via the device-admin
+// registry scan (multi-CCU safe), not the single-hub path.
+func (w *wsHubQuery) SearchWiredDevices(ctx context.Context, interfaceID, centralName string) (int, error) {
+	if w.deviceAdmin == nil {
+		return 0, errors.New("ws: device admin not wired")
+	}
+	return w.deviceAdmin.SearchWiredDevices(ctx, centralName, interfaceID)
 }
 
 func (w *wsHubQuery) TriggerBackup(ctx context.Context) error {
@@ -647,7 +802,22 @@ func (w *wsHubQuery) InboxDevices(_ context.Context) ([]map[string]any, error) {
 	return out, nil
 }
 
-func (w *wsHubQuery) AcceptInboxDevice(ctx context.Context, deviceAddress string) error {
+func (w *wsHubQuery) AcceptInboxDevice(
+	ctx context.Context, deviceAddress string, opts ws.InboxAcceptOptions,
+) error {
+	// Preferred path: delegate to the device-admin domain so the WS
+	// accept walks every central (multi-CCU-safe) and runs the same
+	// first-time-configuration orchestration as the REST endpoint.
+	if w.deviceAdmin != nil {
+		return w.deviceAdmin.AcceptInboxDevice(ctx, deviceAddress, interfaces.AcceptInboxOptions{
+			Name:            opts.Name,
+			IncludeChannels: opts.IncludeChannels,
+			Rooms:           opts.Rooms,
+			Functions:       opts.Functions,
+		})
+	}
+	// Fallback for minimal wirings without a device-admin domain: a plain
+	// accept via the first central's hub, no follow-up configuration.
 	h := w.hub.Hub()
 	if h == nil {
 		return errors.New("ws: hub not available")
@@ -832,11 +1002,20 @@ type wsDeviceWriter struct {
 	admin *adapter.DeviceAdminDomain
 }
 
-func (w *wsDeviceWriter) Rename(ctx context.Context, address, name string) error {
+func (w *wsDeviceWriter) Rename(ctx context.Context, address, name string, includeChannels bool) error {
 	if w.admin == nil {
 		return errors.New("ws: device admin not wired")
 	}
-	return w.admin.RenameDevice(ctx, address, name)
+	return w.admin.RenameDevice(ctx, address, name, includeChannels)
+}
+
+// RenameChannel renames a single channel via
+// DeviceAdminDomain.RenameChannel (CCU JSON-RPC `Channel.setName`).
+func (w *wsDeviceWriter) RenameChannel(ctx context.Context, deviceAddr string, channelNo int, name string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.RenameChannel(ctx, deviceAddr, channelNo, name)
 }
 
 // SetInstallMode opens a per-device pairing window via
@@ -846,6 +1025,80 @@ func (w *wsDeviceWriter) SetInstallMode(ctx context.Context, address string, dur
 		return errors.New("ws: device admin not wired")
 	}
 	return w.admin.SetInstallMode(ctx, address, durationSeconds)
+}
+
+// SetChannelRooms replaces a single channel's room assignments via
+// DeviceAdminDomain.SetChannelRooms (Rega `set_device_rooms` with the
+// channel address).
+func (w *wsDeviceWriter) SetChannelRooms(ctx context.Context, deviceAddr string, channelNo int, rooms []string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelRooms(ctx, deviceAddr, channelNo, rooms)
+}
+
+// SetChannelFunctions replaces a single channel's function (Gewerk)
+// assignments via DeviceAdminDomain.SetChannelFunctions.
+func (w *wsDeviceWriter) SetChannelFunctions(ctx context.Context, deviceAddr string, channelNo int, functions []string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelFunctions(ctx, deviceAddr, channelNo, functions)
+}
+
+// RestoreConfig re-transmits the stored configuration to the device via
+// DeviceAdminDomain.RestoreDeviceConfig (XML-RPC
+// `restoreConfigToDevice`).
+func (w *wsDeviceWriter) RestoreConfig(ctx context.Context, address string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.RestoreDeviceConfig(ctx, address)
+}
+
+// ReplaceCandidates lists the devices the new device may replace via
+// DeviceAdminDomain.ReplaceCandidates.
+func (w *wsDeviceWriter) ReplaceCandidates(ctx context.Context, centralName, newAddress string) ([]hmapi.ReplaceCandidate, error) {
+	if w.admin == nil {
+		return nil, errors.New("ws: device admin not wired")
+	}
+	return w.admin.ReplaceCandidates(ctx, centralName, newAddress)
+}
+
+// ReplaceDevice swaps a paired device for a new one via
+// DeviceAdminDomain.ReplaceDevice.
+func (w *wsDeviceWriter) ReplaceDevice(ctx context.Context, centralName, oldAddress, newAddress string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.ReplaceDevice(ctx, centralName, oldAddress, newAddress)
+}
+
+// TestDeviceCommunication runs the CCU's per-device communication test
+// via DeviceAdminDomain.TestDeviceCommunication.
+func (w *wsDeviceWriter) TestDeviceCommunication(ctx context.Context, address string) (hmapi.CommunicationTestResult, error) {
+	if w.admin == nil {
+		return hmapi.CommunicationTestResult{}, errors.New("ws: device admin not wired")
+	}
+	return w.admin.TestDeviceCommunication(ctx, address)
+}
+
+// TeamCandidates lists the team channels a channel may join via
+// DeviceAdminDomain.TeamCandidates.
+func (w *wsDeviceWriter) TeamCandidates(ctx context.Context, deviceAddr string, channelNo int) ([]hmapi.TeamCandidate, error) {
+	if w.admin == nil {
+		return nil, errors.New("ws: device admin not wired")
+	}
+	return w.admin.TeamCandidates(ctx, deviceAddr, channelNo)
+}
+
+// SetChannelTeam assigns a channel to a team via
+// DeviceAdminDomain.SetChannelTeam.
+func (w *wsDeviceWriter) SetChannelTeam(ctx context.Context, deviceAddr string, channelNo int, teamChannelAddress string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetChannelTeam(ctx, deviceAddr, channelNo, teamChannelAddress)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

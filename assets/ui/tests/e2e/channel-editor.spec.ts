@@ -248,9 +248,13 @@ test.describe('Channel editor — edit-lock lifecycle', () => {
       });
     });
 
+    // Count only writes: the secured-transmission toggle probes the raw
+    // MASTER paramset with a GET on mount, which shares this URL. The
+    // assertion below is about Save refusing to *write* on a lost lock,
+    // so a read must not inflate the count.
     let putCount = 0;
     await page.route('**/api/v1/devices/*/paramsets/MASTER', async (route) => {
-      putCount += 1;
+      if (route.request().method() === 'PUT') putCount += 1;
       await route.fulfill({ json: { status: 'ok' } });
     });
 

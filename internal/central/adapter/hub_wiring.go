@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
@@ -32,6 +33,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -154,6 +156,11 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// recovery can re-apply these without racing a concurrent hub write.
 	unit.HubModel.SetMutator(writer)
 	unit.HubModel.Update.SetFirmwareUpdater(writer)
+	// Wire the single- and bulk-message acknowledgers so REST/WS/MQTT
+	// acknowledge and acknowledge-all calls reach the CCU ReGa engine.
+	msgAck := hubMessageAck{runner: runner}
+	unit.HubModel.Messages.SetAcknowledgers(msgAck, msgAck)
+	unit.HubModel.ServiceMessages.SetAcknowledgers(msgAck, msgAck)
 	// Post-install progress monitor: after a triggered CCU system update, watch
 	// the firmware version and clear the in-progress flag once it changes.
 	// See launchSystemUpdateProgressMonitor.
@@ -355,6 +362,9 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			},
 			Connectivity: func(ctx context.Context) error {
 				return loadConnectivity(ctx, unit)
+			},
+			BidcosInterfaces: func(ctx context.Context) error {
+				return loadBidcosInterfaces(ctx, jc, unit)
 			},
 		})
 		// Initial system-update fetch. The reference stack's scheduler
@@ -714,14 +724,32 @@ func hubEnabledDefault(isInternal bool, desc string, markers []hmenum.Descriptio
 	return markerMatch(desc, markers)
 }
 
-// programDescriptions fetches per-program CCU descriptions via ReGa for
-// marker filtering. Program.getAll omits descriptions, so the call is
-// only made when program markers are configured (it costs an extra
-// ReGa round-trip); otherwise an empty map is returned and descriptions
-// stay blank.
-func programDescriptions(ctx context.Context, runner *rega.Runner, markers []hmenum.DescriptionMarker) map[string]string {
-	out := make(map[string]string)
-	if runner == nil || len(markers) == 0 {
+// programMeta carries the per-program metadata decoded from the
+// get_program_descriptions ReGa script: the human-readable PrgInfo
+// description used for marker filtering, plus the compact rule summaries
+// surfaced to north-bound clients.
+type programMeta struct {
+	description      string
+	conditionSummary string
+	activitySummary  string
+}
+
+// ruleSummaryMaxRunes caps a rule summary so a program with a large
+// rule tree cannot bloat the /programs payload or the UI column. The
+// script already renders only the root rule; this is the display safety
+// net. See truncateRuleSummary.
+const ruleSummaryMaxRunes = 200
+
+// programMetadata fetches per-program metadata (PrgInfo description plus
+// the root-rule summaries) via the get_program_descriptions ReGa script.
+// Program.getAll omits these fields, so the script costs one extra ReGa
+// round-trip; it is issued whenever a runner is available because the
+// rule summaries are surfaced regardless of whether program markers are
+// configured. Returns an empty map when no runner is wired or the script
+// fails — callers then fall back to blank descriptions and summaries.
+func programMetadata(ctx context.Context, runner *rega.Runner) map[string]programMeta {
+	out := make(map[string]programMeta)
+	if runner == nil {
 		return out
 	}
 	descs, err := runner.GetProgramDescriptions(ctx)
@@ -729,36 +757,58 @@ func programDescriptions(ctx context.Context, runner *rega.Runner, markers []hme
 		return out
 	}
 	for _, d := range descs {
-		if decoded, derr := url.QueryUnescape(d.Description); derr == nil {
-			out[d.ID] = decoded
-		} else {
-			out[d.ID] = d.Description
+		out[d.ID] = programMeta{
+			description:      decodeRegaField(d.Description),
+			conditionSummary: truncateRuleSummary(decodeRegaField(d.ConditionSummary)),
+			activitySummary:  truncateRuleSummary(decodeRegaField(d.ActivitySummary)),
 		}
 	}
 	return out
+}
+
+// truncateRuleSummary caps a rule summary at ruleSummaryMaxRunes runes,
+// appending a single-character ellipsis when it overflows. Rune-aware so
+// a multibyte channel name is never split mid-character.
+func truncateRuleSummary(s string) string {
+	r := []rune(s)
+	if len(r) <= ruleSummaryMaxRunes {
+		return s
+	}
+	return string(r[:ruleSummaryMaxRunes]) + "…"
 }
 
 func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h *hub.Hub, writer hub.ProgramWriter, opts hubScanOptions) error {
 	if !opts.enableProgramScan {
 		return nil
 	}
+	// The fetch is complete: internal (Tmp_*, prgEnergyCounter_*) programs
+	// are always loaded into the hub so the daemon knows them. The
+	// include_internal_programs config only steers the *delivery* default,
+	// recorded here so northbound list responses that omit an explicit
+	// override reproduce the historical (hide-by-default) behaviour.
+	h.SetIncludeInternalProgramsDefault(opts.includeInternalPrograms)
 	var programs []programEntry
 	if err := jc.Call(ctx, "Program.getAll", nil, &programs); err != nil {
 		return err
 	}
-	descByID := programDescriptions(ctx, runner, opts.programMarkers)
+	metaByID := programMetadata(ctx, runner)
 	// Collect the fresh ID set for the stale-entry diff below.
 	freshIDs := make(map[string]struct{}, len(programs))
 	for _, p := range programs {
 		if p.ID == "" {
 			continue
 		}
-		if p.IsInternal && !opts.includeInternalPrograms {
+		meta := metaByID[p.ID]
+		if !markerMatch(meta.description, opts.programMarkers) {
 			continue
 		}
-		desc := descByID[p.ID]
-		if !markerMatch(desc, opts.programMarkers) {
-			continue
+		// The description field stays coupled to marker filtering: it is only
+		// exposed when program markers are configured (mirroring the prior
+		// behaviour), whereas the rule summaries below are surfaced
+		// unconditionally.
+		desc := ""
+		if len(opts.programMarkers) > 0 {
+			desc = meta.description
 		}
 		freshIDs[p.ID] = struct{}{}
 		if existing, ok := h.Program(p.ID); ok {
@@ -766,17 +816,20 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			// OnUpdate (e.g. MQTT publisher) remain valid across periodic
 			// refreshes. Only create a new Program when the ID is genuinely new.
 			existing.UpdateMetadata(p.Name, p.IsInternal, writer)
-			existing.EnabledDefault = hubEnabledDefault(p.IsInternal, desc, opts.programMarkers)
+			existing.EnabledDefault = hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers)
 			existing.OnActive(p.IsActive)
+			existing.SetRuleSummary(meta.conditionSummary, meta.activitySummary)
 		} else {
 			prog := hub.NewProgram(h.CentralName, p.ID, p.Name, desc, p.IsInternal, writer)
-			prog.EnabledDefault = hubEnabledDefault(p.IsInternal, desc, opts.programMarkers)
+			prog.EnabledDefault = hubEnabledDefault(p.IsInternal, meta.description, opts.programMarkers)
 			prog.OnActive(p.IsActive)
+			prog.SetRuleSummary(meta.conditionSummary, meta.activitySummary)
 			h.PutProgram(prog)
 		}
 	}
 	// Remove programs that are no longer present on the CCU or no longer
-	// pass the internal / marker filters.
+	// pass the marker filter. Internal programs are kept unconditionally;
+	// their visibility is a delivery-time concern, not a fetch one.
 	for _, existing := range h.Programs() {
 		if _, ok := freshIDs[existing.ID]; !ok {
 			h.RemoveProgram(existing.ID)
@@ -788,16 +841,24 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 // sysvarEntry mirrors SysVar.getAll. The CCU sends numeric values as
 // strings so we keep Value as RawMessage and coerce per-variable.
 type sysvarEntry struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Type        string          `json:"type"`
-	Value       json.RawMessage `json:"value"`
-	Unit        string          `json:"unit"`
-	ValueList   string          `json:"valueList"`
-	MaxValue    json.RawMessage `json:"maxValue"`
-	MinValue    json.RawMessage `json:"minValue"`
-	IsInternal  bool            `json:"isInternal"`
-	Description string          `json:"description"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Value      json.RawMessage `json:"value"`
+	Unit       string          `json:"unit"`
+	ValueList  string          `json:"valueList"`
+	MaxValue   json.RawMessage `json:"maxValue"`
+	MinValue   json.RawMessage `json:"minValue"`
+	IsInternal bool            `json:"isInternal"`
+	// IsVisible / IsLogged mirror the CCU-WebUI visibility and archive
+	// flags. IsLogged is backed by the CCU-side DPArchive setting.
+	IsVisible bool `json:"isVisible"`
+	IsLogged  bool `json:"isLogged"`
+	// ValueName0 / ValueName1 are the false / true value labels the CCU
+	// reports for LOGIC and ALARM variables only.
+	ValueName0  string `json:"valueName0"`
+	ValueName1  string `json:"valueName1"`
+	Description string `json:"description"`
 }
 
 // sysvarDescriptionMarker is the CCU-side marker that indicates a
@@ -876,15 +937,11 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		if descs, err := runner.GetSystemVariableDescriptions(ctx); err == nil {
 			haveDescs = true
 			for _, d := range descs {
-				if decoded, derr := url.QueryUnescape(d.Description); derr == nil {
-					descByID[d.ID] = decoded
-				} else {
-					descByID[d.ID] = d.Description
-				}
+				descByID[d.ID] = decodeRegaField(d.Description)
 				if d.ChannelAddress == "" {
 					continue
 				}
-				if decoded, derr := url.QueryUnescape(d.ChannelAddress); derr == nil {
+				if decoded := decodeRegaField(d.ChannelAddress); decoded != "" {
 					chanByID[d.ID] = decoded
 				} else {
 					chanByID[d.ID] = d.ChannelAddress
@@ -946,6 +1003,10 @@ func upsertSysvar(h *hub.Hub, v *sysvarEntry, writer hub.SysvarWriter, opts hubS
 	existing.Writer = writer
 	existing.IsExtended = isExtended
 	existing.IsInternal = v.IsInternal
+	existing.IsVisible = v.IsVisible
+	existing.IsLogged = v.IsLogged
+	existing.ValueName0 = v.ValueName0
+	existing.ValueName1 = v.ValueName1
 	existing.Description = desc
 	existing.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
 	if haveDescs || !ok {
@@ -1137,14 +1198,17 @@ func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit
 			continue
 		}
 		seen[id] = struct{}{}
+		decodedName := decodeRegaField(m.Name)
 		all = append(all, hub.ServiceMessage{
 			ID:          id,
-			Name:        decodeRegaField(m.Name),
+			Name:        decodedName,
 			Address:     m.Address,
 			DeviceName:  decodeRegaField(m.DeviceName),
+			Parameter:   serviceMessageParameter(decodedName),
+			InterfaceID: interfaceForChannel(unit, m.Address),
 			Type:        hmenum.ServiceMessageType(m.Type),
 			Counter:     m.Counter,
-			DisplayName: messageDisplayName(catalogs, locale, decodeRegaField(m.Name)),
+			DisplayName: messageDisplayName(catalogs, locale, decodedName),
 		})
 	}
 	unit.HubModel.ServiceMessages.Replace(all)
@@ -1203,19 +1267,69 @@ func messageDisplayName(catalogs *i18n.Catalogs, locale, rawName string) string 
 	return translated
 }
 
+// serviceMessageParameter extracts the service parameter from a raw CCU
+// service-message name. The name format is "AL-ADDRESS:CHANNEL.PARAM";
+// the parameter is the segment after the last dot. Device / channel
+// addresses never contain a dot, so the split is unambiguous. Returns ""
+// when the name carries no parameter segment — the caller then suppresses
+// every service parameter of the channel.
+func serviceMessageParameter(rawName string) string {
+	if idx := strings.LastIndex(rawName, "."); idx >= 0 {
+		return rawName[idx+1:]
+	}
+	return ""
+}
+
+// interfaceForChannel resolves the CCU interface (e.g. "HmIP-RF") that
+// owns channelAddress by looking up the device (the part before the ":")
+// in the model registry. Returns "" when the device is not registered;
+// the suppressor then re-resolves the interface at call time. Multi-CCU-
+// safe: the lookup is scoped to unit's own registry.
+func interfaceForChannel(unit *central.Unit, channelAddress string) string {
+	if unit == nil || unit.ModelRegistry == nil || channelAddress == "" {
+		return ""
+	}
+	deviceAddr := channelAddress
+	if i := strings.IndexByte(channelAddress, ':'); i >= 0 {
+		deviceAddr = channelAddress[:i]
+	}
+	if d, ok := unit.ModelRegistry.Get(deviceAddr); ok && d != nil {
+		return string(d.Interface)
+	}
+	return ""
+}
+
 // decodeRegaField URL-decodes a field emitted by the get_service_messages,
-// get_alarm_messages and get_inbox_devices ReGa scripts, which percent-encode
-// human-readable strings (names, device names, descriptions). On a decode
-// error the raw value is returned unchanged so a single malformed field never
-// drops the whole message.
+// get_alarm_messages, get_inbox_devices and get_program_descriptions ReGa
+// scripts, which percent-encode human-readable strings (names, device names,
+// descriptions, rule summaries). On a decode error the raw value is returned
+// unchanged so a single malformed field never drops the whole message.
 func decodeRegaField(s string) string {
 	if s == "" {
 		return ""
 	}
 	if dec, err := url.QueryUnescape(s); err == nil {
-		return dec
+		s = dec
+	}
+	// ReGa object names are ISO-8859-1 on the CCU, so after URL-unescape a
+	// umlaut is a raw Latin-1 high byte — invalid UTF-8 that renders as U+FFFD
+	// ("Sp�le" for "Spüle" in a program's condition/activity summary).
+	// Transcode when the decoded value is not already valid UTF-8.
+	if !utf8.ValidString(s) {
+		s = latin1ToUTF8String(s)
 	}
 	return s
+}
+
+// latin1ToUTF8String reinterprets an ISO-8859-1 string's bytes as Unicode
+// code points, producing valid UTF-8. ASCII bytes map 1:1, so a mixed string
+// keeps its structure while high bytes become correct multi-byte runes.
+func latin1ToUTF8String(s string) string {
+	runes := make([]rune, len(s))
+	for i := range len(s) {
+		runes[i] = rune(s[i])
+	}
+	return string(runes)
 }
 
 // systemUpdateRefresher is the narrow slice of the HubCoordinator the
@@ -1363,6 +1477,77 @@ func loadConnectivity(ctx context.Context, unit *central.Unit) error {
 	return unit.Reconciler.Reconcile(ctx)
 }
 
+// bidcosInterfaceLister is the south-bound read surface loadBidcosInterfaces
+// depends on. [jsonrpc.Client] satisfies it; tests supply a fake.
+type bidcosInterfaceLister interface {
+	ListBidcosInterfaces(ctx context.Context, iface string) ([]jsonrpc.BidcosInterface, error)
+}
+
+// loadBidcosInterfaces polls the CCU's listBidcosInterfaces method for every
+// BidCos radio interface the central owns and refreshes the HubCoordinator's
+// per-interface duty-cycle / carrier-sense cache. It is a read-only JSON-RPC
+// query (no radio traffic). HmIP and wired interfaces carry no BidCos gateway
+// and are skipped; their device-level DUTY_CYCLE data points cover them.
+//
+// When a BidCos interface reports several gateways (the CCU antenna plus LAN
+// gateways), the default gateway wins; absent a default, the highest duty
+// cycle is chosen so the north-bound warning reflects the worst case.
+func loadBidcosInterfaces(ctx context.Context, lister bidcosInterfaceLister, unit *central.Unit) error {
+	if unit == nil || unit.Hub == nil || unit.Clients == nil || lister == nil {
+		return nil
+	}
+	snapshot := make(map[string]coordinators.BidcosInterfaceInfo)
+	var firstErr error
+	for _, e := range unit.Clients.List() {
+		if e == nil || e.Interface != hmenum.InterfaceBidCosRF {
+			continue
+		}
+		gateways, err := lister.ListBidcosInterfaces(ctx, e.InterfaceID)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("loadBidcosInterfaces %s: %w", e.InterfaceID, err)
+			}
+			continue
+		}
+		if info, ok := aggregateBidcosGateways(gateways); ok {
+			snapshot[e.InterfaceID] = info
+		}
+	}
+	unit.Hub.SetBidcosInterfaces(snapshot)
+	return firstErr
+}
+
+// aggregateBidcosGateways collapses the gateway list of one BidCos interface
+// into a single utilisation snapshot. The default gateway is preferred; when
+// none is flagged default, the gateway with the highest duty cycle wins.
+// Returns false when the list is empty.
+func aggregateBidcosGateways(gateways []jsonrpc.BidcosInterface) (coordinators.BidcosInterfaceInfo, bool) {
+	var (
+		chosen jsonrpc.BidcosInterface
+		found  bool
+	)
+	for _, g := range gateways {
+		switch {
+		case !found:
+			chosen, found = g, true
+		case g.Default && !chosen.Default:
+			chosen = g
+		case g.Default == chosen.Default && g.DutyCycle > chosen.DutyCycle:
+			chosen = g
+		}
+	}
+	if !found {
+		return coordinators.BidcosInterfaceInfo{}, false
+	}
+	return coordinators.BidcosInterfaceInfo{
+		Address:      chosen.Address,
+		Type:         chosen.Type,
+		DutyCycle:    chosen.DutyCycle,
+		CarrierSense: chosen.CarrierSense,
+		Connected:    chosen.Connected,
+	}, true
+}
+
 // stringField extracts a string value from a raw map[string]any. Returns ""
 // when the key is absent or the value is not a string.
 func stringField(m map[string]any, key string) string {
@@ -1445,6 +1630,29 @@ func parseSysvarValue(vt hmenum.HubValueType, raw json.RawMessage) (hmtypes.Para
 	return hmtypes.StringValue(s), true
 }
 
+// hubMessageAck adapts the ReGa [rega.Runner] to the model's
+// [hub.MessageAcknowledger] and [hub.BulkMessageAcknowledger] contracts.
+// Single-message acknowledge drops the runner's confirmation boolean —
+// a false with no error means the message was already gone, which the
+// model treats as success. The bulk methods forward the acknowledged
+// count unchanged.
+type hubMessageAck struct {
+	runner *rega.Runner
+}
+
+func (a hubMessageAck) AcknowledgeMessage(ctx context.Context, id string) error {
+	_, err := a.runner.AcknowledgeMessage(ctx, id)
+	return err
+}
+
+func (a hubMessageAck) AcknowledgeAllServiceMessages(ctx context.Context) (int, error) {
+	return a.runner.AcknowledgeAllServiceMessages(ctx)
+}
+
+func (a hubMessageAck) AcknowledgeAllAlarmMessages(ctx context.Context) (int, error) {
+	return a.runner.AcknowledgeAllAlarmMessages(ctx)
+}
+
 // hubJSONRPCWriter implements [hub.ProgramWriter] + [hub.SysvarWriter]
 // against the CCU JSON-RPC endpoint. Program.execute and Rega-backed
 // Sysvar writes mirror
@@ -1456,6 +1664,14 @@ type hubJSONRPCWriter struct {
 // ExecuteProgram runs the given program synchronously.
 func (w *hubJSONRPCWriter) ExecuteProgram(ctx context.Context, id string) error {
 	return w.json.Call(ctx, "Program.execute", map[string]any{"id": id}, nil)
+}
+
+// ExecuteProgramConditional evaluates the program's "if" condition via a
+// ReGa script and runs it only when the condition is satisfied. The CCU's
+// JSON-RPC Program.execute runs unconditionally, so the condition-gated
+// variant has to go through ReGa. Returns whether the program executed.
+func (w *hubJSONRPCWriter) ExecuteProgramConditional(ctx context.Context, id string) (bool, error) {
+	return w.rega.ExecuteProgramConditional(ctx, id)
 }
 
 // SetProgramEnabled toggles the active flag via a ReGa script. The
@@ -1471,6 +1687,20 @@ func (w *hubJSONRPCWriter) SetProgramEnabled(ctx context.Context, id string, ena
 		"state": state,
 	})
 	return err
+}
+
+// DeleteProgram removes the program from the CCU via the delete_program
+// ReGa script. The CCU exposes Program.deleteProgramByName (by name) over
+// JSON-RPC but no delete-by-id, so the ID-keyed ReGa route is the portable
+// choice — the same reason SetProgramEnabled goes through ReGa. A "0"
+// script result (id no longer resolves to a program) maps to
+// [hub.ErrProgramNotFound].
+func (w *hubJSONRPCWriter) DeleteProgram(ctx context.Context, id string) error {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptDeleteProgram, map[string]string{"id": id})
+	if err != nil {
+		return err
+	}
+	return parseMutateResult(out, hub.ErrProgramNotFound)
 }
 
 // SetSysvar writes the sysvar with per-type wire dispatch, mirroring
@@ -1503,57 +1733,116 @@ func (w *hubJSONRPCWriter) SetSysvar(ctx context.Context, name string, value any
 
 // CreateSysvar provisions a new sysvar.
 //
-// BOOL/FLOAT/ENUM without a custom unit go through the CCU's native
-// JSON-RPC methods (`SysVar.createBool` / `createFloat` / `createEnum`)
-// This matches what
-// surface (UTF-8/BOM, escape rules). INTEGER, STRING and any sysvar
-// that needs a `ValueUnit` fall back to the `create_system_variable`
-// Rega script because the CCU's JSON-RPC has no equivalent for those.
-func (w *hubJSONRPCWriter) CreateSysvar(
-	ctx context.Context,
-	name, valueType, unit, vmin, vmax string,
-	valueList []string,
-) error {
-	if unit == "" {
-		switch valueType {
+// BOOL/FLOAT/ENUM without a custom unit, description or value labels go
+// through the CCU's native JSON-RPC methods (`SysVar.createBool` /
+// `createFloat` / `createEnum`), which own the exact CCU surface
+// (UTF-8/BOM, escape rules). INTEGER, STRING, ALARM and any sysvar that
+// needs a `ValueUnit`, a description or custom binary value labels fall
+// back to the `create_system_variable` Rega script because the CCU's
+// JSON-RPC has no equivalent for those (createBool / createFloat /
+// createEnum carry no description or value-name parameters, and there is
+// no native createAlarm — the script backs an ALARM line with an
+// OT_ALARMDP object so it stays acknowledgeable).
+func (w *hubJSONRPCWriter) CreateSysvar(ctx context.Context, spec hub.SysvarCreateSpec) error {
+	// A channel address binds the variable to a device channel; -1 leaves it
+	// unassigned. The address is resolved to the channel's ReGa ise id (the
+	// value SysVar.create* and oNew.Channel() expect) before it hits the CCU.
+	chnID := -1
+	if spec.Channel != "" {
+		id, err := w.resolveChannelISEID(ctx, spec.Channel)
+		if err != nil {
+			return err
+		}
+		chnID = id
+	}
+	// Custom binary value labels only apply to BOOL/ALARM and force the
+	// Rega path — the native createBool has no value-name parameter.
+	customLabels := spec.ValueName0 != "" || spec.ValueName1 != ""
+	if spec.Unit == "" && spec.Description == "" && !customLabels {
+		switch spec.ValueType {
 		case "BOOL":
 			return w.json.Call(ctx, "SysVar.createBool", map[string]any{
-				"name":     name,
+				"name":     spec.Name,
 				"init_val": 0,
 				"internal": 0,
-				"chn_id":   -1,
+				"chn_id":   chnID,
 			}, nil)
 		case "FLOAT":
 			params := map[string]any{
-				"name":     name,
+				"name":     spec.Name,
 				"internal": 0,
-				"chn_id":   -1,
+				"chn_id":   chnID,
 			}
-			if vmin != "" {
-				params["min_value"] = vmin
+			if spec.Min != "" {
+				params["min_value"] = spec.Min
 			}
-			if vmax != "" {
-				params["max_value"] = vmax
+			if spec.Max != "" {
+				params["max_value"] = spec.Max
 			}
 			return w.json.Call(ctx, "SysVar.createFloat", params, nil)
 		case "ENUM":
 			return w.json.Call(ctx, "SysVar.createEnum", map[string]any{
-				"name":       name,
-				"value_list": strings.Join(valueList, ";"),
+				"name":       spec.Name,
+				"value_list": strings.Join(spec.ValueList, ";"),
 				"internal":   0,
-				"chn_id":     -1,
+				"chn_id":     chnID,
 			}, nil)
 		}
 	}
+	// The Rega script sets ValueName0/1 for BOOL and ALARM; supply the
+	// CCU's own "false"/"true" defaults when the caller left a label empty
+	// so the script never writes a blank label over the default.
+	vn0, vn1 := spec.ValueName0, spec.ValueName1
+	if spec.ValueType == "BOOL" || spec.ValueType == "ALARM" {
+		if vn0 == "" {
+			vn0 = "false"
+		}
+		if vn1 == "" {
+			vn1 = "true"
+		}
+	}
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptCreateSystemVariable, map[string]string{
-		"name":   name,
-		"type":   valueType,
-		"unit":   unit,
-		"min":    vmin,
-		"max":    vmax,
-		"values": strings.Join(valueList, ";"),
+		"name":        spec.Name,
+		"type":        spec.ValueType,
+		"unit":        spec.Unit,
+		"min":         spec.Min,
+		"max":         spec.Max,
+		"values":      strings.Join(spec.ValueList, ";"),
+		"description": spec.Description,
+		"valuename0":  vn0,
+		"valuename1":  vn1,
+		"channel":     strconv.Itoa(chnID),
 	})
 	return err
+}
+
+// resolveChannelISEID resolves a device or channel address to its ReGa ise
+// id via the canonical Interface.getIseIDByAddress JSON-RPC method — the
+// numeric id oSv.Channel() / SysVar.create* bind for the "Kanalzuordnung".
+// A CCU-side fault or a non-positive id means the address does not name a
+// channel on this CCU; both surface as [hub.ErrSysvarChannelUnknown] so the
+// REST handler answers 422 (bad channel address) rather than 502. A genuine
+// transport failure propagates unchanged.
+func (w *hubJSONRPCWriter) resolveChannelISEID(ctx context.Context, address string) (int, error) {
+	var raw any
+	if err := w.json.Call(ctx, "Interface.getIseIDByAddress", map[string]any{"address": address}, &raw); err != nil {
+		var rpcErr *hmerr.JSONRPCError
+		if errors.As(err, &rpcErr) {
+			return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
+		}
+		return 0, err
+	}
+	id := 0
+	switch v := raw.(type) {
+	case float64:
+		id = int(v)
+	case string:
+		id, _ = strconv.Atoi(strings.TrimSpace(v))
+	}
+	if id <= 0 {
+		return 0, fmt.Errorf("%w: %s", hub.ErrSysvarChannelUnknown, address)
+	}
+	return id, nil
 }
 
 // DeleteSysvar removes a sysvar via the CCU's native JSON-RPC method
@@ -1566,23 +1855,73 @@ func (w *hubJSONRPCWriter) DeleteSysvar(ctx context.Context, name string) error 
 	}, nil)
 }
 
-// UpdateSysvar patches the sysvar's metadata (unit, bounds, value
-// list, description) without touching its type. Empty strings on
-// the input map leave the corresponding CCU field untouched.
-func (w *hubJSONRPCWriter) UpdateSysvar(
-	ctx context.Context,
-	name, unit, vmin, vmax, description string,
-	valueList []string,
-) error {
+// SysvarUsagePrograms lists the CCU programs that reference the named
+// sysvar via the variable's native DPEnumUsagePrograms (usage_by_sysvar.fn).
+// The ReGa-supplied program name is URL-encoded; it is decoded here.
+func (w *hubJSONRPCWriter) SysvarUsagePrograms(ctx context.Context, name string) ([]hub.SysvarUsage, error) {
+	raw, err := w.rega.SysvarUsagePrograms(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]hub.SysvarUsage, 0, len(raw))
+	for _, p := range raw {
+		out = append(out, hub.SysvarUsage{ID: p.ID, Name: decodeRegaField(p.Name), Active: p.Active})
+	}
+	return out, nil
+}
+
+// UpdateSysvar patches the sysvar's metadata (name, unit, bounds, value
+// list, description, binary value labels, visibility and archive flags)
+// without touching its type. Empty strings on the input map leave the
+// corresponding CCU field untouched; a non-empty newname renames the
+// variable in place. The visibility / archive flags are tri-state: an
+// empty string leaves the flag as-is, "true"/"false" sets it. Type
+// changes are unsafe at the CCU level — callers wanting that must delete
+// + recreate.
+func (w *hubJSONRPCWriter) UpdateSysvar(ctx context.Context, spec hub.SysvarUpdateSpec) error {
+	// Channel assignment is tri-state: nil leaves it untouched (""), an empty
+	// string clears it (ise id -1), an address resolves to the channel's ise
+	// id. The update script's `if (sChannel != "")` guard skips the "" case.
+	channelParam := ""
+	if spec.Channel != nil {
+		if *spec.Channel == "" {
+			channelParam = "-1"
+		} else {
+			id, err := w.resolveChannelISEID(ctx, *spec.Channel)
+			if err != nil {
+				return err
+			}
+			channelParam = strconv.Itoa(id)
+		}
+	}
 	_, err := w.rega.Run(ctx, hmenum.RegaScriptUpdateSystemVariable, map[string]string{
-		"name":        name,
-		"unit":        unit,
-		"min":         vmin,
-		"max":         vmax,
-		"values":      strings.Join(valueList, ";"),
-		"description": description,
+		"name":        spec.Name,
+		"newname":     spec.NewName,
+		"unit":        spec.Unit,
+		"min":         spec.Min,
+		"max":         spec.Max,
+		"values":      strings.Join(spec.ValueList, ";"),
+		"description": spec.Description,
+		"valuename0":  spec.ValueName0,
+		"valuename1":  spec.ValueName1,
+		"visible":     boolFlagParam(spec.Visible),
+		"logged":      boolFlagParam(spec.Logged),
+		"channel":     channelParam,
 	})
 	return err
+}
+
+// boolFlagParam renders a tri-state flag for a Rega script parameter:
+// "" when the pointer is nil (leave the CCU value untouched), otherwise
+// "true"/"false".
+func boolFlagParam(b *bool) string {
+	if b == nil {
+		return ""
+	}
+	if *b {
+		return "true"
+	}
+	return "false"
 }
 
 // SetDeviceRooms replaces the device's room assignments. `rooms` is
@@ -1869,4 +2208,107 @@ func WireBackupAndDownload(unit *central.Unit, writer *clientpkg.ValueWriter) {
 		}
 		return ic.CreateBackupAndDownload(ctx, b, 0, 0)
 	})
+}
+
+// ErrServiceMessageSuppressorNoClient is returned when the service-message
+// suppressor cannot resolve an interface client or its backend for the
+// requested interface — either no client is registered yet or the
+// backend has not been wired.
+var ErrServiceMessageSuppressorNoClient = errors.New("service_message_suppressor: no interface client available")
+
+// clientServiceMessageSuppressor routes CCU service-message suppression
+// through the per-interface [client.InterfaceClient] backend. It resolves
+// the interface client + backend for the target interface at call time so
+// it stays decoupled from interface-wiring order (the same late-binding
+// approach as [clientSysvarCreator]).
+//
+// It satisfies three interfaces at once — [coordinators.ServiceMessageSuppressor],
+// [coordinators.ServiceMessageReader], and [hub.ServiceMessageSuppressor] —
+// so a single instance backs both the hub coordinator seam and the
+// [hub.ServiceMessages] aggregate's [hub.ServiceMessages.Disable] path.
+type clientServiceMessageSuppressor struct {
+	unit   *central.Unit
+	writer *clientpkg.ValueWriter
+}
+
+// resolveInterface returns interfaceID unchanged when non-empty; otherwise
+// it looks the interface up from channelAddress via the model registry.
+func (c *clientServiceMessageSuppressor) resolveInterface(interfaceID, channelAddress string) string {
+	if interfaceID != "" {
+		return interfaceID
+	}
+	return interfaceForChannel(c.unit, channelAddress)
+}
+
+// backendFor resolves the interface client and its registered backend for
+// interfaceID (the bare CCU interface name, e.g. "HmIP-RF"). The client
+// registry is keyed by the composite wire id, so the lookup translates the
+// bare name through [WireInterfaceID].
+func (c *clientServiceMessageSuppressor) backendFor(interfaceID string) (*clientpkg.InterfaceClient, backends.Operations, error) {
+	if c.unit == nil || c.unit.Clients == nil || c.writer == nil || interfaceID == "" {
+		return nil, nil, ErrServiceMessageSuppressorNoClient
+	}
+	wireID := WireInterfaceID(c.unit.Name(), hmenum.Interface(interfaceID))
+	entry, ok := c.unit.Clients.Get(wireID)
+	if !ok || entry == nil || entry.Client == nil {
+		return nil, nil, fmt.Errorf("%w: interface %q", ErrServiceMessageSuppressorNoClient, interfaceID)
+	}
+	b, ok := c.writer.Backend(c.unit.Name(), wireID)
+	if !ok {
+		return nil, nil, fmt.Errorf("%w: backend not registered for %s/%s",
+			ErrServiceMessageSuppressorNoClient, c.unit.Name(), wireID)
+	}
+	return entry.Client, b, nil
+}
+
+// SuppressServiceMessage implements [coordinators.ServiceMessageSuppressor]
+// and [hub.ServiceMessageSuppressor]. The backend's own interface type is
+// sent as the JSON-RPC `interface` parameter, so it must match interfaceID
+// — which it does because the backend is looked up by that interface.
+func (c *clientServiceMessageSuppressor) SuppressServiceMessage(ctx context.Context, interfaceID, channelAddress, parameterID string, suppress bool) error {
+	iface := c.resolveInterface(interfaceID, channelAddress)
+	ic, b, err := c.backendFor(iface)
+	if err != nil {
+		return err
+	}
+	_, err = ic.SuppressServiceMessage(ctx, b, channelAddress, parameterID, suppress)
+	return err
+}
+
+// GetSuppressedServiceMessages implements [coordinators.ServiceMessageReader]
+// and [hub.ServiceMessageSuppressor]. Returns the CCU's current suppressed
+// service-parameter list for channelAddress on the resolved interface.
+func (c *clientServiceMessageSuppressor) GetSuppressedServiceMessages(ctx context.Context, interfaceID, channelAddress string) ([]string, error) {
+	iface := c.resolveInterface(interfaceID, channelAddress)
+	ic, b, err := c.backendFor(iface)
+	if err != nil {
+		return nil, err
+	}
+	return ic.GetSuppressedServiceMessages(ctx, b, iface, channelAddress)
+}
+
+// WireServiceMessageSuppressor installs the durable service-message
+// suppressor on unit. The same instance backs the hub-coordinator seam
+// ([coordinators.HubCoordinator.SetServiceMessageSuppressor] /
+// [coordinators.HubCoordinator.SetServiceMessageReader]) and the
+// [hub.ServiceMessages] aggregate's [hub.ServiceMessages.Disable] /
+// [hub.ServiceMessages.Unsuppress] path, so REST / WS calls actually reach
+// the CCU's Interface.suppressServiceMessages instead of being no-ops.
+//
+// Call this after [WireCentrals] has registered all interface clients so
+// the target interface's client is available when the first suppress call
+// arrives — the same late-binding reason as [WireSysvarCreator]. Nil
+// arguments are safe.
+func WireServiceMessageSuppressor(unit *central.Unit, writer *clientpkg.ValueWriter) {
+	if unit == nil {
+		return
+	}
+	s := &clientServiceMessageSuppressor{unit: unit, writer: writer}
+	if unit.Hub != nil {
+		unit.Hub.SetServiceMessageSuppressor(s)
+		unit.Hub.SetServiceMessageReader(s)
+	}
+	if unit.HubModel != nil && unit.HubModel.ServiceMessages != nil {
+		unit.HubModel.ServiceMessages.SetSuppressor(s)
+	}
 }

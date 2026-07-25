@@ -18,6 +18,9 @@
   import BackupList from "./routes/BackupList.svelte";
   import SysvarList from "./routes/SysvarList.svelte";
   import ProgramList from "./routes/ProgramList.svelte";
+  import GroupList from "./routes/GroupList.svelte";
+  import LinkList from "./routes/LinkList.svelte";
+  import Diagrams from "./routes/Diagrams.svelte";
   import MessageList from "./routes/MessageList.svelte";
   import Settings from "./routes/Settings.svelte";
   import Inbox from "./routes/Inbox.svelte";
@@ -167,10 +170,13 @@
     | { kind: "list" }
     | { kind: "overview" }
     | { kind: "favorites" }
-    | { kind: "detail"; address: string; channel?: number }
+    | { kind: "detail"; address: string; channel?: number; sub?: string }
     | { kind: "backups" }
     | { kind: "sysvars" }
     | { kind: "programs" }
+    | { kind: "groups" }
+    | { kind: "links" }
+    | { kind: "diagrams" }
     | { kind: "messages" }
     | { kind: "audit" }
     | { kind: "diagnostics" }
@@ -189,12 +195,21 @@
     | { kind: "unknown" };
 
   const route = $derived.by<Route>(() => {
+    // Split an optional query string (e.g. `/devices/ADDR?tab=links`) off the
+    // path so it never leaks into the address match. Only the device route
+    // reads a query today; the exact-match routes below are query-free.
+    const qIdx = path.indexOf("?");
+    const query = qIdx >= 0 ? path.slice(qIdx + 1) : "";
+    const rawPath = qIdx >= 0 ? path.slice(0, qIdx) : path;
     if (!path || path === "/" || path === "/devices") return { kind: "list" };
     if (path === "/overview") return { kind: "overview" };
     if (path === "/favorites") return { kind: "favorites" };
     if (path === "/backups") return { kind: "backups" };
     if (path === "/sysvars") return { kind: "sysvars" };
     if (path === "/programs") return { kind: "programs" };
+    if (path === "/groups") return { kind: "groups" };
+    if (path === "/links") return { kind: "links" };
+    if (path === "/diagrams") return { kind: "diagrams" };
     if (path === "/messages") return { kind: "messages" };
     if (path === "/audit") return { kind: "audit" };
     if (path === "/diagnostics") return { kind: "diagnostics" };
@@ -214,7 +229,7 @@
     if (path === "/alarm" || path.startsWith("/alarm/")) {
       return { kind: "alarm", subpath: path.slice("/alarm".length) || "" };
     }
-    const m = path.match(
+    const m = rawPath.match(
       /^\/devices\/([^/]+)(?:\/channels\/(\d+))?\/?$/,
     );
     if (!m) return { kind: "unknown" };
@@ -222,6 +237,7 @@
       kind: "detail",
       address: decodeURIComponent(m[1]),
       channel: m[2] ? Number(m[2]) : undefined,
+      sub: new URLSearchParams(query).get("tab") ?? undefined,
     };
   });
 
@@ -243,6 +259,9 @@
     route.kind === "diagnostics" ? t("page.title.diagnostics") :
     route.kind === "energy" ? t("page.title.energy") :
     route.kind === "fleet" ? t("page.title.fleet") :
+    route.kind === "groups" ? t("page.title.groups") :
+    route.kind === "links" ? t("page.title.links") :
+    route.kind === "diagrams" ? t("page.title.diagrams") :
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
     route.kind === "overview" ? t("page.title.overview") :
@@ -335,6 +354,7 @@
           <DeviceDetail
             address={route.address}
             channel={route.channel}
+            sub={route.sub}
             {locale}
           />
         {:else if route.kind === "backups"}
@@ -343,6 +363,12 @@
           <SysvarList />
         {:else if route.kind === "programs"}
           <ProgramList />
+        {:else if route.kind === "groups"}
+          <GroupList />
+        {:else if route.kind === "links"}
+          <LinkList {locale} />
+        {:else if route.kind === "diagrams"}
+          <Diagrams />
         {:else if route.kind === "messages"}
           <MessageList />
         {:else if route.kind === "audit"}

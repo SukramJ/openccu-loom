@@ -8,10 +8,11 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // Widgets that only display sensor data — they accept onSetSlot as an
 // optional prop but never call it. Everything else must declare and
 // dispatch through the unified slot writer or the registry's
-// `<Widget {onSetSlot} />` wiring becomes silently a no-op.
+// `<Widget {onSetSlot} />` wiring becomes silently a no-op. ButtonEvent
+// is intentionally NOT here: its press slots are writable on virtual
+// remotes, so it declares and dispatches onSetSlot like any actor.
 const READ_ONLY = new Set([
   "BinarySensor.svelte",
-  "ButtonEvent.svelte",
   "Powermeter.svelte",
   "Sensor.svelte",
 ]);

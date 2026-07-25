@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
@@ -44,6 +45,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // loadTr is a package-level helper that loads embedded translations once.
@@ -573,7 +575,7 @@ func TestDevicesAdapter_Devices_PopulatedRegistry(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_HappyPath(t *testing.T) {
 	t.Parallel()
 	admin, _, _, _ := buildBoost9Fixture(t)
-	err := admin.RenameDevice(context.Background(), "DEV004", "NewName")
+	err := admin.RenameDevice(context.Background(), "DEV004", "NewName", false)
 	if err != nil {
 		t.Fatalf("RenameDevice: %v", err)
 	}
@@ -582,7 +584,7 @@ func TestDeviceAdminDomain_RenameDevice_HappyPath(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_UnknownDevice_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin, _, _, _ := buildBoost9Fixture(t)
-	err := admin.RenameDevice(context.Background(), "UNKNOWN", "NewName")
+	err := admin.RenameDevice(context.Background(), "UNKNOWN", "NewName", false)
 	if err == nil {
 		t.Error("expected error for unknown device in RenameDevice")
 	}
@@ -591,9 +593,61 @@ func TestDeviceAdminDomain_RenameDevice_UnknownDevice_ReturnsErr(t *testing.T) {
 func TestDeviceAdminDomain_RenameDevice_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin := &DeviceAdminDomain{registry: nil}
-	err := admin.RenameDevice(context.Background(), "DEV004", "NewName")
+	err := admin.RenameDevice(context.Background(), "DEV004", "NewName", false)
 	if err == nil {
 		t.Error("expected error for nil registry in RenameDevice")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DeviceAdminDomain.RenameChannel
+// ---------------------------------------------------------------------------
+
+func TestDeviceAdminDomain_RenameChannel_HappyPath(t *testing.T) {
+	t.Parallel()
+	admin, c, dev, _ := buildBoost9Fixture(t)
+	var gotAddr, gotName string
+	c.SetRenameDeviceFn(func(_ context.Context, address, name string) error {
+		gotAddr, gotName = address, name
+		return nil
+	})
+	if err := admin.RenameChannel(context.Background(), "DEV004", 1, "Kitchen Light"); err != nil {
+		t.Fatalf("RenameChannel: %v", err)
+	}
+	if gotAddr != "DEV004:1" || gotName != "Kitchen Light" {
+		t.Errorf("hook got (%q, %q), want (%q, %q)", gotAddr, gotName, "DEV004:1", "Kitchen Light")
+	}
+	if got := dev.Channel("DEV004:1").Name; got != "Kitchen Light" {
+		t.Errorf("in-memory channel name = %q, want %q", got, "Kitchen Light")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_UnknownDevice_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	admin, _, _, _ := buildBoost9Fixture(t)
+	err := admin.RenameChannel(context.Background(), "UNKNOWN", 1, "NewName")
+	if err == nil {
+		t.Error("expected error for unknown device in RenameChannel")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_NilRegistry_ReturnsErr(t *testing.T) {
+	t.Parallel()
+	admin := &DeviceAdminDomain{registry: nil}
+	err := admin.RenameChannel(context.Background(), "DEV004", 1, "NewName")
+	if err == nil {
+		t.Error("expected error for nil registry in RenameChannel")
+	}
+}
+
+func TestDeviceAdminDomain_RenameChannel_HookError_Propagates(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	boom := errors.New("ccu unreachable")
+	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error { return boom })
+	err := admin.RenameChannel(context.Background(), "DEV004", 1, "NewName")
+	if !errors.Is(err, boom) {
+		t.Errorf("expected propagated hook error, got %v", err)
 	}
 }
 
@@ -4117,6 +4171,10 @@ type fullFakeLinkOps2 struct {
 	linkPutErr error
 }
 
+func (f *fullFakeLinkOps2) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (f *fullFakeLinkOps2) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return f.linkPutErr
 }
@@ -5951,9 +6009,17 @@ type linksBackend struct {
 	getLinksErr     error
 	addLinkErr      error
 	removeLinkErr   error
+	setLinkInfoErr  error
 	getLinkPeersErr error
 	putLinkParamErr error
 	getLinkParamErr error
+
+	// Captured arguments of the most recent SetLinkInfo call.
+	setIface       string
+	setSender      string
+	setReceiver    string
+	setName        string
+	setDescription string
 }
 
 func (b *linksBackend) GetLinks(_ context.Context, _ string) ([]hmproto.LinkDescription, error) {
@@ -5971,9 +6037,23 @@ func (b *linksBackend) RemoveLink(_ context.Context, _, _ string) error {
 	return b.removeLinkErr
 }
 
+func (b *linksBackend) SetLinkInfo(_ context.Context, iface, sender, receiver, name, description string) (bool, error) {
+	b.setIface = iface
+	b.setSender = sender
+	b.setReceiver = receiver
+	b.setName = name
+	b.setDescription = description
+	if b.setLinkInfoErr != nil {
+		return false, b.setLinkInfoErr
+	}
+	return true, nil
+}
+
 func (b *linksBackend) GetLinkPeers(_ context.Context, _ string) ([]string, error) {
 	return nil, b.getLinkPeersErr
 }
+
+func (b *linksBackend) ActivateLinkParamset(context.Context, string, string, bool) error { return nil }
 
 func (b *linksBackend) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return b.putLinkParamErr
@@ -6097,6 +6177,84 @@ func TestRemoveLink_BackendError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// SetLinkInfo — device in no central → ErrDescriptionNotFound
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_DeviceNotFound(t *testing.T) {
+	t.Parallel()
+	domain, _ := buildLinksFixtureNoBackend(t, "ccu-b26-si0", "SI0DEV01B26")
+	err := domain.SetLinkInfo(context.Background(), "UNKNOWNDEV:1", "PEER:1", "n", "d")
+	if !errors.Is(err, hmerr.ErrDescriptionNotFound) {
+		t.Errorf("expected ErrDescriptionNotFound, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetLinkInfo — backend not found
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_NoBackend(t *testing.T) {
+	t.Parallel()
+	domain, _ := buildLinksFixtureNoBackend(t, "ccu-b26-si1", "SI1DEV01B26")
+	err := domain.SetLinkInfo(context.Background(), "SI1DEV01B26:1", "PEER:1", "n", "d")
+	if !errors.Is(err, ErrNoLinkBackend) {
+		t.Errorf("expected ErrNoLinkBackend, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetLinkInfo — backend.SetLinkInfo error propagates
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_BackendError(t *testing.T) {
+	t.Parallel()
+	setErr := errors.New("set link info fail")
+	b := &linksBackend{setLinkInfoErr: setErr}
+	domain := buildLinksFixtureWithBackend(t, "ccu-b26-si2", "SI2DEV01B26", b)
+	err := domain.SetLinkInfo(context.Background(), "SI2DEV01B26:1", "PEER:1", "n", "d")
+	if !errors.Is(err, setErr) {
+		t.Errorf("expected setErr, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetLinkInfo — forwards the device interface + all four args to the
+// backend and records an audit entry.
+// ---------------------------------------------------------------------------
+
+func TestSetLinkInfo_ForwardsArgsAndRecordsAudit(t *testing.T) {
+	t.Parallel()
+	b := &linksBackend{}
+	domain := buildLinksFixtureWithBackend(t, "ccu-b26-si3", "SI3DEV01B26", b)
+	auditBuf := audit.NewBuffer(10)
+	domain.SetAuditRecorder(auditBuf)
+
+	if err := domain.SetLinkInfo(context.Background(), "SI3DEV01B26:1", "PEER:2", "Treppenlicht", "auto"); err != nil {
+		t.Fatalf("SetLinkInfo: %v", err)
+	}
+	if b.setIface != "HmIP-RF" {
+		t.Errorf("iface: want HmIP-RF, got %q", b.setIface)
+	}
+	if b.setSender != "SI3DEV01B26:1" || b.setReceiver != "PEER:2" {
+		t.Errorf("addresses forwarded wrong: sender=%q receiver=%q", b.setSender, b.setReceiver)
+	}
+	if b.setName != "Treppenlicht" || b.setDescription != "auto" {
+		t.Errorf("name/description forwarded wrong: name=%q desc=%q", b.setName, b.setDescription)
+	}
+	entries := auditBuf.List(0)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(entries))
+	}
+	e := entries[0]
+	if e.Action != audit.ActionLinkUpdate {
+		t.Errorf("audit action: want %q, got %q", audit.ActionLinkUpdate, e.Action)
+	}
+	if e.DeviceAddress != "SI3DEV01B26" || e.ChannelNo != 1 || e.Peer != "PEER:2" || e.Note != "Treppenlicht" {
+		t.Errorf("audit entry fields wrong: %+v", e)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // GetLinkParamset — backend not found (line 214-215)
 // ---------------------------------------------------------------------------
 
@@ -6138,13 +6296,13 @@ func TestPutLinkParamset_BackendPutError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// channelMatchesRole — GetLinkPeers error (line 309-311)
+// LinkableChannels — a candidate carrying no link roles is excluded
+// even when the source channel is absent (WS device-address probe): the
+// directional presence fallback requires the candidate to have roles.
 // ---------------------------------------------------------------------------
 
-func TestChannelMatchesRole_GetLinkPeersError(t *testing.T) {
+func TestLinkableChannels_RolelessCandidateExcluded(t *testing.T) {
 	t.Parallel()
-	peersErr := errors.New("get peers fail")
-	b := &linksBackend{getLinkPeersErr: peersErr}
 	c, err := central.New(central.Config{Name: "ccu-b26-cmr1"})
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
@@ -6161,62 +6319,21 @@ func TestChannelMatchesRole_GetLinkPeersError(t *testing.T) {
 		Name:        "CMR1DEV01B26",
 	})
 	c.ModelRegistry.Put(d)
+	// Channel carries no LINK_*_ROLES → not a valid link candidate.
 	d.AddChannel("CMR1DEV01B26:1", 1, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
 
 	w := client.NewValueWriter()
-	w.Register("ccu-b26-cmr1", "HmIP-RF", b)
 	domain := NewLinksDomain(reg, w, nil)
 
-	// LinkableChannels will call channelMatchesRole for CMR1DEV01B26:1
-	// GetLinkPeers will return error → channelMatchesRole returns false.
+	// Absent source channel → presence fallback; a role-less candidate
+	// still fails it.
 	result, err := domain.LinkableChannels(context.Background(), "HmIP-RF", "OTHERCHANNEL:1", "sender", "en")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Channel not included because channelMatchesRole returned false.
 	for _, ch := range result {
 		if ch.Address == "CMR1DEV01B26:1" {
-			t.Error("CMR1DEV01B26:1 should not appear in linkable channels when GetLinkPeers fails")
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// channelMatchesRole — backend not found → returns false (line 306-307)
-// ---------------------------------------------------------------------------
-
-func TestChannelMatchesRole_NoBackend(t *testing.T) {
-	t.Parallel()
-	c, err := central.New(central.Config{Name: "ccu-b26-cmr2"})
-	if err != nil {
-		t.Fatalf("central.New: %v", err)
-	}
-	reg := central.NewRegistry()
-	if err := reg.Register(c); err != nil {
-		t.Fatalf("reg.Register: %v", err)
-	}
-	d := device.New(device.Config{
-		InterfaceID: "HmIP-RF",
-		Interface:   hmenum.InterfaceHmIPRF,
-		Address:     "CMR2DEV01B26",
-		Model:       "HmIP-STH",
-		Name:        "CMR2DEV01B26",
-	})
-	c.ModelRegistry.Put(d)
-	d.AddChannel("CMR2DEV01B26:1", 1, "KEY_TRANSCEIVER", hmenum.ParamsetKeyValues)
-
-	// No backend registered.
-	w := client.NewValueWriter()
-	domain := NewLinksDomain(reg, w, nil)
-
-	// channelMatchesRole → writer.Backend not found → false → channel excluded.
-	result, err := domain.LinkableChannels(context.Background(), "HmIP-RF", "OTHERCHANNEL:1", "sender", "en")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	for _, ch := range result {
-		if ch.Address == "CMR2DEV01B26:1" {
-			t.Error("CMR2DEV01B26:1 should not appear when no backend")
+			t.Error("a role-less candidate must not appear in linkable channels")
 		}
 	}
 }
@@ -6698,7 +6815,7 @@ func TestRunReport_UnsupportedInterface(t *testing.T) {
 	w := client.NewValueWriter()
 	w.Register("ccu-b27-rr1", "CUxD", &paramsetFakeOps{})
 	domain := NewCentralLinksDomain(reg, w)
-	_, err = domain.CreateCentralLinks(context.Background(), "RR1DEV01B27")
+	_, err = domain.CreateCentralLinks(context.Background(), "RR1DEV01B27", "")
 	if err == nil {
 		t.Fatal("expected error for unsupported interface, got nil")
 	}
@@ -6728,7 +6845,7 @@ func TestRunReport_NoBackend(t *testing.T) {
 	// No backend for BidCos-RF.
 	w := client.NewValueWriter()
 	domain := NewCentralLinksDomain(reg, w)
-	_, err = domain.CreateCentralLinks(context.Background(), "RR2DEV01B27")
+	_, err = domain.CreateCentralLinks(context.Background(), "RR2DEV01B27", "")
 	if !errors.Is(err, ErrNoCentralLinkBackend) {
 		t.Errorf("expected ErrNoCentralLinkBackend, got %v", err)
 	}
@@ -6776,7 +6893,7 @@ func TestRunReport_ReportValueUsageError(t *testing.T) {
 	w := client.NewValueWriter()
 	w.Register("ccu-b27-rr3", "BidCos-RF", b)
 	domain := NewCentralLinksDomain(reg, w)
-	report, runErr := domain.CreateCentralLinks(context.Background(), "RR3DEV01B27")
+	report, runErr := domain.CreateCentralLinks(context.Background(), "RR3DEV01B27", "")
 	if runErr == nil {
 		t.Fatal("expected error from CreateCentralLinks, got nil")
 	}
@@ -7748,7 +7865,7 @@ func TestEventBridge_PublishCustomDPConfig_NilMqtt_NoPanic(t *testing.T) {
 func TestEventBridge_PublishChannelEventState_NilMqtt_NoPanic(t *testing.T) {
 	t.Parallel()
 	b := &EventBridge{mqtt: nil}
-	b.publishChannelEventState(context.Background(), "ccu1", "HmIP-RF", "DEV001", 1, "PRESS_SHORT", nil)
+	b.publishChannelEventState(context.Background(), "ccu1", "HmIP-RF", "DEV001", 1, "HmIP-WRC2", "PRESS_SHORT", nil)
 }
 
 func TestEventBridge_PublishChannelEventDiscoverySnapshot_NilMqtt_NoPanic(t *testing.T) {
@@ -10574,7 +10691,7 @@ func TestDeviceAdminUnpairDevice_DeviceFoundNoBackend(t *testing.T) {
 	t.Parallel()
 	reg, w := buildDeviceWithNoBackend(t, "ccu-b40-unpair-nobackend", "B40UNPAIRDEV")
 	a := NewDeviceAdminDomain(reg, w)
-	err := a.UnpairDevice(context.Background(), "B40UNPAIRDEV")
+	err := a.UnpairDevice(context.Background(), "B40UNPAIRDEV", false, false)
 	if err == nil {
 		t.Fatal("expected ErrNoDeviceBackend from UnpairDevice when no backend for interface")
 	}
@@ -10602,7 +10719,7 @@ func TestDeviceAdminAcceptInboxDevice_HubModelNilContinue(t *testing.T) {
 	a := NewDeviceAdminDomain(reg, nil)
 	// AcceptInboxDevice: finds c in registry → c.HubModel == nil → continue →
 	// exhausts loop → ErrNoDeviceBackend.
-	err = a.AcceptInboxDevice(context.Background(), "ANYDEV")
+	err = a.AcceptInboxDevice(context.Background(), "ANYDEV", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Fatal("expected error from AcceptInboxDevice with nil HubModel")
 	}
@@ -11192,7 +11309,7 @@ func TestCentralLinksCreateTouchedCount(t *testing.T) {
 	w.Register("ccu-b45-cl-touched", "BidCos-RF", b)
 
 	domain := NewCentralLinksDomain(reg, w)
-	report, err := domain.CreateCentralLinks(context.Background(), "B45CLDEV01")
+	report, err := domain.CreateCentralLinks(context.Background(), "B45CLDEV01", "")
 	if err != nil {
 		t.Fatalf("CreateCentralLinks: unexpected error: %v", err)
 	}
@@ -12673,7 +12790,7 @@ func TestHubJSONRPCWriter_CreateSysvar_BoolType_Success(t *testing.T) {
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	w := &hubJSONRPCWriter{json: jc, rega: nil}
-	err := w.CreateSysvar(context.Background(), "myBool", "BOOL", "", "", "", nil)
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "myBool", ValueType: "BOOL"})
 	if err != nil {
 		t.Fatalf("CreateSysvar BOOL: %v", err)
 	}
@@ -12686,7 +12803,7 @@ func TestHubJSONRPCWriter_CreateSysvar_FloatType_Success(t *testing.T) {
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	w := &hubJSONRPCWriter{json: jc, rega: nil}
-	err := w.CreateSysvar(context.Background(), "myFloat", "FLOAT", "", "0", "100", nil)
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "myFloat", ValueType: "FLOAT", Min: "0", Max: "100"})
 	if err != nil {
 		t.Fatalf("CreateSysvar FLOAT: %v", err)
 	}
@@ -12699,7 +12816,7 @@ func TestHubJSONRPCWriter_CreateSysvar_EnumType_Success(t *testing.T) {
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	w := &hubJSONRPCWriter{json: jc, rega: nil}
-	err := w.CreateSysvar(context.Background(), "myEnum", "ENUM", "", "", "", []string{"A", "B", "C"})
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "myEnum", ValueType: "ENUM", ValueList: []string{"A", "B", "C"}})
 	if err != nil {
 		t.Fatalf("CreateSysvar ENUM: %v", err)
 	}
@@ -12749,7 +12866,7 @@ func TestHubJSONRPCWriter_UpdateSysvar_Success(t *testing.T) {
 	jc := newBoost6JSONRPCClient(t, srv.URL)
 	r := newBoost6RegaRunner(t, jc)
 	w := &hubJSONRPCWriter{json: jc, rega: r}
-	err := w.UpdateSysvar(context.Background(), "MyVar", "°C", "0", "100", "desc", nil)
+	err := w.UpdateSysvar(context.Background(), hub.SysvarUpdateSpec{Name: "MyVar", Unit: "°C", Min: "0", Max: "100", Description: "desc"})
 	if err != nil {
 		t.Fatalf("UpdateSysvar: %v", err)
 	}
@@ -12853,7 +12970,7 @@ func TestHubJSONRPCWriter_CreateSysvar_StringType_UsesRega(t *testing.T) {
 	r := newBoost6RegaRunner(t, jc)
 	w := &hubJSONRPCWriter{json: jc, rega: r}
 	// STRING type goes through the rega path.
-	err := w.CreateSysvar(context.Background(), "myStr", "STRING", "", "", "", nil)
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "myStr", ValueType: "STRING"})
 	if err != nil {
 		t.Fatalf("CreateSysvar STRING: %v", err)
 	}
@@ -12868,7 +12985,7 @@ func TestHubJSONRPCWriter_CreateSysvar_WithUnit_UsesRega(t *testing.T) {
 	r := newBoost6RegaRunner(t, jc)
 	w := &hubJSONRPCWriter{json: jc, rega: r}
 	// Any type with a non-empty unit falls back to rega.
-	err := w.CreateSysvar(context.Background(), "myTemp", "FLOAT", "°C", "0", "100", nil)
+	err := w.CreateSysvar(context.Background(), hub.SysvarCreateSpec{Name: "myTemp", ValueType: "FLOAT", Unit: "°C", Min: "0", Max: "100"})
 	if err != nil {
 		t.Fatalf("CreateSysvar with unit: %v", err)
 	}
@@ -13135,6 +13252,10 @@ func (f *configFakeOperations) GetLinkParamset(_ context.Context, _, _ string) (
 	return nil, nil
 }
 
+func (f *configFakeOperations) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (f *configFakeOperations) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }
@@ -13142,7 +13263,7 @@ func (f *configFakeOperations) PutLinkParamset(_ context.Context, _, _ string, _
 func (f *configFakeOperations) ReportValueUsage(_ context.Context, _, _ string, _ int) error {
 	return nil
 }
-func (f *configFakeOperations) DeleteDevice(_ context.Context, _ string) error { return nil }
+func (f *configFakeOperations) DeleteDevice(_ context.Context, _ string, _ int) error { return nil }
 func (f *configFakeOperations) GetAllPrograms(_ context.Context) ([]map[string]any, error) {
 	return nil, nil
 }
@@ -13181,6 +13302,38 @@ func (f *configFakeOperations) DetermineParameter(_ context.Context, _, _ string
 func (*configFakeOperations) GetInstallMode(context.Context) (int, error) { return 0, nil }
 func (*configFakeOperations) SetInstallMode(context.Context, bool, int, int, string) error {
 	return nil
+}
+
+func (*configFakeOperations) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*configFakeOperations) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*configFakeOperations) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*configFakeOperations) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*configFakeOperations) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (*configFakeOperations) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (*configFakeOperations) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (*configFakeOperations) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (*configFakeOperations) GetServiceMessages(context.Context, string) ([]map[string]any, error) {
@@ -13720,7 +13873,7 @@ func TestDeviceAdminDomain_SetFunctions_UnknownDevice_ReturnsErr(t *testing.T) {
 func TestDeviceAdminDomain_AcceptInboxDevice_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	admin := &DeviceAdminDomain{registry: nil, writer: nil}
-	err := admin.AcceptInboxDevice(context.Background(), "DEV003")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV003", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Error("expected error for nil registry in AcceptInboxDevice")
 	}
@@ -13733,7 +13886,7 @@ func TestDeviceAdminDomain_AcceptInboxDevice_UnknownDevice_ReturnsErr(t *testing
 	// Device is not in the inbox (HubModel.AcceptInboxDeviceRemote requires InboxAccepter).
 	// Since InboxAccepter is nil, it returns ErrNoInboxAccepter.
 	// The loop continues without finding a match → returns ErrNoDeviceBackend.
-	err := admin.AcceptInboxDevice(context.Background(), "UNKNOWN")
+	err := admin.AcceptInboxDevice(context.Background(), "UNKNOWN", interfaces.AcceptInboxOptions{})
 	if err == nil {
 		t.Error("expected error for unknown device in AcceptInboxDevice")
 	}
@@ -13888,7 +14041,7 @@ func TestDeviceAdminDomain_AcceptInboxDevice_SuccessPath_NilWriter(t *testing.T)
 	c.HubModel.InboxAccepter = &fakeInboxAccepter{err: nil}
 	// Use nil writer so the early return at "writer == nil" fires.
 	admin.writer = nil
-	err := admin.AcceptInboxDevice(context.Background(), "DEV004")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", interfaces.AcceptInboxOptions{})
 	if err != nil {
 		t.Fatalf("AcceptInboxDevice with nil writer: %v", err)
 	}
@@ -13898,7 +14051,7 @@ func TestDeviceAdminDomain_AcceptInboxDevice_SuccessPath_DeviceInRegistry(t *tes
 	t.Parallel()
 	admin, c, _, _ := buildBoost9Fixture(t)
 	c.HubModel.InboxAccepter = &fakeInboxAccepter{err: nil}
-	err := admin.AcceptInboxDevice(context.Background(), "DEV004")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", interfaces.AcceptInboxOptions{})
 	if err != nil {
 		t.Fatalf("AcceptInboxDevice with device in registry: %v", err)
 	}
@@ -13909,11 +14062,253 @@ func TestDeviceAdminDomain_AcceptInboxDevice_SuccessPath_DeviceNotInRegistry(t *
 	admin, c, _, _ := buildBoost9Fixture(t)
 	c.HubModel.InboxAccepter = &fakeInboxAccepter{err: nil}
 	// DEV999 is NOT in the model registry — exercises the "ok=false" branch.
-	err := admin.AcceptInboxDevice(context.Background(), "DEV999")
+	err := admin.AcceptInboxDevice(context.Background(), "DEV999", interfaces.AcceptInboxOptions{})
 	// Loops through all centrals. InboxAccepter succeeds for DEV999 (it doesn't check).
 	// After success: c.ModelRegistry.Get("DEV999") → false → return nil.
 	if err != nil {
 		t.Fatalf("AcceptInboxDevice DEV999 not in registry: %v", err)
+	}
+}
+
+// captureRoomFuncMutator records room / function assignment calls so the
+// accept-orchestration tests can assert the follow-up steps ran and, on
+// error, that the remaining steps are still attempted (best-effort).
+type captureRoomFuncMutator struct {
+	rooms     []string
+	functions []string
+	roomsErr  error
+	funcsErr  error
+	roomCalls int
+	funcCalls int
+}
+
+func (c *captureRoomFuncMutator) SetDeviceRooms(_ context.Context, _ string, rooms []string) error {
+	c.roomCalls++
+	c.rooms = rooms
+	return c.roomsErr
+}
+
+func (c *captureRoomFuncMutator) SetDeviceFunctions(_ context.Context, _ string, functions []string) error {
+	c.funcCalls++
+	c.functions = functions
+	return c.funcsErr
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_AppliesInitialConfig verifies the
+// accept runs the optional first-time configuration (rename + rooms +
+// functions) against the accepting central.
+func TestDeviceAdminDomain_AcceptInboxDevice_AppliesInitialConfig(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Name:      "Kitchen Switch",
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts); err != nil {
+		t.Fatalf("AcceptInboxDevice with config: %v", err)
+	}
+	if m.roomCalls != 1 || m.funcCalls != 1 {
+		t.Fatalf("expected one room + one function write, got rooms=%d funcs=%d", m.roomCalls, m.funcCalls)
+	}
+	if len(m.rooms) != 1 || m.rooms[0] != "Kitchen" {
+		t.Fatalf("rooms not forwarded: %+v", m.rooms)
+	}
+	if dev, ok := c.ModelRegistry.Get("DEV004"); !ok || dev.Name != "Kitchen Switch" {
+		t.Fatalf("rename not applied in-memory: %+v", dev)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_ConfigError_WrapsIncomplete verifies
+// that a failing follow-up step (rooms) does not swallow the error: the
+// accept already succeeded, so the returned error wraps
+// ErrAcceptConfigIncomplete, and the remaining step (functions) is still
+// attempted.
+func TestDeviceAdminDomain_AcceptInboxDevice_ConfigError_WrapsIncomplete(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{roomsErr: errors.New("ccu unreachable")}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if err == nil {
+		t.Fatal("expected error when a follow-up config step fails")
+	}
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if m.funcCalls != 1 {
+		t.Fatalf("functions must still be attempted after a rooms failure, got %d calls", m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_RenameError_WrapsIncomplete_StillAppliesRoomsAndFunctions
+// mirrors the rooms-failure case above for the rename step: a failing
+// persistent rename must still wrap ErrAcceptConfigIncomplete and must not
+// short-circuit the remaining rooms/functions steps.
+func TestDeviceAdminDomain_AcceptInboxDevice_RenameError_WrapsIncomplete_StillAppliesRoomsAndFunctions(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	c.SetRenameDeviceFn(func(context.Context, string, string) error {
+		return errors.New("ccu rejected rename")
+	})
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Name:      "Kitchen Switch",
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if err == nil {
+		t.Fatal("expected error when the rename step fails")
+	}
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if m.roomCalls != 1 || m.funcCalls != 1 {
+		t.Fatalf("rooms/functions must still be attempted after a rename failure, got rooms=%d funcs=%d",
+			m.roomCalls, m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_FunctionsError_RoomsStillApplied is
+// the mirror image of the rooms-failure case: a failing functions write must
+// not prevent the rooms write from being attempted.
+func TestDeviceAdminDomain_AcceptInboxDevice_FunctionsError_RoomsStillApplied(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{funcsErr: errors.New("ccu unreachable")}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if err == nil {
+		t.Fatal("expected error when the functions step fails")
+	}
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if m.roomCalls != 1 {
+		t.Fatalf("rooms must still be attempted despite the functions error, got %d calls", m.roomCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_BothRoomsAndFunctionsFail_JoinsBothErrors
+// verifies that neither follow-up failure swallows the other: errors.Join
+// keeps both underlying causes discoverable via errors.Is on the returned,
+// ErrAcceptConfigIncomplete-wrapped error.
+func TestDeviceAdminDomain_AcceptInboxDevice_BothRoomsAndFunctionsFail_JoinsBothErrors(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	roomsErr := errors.New("rooms ccu unreachable")
+	funcsErr := errors.New("functions ccu unreachable")
+	m := &captureRoomFuncMutator{roomsErr: roomsErr, funcsErr: funcsErr}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{
+		Rooms:     []string{"Kitchen"},
+		Functions: []string{"Light"},
+	}
+	err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts)
+	if !errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
+		t.Fatalf("expected ErrAcceptConfigIncomplete, got %v", err)
+	}
+	if !errors.Is(err, roomsErr) {
+		t.Errorf("expected the rooms error to survive the join: %v", err)
+	}
+	if !errors.Is(err, funcsErr) {
+		t.Errorf("expected the functions error to survive the join: %v", err)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_ZeroValueOpts_MutatorsNotCalled
+// guards the "untouched" contract: even when RoomMutator/FunctionMutator are
+// wired, a zero-value opts (plain accept) must not invoke either of them.
+func TestDeviceAdminDomain_AcceptInboxDevice_ZeroValueOpts_MutatorsNotCalled(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", interfaces.AcceptInboxOptions{}); err != nil {
+		t.Fatalf("plain accept must not error: %v", err)
+	}
+	if m.roomCalls != 0 || m.funcCalls != 0 {
+		t.Fatalf("a zero-value opts must leave rooms/functions untouched, got rooms=%d funcs=%d",
+			m.roomCalls, m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_EmptyRoomsSlice_ClearsAssignment
+// locks in the documented distinction between a nil Rooms slice ("leave
+// untouched") and an explicit empty slice ("clear the assignment"): the
+// latter must still reach the hub write with a zero-length slice.
+func TestDeviceAdminDomain_AcceptInboxDevice_EmptyRoomsSlice_ClearsAssignment(t *testing.T) {
+	t.Parallel()
+	admin, c, _, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+	m := &captureRoomFuncMutator{}
+	c.HubModel.RoomMutator = m
+	c.HubModel.FunctionMutator = m
+
+	opts := interfaces.AcceptInboxOptions{Rooms: []string{}}
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts); err != nil {
+		t.Fatalf("accept with empty rooms slice must not error: %v", err)
+	}
+	if m.roomCalls != 1 {
+		t.Fatalf("expected the empty rooms slice to still trigger a write, got %d calls", m.roomCalls)
+	}
+	if len(m.rooms) != 0 {
+		t.Fatalf("expected an empty rooms write, got %+v", m.rooms)
+	}
+	if m.funcCalls != 0 {
+		t.Fatalf("functions must stay untouched when opts.Functions is nil, got %d calls", m.funcCalls)
+	}
+}
+
+// TestDeviceAdminDomain_AcceptInboxDevice_IncludeChannels_RenamesChannelsToo
+// verifies the accept-time orchestration forwards IncludeChannels into
+// RenameDeviceWithChannels so every channel picks up the "<name>:<no>"
+// cascade, not just the device itself.
+func TestDeviceAdminDomain_AcceptInboxDevice_IncludeChannels_RenamesChannelsToo(t *testing.T) {
+	t.Parallel()
+	admin, c, dev, _ := buildBoost9Fixture(t)
+	c.HubModel.InboxAccepter = &fakeInboxAccepter{}
+
+	opts := interfaces.AcceptInboxOptions{Name: "Kitchen Switch", IncludeChannels: true}
+	if err := admin.AcceptInboxDevice(context.Background(), "DEV004", opts); err != nil {
+		t.Fatalf("AcceptInboxDevice with include_channels: %v", err)
+	}
+	ch := dev.Channel("DEV004:1")
+	if ch == nil {
+		t.Fatal("channel DEV004:1 not found")
+	}
+	if ch.Name != "Kitchen Switch:1" {
+		t.Fatalf("expected channel rename cascade, got %q", ch.Name)
 	}
 }
 
@@ -13997,7 +14392,7 @@ func buildCentralLinksBoost9Fixture(t *testing.T) *CentralLinksDomain {
 func TestCentralLinksDomain_CreateCentralLinks_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := &CentralLinksDomain{registry: nil, writer: nil}
-	_, err := d.CreateCentralLinks(context.Background(), "DEV006")
+	_, err := d.CreateCentralLinks(context.Background(), "DEV006", "")
 	if err == nil {
 		t.Error("expected error for nil registry")
 	}
@@ -14006,7 +14401,7 @@ func TestCentralLinksDomain_CreateCentralLinks_NilRegistry_ReturnsErr(t *testing
 func TestCentralLinksDomain_CreateCentralLinks_UnknownDevice_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	_, err := d.CreateCentralLinks(context.Background(), "UNKNOWN")
+	_, err := d.CreateCentralLinks(context.Background(), "UNKNOWN", "")
 	if err == nil {
 		t.Error("expected error for unknown device in CreateCentralLinks")
 	}
@@ -14038,7 +14433,7 @@ func TestCentralLinksDomain_CreateCentralLinks_DeviceFound_UnsupportedInterface_
 	w.Register("ccu-cl9b", "VirtualDevices", fake)
 
 	d := NewCentralLinksDomain(reg, w)
-	_, err = d.CreateCentralLinks(context.Background(), "DEV007")
+	_, err = d.CreateCentralLinks(context.Background(), "DEV007", "")
 	if err == nil {
 		t.Error("expected error for unsupported interface in CreateCentralLinks")
 	}
@@ -14067,7 +14462,7 @@ func TestCentralLinksDomain_CreateCentralLinks_DeviceFound_NoBackend_ReturnsErr(
 	// No backend registered → writer.Backend returns false.
 	w := client.NewValueWriter()
 	d := NewCentralLinksDomain(reg, w)
-	_, err = d.CreateCentralLinks(context.Background(), "DEV008")
+	_, err = d.CreateCentralLinks(context.Background(), "DEV008", "")
 	if err == nil {
 		t.Error("expected error when no backend registered")
 	}
@@ -14080,7 +14475,7 @@ func TestCentralLinksDomain_CreateCentralLinks_BackendNotCentralLinkBackend_Retu
 	// ReportValueUsage (so it IS a centralLinkBackend). Channels have no
 	// PRESS_SHORT/PRESS_LONG DPs → all channels skipped → report.Skipped > 0
 	// → returns successfully with no error.
-	report, err := d.CreateCentralLinks(context.Background(), "DEV006")
+	report, err := d.CreateCentralLinks(context.Background(), "DEV006", "")
 	if err != nil {
 		t.Fatalf("CreateCentralLinks: %v", err)
 	}
@@ -14091,7 +14486,7 @@ func TestCentralLinksDomain_CreateCentralLinks_BackendNotCentralLinkBackend_Retu
 func TestCentralLinksDomain_RemoveCentralLinks_HappyPath(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	report, err := d.RemoveCentralLinks(context.Background(), "DEV006")
+	report, err := d.RemoveCentralLinks(context.Background(), "DEV006", "")
 	if err != nil {
 		t.Fatalf("RemoveCentralLinks: %v", err)
 	}
@@ -14101,7 +14496,7 @@ func TestCentralLinksDomain_RemoveCentralLinks_HappyPath(t *testing.T) {
 func TestCentralLinksDomain_CentralLinksStatus_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := &CentralLinksDomain{registry: nil}
-	_, err := d.CentralLinksStatus("DEV006")
+	_, err := d.CentralLinksStatus(context.Background(), "DEV006")
 	if err == nil {
 		t.Error("expected error for nil registry in CentralLinksStatus")
 	}
@@ -14127,7 +14522,7 @@ func TestCentralLinksDomain_CentralLinksStatus_UnsupportedInterface(t *testing.T
 	c.ModelRegistry.Put(dev)
 
 	d := NewCentralLinksDomain(reg, nil)
-	status, err := d.CentralLinksStatus("DEV009")
+	status, err := d.CentralLinksStatus(context.Background(), "DEV009")
 	if err != nil {
 		t.Fatalf("CentralLinksStatus for CUxD: %v", err)
 	}
@@ -14139,7 +14534,7 @@ func TestCentralLinksDomain_CentralLinksStatus_UnsupportedInterface(t *testing.T
 func TestCentralLinksDomain_CentralLinksStatus_EligibleDevice(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	status, err := d.CentralLinksStatus("DEV006")
+	status, err := d.CentralLinksStatus(context.Background(), "DEV006")
 	if err != nil {
 		t.Fatalf("CentralLinksStatus: %v", err)
 	}
@@ -14151,7 +14546,7 @@ func TestCentralLinksDomain_CentralLinksStatus_EligibleDevice(t *testing.T) {
 func TestCentralLinksDomain_CentralLinksStatus_UnknownDevice_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	d := buildCentralLinksBoost9Fixture(t)
-	_, err := d.CentralLinksStatus("UNKNOWN")
+	_, err := d.CentralLinksStatus(context.Background(), "UNKNOWN")
 	if err == nil {
 		t.Error("expected error for unknown device in CentralLinksStatus")
 	}

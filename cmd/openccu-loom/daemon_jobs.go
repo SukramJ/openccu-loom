@@ -79,6 +79,11 @@ func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.L
 		// MetricLastEventAgeSecs by hub.last_event_age_refresh. Wire the
 		// slot once a real CCU metrics fetch exists.
 		jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
+		// Per-BidCos-interface duty-cycle / carrier-sense poll. Delegates
+		// through the HubCoordinator; the inner listBidcosInterfaces hook is
+		// wired by WireHub once the JSON-RPC session is up, nil-tolerant
+		// before then.
+		jobs.BidcosInterfacesRefresh = u.Hub.RefreshBidcosInterfaces
 	}
 	// MetricLastEventAgeSecs: seconds since the most recent CCU callback
 	// across the central's interfaces. The metric and its MetricHubSensor

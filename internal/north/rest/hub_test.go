@@ -148,6 +148,15 @@ func TestExecuteProgram(t *testing.T) {
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
+	var body struct {
+		Executed bool `json:"executed"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v body=%s", err, rr.Body.String())
+	}
+	if !body.Executed {
+		t.Fatalf("executed=false, want true for unconditional run")
+	}
 	if pw.calls.Load() != 1 {
 		t.Fatalf("calls=%d", pw.calls.Load())
 	}
@@ -228,5 +237,58 @@ func TestReconnectInterface(t *testing.T) {
 	}
 	if iface.reconnects.Load() != 1 {
 		t.Fatalf("reconnects=%d", iface.reconnects.Load())
+	}
+}
+
+// fakeBulkAck implements hub.BulkMessageAcknowledger with a fixed count for
+// both message classes, used by the router-precedence tests below.
+type fakeBulkAck struct{ n int }
+
+func (f fakeBulkAck) AcknowledgeAllServiceMessages(context.Context) (int, error) { return f.n, nil }
+func (f fakeBulkAck) AcknowledgeAllAlarmMessages(context.Context) (int, error)   { return f.n, nil }
+
+// TestAckAllAlarmMessagesRouteTakesPrecedenceOverSingleAckWildcard pins the
+// router's static-vs-wildcard precedence: `POST /alarm-messages/ack-all`
+// must dispatch to the bulk handler, not be swallowed by the
+// `/alarm-messages/{id}/ack` single-message route with id="ack-all".
+// Routing this to the wrong handler would 404 (no further "/ack" segment)
+// or silently try to acknowledge a message literally named "ack-all".
+func TestAckAllAlarmMessagesRouteTakesPrecedenceOverSingleAckWildcard(t *testing.T) {
+	harness := newHubRouter(t)
+	harness.hub.Messages.SetAcknowledgers(nil, fakeBulkAck{n: 2})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm-messages/ack-all", http.NoBody)
+	rr := httptest.NewRecorder()
+	harness.handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var got handlers.AckAllResult
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Acknowledged != 2 {
+		t.Fatalf("acknowledged=%d, want 2", got.Acknowledged)
+	}
+}
+
+// TestAckAllServiceMessagesRouteTakesPrecedenceOverSingleAckWildcard mirrors
+// the alarm-side routing-precedence pin for the service-messages endpoint.
+func TestAckAllServiceMessagesRouteTakesPrecedenceOverSingleAckWildcard(t *testing.T) {
+	harness := newHubRouter(t)
+	harness.hub.ServiceMessages.SetAcknowledgers(nil, fakeBulkAck{n: 5})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/service-messages/ack-all", http.NoBody)
+	rr := httptest.NewRecorder()
+	harness.handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var got handlers.AckAllResult
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Acknowledged != 5 {
+		t.Fatalf("acknowledged=%d, want 5", got.Acknowledged)
 	}
 }

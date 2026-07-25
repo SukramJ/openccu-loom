@@ -269,11 +269,27 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        /** Remove a device from the registry (admin) */
+        /**
+         * Remove a device from the registry (admin)
+         * @description Unpairs the device via the CCU `deleteDevice` call. Two optional
+         *     query flags map onto the CCU delete bitmask: `reset=true` also
+         *     factory-resets the device during removal, and `force=true` removes
+         *     an unreachable device even when the CCU cannot complete the
+         *     handshake. Both default to false (plain unpair). A backend without a
+         *     pairing concept (CUxD) answers 422.
+         */
         delete: operations["deleteDevice"];
         options?: never;
         head?: never;
-        /** Update mutable device metadata (name, room assignment) */
+        /**
+         * Update mutable device metadata (name, room assignment)
+         * @description Renames persist to the CCU (JSON-RPC `Device.setName`). Set
+         *     `include_channels: true` to also rename every channel with the
+         *     `"<name>:<channelNo>"` pattern the CCU WebUI applies. Omitted, it
+         *     defaults to false (device name only). Room / function assignment
+         *     is applied via the Rega hub-writer. A backend without JSON-RPC
+         *     (Homegear, CUxD) answers 422.
+         */
         patch: operations["patchDevice"];
         trace?: never;
     };
@@ -371,7 +387,17 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a single channel (rename, rooms, functions)
+         * @description Applies partial updates to a single channel: rename (JSON-RPC
+         *     `Channel.setName`), room assignment and function (Gewerk)
+         *     assignment — the channel-level twin of `PATCH /devices/{addr}`.
+         *     Omitted fields stay untouched; an explicit empty array clears
+         *     the assignment set. Naming a channel number the device does not
+         *     have answers 404; a backend without JSON-RPC (Homegear, CUxD)
+         *     answers 422.
+         */
+        patch: operations["patchChannel"];
         trace?: never;
     };
     "/devices/{addr}/channels/{no}/event-groups": {
@@ -557,6 +583,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/channels/{no}/flags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the operator per-channel overrides (G12) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    addr: components["parameters"]["Address"];
+                    no: components["parameters"]["ChannelNo"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChannelFlags"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Set the operator per-channel overrides (G12)
+         * @description Hide the channel from the operation surfaces (data-point list, MQTT,
+         *     Matter) and/or lock it against control writes. An absent field keeps
+         *     its current value.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    addr: components["parameters"]["Address"];
+                    no: components["parameters"]["ChannelNo"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChannelFlagsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ChannelFlags"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                404: components["responses"]["NotFound"];
+                503: components["responses"]["ServiceUnavailable"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/paramsets/{key}": {
         parameters: {
             query?: never;
@@ -638,6 +739,199 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Heating-group listing (read-only)
+         * @description Returns Homematic heating groups (HmIP / BidCos), grouped by
+         *     central. Read from each CCU's groups.gson via the
+         *     `CCU.getHeatingGroupList` JSON-RPC method.
+         *
+         *     Without a `central` query the response aggregates over every
+         *     configured central, one `entries` object each; a central whose
+         *     backend cannot read groups (offline, or a non-CCU backend)
+         *     contributes an empty `groups` array rather than failing the
+         *     request. With `central` set, the listing is scoped to that
+         *     central and returns 404 when it is unknown or cannot serve
+         *     groups.
+         *
+         *     This is the read surface only. Creating, editing, and deleting
+         *     groups runs through the CCU jpages proxy (ADR 0055) and is
+         *     exposed separately.
+         */
+        get: operations["listGroups"];
+        put?: never;
+        /**
+         * Create a heating group (admin)
+         * @description Creates a heating group through the CCU jpages proxy (ADR 0055):
+         *     a two-step `GET group/create` → `POST group/save` flow, then a
+         *     roster poll to confirm the group committed (the save response is
+         *     slow and unreliable). Admin-gated and audited. `?central=` selects
+         *     the target CCU (optional when only one is configured).
+         */
+        post: operations["createGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assignable group types for the create form
+         * @description Returns the group types a new group can be created as (parsed from
+         *     the CCU's create page — there is no separate JSON type endpoint on
+         *     the firmware). `?central=` scopes to one CCU.
+         */
+        get: operations["listGroupTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/suitable-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Devices assignable to a group of a given type
+         * @description Returns the devices/channels that can be assigned to a group of
+         *     the given `type_id`, split into assignable and leftover buckets.
+         *     `?central=` scopes to one CCU.
+         */
+        get: operations["listSuitableGroupMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The numeric CCU group id. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Edit a heating group (admin)
+         * @description Edits an existing heating group (name, members, "operate only via
+         *     group" flag) through the jpages save path. Admin-gated and audited.
+         */
+        put: operations["updateGroup"];
+        post?: never;
+        /**
+         * Delete a heating group (admin)
+         * @description Deletes a heating group through the jpages delete path. Admin-gated
+         *     and audited.
+         */
+        delete: operations["deleteGroup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/diagrams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List saved diagram definitions (own + shared)
+         * @description Returns the caller's own named multi-series diagram definitions
+         *     plus every diagram shared by other users (SV03). Diagrams are
+         *     Loom-native metadata; each references measurement-history data
+         *     points that the recorder samples.
+         */
+        get: operations["listDiagrams"];
+        put?: never;
+        /** Create a diagram definition */
+        post: operations["createDiagram"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/diagrams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a diagram definition */
+        get: operations["getDiagram"];
+        /** Update a diagram definition (owner or admin) */
+        put: operations["updateDiagram"];
+        post?: never;
+        /** Delete a diagram definition (owner or admin) */
+        delete: operations["deleteDiagram"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Global direct-link overview (read-only)
+         * @description Returns every direct link (channel-to-channel association)
+         *     across all configured centrals as a single flat list. Each link
+         *     carries its owning `central_name` and `interface_id` so a client
+         *     can render one searchable table over multiple CCUs.
+         *
+         *     The daemon reads the interface-wide link roster with one
+         *     empty-address `getLinks` per (central, interface) — the same call
+         *     the CCU WebUI uses — rather than a per-channel scan. A central
+         *     whose interface backend is offline, missing, or cannot list
+         *     links (e.g. CUxD) contributes nothing rather than failing the
+         *     request.
+         *
+         *     With `central` set the listing is scoped to that central and
+         *     returns 404 when it is unknown. Creating, editing and deleting
+         *     links runs through the per-device `/devices/{addr}/links`
+         *     endpoints.
+         */
+        get: operations["listAllLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/programs": {
         parameters: {
             query?: never;
@@ -650,6 +944,14 @@ export interface paths {
                 query?: {
                     page?: components["parameters"]["Page"];
                     per_page?: components["parameters"]["PerPage"];
+                    /**
+                     * @description Overrides whether internal (Tmp_*, prgEnergyCounter_*) programs
+                     *     are listed. When omitted, each central applies its
+                     *     `include_internal_programs` config default (hidden by default,
+                     *     mirroring the CCU WebUI's "show system programs" toggle). The
+                     *     daemon always knows every program; this only steers delivery.
+                     */
+                    include_internal?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -692,6 +994,14 @@ export interface paths {
          *     scenes, so a double-execution under client retry can produce
          *     observable side effects. Supply the optional `Idempotency-Key`
          *     header to suppress that risk.
+         *
+         *     The optional body carries `check_conditions`: when `true` the CCU
+         *     evaluates the program's "if" condition and runs the program only
+         *     when the condition is currently satisfied. When `false` (the
+         *     default, and when the body is omitted) the program runs
+         *     unconditionally. The response reports `executed` — always `true`
+         *     for an unconditional run, and `false` for a condition-checked run
+         *     whose condition was not met.
          */
         post: {
             parameters: {
@@ -715,15 +1025,22 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["ProgramExecuteRequest"];
+                };
+            };
             responses: {
-                /** @description Accepted */
+                /** @description Execution result */
                 202: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ProgramExecuteResponse"];
+                    };
                 };
+                400: components["responses"]["BadRequest"];
                 404: components["responses"]["NotFound"];
                 502: components["responses"]["BadGateway"];
                 503: components["responses"]["ServiceUnavailable"];
@@ -954,8 +1271,34 @@ export interface paths {
         delete: operations["deleteSysvar"];
         options?: never;
         head?: never;
-        /** Update the sysvar metadata (description, unit, value_list, min, max). Triggers the Rega update_system_variable script via JSON-RPC. All fields are optional — omitted fields leave CCU metadata unchanged. Type changes are not supported; delete and recreate the sysvar instead. */
+        /** Update the sysvar metadata (name, description, unit, value_list, min, max). Triggers the Rega update_system_variable script via JSON-RPC. All fields are optional — omitted fields leave CCU metadata unchanged. A non-empty name renames the variable in place. Type changes are not supported; delete and recreate the sysvar instead. */
         patch: operations["patchSysvar"];
+        trace?: never;
+    };
+    "/sysvars/{name}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Programs referencing a system variable (read-only)
+         * @description Lists the CCU programs that reference a system variable, via the
+         *     variable object's native `DPEnumUsagePrograms()` — the same call
+         *     the CCU WebUI uses. Each program is enriched from the hub's
+         *     program registry (localized name, canonical unique id, internal
+         *     flag, observed active state) when known. Consumed as a warning in
+         *     the SPA's delete-confirmation. 503 when no CCU-side reader is
+         *     wired; 400 when the sysvar name is ambiguous across CCUs.
+         */
+        get: operations["getSysvarUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/alarm-messages": {
@@ -1099,6 +1442,30 @@ export interface paths {
                 503: components["responses"]["ServiceUnavailable"];
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/install-mode/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan the wired bus for new devices (BidCos-Wired)
+         * @description Triggers a synchronous wired-bus scan (`searchDevices`) on the
+         *     given BidCos-Wired interface and returns the count of devices
+         *     found. The found devices join the inbox (not yet accepted) for
+         *     the operator to accept. Only BidCos-Wired supports it; other
+         *     interfaces answer 422.
+         */
+        post: operations["installModeSearch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1357,6 +1724,33 @@ export interface paths {
         get: operations["listSystemCCU"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/ccu/{central}/reboot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reboot one CCU (admin-only)
+         * @description Reboots the named CCU. The daemon runs a ReGa script that
+         *     persists the CCU's state (`system.Save()`) and then triggers
+         *     `/sbin/reboot`. The southbound connection to that central drops
+         *     for the duration of the reboot and recovers automatically once
+         *     the CCU is back (the readiness gate re-runs the bring-up).
+         *
+         *     Unrelated to `POST /system/restart`, which restarts the
+         *     OpenCCU-Loom daemon itself — this reboots the CCU hardware.
+         */
+        post: operations["rebootSystemCCU"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1918,7 +2312,19 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Promote a pending pairing into the registry */
+        /**
+         * Promote a pending pairing into the registry
+         * @description Accepts a device waiting in the inbox. The optional body applies
+         *     first-time configuration right after the accept: `name` renames
+         *     the device (persisted to the CCU), `include_channels` cascades
+         *     that rename to every channel (`"<name>:<channelNo>"`), and
+         *     `rooms` / `functions` assign the device to rooms and functions
+         *     (Gewerke). An empty or omitted body accepts the device with no
+         *     configuration (backward compatible). The follow-up steps run only
+         *     after the accept succeeds; if the accept succeeds but a follow-up
+         *     step fails the response is a 502 whose title states the device
+         *     was accepted so only the configuration needs re-applying.
+         */
         post: operations["acceptInboxDevice"];
         delete?: never;
         options?: never;
@@ -1976,6 +2382,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/config/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-transmit stored configuration to a device (admin-only)
+         * @description Asks the CCU to re-send every channel's stored MASTER paramset
+         *     plus the device's direct-link peerings — the recovery path after
+         *     a device factory reset. The transfer runs asynchronously on the
+         *     radio (watch the device's CONFIG_PENDING state for progress), so
+         *     the endpoint returns 202 once the request was accepted. Supported
+         *     on HmIP-RF and BidCos-RF only; other interfaces (BidCos-Wired,
+         *     CUxD, VirtualDevices) answer 422. Consult
+         *     `DeviceSummary.config_restore_supported` before offering the
+         *     action.
+         */
+        post: operations["restoreDeviceConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the per-device communication / function test
+         * @description Asks the CCU to send a radio test frame to the device and reports
+         *     whether the device answered within the poll window (the same test
+         *     the CCU inbox runs). Blocks until the test completes or the window
+         *     elapses. Supported on the radio interfaces (HmIP-RF, BidCos-RF,
+         *     BidCos-Wired); VirtualDevices and CUxD answer 422. Consult
+         *     `DeviceSummary.communication_test_supported` before offering the
+         *     action.
+         */
+        post: operations["testDeviceCommunication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/team-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List team channels a channel may be assigned to
+         * @description Returns the team channels that share the target channel's team tag
+         *     (the candidate list for a team assignment, e.g. a smoke-detector
+         *     team). Read-only. Supported on BidCos-RF / HmIP-RF; other
+         *     interfaces return an empty list.
+         */
+        get: operations["getDeviceTeamCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign a channel to a team
+         * @description Assigns the channel to the given team channel (`setTeam`). A null or
+         *     empty `team` resets the channel to its own default team. Supported
+         *     on BidCos-RF / HmIP-RF; other interfaces answer 422.
+         */
+        put: operations["setDeviceChannelTeam"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/replace-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List devices the new device may replace
+         * @description Returns the already-paired devices the new (inbox) device at
+         *     `{addr}` may replace — the interface daemon (rfd / hs485d)
+         *     computes type / channel compatibility. `model_matches` flags an
+         *     exact-model swap apart from a compatible cross-type one. A pure
+         *     CCU read. Supported on BidCos-RF and BidCos-Wired only; HmIP
+         *     devices cannot be replaced (the CCU WebUI hides the action for
+         *     them too).
+         */
+        get: operations["listDeviceReplaceCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a paired device with a new one (admin-only)
+         * @description Swaps the paired `old_address` for the new device at `{addr}`.
+         *     The interface daemon migrates direct links, teams and link
+         *     paramsets; ReGa re-binds the existing object in place (same
+         *     ise-ID, so programs, names and rooms survive) and the old device
+         *     is unpaired. Returns 202 once the swap is applied — the radio
+         *     config transfer to the new device continues CCU-side afterwards.
+         *     Supported on BidCos-RF and BidCos-Wired only.
+         */
+        post: operations["replaceDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/firmware/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download a firmware image onto a CCU (admin-only)
+         * @description Instructs one CCU to fetch a firmware image from the supplied
+         *     http/https URL onto the central (posting to the CCU's maintenance
+         *     CGI) so it can be staged for a later install. The CCU performs the
+         *     transfer asynchronously; the endpoint returns 202 once the request
+         *     was accepted.
+         */
+        post: operations["downloadSystemFirmware"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/install-mode": {
         parameters: {
             query?: never;
@@ -1992,6 +2573,32 @@ export interface paths {
          *     backend is resolved by address.
          */
         post: operations["deviceInstallMode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/paramsets/{key}/determine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read one parameter's live value from the device
+         * @description Reads ("determines") the current value of a single parameter straight
+         *     from the device via the CCU's determineParameter operation — the MASTER
+         *     editor's "Determine" button. This is a read (no edit-lock token
+         *     required), but it triggers a device round-trip, so the parameter is
+         *     named in the request body. The {key} path segment scopes the request to
+         *     the paramset being edited; the CCU auto-selects the paramset on the
+         *     wire. Shares the backend path with the WS `paramset.determine` command.
+         */
+        post: operations["determineParameter"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2454,6 +3061,33 @@ export interface paths {
         delete: operations["removeLink"];
         options?: never;
         head?: never;
+        /** Rename a direct link (change name / description) */
+        patch: operations["updateLink"];
+        trace?: never;
+    };
+    "/devices/{addr}/links/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a direct link at the device (activate link paramset)
+         * @description Triggers the receiver's LINK-paramset behaviour for the given
+         *     sender — the CCU config dialog's "test link" / simulate-keypress
+         *     probe. It PHYSICALLY actuates the receiver (a switch clicks, a
+         *     blind moves), so it is operator-gated and fire-and-forget. Maps to
+         *     XML-RPC `activateLinkParamset(receiver, sender, longPress)`. 501
+         *     when the interface does not support link activation (CUxD /
+         *     Homegear).
+         */
+        post: operations["testLinkAtDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -2485,9 +3119,20 @@ export interface paths {
         /** PRESS-event forwarding status for the device */
         get: operations["getCentralLinksStatus"];
         put?: never;
-        /** Enable central click-event forwarding */
+        /**
+         * Enable central click-event forwarding
+         * @description Enables CCU click-event forwarding. Without `channel` every
+         *     eligible (press-event) channel of the device is switched on;
+         *     with `channel` (a channel address such as ABC0000001:4) only
+         *     that single channel is touched.
+         */
         post: operations["createCentralLinks"];
-        /** Disable central click-event forwarding */
+        /**
+         * Disable central click-event forwarding
+         * @description Disables CCU click-event forwarding. Without `channel` the whole
+         *     device is switched off; with `channel` (a channel address such as
+         *     ABC0000001:4) only that single channel is touched.
+         */
         delete: operations["removeCentralLinks"];
         options?: never;
         head?: never;
@@ -2624,7 +3269,11 @@ export interface paths {
         get: operations["getProgram"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a program from the CCU (admin)
+         * @description Removes the program from the CCU (dom.DeleteObject) and drops the local mirror once the call lands. Irreversible, therefore admin-gated like DELETE /devices/{addr}. The optional `central` query parameter scopes the target to one CCU when several are configured.
+         */
+        delete: operations["deleteProgram"];
         options?: never;
         head?: never;
         /** Toggle program active flag */
@@ -2665,6 +3314,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alarm-messages/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge all alarm messages
+         * @description Acknowledges every active alarm message in a single CCU pass.
+         *     An optional `central` query parameter scopes the operation to
+         *     one CCU; when omitted the acknowledge runs across every
+         *     registered central. The response carries the total number of
+         *     messages acknowledged.
+         */
+        post: operations["ackAllAlarmMessages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-messages/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge all quittable service messages
+         * @description Acknowledges every quittable service message in a single CCU
+         *     pass (non-quittable messages are left untouched, mirroring the
+         *     single-message writability gate). An optional `central` query
+         *     parameter scopes the operation to one CCU; when omitted the
+         *     acknowledge runs across every registered central. The response
+         *     carries the total number of messages acknowledged.
+         */
+        post: operations["ackAllServiceMessages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/service-messages/{id}/disable": {
         parameters: {
             query?: never;
@@ -2675,16 +3373,69 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Disable (suppress) a service message
-         * @description The CCU exposes exactly one dismiss primitive for service
-         *     messages — there is no separate wire-level "disable/suppress
-         *     forever" operation — so this shares the same domain call as
-         *     `POST .../ack` (`hub.ServiceMessages.Disable` delegates to
-         *     `Acknowledge`). Exposed as its own operation (rather than an
-         *     alias) so callers can name the intent, and shares the domain
+         * Disable (permanently suppress) a service message
+         * @description Durably suppresses the service message's channel parameter on the
+         *     CCU via `Interface.suppressServiceMessages`. Unlike `POST .../ack`
+         *     (a one-shot dismiss that returns as soon as the condition
+         *     re-triggers), the CCU stops raising service messages for the
+         *     resolved channel + service parameter until it is unsuppressed via
+         *     `POST /service-messages/unsuppress`. The channel and parameter are
+         *     resolved from the stored message; the suppression is recorded and
+         *     surfaced by `GET /service-messages/suppressed`. Shares the domain
          *     call with the WS `service_messages.disable` command.
          */
         post: operations["disableServiceMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-messages/suppressed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List permanently suppressed service messages
+         * @description Returns the service-message channel parameters that have been
+         *     durably suppressed via `POST /service-messages/{id}/disable`,
+         *     aggregated across every central. The list is reconciled against
+         *     each CCU's live `Interface.getSuppressedServiceMessages`, so an
+         *     entry cleared elsewhere (e.g. the CCU WebUI) drops out. Each entry
+         *     can be cleared via `POST /service-messages/unsuppress`.
+         */
+        get: operations["listSuppressedServiceMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/service-messages/unsuppress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear a permanent service-message suppression
+         * @description Clears a durable suppression for a channel parameter via
+         *     `Interface.suppressServiceMessages` (suppress=false). The optional
+         *     `central` query parameter selects the target central (required
+         *     when more than one CCU is registered). The request body names the
+         *     channel (required) and the service parameter (omit or empty to
+         *     clear every service parameter of the channel); the interface is
+         *     optional and resolved from the stored suppression when omitted.
+         */
+        post: operations["unsuppressServiceMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2832,6 +3583,36 @@ export interface paths {
          */
         get: operations["getHistory"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/history/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective per-datapoint recording state (read-only)
+         * @description Reports whether one data point's live values are currently
+         *     persisted to measurement history, and whether that decision comes
+         *     from an explicit override or the parameter-name glob policy. Part
+         *     of the opt-in history feature; 503 when history is disabled.
+         */
+        get: operations["getRecordingOverride"];
+        /**
+         * Set or clear a per-datapoint recording override
+         * @description Forces recording on/off for one data point, or (record: null)
+         *     clears the override so it falls back to the glob policy. Toggling
+         *     affects only future samples; existing rows are untouched. Part of
+         *     the opt-in history feature; 503 when disabled.
+         */
+        put: operations["putRecordingOverride"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4408,6 +5189,23 @@ export interface components {
              *     summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
              */
             unique_id: string;
+            /**
+             * @description Channel-level entity display name, fully composed by the
+             *     daemon: a custom channel name verbatim, the `ch<no>` /
+             *     `vch<no>` channel-group marker for derived names, or the
+             *     locale-aware postfix label (button locks). Device-name
+             *     prefix stripped; empty when the name collapses to the
+             *     device name alone. Consumers render it verbatim — the
+             *     daemon is the single naming authority.
+             */
+            translated_name?: string;
+            /**
+             * @description Untranslated marker / postfix portion of the entity name
+             *     (`ch6`, `vch5`, `Button Lock`); empty when the entity is
+             *     named after the channel or device alone. Mirrors the
+             *     reference schema's `DataPointNameData.parameter_name`.
+             */
+            parameter_name?: string;
         };
         /**
          * @description RFC 9457 problem detail. The `type` URI selects one of the
@@ -4508,6 +5306,89 @@ export interface components {
              *     — never reject an `Info` payload because of an unknown entry.
              */
             capabilities: string[];
+        };
+        /** @description One central's heating-group roster. */
+        GroupCentralEntry: {
+            /** @description Daemon-local central name the groups belong to. */
+            central: string;
+            groups: components["schemas"]["GroupEntry"][];
+        };
+        /**
+         * @description One Homematic heating group (HmIP / BidCos), as read from the
+         *     CCU's groups.gson via `CCU.getHeatingGroupList`. Read-only — the
+         *     create / edit / delete surface runs through the CCU jpages proxy
+         *     (see ADR 0055) and is exposed separately.
+         */
+        GroupEntry: {
+            /** @description Numeric CCU group id. */
+            id: number;
+            /** @description Operator-facing group name. */
+            name: string;
+            /** @description Label of the backing virtual device; often empty. */
+            group_device_name?: string;
+            /** @description The "operate only via group" flag. */
+            forbid_single_operation: boolean;
+            /** @description Group-type key. */
+            type_id: string;
+            /** @description CCU-provided type label (may be a translation key). */
+            type_label?: string;
+            members: components["schemas"]["GroupMemberEntry"][];
+        };
+        /** @description One device or channel wired into a heating group. */
+        GroupMemberEntry: {
+            /** @description Member device or channel address. */
+            address: string;
+            /** @description Member-type key. */
+            type_id?: string;
+        };
+        /** @description Body of POST /groups. */
+        CreateGroupRequest: {
+            /** @description Group-type key (e.g. the HmIP heating-group type). */
+            type_id: string;
+            /** @description Operator-facing group name. */
+            name: string;
+            /** @description The "operate only via group" flag. */
+            forbid_single_operation?: boolean;
+            /** @description Member channel/device addresses to assign. */
+            members?: string[];
+        };
+        /** @description Body of PUT /groups/{id}. */
+        UpdateGroupRequest: {
+            name: string;
+            forbid_single_operation?: boolean;
+            members?: string[];
+        };
+        /** @description One assignable group type for the create form. */
+        GroupTypeEntry: {
+            id: string;
+            /** @description CCU translation key for the type label. */
+            label_key?: string;
+        };
+        /** @description One device/channel assignable to a group of a given type. The fields after `type` are best-effort enrichment resolved from the live device model so a client can identify, group and filter candidates instead of showing a flat address list; they are omitted when the member is not (yet) present in the model. */
+        SuitableMemberEntry: {
+            address: string;
+            serial?: string;
+            /** @description Member kind (e.g. SENSOR_WINDOW, SWITCH_ACTUATOR). */
+            type?: string;
+            /** @description Parent device address (address without the channel suffix); group channels by it. */
+            device_address?: string;
+            /** @description CCU-assigned device name. */
+            device_name?: string;
+            /** @description Device model (e.g. HmIP-eTRV-2). */
+            device_model?: string;
+            /** @description CCU-assigned channel name. */
+            channel_name?: string;
+            /** @description Channel number within the device. */
+            channel_no?: number;
+            /** @description Rooms the channel (or its device) is assigned to. */
+            rooms?: string[];
+            /** @description Functions the channel (or its device) is assigned to. */
+            functions?: string[];
+        };
+        /** @description Candidate members for a group type. */
+        SuitableMembersResponse: {
+            assignable: components["schemas"]["SuitableMemberEntry"][];
+            leftover: components["schemas"]["SuitableMemberEntry"][];
         };
         /**
          * @description One CCU as known to the daemon. `name` is the daemon-local
@@ -4670,12 +5551,51 @@ export interface components {
              */
             master_pushes_config_pending: boolean;
             /**
+             * @description True when the device's interface exposes `restoreConfigToDevice`
+             *     (HmIP-RF, BidCos-RF). The SPA gates the "restore config" action on
+             *     it. False for BidCos-Wired, CUxD and VirtualDevices.
+             */
+            config_restore_supported?: boolean;
+            /**
+             * @description True when the device's interface can run the CCU's per-device
+             *     communication test (radio interfaces). The SPA gates the "test"
+             *     action on it. False for VirtualDevices and CUxD.
+             */
+            communication_test_supported?: boolean;
+            /**
+             * @description True when the device's interface exposes channel team assignment
+             *     (setTeam / listTeams — BidCos-RF, HmIP-RF). The SPA gates the
+             *     team picker on it.
+             */
+            team_supported?: boolean;
+            /**
              * @description True when the device should be split into multiple logical
              *     sub-devices for northbound presentation. The SPA's CdpTilesPanel
              *     uses this flag to switch from a flat tile grid to per-group
              *     sections.
              */
             has_sub_devices: boolean;
+            rx_mode?: components["schemas"]["RxMode"];
+        };
+        /**
+         * @description Named flags decoded from the device's CCU RX_MODE bitmask. The
+         *     `wakeup` / `lazy_config` bits mark a battery-powered device that only
+         *     applies pending configuration when it next wakes up — the SPA shows a
+         *     "pending wakeup" hint after a link/config write to such a device. Only
+         *     set bits are present; the whole object is omitted when the CCU reports
+         *     no rx mode (RX_MODE == 0).
+         */
+        RxMode: {
+            /** @description Mains-powered, permanently reachable (RX_ALWAYS); applies configuration immediately. */
+            always?: boolean;
+            /** @description Reachable via burst wakeup (RX_BURST). */
+            burst?: boolean;
+            /** @description Reachable in its configuration window (RX_CONFIG). */
+            config?: boolean;
+            /** @description Battery device that only accepts pending configuration on its next wakeup (RX_WAKEUP). */
+            wakeup?: boolean;
+            /** @description Battery device whose configuration transfer is deferred until its next wakeup (RX_LAZY_CONFIG). */
+            lazy_config?: boolean;
         };
         DeviceList: {
             items: components["schemas"]["DeviceSummary"][];
@@ -4699,6 +5619,21 @@ export interface components {
                 SignalStrength?: number | null;
             };
             channels: components["schemas"]["ChannelSummary"][];
+        };
+        /** @description Operator per-channel overrides (G12). */
+        ChannelFlags: {
+            /** @description Channel hidden from the operation surfaces. */
+            hidden: boolean;
+            /** @description Channel locked against control writes. */
+            locked: boolean;
+        };
+        /**
+         * @description Partial update of the operator per-channel overrides (G12). An absent
+         *     field keeps its current value.
+         */
+        ChannelFlagsRequest: {
+            hidden?: boolean;
+            locked?: boolean;
         };
         ChannelSummary: {
             address: string;
@@ -4766,6 +5701,13 @@ export interface components {
              */
             room?: string;
             /**
+             * @description The channel's full room-assignment set. Unlike `room` it is
+             *     not collapsed to the unique case, so assignment editors can
+             *     round-trip it. Omitted when the channel carries no room
+             *     assignment.
+             */
+            rooms?: string[];
+            /**
              * @description The channel's resolved "Gewerke" (function) labels — the
              *     channel-level twin of `DeviceSummary.functions`. Lets clients
              *     map functions at channel granularity instead of folding them
@@ -4780,6 +5722,19 @@ export interface components {
              *     condition holds.
              */
             is_custom_dp_primary?: boolean;
+            /**
+             * @description Operator per-channel override (G12): when true the channel is
+             *     hidden from the operation surfaces (data-point list, MQTT, Matter).
+             *     The channel stays in the device detail so it remains manageable.
+             *     Omitted when false.
+             */
+            hidden?: boolean;
+            /**
+             * @description Operator per-channel override (G12): when true control writes to
+             *     the channel's VALUES paramset are rejected (423). Reads and
+             *     MASTER/config edits are unaffected. Omitted when false.
+             */
+            locked?: boolean;
         };
         MQTTReloadResponse: {
             /** @description Always true on success; the 503 path returns a problem+json document instead. */
@@ -4959,17 +5914,24 @@ export interface components {
             /**
              * @description Locale-aware per-entity name a north-bound consumer (HA via
              *     MQTT discovery or the REST drop-in) assigns to this data
-             *     point. Identical to the MQTT discovery `name` field — both
-             *     resolve through the same naming primitive. The parameter
-             *     portion only; HA prepends the device name. Empty when
-             *     `label_omitted` is true.
+             *     point, resolved through the same naming primitives as the
+             *     MQTT discovery `name` field. The parameter portion only; HA
+             *     prepends the device name. When `label_omitted` is true it
+             *     instead carries the channel-level collapsed name (channel
+             *     name plus multi-channel `chN` marker, device prefix
+             *     stripped) — possibly empty when the collapse reduces to the
+             *     device name alone. Consumers therefore never need to
+             *     compose entity names themselves; the daemon is the single
+             *     naming authority.
              */
             translated_name?: string;
             /**
              * @description True when the parameter is flagged "primary" in the embedded
              *     translation_custom catalogue (translation key present, value
-             *     empty). Consumers then collapse the entity name to the device
-             *     name alone (MQTT discovery emits `name: null`).
+             *     empty). The entity is then named after the channel:
+             *     `translated_name` holds the collapsed channel-level name,
+             *     falling back to the device name when empty (MQTT discovery
+             *     instead emits `name: null`).
              */
             label_omitted?: boolean;
             /**
@@ -5113,6 +6075,21 @@ export interface components {
             /** @description RFC3339 timestamp of the most recent execution. */
             last_executed?: string;
             /**
+             * @description Compact, language-neutral rendering of the program's root-rule
+             *     trigger conditions — object names from the ReGa DOM joined by
+             *     symbolic operators (==, >=, <=, >, <, &&, ||). Capped at ~200
+             *     characters with an ellipsis. Absent when the program has no rule
+             *     or the CCU-side scan produced nothing.
+             */
+            condition_summary?: string;
+            /**
+             * @description Compact, language-neutral rendering of the program's root-rule
+             *     activities (object name := value, joined by "; "). Capped at
+             *     ~200 characters with an ellipsis. Absent when the program has no
+             *     rule.
+             */
+            activity_summary?: string;
+            /**
              * @description True for CCU-internal helper programs (prgEnergyCounter_…,
              *     Tmp_…). Clients skip these for HA entities, mirroring
              *     aiohomematic's DEFAULT_INCLUDE_INTERNAL_PROGRAMS=false.
@@ -5146,6 +6123,42 @@ export interface components {
              */
             device_address?: string;
         };
+        /** @description Optional body for POST /programs/{id}/execute. */
+        ProgramExecuteRequest: {
+            /**
+             * @description When true, the CCU evaluates the program's "if" condition and
+             *     runs the program only when the condition is currently
+             *     satisfied. When false (the default) the program runs
+             *     unconditionally.
+             * @default false
+             */
+            check_conditions: boolean;
+        };
+        ProgramExecuteResponse: {
+            /**
+             * @description Whether the program actually ran. Always true for an
+             *     unconditional execution (check_conditions=false); false for a
+             *     condition-checked execution whose condition was not met.
+             */
+            executed: boolean;
+        };
+        /** @description One CCU program that references a system variable. */
+        SysvarUsageProgram: {
+            id: string;
+            name: string;
+            /** @description Canonical loom routing key when the program is known to the hub. */
+            unique_id?: string;
+            /** @description Observed enabled state; omitted when unknown. */
+            active?: boolean;
+            /** @description True for Tmp_*-programs created internally by the CCU. */
+            is_internal?: boolean;
+        };
+        /** @description The programs that reference a system variable. */
+        SysvarUsage: {
+            central?: string;
+            sysvar: string;
+            programs: components["schemas"]["SysvarUsageProgram"][];
+        };
         SysvarSummary: {
             /** @description CCU this system variable belongs to. */
             central?: string;
@@ -5166,6 +6179,30 @@ export interface components {
              *     opted in (aiohomematic's INTERNAL description marker).
              */
             is_internal?: boolean;
+            /**
+             * @description Mirrors the CCU's isVisible flag — whether the variable is
+             *     shown in the CCU WebUI. Always present (a real CCU reports it
+             *     for every variable).
+             */
+            is_visible?: boolean;
+            /**
+             * @description Mirrors the CCU's isLogged flag (backed by the CCU-side
+             *     DPArchive setting) — whether value changes are recorded to the
+             *     measurement archive. Always present.
+             */
+            is_logged?: boolean;
+            /**
+             * @description False-state value label for a binary (LOGIC/ALARM) variable —
+             *     the operator-visible text for value 0. Absent for non-binary
+             *     variables.
+             */
+            value_name_0?: string;
+            /**
+             * @description True-state value label for a binary (LOGIC/ALARM) variable —
+             *     the operator-visible text for value 1. Absent for non-binary
+             *     variables.
+             */
+            value_name_1?: string;
             /**
              * @description True when the variable's description carried the extended
              *     marker — clients expose the writable entity flavour
@@ -5230,6 +6267,25 @@ export interface components {
              * @description Number of raw samples aggregated into this bucket.
              */
             count: number;
+        };
+        /** @description Effective measurement-recording state of one data point. */
+        RecordingState: {
+            /** @description Whether this data point's live values are currently persisted to measurement history. */
+            record: boolean;
+            /**
+             * @description "override" when an explicit per-datapoint toggle decides, "policy" when the parameter-name glob policy decides.
+             * @enum {string}
+             */
+            source: "override" | "policy";
+        };
+        /** @description Set or clear a per-datapoint recording override. A null `record` clears the override (revert to the glob policy). */
+        RecordingWriteRequest: {
+            central: string;
+            interface_id: string;
+            channel: string;
+            parameter: string;
+            /** @description true/false forces recording on/off; null clears the override. */
+            record?: boolean | null;
         };
         /** @description One bucketed point of a device's energy breakdown: the cumulative-counter delta over the bucket (Wh) plus the instantaneous POWER summary (W). */
         EnergyBucket: {
@@ -5360,6 +6416,24 @@ export interface components {
             /** @description Human-readable translation of the message code. */
             display_name?: string;
         };
+        SuppressedServiceMessage: {
+            /** @description CCU this suppression belongs to (multi-central grouping). */
+            central?: string;
+            /** @description CCU interface the channel lives on (e.g. "HmIP-RF"). */
+            interface?: string;
+            /** @description Suppressed channel address ("ADDR:chn"). */
+            channel: string;
+            /** @description Suppressed service parameter (e.g. "LOWBAT"). Empty means every service parameter of the channel is suppressed. */
+            parameter?: string;
+            /** @description Human-readable channel/device name, when known. */
+            device_name?: string;
+            /** @description Raw CCU message name that was suppressed, when known. */
+            name?: string;
+        };
+        AckAllResult: {
+            /** @description Number of messages acknowledged across the scoped centrals. */
+            acknowledged: number;
+        };
         InstallModeInterfaceEntry: {
             /** @description CCU the interface belongs to. */
             central?: string;
@@ -5376,6 +6450,34 @@ export interface components {
             active: boolean;
             /** @description Install-mode duration; defaults to 60 when omitted. */
             seconds?: number;
+            /**
+             * @description Disambiguates the CCU when several centrals expose the same
+             *     interface name. Omitted matches the first interface entry
+             *     across all centrals.
+             */
+            central?: string;
+            /**
+             * @description Restricts pairing to one already-known device address
+             *     (targeted teach-in / re-pairing by serial). Only meaningful
+             *     with active=true; ignored on stop. Note that HmIP radios
+             *     have no address-targeted pairing on the CCU side — use
+             *     sgtin + key there instead.
+             */
+            device_address?: string;
+            /**
+             * @description HmIP SGTIN for the keyserver-less LOCAL teach-in. Formatted
+             *     label input (dashes, spaces, lowercase) is accepted and
+             *     normalised server-side to 24 hex characters. Requires key,
+             *     active=true, and is mutually exclusive with device_address.
+             */
+            sgtin?: string;
+            /**
+             * Format: password
+             * @description HmIP device key from the label: 32 hex characters, or the
+             *     shorter Base32 label form (converted automatically). Never
+             *     logged or audited.
+             */
+            key?: string;
         };
         SystemUpdateEntry: {
             /** @description CCU this update info belongs to. */
@@ -5442,6 +6544,19 @@ export interface components {
             central_id?: string;
             host?: string;
             note?: string;
+            /**
+             * @description Transmit duty cycle in percent (0..100) for BidCos radio
+             *     interfaces, sourced from the CCU's listBidcosInterfaces poll.
+             *     Absent when unknown or when the interface carries no BidCos
+             *     gateway (e.g. HmIP-RF, covered by device-level DUTY_CYCLE
+             *     data points).
+             */
+            duty_cycle?: number;
+            /**
+             * @description Receive carrier-sense load in percent (0..100). Absent when
+             *     the CCU does not report it (the common case over JSON-RPC).
+             */
+            carrier_sense?: number;
         };
         Snapshot: {
             /** Format: date-time */
@@ -6588,6 +7703,12 @@ export interface components {
             lock_mode?: string;
             lock_action?: string;
             permission?: string;
+            /** @description Universal-light colour discriminator (0 hue/saturation, 1 colour temperature, 2 effect). Opaque; carried verbatim for a lossless round-trip. Absent on non-colour devices. */
+            color_type?: number;
+            /** @description Packed 20-bit colour/effect value; opaque. 0 is legitimate and is always round-tripped. */
+            color_value?: number;
+            /** @description HmIP-BSL signal-LED behaviour, opaque. */
+            output_behaviour?: number;
         };
         /**
          * @description Unified schedule DTO. ``kind`` is ``climate`` (thermostat
@@ -6605,6 +7726,8 @@ export interface components {
                 [key: string]: components["schemas"]["ClimateProfile"];
             };
             simple_entries?: components["schemas"]["SimpleScheduleEntry"][];
+            /** @description True when the device exposes per-switch-point colour/effect fields (universal lights) or an OUTPUT_BEHAVIOUR field (HmIP-BSL). The SPA shows a colour summary only when set. */
+            color_capable?: boolean;
         };
         /** @description Selects the active climate profile (P1..P6). */
         SetActiveProfileRequest: {
@@ -6694,9 +7817,53 @@ export interface components {
             peer_device_name?: string;
             peer_device_model?: string;
             direction: string;
+            /** @description Owning central. Populated only by the global overview (`GET /links`); empty on the per-device listing. */
+            central_name?: string;
+            /** @description Owning interface (wire interface id). Populated only by the global overview (`GET /links`); empty on the per-device listing. */
+            interface_id?: string;
+        };
+        /** @description A named multi-series diagram definition (SV03). */
+        DiagramConfig: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            visibility: "private" | "shared";
+            /** @description Owner subject. */
+            owner: string;
+            /** @description SPA-owned diagram document (series list + default range). Opaque to the daemon except a non-empty central per series. */
+            config: Record<string, never>;
+            /** Format: int64 */
+            created_at_ms: number;
+            /** Format: int64 */
+            updated_at_ms: number;
+        };
+        /** @description Create or update a diagram definition. */
+        DiagramWriteRequest: {
+            name: string;
+            /**
+             * @description Defaults to private.
+             * @enum {string}
+             */
+            visibility?: "private" | "shared";
+            /** @description SPA-owned diagram document (series list + default range). */
+            config?: Record<string, never>;
         };
         /** @description Create a direct link between a sender and a receiver channel. */
         AddLinkRequest: {
+            sender_address: string;
+            receiver_address: string;
+            name?: string;
+            description?: string;
+        };
+        /** @description Trigger the receiver's LINK paramset for the sender (test link / simulate keypress). Physically actuates the receiver. */
+        TestLinkAtDeviceRequest: {
+            receiver_address: string;
+            sender_address: string;
+            /** @description Select the LONG_* action group instead of SHORT_*. Default false. */
+            long_press?: boolean;
+        };
+        /** @description Change the name and/or description of an existing direct link. The two channel addresses identify the link; name and description are written verbatim, so an empty string clears that field on the CCU. */
+        UpdateLinkRequest: {
             sender_address: string;
             receiver_address: string;
             name?: string;
@@ -6707,6 +7874,37 @@ export interface components {
             supported: boolean;
             reason?: string;
             eligible_channels?: number;
+            /**
+             * @description Per-channel suitability for central click-event routing. One
+             *     entry per eligible (press-event) channel, letting clients
+             *     offer a per-channel toggle alongside the device-wide one.
+             */
+            channels?: components["schemas"]["CentralLinksChannelStatus"][];
+            /**
+             * @description True when the daemon could read the CCU-side report-value-usage
+             *     metadata, so each channel's `active` flag reflects the live CCU
+             *     state. False when the backend has no metadata read path (or the
+             *     read failed device-wide); clients then show eligibility only,
+             *     without an active/inactive indicator.
+             */
+            active_state_known?: boolean;
+            /**
+             * @description Count of eligible channels whose central link is currently
+             *     active. Only meaningful when `active_state_known` is true.
+             */
+            active_channels?: number;
+        };
+        /** @description One channel's suitability for central click-event routing. */
+        CentralLinksChannelStatus: {
+            address: string;
+            number: number;
+            eligible: boolean;
+            /**
+             * @description True when the CCU's report-value-usage counter for the channel is
+             *     currently raised (a central link exists). Only meaningful when the
+             *     enclosing status has `active_state_known` set.
+             */
+            active?: boolean;
         };
         /** @description A derived/calculated data point on a channel. */
         CalculatedDPSummary: {
@@ -6773,10 +7971,56 @@ export interface components {
             central?: string;
             address: string;
             model: string;
+            /**
+             * @description CCU interface the device was detected through. The SPA hides
+             *     the "replace existing device" action for HmIP interfaces,
+             *     which do not support the swap.
+             */
+            interface?: string;
             serial?: string;
             manufacturer?: string;
             /** Format: int64 */
             first_seen?: number;
+        };
+        /**
+         * @description One already-paired device a new (inbox) device may replace,
+         *     returned by GET /devices/{addr}/replace-candidates.
+         */
+        ReplaceCandidate: {
+            address: string;
+            name?: string;
+            model?: string;
+            interface?: string;
+            central?: string;
+            /** @description True when the candidate's model equals the new device's (an exact swap rather than a compatible cross-type one). */
+            model_matches: boolean;
+        };
+        /**
+         * @description One team channel a device channel may be assigned to, returned by
+         *     GET /devices/{addr}/channels/{no}/team-candidates.
+         */
+        TeamCandidate: {
+            address: string;
+            name?: string;
+            team_tag?: string;
+            /** @description True when this channel is the target channel's currently-assigned team. */
+            current: boolean;
+        };
+        /**
+         * @description Outcome of a per-device communication / function test
+         *     (POST /devices/{addr}/test).
+         */
+        CommunicationTestResult: {
+            /** @description True when the device answered the radio test frame within the poll window. */
+            passed: boolean;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: int64 */
+            duration_ms: number;
+            /** @description True when the poll window elapsed before the device answered. */
+            timed_out: boolean;
         };
         /** @description One candidate returned by GET /channels/{no}/linkable-channels. */
         LinkableChannel: {
@@ -7211,7 +8455,12 @@ export type $defs = Record<string, never>;
 export interface operations {
     deleteDevice: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also reset the device to factory defaults during removal (CCU DELETE_FLAG_RESET). */
+                reset?: boolean;
+                /** @description Force removal even when the device is unreachable (CCU DELETE_FLAG_FORCE). */
+                force?: boolean;
+            };
             header?: never;
             path: {
                 addr: components["parameters"]["Address"];
@@ -7227,6 +8476,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -7244,6 +8494,10 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
+                    /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
+                    include_channels?: boolean;
+                    rooms?: string[];
+                    functions?: string[];
                 };
             };
         };
@@ -7284,6 +8538,48 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    patchChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    /**
+                     * @description Replaces the channel's room assignments. Room names
+                     *     unknown to the CCU are silently skipped.
+                     */
+                    rooms?: string[];
+                    /**
+                     * @description Replaces the channel's function (Gewerk)
+                     *     assignments. Unknown names are silently skipped.
+                     */
+                    functions?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Update accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getParamset: {
         parameters: {
             query?: never;
@@ -7312,7 +8608,183 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    createSysvar: {
+    listGroups: {
+        parameters: {
+            query?: {
+                /** @description Scope the listing to one central (matches `SystemCCUEntry.name`). Omit to aggregate over all centrals. */
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Heating groups grouped by central */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        entries: components["schemas"]["GroupCentralEntry"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createGroup: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description The created group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupEntry"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listGroupTypes: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The assignable group types. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        types: components["schemas"]["GroupTypeEntry"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSuitableGroupMembers: {
+        parameters: {
+            query: {
+                type_id: string;
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidate members for the type. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuitableMembersResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateGroup: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The numeric CCU group id. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Group updated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteGroup: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The numeric CCU group id. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Group deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listDiagrams: {
         parameters: {
             query?: never;
             header?: never;
@@ -7320,6 +8792,226 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description The caller's visible diagrams. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        diagrams: components["schemas"]["DiagramConfig"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Living-room climate",
+                 *       "visibility": "private",
+                 *       "config": {
+                 *         "series": [
+                 *           {
+                 *             "central": "ccu1",
+                 *             "interface_id": "ccu1-HmIP-RF",
+                 *             "channel_address": "0001ABCD:1",
+                 *             "parameter": "ACTUAL_TEMPERATURE"
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["DiagramWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The diagram. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramConfig"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Living-room climate",
+                 *       "visibility": "shared",
+                 *       "config": {
+                 *         "series": [
+                 *           {
+                 *             "central": "ccu1",
+                 *             "parameter": "ACTUAL_TEMPERATURE"
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["DiagramWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagramConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteDiagram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listAllLinks: {
+        parameters: {
+            query?: {
+                /** @description Scope the listing to one central (matches `SystemCCUEntry.name`). Omit to aggregate over all centrals. */
+                central?: string;
+                /** @description Locale for channel-type labels (default `en`). */
+                locale?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All direct links across the selected centrals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        links: components["schemas"]["Link"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createSysvar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Name of the new system variable. */
+                    name: string;
+                    /**
+                     * @description Value kind of the new variable. ALARM provisions a binary, acknowledgeable alarm line (backed by an OT_ALARMDP on the CCU) and always routes through the Rega create script.
+                     * @enum {string}
+                     */
+                    value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM" | "ALARM";
+                    /** @description Physical unit string (e.g. "°C", "%"). */
+                    unit?: string;
+                    /** @description Minimum value (as string, CCU convention). */
+                    min?: string;
+                    /** @description Maximum value (as string, CCU convention). */
+                    max?: string;
+                    /** @description Human-readable label shown in the CCU UI. When set, creation routes through the Rega script (the native JSON-RPC create methods carry no description parameter). */
+                    description?: string;
+                    /** @description Ordered list of enum labels for ENUM-type sysvars. */
+                    value_list?: string[];
+                    /** @description False-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "false" default. Setting a custom label routes creation through the Rega script. */
+                    value_name_0?: string;
+                    /** @description True-state label for a binary (BOOL/ALARM) variable. Empty adopts the CCU's own "true" default. */
+                    value_name_1?: string;
+                    /** @description Bind the new variable to a device channel ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves it unassigned. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+                    channel_address?: string;
+                };
+            };
+        };
         responses: {
             /** @description Scheduled */
             202: {
@@ -7437,6 +9129,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description New name for the variable. When present and non-empty the sysvar is renamed in place (the path {name} stays the current name). Omit or leave empty to keep the name. */
+                    name?: string;
                     /** @description Human-readable label shown in the CCU UI. */
                     description?: string;
                     /** @description Physical unit string (e.g. "°C", "%"). */
@@ -7445,8 +9139,18 @@ export interface operations {
                     min?: string;
                     /** @description Maximum value (as string, CCU convention). */
                     max?: string;
-                    /** @description Ordered list of enum labels for ENUM-type sysvars. */
+                    /** @description Ordered list of enum labels for LIST/ENUM-type sysvars. */
                     value_list?: string[];
+                    /** @description New false-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+                    value_name_0?: string;
+                    /** @description New true-state label for a binary (LOGIC/ALARM) variable. An empty string leaves the label untouched. */
+                    value_name_1?: string;
+                    /** @description Toggle the CCU WebUI-visibility flag. Omit to leave it unchanged. */
+                    is_visible?: boolean;
+                    /** @description Toggle the archive flag (CCU DPArchive) that records value changes to the measurement history. Omit to leave it unchanged. */
+                    is_logged?: boolean;
+                    /** @description Reassign the CCU "Kanalzuordnung". Tri-state: omit to leave the assignment untouched, send an empty string to clear it, or a channel address ("ADDR:idx") to assign it. The address is resolved to the channel's ReGa ise id; an address the CCU cannot resolve is rejected with 422. */
+                    channel_address?: string;
                 };
             };
         };
@@ -7459,6 +9163,74 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getSysvarUsage: {
+        parameters: {
+            query?: {
+                /** @description Scope to one central (required when the name is ambiguous). */
+                central?: string;
+            };
+            header?: never;
+            path: {
+                /** @description System-variable name. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Programs referencing the variable. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SysvarUsage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    installModeSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The BidCos-Wired interface to scan. */
+                    interface: string;
+                    /** @description Disambiguates the CCU; optional for single-CCU setups. */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        central?: string;
+                        interface: string;
+                        /** @description Number of devices the bus scan found. */
+                        found: number;
+                    };
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -7483,6 +9255,30 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    rebootSystemCCU: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Target central name (matches `SystemCCUEntry.name`). */
+                central: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reboot triggered */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getRestartPending: {
@@ -8105,7 +9901,17 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    /** @description Also rename each channel to "<name>:<channelNo>". Only consulted together with name. Defaults to false. */
+                    include_channels?: boolean;
+                    rooms?: string[];
+                    functions?: string[];
+                };
+            };
+        };
         responses: {
             /** @description Accept dispatched */
             202: {
@@ -8114,6 +9920,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -8162,13 +9969,250 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Update scheduled */
+            /**
+             * @description Update scheduled. When the device's radio interface reports a
+             *     high transmit duty cycle the body carries an advisory
+             *     `duty_cycle_warning` (the update is never rejected on that
+             *     basis, mirroring the CCU WebUI's non-blocking warning).
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example scheduled */
+                        status: string;
+                        /** @description Transmit duty cycle in percent of the device's radio interface, present only when it is at or above the warning threshold (80%). Absent when unknown or below. */
+                        duty_cycle_warning?: number;
+                    };
+                };
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    restoreDeviceConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description Restore dispatched; the configuration transfer continues
+             *     asynchronously (watch CONFIG_PENDING).
+             */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    testDeviceCommunication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunicationTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDeviceTeamCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        candidates: components["schemas"]["TeamCandidate"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setDeviceChannelTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+                no: components["parameters"]["ChannelNo"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The team channel address to join; null/empty resets to the default team. */
+                    team?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Team assignment accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listDeviceReplaceCandidates: {
+        parameters: {
+            query?: {
+                /** @description Disambiguates the CCU; optional for single-CCU setups. */
+                central?: string;
+            };
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        candidates: components["schemas"]["ReplaceCandidate"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    replaceDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The paired device the new device replaces. */
+                    old_address: string;
+                    /** @description Disambiguates the CCU; optional for single-CCU setups. */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /**
+             * @description Replace applied; the device's radio configuration transfer
+             *     continues asynchronously.
+             */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example replacing */
+                        status: string;
+                        old_address: string;
+                        new_address: string;
+                        central?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    downloadSystemFirmware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uri
+                     * @description http/https firmware image the CCU should fetch.
+                     */
+                    url: string;
+                    /** @description Target central (optional for single-CCU deployments). */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Download triggered */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -8200,6 +10244,55 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    determineParameter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+                key: "VALUES" | "MASTER" | "LINK";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Name of the parameter to determine (e.g. "TEMPERATURE"). */
+                    parameter: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The value the device reported for the parameter. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * @description The determined value. Type follows the parameter's
+                         *     declared TYPE (bool / number / string); null when the
+                         *     backend does not support the operation (e.g. CUxD).
+                         */
+                        value: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description CCU read error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -8916,6 +11009,75 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    updateLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    testLinkAtDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "receiver_address": "0001ABCD:3",
+                 *       "sender_address": "0002EFGH:1",
+                 *       "long_press": false
+                 *     }
+                 */
+                "application/json": components["schemas"]["TestLinkAtDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description Triggered (the actuator reacts asynchronously). */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description Link activation not supported on this interface. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getLinkParamset: {
         parameters: {
             query?: never;
@@ -8995,7 +11157,10 @@ export interface operations {
     };
     createCentralLinks: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device. */
+                channel?: string;
+            };
             header?: never;
             path: {
                 addr: string;
@@ -9018,7 +11183,10 @@ export interface operations {
     };
     removeCentralLinks: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Channel address to scope the switch to a single channel, e.g. ABC0000001:4. Omit for the whole device. */
+                channel?: string;
+            };
             header?: never;
             path: {
                 addr: string;
@@ -9311,6 +11479,32 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    deleteProgram: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     setProgramEnabled: {
         parameters: {
             query?: never;
@@ -9385,6 +11579,56 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    ackAllAlarmMessages: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AckAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    ackAllServiceMessages: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AckAllResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     disableServiceMessage: {
         parameters: {
             query?: never;
@@ -9403,6 +11647,61 @@ export interface operations {
                 };
                 content?: never;
             };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    listSuppressedServiceMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suppressed service messages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuppressedServiceMessage"][];
+                };
+            };
+        };
+    };
+    unsuppressServiceMessage: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description CCU interface the channel lives on (e.g. "HmIP-RF"). Optional — resolved from the stored suppression when omitted. */
+                    interface?: string;
+                    /** @description Channel address ("ADDR:chn"). */
+                    channel: string;
+                    /** @description Service parameter to unsuppress (e.g. "LOWBAT"). Omit or empty to clear every service parameter of the channel. */
+                    parameter?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            422: components["responses"]["UnprocessableEntity"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -9687,6 +11986,68 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getRecordingOverride: {
+        parameters: {
+            query: {
+                central: string;
+                interface_id: string;
+                channel: string;
+                parameter: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective recording state for the data point. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordingState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    putRecordingOverride: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "central": "ccu1",
+                 *       "interface_id": "ccu1-HmIP-RF",
+                 *       "channel": "0001ABCD:1",
+                 *       "parameter": "ACTUAL_TEMPERATURE",
+                 *       "record": true
+                 *     }
+                 */
+                "application/json": components["schemas"]["RecordingWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Resulting effective recording state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordingState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

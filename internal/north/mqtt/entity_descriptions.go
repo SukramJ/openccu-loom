@@ -3,7 +3,11 @@
 
 package mqtt
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/ccudata"
+)
 
 // EntityDescription captures the per-parameter metadata MQTT consumers
 // (Home Assistant Discovery, custom dashboards) expect on top of the
@@ -242,23 +246,54 @@ func LookupEvent(parameter string) (EntityDescription, bool) {
 	return desc, ok
 }
 
-// doorbellEventModels lists the device models whose press/ring channel is a
-// doorbell rather than a generic button. Mirrors the reference EVENT_RULES
-// doorbell rule (entity_helpers/descriptions/events.py): HmIP-DBB is a wireless
-// doorbell button, HmIP-DSD-PCB a doorbell sensor PCB.
-var doorbellEventModels = map[string]struct{}{
-	"HmIP-DBB":     {},
-	"HmIP-DSD-PCB": {},
-}
-
 // EventDeviceClassForModel returns the HA `device_class` for a channel-level
-// press/ring event entity: "doorbell" for the doorbell models, else the
-// generic "button". The HA mqtt.event component accepts both values.
+// press/ring event entity: "doorbell" for the curated doorbell models
+// (the shared device-semantics classification embedded from the
+// upstream data package — the reference stack reads the same list),
+// else the generic "button". The HA mqtt.event component accepts both.
 func EventDeviceClassForModel(model string) string {
-	if _, ok := doorbellEventModels[model]; ok {
+	if _, ok := ccudata.DoorbellModels()[model]; ok {
 		return "doorbell"
 	}
 	return "button"
+}
+
+// doorbellRingSource is the press type that represents the ring on
+// doorbell devices. HA requires doorbell event entities to support the
+// standard "ring" event type (mandatory from HA 2027.4), so this type
+// is announced and fired as "ring" instead of "press_short".
+const doorbellRingSource = "press_short"
+
+// DoorbellRingType is HA's standard doorbell event type.
+const DoorbellRingType = "ring"
+
+// MapDoorbellEventTypes rewrites the announced `event_types` of a
+// doorbell-class entity: press_short becomes the standard "ring",
+// every other type stays. Non-doorbell models pass through untouched.
+func MapDoorbellEventTypes(model string, types []string) []string {
+	if EventDeviceClassForModel(model) != "doorbell" {
+		return types
+	}
+	out := make([]string, len(types))
+	for i, t := range types {
+		if t == doorbellRingSource {
+			out[i] = DoorbellRingType
+		} else {
+			out[i] = t
+		}
+	}
+	return out
+}
+
+// DoorbellEventType maps one runtime press type onto the announced
+// vocabulary: "ring" for the doorbell models' press_short, the
+// lower-cased press type otherwise.
+func DoorbellEventType(model, pressType string) string {
+	t := strings.ToLower(pressType)
+	if t == doorbellRingSource && EventDeviceClassForModel(model) == "doorbell" {
+		return DoorbellRingType
+	}
+	return t
 }
 
 // ---------------------------------------------------------------------------

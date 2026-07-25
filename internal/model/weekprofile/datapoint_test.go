@@ -681,6 +681,32 @@ func TestExtractSupportedScheduleFieldsParsesKnownFields(t *testing.T) {
 	}
 }
 
+// TestExtractSupportedScheduleFieldsRecognisesColorFields asserts the
+// universal-light colour/effect and BSL output-behaviour fields are
+// recognised (so FilterRawScheduleByFields keeps them for RGBW/BSL).
+func TestExtractSupportedScheduleFieldsRecognisesColorFields(t *testing.T) {
+	t.Parallel()
+	master := map[string]struct{}{
+		"03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":  {},
+		"03_WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE": {},
+		"01_WP_OUTPUT_BEHAVIOUR":                              {},
+	}
+	fields := ExtractSupportedScheduleFields(master)
+	set := make(map[hmenum.ScheduleField]struct{}, len(fields))
+	for _, f := range fields {
+		set[f] = struct{}{}
+	}
+	for _, want := range []hmenum.ScheduleField{
+		hmenum.ScheduleFieldColorType,
+		hmenum.ScheduleFieldColorValue,
+		hmenum.ScheduleFieldOutputBehaviour,
+	} {
+		if _, ok := set[want]; !ok {
+			t.Errorf("missing colour field %s", want)
+		}
+	}
+}
+
 func TestExtractSupportedScheduleFieldsEmptyParamset(t *testing.T) {
 	t.Parallel()
 	fields := ExtractSupportedScheduleFields(map[string]struct{}{})

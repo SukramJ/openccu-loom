@@ -33,11 +33,38 @@ type CentralLinksReport struct {
 }
 
 // CentralLinksStatus describes whether the device is eligible for
-// central click-event routing.
+// central click-event routing. Channels enumerates the eligible
+// channels so the SPA can offer a per-channel toggle next to the
+// device-wide one — mirroring the CCU channel-config dialog, which
+// scopes the switch to the single opened channel.
 type CentralLinksStatus struct {
-	Supported        bool   `json:"supported"`
-	Reason           string `json:"reason,omitempty"`
-	EligibleChannels int    `json:"eligible_channels,omitempty"`
+	Supported        bool                        `json:"supported"`
+	Reason           string                      `json:"reason,omitempty"`
+	EligibleChannels int                         `json:"eligible_channels,omitempty"`
+	Channels         []CentralLinksChannelStatus `json:"channels,omitempty"`
+	// ActiveStateKnown is true when the daemon could read the CCU-side
+	// report-value-usage metadata, so each channel's Active flag reflects the
+	// live CCU state. It is false when the backend has no metadata read path
+	// (or the read failed device-wide); clients then show eligibility only,
+	// without an active / inactive indicator.
+	ActiveStateKnown bool `json:"active_state_known"`
+	// ActiveChannels counts eligible channels whose central link is currently
+	// active. Only meaningful when ActiveStateKnown is true.
+	ActiveChannels int `json:"active_channels,omitempty"`
+}
+
+// CentralLinksChannelStatus describes one channel's suitability for
+// central click-event routing. Eligible is true when the channel
+// exposes PRESS_SHORT / PRESS_LONG and can therefore drive central
+// click events. Active is true when the CCU's report-value-usage
+// counter for the channel is currently raised (a central link exists);
+// it is only meaningful when the enclosing status has ActiveStateKnown
+// set.
+type CentralLinksChannelStatus struct {
+	Address  string `json:"address"`
+	Number   int    `json:"number"`
+	Eligible bool   `json:"eligible"`
+	Active   bool   `json:"active"`
 }
 
 // ErrCentralLinksUnsupported is returned by adapters when the device
@@ -45,6 +72,12 @@ type CentralLinksStatus struct {
 // (CUxD, virtual devices, …). Surfaced as 422 to make the SPA show
 // "not applicable on this device" instead of a generic upstream error.
 var ErrCentralLinksUnsupported = errors.New("central-links: device interface does not support central links")
+
+// ErrCentralLinksChannelNotFound is returned when a channel-scoped
+// create/remove/status request names a channel address that the device
+// does not carry. Surfaced as 422 so the SPA shows a targeted
+// validation error rather than a generic upstream failure.
+var ErrCentralLinksChannelNotFound = errors.New("central-links: channel not found on device")
 
 // --- Config ---
 
@@ -157,6 +190,16 @@ type InterfaceState struct {
 	CentralID string `json:"central_id,omitempty"`
 	Host      string `json:"host,omitempty"`
 	Note      string `json:"note,omitempty"`
+	// DutyCycle is the interface's transmit duty cycle in percent (0..100)
+	// for BidCos radio interfaces, sourced from the CCU's
+	// listBidcosInterfaces poll. Nil (absent) when unknown or when the
+	// interface carries no BidCos gateway (e.g. HmIP-RF, whose device-level
+	// DUTY_CYCLE data points provide the value instead).
+	DutyCycle *int `json:"duty_cycle,omitempty"`
+	// CarrierSense is the interface's receive carrier-sense load in percent
+	// (0..100). Nil (absent) when the CCU does not report it, which is the
+	// common case over the JSON-RPC surface.
+	CarrierSense *int `json:"carrier_sense,omitempty"`
 }
 
 // --- Links ---
@@ -182,6 +225,12 @@ type Link struct {
 	PeerDeviceName           string `json:"peer_device_name,omitempty"`
 	PeerDeviceModel          string `json:"peer_device_model,omitempty"`
 	Direction                string `json:"direction"`
+	// CentralName and InterfaceID identify the owning CCU and interface
+	// of the link. They are populated only by the global links overview
+	// (`GET /api/v1/links`); the per-device listing leaves them empty so
+	// its response stays byte-identical.
+	CentralName string `json:"central_name,omitempty"`
+	InterfaceID string `json:"interface_id,omitempty"`
 }
 
 // LinkableChannel is one candidate returned by
@@ -223,6 +272,11 @@ type ClimateSchedule struct {
 	ActiveProfileIndex *int                      `json:"active_profile_index,omitempty"`
 	Profiles           map[string]ClimateProfile `json:"profiles,omitempty"`
 	SimpleEntries      []SimpleScheduleEntry     `json:"simple_entries,omitempty"`
+	// ColorCapable is true when the device advertises per-switch-point
+	// colour/effect fields (universal lights: HmIP-RGBW / DRG-DALI / LSC)
+	// or an OUTPUT_BEHAVIOUR field (HmIP-BSL). The SPA shows a colour
+	// summary per switch point only when this is set.
+	ColorCapable bool `json:"color_capable,omitempty"`
 }
 
 // SimpleScheduleEntry is one switching slot for a non-climate device.
@@ -293,6 +347,18 @@ type SimpleScheduleEntry struct {
 	LockMode   string `json:"lock_mode,omitempty"`
 	LockAction string `json:"lock_action,omitempty"`
 	Permission string `json:"permission,omitempty"`
+
+	// --- Universal-light colour / effect (opaque, lossless) ------
+	// ColorType is the discriminator (0 = hue/saturation, 1 = colour
+	// temperature, 2 = effect); ColorValue is the packed 20-bit value.
+	// Both are carried verbatim as opaque ints so an un-edited switch
+	// point's colour survives a read → write round-trip deterministically
+	// (glued to this entry's SlotNo). OutputBehaviour is the HmIP-BSL
+	// signal-LED field. Nil = absent (never written; preserves the CCU's
+	// sparse-merge). 0 is a legitimate value and is always round-tripped.
+	ColorType       *int `json:"color_type,omitempty"`
+	ColorValue      *int `json:"color_value,omitempty"`
+	OutputBehaviour *int `json:"output_behaviour,omitempty"`
 }
 
 // ScheduleChannelRef identifies the owning channel so the SPA can
@@ -483,6 +549,11 @@ type UISchemaParameterOps struct {
 	Read  bool `json:"read"`
 	Write bool `json:"write"`
 	Event bool `json:"event"`
+	// Determine is the DETERMINE bit (0x08): the parameter's live value
+	// can be read from the device on demand. The MASTER editor renders a
+	// "Determine" button for such fields. Omitted when unset so the
+	// addition is backward-compatible.
+	Determine bool `json:"determine,omitempty"`
 }
 
 // UISchemaParameterFlags mirrors the OCCU FLAGS bitmask.
@@ -535,4 +606,49 @@ type UISchemaProfile struct {
 	SenderType      string          `json:"sender_type,omitempty"`
 	ActiveProfileID int             `json:"active_profile_id,omitempty"`
 	Raw             json.RawMessage `json:"raw,omitempty"`
+}
+
+// --- Device replace ---
+
+// ReplaceCandidate is one already-paired device a new (inbox) device may
+// replace, as returned by `GET /devices/{addr}/replace-candidates`. The
+// interface daemon (rfd / hs485d) computes type / channel compatibility;
+// ModelMatches is true when the candidate's model equals the new
+// device's, letting the SPA badge an exact swap apart from a compatible
+// cross-type one.
+type ReplaceCandidate struct {
+	Address      string `json:"address"`
+	Name         string `json:"name,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Interface    string `json:"interface,omitempty"`
+	Central      string `json:"central,omitempty"`
+	ModelMatches bool   `json:"model_matches"`
+}
+
+// --- Device communication test ---
+
+// CommunicationTestResult is the outcome of a per-device communication /
+// function test (POST /devices/{addr}/test): the CCU sends a radio test
+// frame to the device and waits for its ACK. Passed is true when the
+// device's last-completed-test time advanced past the test start within
+// the poll window; TimedOut is true when the window elapsed first.
+type CommunicationTestResult struct {
+	Passed      bool      `json:"passed"`
+	StartedAt   time.Time `json:"started_at"`
+	CompletedAt time.Time `json:"completed_at,omitempty"`
+	DurationMs  int64     `json:"duration_ms"`
+	TimedOut    bool      `json:"timed_out"`
+}
+
+// --- Device team assignment ---
+
+// TeamCandidate is one team-channel a device channel may be assigned to,
+// returned by GET /devices/{addr}/channels/{no}/team-candidates. The
+// candidate list is filtered to channels sharing the target's team tag;
+// Current marks the channel's currently-assigned team.
+type TeamCandidate struct {
+	Address string `json:"address"`
+	Name    string `json:"name,omitempty"`
+	TeamTag string `json:"team_tag,omitempty"`
+	Current bool   `json:"current"`
 }

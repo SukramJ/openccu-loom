@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
@@ -80,6 +82,24 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	var auditRead handlers.AuditService = auditBuf
 	if auditDB != nil {
 		auditRead = auditReadService{Buffer: auditBuf, store: sqlitestore.NewAuditStore(auditDB)}
+	}
+	// Per-channel operator overrides (G12): visibility + operation lock, in
+	// the main app DB. The overlay is a save-through read cache the ingest and
+	// control-write paths consult; hydrated once here at boot.
+	var channelFlagsStore *sqlitestore.ChannelFlagsStore
+	channelFlagsOverlay := channelflags.New()
+	if auditDB != nil {
+		channelFlagsStore = sqlitestore.NewChannelFlagsStore(auditDB)
+		loadCtx, cancelLoad := context.WithTimeout(ctx, 10*time.Second)
+		if list, err := channelFlagsStore.List(loadCtx); err != nil {
+			logger.Warn("channel_flags.load_failed", slog.String("err", err.Error()))
+		} else {
+			for _, f := range list {
+				channelFlagsOverlay.Set(f.CentralName, f.ChannelAddress,
+					channelflags.Flags{Hidden: f.Hidden, Locked: f.Locked})
+			}
+		}
+		cancelLoad()
 	}
 	auditDurableStats := ov.durableStats
 	sqUsers := ov.sqUsers
@@ -195,11 +215,21 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	masterValuesStore := si.masterValuesStore
 	valuesCacheStore := si.valuesCacheStore
 	historyStore := si.historyStore
+	recordingOverrides := si.recordingOverrides
+	recordingStore := si.recordingStore
 	wsHub := si.wsHub
 	wsHandler := si.wsHandler
 	valueWriter := si.valueWriter
 	mqttCollector := si.mqttCollector
 	mqttSup := si.mqttSup
+	// G12: let the (re)built MQTT bridge skip operator-hidden channels, so a
+	// hidden channel disappears from the MQTT plane like it does from the REST
+	// operation list and Matter. The overlay is keyed on (central, address).
+	if mqttSup != nil {
+		mqttSup.SetChannelHidden(func(central, channelAddress string) bool {
+			return channelFlagsOverlay.Get(central, channelAddress).Hidden
+		})
+	}
 	mqttWiring := si.mqttWiring
 	// Firmware polling jobs arrive in a second registration pass: their
 	// hooks resolve CCU backends through the ValueWriter, which does not
@@ -384,6 +414,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		descriptorStores:        si.descriptorStores,
 		sqCentrals:              sqCentrals,
 		historyStore:            historyStore,
+		recordingOverrides:      recordingOverrides,
+		recordingStore:          recordingStore,
+		channelFlagsOverlay:     channelFlagsOverlay,
 		healthTracker:           healthTracker,
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		mqttWiring:              mqttWiring,
@@ -411,7 +444,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// below then leaves the plain SQLite-backed service in place.
 	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
 	centralOrch := newCentralOrchestrator(reg, sb.bringUpManager, sbDeps, cfg, logger, instanceName,
-		valuesCacheStore, masterValuesStore, historyStore)
+		valuesCacheStore, masterValuesStore, historyStore, recordingStore)
 	// A runtime-adopted central must join the hub-discovery ready pipeline the
 	// same way boot-time centrals do, so its serial-gated hub discovery publishes
 	// once its bring-up resolves the serial.
@@ -490,6 +523,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if auditDB != nil {
 		prefSvc = sqlitestore.NewUserPreferencesStore(auditDB)
 	}
+	var diagramSvc handlers.DiagramConfigService
+	if auditDB != nil {
+		diagramSvc = newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB))
+	}
 	tokenAdminSvc := rw.tokenAdmin
 	// Wrap the persisted CentralAdminService so POST/PUT/DELETE
 	// /admin/centrals also drive the live orchestrator built above — the
@@ -545,6 +582,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	centralLinksDomain := adapter.NewCentralLinksDomain(reg, valueWriter)
 	definitionExportDomain := adapter.NewDefinitionExportDomain(reg)
 	deviceAdminDomain := adapter.NewDeviceAdminDomain(reg, valueWriter)
+	ccuMaintenanceDomain := adapter.NewCCUMaintenanceDomain(reg, valueWriter)
+	groupsDomain := adapter.NewGroupsDomain(reg, valueWriter)
 	dpWriterAdapter := adapter.NewDataPointWriterAdapter(reg, valueWriter)
 	customDPDispatcher := adapter.NewCustomDPDispatcher(reg).SetAuditRecorder(auditRec)
 	roomFunctionAdmin := adapter.NewRoomFunctionAdminDomain(reg)
@@ -595,6 +634,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		linksDomain:      linksDomain,
 		schedulesDomain:  schedulesDomain,
 		centralLinks:     centralLinksDomain,
+		groupsDomain:     groupsDomain,
 		definitionExport: definitionExportDomain,
 		deviceAdmin:      deviceAdminDomain,
 		paramsets:        paramsetsDomain,
@@ -656,12 +696,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		configAdapter:           configAdapter,
 		devicesAdapter:          devicesAdapter,
 		deviceAdminDomain:       deviceAdminDomain,
+		ccuMaintenanceDomain:    ccuMaintenanceDomain,
+		groupsDomain:            groupsDomain,
 		deviceReloader:          deviceReloader,
 		firmwareRefresher:       adapter.NewFirmwareDomain(reg, valueWriter),
 		editSessions:            editSessions,
 		dpWriterAdapter:         dpWriterAdapter,
 		customDPDispatcher:      customDPDispatcher,
 		paramsetsDomain:         paramsetsDomain,
+		parameterDeterminer:     adapter.NewParameterDeterminerAdapter(reg, valueWriter),
 		hubAdapter:              hubAdapter,
 		ifaceAdapter:            ifaceAdapter,
 		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
@@ -686,6 +729,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		userSvc:                 userAdminSvc,
 		passwordSvc:             selfPasswordSvc,
 		prefSvc:                 prefSvc,
+		diagramSvc:              diagramSvc,
 		tokenSvc:                tokenAdminSvc,
 		centSvc:                 centralAdminSvc,
 		discovery:               discoveryDeps,
@@ -703,6 +747,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visibilityAdapter:       visibilityAdapter,
 		valuesCacheStore:        valuesCacheStore,
 		historyStore:            historyStore,
+		recordingOverrides:      recordingOverrides,
+		channelFlagsStore:       channelFlagsStore,
+		channelFlagsOverlay:     channelFlagsOverlay,
 	})
 	defer restMountTeardown()
 

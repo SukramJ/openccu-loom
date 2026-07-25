@@ -468,21 +468,24 @@ var conditionToInt = func() map[schedule.Condition]int {
 // produces a semantically equivalent paramset.
 //
 // Mirrors `DefaultWeekProfile.convert_raw_to_dict_schedule`.
-func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) {
+func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) { //nolint:gocyclo,funlen // flat per-field switch dispatch; length/complexity is field count, not control-flow depth
 	type group struct {
-		weekday        int
-		fixedHour      int
-		fixedMinute    int
-		level          float64
-		level2         *float64
-		condition      schedule.Condition
-		astroType      schedule.Astro
-		astroOffset    int
-		targetChannels int
-		durationBase   int
-		durationFactor int
-		rampBase       int
-		rampFactor     int
+		weekday         int
+		fixedHour       int
+		fixedMinute     int
+		level           float64
+		level2          *float64
+		condition       schedule.Condition
+		astroType       schedule.Astro
+		astroOffset     int
+		targetChannels  int
+		durationBase    int
+		durationFactor  int
+		rampBase        int
+		rampFactor      int
+		colorType       *int
+		colorValue      *int
+		outputBehaviour *int
 	}
 	groups := make(map[int]*group)
 
@@ -534,6 +537,15 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) {
 			g.rampBase = toInt(val)
 		case "RAMP_TIME_FACTOR":
 			g.rampFactor = toInt(val)
+		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE":
+			v := toInt(val)
+			g.colorType = &v
+		case "HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE":
+			v := toInt(val)
+			g.colorValue = &v
+		case "OUTPUT_BEHAVIOUR":
+			v := toInt(val)
+			g.outputBehaviour = &v
 		}
 	}
 
@@ -563,6 +575,9 @@ func ParseSimpleRawParamset(raw map[string]any) (*schedule.Simple, error) {
 		if g.rampFactor > 0 {
 			entry.RampTime = FormatTimeBaseFactor(g.rampBase, g.rampFactor)
 		}
+		entry.ColorType = g.colorType
+		entry.ColorValue = g.colorValue
+		entry.OutputBehaviour = g.outputBehaviour
 		if err := s.Put(groupNo, entry); err != nil {
 			// Skip entries that fail basic validation rather than aborting.
 			continue
@@ -630,6 +645,18 @@ func BuildSimpleRawParamset(s *schedule.Simple) map[string]any {
 				b, f := parseDurationToBaseFactorInts(entry.RampTime)
 				out[prefix+"RAMP_TIME_BASE"] = b
 				out[prefix+"RAMP_TIME_FACTOR"] = f
+			}
+
+			// Universal-light colour / effect — opaque, emit only when
+			// present (nil leaves the CCU's stored value via sparse merge).
+			if entry.ColorType != nil {
+				out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE"] = *entry.ColorType
+			}
+			if entry.ColorValue != nil {
+				out[prefix+"HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_VALUE"] = *entry.ColorValue
+			}
+			if entry.OutputBehaviour != nil {
+				out[prefix+"OUTPUT_BEHAVIOUR"] = *entry.OutputBehaviour
 			}
 		}
 	}

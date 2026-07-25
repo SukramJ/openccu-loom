@@ -31,7 +31,7 @@ func GetCentralLinksStatus(svc CentralLinksService) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Central links unavailable", ""))
 			return
 		}
-		st, err := svc.CentralLinksStatus(chi.URLParam(r, "addr"))
+		st, err := svc.CentralLinksStatus(r.Context(), chi.URLParam(r, "addr"))
 		if err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Central links status failed", err)
 			return
@@ -48,7 +48,7 @@ func CreateCentralLinks(svc CentralLinksService) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Central links unavailable", ""))
 			return
 		}
-		report, err := svc.CreateCentralLinks(r.Context(), chi.URLParam(r, "addr"))
+		report, err := svc.CreateCentralLinks(r.Context(), chi.URLParam(r, "addr"), r.URL.Query().Get("channel"))
 		if err != nil {
 			centralLinksError(w, r, err)
 			return
@@ -65,7 +65,7 @@ func DeleteCentralLinks(svc CentralLinksService) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Central links unavailable", ""))
 			return
 		}
-		report, err := svc.RemoveCentralLinks(r.Context(), chi.URLParam(r, "addr"))
+		report, err := svc.RemoveCentralLinks(r.Context(), chi.URLParam(r, "addr"), r.URL.Query().Get("channel"))
 		if err != nil {
 			centralLinksError(w, r, err)
 			return
@@ -81,6 +81,11 @@ func centralLinksError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, ErrCentralLinksUnsupported) {
 		problem.Write(w, http.StatusUnprocessableEntity,
 			problem.New(problem.TypeValidation, r, "Central links unsupported", err.Error()))
+		return
+	}
+	if errors.Is(err, hmapi.ErrCentralLinksChannelNotFound) {
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Central links channel not found", err.Error()))
 		return
 	}
 	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Central links failed", err)

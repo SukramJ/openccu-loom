@@ -6,6 +6,7 @@ package backends
 import (
 	"context"
 
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -49,6 +50,19 @@ type LifecycleOps interface {
 	Ping(ctx context.Context, interfaceID string) error
 }
 
+// Device-delete flags form the bitmask passed to [DeviceOps.DeleteDevice].
+// They mirror the CCU's XML-RPC `deleteDevice` flag constants and may be
+// OR-combined.
+const (
+	// DeleteFlagReset resets the device to factory defaults as part of the
+	// unpair (CCU DELETE_FLAG_RESET = 1).
+	DeleteFlagReset = 1
+	// DeleteFlagForce forces the delete even when the device is unreachable,
+	// so the CCU drops it without the bidirectional handshake
+	// (CCU DELETE_FLAG_FORCE = 2).
+	DeleteFlagForce = 2
+)
+
 // DeviceOps covers device enumeration, discovery helpers, firmware
 // management, pairing lifecycle, and bulk device-data retrieval.
 type DeviceOps interface {
@@ -60,11 +74,77 @@ type DeviceOps interface {
 	// [ErrUnsupported] on backends without [Capabilities.FirmwareUpdate].
 	UpdateFirmware(ctx context.Context, address string) error
 
+	// RestoreConfigToDevice re-transmits the centrally stored
+	// configuration (MASTER paramsets of every channel plus link
+	// peerings) to the device — the recovery path after a device
+	// factory reset. Maps to the CCU `restoreConfigToDevice(address)`
+	// XML-RPC call. The call returns promptly; the radio transfer
+	// continues asynchronously (CONFIG_PENDING). Returns
+	// [ErrUnsupported] on backends without [Capabilities.ConfigRestore]
+	// (CUxD, Homegear); the caller additionally gates on the interface
+	// (only rfd / HMIPServer expose the method).
+	RestoreConfigToDevice(ctx context.Context, address string) error
+
+	// ListReplaceableDevices returns the already-paired devices the new
+	// device (newDeviceAddress) may replace — the interface daemon
+	// computes type / channel compatibility. Maps to the XML-RPC
+	// `listReplaceableDevices(newDeviceAddress)` call. Returns
+	// [ErrUnsupported] on backends without [Capabilities.ReplaceDevice];
+	// the caller additionally gates on the interface (rfd / hs485d
+	// only). A wrong-interface serial produces an upstream fault the
+	// caller tolerates.
+	ListReplaceableDevices(ctx context.Context, newDeviceAddress string) ([]hmproto.DeviceDescription, error)
+
+	// ReplaceDevice swaps oldDeviceAddress for newDeviceAddress on the
+	// interface daemon: the daemon migrates the direct links, teams and
+	// link paramsets, and ReGa re-binds the existing object in place
+	// (same ise-ID → programs, names, rooms survive). Maps to the
+	// XML-RPC `replaceDevice(oldDeviceAddress, newDeviceAddress)` call.
+	// Returns [ErrUnsupported] on backends without
+	// [Capabilities.ReplaceDevice]; an incompatible pair surfaces as an
+	// upstream fault.
+	ReplaceDevice(ctx context.Context, oldDeviceAddress, newDeviceAddress string) error
+
+	// SearchDevices triggers a wired-bus scan for new devices via the
+	// XML-RPC `searchDevices()` call (no arguments) and returns the count
+	// of devices found. The daemon additionally pushes newDevices
+	// callbacks; the found devices surface in the inbox (ReadyConfig
+	// false) for the operator to accept. Only hs485d (BidCos-Wired)
+	// implements it — every other backend/interface returns
+	// [ErrUnsupported]; the caller additionally gates on
+	// [hmenum.Interface.SupportsDeviceSearch].
+	SearchDevices(ctx context.Context) (int, error)
+
+	// SetTeam assigns channelAddress to teamChannelAddress via the
+	// XML-RPC `setTeam(address, team)` call (e.g. smoke-detector teams).
+	// An empty teamChannelAddress resets the channel to its own default
+	// team. Returns [ErrUnsupported] on backends without
+	// [Capabilities.TeamAssignment]; the caller additionally gates on the
+	// interface (BidCos-RF / HmIP-RF).
+	SetTeam(ctx context.Context, channelAddress, teamChannelAddress string) error
+
+	// ListTeams returns the team-channel descriptions used to build the
+	// assignment candidate list via the XML-RPC `listTeams()` call. Each
+	// entry carries ADDRESS / PARENT / TEAM_TAG / PARENT_TYPE. Returns
+	// [ErrUnsupported] on backends without [Capabilities.TeamAssignment].
+	ListTeams(ctx context.Context) ([]hmproto.DeviceDescription, error)
+
+	// TestDevice runs the CCU's per-device communication/function test
+	// (ReGa DevStartComTest) and polls for completion up to maxWaitSecs
+	// (poll every pollIntervalSecs). The CCU sends a radio test frame and
+	// waits for the device's ACK; a pass means the device answered.
+	// Requires the ReGa runner — returns [ErrUnsupported] on backends
+	// without [Capabilities.CommunicationTest]; the caller additionally
+	// gates on the interface.
+	TestDevice(ctx context.Context, address string, maxWaitSecs, pollIntervalSecs float64) (hmapi.CommunicationTestResult, error)
+
 	// DeleteDevice unpairs the device from the CCU. Maps to the CCU's
-	// `deleteDevice(address, flags)` XML-RPC call (flags=0 — keep the
-	// bidirectional handshake clean). Backends without a pairing concept (CUxD
-	// virtual devices) return [ErrUnsupported].
-	DeleteDevice(ctx context.Context, address string) error
+	// `deleteDevice(address, flags)` XML-RPC call. flags is the CCU delete
+	// bitmask ([DeleteFlagReset] resets the device to factory defaults,
+	// [DeleteFlagForce] forces removal of an unreachable device); pass 0 for a
+	// plain unpair that keeps the bidirectional handshake clean. Backends
+	// without a pairing concept (CUxD virtual devices) return [ErrUnsupported].
+	DeleteDevice(ctx context.Context, address string, flags int) error
 
 	// GetAllDeviceData returns all current parameter values for all devices on
 	// the interface in one call (where supported). Used during discovery to
@@ -215,6 +295,14 @@ type LinkOps interface {
 	// PutLinkParamset writes LINK paramset values atomically.
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
 
+	// ActivateLinkParamset triggers the receiver's LINK-paramset behaviour
+	// for the given sender — the CCU's "test / simulate keypress" probe.
+	// It PHYSICALLY actuates the receiver (a switch clicks, a blind moves).
+	// longPress selects the LONG_* action group instead of SHORT_*. Maps to
+	// XML-RPC activateLinkParamset(receiver, sender, longPress). Backends
+	// without link support return [ErrUnsupported].
+	ActivateLinkParamset(ctx context.Context, receiverAddress, senderAddress string, longPress bool) error
+
 	// GetLinkInfo returns the name and description of the direct link between
 	// senderAddress and receiverAddress on iface. Returns [ErrUnsupported] when
 	// [Capabilities.LinkOperations] is false.
@@ -244,6 +332,14 @@ type SystemOps interface {
 	// to that address. Returns [ErrUnsupported] when [Capabilities.InstallMode]
 	// is false.
 	SetInstallMode(ctx context.Context, on bool, duration, mode int, deviceAddress string) error
+
+	// SetInstallModeLocal opens an HmIP pairing window restricted to a
+	// single device identified by SGTIN + device key — the keyserver-less
+	// LOCAL teach-in. sgtin and keyHex must be pre-normalised (24 / 32
+	// uppercase hex characters, see pkg/hmproto). Returns
+	// [ErrUnsupported] on backends or interfaces without the HmIP
+	// JSON-RPC surface ([Capabilities.InstallModeLocal]).
+	SetInstallModeLocal(ctx context.Context, duration int, sgtin, keyHex string) error
 
 	// --- service / alarm messages -----------------------------------------
 

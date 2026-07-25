@@ -23,18 +23,97 @@ const (
 	ActionLinkParamsetWrite Action = "link_paramset_write"
 	ActionLinkAdd           Action = "link_add"
 	ActionLinkRemove        Action = "link_remove"
-	ActionScheduleWrite     Action = "schedule_write"
-	ActionActiveProfile     Action = "active_profile"
-	ActionDataPointWrite    Action = "data_point_write"
+	ActionLinkUpdate        Action = "link_update"
+	// ActionLinkActivate records a "test link at device" probe: the CCU is
+	// asked to trigger the receiver as if the sender fired (short/long
+	// keypress). It physically actuates the device. DeviceAddress = the
+	// receiver device, Peer = the sender channel, Note = short|long.
+	ActionLinkActivate   Action = "link_activate"
+	ActionScheduleWrite  Action = "schedule_write"
+	ActionActiveProfile  Action = "active_profile"
+	ActionDataPointWrite Action = "data_point_write"
 
 	// ActionDeviceInstallMode records a targeted pairing window opened
 	// for one device. The Entry's DeviceAddress carries the target.
 	ActionDeviceInstallMode Action = "device_install_mode"
 
+	// ActionDeviceAssignment records a room / function (Gewerk)
+	// assignment change on a device or a single channel. The Entry's
+	// DeviceAddress carries the device or channel address; the Note the
+	// assigned sets.
+	ActionDeviceAssignment Action = "device_assignment"
+
+	// ActionInstallMode records an interface-level pairing window
+	// toggled on or off. The Note carries central, interface and
+	// duration; DeviceAddress the optional targeted device.
+	ActionInstallMode Action = "install_mode"
+
+	// ActionInstallModeLocal records a keyserver-less HmIP LOCAL
+	// teach-in (one-device SGTIN whitelist). DeviceAddress carries the
+	// SGTIN; the device key is credential material and never recorded.
+	ActionInstallModeLocal Action = "install_mode_local"
+
+	// ActionDeviceConfigRestore records a re-transmit of the centrally
+	// stored configuration to a device after a factory reset. The
+	// Entry's DeviceAddress carries the target.
+	ActionDeviceConfigRestore Action = "device_config_restore"
+
+	// ActionDeviceReplace records a guided device replacement: the
+	// Entry's DeviceAddress carries the old (replaced, now unpaired)
+	// device; the Note the new device address.
+	ActionDeviceReplace Action = "device_replace"
+
+	// ActionDeviceSearch records a wired-bus device scan. The Note
+	// carries the scanned interface.
+	ActionDeviceSearch Action = "device_search"
+
+	// ActionDeviceCommunicationTest records a per-device communication /
+	// function test. The Entry's DeviceAddress carries the target.
+	ActionDeviceCommunicationTest Action = "device_communication_test"
+
+	// ActionDeviceTeamSet records a channel team assignment (or reset).
+	// The Entry's DeviceAddress carries the channel address.
+	ActionDeviceTeamSet Action = "device_team_set"
+
+	// ActionRecordingToggle records an operator toggling per-datapoint
+	// measurement recording (force on/off) or clearing the override back to
+	// the glob policy. The Entry's DeviceAddress carries the channel and the
+	// Note carries central/interface/parameter and the new state.
+	ActionRecordingToggle Action = "recording_toggle"
+
+	// ActionChannelFlags records an operator setting the per-channel
+	// visibility / operation-lock overrides (G12). The Note carries the
+	// central, channel address, and the new hidden/locked state.
+	ActionChannelFlags Action = "channel_flags"
+
+	// ActionSystemCCUReboot records an operator-triggered reboot of a CCU
+	// host. The Entry's Note carries the target central name.
+	ActionSystemCCUReboot Action = "system_ccu_reboot"
+
+	// ActionSystemFirmwareDownload records an operator-triggered CCU
+	// firmware download: the CCU fetches a firmware image from a URL onto
+	// the central so it can be staged for installation. The Entry's Note
+	// carries the target central name and the source URL.
+	ActionSystemFirmwareDownload Action = "system_firmware_download"
+
 	// ActionRoomFunction records room / function (Gewerk) entity
 	// lifecycle changes (create / rename / delete). The Note carries
 	// the operation and target name.
 	ActionRoomFunction Action = "room_function"
+
+	// ActionDiagramConfig records create / update / delete of a named
+	// multi-series diagram definition (SV03). The Note carries the
+	// operation and the diagram name.
+	ActionDiagramConfig Action = "diagram_config"
+
+	// ActionGroupAdmin records create / update / delete of a heating group
+	// through the CCU jpages proxy (GR02). The Note carries the operation,
+	// the central, and the group name/id.
+	ActionGroupAdmin Action = "group_admin"
+
+	// ActionProgramDelete records deletion of a CCU program. The Note
+	// carries the program name and id.
+	ActionProgramDelete Action = "program_delete"
 
 	// ActionTLSCertUpload records a runtime replacement of the daemon's
 	// TLS server certificate.

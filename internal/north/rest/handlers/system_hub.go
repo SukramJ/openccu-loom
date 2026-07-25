@@ -11,9 +11,13 @@
 package handlers
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
@@ -149,6 +153,21 @@ type InstallModeInterfaceRequest struct {
 	Active bool `json:"active"`
 	// Seconds is the install-mode duration (default 60).
 	Seconds int `json:"seconds,omitempty"`
+	// Central disambiguates the CCU when several centrals expose the
+	// same interface name. Empty matches the first interface entry
+	// across all centrals (the historical behaviour).
+	Central string `json:"central,omitempty"`
+	// DeviceAddress restricts pairing to one already-known device
+	// address (targeted teach-in / re-pairing by serial). Only
+	// meaningful with active=true; ignored on stop.
+	DeviceAddress string `json:"device_address,omitempty"`
+	// SGTIN + Key request the keyserver-less HmIP LOCAL teach-in: the
+	// CCU pairs exactly the device whose SGTIN and device key (from the
+	// label; the short Base32 form is converted automatically) are
+	// given. Both must come together, require active=true and are
+	// mutually exclusive with DeviceAddress.
+	SGTIN string `json:"sgtin,omitempty"`
+	Key   string `json:"key,omitempty"`
 }
 
 // GetInstallModeInterfaces returns the per-interface install-mode state.
@@ -180,7 +199,13 @@ func GetInstallModeInterfaces(idx HubIndex) http.HandlerFunc {
 }
 
 // PostInstallModeInterface starts or stops install mode on one interface.
-func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
+// Beyond the plain broadcast toggle it supports two targeted flavours:
+// device_address (re-pairing an already-known device by serial) and
+// sgtin+key (the keyserver-less HmIP LOCAL teach-in with a one-device
+// whitelist).
+//
+//nolint:gocognit // sequential validation matrix + dispatch; splitting obscures the flow
+func PostInstallModeInterface(idx HubIndex, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if idx == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -193,14 +218,9 @@ func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		if req.Interface == "" {
+		if msg := validateInstallModeRequest(req); msg != "" {
 			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "interface is required", ""))
-			return
-		}
-		if req.Seconds < 0 {
-			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "seconds must be >= 0", ""))
+				problem.New(problem.TypeValidation, r, msg, ""))
 			return
 		}
 		duration := time.Duration(req.Seconds) * time.Second
@@ -208,7 +228,7 @@ func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
 			duration = 60 * time.Second
 		}
 		for _, nh := range idx.Hubs() {
-			if nh.Hub == nil {
+			if nh.Hub == nil || (req.Central != "" && nh.Central != req.Central) {
 				continue
 			}
 			for _, dp := range nh.Hub.InstallModeDPs() {
@@ -216,15 +236,21 @@ func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
 					continue
 				}
 				var err error
-				if req.Active {
+				switch {
+				case req.SGTIN != "":
+					err = dp.EnableLocal(r.Context(), duration, req.SGTIN, req.Key)
+				case req.Active && req.DeviceAddress != "":
+					err = dp.EnableForDevice(r.Context(), duration, req.DeviceAddress)
+				case req.Active:
 					err = dp.Enable(r.Context(), duration)
-				} else {
+				default:
 					err = dp.Disable(r.Context())
 				}
 				if err != nil {
-					writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Install mode write failed", err)
+					writeInstallModeError(w, r, err)
 					return
 				}
+				recordInstallMode(r, rec, nh.Central, req)
 				w.WriteHeader(http.StatusAccepted)
 				return
 			}
@@ -232,4 +258,62 @@ func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
 		problem.Write(w, http.StatusNotFound,
 			problem.New(problem.TypeNotFound, r, "Interface not found", "no install-mode DP for interface"))
 	}
+}
+
+// validateInstallModeRequest returns the 422 message for an invalid
+// install-mode request, or "" when the request is consistent.
+func validateInstallModeRequest(req InstallModeInterfaceRequest) string {
+	switch {
+	case req.Interface == "":
+		return "interface is required"
+	case req.Seconds < 0:
+		return "seconds must be >= 0"
+	case (req.SGTIN != "") != (req.Key != ""):
+		return "sgtin and key must be supplied together"
+	case req.SGTIN != "" && !req.Active:
+		return "sgtin/key require active=true"
+	case req.SGTIN != "" && req.DeviceAddress != "":
+		return "sgtin/key and device_address are mutually exclusive"
+	}
+	return ""
+}
+
+// writeInstallModeError maps an install-mode write failure: whitelist
+// input the operator can fix (bad SGTIN/key, LOCAL unsupported on the
+// interface, invalid duration) answers 422, everything else 502.
+func writeInstallModeError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, hub.ErrInstallModeInvalidLocalInput) ||
+		errors.Is(err, hub.ErrLocalInstallModeUnsupported) ||
+		errors.Is(err, hub.ErrInstallModeInvalidDuration) ||
+		errors.Is(err, backends.ErrUnsupported) {
+		problem.Write(w, http.StatusUnprocessableEntity,
+			problem.New(problem.TypeValidation, r, "Install mode request rejected", err.Error()))
+		return
+	}
+	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Install mode write failed", err)
+}
+
+// recordInstallMode appends the audit entry for a successful interface
+// install-mode write. The device key is credential material and never
+// recorded; a LOCAL teach-in notes the SGTIN via DeviceAddress instead.
+func recordInstallMode(r *http.Request, rec audit.Recorder, central string, req InstallModeInterfaceRequest) {
+	if rec == nil {
+		return
+	}
+	entry := audit.Entry{
+		User:   identityFromCtx(r.Context()),
+		Action: audit.ActionInstallMode,
+	}
+	switch {
+	case req.SGTIN != "":
+		entry.Action = audit.ActionInstallModeLocal
+		entry.DeviceAddress = req.SGTIN
+		entry.Note = fmt.Sprintf("local teach-in (SGTIN whitelist) central=%s interface=%s", central, req.Interface)
+	case req.Active:
+		entry.DeviceAddress = req.DeviceAddress
+		entry.Note = fmt.Sprintf("enable central=%s interface=%s seconds=%d", central, req.Interface, req.Seconds)
+	default:
+		entry.Note = fmt.Sprintf("disable central=%s interface=%s", central, req.Interface)
+	}
+	rec.Record(entry)
 }

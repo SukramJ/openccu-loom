@@ -1,0 +1,20 @@
+!# openccu-loom — delete_program
+!# Params: ##id## (program ID)
+!# Output: 1 on success, 0 when the id does not resolve to a program.
+!#
+!# Removes the program from the ID_PROGRAMS list and deletes the object
+!# via dom.DeleteObject. Mirrors the CCU WebUI's
+!# Program.deleteProgramByName (Remove from ID_PROGRAMS) plus the full
+!# object deletion the room/function delete scripts perform.
+
+string sProgramId = "##id##";
+integer iResult = 0;
+object oList = dom.GetObject(ID_PROGRAMS);
+object oProgram = oList.Get(sProgramId);
+if (oProgram) {
+    string sId = oProgram.ID();
+    oList.Remove(sId);
+    dom.DeleteObject(sId);
+    iResult = 1;
+}
+Write(iResult);

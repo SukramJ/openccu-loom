@@ -82,6 +82,10 @@ func (p *ParameterData) IsWritable() bool { return p.Operations.IsWritable() }
 // IsEvent reports whether OPERATIONS has the EVENT bit set.
 func (p *ParameterData) IsEvent() bool { return p.Operations.IsEvent() }
 
+// IsDeterminable reports whether OPERATIONS has the DETERMINE bit set —
+// the parameter's live value can be read on demand via determineParameter.
+func (p *ParameterData) IsDeterminable() bool { return p.Operations.IsDeterminable() }
+
 // IsVisible reports whether FLAGS has the VISIBLE bit set.
 func (p *ParameterData) IsVisible() bool { return p.Flags.IsVisible() }
 

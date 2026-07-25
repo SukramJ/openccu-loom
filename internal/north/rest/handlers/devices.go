@@ -79,10 +79,67 @@ type DeviceSummary struct {
 	// reload. Sourced from `hmenum.Interface.PushesConfigPending`.
 	MasterPushesConfigPending bool `json:"master_pushes_config_pending"`
 
+	// ConfigRestoreSupported is true when the device's interface
+	// exposes `restoreConfigToDevice` (HmIP-RF, BidCos-RF). The SPA
+	// gates the "restore config" action on it so the button never
+	// shows for a device that cannot serve the write.
+	ConfigRestoreSupported bool `json:"config_restore_supported"`
+
+	// CommunicationTestSupported is true when the device's interface can
+	// run the CCU's per-device communication test (radio interfaces).
+	// The SPA gates the "test" action on it.
+	CommunicationTestSupported bool `json:"communication_test_supported"`
+
+	// TeamSupported is true when the device's interface exposes channel
+	// team assignment (setTeam / listTeams — BidCos-RF, HmIP-RF). The
+	// SPA gates the team picker on it.
+	TeamSupported bool `json:"team_supported"`
+
 	// HasSubDevices mirrors [device.Device.HasSubDevices] so SPA / WS
 	// consumers can apply the same per-channel-group split the MQTT
 	// bridge does under the `sub_devices_enabled` toggle.
 	HasSubDevices bool `json:"has_sub_devices"`
+
+	// RxMode decodes the device's CCU RX_MODE bitmask into named flags.
+	// Its `wakeup` / `lazy_config` bits mark a battery-powered device that
+	// only applies pending configuration on its next wakeup — the SPA uses
+	// them to show a "pending wakeup" hint after a link/config write.
+	// Omitted when the CCU reports no rx mode (RX_MODE == 0).
+	RxMode *RxModeInfo `json:"rx_mode,omitempty"`
+}
+
+// RxModeInfo decodes a device's CCU RX_MODE bitmask into named boolean
+// flags. Set bits are emitted; cleared bits are omitted.
+type RxModeInfo struct {
+	// Always marks a mains-powered device that is permanently reachable
+	// (RX_ALWAYS) and applies configuration immediately.
+	Always bool `json:"always,omitempty"`
+	// Burst marks a device reachable via burst wakeup (RX_BURST).
+	Burst bool `json:"burst,omitempty"`
+	// Config marks a device reachable in its configuration window (RX_CONFIG).
+	Config bool `json:"config,omitempty"`
+	// Wakeup marks a battery device that only accepts pending configuration
+	// when it next wakes up (RX_WAKEUP).
+	Wakeup bool `json:"wakeup,omitempty"`
+	// LazyConfig marks a battery device whose configuration transfer is
+	// deferred until its next wakeup (RX_LAZY_CONFIG).
+	LazyConfig bool `json:"lazy_config,omitempty"`
+}
+
+// rxModeInfo decodes a device's RX_MODE bitmask into a [RxModeInfo]. It
+// returns nil when no bit is set (RX_MODE == 0), so the DTO omits the
+// field for devices the CCU reports no rx mode for.
+func rxModeInfo(m hmenum.RxMode) *RxModeInfo {
+	if m == hmenum.RxModeUndefined {
+		return nil
+	}
+	return &RxModeInfo{
+		Always:     m.Has(hmenum.RxModeAlways),
+		Burst:      m.Has(hmenum.RxModeBurst),
+		Config:     m.Has(hmenum.RxModeConfig),
+		Wakeup:     m.Has(hmenum.RxModeWakeup),
+		LazyConfig: m.Has(hmenum.RxModeLazyConfig),
+	}
 }
 
 // DeviceDetail extends [DeviceSummary] with the firmware snapshot
@@ -141,6 +198,11 @@ type ChannelSummary struct {
 	// room can be resolved. External clients use it as the
 	// suggested-area of the channel group's sub-device.
 	Room string `json:"room,omitempty"`
+	// Rooms is the channel's full room-assignment set
+	// ([device.Channel.Rooms]) — unlike [ChannelSummary.Room] it is not
+	// collapsed to the unique case, so editors can round-trip the
+	// assignment. Empty when the channel carries no room assignment.
+	Rooms []string `json:"rooms,omitempty"`
 	// Functions are the channel's resolved "Gewerke" (function) labels
 	// ([device.Channel.Functions]) — the channel-level twin of
 	// [DeviceSummary.Functions]. Surfaced so clients can map functions at
@@ -154,6 +216,12 @@ type ChannelSummary struct {
 	// reconstructs from the device profile — the entity that should carry the
 	// device-level name. False for secondary / non-CDP channels.
 	IsCustomDpPrimary bool `json:"is_custom_dp_primary,omitempty"`
+	// Hidden / Locked are the operator per-channel overrides (G12): hidden
+	// removes the channel from the operation surfaces (data-point list / MQTT
+	// / Matter), locked blocks control writes. Both surface so the SPA can
+	// badge the channel and render the toggles.
+	Hidden bool `json:"hidden,omitempty"`
+	Locked bool `json:"locked,omitempty"`
 }
 
 // DataPointSummary is one entry in `GET .../data-points`.
@@ -210,14 +278,18 @@ type DataPointSummary struct {
 	// discovery plane applies.
 	Usage string `json:"usage,omitempty"`
 	// TranslatedName is the locale-aware per-entity name HA assigns to
-	// this data point — identical to the MQTT discovery `name` field
-	// (both resolve through naming.EntityDisplayName). It is the
-	// parameter portion only; HA prepends the device name. Empty when
-	// LabelOmitted is true.
+	// this data point — resolved through the same primitives as the
+	// MQTT discovery `name` field. It is the parameter portion only;
+	// HA prepends the device name. When LabelOmitted is true it
+	// carries the channel-level collapsed name instead (channel name
+	// plus multi-channel marker, device prefix stripped) — possibly
+	// empty when the collapse reduces to the device name alone.
 	TranslatedName string `json:"translated_name,omitempty"`
 	// LabelOmitted is true when the parameter is flagged "primary" in
-	// the embedded translation_custom catalogue. Consumers then collapse
-	// the entity name to the device name alone (MQTT emits `name: null`).
+	// the embedded translation_custom catalogue. The entity is then
+	// named after the channel: TranslatedName holds the collapsed
+	// channel-level name (MQTT instead emits `name: null` and lets HA
+	// fall back to the device name).
 	LabelOmitted bool `json:"label_omitted,omitempty"`
 	// Control is the CCU paramset descriptor's CONTROL attribute,
 	// of the form WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT",
@@ -618,10 +690,19 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		}
 	}
 	s.Room = ch.Room()
+	if len(ch.Rooms) > 0 {
+		s.Rooms = ch.Rooms
+	}
 	if len(ch.Functions) > 0 {
 		s.Functions = ch.Functions
 	}
 	s.IsCustomDpPrimary = ch.IsCustomDPPrimaryChannel()
+	// Operator per-channel overrides (G12): surfaced so the SPA can badge a
+	// hidden/locked channel and render the toggles. The channel stays in the
+	// detail list (so it is manageable); the hidden filter applies to the
+	// operation surfaces (data-point list, MQTT, Matter).
+	s.Hidden = ch.IsHidden()
+	s.Locked = ch.IsLocked()
 	return s
 }
 
@@ -640,6 +721,12 @@ func ListDataPoints(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibil
 			return
 		}
 		includeAll := r.URL.Query().Get("include") == "all"
+		// An operator-hidden channel (G12) is excluded from the operation
+		// data-point list; ?include=all still returns it for management.
+		if !includeAll && ch.IsHidden() {
+			JSON(w, http.StatusOK, []DataPointSummary{})
+			return
+		}
 		dps := ch.DataPoints()
 		model := ""
 		if d := ch.Device(); d != nil {
@@ -790,27 +877,31 @@ func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
 
 func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	return DeviceSummary{
-		Address:                   d.Address,
-		Central:                   centralName,
-		Interface:                 string(d.Interface),
-		InterfaceID:               d.InterfaceID,
-		IseID:                     d.IseID,
-		Model:                     d.Model,
-		ModelLabel:                d.ModelLabel,
-		ModelIcon:                 d.ModelIcon,
-		SubModel:                  d.SubModel,
-		Name:                      d.Name,
-		Manufacturer:              string(d.Manufacturer),
-		ProductGroup:              string(d.ProductGroup),
-		IsAvailable:               d.Available(),
-		ChannelsCount:             len(d.Channels()),
-		Updatable:                 d.Updatable,
-		UpdateAvailable:           d.UpdateAvailable(),
-		UpdateStatus:              string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
-		Rooms:                     d.Rooms,
-		Functions:                 d.Functions,
-		MasterPushesConfigPending: hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
-		HasSubDevices:             d.HasSubDevices(),
+		Address:                    d.Address,
+		Central:                    centralName,
+		Interface:                  string(d.Interface),
+		InterfaceID:                d.InterfaceID,
+		IseID:                      d.IseID,
+		Model:                      d.Model,
+		ModelLabel:                 d.ModelLabel,
+		ModelIcon:                  d.ModelIcon,
+		SubModel:                   d.SubModel,
+		Name:                       d.Name,
+		Manufacturer:               string(d.Manufacturer),
+		ProductGroup:               string(d.ProductGroup),
+		IsAvailable:                d.Available(),
+		ChannelsCount:              len(d.Channels()),
+		Updatable:                  d.Updatable,
+		UpdateAvailable:            d.UpdateAvailable(),
+		UpdateStatus:               string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
+		Rooms:                      d.Rooms,
+		Functions:                  d.Functions,
+		MasterPushesConfigPending:  hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
+		ConfigRestoreSupported:     d.Interface.SupportsConfigRestore(),
+		CommunicationTestSupported: d.Interface.SupportsCommunicationTest(),
+		TeamSupported:              d.Interface.SupportsTeams(),
+		HasSubDevices:              d.HasSubDevices(),
+		RxMode:                     rxModeInfo(d.RxMode),
 	}
 }
 
@@ -849,8 +940,8 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// naming.EntityDisplayName), so REST and MQTT consumers spawn
 	// entities with identical names.
 	if t, ok := labels.(device.ParameterTranslator); ok && ch != nil {
-		label, labelOmitted := device.TranslatedDataPointLabel(ch, s.Parameter, channelType, t)
-		s.TranslatedName, s.LabelOmitted = naming.EntityDisplayName(label, labelOmitted, s.Parameter)
+		nd, labelOmitted := device.TranslatedDataPointNameData(ch, s.Parameter, channelType, t)
+		s.TranslatedName, s.LabelOmitted = naming.ComposedEntityName(nd, labelOmitted, s.Parameter)
 	}
 	// Category + functional type let a client classify the DP declaratively.
 	// Same assertion pattern as CustomDPSummary / calculated_data_points.go:

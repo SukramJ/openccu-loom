@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"strconv"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -449,14 +450,26 @@ func TestParamsetGetSurfacesBackendError(t *testing.T) {
 // --- programs.* / sysvars.* ---
 
 type stubHub struct {
-	programs   []map[string]any
-	executedID string
-	executeErr error
-	sysvars    []map[string]any
-	listErr    error
-	setName    string
-	setValue   any
-	setErr     error
+	localCalls         map[string]string
+	wiredSearches      map[string]string
+	wiredFound         int
+	programs           []map[string]any
+	executedID         string
+	executeChecked     bool
+	executeExecuted    bool
+	executeErr         error
+	deletedProgramID   string
+	deleteProgramErr   error
+	sysvars            []map[string]any
+	listErr            error
+	setName            string
+	setValue           any
+	setErr             error
+	usagePrograms      []map[string]any
+	usageErr           error
+	usageCentral       string
+	usageName          string
+	gotIncludeInternal *bool // captures the override ListPrograms last received
 
 	fetchCentral string
 	fetchErr     error
@@ -466,6 +479,9 @@ type stubHub struct {
 	ackedAlarmID    string
 	ackedServiceID  string
 	ackErr          error
+	ackAllAlarms    bool
+	ackAllServices  bool
+	ackAllCount     int
 
 	installStatus       map[string]any
 	installEnabledID    string
@@ -481,16 +497,32 @@ type stubHub struct {
 	firmwareErr       error
 	inboxDevices      []map[string]any
 	inboxAccepted     string
+	inboxAcceptOpts   InboxAcceptOptions
 	inboxErr          error
 }
 
-func (h *stubHub) ListPrograms(context.Context) ([]map[string]any, error) {
+func (h *stubHub) ListPrograms(_ context.Context, includeInternal *bool) ([]map[string]any, error) {
+	h.gotIncludeInternal = includeInternal
 	return h.programs, h.listErr
 }
 
-func (h *stubHub) ExecuteProgram(_ context.Context, id string) error {
+func (h *stubHub) ExecuteProgram(_ context.Context, id string, checkConditions bool) (bool, error) {
 	h.executedID = id
-	return h.executeErr
+	h.executeChecked = checkConditions
+	if h.executeErr != nil {
+		return false, h.executeErr
+	}
+	// Unconditional runs always execute; conditional runs report the
+	// stub's configured executeExecuted flag.
+	if checkConditions {
+		return h.executeExecuted, nil
+	}
+	return true, nil
+}
+
+func (h *stubHub) DeleteProgram(_ context.Context, id string) error {
+	h.deletedProgramID = id
+	return h.deleteProgramErr
 }
 
 func (h *stubHub) ListSysvars(context.Context) ([]map[string]any, error) {
@@ -508,6 +540,12 @@ func (h *stubHub) FetchSystemVariables(_ context.Context, centralName string) er
 	return h.fetchErr
 }
 
+func (h *stubHub) SysvarUsagePrograms(_ context.Context, centralName, name string) ([]map[string]any, error) {
+	h.usageCentral = centralName
+	h.usageName = name
+	return h.usagePrograms, h.usageErr
+}
+
 func (h *stubHub) ListAlarmMessages(context.Context) ([]map[string]any, error) {
 	return h.alarmMessages, h.listErr
 }
@@ -515,6 +553,11 @@ func (h *stubHub) ListAlarmMessages(context.Context) ([]map[string]any, error) {
 func (h *stubHub) AcknowledgeAlarmMessage(_ context.Context, id string) error {
 	h.ackedAlarmID = id
 	return h.ackErr
+}
+
+func (h *stubHub) AcknowledgeAllAlarmMessages(context.Context) (int, error) {
+	h.ackAllAlarms = true
+	return h.ackAllCount, h.ackErr
 }
 
 func (h *stubHub) ListServiceMessages(context.Context) ([]map[string]any, error) {
@@ -526,6 +569,11 @@ func (h *stubHub) AcknowledgeServiceMessage(_ context.Context, id string) error 
 	return h.ackErr
 }
 
+func (h *stubHub) AcknowledgeAllServiceMessages(context.Context) (int, error) {
+	h.ackAllServices = true
+	return h.ackAllCount, h.ackErr
+}
+
 func (h *stubHub) InstallModeStatus(context.Context) (map[string]any, error) {
 	return h.installStatus, h.installErr
 }
@@ -534,6 +582,22 @@ func (h *stubHub) EnableInstallMode(_ context.Context, ifaceID string, durationS
 	h.installEnabledID = ifaceID
 	h.installDurationSecs = durationSecs
 	return h.installErr
+}
+
+func (h *stubHub) EnableInstallModeLocal(_ context.Context, ifaceID string, durationSecs int, sgtin, key string) error {
+	if h.localCalls == nil {
+		h.localCalls = map[string]string{}
+	}
+	h.localCalls[ifaceID] = sgtin + "/" + key + "/" + strconv.Itoa(durationSecs)
+	return nil
+}
+
+func (h *stubHub) SearchWiredDevices(_ context.Context, ifaceID, central string) (int, error) {
+	if h.wiredSearches == nil {
+		h.wiredSearches = map[string]string{}
+	}
+	h.wiredSearches[ifaceID] = central
+	return h.wiredFound, nil
 }
 
 func (h *stubHub) DisableInstallMode(_ context.Context, ifaceID string) error {
@@ -560,8 +624,9 @@ func (h *stubHub) InboxDevices(context.Context) ([]map[string]any, error) {
 	return h.inboxDevices, h.inboxErr
 }
 
-func (h *stubHub) AcceptInboxDevice(_ context.Context, address string) error {
+func (h *stubHub) AcceptInboxDevice(_ context.Context, address string, opts InboxAcceptOptions) error {
 	h.inboxAccepted = address
+	h.inboxAcceptOpts = opts
 	return h.inboxErr
 }
 
@@ -598,6 +663,163 @@ func TestProgramsExecuteRequiresID(t *testing.T) {
 	res := r.Dispatch(opCtx(), "programs.execute", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+// TestProgramsExecuteConditional verifies that programs.execute forwards the
+// check_conditions flag and returns the executed result the hub reports:
+// a condition that is not met yields executed=false without erroring.
+func TestProgramsExecuteConditional(t *testing.T) {
+	hub := &stubHub{executeExecuted: false}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1", "check_conditions": true})
+	res := r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error != nil {
+		t.Fatalf("execute err: %+v", res.Error)
+	}
+	if !hub.executeChecked {
+		t.Fatal("check_conditions flag was not forwarded to the hub")
+	}
+	if got := res.Data.(map[string]any)["executed"]; got != false {
+		t.Fatalf("executed=%v want false (condition not met)", got)
+	}
+
+	// When the condition is met the program runs and executed is true.
+	hub.executeExecuted = true
+	res = r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error != nil {
+		t.Fatalf("execute err: %+v", res.Error)
+	}
+	if got := res.Data.(map[string]any)["executed"]; got != true {
+		t.Fatalf("executed=%v want true (condition met)", got)
+	}
+}
+
+// TestProgramsExecuteErrorMapsToInternal verifies that a HubQuery-side
+// failure (the CCU round-trip erroring, whether checked or unconditional)
+// surfaces as a CommandErrorInternal instead of a successful response with
+// a stale executed flag.
+func TestProgramsExecuteErrorMapsToInternal(t *testing.T) {
+	hub := &stubHub{executeErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
+	}
+
+	// Same mapping applies to the condition-checked branch.
+	args, _ = json.Marshal(map[string]any{"id": "P1", "check_conditions": true})
+	res = r.Dispatch(opCtx(), "programs.execute", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error (checked), got %+v", res.Error)
+	}
+}
+
+func TestProgramsDeleteRequiresID(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+	res := r.Dispatch(adminCtx(), "programs.delete", json.RawMessage(`{}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+func TestProgramsDeleteForwardsID(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(adminCtx(), "programs.delete", args)
+	if res.Error != nil {
+		t.Fatalf("delete err: %+v", res.Error)
+	}
+	if hub.deletedProgramID != "P1" {
+		t.Fatalf("deleted id=%q want P1", hub.deletedProgramID)
+	}
+	data := res.Data.(map[string]any)
+	if data["deleted"] != true || data["id"] != "P1" {
+		t.Fatalf("unexpected result: %+v", data)
+	}
+}
+
+func TestProgramsDeleteErrorMapsToInternal(t *testing.T) {
+	hub := &stubHub{deleteProgramErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"id": "P1"})
+	res := r.Dispatch(adminCtx(), "programs.delete", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
+	}
+}
+
+// TestProgramsListOmittedArgsPassesNilOverride verifies that dispatching
+// programs.list with no args body at all leaves the include_internal
+// override unset, so the underlying HubQuery applies its own default.
+func TestProgramsListOmittedArgsPassesNilOverride(t *testing.T) {
+	hub := &stubHub{programs: []map[string]any{{"id": "P1"}}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "programs.list", nil)
+	if res.Error != nil {
+		t.Fatalf("list err: %+v", res.Error)
+	}
+	if hub.gotIncludeInternal != nil {
+		t.Fatalf("expected nil override for omitted args, got %v", *hub.gotIncludeInternal)
+	}
+}
+
+// TestProgramsListForwardsIncludeInternal verifies both explicit
+// include_internal values decode and reach the HubQuery unchanged.
+func TestProgramsListForwardsIncludeInternal(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		hub := &stubHub{programs: []map[string]any{{"id": "P1"}}}
+		r := NewRouter()
+		RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+		args, _ := json.Marshal(map[string]any{"include_internal": want})
+		res := r.Dispatch(context.Background(), "programs.list", args)
+		if res.Error != nil {
+			t.Fatalf("include_internal=%v: list err: %+v", want, res.Error)
+		}
+		if hub.gotIncludeInternal == nil || *hub.gotIncludeInternal != want {
+			t.Fatalf("include_internal=%v: HubQuery received %v", want, hub.gotIncludeInternal)
+		}
+	}
+}
+
+// TestProgramsListRejectsNonBooleanIncludeInternal exercises the parsing
+// edge case of a wrong-typed include_internal value (a string instead of
+// a bool): decodeOrEmpty must surface it as bad_request, not panic or
+// silently coerce.
+func TestProgramsListRejectsNonBooleanIncludeInternal(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+
+	res := r.Dispatch(context.Background(), "programs.list", json.RawMessage(`{"include_internal":"yes"}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request for a non-boolean include_internal, got %+v", res.Error)
+	}
+}
+
+// TestProgramsListPropagatesHubError checks that a HubQuery/CCU-side
+// failure surfaces as a command error instead of a silently empty list.
+func TestProgramsListPropagatesHubError(t *testing.T) {
+	hub := &stubHub{listErr: errors.New("rega: program list unavailable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "programs.list", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
 	}
 }
 
@@ -670,6 +892,55 @@ func TestAlarmAndServiceMessagesListAndAck(t *testing.T) {
 	}
 }
 
+func TestAlarmAndServiceMessagesAckAll(t *testing.T) {
+	hub := &stubHub{ackAllCount: 4}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(opCtx(), "alarm_messages.ack_all", nil)
+	if res.Error != nil || !hub.ackAllAlarms {
+		t.Fatalf("ack_all alarm: err=%+v called=%v", res.Error, hub.ackAllAlarms)
+	}
+	if n := res.Data.(map[string]any)["acknowledged"]; n != 4 {
+		t.Fatalf("alarm ack_all acknowledged=%v, want 4", n)
+	}
+
+	res = r.Dispatch(opCtx(), "service_messages.ack_all", nil)
+	if res.Error != nil || !hub.ackAllServices {
+		t.Fatalf("ack_all service: err=%+v called=%v", res.Error, hub.ackAllServices)
+	}
+	if n := res.Data.(map[string]any)["acknowledged"]; n != 4 {
+		t.Fatalf("service ack_all acknowledged=%v, want 4", n)
+	}
+}
+
+func TestAckAllPropagatesError(t *testing.T) {
+	hub := &stubHub{ackErr: errors.New("rega down")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+	res := r.Dispatch(opCtx(), "service_messages.ack_all", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
+	}
+}
+
+// TestAlarmAckAllPropagatesError mirrors TestAckAllPropagatesError for the
+// alarm_messages.ack_all command — the two bulk-acknowledge commands are
+// registered from separate handler closures, so each needs its own error-path
+// pin.
+func TestAlarmAckAllPropagatesError(t *testing.T) {
+	hub := &stubHub{ackErr: errors.New("rega down")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+	res := r.Dispatch(opCtx(), "alarm_messages.ack_all", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal_error, got %+v", res.Error)
+	}
+	if !hub.ackAllAlarms {
+		t.Error("alarm_messages.ack_all must dispatch to AcknowledgeAllAlarmMessages, not the service path")
+	}
+}
+
 func TestAlarmAckRequiresID(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
@@ -708,6 +979,54 @@ func TestInstallModeFullCycle(t *testing.T) {
 	}
 }
 
+// TestInstallModeSearchDispatchesToHubQueryAndReturnsFound verifies
+// "install_mode.search" forwards interface_id/central to
+// HubQuery.SearchWiredDevices and echoes the found count back in the
+// result, keyed as {interface_id, found}.
+func TestInstallModeSearchDispatchesToHubQueryAndReturnsFound(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{wiredFound: 4}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"interface_id": "BidCos-Wired", "central": "ccu-01"})
+	res := r.Dispatch(opCtx(), "install_mode.search", args)
+	if res.Error != nil {
+		t.Fatalf("install_mode.search: %+v", res.Error)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("result not a map: %T", res.Data)
+	}
+	if data["interface_id"] != "BidCos-Wired" {
+		t.Fatalf("interface_id=%v, want BidCos-Wired", data["interface_id"])
+	}
+	if found, _ := data["found"].(int); found != 4 {
+		t.Fatalf("found=%v, want 4", data["found"])
+	}
+	got, ok := hub.wiredSearches["BidCos-Wired"]
+	if !ok || got != "ccu-01" {
+		t.Fatalf("wiredSearches[BidCos-Wired]=%q ok=%v, want (ccu-01, true)", got, ok)
+	}
+}
+
+// TestInstallModeSearchRequiresInterfaceID verifies a missing interface_id
+// is rejected as bad_request before HubQuery.SearchWiredDevices is called.
+func TestInstallModeSearchRequiresInterfaceID(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{wiredFound: 4}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(opCtx(), "install_mode.search", json.RawMessage(`{}`))
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+	if len(hub.wiredSearches) != 0 {
+		t.Fatalf("HubQuery.SearchWiredDevices must not be called without interface_id, got %v", hub.wiredSearches)
+	}
+}
+
 func TestInstallModeEnableValidatesArgs(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
@@ -725,10 +1044,96 @@ func TestInstallModeEnableValidatesArgs(t *testing.T) {
 	}
 }
 
+// TestInstallModeEnableLocalRequiresSGTINAndKeyTogether verifies that
+// supplying sgtin without key (or vice versa) is rejected as bad_request —
+// the two must arrive together for the keyserver-less HmIP LOCAL teach-in.
+func TestInstallModeEnableLocalRequiresSGTINAndKeyTogether(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
+
+	sgtinOnly, _ := json.Marshal(map[string]any{
+		"interface_id":     "HmIP-RF",
+		"duration_seconds": 300,
+		"sgtin":            "3014F711A061A7D569892A67",
+	})
+	res := r.Dispatch(opCtx(), "install_mode.enable", sgtinOnly)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("sgtin without key: %+v", res.Error)
+	}
+}
+
+// TestInstallModeEnableLocalDispatchesToHubQuery verifies the LOCAL
+// teach-in happy path: interface_id/sgtin/key/duration reach
+// EnableInstallModeLocal on the HubQuery, and the response carries
+// "local": true so the SPA can distinguish the two enable flavours.
+func TestInstallModeEnableLocalDispatchesToHubQuery(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{
+		"interface_id":     "HmIP-RF",
+		"duration_seconds": 300,
+		"sgtin":            "3014F711A061A7D569892A67",
+		"key":              "0110C8531D0952D8D73E1194E95B5F19",
+	})
+	res := r.Dispatch(opCtx(), "install_mode.enable", args)
+	if res.Error != nil {
+		t.Fatalf("enable local: %+v", res.Error)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("result not a map: %T", res.Data)
+	}
+	if local, _ := data["local"].(bool); !local {
+		t.Fatalf("result[\"local\"] = %v, want true", data["local"])
+	}
+	got, ok := hub.localCalls["HmIP-RF"]
+	if !ok {
+		t.Fatal("EnableInstallModeLocal was not called for interface HmIP-RF")
+	}
+	const want = "3014F711A061A7D569892A67/0110C8531D0952D8D73E1194E95B5F19/300"
+	if got != want {
+		t.Fatalf("localCalls[HmIP-RF] = %q, want %q", got, want)
+	}
+}
+
+// TestInstallModeEnableWithoutSGTINStillUsesLegacyPath verifies that
+// omitting sgtin/key entirely still dispatches through the pre-existing
+// broadcast EnableInstallMode path (no "local" key in the result), so the
+// LOCAL teach-in addition is fully backwards compatible.
+func TestInstallModeEnableWithoutSGTINStillUsesLegacyPath(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"interface_id": "HmIP-RF", "duration_seconds": 60})
+	res := r.Dispatch(opCtx(), "install_mode.enable", args)
+	if res.Error != nil {
+		t.Fatalf("legacy enable: %+v", res.Error)
+	}
+	if hub.installEnabledID != "HmIP-RF" || hub.installDurationSecs != 60 {
+		t.Fatalf("legacy enable saw (%q, %d) want (HmIP-RF, 60)", hub.installEnabledID, hub.installDurationSecs)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("result not a map: %T", res.Data)
+	}
+	if _, present := data["local"]; present {
+		t.Fatalf("legacy enable result must not carry \"local\", got %v", data["local"])
+	}
+	if len(hub.localCalls) != 0 {
+		t.Fatalf("legacy enable must not call EnableInstallModeLocal, got %v", hub.localCalls)
+	}
+}
+
 // --- links.* / schedules.* ---
 
 type stubLinks struct {
 	links            []map[string]any
+	allLinks         []map[string]any
+	listAllErr       error
+	listAllCentral   string
 	linkable         []map[string]any
 	listErr          error
 	addedSender      string
@@ -740,6 +1145,13 @@ type stubLinks struct {
 	addErr           error
 	removeErr        error
 
+	// set_info
+	setSender      string
+	setReceiver    string
+	setName        string
+	setDescription string
+	setInfoErr     error
+
 	// link paramset
 	linkParamsetValues map[string]any
 	linkParamsetErr    error
@@ -747,9 +1159,21 @@ type stubLinks struct {
 	putParamsetPeer    string
 	putParamsetValues  map[string]any
 	putParamsetErr     error
+	activateReceiver   string
+	activateSender     string
+	activateLong       bool
+	activateErr        error
 }
 
 func (l *stubLinks) ListLinks(_ context.Context, _ string) ([]map[string]any, error) {
+	return l.links, l.listErr
+}
+
+func (l *stubLinks) ListAllLinks(_ context.Context, central string) ([]map[string]any, error) {
+	l.listAllCentral = central
+	if l.allLinks != nil || l.listAllErr != nil {
+		return l.allLinks, l.listAllErr
+	}
 	return l.links, l.listErr
 }
 
@@ -759,6 +1183,14 @@ func (l *stubLinks) AddLink(_ context.Context, sender, receiver, name, descripti
 	l.addedName = name
 	l.addedDescription = description
 	return l.addErr
+}
+
+func (l *stubLinks) SetLinkInfo(_ context.Context, sender, receiver, name, description string) error {
+	l.setSender = sender
+	l.setReceiver = receiver
+	l.setName = name
+	l.setDescription = description
+	return l.setInfoErr
 }
 
 func (l *stubLinks) RemoveLink(_ context.Context, sender, receiver string) error {
@@ -780,6 +1212,13 @@ func (l *stubLinks) PutLinkParamset(_ context.Context, addr, peer string, values
 	l.putParamsetPeer = peer
 	l.putParamsetValues = values
 	return l.putParamsetErr
+}
+
+func (l *stubLinks) ActivateLinkParamset(_ context.Context, receiver, sender string, longPress bool) error {
+	l.activateReceiver = receiver
+	l.activateSender = sender
+	l.activateLong = longPress
+	return l.activateErr
 }
 
 type stubSchedules struct {
@@ -890,6 +1329,59 @@ func TestLinksListAddRemove(t *testing.T) {
 	}
 }
 
+func TestLinksActivateParamset(t *testing.T) {
+	links := &stubLinks{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+
+	args, _ := json.Marshal(map[string]any{
+		"receiver_channel_address": "RCV:3",
+		"sender_channel_address":   "SND:1",
+		"long_press":               true,
+	})
+	res := r.Dispatch(opCtx(), "links.activate_paramset", args)
+	if res.Error != nil {
+		t.Fatalf("activate err: %+v", res.Error)
+	}
+	if links.activateReceiver != "RCV:3" || links.activateSender != "SND:1" || !links.activateLong {
+		t.Errorf("args not forwarded: %+v", links)
+	}
+	if res.Data.(map[string]any)["long_press"] != true {
+		t.Errorf("result missing long_press: %+v", res.Data)
+	}
+}
+
+func TestLinksActivateParamset_RequiresAddresses(t *testing.T) {
+	links := &stubLinks{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+	res := r.Dispatch(opCtx(), "links.activate_paramset", nil)
+	if res.Error == nil {
+		t.Fatal("expected a bad-request error when addresses are missing")
+	}
+}
+
+func TestLinksListAll(t *testing.T) {
+	links := &stubLinks{allLinks: []map[string]any{
+		{"sender_address": "DEVA:1", "receiver_address": "PEERA:1", "central_name": "ccu-a"},
+	}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+
+	// No device_address required; an optional central is forwarded.
+	args, _ := json.Marshal(map[string]any{"central": "ccu-a"})
+	res := r.Dispatch(context.Background(), "links.list_all", args)
+	if res.Error != nil {
+		t.Fatalf("list_all err: %+v", res.Error)
+	}
+	if got := res.Data.(map[string]any)["links"].([]map[string]any); len(got) != 1 {
+		t.Fatalf("links=%+v", res.Data)
+	}
+	if links.listAllCentral != "ccu-a" {
+		t.Errorf("central not forwarded: got %q", links.listAllCentral)
+	}
+}
+
 func TestLinksAddRequiresSenderAndReceiver(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: &stubLinks{}})
@@ -897,6 +1389,49 @@ func TestLinksAddRequiresSenderAndReceiver(t *testing.T) {
 	res := r.Dispatch(opCtx(), "links.add", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+func TestLinksSetInfoForwardsArgs(t *testing.T) {
+	links := &stubLinks{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+
+	args, _ := json.Marshal(map[string]any{
+		"sender": "S:1", "receiver": "R:1", "name": "Stairs", "description": "auto",
+	})
+	res := r.Dispatch(opCtx(), "links.set_info", args)
+	if res.Error != nil {
+		t.Fatalf("set_info err: %+v", res.Error)
+	}
+	if links.setSender != "S:1" || links.setReceiver != "R:1" ||
+		links.setName != "Stairs" || links.setDescription != "auto" {
+		t.Fatalf("set_info stub captured wrong args: %+v", links)
+	}
+	data, ok := res.Data.(map[string]any)
+	if !ok || data["updated"] != true {
+		t.Fatalf("expected updated=true, got %+v", res.Data)
+	}
+}
+
+func TestLinksSetInfoRequiresSenderAndReceiver(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: &stubLinks{}})
+	args, _ := json.Marshal(map[string]any{"sender": "S:1"})
+	res := r.Dispatch(opCtx(), "links.set_info", args)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+func TestLinksSetInfoBackendError(t *testing.T) {
+	links := &stubLinks{setInfoErr: errors.New("ccu boom")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: links})
+	args, _ := json.Marshal(map[string]any{"sender": "S:1", "receiver": "R:1"})
+	res := r.Dispatch(opCtx(), "links.set_info", args)
+	if res.Error == nil || res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %+v", res.Error)
 	}
 }
 
@@ -1238,6 +1773,83 @@ func TestInboxAcceptRequiresAddress(t *testing.T) {
 	}
 }
 
+// TestInboxAccept_HubError_ReturnsCommandError verifies that a failing
+// AcceptInboxDevice call (e.g. the CCU rejects the accept, or a follow-up
+// configuration step failed) surfaces as a CommandErrorInternal rather than
+// a silent success — the WS caller must be able to tell the accept did not
+// go through cleanly.
+func TestInboxAccept_HubError_ReturnsCommandError(t *testing.T) {
+	hub := &stubHub{inboxErr: errors.New("ccu unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"device_address": "0009ABCD"})
+	res := r.Dispatch(opCtx(), "inbox.accept", args)
+	if res.Error == nil {
+		t.Fatal("expected a command error when AcceptInboxDevice fails")
+	}
+	if res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected CommandErrorInternal, got %+v", res.Error)
+	}
+	// The address must still have reached the hub before the failure —
+	// this is not a parsing rejection.
+	if hub.inboxAccepted != "0009ABCD" {
+		t.Fatalf("expected the accept to have been attempted, got %q", hub.inboxAccepted)
+	}
+}
+
+// TestInboxAcceptForwardsConfigOptions verifies the WS handler parses the
+// optional first-time-configuration fields and forwards them into the
+// InboxAcceptOptions passed to the hub.
+func TestInboxAcceptForwardsConfigOptions(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{
+		"device_address":   "0009ABCD",
+		"name":             "Kitchen",
+		"include_channels": true,
+		"rooms":            []string{"Living Room"},
+		"functions":        []string{"Lights"},
+	})
+	res := r.Dispatch(opCtx(), "inbox.accept", args)
+	if res.Error != nil {
+		t.Fatalf("accept err: %+v", res.Error)
+	}
+	got := hub.inboxAcceptOpts
+	if got.Name != "Kitchen" || !got.IncludeChannels {
+		t.Fatalf("name/include_channels not forwarded: %+v", got)
+	}
+	if len(got.Rooms) != 1 || got.Rooms[0] != "Living Room" {
+		t.Fatalf("rooms not forwarded: %+v", got.Rooms)
+	}
+	if len(got.Functions) != 1 || got.Functions[0] != "Lights" {
+		t.Fatalf("functions not forwarded: %+v", got.Functions)
+	}
+}
+
+// TestInboxAcceptEmptyOptionsAcceptOnly verifies a bare address accepts
+// with a zero-value options struct (no first-time configuration).
+func TestInboxAcceptEmptyOptionsAcceptOnly(t *testing.T) {
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"device_address": "0009ABCD"})
+	res := r.Dispatch(opCtx(), "inbox.accept", args)
+	if res.Error != nil {
+		t.Fatalf("accept err: %+v", res.Error)
+	}
+	if hub.inboxAccepted != "0009ABCD" {
+		t.Fatalf("accepted=%q want 0009ABCD", hub.inboxAccepted)
+	}
+	got := hub.inboxAcceptOpts
+	if got.Name != "" || got.IncludeChannels || got.Rooms != nil || got.Functions != nil {
+		t.Fatalf("expected zero options, got %+v", got)
+	}
+}
+
 func TestSchedulesActiveProfileBoundsCheck(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: &stubSchedules{}})
@@ -1449,6 +2061,38 @@ func TestSysvarsFetch_WithCentralName(t *testing.T) {
 	}
 	if res.Data.(map[string]any)["fetched"] != true {
 		t.Errorf("result does not carry fetched=true: %+v", res.Data)
+	}
+}
+
+func TestSysvarsUsage_Success(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{usagePrograms: []map[string]any{{"id": "P1", "name": "Morning", "active": true}}}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"name": "Alarm", "central_name": "ccu-01"})
+	res := r.Dispatch(context.Background(), "sysvars.usage", args)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	if hub.usageName != "Alarm" || hub.usageCentral != "ccu-01" {
+		t.Errorf("args not forwarded: name=%q central=%q", hub.usageName, hub.usageCentral)
+	}
+	data := res.Data.(map[string]any)
+	if data["sysvar"] != "Alarm" || len(data["programs"].([]map[string]any)) != 1 {
+		t.Errorf("result shape wrong: %+v", data)
+	}
+}
+
+func TestSysvarsUsage_RequiresName(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "sysvars.usage", nil)
+	if res.Error == nil {
+		t.Fatal("expected a bad-request error when name is missing")
 	}
 }
 

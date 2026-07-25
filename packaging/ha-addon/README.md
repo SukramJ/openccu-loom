@@ -14,23 +14,26 @@ This directory contains the Home Assistant add-on packaging for OpenCCU-Loom.
 ```
 ha-addon/
 ├── README.md                     this file
-└── openccu-loom/
-    ├── config.yaml               HA add-on manifest (name, slug, ports, options, …)
-    ├── build.yaml                HA builder config (base images, build args)
-    ├── Dockerfile                copies daemon + spec from the release image
-    ├── DOCS.md                   shown in the HA add-on UI
-    ├── CHANGELOG.md              per-add-on release notes
-    ├── icon.png                  add-on icon (square brand mark)
-    ├── logo.png                  add-on logo (wordmark)
-    └── rootfs/
-        ├── etc/s6-overlay/s6-rc.d/
-        │   ├── openccu-loom/
-        │   │   ├── type          "longrun"
-        │   │   └── run           s6 run script → exec /usr/bin/run.sh
-        │   └── user/contents.d/
-        │       └── openccu-loom  empty — registers service in the user bundle
-        └── usr/bin/
-            └── run.sh            reads add-on config, sets env, execs daemon
+├── openccu-loom/                 the daemon add-on (runs OpenCCU-Loom on the HA host)
+│   ├── config.yaml               HA add-on manifest (name, slug, ports, options, …)
+│   ├── build.yaml                HA builder config (base images, build args)
+│   ├── Dockerfile                copies daemon + spec from the release image
+│   ├── DOCS.md                   shown in the HA add-on UI
+│   ├── CHANGELOG.md              per-add-on release notes
+│   ├── icon.png                  add-on icon (square brand mark)
+│   ├── logo.png                  add-on logo (wordmark)
+│   └── rootfs/
+│       ├── etc/s6-overlay/s6-rc.d/
+│       │   ├── openccu-loom/
+│       │   │   ├── type          "longrun"
+│       │   │   └── run           s6 run script → exec /usr/bin/run.sh
+│       │   └── user/contents.d/
+│       │       └── openccu-loom  empty — registers service in the user bundle
+│       └── usr/bin/
+│           └── run.sh            reads add-on config, sets env, execs daemon
+└── openccu-loom-remote/          ingress proxy for REMOTE instances (ADR 0054)
+    └── (same layout; the binary is the openccu-loom-remote proxy,
+         no host_network, ingress only)
 ```
 
 ## Pre-built images

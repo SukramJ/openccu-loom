@@ -17,6 +17,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -456,13 +457,17 @@ func (b *orchBackendStub) GetLinkParamset(context.Context, string, string) (map[
 	return nil, nil
 }
 
+func (b *orchBackendStub) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (b *orchBackendStub) PutLinkParamset(context.Context, string, string, map[string]any) error {
 	return nil
 }
 
 func (b *orchBackendStub) ReportValueUsage(context.Context, string, string, int) error { return nil }
 
-func (b *orchBackendStub) DeleteDevice(context.Context, string) error { return nil }
+func (b *orchBackendStub) DeleteDevice(context.Context, string, int) error { return nil }
 
 func (b *orchBackendStub) GetAllPrograms(context.Context) ([]map[string]any, error) {
 	return nil, nil
@@ -494,6 +499,38 @@ func (b *orchBackendStub) DetermineParameter(context.Context, string, string) (a
 func (b *orchBackendStub) GetInstallMode(context.Context) (int, error) { return 0, nil }
 func (b *orchBackendStub) SetInstallMode(context.Context, bool, int, int, string) error {
 	return nil
+}
+
+func (b *orchBackendStub) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (b *orchBackendStub) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (b *orchBackendStub) GetServiceMessages(context.Context, string) ([]map[string]any, error) {

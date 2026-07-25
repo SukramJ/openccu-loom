@@ -135,6 +135,22 @@ type Channel struct {
 	// pipeline.
 	linkPeerTargetCategories []string
 
+	// linkSourceRoles / linkTargetRoles hold the raw CCU LINK_SOURCE_ROLES /
+	// LINK_TARGET_ROLES tokens of this channel (space-separated on the wire).
+	// They drive the direct-link role-matching filter: a sender source
+	// intersects its LinkSourceRoles against a candidate's LinkTargetRoles,
+	// and vice versa. Set by the ingest pipeline. Guarded by mu.
+	linkSourceRoles []string
+	linkTargetRoles []string
+
+	// operatorHidden / operatorLocked are daemon-owned per-channel overrides
+	// (G12) applied by the ingest pipeline from the persistent channel_flags
+	// overlay: hidden drops the channel from operation lists / MQTT discovery /
+	// Matter exposure, locked blocks control writes (VALUES paramset) while
+	// leaving reads intact. Guarded by mu.
+	operatorHidden bool
+	operatorLocked bool
+
 	// linkPeers caches the most recently observed link peer addresses for
 	// this channel. Set by WireClimateLinkPeerRefresh when it processes a
 	// LinkPeerChangedEvent, so the recovery path can immediately re-wire
@@ -1377,6 +1393,82 @@ func (c *Channel) HasLinkTargetCategory(category hmenum.DataPointCategory) bool 
 	cats := c.linkPeerTargetCategories
 	c.mu.RUnlock()
 	return slices.Contains(cats, string(category))
+}
+
+// ─── LinkRoles (raw CCU LINK_*_ROLES) ────────────────────────────────
+
+// LinkSourceRoles returns the raw CCU LINK_SOURCE_ROLES tokens of this
+// channel (what it can act as a source for). Returns nil when not set.
+func (c *Channel) LinkSourceRoles() []string {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	roles := c.linkSourceRoles
+	c.mu.RUnlock()
+	if len(roles) == 0 {
+		return nil
+	}
+	return append([]string(nil), roles...)
+}
+
+// LinkTargetRoles returns the raw CCU LINK_TARGET_ROLES tokens of this
+// channel (what it can act as a target for). Returns nil when not set.
+func (c *Channel) LinkTargetRoles() []string {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	roles := c.linkTargetRoles
+	c.mu.RUnlock()
+	if len(roles) == 0 {
+		return nil
+	}
+	return append([]string(nil), roles...)
+}
+
+// SetLinkRoles records the raw CCU LINK_SOURCE_ROLES / LINK_TARGET_ROLES
+// tokens for direct-link role matching. Called by the ingest pipeline.
+func (c *Channel) SetLinkRoles(source, target []string) {
+	c.mu.Lock()
+	c.linkSourceRoles = append([]string(nil), source...)
+	c.linkTargetRoles = append([]string(nil), target...)
+	c.mu.Unlock()
+}
+
+// SetOperatorFlags records the daemon-owned per-channel overrides (G12).
+// Called by the ingest pipeline from the persistent channel_flags overlay
+// and by the REST/WS handler after an operator change.
+func (c *Channel) SetOperatorFlags(hidden, locked bool) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.operatorHidden = hidden
+	c.operatorLocked = locked
+	c.mu.Unlock()
+}
+
+// IsHidden reports whether an operator has hidden this channel from the
+// operation lists / MQTT / Matter surfaces (G12).
+func (c *Channel) IsHidden() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.operatorHidden
+}
+
+// IsLocked reports whether an operator has locked this channel against
+// control writes (G12).
+func (c *Channel) IsLocked() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.operatorLocked
 }
 
 // ─── LinkPeers cache ──────────────────────────────────────────────────

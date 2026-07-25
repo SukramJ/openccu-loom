@@ -14,6 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -51,6 +52,10 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// DeviceReplacer backs the guided device-replace workflow
+	// (GET /devices/{addr}/replace-candidates + POST
+	// /devices/{addr}/replace). Nil serves those routes as 503.
+	DeviceReplacer handlers.DeviceReplacePort
 	// FirmwareRefresher backs POST /devices/firmware/refresh (force
 	// re-read of per-device firmware data from every CCU). Nil leaves
 	// the route unmounted.
@@ -58,6 +63,16 @@ type Deps struct {
 	// DeviceInstallMode opens a targeted (per-device / serial) pairing
 	// window at POST /devices/{addr}/install-mode. Nil disables the route.
 	DeviceInstallMode handlers.DeviceInstallModePort
+	// InstallModeSearch triggers a wired-bus device scan at POST
+	// /install-mode/search. Nil serves the route as 503.
+	InstallModeSearch handlers.DeviceSearchPort
+	// DeviceCommunicationTest runs the per-device communication test at
+	// POST /devices/{addr}/test. Nil serves the route as 503.
+	DeviceCommunicationTest handlers.DeviceCommunicationTestPort
+	// DeviceTeam backs channel team assignment
+	// (GET .../channels/{no}/team-candidates + PUT .../channels/{no}/team).
+	// Nil serves those routes as 503.
+	DeviceTeam handlers.DeviceTeamPort
 	// DeviceIcons proxies device-type icon images from the CCU for the
 	// device list. Optional — nil answers 404 (SPA uses a glyph).
 	DeviceIcons handlers.DeviceIconProxy
@@ -74,6 +89,12 @@ type Deps struct {
 	Reloader  handlers.ReloaderService
 	DPWriter  handlers.DataPointWriter
 	Paramsets handlers.ParamsetService
+	// ParameterDeterminer backs
+	// POST /devices/{addr}/channels/{no}/paramsets/{key}/determine — the
+	// MASTER editor's "Determine" button, which reads one parameter's live
+	// value straight from the device. Nil disables the route (404); shares
+	// the domain call with the WS `paramset.determine` command.
+	ParameterDeterminer handlers.ParameterDeterminer
 	// WebhookInboundEnabled mounts the inbound webhook routes
 	// (POST /webhook/value, POST /webhook/program) when true; off means the
 	// routes are not mounted (404). Restart-required (mirrors north.mcp).
@@ -119,6 +140,7 @@ type Deps struct {
 	// Links backs the direct-link (Direktverknüpfung) endpoints:
 	//   GET    /api/v1/devices/{addr}/links
 	//   POST   /api/v1/devices/{addr}/links
+	//   PATCH  /api/v1/devices/{addr}/links
 	//   DELETE /api/v1/devices/{addr}/links?sender=…&receiver=…
 	//   GET    /api/v1/devices/{addr}/channels/{no}/linkable-channels
 	Links handlers.LinksService
@@ -138,6 +160,16 @@ type Deps struct {
 	// History feeds the measurement-history chart: GET /api/v1/history.
 	// Nil when the opt-in history feature is disabled (the default).
 	History handlers.HistoryService
+	// RecordingOverrides feeds the per-datapoint recording toggle:
+	// GET/PUT /api/v1/history/recording. Nil when the opt-in history
+	// feature is disabled (the same flag /history depends on).
+	RecordingOverrides handlers.RecordingOverrideService
+	// ChannelFlags + ChannelFlagsOverlay back the per-channel operator
+	// override endpoints (G12): GET/PUT
+	// /api/v1/devices/{addr}/channels/{no}/flags. Both nil when there is no
+	// durable DB (the routes are then not mounted).
+	ChannelFlags        handlers.ChannelFlagsWriter
+	ChannelFlagsOverlay *channelflags.Overlay
 	// Energy feeds the energy view's per-device power/energy breakdown:
 	// GET /api/v1/energy. Nil when the opt-in history feature is
 	// disabled (the same feature flag /history depends on).
@@ -178,6 +210,9 @@ type Deps struct {
 	// Preferences backs per-user UI state (favorites, dashboard) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
+	// Diagrams backs the named multi-series diagram CRUD at /diagrams.
+	// Nil disables those routes.
+	Diagrams handlers.DiagramConfigService
 
 	// RoomFunctionAdmin backs room/function entity CRUD at /rooms and
 	// /functions (create/rename/delete). Nil disables those routes;
@@ -263,6 +298,21 @@ type Deps struct {
 	// metadata (model, version, serial, configured interfaces). Nil
 	// returns an empty entries array.
 	SystemCCU handlers.SystemCCUReader
+	// CCUReboot backs `POST /api/v1/system/ccu/{central}/reboot` — an
+	// admin-only reboot of one CCU host. Nil serves the route as 503.
+	CCUReboot handlers.CCURebootPort
+	// FirmwareDownload backs `POST /api/v1/system/firmware/download` — an
+	// admin-only trigger that has one CCU fetch a firmware image onto the
+	// central. Nil serves the route as 503.
+	FirmwareDownload handlers.FirmwareDownloadPort
+	// Groups backs `GET /api/v1/groups` — the read-only heating-group
+	// listing (one entry per central; `?central=` scopes to one). Nil
+	// serves the route as 503.
+	Groups handlers.GroupsReader
+	// GroupsWriter backs heating-group administration (GR02): create / edit
+	// / delete plus the suitable-members and types read helpers, via the CCU
+	// jpages proxy. Nil serves those routes as 503.
+	GroupsWriter handlers.GroupsWriter
 	// RateLimit, when non-nil, installs the per-identity REST
 	// rate limiter before the auth-require gate. Nil disables it.
 	RateLimit *middleware.RateLimitConfig
@@ -637,6 +687,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Put("/me/preferences/{key}", handlers.PutPreference(d.Preferences))
 				pr.Delete("/me/preferences/{key}", handlers.DeletePreference(d.Preferences))
 			}
+			if d.Diagrams != nil {
+				pr.Get("/diagrams", handlers.ListDiagrams(d.Diagrams))
+				pr.Get("/diagrams/{id}", handlers.GetDiagram(d.Diagrams))
+				pr.With(op).Post("/diagrams", handlers.CreateDiagram(d.Diagrams, d.AuditRecorder))
+				pr.With(op).Put("/diagrams/{id}", handlers.UpdateDiagram(d.Diagrams, d.AuditRecorder))
+				pr.With(op).Delete("/diagrams/{id}", handlers.DeleteDiagram(d.Diagrams, d.AuditRecorder))
+			}
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
@@ -650,9 +707,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/devices/{addr}/channels/{no}/data-points/{param}", handlers.GetDataPoint(d.Devices, d.Labels))
 				pr.With(op).Put("/devices/{addr}/channels/{no}/data-points/{param}/value",
 					handlers.PutDataPointValue(d.Devices, d.DPWriter))
+				// Per-channel operator overrides (G12): hidden / locked. Always
+				// mounted; PutChannelFlags returns 503 when there is no durable
+				// store/overlay, GetChannelFlags reads the live channel.
+				pr.Get("/devices/{addr}/channels/{no}/flags",
+					handlers.GetChannelFlags(d.Devices))
+				pr.With(op).Put("/devices/{addr}/channels/{no}/flags",
+					handlers.PutChannelFlags(d.Devices, d.ChannelFlags, d.ChannelFlagsOverlay, d.AuditRecorder))
 				// Custom data points (Phase C).
 				pr.Get("/devices/{addr}/cdps",
-					handlers.ListCustomDataPoints(d.Devices))
+					handlers.ListCustomDataPoints(d.Devices, d.Labels))
 				pr.Get("/devices/{addr}/cdps/{name}",
 					handlers.GetCustomDataPoint(d.Devices))
 				pr.With(op).Post("/devices/{addr}/cdps/{name}/{operation}",
@@ -683,6 +747,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 						handlers.MatchMasterProfile(d.Devices, d.MasterProfiles))
 				}
 			}
+			if d.ParameterDeterminer != nil {
+				// Read one parameter's live value from the device (the MASTER
+				// editor's "Determine" button). A read, so no edit-lock token —
+				// but it triggers a device round-trip like master-profiles/match.
+				pr.Post("/devices/{addr}/channels/{no}/paramsets/{key}/determine",
+					handlers.DetermineParameter(d.ParameterDeterminer))
+			}
 			if d.UISchema != nil {
 				pr.Get("/devices/{addr}/channels/{no}/ui-schema", handlers.UISchemaHandler(d.UISchema))
 			}
@@ -699,8 +770,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/devices/{addr}/export-definition",
 				handlers.ExportDeviceDefinition(d.DefinitionExport))
 			if d.Links != nil {
+				pr.Get("/links", handlers.ListAllLinks(d.Links))
 				pr.Get("/devices/{addr}/links", handlers.ListLinks(d.Links))
+				pr.With(op).Post("/devices/{addr}/links/test", handlers.TestLinkAtDevice(d.Links))
 				pr.With(op).Post("/devices/{addr}/links", handlers.AddLink(d.Links))
+				pr.With(op).Patch("/devices/{addr}/links", handlers.UpdateLink(d.Links))
 				pr.With(op).Delete("/devices/{addr}/links", handlers.RemoveLink(d.Links))
 				pr.Get("/devices/{addr}/channels/{no}/linkable-channels",
 					handlers.LinkableChannels(d.Links))
@@ -739,14 +813,31 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.History != nil {
 				pr.Get("/history", handlers.GetHistory(d.History))
 			}
+			if d.RecordingOverrides != nil {
+				pr.Get("/history/recording", handlers.GetRecordingOverride(d.RecordingOverrides))
+				pr.With(op).Put("/history/recording", handlers.PutRecordingOverride(d.RecordingOverrides, d.AuditRecorder))
+			}
 			if d.Energy != nil {
 				pr.Get("/energy", handlers.GetEnergy(d.Energy))
 			}
 			if d.DeviceAdmin != nil {
 				pr.With(admin).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))
-				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin))
+				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin, d.AuditRecorder))
+				pr.With(op).Patch("/devices/{addr}/channels/{no}", handlers.PatchChannel(d.DeviceAdmin, d.AuditRecorder))
 				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
+				pr.With(admin).Post("/devices/{addr}/config/restore", handlers.RestoreDeviceConfig(d.DeviceAdmin, d.AuditRecorder))
+			}
+			if d.DeviceReplacer != nil {
+				pr.Get("/devices/{addr}/replace-candidates", handlers.GetDeviceReplaceCandidates(d.DeviceReplacer))
+				pr.With(admin).Post("/devices/{addr}/replace", handlers.PostDeviceReplace(d.DeviceReplacer, d.AuditRecorder))
+			}
+			if d.DeviceCommunicationTest != nil {
+				pr.With(op).Post("/devices/{addr}/test", handlers.TestDeviceCommunication(d.DeviceCommunicationTest, d.AuditRecorder))
+			}
+			if d.DeviceTeam != nil {
+				pr.Get("/devices/{addr}/channels/{no}/team-candidates", handlers.GetDeviceTeamCandidates(d.DeviceTeam))
+				pr.With(op).Put("/devices/{addr}/channels/{no}/team", handlers.SetDeviceChannelTeam(d.DeviceTeam, d.AuditRecorder))
 			}
 			if d.FirmwareRefresher != nil {
 				pr.With(op).Post("/devices/firmware/refresh", handlers.RefreshFirmwareData(d.FirmwareRefresher))
@@ -832,6 +923,20 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))
 			}
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
+			// Reboot one CCU host. Admin-gated like DELETE /devices; the
+			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
+			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
+			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
+			// Read-only heating-group listing (one entry per central).
+			pr.Get("/groups", handlers.ListGroups(d.Groups))
+			// Heating-group administration (GR02) via the CCU jpages proxy.
+			// The type / suitable-member helpers are reads; create / edit /
+			// delete are admin-gated and audited.
+			pr.Get("/groups/types", handlers.ListGroupTypes(d.GroupsWriter))
+			pr.Get("/groups/suitable-members", handlers.ListSuitableMembers(d.GroupsWriter))
+			pr.With(admin).Post("/groups", handlers.CreateGroup(d.GroupsWriter, d.AuditRecorder))
+			pr.With(admin).Put("/groups/{id}", handlers.UpdateGroup(d.GroupsWriter, d.AuditRecorder))
+			pr.With(admin).Delete("/groups/{id}", handlers.DeleteGroup(d.GroupsWriter, d.AuditRecorder))
 			// Persistent "restart required" status for the SPA banner.
 			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
 			// Config fields changed since the daemon started.
@@ -939,9 +1044,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/programs/{id}", handlers.GetProgram(d.Hub))
 				pr.With(op).Post("/programs/{id}/execute", handlers.ExecuteProgram(d.Hub))
 				pr.With(op).Patch("/programs/{id}", handlers.SetProgramEnabled(d.Hub))
+				pr.With(admin).Delete("/programs/{id}", handlers.DeleteProgram(d.Hub, d.AuditRecorder))
 				pr.Get("/sysvars", handlers.ListSysvars(d.Hub))
 				pr.With(op).Post("/sysvars", handlers.CreateSysvar(d.Hub))
 				pr.Get("/sysvars/{name}", handlers.GetSysvar(d.Hub))
+				pr.Get("/sysvars/{name}/usage", handlers.GetSysvarUsage(d.Hub))
 				pr.With(op).Put("/sysvars/{name}", handlers.PutSysvar(d.Hub))
 				pr.With(op).Patch("/sysvars/{name}", handlers.PatchSysvar(d.Hub))
 				pr.With(op).Delete("/sysvars/{name}", handlers.DeleteSysvar(d.Hub))
@@ -955,8 +1062,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// inbox, update, metrics, connectivity, install-mode).
 				pr.Get("/hub/data-points", handlers.GetHubDataPoints(d.Hub))
 				pr.Get("/alarm-messages", handlers.ListAlarmMessages(d.Hub))
+				pr.With(op).Post("/alarm-messages/ack-all", handlers.AckAllAlarmMessages(d.Hub))
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))
 				pr.Get("/service-messages", handlers.ListServiceMessages(d.Hub))
+				pr.Get("/service-messages/suppressed", handlers.ListSuppressedServiceMessages(d.Hub))
+				pr.With(op).Post("/service-messages/ack-all", handlers.AckAllServiceMessages(d.Hub))
+				pr.With(op).Post("/service-messages/unsuppress", handlers.UnsuppressServiceMessage(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/ack", handlers.AckServiceMessage(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/disable", handlers.DisableServiceMessage(d.Hub))
 			}
@@ -967,7 +1078,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub))
 				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
 				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
-				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub))
+				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub, d.AuditRecorder))
+				pr.With(op).Post("/install-mode/search", handlers.PostInstallModeSearch(d.InstallModeSearch, d.AuditRecorder))
 			}
 			if d.Interfaces != nil {
 				pr.Get("/interfaces", handlers.ListInterfaces(d.Interfaces))

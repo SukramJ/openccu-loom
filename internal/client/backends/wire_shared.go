@@ -49,6 +49,46 @@ func listDevicesViaCaller(ctx context.Context, caller Caller, prefix string) ([]
 	return out, nil
 }
 
+// listReplaceableDevicesViaCaller implements the ListReplaceableDevices
+// wire call: the interface daemon computes which already-paired devices
+// the given new device may replace (type / channel compatibility) and
+// returns their descriptions. Mirrors [listDevicesViaCaller] but with
+// the one-argument `listReplaceableDevices(newAddress)` method.
+func listReplaceableDevicesViaCaller(ctx context.Context, caller Caller, prefix, newAddress string) ([]hmproto.DeviceDescription, error) {
+	return listStructArrayViaCaller(ctx, caller, prefix, "listReplaceableDevices", newAddress)
+}
+
+// listStructArrayViaCaller runs a wire method returning an array of
+// device-description structs (`listReplaceableDevices`, `listTeams`, …)
+// and decodes each into a [hmproto.DeviceDescription]. args are the
+// positional method arguments (none for listTeams).
+func listStructArrayViaCaller(ctx context.Context, caller Caller, prefix, method string, args ...any) ([]hmproto.DeviceDescription, error) {
+	if caller == nil {
+		return nil, ErrNotWired
+	}
+	raw, err := caller.Call(ctx, method, args...)
+	if err != nil {
+		return nil, err
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.%s: unexpected type %T", prefix, method, raw)
+	}
+	out := make([]hmproto.DeviceDescription, 0, len(list))
+	for i, entry := range list {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s.%s[%d]: not a struct", prefix, method, i)
+		}
+		dd, err := toDeviceDescription(m)
+		if err != nil {
+			return nil, fmt.Errorf("%s.%s[%d]: %w", prefix, method, i, err)
+		}
+		out = append(out, dd)
+	}
+	return out, nil
+}
+
 // getParamsetDescriptionViaCaller implements the GetParamsetDescription
 // wire call shared by every backend.
 func getParamsetDescriptionViaCaller(

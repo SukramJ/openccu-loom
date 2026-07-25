@@ -27,6 +27,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -82,13 +84,17 @@ func (t *testBackendOps) GetLinkParamset(_ context.Context, _, _ string) (map[st
 	return nil, nil
 }
 
+func (t *testBackendOps) ActivateLinkParamset(context.Context, string, string, bool) error {
+	return nil
+}
+
 func (t *testBackendOps) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
 	return nil
 }
 
 func (t *testBackendOps) ReportValueUsage(_ context.Context, _, _ string, _ int) error { return nil }
 
-func (t *testBackendOps) DeleteDevice(_ context.Context, _ string) error { return nil }
+func (t *testBackendOps) DeleteDevice(_ context.Context, _ string, _ int) error { return nil }
 
 func (t *testBackendOps) GetAllPrograms(_ context.Context) ([]map[string]any, error) { return nil, nil }
 
@@ -122,6 +128,38 @@ func (t *testBackendOps) GetInstallMode(_ context.Context) (int, error) { return
 
 func (t *testBackendOps) SetInstallMode(_ context.Context, _ bool, _, _ int, _ string) error {
 	return nil
+}
+
+func (t *testBackendOps) SetInstallModeLocal(context.Context, int, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (t *testBackendOps) RestoreConfigToDevice(context.Context, string) error {
+	return backends.ErrUnsupported
+}
+
+func (t *testBackendOps) ListReplaceableDevices(context.Context, string) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (t *testBackendOps) ReplaceDevice(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (t *testBackendOps) SearchDevices(context.Context) (int, error) {
+	return 0, backends.ErrUnsupported
+}
+
+func (t *testBackendOps) SetTeam(context.Context, string, string) error {
+	return backends.ErrUnsupported
+}
+
+func (t *testBackendOps) ListTeams(context.Context) ([]hmproto.DeviceDescription, error) {
+	return nil, backends.ErrUnsupported
+}
+
+func (t *testBackendOps) TestDevice(context.Context, string, float64, float64) (hmapi.CommunicationTestResult, error) {
+	return hmapi.CommunicationTestResult{}, backends.ErrUnsupported
 }
 
 func (t *testBackendOps) GetServiceMessages(_ context.Context, _ string) ([]map[string]any, error) {
@@ -297,7 +335,7 @@ func TestWSHubQuery_TriggerFirmwareUpdate_LiveHub_ReturnsError(t *testing.T) {
 func TestWSHubQuery_AcceptInboxDevice_LiveHub_ReturnsError(t *testing.T) {
 	t.Parallel()
 	q, _ := buildHubQueryWithLiveHub(t)
-	err := q.AcceptInboxDevice(context.Background(), "INBOXDEV001")
+	err := q.AcceptInboxDevice(context.Background(), "INBOXDEV001", ws.InboxAcceptOptions{})
 	if err == nil {
 		t.Error("expected error when InboxAccepter is nil")
 	}
@@ -313,7 +351,7 @@ func TestWSHubQuery_ExecuteProgram_LiveHub_FoundProgram_NilWriter(t *testing.T) 
 	q, h := buildHubQueryWithLiveHub(t)
 	// Register a program with nil Writer so Execute returns an error.
 	h.PutProgram(hubmodel.NewProgram("ccu-01", "prog-test-coverage4", "Coverage Test Program", "", false, nil))
-	err := q.ExecuteProgram(context.Background(), "prog-test-coverage4")
+	_, err := q.ExecuteProgram(context.Background(), "prog-test-coverage4", false)
 	if err == nil {
 		t.Error("expected error from Program.Execute with nil Writer")
 	}
@@ -538,7 +576,7 @@ func TestWSHubQuery_ListPrograms_LiveHub_WithProgram(t *testing.T) {
 	q, h := buildHubQueryWithLiveHub(t)
 	h.PutProgram(hubmodel.NewProgram("ccu-01", "prog-list-1", "List Test", "desc", false, nil))
 
-	out, err := q.ListPrograms(context.Background())
+	out, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}
@@ -565,7 +603,7 @@ func TestWSHubQuery_ListPrograms_LiveHub_WithExecutedProgram(t *testing.T) {
 	prog.OnExecution(true, hmenum.ProgramTriggerUser)
 	h.PutProgram(prog)
 
-	out, err := q.ListPrograms(context.Background())
+	out, err := q.ListPrograms(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListPrograms: %v", err)
 	}

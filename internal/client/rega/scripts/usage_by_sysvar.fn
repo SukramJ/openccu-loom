@@ -1,0 +1,37 @@
+!# openccu-loom — usage_by_sysvar
+!# Params: ##name##  (target sysvar name)
+!# Output: [{"id":"<program-id>","name":"<uri-encoded>","active":<true|false>}...]
+!#
+!# Lists the CCU programs that reference a system variable, using the
+!# variable object's native DPEnumUsagePrograms() — the same call the CCU
+!# WebUI's system-variable admin page uses for its "Programs" button. It
+!# captures every reference (trigger conditions AND activities), not just
+!# the root rule the program-descriptions summary covers. An unknown
+!# sysvar yields an empty array. The program name is URL-encoded because
+!# it may contain quotes, backslashes or newlines that would break the
+!# JSON framing; active is a bare JSON boolean.
+
+string sName = "##name##";
+boolean bFirst = true;
+
+Write('[');
+object oVar = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
+if (oVar) {
+    string sPrgId;
+    foreach (sPrgId, oVar.DPEnumUsagePrograms()) {
+        object oPrg = dom.GetObject(sPrgId);
+        if (oPrg) {
+            if (bFirst) {
+                bFirst = false;
+            } else {
+                WriteLine(',');
+            }
+            string sActive = "false";
+            if (oPrg.Active()) {
+                sActive = "true";
+            }
+            Write('{"id":"' # sPrgId # '","name":"' # oPrg.Name().UriEncode() # '","active":' # sActive # '}');
+        }
+    }
+}
+Write(']');

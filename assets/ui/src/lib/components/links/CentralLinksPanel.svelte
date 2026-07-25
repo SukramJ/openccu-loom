@@ -5,6 +5,9 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
 
   // Central-Links toggle. Mirrors aiohomematic's
@@ -12,16 +15,23 @@
   // the CCU forwards PRESS_SHORT/PRESS_LONG events to the central
   // only after the per-channel reportValueUsage counter is > 0.
   // Surfaces the touched/skipped/failed counters so the user sees
-  // exactly which channels participated.
+  // exactly which channels participated. Besides the device-wide
+  // switch it offers a per-channel switch for each eligible channel,
+  // mirroring the CCU channel-config dialog that scopes the switch to
+  // the single opened channel. Every toggle is guarded by the shared
+  // confirm dialog and reports its result through a toast, matching
+  // the CCU WebUI which asks a yes/no safety question in both
+  // directions.
 
   type Props = { address: string };
   let { address }: Props = $props();
 
   let status = $state<CentralLinksStatus | null>(null);
   let loading = $state(true);
+  // Device-wide busy state, plus the address of the channel whose
+  // per-channel switch is currently in flight.
   let busy = $state<"create" | "remove" | null>(null);
-  let banner = $state<string | null>(null);
-  let lastReport = $state<CentralLinksReport | null>(null);
+  let busyChannel = $state<string | null>(null);
   let loadError = $state<string | null>(null);
 
   async function load() {
@@ -36,51 +46,83 @@
     }
   }
 
+  function errorText(err: unknown): string {
+    return err instanceof ApiError
+      ? `${err.status}: ${err.message}`
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  }
+
+  // Confirm before every toggle. Enabling raises the device's radio
+  // duty cycle; disabling can strand CCU-side programs that consume the
+  // press events, so it runs through the destructive variant of the
+  // shared dialog.
+  function confirmToggle(enable: boolean): Promise<boolean> {
+    return confirmStore.ask({
+      title: t(enable ? "central.confirm.enable_title" : "central.confirm.disable_title"),
+      body: t(enable ? "central.confirm.enable_body" : "central.confirm.disable_body"),
+      confirmLabel: t(enable ? "central.enable" : "central.disable"),
+      destructive: !enable,
+    });
+  }
+
+  function reportToast(enable: boolean, report: CentralLinksReport) {
+    const msg = t(enable ? "central.report.enabled" : "central.report.disabled", {
+      touched: report.touched,
+      skipped: report.skipped,
+      failed: report.failed,
+    });
+    if (report.failed > 0) {
+      toastStore.warn(msg);
+    } else {
+      toastStore.success(msg);
+    }
+  }
+
   async function create() {
+    if (!(await confirmToggle(true))) return;
     busy = "create";
-    banner = null;
     try {
-      lastReport = await api.createCentralLinks(address);
-      banner = t("central.report.enabled", {
-        touched: lastReport.touched,
-        skipped: lastReport.skipped,
-        failed: lastReport.failed,
-      });
+      reportToast(true, await api.createCentralLinks(address));
       await load();
     } catch (err) {
-      banner =
-        err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err);
+      toastStore.error(t("central.action_failed"), errorText(err));
     } finally {
       busy = null;
     }
   }
 
   async function remove() {
+    if (!(await confirmToggle(false))) return;
     busy = "remove";
-    banner = null;
     try {
-      lastReport = await api.removeCentralLinks(address);
-      banner = t("central.report.disabled", {
-        touched: lastReport.touched,
-        skipped: lastReport.skipped,
-        failed: lastReport.failed,
-      });
+      reportToast(false, await api.removeCentralLinks(address));
       await load();
     } catch (err) {
-      banner =
-        err instanceof ApiError
-          ? `${err.status}: ${err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err);
+      toastStore.error(t("central.action_failed"), errorText(err));
     } finally {
       busy = null;
     }
   }
+
+  async function toggleChannel(channelAddress: string, enable: boolean) {
+    if (!(await confirmToggle(enable))) return;
+    busyChannel = channelAddress;
+    try {
+      const report = enable
+        ? await api.createCentralLinks(address, channelAddress)
+        : await api.removeCentralLinks(address, channelAddress);
+      reportToast(enable, report);
+      await load();
+    } catch (err) {
+      toastStore.error(t("central.action_failed"), errorText(err));
+    } finally {
+      busyChannel = null;
+    }
+  }
+
+  const anyBusy = $derived(busy !== null || busyChannel !== null);
 
   onMount(load);
 </script>
@@ -90,16 +132,39 @@
     <h3 class="text-sm font-semibold">{t("central.title")}</h3>
     {#if status}
       {#if status.supported}
-        <Badge variant="muted">
-          {status.eligible_channels ?? 0}
-          {t("central.eligible")}
-        </Badge>
+        <div class="flex items-center gap-1.5">
+          <Badge variant="muted">
+            {status.eligible_channels ?? 0}
+            {t("central.eligible")}
+          </Badge>
+          {#if status.active_state_known}
+            <Badge variant={(status.active_channels ?? 0) > 0 ? "success" : "muted"}>
+              {t("central.active_count", { count: status.active_channels ?? 0 })}
+            </Badge>
+          {/if}
+        </div>
       {:else}
         <Badge variant="muted">{t("central.unsupported_badge")}</Badge>
       {/if}
     {/if}
   </header>
-  <p class="mb-3 text-xs text-[var(--ha-secondary-text-color)]">{t("central.subtitle")}</p>
+  <p class="mb-2 text-xs text-[var(--ha-secondary-text-color)]">{t("central.subtitle")}</p>
+
+  <!-- Collapsible help matching the CCU channel-config "info" dialog: press
+       forwarding is off by default to spare duty cycle and battery, which is
+       why a button can look dead, and enabling it has an ongoing cost. -->
+  <details class="mb-3">
+    <summary
+      class="flex cursor-pointer items-center gap-1 text-xs text-[var(--ha-secondary-text-color)]"
+    >
+      <Icon name="mdi:information-outline" size={14} />
+      {t("central.help.summary")}
+    </summary>
+    <ul class="mt-1 list-disc space-y-1 pl-5 text-xs text-[var(--ha-secondary-text-color)]">
+      <li>{t("central.help.no_link")}</li>
+      <li>{t("central.help.duty_cycle")}</li>
+    </ul>
+  </details>
 
   {#if loading}
     <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
@@ -115,26 +180,70 @@
       {/if}
     </p>
   {:else if status}
-    <div class="flex flex-wrap items-center gap-2">
-      <Button
-        type="button"
-        size="sm"
-        onclick={() => void create()}
-        disabled={busy !== null || (status.eligible_channels ?? 0) === 0}
-      >
-        {busy === "create" ? "…" : t("central.enable")}
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onclick={() => void remove()}
-        disabled={busy !== null || (status.eligible_channels ?? 0) === 0}
-      >
-        {busy === "remove" ? "…" : t("central.disable")}
-      </Button>
-      {#if banner}
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
+    <div class="space-y-3">
+      <div>
+        <p class="mb-1 text-xs font-medium text-[var(--ha-secondary-text-color)]">
+          {t("central.device_wide")}
+        </p>
+        <div class="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onclick={() => void create()}
+            disabled={anyBusy || (status.eligible_channels ?? 0) === 0}
+          >
+            {busy === "create" ? "…" : t("central.enable")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => void remove()}
+            disabled={anyBusy || (status.eligible_channels ?? 0) === 0}
+          >
+            {busy === "remove" ? "…" : t("central.disable")}
+          </Button>
+        </div>
+      </div>
+
+      {#if status.channels && status.channels.length > 0}
+        <div>
+          <p class="mb-1 text-xs font-medium text-[var(--ha-secondary-text-color)]">
+            {t("central.per_channel")}
+          </p>
+          <ul class="space-y-1.5">
+            {#each status.channels as ch (ch.address)}
+              <li class="flex flex-wrap items-center gap-2">
+                <span class="min-w-0 flex-1 text-xs">
+                  {t("central.channel_label", { number: ch.number })}
+                  <span class="ml-1 font-mono text-[var(--ha-secondary-text-color)]">{ch.address}</span>
+                </span>
+                {#if status.active_state_known}
+                  <Badge variant={ch.active ? "success" : "muted"}>
+                    {ch.active ? t("central.active") : t("central.inactive")}
+                  </Badge>
+                {/if}
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => void toggleChannel(ch.address, true)}
+                  disabled={anyBusy}
+                >
+                  {busyChannel === ch.address ? "…" : t("central.enable")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => void toggleChannel(ch.address, false)}
+                  disabled={anyBusy}
+                >
+                  {busyChannel === ch.address ? "…" : t("central.disable")}
+                </Button>
+              </li>
+            {/each}
+          </ul>
+        </div>
       {/if}
     </div>
   {/if}

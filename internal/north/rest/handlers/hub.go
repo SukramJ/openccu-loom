@@ -4,12 +4,15 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/restapi"
@@ -127,6 +130,15 @@ type ProgramSummary struct {
 	// LastExecuted is the RFC3339 timestamp of the most recent execution,
 	// omitted when no execution has been observed yet. Closes H-032.
 	LastExecuted string `json:"last_executed,omitempty"`
+	// ConditionSummary is a compact, language-neutral rendering of the
+	// program's root-rule trigger conditions (object names joined by the
+	// symbolic operators ==, >=, <=, >, <, &&, ||). Omitted when the
+	// program has no rule or the CCU-side scan produced nothing.
+	ConditionSummary string `json:"condition_summary,omitempty"`
+	// ActivitySummary is a compact, language-neutral rendering of the
+	// program's root-rule activities (object name := value, joined by
+	// "; "). Omitted when the program has no rule.
+	ActivitySummary string `json:"activity_summary,omitempty"`
 	// IsInternal is true for Tmp_*-programs created internally by the CCU.
 	IsInternal bool `json:"is_internal,omitempty"`
 	// EnabledDefault is true when the program matched a configured description
@@ -173,6 +185,18 @@ type SysvarSummary struct {
 	// back CCU bookkeeping; clients skip them for HA entities unless
 	// opted in (the reference stack's INTERNAL description marker).
 	IsInternal bool `json:"is_internal,omitempty"`
+	// IsVisible mirrors the CCU's isVisible flag (WebUI visibility);
+	// IsLogged mirrors isLogged (whether the CCU archives value changes).
+	// Both are always emitted (a real CCU reports them for every variable)
+	// so a client can rely on the explicit false as "hidden"/"not logged"
+	// rather than an absent field.
+	IsVisible bool `json:"is_visible"`
+	IsLogged  bool `json:"is_logged"`
+	// ValueName0 / ValueName1 are the CCU-side false / true value labels
+	// for a binary (LOGIC / ALARM) variable — the operator-visible text
+	// for each state. Empty for non-binary variables.
+	ValueName0 string `json:"value_name_0,omitempty"`
+	ValueName1 string `json:"value_name_1,omitempty"`
 	// IsExtended is true when the variable's description carried the
 	// extended marker — clients then expose the writable entity flavour
 	// (switch/number/select/text) instead of the read-only default.
@@ -211,9 +235,13 @@ type SysvarRefreshService = interfaces.SysvarRefreshService
 // InboxDeviceDTO is one entry in `GET /api/v1/inbox`.
 type InboxDeviceDTO struct {
 	// Central is the CCU that reported this pending device.
-	Central      string `json:"central,omitempty"`
-	Address      string `json:"address"`
-	Model        string `json:"model"`
+	Central string `json:"central,omitempty"`
+	Address string `json:"address"`
+	Model   string `json:"model"`
+	// Interface is the CCU interface the device was detected through.
+	// The SPA hides the "replace existing device" action for HmIP
+	// interfaces, which do not support the swap.
+	Interface    string `json:"interface,omitempty"`
 	Serial       string `json:"serial,omitempty"`
 	Manufacturer string `json:"manufacturer,omitempty"`
 	FirstSeen    int64  `json:"first_seen,omitempty"`
@@ -295,13 +323,26 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 			JSON(w, http.StatusOK, []ProgramSummary{})
 			return
 		}
+		includeInternal, err := parseOptionalBoolQuery(r)
+		if err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid include_internal", err.Error()))
+			return
+		}
 		var out []ProgramSummary
 		for _, nh := range idx.Hubs() {
 			if nh.Hub == nil {
 				continue
 			}
 			serial := idx.SerialSuffix(nh.Central)
+			// The hub always holds internal programs; whether they are served
+			// is resolved per central: an explicit include_internal wins,
+			// otherwise the central's include_internal_programs config default.
+			include := effectiveBool(includeInternal, nh.Hub.IncludeInternalProgramsDefault())
 			for _, p := range nh.Hub.Programs() {
+				if p.IsInternal && !include {
+					continue
+				}
 				out = append(out, toProgramSummary(p, nh.Central, serial))
 			}
 		}
@@ -311,6 +352,31 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
 	}
+}
+
+// parseOptionalBoolQuery reads the include_internal query parameter. It
+// returns (nil, nil) when the parameter is absent or empty so callers can
+// fall back to a per-request default, and a parse error (surfaced as 400)
+// when a non-empty value is not a recognised boolean literal.
+func parseOptionalBoolQuery(r *http.Request) (*bool, error) {
+	raw := r.URL.Query().Get("include_internal")
+	if raw == "" {
+		return nil, nil
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+// effectiveBool resolves an optional override against a default: the
+// override wins when present, otherwise def is used.
+func effectiveBool(override *bool, def bool) bool {
+	if override != nil {
+		return *override
+	}
+	return def
 }
 
 // toProgramSummary maps a hub program onto its REST DTO, tagging it with the
@@ -338,6 +404,7 @@ func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSumma
 	e.EnabledDefault = p.EnabledByDefault()
 	e.Channel = p.Channel()
 	e.DeviceAddress = p.DeviceAddress()
+	e.ConditionSummary, e.ActivitySummary = p.RuleSummary()
 	return e
 }
 
@@ -408,12 +475,36 @@ func SetProgramEnabled(idx HubIndex) http.HandlerFunc {
 
 // SysvarCreateRequest is the body for `POST /sysvars`.
 type SysvarCreateRequest struct {
-	Name      string   `json:"name"`
-	ValueType string   `json:"value_type"` // BOOL|INTEGER|FLOAT|STRING|ENUM
-	Unit      string   `json:"unit,omitempty"`
-	Min       string   `json:"min,omitempty"`
-	Max       string   `json:"max,omitempty"`
-	ValueList []string `json:"value_list,omitempty"`
+	Name        string   `json:"name"`
+	ValueType   string   `json:"value_type"` // BOOL|INTEGER|FLOAT|STRING|ENUM|ALARM
+	Unit        string   `json:"unit,omitempty"`
+	Min         string   `json:"min,omitempty"`
+	Max         string   `json:"max,omitempty"`
+	Description string   `json:"description,omitempty"`
+	ValueList   []string `json:"value_list,omitempty"`
+	// ValueName0 / ValueName1 set the false / true value labels of a
+	// binary (BOOL / ALARM) variable. Empty adopts the CCU's own
+	// "false" / "true" defaults; ignored for non-binary types.
+	ValueName0 string `json:"value_name_0,omitempty"`
+	ValueName1 string `json:"value_name_1,omitempty"`
+	// ChannelAddress binds the new variable to a device channel
+	// ("ADDR:idx", the CCU "Kanalzuordnung"). Empty leaves it unassigned.
+	// An address the CCU cannot resolve is rejected with 422.
+	ChannelAddress string `json:"channel_address,omitempty"`
+}
+
+// sysvarCreateTypes is the set of value_type codes the CCU's
+// create_system_variable Rega script and the native JSON-RPC create
+// methods understand. It is deliberately narrower than the read-side
+// [hmenum.HubValueType] vocabulary (LOGIC/NUMBER/LIST): those are how
+// the CCU reports existing variables, not how a new one is requested.
+var sysvarCreateTypes = map[string]struct{}{
+	"BOOL":    {},
+	"INTEGER": {},
+	"FLOAT":   {},
+	"STRING":  {},
+	"ENUM":    {},
+	"ALARM":   {},
 }
 
 // CreateSysvar provisions a new sysvar on the CCU via the Rega
@@ -436,8 +527,29 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeValidation, r, "name and value_type are required", ""))
 			return
 		}
-		if err := h.CreateSysvarRemote(r.Context(),
-			req.Name, req.ValueType, req.Unit, req.Min, req.Max, req.ValueList); err != nil {
+		if _, ok := sysvarCreateTypes[req.ValueType]; !ok {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r,
+					"value_type must be one of BOOL, INTEGER, FLOAT, STRING, ENUM, ALARM", req.ValueType))
+			return
+		}
+		if err := h.CreateSysvarRemote(r.Context(), hub.SysvarCreateSpec{
+			Name:        req.Name,
+			ValueType:   req.ValueType,
+			Unit:        req.Unit,
+			Min:         req.Min,
+			Max:         req.Max,
+			Description: req.Description,
+			ValueList:   req.ValueList,
+			ValueName0:  req.ValueName0,
+			ValueName1:  req.ValueName1,
+			Channel:     req.ChannelAddress,
+		}); err != nil {
+			if errors.Is(err, hub.ErrSysvarChannelUnknown) {
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "channel_address does not resolve to a device channel", req.ChannelAddress))
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar create failed", err)
 			return
 		}
@@ -447,14 +559,31 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 
 // SysvarPatchRequest is the body for `PATCH /sysvars/{name}`.
 // Every field is optional — empty/missing fields leave the CCU's
-// existing metadata untouched. Type changes are not supported via
-// this endpoint; rebuild the sysvar (DELETE + POST) instead.
+// existing metadata untouched. A non-empty Name renames the variable.
+// Type changes are not supported via this endpoint; rebuild the sysvar
+// (DELETE + POST) instead.
 type SysvarPatchRequest struct {
+	Name        *string   `json:"name,omitempty"`
 	Unit        *string   `json:"unit,omitempty"`
 	Min         *string   `json:"min,omitempty"`
 	Max         *string   `json:"max,omitempty"`
 	ValueList   *[]string `json:"value_list,omitempty"`
 	Description *string   `json:"description,omitempty"`
+	// ValueName0 / ValueName1 rename the false / true value labels of a
+	// binary (LOGIC / ALARM) variable. A present, empty string leaves the
+	// label untouched (the CCU rejects a blank label).
+	ValueName0 *string `json:"value_name_0,omitempty"`
+	ValueName1 *string `json:"value_name_1,omitempty"`
+	// IsVisible / IsLogged toggle the CCU WebUI-visibility and archive
+	// (DPArchive) flags. Tri-state: an omitted field leaves the flag
+	// untouched, a present true/false sets it.
+	IsVisible *bool `json:"is_visible,omitempty"`
+	IsLogged  *bool `json:"is_logged,omitempty"`
+	// ChannelAddress reassigns the CCU "Kanalzuordnung". Tri-state: an
+	// omitted field leaves the assignment untouched, an empty string clears
+	// it, a channel address ("ADDR:idx") assigns it. An address the CCU
+	// cannot resolve is rejected with 422.
+	ChannelAddress *string `json:"channel_address,omitempty"`
 }
 
 // PatchSysvar updates a sysvar's metadata in place via the Rega
@@ -472,26 +601,48 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
-		unit, vmin, vmax, desc := "", "", "", ""
-		var valueList []string
+		spec := hub.SysvarUpdateSpec{
+			Name:    name,
+			Visible: req.IsVisible,
+			Logged:  req.IsLogged,
+		}
+		if req.Name != nil {
+			spec.NewName = *req.Name
+		}
 		if req.Unit != nil {
-			unit = *req.Unit
+			spec.Unit = *req.Unit
 		}
 		if req.Min != nil {
-			vmin = *req.Min
+			spec.Min = *req.Min
 		}
 		if req.Max != nil {
-			vmax = *req.Max
+			spec.Max = *req.Max
 		}
 		if req.Description != nil {
-			desc = *req.Description
+			spec.Description = *req.Description
 		}
 		if req.ValueList != nil {
-			valueList = *req.ValueList
+			spec.ValueList = *req.ValueList
 		}
-		if err := h.UpdateSysvarRemote(
-			r.Context(), name, unit, vmin, vmax, desc, valueList,
-		); err != nil {
+		if req.ValueName0 != nil {
+			spec.ValueName0 = *req.ValueName0
+		}
+		if req.ValueName1 != nil {
+			spec.ValueName1 = *req.ValueName1
+		}
+		if req.ChannelAddress != nil {
+			spec.Channel = req.ChannelAddress
+		}
+		if err := h.UpdateSysvarRemote(r.Context(), spec); err != nil {
+			if errors.Is(err, hub.ErrSysvarChannelUnknown) {
+				detail := ""
+				if req.ChannelAddress != nil {
+					detail = *req.ChannelAddress
+				}
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "channel_address does not resolve to a device channel", detail))
+				return
+			}
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar update failed", err)
 			return
 		}
@@ -536,7 +687,28 @@ func FetchSysvars(svc SysvarRefreshService) http.HandlerFunc {
 	}
 }
 
-// ExecuteProgram triggers a CCU program.
+// ProgramExecuteRequest is the optional body for
+// `POST /programs/{id}/execute`.
+type ProgramExecuteRequest struct {
+	// CheckConditions gates execution on the program's "if" condition: when
+	// true the CCU evaluates the condition and runs the program only when it
+	// is satisfied. When false (the default) the program runs unconditionally.
+	CheckConditions bool `json:"check_conditions"`
+}
+
+// ProgramExecuteResponse is the body returned by
+// `POST /programs/{id}/execute`.
+type ProgramExecuteResponse struct {
+	// Executed reports whether the program actually ran. It is always true
+	// for an unconditional execution (check_conditions=false); for a
+	// condition-checked execution it is false when the condition was not met.
+	Executed bool `json:"executed"`
+}
+
+// ExecuteProgram triggers a CCU program. The optional body carries
+// check_conditions: when true the program's "if" condition is evaluated on
+// the CCU and the program runs only when the condition is satisfied. The
+// response reports whether the program executed.
 func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h, ok := requireMutationHub(w, r, idx)
@@ -550,11 +722,76 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Program not found", id))
 			return
 		}
+		var req ProgramExecuteRequest
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.CheckConditions {
+			executed, err := p.ExecuteWithConditionCheck(r.Context())
+			if err != nil {
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
+				return
+			}
+			JSON(w, http.StatusAccepted, ProgramExecuteResponse{Executed: executed})
+			return
+		}
 		if err := p.Execute(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 			return
 		}
-		w.WriteHeader(http.StatusAccepted)
+		JSON(w, http.StatusAccepted, ProgramExecuteResponse{Executed: true})
+	}
+}
+
+// DeleteProgram removes a program from the CCU and drops the local mirror
+// once the call lands. Admin-gated (parity with DELETE /devices) because
+// deletion is irreversible. Returns 404 when the program is unknown, 204
+// on success. Records an audit entry on success.
+func DeleteProgram(idx HubIndex, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
+			return
+		}
+		id := chi.URLParam(r, "id")
+		p, ok := h.Program(id)
+		if !ok {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Program not found", id))
+			return
+		}
+		name := p.Name
+		if err := h.DeleteProgramRemote(r.Context(), id); err != nil {
+			writeProgramDeleteError(w, r, err)
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
+				Action: audit.ActionProgramDelete,
+				Note:   "delete program " + name + " (" + id + ")",
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// writeProgramDeleteError maps the hub sentinels a program delete can
+// return onto HTTP problem responses: an unknown / already-gone program is
+// 404, an execute-only writer is 503, and any other CCU-side failure is a
+// 502 upstream error.
+func writeProgramDeleteError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, hub.ErrProgramNotFound):
+		problem.Write(w, http.StatusNotFound,
+			problem.New(problem.TypeNotFound, r, "Program not found", err.Error()))
+	case errors.Is(err, hub.ErrProgramDeleteUnsupported):
+		problem.Write(w, http.StatusServiceUnavailable,
+			problem.New(problem.TypeServiceUnready, r, "Program deletion unavailable", err.Error()))
+	default:
+		writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Program delete failed", err)
 	}
 }
 
@@ -622,6 +859,85 @@ func GetSysvar(idx HubIndex) http.HandlerFunc {
 	}
 }
 
+// SysvarUsageProgramDTO is one CCU program that references a system
+// variable, enriched from the hub's program registry where available.
+type SysvarUsageProgramDTO struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// UniqueID is the canonical loom routing key when the program is known
+	// to the hub registry; empty when only the ReGa-supplied name is known.
+	UniqueID string `json:"unique_id,omitempty"`
+	// Active is the observed enabled state; omitted when unknown.
+	Active *bool `json:"active,omitempty"`
+	// IsInternal marks Tmp_*-programs created internally by the CCU.
+	IsInternal bool `json:"is_internal,omitempty"`
+}
+
+// SysvarUsageResponse is the body of GET /sysvars/{name}/usage.
+type SysvarUsageResponse struct {
+	Central  string                  `json:"central,omitempty"`
+	Sysvar   string                  `json:"sysvar"`
+	Programs []SysvarUsageProgramDTO `json:"programs"`
+}
+
+// GetSysvarUsage lists the CCU programs that reference a system variable
+// (native DPEnumUsagePrograms), enriched against the hub's program
+// registry. Read-only; a delete-confirmation warning consumes it.
+func GetSysvarUsage(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if idx == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
+			return
+		}
+		name := chi.URLParam(r, "name")
+		h := resolveHubForRead(idx, r.URL.Query().Get("central"), func(hh *hub.Hub) bool {
+			_, ok := hh.Sysvar(name)
+			return ok
+		})
+		if h == nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+			return
+		}
+		if _, ok := h.Sysvar(name); !ok {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Sysvar not found", name))
+			return
+		}
+		usage, err := h.SysvarUsageRemote(r.Context(), name)
+		if err != nil {
+			if errors.Is(err, hub.ErrNoSysvarUsageReader) {
+				problem.Write(w, http.StatusServiceUnavailable,
+					problem.New(problem.TypeServiceUnready, r, "Sysvar usage lookup not available", ""))
+				return
+			}
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable,
+				"Sysvar usage lookup failed", err)
+			return
+		}
+		serial := idx.SerialSuffix(h.CentralName)
+		programs := make([]SysvarUsageProgramDTO, 0, len(usage))
+		for _, u := range usage {
+			dto := SysvarUsageProgramDTO{ID: u.ID, Name: u.Name}
+			active := u.Active
+			if p, ok := h.Program(u.ID); ok {
+				if p.Name != "" {
+					dto.Name = p.Name
+				}
+				dto.UniqueID = p.CanonicalUniqueID(serial)
+				dto.IsInternal = p.IsInternal
+				if a, observed := p.Active(); observed {
+					active = a
+				}
+			}
+			dto.Active = &active
+			programs = append(programs, dto)
+		}
+		JSON(w, http.StatusOK, SysvarUsageResponse{Central: h.CentralName, Sysvar: name, Programs: programs})
+	}
+}
+
 // PutSysvar writes a sysvar, routing to the central named by the
 // `?central=` query parameter.
 func PutSysvar(idx HubIndex) http.HandlerFunc {
@@ -669,6 +985,10 @@ func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 		Observed:       ok,
 		ValueList:      s.ValueList,
 		IsInternal:     s.IsInternal,
+		IsVisible:      s.IsVisible,
+		IsLogged:       s.IsLogged,
+		ValueName0:     s.ValueName0,
+		ValueName1:     s.ValueName1,
 		IsExtended:     s.IsExtended,
 		Vid:            s.Vid,
 		EnabledDefault: s.EnabledByDefault(),
@@ -709,6 +1029,7 @@ func ListInbox(idx HubIndex) http.HandlerFunc {
 					Central:      nh.Central,
 					Address:      e.Address,
 					Model:        e.Model,
+					Interface:    e.Interface,
 					Serial:       e.Serial,
 					Manufacturer: e.Manufacturer,
 					FirstSeen:    e.FirstSeen,
@@ -844,10 +1165,75 @@ func AckServiceMessage(idx HubIndex) http.HandlerFunc {
 	}
 }
 
-// DisableServiceMessage suppresses a single service message, routing to
-// the central named by the `?central=` query parameter. Reuses the same
-// domain call as the WS `service_messages.disable` command
-// ([hub.ServiceMessages.Disable]).
+// AckAllResult is the response body for the bulk acknowledge endpoints:
+// the total number of messages acknowledged across the scoped centrals.
+type AckAllResult struct {
+	Acknowledged int `json:"acknowledged"`
+}
+
+// AckAllAlarmMessages acknowledges every active alarm message. An optional
+// `?central=` query parameter scopes the operation to one CCU; when omitted
+// every registered central is acknowledged. Returns the total count.
+func AckAllAlarmMessages(idx HubIndex) http.HandlerFunc {
+	return ackAllMessagesHandler(idx, func(ctx context.Context, h *hub.Hub) (int, error) {
+		return h.Messages.AcknowledgeAll(ctx)
+	})
+}
+
+// AckAllServiceMessages acknowledges every quittable service message across
+// the scoped centrals. Central scoping matches [AckAllAlarmMessages].
+func AckAllServiceMessages(idx HubIndex) http.HandlerFunc {
+	return ackAllMessagesHandler(idx, func(ctx context.Context, h *hub.Hub) (int, error) {
+		return h.ServiceMessages.AcknowledgeAll(ctx)
+	})
+}
+
+// ackAllMessagesHandler is the shared body of the two bulk-acknowledge
+// endpoints. It iterates the hubs the request targets (all registered
+// centrals, or the single one named by `?central=`), sums the acknowledged
+// counts, and returns them. A named-but-unknown central is a 400.
+func ackAllMessagesHandler(idx HubIndex, ackAll func(context.Context, *hub.Hub) (int, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if idx == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
+			return
+		}
+		central := r.URL.Query().Get("central")
+		total := 0
+		matched := false
+		for _, nh := range idx.Hubs() {
+			if nh.Hub == nil {
+				continue
+			}
+			if central != "" && nh.Central != central {
+				continue
+			}
+			matched = true
+			n, err := ackAll(r.Context(), nh.Hub)
+			if err != nil {
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Acknowledge failed", err)
+				return
+			}
+			total += n
+		}
+		if central != "" && !matched {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "central unknown", ""))
+			return
+		}
+		JSON(w, http.StatusOK, AckAllResult{Acknowledged: total})
+	}
+}
+
+// DisableServiceMessage durably suppresses a single service message,
+// routing to the central named by the `?central=` query parameter. It
+// resolves the message's channel + service parameter and calls the CCU's
+// Interface.suppressServiceMessages so the parameter stops raising
+// service messages until it is unsuppressed
+// ([UnsuppressServiceMessage]). Shares the domain call
+// ([hub.ServiceMessages.Disable]) with the WS `service_messages.disable`
+// command.
 func DisableServiceMessage(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h, ok := requireMutationHub(w, r, idx)
@@ -857,6 +1243,92 @@ func DisableServiceMessage(idx HubIndex) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		if err := h.ServiceMessages.Disable(r.Context(), id); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Disable failed", err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// SuppressedServiceMessageDTO is one entry in the suppressed-messages
+// management list (`GET /api/v1/service-messages/suppressed`).
+type SuppressedServiceMessageDTO struct {
+	// Central is the CCU this suppression belongs to.
+	Central string `json:"central,omitempty"`
+	// Interface is the CCU interface the channel lives on (e.g. "HmIP-RF").
+	Interface string `json:"interface,omitempty"`
+	// Channel is the suppressed channel address ("ADDR:chn").
+	Channel string `json:"channel"`
+	// Parameter is the suppressed service parameter (e.g. "LOWBAT");
+	// empty means every service parameter of the channel is suppressed.
+	Parameter string `json:"parameter,omitempty"`
+	// DeviceName is the human-readable channel/device name, when known.
+	DeviceName string `json:"device_name,omitempty"`
+	// Name is the raw CCU message name that was suppressed, when known.
+	Name string `json:"name,omitempty"`
+}
+
+// ListSuppressedServiceMessages renders the durably-suppressed service
+// messages aggregated across all centrals. The list is reconciled against
+// each CCU's live Interface.getSuppressedServiceMessages so entries
+// cleared elsewhere drop out. Returns an empty array when nothing is
+// suppressed or no hub is wired.
+func ListSuppressedServiceMessages(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if idx == nil {
+			JSON(w, http.StatusOK, []SuppressedServiceMessageDTO{})
+			return
+		}
+		out := []SuppressedServiceMessageDTO{}
+		for _, nh := range idx.Hubs() {
+			if nh.Hub == nil || nh.Hub.ServiceMessages == nil {
+				continue
+			}
+			for _, s := range nh.Hub.ServiceMessages.Suppressed(r.Context()) {
+				out = append(out, SuppressedServiceMessageDTO{
+					Central:    nh.Central,
+					Interface:  s.InterfaceID,
+					Channel:    s.Channel,
+					Parameter:  s.Parameter,
+					DeviceName: s.DeviceName,
+					Name:       s.Name,
+				})
+			}
+		}
+		JSON(w, http.StatusOK, out)
+	}
+}
+
+// UnsuppressRequest is the body of `POST /service-messages/unsuppress`.
+type UnsuppressRequest struct {
+	Interface string `json:"interface,omitempty"`
+	Channel   string `json:"channel"`
+	Parameter string `json:"parameter,omitempty"`
+}
+
+// UnsuppressServiceMessage clears a durable suppression, routing to the
+// central named by the `?central=` query parameter. The body names the
+// channel (required) and the service parameter (empty = all parameters of
+// the channel); the interface is optional and resolved from the stored
+// suppression when omitted.
+func UnsuppressServiceMessage(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
+			return
+		}
+		var req UnsuppressRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if req.Channel == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "channel is required", ""))
+			return
+		}
+		if err := h.ServiceMessages.Unsuppress(r.Context(), req.Interface, req.Channel, req.Parameter); err != nil {
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Unsuppress failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

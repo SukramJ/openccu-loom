@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // stubCentralLinksService is an inline stub for CentralLinksService.
@@ -20,17 +22,24 @@ type stubCentralLinksService struct {
 	removeErr    error
 	statusResult CentralLinksStatus
 	statusErr    error
+
+	// Captured channel argument of the last create/remove call so tests
+	// can assert the ?channel query parameter is forwarded.
+	lastCreateChannel string
+	lastRemoveChannel string
 }
 
-func (s *stubCentralLinksService) CreateCentralLinks(_ context.Context, _ string) (CentralLinksReport, error) {
+func (s *stubCentralLinksService) CreateCentralLinks(_ context.Context, _, channelAddress string) (CentralLinksReport, error) {
+	s.lastCreateChannel = channelAddress
 	return s.createReport, s.createErr
 }
 
-func (s *stubCentralLinksService) RemoveCentralLinks(_ context.Context, _ string) (CentralLinksReport, error) {
+func (s *stubCentralLinksService) RemoveCentralLinks(_ context.Context, _, channelAddress string) (CentralLinksReport, error) {
+	s.lastRemoveChannel = channelAddress
 	return s.removeReport, s.removeErr
 }
 
-func (s *stubCentralLinksService) CentralLinksStatus(_ string) (CentralLinksStatus, error) {
+func (s *stubCentralLinksService) CentralLinksStatus(_ context.Context, _ string) (CentralLinksStatus, error) {
 	return s.statusResult, s.statusErr
 }
 
@@ -150,6 +159,76 @@ func TestCentralLinksError_Generic(t *testing.T) {
 	centralLinksError(w, req, errors.New("some internal failure"))
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// --- ?channel query-parameter forwarding ---
+
+func TestCreateCentralLinks_ForwardsChannelQueryParam(t *testing.T) {
+	t.Parallel()
+	svc := &stubCentralLinksService{createReport: CentralLinksReport{Touched: 1}}
+	req := httptest.NewRequest(http.MethodPost, "/?channel=DEV001:2", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	CreateCentralLinks(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.lastCreateChannel != "DEV001:2" {
+		t.Fatalf("channel forwarded = %q, want DEV001:2", svc.lastCreateChannel)
+	}
+}
+
+func TestDeleteCentralLinks_ForwardsChannelQueryParam(t *testing.T) {
+	t.Parallel()
+	svc := &stubCentralLinksService{removeReport: CentralLinksReport{Touched: 1}}
+	req := httptest.NewRequest(http.MethodDelete, "/?channel=DEV001:3", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	DeleteCentralLinks(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.lastRemoveChannel != "DEV001:3" {
+		t.Fatalf("channel forwarded = %q, want DEV001:3", svc.lastRemoveChannel)
+	}
+}
+
+func TestCreateCentralLinks_NoChannelForwardsEmpty(t *testing.T) {
+	t.Parallel()
+	svc := &stubCentralLinksService{createReport: CentralLinksReport{Touched: 2}}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	CreateCentralLinks(svc).ServeHTTP(w, req)
+
+	if svc.lastCreateChannel != "" {
+		t.Fatalf("channel forwarded = %q, want empty", svc.lastCreateChannel)
+	}
+}
+
+func TestDeleteCentralLinks_NoChannelForwardsEmpty(t *testing.T) {
+	t.Parallel()
+	svc := &stubCentralLinksService{removeReport: CentralLinksReport{Touched: 1}}
+	req := httptest.NewRequest(http.MethodDelete, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	DeleteCentralLinks(svc).ServeHTTP(w, req)
+
+	if svc.lastRemoveChannel != "" {
+		t.Fatalf("channel forwarded = %q, want empty", svc.lastRemoveChannel)
+	}
+}
+
+func TestCentralLinksError_ChannelNotFound_Returns422(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	centralLinksError(w, req, hmapi.ErrCentralLinksChannelNotFound)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

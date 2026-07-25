@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -362,6 +363,72 @@ func TestSetProgramStateFalse(t *testing.T) {
 	}
 }
 
+// TestExecuteProgramConditionalPassesID verifies the pid reaches the
+// substituted script and the {"executed":true} response decodes to true.
+func TestExecuteProgramConditionalPassesID(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"executed":true}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	executed, err := r.ExecuteProgramConditional(context.Background(), "prog-42")
+	if err != nil {
+		t.Fatalf("ExecuteProgramConditional: %v", err)
+	}
+	if !executed {
+		t.Fatal("executed=false, want true")
+	}
+	if !strings.Contains(capture.lastScript(), `"prog-42"`) {
+		t.Errorf("script missing pid: %s", capture.lastScript())
+	}
+}
+
+// TestExecuteProgramConditionalConditionNotMet verifies that a
+// {"executed":false} response (condition not satisfied) decodes to false
+// without erroring.
+func TestExecuteProgramConditionalConditionNotMet(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"executed":false}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	executed, err := r.ExecuteProgramConditional(context.Background(), "prog-7")
+	if err != nil {
+		t.Fatalf("ExecuteProgramConditional: %v", err)
+	}
+	if executed {
+		t.Fatal("executed=true, want false (condition not met)")
+	}
+}
+
+// TestExecuteProgramConditionalPropagatesCCUError verifies that a malformed
+// (unparsable) script result — e.g. a degraded CCU-side script run — surfaces
+// as an error wrapping [hmerr.ErrClientException] with executed=false, rather
+// than silently reporting "condition not met".
+func TestExecuteProgramConditionalPropagatesCCUError(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "not json")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	executed, err := r.ExecuteProgramConditional(context.Background(), "prog-42")
+	if err == nil {
+		t.Fatal("expected error for malformed script output")
+	}
+	if executed {
+		t.Error("executed=true on error path, want false")
+	}
+	if !errors.Is(err, hmerr.ErrClientException) {
+		t.Errorf("error should classify as ErrClientException, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "prog-42") {
+		t.Errorf("error should mention the program id, got: %v", err)
+	}
+}
+
 // TestGetSystemUpdateInfo verifies the JSON response is decoded into SystemUpdateInfo.
 func TestGetSystemUpdateInfo(t *testing.T) {
 	t.Parallel()
@@ -453,6 +520,144 @@ func TestGetInboxDevicesEmpty(t *testing.T) {
 	}
 	if len(devices) != 0 {
 		t.Errorf("len(devices)=%d, want 0", len(devices))
+	}
+}
+
+// TestGetProgramDescriptionsParsesRuleSummaries is a golden parse of the
+// get_program_descriptions.fn output: every string field (description,
+// condition_summary, activity_summary) is URL-encoded on the wire, and the
+// runner surfaces them verbatim for the caller to decode. The encoded
+// summaries here mirror what the ReGa traversal emits: symbolic operators
+// (>=, :=) and a multibyte channel name.
+func TestGetProgramDescriptionsParsesRuleSummaries(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	// condition_summary decodes to "Wohnzimmer >= 20.00 && Flur == 1.00"
+	// activity_summary  decodes to "Bücherregal := 1.00"
+	payload := `[{"id":"1234","description":"HAHM%20lamp",` +
+		`"condition_summary":"Wohnzimmer%20%3E%3D%2020.00%20%26%26%20Flur%20%3D%3D%201.00",` +
+		`"activity_summary":"B%C3%BCcherregal%20%3A%3D%201.00"}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	descs, err := r.GetProgramDescriptions(context.Background())
+	if err != nil {
+		t.Fatalf("GetProgramDescriptions: %v", err)
+	}
+	if len(descs) != 1 {
+		t.Fatalf("len(descs)=%d, want 1", len(descs))
+	}
+	d := descs[0]
+	if d.ID != "1234" {
+		t.Errorf("ID=%q, want 1234", d.ID)
+	}
+	// Fields arrive URL-encoded; decoding them yields the human strings.
+	for _, tc := range []struct {
+		field, encoded, wantDecoded string
+	}{
+		{"description", d.Description, "HAHM lamp"},
+		{"condition_summary", d.ConditionSummary, "Wohnzimmer >= 20.00 && Flur == 1.00"},
+		{"activity_summary", d.ActivitySummary, "Bücherregal := 1.00"},
+	} {
+		got, derr := url.QueryUnescape(tc.encoded)
+		if derr != nil {
+			t.Fatalf("decode %s (%q): %v", tc.field, tc.encoded, derr)
+		}
+		if got != tc.wantDecoded {
+			t.Errorf("%s decoded = %q, want %q", tc.field, got, tc.wantDecoded)
+		}
+	}
+}
+
+func TestSysvarUsagePrograms(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	payload := `[{"id":"1234","name":"Wohnzimmer%20Licht","active":true},` +
+		`{"id":"5678","name":"Flur","active":false}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	progs, err := r.SysvarUsagePrograms(context.Background(), "MyVar")
+	if err != nil {
+		t.Fatalf("SysvarUsagePrograms: %v", err)
+	}
+	if len(progs) != 2 {
+		t.Fatalf("len=%d, want 2", len(progs))
+	}
+	if progs[0].ID != "1234" || !progs[0].Active {
+		t.Errorf("prog[0] = %+v", progs[0])
+	}
+	if progs[1].Active {
+		t.Errorf("prog[1] should be inactive: %+v", progs[1])
+	}
+	// The name arrives URL-encoded.
+	if got, _ := url.QueryUnescape(progs[0].Name); got != "Wohnzimmer Licht" {
+		t.Errorf("name decoded = %q, want %q", got, "Wohnzimmer Licht")
+	}
+	// The ##name## parameter is substituted into the dispatched script.
+	if !strings.Contains(capture.lastScript(), "MyVar") {
+		t.Errorf("dispatched script missing the sysvar name; got %q", capture.lastScript())
+	}
+}
+
+func TestSysvarUsageProgramsPropagatesError(t *testing.T) {
+	t.Parallel()
+	// A non-JSON reply must surface as a parse error, not a silent empty list.
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "not json")
+	defer srv.Close()
+	r := newRunner(t, srv.URL)
+	if _, err := r.SysvarUsagePrograms(context.Background(), "X"); err == nil {
+		t.Error("expected a parse error for a non-JSON reply")
+	}
+}
+
+// TestGetProgramDescriptionsHandlesMissingSummaries verifies a program with
+// no rule (empty summary fields) parses without error and yields empty
+// summaries.
+func TestGetProgramDescriptionsHandlesMissingSummaries(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	payload := `[{"id":"9","description":"","condition_summary":"","activity_summary":""}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	descs, err := r.GetProgramDescriptions(context.Background())
+	if err != nil {
+		t.Fatalf("GetProgramDescriptions: %v", err)
+	}
+	if len(descs) != 1 {
+		t.Fatalf("len(descs)=%d, want 1", len(descs))
+	}
+	if descs[0].ConditionSummary != "" || descs[0].ActivitySummary != "" {
+		t.Errorf("expected empty summaries, got cond=%q act=%q",
+			descs[0].ConditionSummary, descs[0].ActivitySummary)
+	}
+}
+
+// TestGetProgramDescriptionsPropagatesCCUError verifies a malformed script
+// result (e.g. a truncated or degraded ReGa run) surfaces as an error
+// instead of silently returning an empty slice, so callers (programMetadata)
+// can distinguish "the script failed" from "there are no programs".
+func TestGetProgramDescriptionsPropagatesCCUError(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "not json")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	descs, err := r.GetProgramDescriptions(context.Background())
+	if err == nil {
+		t.Fatal("expected error for malformed script output")
+	}
+	if descs != nil {
+		t.Errorf("expected nil descriptions on error, got %+v", descs)
+	}
+	if !errors.Is(err, hmerr.ErrClientException) {
+		t.Errorf("error should classify as ErrClientException, got %v", err)
 	}
 }
 
@@ -749,6 +954,120 @@ func TestAcknowledgeMessageEmptyIDReturnsError(t *testing.T) {
 	}
 	if err == nil {
 		t.Fatal("expected error for empty message ID")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Bulk acknowledge: parse the acknowledged count + dispatch the right script
+// ---------------------------------------------------------------------------
+
+// TestAcknowledgeAllServiceMessagesParsesCount verifies the service bulk-ack
+// runner parses {"acknowledged":n} and dispatches the writability-gated
+// service pass.
+func TestAcknowledgeAllServiceMessagesParsesCount(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"acknowledged":4}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	n, err := r.AcknowledgeAllServiceMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllServiceMessages: %v", err)
+	}
+	if n != 4 {
+		t.Fatalf("count=%d, want 4", n)
+	}
+	if !strings.Contains(capture.lastScript(), "acknowledge_all_service_messages") {
+		t.Errorf("wrong script dispatched: %s", capture.lastScript())
+	}
+	// Service messages are acknowledged only when writable — the gate must
+	// be present in the dispatched body.
+	if !strings.Contains(capture.lastScript(), "Operations()") {
+		t.Errorf("service ack-all must apply the writability gate: %s", capture.lastScript())
+	}
+}
+
+// TestAcknowledgeAllAlarmMessagesParsesCount verifies the alarm bulk-ack
+// runner parses {"acknowledged":n} and dispatches the ALARMDP pass.
+func TestAcknowledgeAllAlarmMessagesParsesCount(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"acknowledged":7}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	n, err := r.AcknowledgeAllAlarmMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllAlarmMessages: %v", err)
+	}
+	if n != 7 {
+		t.Fatalf("count=%d, want 7", n)
+	}
+	if !strings.Contains(capture.lastScript(), "acknowledge_all_alarm_messages") {
+		t.Errorf("wrong script dispatched: %s", capture.lastScript())
+	}
+	if !strings.Contains(capture.lastScript(), "ALARMDP") {
+		t.Errorf("alarm ack-all must walk ALARMDP objects: %s", capture.lastScript())
+	}
+}
+
+// TestAcknowledgeAllServiceMessagesCCUError surfaces a transport failure as a
+// wrapped error and a zero count.
+func TestAcknowledgeAllServiceMessagesCCUError(t *testing.T) {
+	t.Parallel()
+	_, runner := newFakeServer(t, func(_ string) any {
+		return `not valid json`
+	})
+	n, err := runner.AcknowledgeAllServiceMessages(context.Background())
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0 on error", n)
+	}
+}
+
+// TestAcknowledgeAllAlarmMessagesCCUError mirrors
+// TestAcknowledgeAllServiceMessagesCCUError for the alarm bulk-ack script.
+func TestAcknowledgeAllAlarmMessagesCCUError(t *testing.T) {
+	t.Parallel()
+	_, runner := newFakeServer(t, func(_ string) any {
+		return `not valid json`
+	})
+	n, err := runner.AcknowledgeAllAlarmMessages(context.Background())
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0 on error", n)
+	}
+}
+
+// TestAcknowledgeAllMessagesZeroCount verifies that {"acknowledged":0} — the
+// CCU's answer when nothing was quittable/active — parses as a clean
+// zero-count success rather than being mistaken for a decode failure.
+func TestAcknowledgeAllMessagesZeroCount(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"acknowledged":0}`)
+	defer srv.Close()
+	r := newRunner(t, srv.URL)
+
+	n, err := r.AcknowledgeAllServiceMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllServiceMessages: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0", n)
+	}
+
+	n, err = r.AcknowledgeAllAlarmMessages(context.Background())
+	if err != nil {
+		t.Fatalf("AcknowledgeAllAlarmMessages: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("count=%d, want 0", n)
 	}
 }
 

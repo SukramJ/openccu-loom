@@ -44,6 +44,9 @@
     | "backups"
     | "sysvars"
     | "programs"
+    | "groups"
+    | "links"
+    | "diagrams"
     | "messages"
     | "audit"
     | "diagnostics"
@@ -115,6 +118,11 @@
   };
 
   const matterEnabled = $derived(matterStore.status?.enabled === true);
+  // The Diagrams view charts measurement history — only surface it when
+  // the opt-in history-recording feature is enabled (SV03).
+  const historyEnabled = $derived(
+    infoStore.info?.capabilities?.includes("history.v1") ?? false,
+  );
 
   // Cluster-grouped navigation. Order is opinionated: top cluster
   // surfaces day-to-day work, lowest cluster groups admin / system.
@@ -175,6 +183,18 @@
           label: t("nav.sysvars"),
           matches: ["sysvars"],
         },
+        {
+          href: "#/groups",
+          icon: "mdi:home-group",
+          label: t("nav.groups"),
+          matches: ["groups"],
+        },
+        {
+          href: "#/links",
+          icon: "mdi:link",
+          label: t("nav.links"),
+          matches: ["links"],
+        },
       ],
     },
     {
@@ -192,12 +212,24 @@
           label: t("nav.diagnostics"),
           matches: ["diagnostics"],
         },
-        {
-          href: "#/energy",
-          icon: "mdi:zap",
-          label: t("nav.energy"),
-          matches: ["energy"],
-        },
+        // Energy and Diagrams both chart measurement history — only surface
+        // them when the opt-in history-recording feature is enabled.
+        ...(historyEnabled
+          ? [
+              {
+                href: "#/energy",
+                icon: "mdi:zap" as const,
+                label: t("nav.energy"),
+                matches: ["energy"] as RouteKind[],
+              },
+              {
+                href: "#/diagrams",
+                icon: "mdi:chart-line-variant" as const,
+                label: t("nav.diagrams"),
+                matches: ["diagrams"] as RouteKind[],
+              },
+            ]
+          : []),
         {
           href: "#/signal",
           icon: "mdi:signal",

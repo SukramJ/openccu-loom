@@ -2475,3 +2475,188 @@ func TestGetValueError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+// TestListBidcosInterfaces verifies the CCU response is decoded into
+// []BidcosInterface, including the CCU's quoted-string dutyCycle shape and
+// the absent-carrierSense → -1 fallback, and that the interface param is
+// sent on the wire.
+func TestListBidcosInterfaces(t *testing.T) {
+	t.Parallel()
+	var capturedIface string
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listBidcosInterfaces": func(env envelope) any {
+			capturedIface, _ = env.Params["interface"].(string)
+			return okResult([]map[string]any{
+				{
+					"address":     "OEQ1234567",
+					"description": "HM-CCU2",
+					"type":        "CCU2",
+					"dutyCycle":   "42", // CCU emits a quoted string
+					"isConnected": true,
+					"isDefault":   true,
+				},
+				{
+					"address":     "KEQ0111111",
+					"type":        "HM-LGW",
+					"dutyCycle":   "0",
+					"isConnected": false,
+					"isDefault":   false,
+				},
+			})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListBidcosInterfaces(context.Background(), "BidCos-RF")
+	if err != nil {
+		t.Fatalf("ListBidcosInterfaces: %v", err)
+	}
+	if capturedIface != "BidCos-RF" {
+		t.Errorf("server saw interface=%q, want %q", capturedIface, "BidCos-RF")
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2", len(got))
+	}
+	first := got[0]
+	if first.Address != "OEQ1234567" || first.Type != "CCU2" {
+		t.Errorf("first = %+v", first)
+	}
+	if first.DutyCycle != 42 {
+		t.Errorf("DutyCycle = %d, want 42", first.DutyCycle)
+	}
+	if !first.Connected || !first.Default {
+		t.Errorf("Connected/Default = %v/%v, want true/true", first.Connected, first.Default)
+	}
+	// carrierSense absent → -1.
+	if first.CarrierSense != -1 {
+		t.Errorf("CarrierSense = %d, want -1 (absent)", first.CarrierSense)
+	}
+	second := got[1]
+	if second.DutyCycle != 0 {
+		t.Errorf("second DutyCycle = %d, want 0", second.DutyCycle)
+	}
+	if second.Connected || second.Default {
+		t.Errorf("second Connected/Default = %v/%v, want false/false", second.Connected, second.Default)
+	}
+}
+
+// TestListBidcosInterfacesNumericAndCarrierSense checks that a native-number
+// dutyCycle and a present carrierSense value are both coerced correctly.
+func TestListBidcosInterfacesNumericAndCarrierSense(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listBidcosInterfaces": func(env envelope) any {
+			return okResult([]map[string]any{
+				{
+					"address":      "OEQ9999999",
+					"dutyCycle":    63, // native JSON number
+					"carrierSense": "71",
+					"isConnected":  true,
+				},
+			})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListBidcosInterfaces(context.Background(), "BidCos-RF")
+	if err != nil {
+		t.Fatalf("ListBidcosInterfaces: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d, want 1", len(got))
+	}
+	if got[0].DutyCycle != 63 {
+		t.Errorf("DutyCycle = %d, want 63", got[0].DutyCycle)
+	}
+	if got[0].CarrierSense != 71 {
+		t.Errorf("CarrierSense = %d, want 71", got[0].CarrierSense)
+	}
+}
+
+// TestListBidcosInterfacesError checks that a server-side error surfaces.
+func TestListBidcosInterfacesError(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listBidcosInterfaces": func(env envelope) any {
+			return response{Error: &wireError{Code: -32603, Message: "internal"}}
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	if _, err := c.ListBidcosInterfaces(context.Background(), "BidCos-RF"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestListBidcosInterfacesMalformedFieldsFallBackToUnknown verifies that a
+// dutyCycle value the CCU sends as a non-numeric string, or omits entirely,
+// decodes to -1 (unknown) instead of erroring, and that boolean fields of an
+// unexpected wire shape default to false rather than panicking.
+func TestListBidcosInterfacesMalformedFieldsFallBackToUnknown(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listBidcosInterfaces": func(env envelope) any {
+			return okResult([]map[string]any{
+				{
+					"address":     "OEQ0000001",
+					"dutyCycle":   "n/a", // malformed, unparsable string
+					"isConnected": 1.0,   // unexpected type for a bool field
+					// isDefault is absent entirely.
+				},
+				{
+					"address": "OEQ0000002",
+					// dutyCycle key is absent entirely.
+				},
+			})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListBidcosInterfaces(context.Background(), "BidCos-RF")
+	if err != nil {
+		t.Fatalf("ListBidcosInterfaces: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2", len(got))
+	}
+	if got[0].DutyCycle != -1 {
+		t.Errorf("DutyCycle for malformed string = %d, want -1", got[0].DutyCycle)
+	}
+	if got[0].Connected {
+		t.Errorf("Connected for unexpected-type isConnected = %v, want false", got[0].Connected)
+	}
+	if got[0].Default {
+		t.Errorf("Default for absent isDefault = %v, want false", got[0].Default)
+	}
+	if got[1].DutyCycle != -1 {
+		t.Errorf("DutyCycle for absent key = %d, want -1", got[1].DutyCycle)
+	}
+}
+
+// TestListBidcosInterfacesEmptyResult verifies that a CCU reply with no
+// gateways decodes to an empty (non-nil) slice rather than an error.
+func TestListBidcosInterfacesEmptyResult(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listBidcosInterfaces": func(env envelope) any {
+			return okResult([]map[string]any{})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListBidcosInterfaces(context.Background(), "BidCos-RF")
+	if err != nil {
+		t.Fatalf("ListBidcosInterfaces: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected non-nil empty slice")
+	}
+	if len(got) != 0 {
+		t.Fatalf("len=%d, want 0", len(got))
+	}
+}

@@ -3,6 +3,8 @@
   import type { DeviceDetail } from "$lib/api/types";
   import { api, ApiError } from "$lib/api/client";
   import ChannelPanel from "$lib/components/channel/ChannelPanel.svelte";
+  import ChannelFlagsToggles from "$lib/components/channel/ChannelFlagsToggles.svelte";
+  import TeamPicker from "$lib/components/device/TeamPicker.svelte";
   import DeviceLinks from "$lib/components/links/DeviceLinks.svelte";
   import CentralLinksPanel from "$lib/components/links/CentralLinksPanel.svelte";
   import CdpTilesPanel from "$lib/cdp/CdpTilesPanel.svelte";
@@ -10,6 +12,8 @@
   import MaintenanceStatusGrid from "$lib/components/device/MaintenanceStatusGrid.svelte";
   import AuditLog from "./AuditLog.svelte";
   import HistoryChart from "$lib/components/HistoryChart.svelte";
+  import RecordToggle from "$lib/components/RecordToggle.svelte";
+  import RoomFunctionSelect from "$lib/components/RoomFunctionSelect.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -26,14 +30,18 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Select from "$lib/components/ui/Select.svelte";
+  import Switch from "$lib/components/ui/Switch.svelte";
 
   type Props = {
     address: string;
     channel?: number;
+    // Optional deep-link target sub-tab (e.g. "links" from the global
+    // direct-links overview) so the view opens on that tab, not just the device.
+    sub?: string;
     locale: string;
   };
 
-  let { address, channel, locale }: Props = $props();
+  let { address, channel, sub, locale }: Props = $props();
 
   let detail = $state<DeviceDetail | null>(null);
   let error = $state<string | null>(null);
@@ -122,17 +130,41 @@
   let renaming = $state(false);
   let renameValue = $state("");
   let renameBusy = $state(false);
+  // Whether the device rename also cascades to every channel
+  // ("<name>:<channelNo>"). Default on, matching the CCU WebUI.
+  let renameIncludeChannels = $state(true);
+
+  // Per-channel rename workflow state. renameChannelNo is the channel
+  // number currently being edited (null = no dialog open).
+  let renameChannelNo = $state<number | null>(null);
+  let renameChannelValue = $state("");
+  let renameChannelBusy = $state(false);
   let deleting = $state(false);
   let updatingFw = $state(false);
+  let restoringConfig = $state(false);
+  let testingComm = $state(false);
+  let commTestResult = $state<import("$lib/api/types").CommunicationTestResult | null>(null);
   let exportingDef = $state(false);
 
-  let editingRooms = $state(false);
-  let roomsDraft = $state("");
-  let roomsBusy = $state(false);
+  // Delete-with-options dialog. The plain confirm becomes a small options
+  // dialog: a mode radio (plain unpair / factory reset) plus a "force
+  // removal" checkbox for unreachable devices. Before the dialog is usable
+  // the direct links and programs that reference the device are loaded so a
+  // dependency warning can be shown.
+  let deleteDialogOpen = $state(false);
+  let deleteMode = $state<"unpair" | "reset">("unpair");
+  let deleteForce = $state(false);
+  let deleteDepsLoading = $state(false);
+  let deleteLinkCount = $state(0);
+  let deleteProgramNames = $state<string[]>([]);
+  const deleteHasDeps = $derived(
+    deleteLinkCount > 0 || deleteProgramNames.length > 0,
+  );
 
-  let editingFunctions = $state(false);
-  let functionsDraft = $state("");
-  let functionsBusy = $state(false);
+  // Room / function catalogues for the assignment comboboxes. Loaded once
+  // on mount; a created entry is appended locally so it appears immediately.
+  let roomOptions = $state<string[]>([]);
+  let functionOptions = $state<string[]>([]);
 
   async function load() {
     error = null;
@@ -149,7 +181,36 @@
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    void load();
+    void loadRoomFunctionCatalogs();
+  });
+
+  async function loadRoomFunctionCatalogs() {
+    try {
+      const [rooms, functions] = await Promise.all([
+        api.listRooms(),
+        api.listFunctions(),
+      ]);
+      roomOptions = rooms.map((r) => r.name).sort((a, b) => a.localeCompare(b));
+      functionOptions = functions
+        .map((f) => f.name)
+        .sort((a, b) => a.localeCompare(b));
+    } catch {
+      // Non-fatal: current assignments still render; search/create just have
+      // an empty catalogue until the next load.
+    }
+  }
+
+  // Deep-link into a specific configure sub-tab (e.g. "links" from the global
+  // direct-links overview's "edit on device" action), so the view opens on the
+  // requested tab instead of the default channels strip.
+  onMount(() => {
+    if (sub === "links" || sub === "schedule" || sub === "device-config") {
+      topTab = "configure";
+      configSub = sub;
+    }
+  });
 
   onMount(() => {
     if (!favoritesStore.loaded) void favoritesStore.load();
@@ -220,6 +281,7 @@
 
   function startRename() {
     renameValue = detail?.name ?? "";
+    renameIncludeChannels = true;
     renaming = true;
   }
 
@@ -232,7 +294,7 @@
     }
     renameBusy = true;
     try {
-      await api.renameDevice(address, next);
+      await api.renameDevice(address, next, renameIncludeChannels);
       toastStore.success(t("device.renamed"));
       renaming = false;
       await load();
@@ -243,21 +305,83 @@
     }
   }
 
-  async function onDelete() {
+  function startRenameChannel(no: number, currentName: string) {
+    renameChannelNo = no;
+    renameChannelValue = currentName;
+  }
+
+  function cancelRenameChannel() {
+    renameChannelNo = null;
+    renameChannelValue = "";
+  }
+
+  async function commitRenameChannel() {
+    if (renameChannelNo === null) return;
+    const next = renameChannelValue.trim();
+    if (!next) {
+      cancelRenameChannel();
+      return;
+    }
+    renameChannelBusy = true;
+    try {
+      await api.renameChannel(address, renameChannelNo, next);
+      toastStore.success(t("channel.renamed"));
+      cancelRenameChannel();
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      renameChannelBusy = false;
+    }
+  }
+
+  function onDelete() {
     if (!detail) return;
-    const ok = await confirmStore.ask({
-      title: t("device.confirm_remove_title"),
-      body: t("device.confirm_remove_body", {
-        name: detail.name || detail.address,
-      }),
-      confirmLabel: t("common.delete"),
-      destructive: true,
-    });
-    if (!ok) return;
+    deleteMode = "unpair";
+    deleteForce = false;
+    deleteDialogOpen = true;
+    void loadDeleteDependencies();
+  }
+
+  // Load the dependencies that a removal would orphan: direct links on the
+  // device and CCU programs that reference it. Best-effort — a failed probe
+  // must not block the delete flow, so both fall back to an empty list and
+  // simply suppress the corresponding warning.
+  async function loadDeleteDependencies() {
+    if (!detail) return;
+    const addr = detail.address;
+    deleteDepsLoading = true;
+    deleteLinkCount = 0;
+    deleteProgramNames = [];
+    try {
+      const [links, programs] = await Promise.all([
+        api.listLinks(addr, locale).catch(() => []),
+        api.listPrograms().catch(() => []),
+      ]);
+      deleteLinkCount = links.length;
+      deleteProgramNames = programs
+        .filter((p) => p.device_address === addr)
+        .map((p) => p.name);
+    } finally {
+      deleteDepsLoading = false;
+    }
+  }
+
+  function cancelDelete() {
+    if (deleting) return;
+    deleteDialogOpen = false;
+  }
+
+  async function confirmDelete() {
+    if (!detail) return;
     deleting = true;
     try {
-      await api.deleteDevice(address);
+      await api.deleteDevice(address, {
+        reset: deleteMode === "reset",
+        force: deleteForce,
+      });
       toastStore.success(t("device.removed"));
+      deleteDialogOpen = false;
       location.hash = "#/devices";
     } catch (err) {
       toastStore.error(err instanceof Error ? err.message : String(err));
@@ -284,6 +408,46 @@
       toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       updatingFw = false;
+    }
+  }
+
+  async function onRestoreConfig() {
+    if (!detail) return;
+    const ok = await confirmStore.ask({
+      title: t("device.restore_config"),
+      body: t("device.confirm_restore_config_body", {
+        name: detail.name || detail.address,
+      }),
+      confirmLabel: t("device.restore_config"),
+    });
+    if (!ok) return;
+    restoringConfig = true;
+    try {
+      await api.restoreDeviceConfig(address);
+      toastStore.success(t("device.restore_config_triggered"));
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      restoringConfig = false;
+    }
+  }
+
+  async function onTestCommunication() {
+    if (!detail) return;
+    testingComm = true;
+    commTestResult = null;
+    try {
+      const r = await api.testDeviceCommunication(address);
+      commTestResult = r;
+      if (r.passed) {
+        toastStore.success(t("device.communication_test_passed"));
+      } else {
+        toastStore.warn(t("device.communication_test_failed"));
+      }
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      testingComm = false;
     }
   }
 
@@ -319,52 +483,51 @@
     }
   }
 
-  function startEditRooms() {
-    roomsDraft = (detail?.rooms ?? []).join(", ");
-    editingRooms = true;
-  }
-
-  function startEditFunctions() {
-    functionsDraft = (detail?.functions ?? []).join(", ");
-    editingFunctions = true;
-  }
-
-  async function saveRooms() {
-    if (!detail) return;
-    roomsBusy = true;
+  // The comboboxes persist each add/remove immediately with an optimistic
+  // local update, rolling back to the previous set if the CCU rejects it.
+  async function updateRooms(next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prev = d.rooms ?? [];
+    detail = { ...d, rooms: next };
     try {
-      const list = roomsDraft
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      await api.setDeviceRooms(detail.address, list);
+      await api.setDeviceRooms(d.address, next);
       toastStore.success(t("device.rooms_updated"));
-      editingRooms = false;
-      await load();
     } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, rooms: prev };
       toastStore.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      roomsBusy = false;
     }
   }
 
-  async function saveFunctions() {
-    if (!detail) return;
-    functionsBusy = true;
+  async function updateFunctions(next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prev = d.functions ?? [];
+    detail = { ...d, functions: next };
     try {
-      const list = functionsDraft
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      await api.setDeviceFunctions(detail.address, list);
+      await api.setDeviceFunctions(d.address, next);
       toastStore.success(t("device.functions_updated"));
-      editingFunctions = false;
-      await load();
     } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, functions: prev };
       toastStore.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      functionsBusy = false;
     }
+  }
+
+  async function createRoomEntry(name: string) {
+    await api.createRoom(name, detail?.central);
+    if (!roomOptions.includes(name))
+      roomOptions = [...roomOptions, name].sort((a, b) => a.localeCompare(b));
+    toastStore.success(t("roomfn.created.room"));
+  }
+  async function createFunctionEntry(name: string) {
+    await api.createFunction(name, detail?.central);
+    if (!functionOptions.includes(name))
+      functionOptions = [...functionOptions, name].sort((a, b) =>
+        a.localeCompare(b),
+      );
+    toastStore.success(t("roomfn.created.function"));
   }
 
   function clickChannelInStrip(ch: { number: number; type?: string }) {
@@ -373,6 +536,48 @@
       return;
     }
     location.hash = `#/devices/${detail?.address}/channels/${ch.number}`;
+  }
+
+  // Per-channel assignment mirrors the device level: optimistic update on the
+  // matching channel, rolled back on a CCU error.
+  async function updateChannelRooms(no: number, next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prevChannels = d.channels;
+    detail = {
+      ...d,
+      channels: d.channels.map((c) =>
+        c.number === no ? { ...c, rooms: next } : c,
+      ),
+    };
+    try {
+      await api.setChannelRooms(address, no, next);
+      toastStore.success(t("channel.rooms_updated"));
+    } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, channels: prevChannels };
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function updateChannelFunctions(no: number, next: string[]) {
+    const d = detail;
+    if (!d) return;
+    const prevChannels = d.channels;
+    detail = {
+      ...d,
+      channels: d.channels.map((c) =>
+        c.number === no ? { ...c, functions: next } : c,
+      ),
+    };
+    try {
+      await api.setChannelFunctions(address, no, next);
+      toastStore.success(t("channel.functions_updated"));
+    } catch (err) {
+      if (detail && detail.address === d.address)
+        detail = { ...detail, channels: prevChannels };
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    }
   }
 
   // Top-level tabs. Three tabs only — the previous Bedienen/Status
@@ -430,34 +635,48 @@
       >
         <div class="min-w-0 flex-1">
           {#if renaming}
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="w-full sm:w-64">
-                <Input
-                  type="text"
-                  bind:value={renameValue}
-                  onkeydown={(e) => {
-                    if (e.key === "Enter") void commitRename();
-                    else if (e.key === "Escape") renaming = false;
-                  }}
-                />
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="w-full sm:w-64">
+                  <Input
+                    type="text"
+                    aria-label={t("device.rename")}
+                    bind:value={renameValue}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter") void commitRename();
+                      else if (e.key === "Escape") renaming = false;
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => void commitRename()}
+                  disabled={renameBusy}
+                >
+                  {t("common.save")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => (renaming = false)}
+                  disabled={renameBusy}
+                >
+                  {t("common.cancel")}
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                onclick={() => void commitRename()}
-                disabled={renameBusy}
+              <label
+                for="rename-include-channels"
+                class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
               >
-                {t("common.save")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onclick={() => (renaming = false)}
-                disabled={renameBusy}
-              >
-                {t("common.cancel")}
-              </Button>
+                <Switch
+                  id="rename-include-channels"
+                  bind:checked={renameIncludeChannels}
+                  disabled={renameBusy}
+                />
+                <span>{t("device.rename_include_channels")}</span>
+              </label>
             </div>
           {:else}
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
@@ -487,63 +706,31 @@
               </Badge>
             {/if}
           </p>
-          <div class="mt-1 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-            <span class="font-semibold">{t("device.rooms")}:</span>
-            <div class="flex items-baseline gap-2">
-              {#if editingRooms}
-                <div class="flex flex-1 items-center gap-2">
-                  <input
-                    type="text"
-                    bind:value={roomsDraft}
-                    placeholder={t("device.rooms.placeholder")}
-                    class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
-                  <Button type="button" size="sm" onclick={() => void saveRooms()} disabled={roomsBusy}>
-                    {t("common.save")}
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onclick={() => (editingRooms = false)} disabled={roomsBusy}>
-                    ×
-                  </Button>
-                </div>
-              {:else}
-                <span>{(detail.rooms ?? []).join(", ") || t("common.none")}</span>
-                <button
-                  type="button"
-                  class="text-brand-600 hover:underline dark:text-brand-400"
-                  onclick={startEditRooms}
-                >
-                  {t("common.edit")}
-                </button>
-              {/if}
-            </div>
-            <span class="font-semibold">{t("device.functions")}:</span>
-            <div class="flex items-baseline gap-2">
-              {#if editingFunctions}
-                <div class="flex flex-1 items-center gap-2">
-                  <input
-                    type="text"
-                    bind:value={functionsDraft}
-                    placeholder={t("device.functions.placeholder")}
-                    class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                  />
-                  <Button type="button" size="sm" onclick={() => void saveFunctions()} disabled={functionsBusy}>
-                    {t("common.save")}
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onclick={() => (editingFunctions = false)} disabled={functionsBusy}>
-                    ×
-                  </Button>
-                </div>
-              {:else}
-                <span>{(detail.functions ?? []).join(", ") || t("common.none")}</span>
-                <button
-                  type="button"
-                  class="text-brand-600 hover:underline dark:text-brand-400"
-                  onclick={startEditFunctions}
-                >
-                  {t("common.edit")}
-                </button>
-              {/if}
-            </div>
+          <div class="mt-1 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+            <span class="pt-2 font-semibold">{t("device.rooms")}:</span>
+            <RoomFunctionSelect
+              id="device-rooms"
+              ariaLabel={t("device.rooms")}
+              selected={detail.rooms ?? []}
+              options={roomOptions}
+              onChange={(next) => void updateRooms(next)}
+              onCreate={createRoomEntry}
+              placeholder={t("roomfn.placeholder.room")}
+              createLabel={(v) => t("roomfn.create.room", { name: v })}
+              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            />
+            <span class="pt-2 font-semibold">{t("device.functions")}:</span>
+            <RoomFunctionSelect
+              id="device-functions"
+              ariaLabel={t("device.functions")}
+              selected={detail.functions ?? []}
+              options={functionOptions}
+              onChange={(next) => void updateFunctions(next)}
+              onCreate={createFunctionEntry}
+              placeholder={t("roomfn.placeholder.function")}
+              createLabel={(v) => t("roomfn.create.function", { name: v })}
+              removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+            />
           </div>
         </div>
         {#if !renaming}
@@ -592,6 +779,41 @@
                 {updatingFw ? "…" : t("device.firmware_update")}
               </Button>
             {/if}
+            {#if detail.config_restore_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onRestoreConfig()}
+                disabled={restoringConfig}
+                title={t("device.restore_config.tooltip")}
+              >
+                <Icon name="mdi:backup-restore" size={14} />
+                {restoringConfig ? "…" : t("device.restore_config")}
+              </Button>
+            {/if}
+            {#if detail.communication_test_supported}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void onTestCommunication()}
+                disabled={testingComm}
+                title={t("device.communication_test.tooltip")}
+              >
+                <Icon name="mdi:radio-tower" size={14} />
+                {testingComm
+                  ? t("device.communication_test_running")
+                  : t("device.communication_test")}
+              </Button>
+              {#if commTestResult}
+                <Badge variant={commTestResult.passed ? "success" : "warning"}>
+                  {commTestResult.passed
+                    ? t("device.communication_test_passed")
+                    : t("device.communication_test_failed")}
+                </Badge>
+              {/if}
+            {/if}
             <Button
               type="button"
               variant="outline"
@@ -606,7 +828,7 @@
               type="button"
               variant="outline-destructive"
               size="sm"
-              onclick={() => void onDelete()}
+              onclick={onDelete}
               disabled={deleting}
             >
               <Icon name="mdi:trash-can" size={14} />
@@ -781,6 +1003,98 @@
                 </div>
               </Card>
             {:else}
+              <!-- Per-channel rename affordance. The pencil opens an inline
+                   editor; the CCU stores the channel name via Channel.setName. -->
+              <div class="mb-3 flex flex-wrap items-center gap-2">
+                {#if renameChannelNo === ch.number}
+                  <div class="w-full sm:w-64">
+                    <Input
+                      type="text"
+                      aria-label={t("channel.rename")}
+                      bind:value={renameChannelValue}
+                      onkeydown={(e) => {
+                        if (e.key === "Enter") void commitRenameChannel();
+                        else if (e.key === "Escape") cancelRenameChannel();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onclick={() => void commitRenameChannel()}
+                    disabled={renameChannelBusy}
+                  >
+                    {t("common.save")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onclick={cancelRenameChannel}
+                    disabled={renameChannelBusy}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                {:else}
+                  <h3 class="font-medium text-slate-900 dark:text-white">
+                    {ch.name?.trim() ||
+                      ch.type_label ||
+                      t("device.channel_n", { n: ch.number })}
+                  </h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t("channel.rename")}
+                    title={t("channel.rename")}
+                    onclick={() => startRenameChannel(ch.number, ch.name ?? "")}
+                  >
+                    <Icon name="mdi:pencil" size={16} />
+                  </Button>
+                {/if}
+              </div>
+              <!-- Per-channel room / function assignment. Same combobox as the
+                   device level, persisted per change via
+                   PATCH /devices/{addr}/channels/{no}. -->
+              <div class="mb-3 grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+                <span class="pt-2 font-semibold">{t("channel.rooms")}:</span>
+                <RoomFunctionSelect
+                  id={`ch-${ch.number}-rooms`}
+                  ariaLabel={t("channel.rooms")}
+                  selected={ch.rooms ?? []}
+                  options={roomOptions}
+                  onChange={(next) => void updateChannelRooms(ch.number, next)}
+                  onCreate={createRoomEntry}
+                  placeholder={t("roomfn.placeholder.room")}
+                  createLabel={(v) => t("roomfn.create.room", { name: v })}
+                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                />
+                <span class="pt-2 font-semibold">{t("channel.functions")}:</span>
+                <RoomFunctionSelect
+                  id={`ch-${ch.number}-functions`}
+                  ariaLabel={t("channel.functions")}
+                  selected={ch.functions ?? []}
+                  options={functionOptions}
+                  onChange={(next) => void updateChannelFunctions(ch.number, next)}
+                  onCreate={createFunctionEntry}
+                  placeholder={t("roomfn.placeholder.function")}
+                  createLabel={(v) => t("roomfn.create.function", { name: v })}
+                  removeLabel={(n) => t("roomfn.remove_named", { name: n })}
+                />
+              </div>
+              {#if detail.team_supported}
+                <div class="mb-3">
+                  <TeamPicker address={detail.address} channel={ch.number} />
+                </div>
+              {/if}
+              <div class="mb-3">
+                <ChannelFlagsToggles
+                  address={detail.address}
+                  channelNo={ch.number}
+                  hidden={ch.hidden}
+                  locked={ch.locked}
+                />
+              </div>
               <ChannelPanel
                 address={detail.address}
                 channel={ch.number}
@@ -840,6 +1154,14 @@
                 {:else if historyChannelNo !== null}
                   <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.no_numeric")}</span>
                 {/if}
+                {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
+                  <RecordToggle
+                    central={detail.central}
+                    interfaceId={detail.interface_id}
+                    channel={`${detail.address}:${historyChannelNo}`}
+                    parameter={historyParameter}
+                  />
+                {/if}
               </div>
               {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
                 {@const selectedDP = historyDPs.find((dp) => dp.parameter === historyParameter)}
@@ -860,6 +1182,155 @@
       {/if}
     {:else}
       <EmptyState message={t("device.no_channels")} />
+    {/if}
+
+    <!-- Remove-device options dialog. Follows the shared ConfirmDialog
+         visual pattern (overlay + card tokens + destructive confirm) but
+         hosts the removal-mode radio, force checkbox, and dependency
+         warning the plain confirm dialog cannot carry. -->
+    {#if deleteDialogOpen}
+      <div
+        class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
+        style="background-color: rgb(0 0 0 / 0.45);"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("device.confirm_remove_title")}
+        tabindex="-1"
+        onclick={(e) => {
+          if (e.target === e.currentTarget) cancelDelete();
+        }}
+        onkeydown={(e) => {
+          if (e.key === "Escape") cancelDelete();
+        }}
+      >
+        <div
+          class="w-full max-w-md p-5"
+          style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-radius: var(--ha-radius-card); box-shadow: var(--ha-elevation-modal);"
+        >
+          <h2 class="mb-2 text-lg font-semibold">
+            {t("device.confirm_remove_title")}
+          </h2>
+          <p class="mb-4 text-sm" style="color: var(--ha-secondary-text-color);">
+            {t("device.confirm_remove_body", {
+              name: detail.name || detail.address,
+            })}
+          </p>
+
+          {#if deleteDepsLoading}
+            <p
+              class="mb-4 text-sm"
+              style="color: var(--ha-secondary-text-color);"
+            >
+              {t("device.delete.checking")}
+            </p>
+          {:else if deleteHasDeps}
+            <div
+              class="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200"
+              role="alert"
+            >
+              <p class="font-semibold">{t("device.delete.warning_title")}</p>
+              <ul class="mt-1 list-inside list-disc space-y-0.5">
+                {#if deleteLinkCount > 0}
+                  <li>
+                    {t("device.delete.warning_links", {
+                      count: deleteLinkCount,
+                    })}
+                  </li>
+                {/if}
+                {#if deleteProgramNames.length > 0}
+                  <li>
+                    {t("device.delete.warning_programs", {
+                      count: deleteProgramNames.length,
+                    })}
+                  </li>
+                {/if}
+              </ul>
+            </div>
+          {/if}
+
+          <fieldset class="mb-4">
+            <legend class="mb-2 text-sm font-medium">
+              {t("device.delete.mode_label")}
+            </legend>
+            <label class="flex items-start gap-2 py-1 text-sm">
+              <input
+                type="radio"
+                name="delete-mode"
+                value="unpair"
+                bind:group={deleteMode}
+                class="mt-0.5 accent-brand-600"
+              />
+              <span>
+                <span class="font-medium">{t("device.delete.mode_unpair")}</span>
+                <span
+                  class="block text-xs"
+                  style="color: var(--ha-secondary-text-color);"
+                >
+                  {t("device.delete.mode_unpair_hint")}
+                </span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 py-1 text-sm">
+              <input
+                type="radio"
+                name="delete-mode"
+                value="reset"
+                bind:group={deleteMode}
+                class="mt-0.5 accent-brand-600"
+              />
+              <span>
+                <span class="font-medium">{t("device.delete.mode_reset")}</span>
+                <span
+                  class="block text-xs"
+                  style="color: var(--ha-secondary-text-color);"
+                >
+                  {t("device.delete.mode_reset_hint")}
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
+          <label class="mb-4 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              bind:checked={deleteForce}
+              class="mt-0.5 accent-brand-600"
+            />
+            <span>
+              <span class="font-medium">{t("device.delete.force")}</span>
+              <span
+                class="block text-xs"
+                style="color: var(--ha-secondary-text-color);"
+              >
+                {t("device.delete.force_hint")}
+              </span>
+            </span>
+          </label>
+
+          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              class="w-full sm:w-auto"
+              onclick={cancelDelete}
+              disabled={deleting}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="md"
+              class="w-full sm:w-auto"
+              onclick={() => void confirmDelete()}
+              disabled={deleting}
+            >
+              {t("common.delete")}
+            </Button>
+          </div>
+        </div>
+      </div>
     {/if}
   {/if}
 </section>

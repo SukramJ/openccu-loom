@@ -1,41 +1,41 @@
 # Dead-Code Summary
 
-Generated: b3a68130
-HEAD: b3a68130
+Generated: 6d443e5e
+HEAD: 6d443e5e
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 25608 |
-| Reachable | 4538 |
-| Whitelisted | 18349 |
-| **Unreachable** | **2721** |
+| Total Exported | 26821 |
+| Reachable | 4639 |
+| Whitelisted | 19346 |
+| **Unreachable** | **2836** |
 
 ## Top-20 Packages by Dead Code
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
-| internal/client/backends | 8 | 37 | 4 |
+| internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 88 | 46 |
+| internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| pkg/hmerr | 4 | 5 | 24 |
+| pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
+| internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
-| internal/model/device | 2 | 43 | 12 |
+| internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 41 | 30 |
+| internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
-| internal/alarm | 0 | 23 | 0 |
 
 ## Top-50 Interesting Cases (kind=func, not in _test.go)
 
@@ -45,6 +45,8 @@ HEAD: b3a68130
 | internal/audit | AsyncSink | internal/audit/persist.go | 291 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
+| internal/ccudata | SnapshotVersion | internal/ccudata/embed.go | 35 |
+| internal/ccudata | SnapshotVersion | internal/ccudata/embed.go | 35 |
 | internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
 | internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
 | internal/central/adapter | EncodeTimeValue | internal/central/adapter/link_param_metadata.go | 305 |
@@ -65,8 +67,8 @@ HEAD: b3a68130
 | internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 229 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 229 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
+| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 273 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
@@ -89,28 +91,27 @@ HEAD: b3a68130
 | internal/north/webhook | WithBackoff | internal/north/webhook/outbound.go | 92 |
 | internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
 | internal/north/webhook | WithHTTPClient | internal/north/webhook/outbound.go | 89 |
-| internal/payload | For | internal/payload/payload.go | 39 |
-| internal/payload | For | internal/payload/payload.go | 39 |
 
 ## Full By-Package Breakdown
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
 | internal/central/events | 10 | 9 | 0 |
-| internal/client/backends | 8 | 37 | 4 |
+| internal/client/backends | 8 | 45 | 4 |
 | pkg/hmlog | 8 | 18 | 0 |
-| internal/central/adapter | 4 | 88 | 46 |
+| internal/central/adapter | 4 | 92 | 48 |
 | internal/north/matter/tlv | 4 | 11 | 26 |
 | internal/north/webhook | 4 | 3 | 0 |
 | internal/payload | 4 | 232 | 6 |
-| pkg/hmerr | 4 | 5 | 24 |
+| pkg/hmerr | 4 | 5 | 28 |
 | internal/audit | 2 | 22 | 2 |
 | internal/auth | 2 | 24 | 4 |
+| internal/ccudata | 2 | 31 | 4 |
 | internal/client/transport/binrpc | 2 | 11 | 0 |
 | internal/client/transport/xmlrpc | 2 | 21 | 0 |
-| internal/model/device | 2 | 43 | 12 |
+| internal/model/device | 2 | 43 | 14 |
 | internal/model/event | 2 | 5 | 0 |
-| internal/model/hub | 2 | 41 | 30 |
+| internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/discovery/mdns | 2 | 6 | 2 |
 | internal/routingkey | 2 | 0 | 2 |
@@ -123,21 +124,21 @@ HEAD: b3a68130
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
-| internal/ccudata | 0 | 31 | 4 |
 | internal/central | 0 | 22 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |
-| internal/central/coordinators | 0 | 119 | 4 |
+| internal/central/coordinators | 0 | 121 | 4 |
 | internal/central/registry | 0 | 15 | 0 |
 | internal/central/rpcserver | 0 | 10 | 4 |
+| internal/channelflags | 0 | 2 | 0 |
 | internal/client | 0 | 26 | 8 |
 | internal/client/observer | 0 | 3 | 0 |
-| internal/client/transport/jsonrpc | 0 | 11 | 0 |
+| internal/client/transport/jsonrpc | 0 | 13 | 0 |
 | internal/clock | 0 | 5 | 0 |
 | internal/configstore | 0 | 17 | 0 |
 | internal/configui | 0 | 16 | 0 |
 | internal/diagnostics | 0 | 6 | 4 |
 | internal/health | 0 | 16 | 0 |
-| internal/history | 0 | 12 | 0 |
+| internal/history | 0 | 13 | 0 |
 | internal/i18n | 0 | 2 | 0 |
 | internal/metrics | 0 | 62 | 2 |
 | internal/metrics/wiring | 0 | 7 | 0 |
@@ -153,6 +154,7 @@ HEAD: b3a68130
 | internal/model/custom/textdisplay | 0 | 5 | 18 |
 | internal/model/datapoint | 0 | 3 | 0 |
 | internal/model/device/definitionexport | 0 | 6 | 2 |
+| internal/model/group | 0 | 14 | 0 |
 | internal/model/naming | 0 | 2 | 4 |
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/bridge | 0 | 7 | 0 |
@@ -191,9 +193,9 @@ HEAD: b3a68130
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 84 | 22 |
-| pkg/hmapi | 0 | 117 | 14 |
-| pkg/hmenum | 0 | 100 | 36 |
+| internal/store/sqlite | 0 | 93 | 28 |
+| pkg/hmapi | 0 | 125 | 16 |
+| pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
-| pkg/interfaces | 0 | 78 | 0 |
+| pkg/interfaces | 0 | 81 | 4 |

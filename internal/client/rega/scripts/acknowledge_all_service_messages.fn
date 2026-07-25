@@ -1,0 +1,31 @@
+!# openccu-loom — acknowledge_all_service_messages
+!# Output: {"acknowledged":<count>}
+!#
+!# Acknowledges every quittable service message (ID_SERVICES) in one
+!# pass and returns the number acknowledged. A service message is
+!# quittable when its trigger data point carries the OPERATION_WRITE
+!# bit (bit 2 in .Operations()); non-writable messages are left
+!# untouched. Each acknowledged message is cleared via AlReceipt().
+!#
+!# Mirrors the CCU WebUI ackAll() loop, which acknowledges only entries
+!# whose trigger is writable. The single-message counterpart is
+!# acknowledge_message.fn.
+
+integer iCount = 0;
+string sAlarmId;
+
+object oServices = dom.GetObject(ID_SERVICES);
+if (oServices) {
+    foreach (sAlarmId, oServices.EnumIDs()) {
+        object oAlarm = dom.GetObject(sAlarmId);
+        if (oAlarm && (oAlarm.AlState() == 1)) {
+            object oTrigger = dom.GetObject(oAlarm.AlTriggerDP());
+            if (oTrigger && (oTrigger.Operations() & 2)) {
+                oAlarm.AlReceipt();
+                iCount = iCount + 1;
+            }
+        }
+    }
+}
+
+Write('{"acknowledged":' # iCount # '}');

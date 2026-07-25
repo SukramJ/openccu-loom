@@ -57,3 +57,43 @@ func TestPin_SetProgramExecutor_CalledInHubWiring(t *testing.T) {
 		"internal/central/coordinators", "SetProgramExecutor",
 	)
 }
+
+// TestPin_SetServiceMessageSuppressor_WiredInHubWiring pins that
+// hub_wiring.go wires the durable service-message suppressor via
+// HubCoordinator.SetServiceMessageSuppressor. Without this call
+// permanent service-message suppression (`POST
+// /service-messages/{id}/disable`, the ServiceMessages aggregate's
+// Disable path) silently becomes a no-op instead of reaching the CCU's
+// Interface.suppressServiceMessages.
+func TestPin_SetServiceMessageSuppressor_WiredInHubWiring(t *testing.T) {
+	contract.MustFindCallerInFile(
+		t,
+		"internal/central/adapter/hub_wiring.go",
+		"internal/central/coordinators", "SetServiceMessageSuppressor",
+	)
+}
+
+// TestPin_SetServiceMessageReader_WiredInHubWiring pins that hub_wiring.go
+// wires the suppressed-parameter reader via
+// HubCoordinator.SetServiceMessageReader so the management view can be
+// reconciled against the CCU's live getSuppressedServiceMessages.
+func TestPin_SetServiceMessageReader_WiredInHubWiring(t *testing.T) {
+	contract.MustFindCallerInFile(
+		t,
+		"internal/central/adapter/hub_wiring.go",
+		"internal/central/coordinators", "SetServiceMessageReader",
+	)
+}
+
+// TestPin_WireServiceMessageSuppressor_CalledInCcuWiring pins that the
+// central bring-up (ccu_wiring.go) invokes WireServiceMessageSuppressor
+// after the interface clients are registered. Without this call the
+// suppressor is defined but never installed, leaving suppression
+// unwired.
+func TestPin_WireServiceMessageSuppressor_CalledInCcuWiring(t *testing.T) {
+	contract.MustFindCallerInFile(
+		t,
+		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter", "WireServiceMessageSuppressor",
+	)
+}

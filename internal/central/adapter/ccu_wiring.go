@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
+	"github.com/SukramJ/openccu-loom/internal/channelflags"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
@@ -121,6 +122,11 @@ type WireDeps struct {
 	//
 	// nil disables the cache (every channel hits the CCU at hydration).
 	MasterValues *sqlite.MasterValuesStore
+
+	// ChannelFlags, when non-nil, is the operator per-channel override
+	// overlay (G12) re-applied onto every rebuilt channel by each
+	// per-central [DevicePipeline] via [DevicePipeline.WithChannelFlags].
+	ChannelFlags *channelflags.Overlay
 
 	// ValuesCache, when non-nil, is installed on every per-central
 	// [DevicePipeline] via [DevicePipeline.WithValuesCacheStore]. The
@@ -407,7 +413,8 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		).
 		WithFirmwareCheck(cc.Behavior.EnableDeviceFirmwareCheckEnabled()).
 		WithMasterValuesStore(deps.MasterValues, cc.Name).
-		WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name)
+		WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name).
+		WithChannelFlags(deps.ChannelFlags)
 
 	// JSON-RPC Caller adapter so CcuBackend can dispatch JSON-RPC-only ops.
 	var jCaller backends.Caller
@@ -466,6 +473,10 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// Late-binding handlers: resolve the primary client/backend at call time.
 	WireSysvarCreator(unit, writer)
 	WireBackupAndDownload(unit, writer)
+	// Durable service-message suppression: routes the hub coordinator seam
+	// and the ServiceMessages aggregate's Disable/Unsuppress path through the
+	// per-interface backend's Interface.suppressServiceMessages call.
+	WireServiceMessageSuppressor(unit, writer)
 	// Per-interface install-mode data points: one per pairing-capable radio,
 	// each writing to its own interface backend (no CCU-wide toggle exists).
 	WireInstallModeDPs(unit, writer)
@@ -764,6 +775,34 @@ func wireInterface(
 			})
 		}
 		ccuBackend.SetDownloadFirmwareTransport(ccuBaseURLFor(cc), hc, sessionIDFn)
+
+		// Persist device / channel renames to the CCU. The hook resolves
+		// the address to its ReGa ISE-ID, then dispatches to Device.setName
+		// for a device address or Channel.setName for a channel address
+		// (one carrying a ":" channel suffix), both over JSON-RPC. Without
+		// this hook a rename would only mutate the in-memory model and be
+		// lost on the next device reload. Wired on the CCU backend because
+		// the ReGa ISE-ID lookup and setName calls require JSON-RPC.
+		renameBackend := ccuBackend
+		unit.SetRenameDeviceFn(func(ctx context.Context, address, name string) error {
+			iseID, err := renameBackend.GetIseIDByAddress(ctx, address)
+			if err != nil {
+				return fmt.Errorf("rename: resolve ise-id for %s: %w", address, err)
+			}
+			if iseID <= 0 {
+				return fmt.Errorf("rename: address %s not found on CCU", address)
+			}
+			if strings.Contains(address, ":") {
+				if _, err := renameBackend.RenameChannel(ctx, iseID, name); err != nil {
+					return fmt.Errorf("rename channel %s: %w", address, err)
+				}
+				return nil
+			}
+			if _, err := renameBackend.RenameDevice(ctx, iseID, name); err != nil {
+				return fmt.Errorf("rename device %s: %w", address, err)
+			}
+			return nil
+		})
 	}
 
 	// Register the backend so REST / MQTT command paths can dispatch.

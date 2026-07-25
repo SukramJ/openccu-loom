@@ -1,0 +1,50 @@
+# version MUST equal the release tag and is bumped in the release commit
+# (same rule as the main add-on; release.yml guards both).
+name: OpenCCU-Loom Remote
+version: "0.48.2"
+slug: openccu-loom-remote
+description: >-
+  Bring the Config UI of one or more remote OpenCCU-Loom instances into the
+  Home Assistant sidebar via Ingress — no local daemon required.
+url: https://github.com/SukramJ/openccu-loom
+# Mirrors the main add-on's dev restriction; build.yaml already lists the
+# aarch64 + armv7 base images for the multi-arch restore.
+arch:
+  - amd64
+
+# One tag per arch, HA convention (see the main add-on).
+image: "ghcr.io/sukramj/openccu-loom-remote-ha-{arch}"
+
+# The HA base image ships its own s6-overlay init as the entrypoint; tell the
+# Supervisor not to inject its own init on top (required for s6-overlay images).
+init: false
+
+# Unlike the main add-on there is NO host_network: the proxy only makes
+# outbound connections to the remote instances; Ingress reaches the container
+# directly on ingress_port.
+ingress: true
+# Static: must equal the --listen port in run.sh.
+ingress_port: 8234
+# The proxy's trust model REQUIRES the HA admin gate: requests arriving via
+# Ingress are treated as authorized to reach the remote UI (the injected API
+# token does the rest). Never set this to false. See ADR 0054.
+panel_admin: true
+panel_icon: mdi:lan-connect
+panel_title: "OpenCCU-Loom Remote"
+
+options:
+  log_level: info
+  # Configure at least one remote instance before starting the add-on:
+  #   - name: main            # slug; becomes the URL path /i/<name>/
+  #     url: "http://192.168.1.10:8119"
+  #     token: "<api token>"  # optional: auto-login for HA admins
+  #     tls_insecure: false   # optional: allow self-signed https
+  instances: []
+
+schema:
+  log_level: "list(debug|info|warn|error)?"
+  instances:
+    - name: "match(^\\s*[A-Za-z0-9][A-Za-z0-9_-]{0,63}\\s*$)"
+      url: url
+      token: password?
+      tls_insecure: bool?

@@ -151,33 +151,239 @@ func TestServiceMessagesAcknowledgeCallsAckerAndRemoves(t *testing.T) {
 	}
 }
 
-// TestServiceMessagesDisableDelegatesToAcknowledge verifies that Disable
-// shares Acknowledge's underlying call (the CCU has one dismiss
-// primitive) — same acker invocation, same removal from the live set.
-func TestServiceMessagesDisableDelegatesToAcknowledge(t *testing.T) {
+// stubSuppressor records SuppressServiceMessage calls and serves a
+// canned suppressed-parameter list per channel for GetSuppressedServiceMessages.
+type stubSuppressor struct {
+	calls  []suppressCall
+	live   map[string][]string // channel → suppressed params
+	err    error
+	getErr error
+}
+
+type suppressCall struct {
+	iface, channel, parameter string
+	suppress                  bool
+}
+
+func (s *stubSuppressor) SuppressServiceMessage(_ context.Context, iface, channel, parameter string, suppress bool) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.calls = append(s.calls, suppressCall{iface, channel, parameter, suppress})
+	return nil
+}
+
+func (s *stubSuppressor) GetSuppressedServiceMessages(_ context.Context, _, channel string) ([]string, error) {
+	if s.getErr != nil {
+		return nil, s.getErr
+	}
+	return s.live[channel], nil
+}
+
+// TestServiceMessagesDisableSuppressesChannelParameter verifies that
+// Disable resolves the message's channel + parameter and durably
+// suppresses it on the CCU, then records it and removes it from the live
+// set.
+func TestServiceMessagesDisableSuppressesChannelParameter(t *testing.T) {
 	t.Parallel()
-	ack := &stubAck{}
-	sm := NewServiceMessagesWithCentral("c1", ack)
-	sm.Replace([]ServiceMessage{{ID: "svc-3", Quittable: true, Timestamp: time.Now()}})
+	sup := &stubSuppressor{}
+	sm := NewServiceMessagesWithCentral("c1", &stubAck{})
+	sm.SetSuppressor(sup)
+	sm.Replace([]ServiceMessage{{
+		ID: "svc-3", Address: "ABC123:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Quittable: true, Timestamp: time.Now(),
+	}})
 	if err := sm.Disable(context.Background(), "svc-3"); err != nil {
 		t.Fatalf("Disable: %v", err)
 	}
 	if sm.Count() != 0 {
 		t.Fatalf("Count=%d after disable, want 0", sm.Count())
 	}
-	if len(ack.ids) == 0 || ack.ids[0] != "svc-3" {
-		t.Errorf("acker not called with svc-3, got %v", ack.ids)
+	if len(sup.calls) != 1 {
+		t.Fatalf("suppressor calls=%d, want 1 (%v)", len(sup.calls), sup.calls)
+	}
+	got := sup.calls[0]
+	if got.iface != "HmIP-RF" || got.channel != "ABC123:1" || got.parameter != "LOWBAT" || !got.suppress {
+		t.Errorf("suppress call = %+v, want {HmIP-RF ABC123:1 LOWBAT true}", got)
+	}
+	if sm.SuppressedCount() != 1 {
+		t.Errorf("SuppressedCount=%d, want 1", sm.SuppressedCount())
 	}
 }
 
-// TestServiceMessagesDisableRequiresAckInterface mirrors
-// TestServiceMessagesAcknowledgeRequiresAckInterface for Disable.
-func TestServiceMessagesDisableRequiresAckInterface(t *testing.T) {
+// TestServiceMessagesDisableRequiresSuppressor asserts Disable fails when
+// no suppressor is wired instead of silently succeeding.
+func TestServiceMessagesDisableRequiresSuppressor(t *testing.T) {
 	t.Parallel()
 	sm := NewServiceMessages(nil)
 	sm.Replace([]ServiceMessage{{ID: "svc-4", Timestamp: time.Now()}})
 	if err := sm.Disable(context.Background(), "svc-4"); err == nil {
-		t.Fatal("expected error when Ack is nil")
+		t.Fatal("expected error when no suppressor is configured")
+	}
+}
+
+// TestServiceMessagesDisableUnknownID errors for an unknown message id.
+func TestServiceMessagesDisableUnknownID(t *testing.T) {
+	t.Parallel()
+	sm := NewServiceMessages(nil)
+	sm.SetSuppressor(&stubSuppressor{})
+	if err := sm.Disable(context.Background(), "missing"); err == nil {
+		t.Fatal("expected error for unknown message id")
+	}
+}
+
+// TestServiceMessagesUnsuppressClearsRecord verifies Unsuppress clears the
+// CCU suppression and drops the record from the management view.
+func TestServiceMessagesUnsuppressClearsRecord(t *testing.T) {
+	t.Parallel()
+	sup := &stubSuppressor{live: map[string][]string{"ABC123:1": {"LOWBAT"}}}
+	sm := NewServiceMessages(nil)
+	sm.SetSuppressor(sup)
+	sm.Replace([]ServiceMessage{{
+		ID: "svc-5", Address: "ABC123:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
+	if err := sm.Disable(context.Background(), "svc-5"); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+	// Interface omitted on unsuppress → resolved from the stored record.
+	if err := sm.Unsuppress(context.Background(), "", "ABC123:1", "LOWBAT"); err != nil {
+		t.Fatalf("Unsuppress: %v", err)
+	}
+	if sm.SuppressedCount() != 0 {
+		t.Fatalf("SuppressedCount=%d after unsuppress, want 0", sm.SuppressedCount())
+	}
+	last := sup.calls[len(sup.calls)-1]
+	if last.suppress || last.iface != "HmIP-RF" || last.parameter != "LOWBAT" {
+		t.Errorf("last call = %+v, want a clear on HmIP-RF/LOWBAT", last)
+	}
+}
+
+// TestServiceMessagesDisableSuppressorErrorPropagates verifies that a
+// failing CCU suppress call is returned to the caller and the message
+// stays in the active set (nothing is recorded as suppressed).
+func TestServiceMessagesDisableSuppressorErrorPropagates(t *testing.T) {
+	t.Parallel()
+	boom := errors.New("ccu unreachable")
+	sup := &stubSuppressor{err: boom}
+	sm := NewServiceMessages(nil)
+	sm.SetSuppressor(sup)
+	sm.Replace([]ServiceMessage{{
+		ID: "svc-err", Address: "ABC123:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
+
+	if err := sm.Disable(context.Background(), "svc-err"); !errors.Is(err, boom) {
+		t.Fatalf("Disable error = %v, want %v", err, boom)
+	}
+	if sm.Count() != 1 {
+		t.Errorf("Count=%d after failed Disable, want 1 (message must stay active)", sm.Count())
+	}
+	if sm.SuppressedCount() != 0 {
+		t.Errorf("SuppressedCount=%d after failed Disable, want 0", sm.SuppressedCount())
+	}
+}
+
+// TestServiceMessagesUnsuppressSuppressorErrorPropagates verifies that a
+// failing CCU clear call is returned to the caller and the management
+// record is kept (not silently dropped).
+func TestServiceMessagesUnsuppressSuppressorErrorPropagates(t *testing.T) {
+	t.Parallel()
+	boom := errors.New("ccu unreachable")
+	sup := &stubSuppressor{live: map[string][]string{"ABC123:1": {"LOWBAT"}}}
+	sm := NewServiceMessages(nil)
+	sm.SetSuppressor(sup)
+	sm.Replace([]ServiceMessage{{
+		ID: "svc-clear", Address: "ABC123:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
+	if err := sm.Disable(context.Background(), "svc-clear"); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+
+	sup.err = boom
+	if err := sm.Unsuppress(context.Background(), "HmIP-RF", "ABC123:1", "LOWBAT"); !errors.Is(err, boom) {
+		t.Fatalf("Unsuppress error = %v, want %v", err, boom)
+	}
+	if sm.SuppressedCount() != 1 {
+		t.Errorf("SuppressedCount=%d after failed Unsuppress, want 1 (record must survive)", sm.SuppressedCount())
+	}
+}
+
+// TestServiceMessagesUnsuppressRequiresSuppressor asserts Unsuppress fails
+// when no suppressor is wired instead of silently succeeding.
+func TestServiceMessagesUnsuppressRequiresSuppressor(t *testing.T) {
+	t.Parallel()
+	sm := NewServiceMessages(nil)
+	if err := sm.Unsuppress(context.Background(), "HmIP-RF", "ABC123:1", "LOWBAT"); err == nil {
+		t.Fatal("expected error when no suppressor is configured")
+	}
+}
+
+// TestServiceMessagesSuppressedToleratesReadError verifies that a failed
+// per-channel getSuppressedServiceMessages read leaves that channel's
+// records in place instead of dropping them from the management view — a
+// transient CCU read failure must not look like "suppression cleared".
+func TestServiceMessagesSuppressedToleratesReadError(t *testing.T) {
+	t.Parallel()
+	sup := &stubSuppressor{getErr: errors.New("rega timeout")}
+	sm := NewServiceMessages(nil)
+	sm.SetSuppressor(sup)
+	sm.Replace([]ServiceMessage{{
+		ID: "svc-tolerate", Address: "ABC123:1", Parameter: "LOWBAT",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
+	if err := sm.Disable(context.Background(), "svc-tolerate"); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+
+	got := sm.Suppressed(context.Background())
+	if len(got) != 1 || got[0].Channel != "ABC123:1" || got[0].Parameter != "LOWBAT" {
+		t.Fatalf("Suppressed on read error = %+v, want the record kept", got)
+	}
+}
+
+// TestServiceMessagesSuppressedEmptyParameterAlwaysKept verifies that a
+// suppression targeting every parameter of a channel (Parameter == "") is
+// never dropped by the CCU-reconcile pass, regardless of what the CCU's
+// live per-parameter list reports.
+func TestServiceMessagesSuppressedEmptyParameterAlwaysKept(t *testing.T) {
+	t.Parallel()
+	// CCU reports no suppressed parameters at all for the channel.
+	sup := &stubSuppressor{live: map[string][]string{}}
+	sm := NewServiceMessages(nil)
+	sm.SetSuppressor(sup)
+	sm.Replace([]ServiceMessage{{
+		ID: "svc-all", Address: "ABC123:1", Parameter: "",
+		InterfaceID: "HmIP-RF", Timestamp: time.Now(),
+	}})
+	if err := sm.Disable(context.Background(), "svc-all"); err != nil {
+		t.Fatalf("Disable: %v", err)
+	}
+
+	got := sm.Suppressed(context.Background())
+	if len(got) != 1 || got[0].Parameter != "" {
+		t.Fatalf("Suppressed with all-parameters record = %+v, want kept with empty Parameter", got)
+	}
+}
+
+// TestServiceMessagesSuppressedReconcilesAgainstCCU verifies the management
+// view drops records the CCU no longer reports as suppressed.
+func TestServiceMessagesSuppressedReconcilesAgainstCCU(t *testing.T) {
+	t.Parallel()
+	// CCU reports LOWBAT still suppressed on ABC123:1 but nothing on DEF:2.
+	sup := &stubSuppressor{live: map[string][]string{"ABC123:1": {"LOWBAT"}}}
+	sm := NewServiceMessages(nil)
+	sm.SetSuppressor(sup)
+	sm.Replace([]ServiceMessage{
+		{ID: "a", Address: "ABC123:1", Parameter: "LOWBAT", InterfaceID: "HmIP-RF", Timestamp: time.Now()},
+		{ID: "b", Address: "DEF:2", Parameter: "ERROR", InterfaceID: "HmIP-RF", Timestamp: time.Now()},
+	})
+	_ = sm.Disable(context.Background(), "a")
+	_ = sm.Disable(context.Background(), "b")
+	got := sm.Suppressed(context.Background())
+	if len(got) != 1 || got[0].Channel != "ABC123:1" || got[0].Parameter != "LOWBAT" {
+		t.Fatalf("Suppressed reconcile = %+v, want only ABC123:1/LOWBAT", got)
 	}
 }
 

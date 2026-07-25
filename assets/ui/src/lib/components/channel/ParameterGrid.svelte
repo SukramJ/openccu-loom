@@ -7,6 +7,10 @@
   import { detectDstGroups, dstHeader } from "$lib/channel/dst-groups";
   import { disambiguateLabels } from "$lib/channel/disambiguate-labels";
   import type { LabelDisambiguation } from "$lib/channel/disambiguate-labels";
+  import {
+    formatReading,
+    isConditionValueParam,
+  } from "$lib/channel/brightness-helper";
   import { t } from "$lib/i18n";
   import type { ParamValues } from "$lib/channel/validate";
 
@@ -18,8 +22,21 @@
     locale: string;
     /** Parameter names locked by a profile apply; rendered read-only. */
     locked?: Set<string>;
+    /**
+     * Live brightness reading of the LINK sender channel, when it
+     * exposes one. Enables the "take current brightness" helper on the
+     * SHORT_/LONG_ COND_VALUE_LO/_HI threshold fields. Null / omitted
+     * for VALUES / MASTER and links whose sender has no brightness DP.
+     */
+    brightnessSource?: { value: number; unit: string | null } | null;
     onParamChange: (name: string, value: unknown) => void;
     onAction?: (name: string) => void;
+    /**
+     * Determine one parameter's live value from the device. When set, a
+     * "Determine" button is rendered for determine-capable parameters.
+     * Wired only in the MASTER editor; omitted elsewhere.
+     */
+    onDetermine?: (name: string) => Promise<void>;
   };
 
   let {
@@ -29,9 +46,26 @@
     errors,
     locale,
     locked,
+    brightnessSource = null,
     onParamChange,
     onAction,
+    onDetermine,
   }: Props = $props();
+
+  // Build the per-field brightness helper for a condition-threshold
+  // parameter, or undefined when it does not apply (non-condition field,
+  // no sender reading). The button patches the field through the normal
+  // onParamChange path so dirty tracking / undo keep working.
+  function brightnessHelperFor(
+    p: UISchemaParameter,
+  ): { value: number; display: string } | undefined {
+    if (!brightnessSource) return undefined;
+    if (!isConditionValueParam(p.name)) return undefined;
+    return {
+      value: brightnessSource.value,
+      display: formatReading(brightnessSource.value, brightnessSource.unit),
+    };
+  }
 
   // DST first: `DST_START_*` / `DST_END_*` are pulled out of the flat
   // list and rendered as two titled sub-sections. This matches the
@@ -186,8 +220,10 @@
         dirty={dirty.has(p.name)}
         error={errors[p.name] ?? null}
         forceDisabled={locked?.has(p.name) ?? false}
+        brightnessHelper={brightnessHelperFor(p)}
         onChange={(v) => onParamChange(p.name, v)}
         onAction={onAction ? () => onAction(p.name) : undefined}
+        onDetermine={onDetermine ? () => onDetermine(p.name) : undefined}
       />
     {/each}
   {/if}
@@ -211,8 +247,10 @@
               dirty={dirty.has(p.name)}
               error={errors[p.name] ?? null}
               forceDisabled={locked?.has(p.name) ?? false}
+              brightnessHelper={brightnessHelperFor(p)}
               onChange={(v) => onParamChange(p.name, v)}
               onAction={onAction ? () => onAction(p.name) : undefined}
+              onDetermine={onDetermine ? () => onDetermine(p.name) : undefined}
             />
           {/each}
         </div>

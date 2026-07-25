@@ -24,8 +24,14 @@ import (
 //  2. Build the parameter-name fallback `parameter.title().
 //     replace("_", " ")` (e.g. RSSI_DEVICE → "Rssi Device").
 //  3. When the parameter exists on more than one channel of the
-//     same device AND the channel is non-zero, append `" chN"` so
-//     two STATE entities of a 2-channel switch don't collide.
+//     same device AND the channel is non-zero AND the channel name
+//     alone does not identify the channel, append `" chN"` so two
+//     STATE entities of a 2-channel switch don't collide. The name
+//     is considered ambiguous when it carries a `:N` channel suffix
+//     (device-derived or `<name>:<no>`-scheme names) or when another
+//     channel providing the same parameter resolves to the same
+//     name. A unique custom channel name keeps its clean data point
+//     name without the postfix.
 //  4. When the channel name has the `<dev>:N` shape, drop the `:N`
 //     suffix — `composeName` later strips the leftover device
 //     prefix.
@@ -56,12 +62,14 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 	}
 
 	pName := naming.TitleCaseParameter(parameter)
+	cName := stripChannelAddressSuffix(channelName)
+	nameHasChannelNo := cName != channelName
+
 	postfix := ""
-	if channel.IsParameterInMultipleChannels(parameter) && channel.Number != 0 {
+	if channel.Number != 0 && channel.IsParameterInMultipleChannels(parameter) &&
+		(nameHasChannelNo || isChannelNameAmbiguous(channel, parameter, channelName, model, deviceName)) {
 		postfix = fmt.Sprintf(" ch%d", channel.Number)
 	}
-
-	cName := stripChannelAddressSuffix(channelName)
 
 	translated := ""
 	if parameterTranslation != "" {
@@ -73,6 +81,69 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 		ChannelName:             cName,
 		ParameterName:           strings.TrimSpace(pName + postfix),
 		TranslatedParameterName: translated,
+		ChannelPostfix:          strings.TrimSpace(postfix),
+	}
+}
+
+// BuildCustomDataPointName resolves the name quadruple for a channel's
+// custom data point. It is the custom-DP sibling of
+// [BuildDataPointName], mirroring the Python reference's
+// `get_custom_data_point_name` (model/support.py):
+//
+//  1. A channel whose name carries the `:N` suffix (device-derived or
+//     `<name>:<no>` scheme) and that is the device's only primary of
+//     its kind — or whose custom DP opts out of multi-channel naming —
+//     renders the optional postfix alone (button locks). With an empty
+//     postfix the name collapses to the device name.
+//  2. Any other `:N`-suffixed channel carries the channel-group marker
+//     `ch<no>` (primary) / `vch<no>` (secondary); the digits follow
+//     the name suffix, matching the reference's name-split semantics.
+//  3. A custom channel name without the `:N` shape is used verbatim.
+//
+// `postfix` is the raw wire postfix (e.g. "BUTTON_LOCK", title-cased
+// here); `postfixTranslation` its locale label — empty when none
+// exists.
+func BuildCustomDataPointName(channel *Channel, postfix, postfixTranslation string) naming.NameData {
+	if channel == nil {
+		return naming.EmptyNameData
+	}
+	deviceName := ""
+	model := ""
+	if channel.device != nil {
+		deviceName = channel.device.Name
+		model = channel.device.Model
+	}
+	channelName := baseChannelName(channel, model, deviceName)
+	if channelName == "" {
+		return naming.EmptyNameData
+	}
+	cName := stripChannelAddressSuffix(channelName)
+	if cName == channelName {
+		return naming.NameData{DeviceName: deviceName, ChannelName: channelName}
+	}
+	// The single-primary collapse only applies ON the primary channel:
+	// HasSinglePrimaryCustomDP counts primaries and therefore returns
+	// true even when invoked from a secondary (same trap the MQTT
+	// discovery name builder documents). Mirrors the reference's
+	// per-channel `is_only_primary_channel`.
+	isOnlyPrimary := channel.IsCustomDPPrimaryChannel() && channel.HasSinglePrimaryCustomDP()
+	if isOnlyPrimary || channel.IgnoreMultipleChannelsForName() {
+		return naming.NameData{
+			DeviceName:              deviceName,
+			ChannelName:             cName,
+			ParameterName:           naming.TitleCaseParameter(postfix),
+			TranslatedParameterName: postfixTranslation,
+		}
+	}
+	marker := "vch"
+	if channel.IsCustomDPPrimaryChannel() {
+		marker = "ch"
+	}
+	pName := marker + channelName[len(cName)+1:]
+	return naming.NameData{
+		DeviceName:    deviceName,
+		ChannelName:   cName,
+		ParameterName: pName,
 	}
 }
 
@@ -99,9 +170,21 @@ type ParameterTranslator interface {
 func TranslatedDataPointLabel(
 	channel *Channel, parameter, channelType string, labels ParameterTranslator,
 ) (label string, labelOmitted bool) {
+	nd, labelOmitted := TranslatedDataPointNameData(channel, parameter, channelType, labels)
+	return nd.TranslatedName(), labelOmitted
+}
+
+// TranslatedDataPointNameData is the [TranslatedDataPointLabel] variant
+// that exposes the full [naming.NameData] instead of the composed
+// label. The REST data-point summary uses it to also ship the
+// channel-level collapsed name ([naming.NameData.CollapsedName]) when
+// the label is omitted, so REST consumers never re-compose entity
+// names client-side.
+func TranslatedDataPointNameData(
+	channel *Channel, parameter, channelType string, labels ParameterTranslator,
+) (nd naming.NameData, labelOmitted bool) {
 	translation, labelOmitted := TranslatedParameterLabel(parameter, channelType, labels)
-	label = BuildDataPointName(channel, parameter, translation).TranslatedName()
-	return label, labelOmitted
+	return BuildDataPointName(channel, parameter, translation), labelOmitted
 }
 
 // TranslatedParameterLabel is the channel-independent core of
@@ -124,6 +207,27 @@ func TranslatedParameterLabel(
 	}
 	translation, translated := labels.ChannelTypedParameterLabelOk(channelType, parameter)
 	return translation, translated && translation == ""
+}
+
+// isChannelNameAmbiguous reports whether another channel of the same
+// device provides the given parameter AND resolves to the same channel
+// name — i.e. the name alone cannot identify the channel and the `" chN"`
+// postfix is required. Mirrors the Python reference implementation's
+// `support.py::_is_channel_name_ambiguous`.
+func isChannelNameAmbiguous(channel *Channel, parameter, channelName, model, deviceName string) bool {
+	if channel.device == nil {
+		return false
+	}
+	for _, sibling := range channel.device.Channels() {
+		if sibling.Address == channel.Address {
+			continue
+		}
+		if sibling.HasParameter(parameter) &&
+			baseChannelName(sibling, model, deviceName) == channelName {
+			return true
+		}
+	}
+	return false
 }
 
 // baseChannelName implements

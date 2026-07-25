@@ -13,6 +13,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { t } from "$lib/i18n";
+  import { sysvarWidget, sysvarNumberStep } from "$lib/sysvar-widget";
   import { toastStore } from "$lib/stores/toast.svelte";
 
   // Start page: the user's pinned devices and system variables, served
@@ -157,25 +158,32 @@
             {#if sv}
               {@const dirty = isDirty(sv)}
               {@const saving = savingName === sv.name}
+              {@const widget = sysvarWidget(sv)}
               <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2 dark:border-slate-700">
-                {#if sv.value_type === "BOOL"}
+                {#if widget === "switch"}
+                  {@const on = Boolean(currentValue(sv))}
                   <Switch
-                    checked={Boolean(currentValue(sv))}
+                    checked={on}
                     onCheckedChange={(v) => setDraft(sv, v)}
                   />
-                {:else if sv.value_list && sv.value_list.length > 0}
+                  {#if sv.value_name_0 || sv.value_name_1}
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                      {on ? (sv.value_name_1 ?? "") : (sv.value_name_0 ?? "")}
+                    </span>
+                  {/if}
+                {:else if widget === "select"}
                   <Select
-                    options={sv.value_list.map((label, i) => ({
+                    options={(sv.value_list ?? []).map((label, i) => ({
                       value: String(i),
                       label,
                     }))}
                     value={currentValue(sv) != null ? String(currentValue(sv)) : ""}
                     onValueChange={(v) => setDraft(sv, Number(v))}
                   />
-                {:else if sv.value_type === "INTEGER" || sv.value_type === "FLOAT"}
+                {:else if widget === "number"}
                   <Input
                     type="number"
-                    step={sv.value_type === "FLOAT" ? "any" : "1"}
+                    step={sysvarNumberStep(sv.value_type)}
                     value={currentValue(sv) as number | null}
                     oninput={(e) => {
                       const n = Number((e.target as HTMLInputElement).value);

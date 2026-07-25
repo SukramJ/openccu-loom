@@ -19,6 +19,18 @@ func TestOperationsBitmask(t *testing.T) {
 	if OperationsNone.IsReadable() {
 		t.Error("NONE must not be readable")
 	}
+	if rw.IsDeterminable() {
+		t.Error("RW should not include determine")
+	}
+	// The firmware spells the fourth bit out as operations="read,write,determine";
+	// on the wire it arrives as bit 0x08.
+	rwd := OperationsRead | OperationsWrite | OperationsDetermine
+	if !rwd.IsDeterminable() {
+		t.Error("RWD should be determinable")
+	}
+	if OperationsDetermine != 8 {
+		t.Fatalf("OperationsDetermine=%d, want 8 (CCU determine bit)", OperationsDetermine)
+	}
 }
 
 func TestFlagBitmask(t *testing.T) {

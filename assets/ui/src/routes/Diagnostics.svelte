@@ -458,6 +458,15 @@
     return "muted";
   }
 
+  // Radio-utilisation thresholds: yellow from 60 %, red from 80 %.
+  // A higher duty cycle means the interface is closer to its legal
+  // transmit budget, so the scale runs green → yellow → red as load rises.
+  function utilisationVariant(pct: number): "success" | "warning" | "danger" {
+    if (pct >= 80) return "danger";
+    if (pct >= 60) return "warning";
+    return "success";
+  }
+
   function formatGaugeValue(v: number): string {
     if (Number.isInteger(v)) {
       if (Math.abs(v) >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
@@ -473,6 +482,18 @@
     { key: "id", label: t("diagnostics.col.interface"), sortable: true, title: true, get: (i) => i.id },
     { key: "type", label: t("diagnostics.col.type"), sortable: true, get: (i) => i.interface },
     { key: "status", label: t("diagnostics.col.status"), sortable: true, get: (i) => (i.connected ? 1 : 0) },
+    {
+      key: "duty_cycle",
+      label: t("diagnostics.col.duty_cycle"),
+      sortable: true,
+      get: (i) => (i.duty_cycle ?? -1),
+    },
+    {
+      key: "carrier_sense",
+      label: t("diagnostics.col.carrier_sense"),
+      sortable: true,
+      get: (i) => (i.carrier_sense ?? -1),
+    },
     {
       key: "host",
       label: t("diagnostics.col.host"),
@@ -735,6 +756,18 @@
             <Badge variant="success">{t("diagnostics.connected")}</Badge>
           {:else}
             <Badge variant="danger">{t("diagnostics.disconnected")}</Badge>
+          {/if}
+        {:else if col.key === "duty_cycle"}
+          {#if row.duty_cycle != null && row.duty_cycle >= 0}
+            <Badge variant={utilisationVariant(row.duty_cycle)}>{row.duty_cycle}%</Badge>
+          {:else}
+            <span class="text-xs text-[var(--ha-secondary-text-color)]" title={t("diagnostics.utilisation_unknown")}>—</span>
+          {/if}
+        {:else if col.key === "carrier_sense"}
+          {#if row.carrier_sense != null && row.carrier_sense >= 0}
+            <Badge variant={utilisationVariant(row.carrier_sense)}>{row.carrier_sense}%</Badge>
+          {:else}
+            <span class="text-xs text-[var(--ha-secondary-text-color)]" title={t("diagnostics.utilisation_unknown")}>—</span>
           {/if}
         {:else if col.key === "host"}
           <span class="text-xs text-[var(--ha-secondary-text-color)]">
