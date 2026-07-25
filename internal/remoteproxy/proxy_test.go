@@ -515,6 +515,31 @@ func TestInstanceProxyForwardingHeaders(t *testing.T) {
 	}
 }
 
+// TestInstanceProxyPreservesUpstreamForwardedHost pins that an X-Forwarded-Host
+// a trusted upstream proxy (e.g. Traefik) already set reaches the daemon
+// unchanged, rather than being overwritten with this hop's own host by
+// SetXForwarded. The daemon's WebSocket same-origin check compares the browser
+// Origin against X-Forwarded-Host; across a double proxy it must stay the
+// browser-facing host or the SPA's live WebSocket 403s.
+func TestInstanceProxyPreservesUpstreamForwardedHost(t *testing.T) {
+	upstream, capture := newProxyUpstreamFixture(t, nil)
+	proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: upstream.URL}})
+
+	resp := proxyGet(t, proxy.URL+"/", map[string]string{
+		"X-Forwarded-Host":  "loom.example",
+		"X-Forwarded-Proto": "https",
+	})
+	resp.Body.Close()
+
+	h := capture.Header()
+	if got := h.Get("X-Forwarded-Host"); got != "loom.example" {
+		t.Errorf("X-Forwarded-Host = %q, want loom.example (upstream value preserved)", got)
+	}
+	if got := h.Get("X-Forwarded-Proto"); got != "https" {
+		t.Errorf("X-Forwarded-Proto = %q, want https (upstream value preserved)", got)
+	}
+}
+
 func TestInstanceProxyUnreachableUpstream(t *testing.T) {
 	proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: proxyClosedUpstreamURL(t)}})
 

@@ -5384,6 +5384,8 @@ export interface components {
             rooms?: string[];
             /** @description Functions the channel (or its device) is assigned to. */
             functions?: string[];
+            /** @description True when the device still has a pending configuration (CONFIG_PENDING) and cannot be assigned to a group yet; a client shows it as a non-selectable candidate with a hint. */
+            config_pending?: boolean;
         };
         /** @description Candidate members for a group type. */
         SuitableMembersResponse: {

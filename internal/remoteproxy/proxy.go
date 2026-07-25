@@ -121,8 +121,22 @@ func newInstanceProxy(inst Instance, prefix string, log *slog.Logger) (*instance
 // only the upstream base, forwarding headers, and the optional Bearer
 // injection remain.
 func (p *instanceProxy) rewrite(pr *httputil.ProxyRequest) {
+	// Capture the forwarding headers a trusted upstream proxy (e.g. Traefik)
+	// already set, before SetXForwarded overwrites them with this hop's own
+	// view. The daemon's WebSocket same-origin check compares the browser Origin
+	// against X-Forwarded-Host; across a double proxy that must remain the
+	// browser-facing host, not this hop's internal upstream host, or the SPA's
+	// live WebSocket 403s in a reconnect loop.
+	priorHost := pr.In.Header.Get("X-Forwarded-Host")
+	priorProto := pr.In.Header.Get("X-Forwarded-Proto")
 	pr.SetURL(p.target)
 	pr.SetXForwarded()
+	if priorHost != "" {
+		pr.Out.Header.Set("X-Forwarded-Host", priorHost)
+	}
+	if priorProto != "" {
+		pr.Out.Header.Set("X-Forwarded-Proto", priorProto)
+	}
 	// Forward the browser-facing base with the instance prefix appended.
 	// Without an Ingress hop (direct access, tests) the prefix alone is
 	// still the correct base for multi-instance mounts. The inbound value

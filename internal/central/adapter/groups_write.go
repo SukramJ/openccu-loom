@@ -350,6 +350,9 @@ func enrichCandidate(c *group.MemberCandidate, unit *central.Unit) {
 	c.DeviceAddress = dev.Address
 	c.DeviceName = dev.Name
 	c.DeviceModel = dev.Model
+	if av := dev.Availability(); av != nil {
+		c.ConfigPending = av.IsConfigPending()
+	}
 	// A channel often carries no room/function of its own; fall back to the
 	// device's assignment so every candidate can still be filtered by room.
 	if len(c.Rooms) == 0 {

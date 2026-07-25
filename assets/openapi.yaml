@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.54.0
+  version: 2.55.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -7146,6 +7146,12 @@ components:
           type: array
           items: { type: string }
           description: Functions the channel (or its device) is assigned to.
+        config_pending:
+          type: boolean
+          description: >
+            True when the device still has a pending configuration
+            (CONFIG_PENDING) and cannot be assigned to a group yet; a client
+            shows it as a non-selectable candidate with a hint.
     SuitableMembersResponse:
       type: object
       required: [assignable, leftover]

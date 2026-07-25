@@ -44,6 +44,11 @@ type MemberCandidate struct {
 	// back to the device's when the channel carries none).
 	Rooms     []string
 	Functions []string
+	// ConfigPending is true when the device still has a pending configuration
+	// (CONFIG_PENDING on channel 0). Such a device cannot be assigned to a
+	// group yet; the client shows it as a non-selectable candidate with a hint
+	// rather than hiding it.
+	ConfigPending bool
 }
 
 // SuitableMembers splits the devices for a group type into the ones that can
