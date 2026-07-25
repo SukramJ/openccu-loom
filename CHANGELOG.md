@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.6]
+
+### Security
+
+- **Complete the remote-proxy open-redirect hardening** (CodeQL
+  `go/bad-redirect-check`). 0.48.5 gated the final `Location` write, but three
+  helper functions in the rewrite path (`rewriteLocation`, `stripPathPrefix`,
+  `rebase`) still split their input on a bare leading-slash test, which the
+  scanner flags because such a check alone does not exclude the `//host` /
+  `/\host` open-redirect forms. The leading-slash decision now lives solely in
+  the complete `isLocalPath` gate: `rewriteLocation` forwards only genuine
+  local paths, `stripPathPrefix` collapses an unsafe `//…` / `/\…` remainder to
+  the base root, and `rebase` composes the browser base without any leading-slash
+  test on the (possibly upstream-controlled) reference. No user-visible change.
+
 ## [0.48.5]
 
 ### Security

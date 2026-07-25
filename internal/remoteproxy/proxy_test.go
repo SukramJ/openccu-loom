@@ -763,3 +763,55 @@ func TestInstanceProxyProtocolRelativeLocationNotRebased(t *testing.T) {
 		t.Errorf("Location = %q was rebased under the base; a protocol-relative foreign host must not be", got)
 	}
 }
+
+// TestStripPathPrefixNeutralizesOpenRedirect pins the redirect-safety half of
+// stripPathPrefix (go/bad-redirect-check): the only branch that forwards the
+// tainted remainder is gated by the complete isLocalPath check, so an "//…" or
+// "/\…" remainder never survives as an off-site absolute-path reference.
+func TestStripPathPrefixNeutralizesOpenRedirect(t *testing.T) {
+	cases := []struct {
+		ref, prefix, want string
+	}{
+		{"/loom/login", "/loom", "/login"},
+		{"/loom/ok", "/loom", "/ok"},
+		{"/loom", "/loom", "/"},
+		{"/apple", "/app", "/apple"},    // literal, not a segment boundary
+		{"/loom?x=1", "/loom", "/?x=1"}, // query boundary keeps the base root
+		{"/loom//evil.example", "/loom", "/"},
+		{`/loom/\evil.example`, "/loom", "/"},
+		{"/anything", "", "/anything"}, // empty prefix is a no-op
+	}
+	for _, c := range cases {
+		if got := stripPathPrefix(c.ref, c.prefix); got != c.want {
+			t.Errorf("stripPathPrefix(%q, %q) = %q, want %q", c.ref, c.prefix, got, c.want)
+		}
+	}
+}
+
+// TestRebaseStaysLocal verifies rebase always yields a base-prefixed local path
+// (or the untouched already-based value), never an external URL, without any
+// bare leading-slash test on the possibly-tainted ref.
+func TestRebaseStaysLocal(t *testing.T) {
+	const base = "/i/alpha"
+	cases := []struct {
+		ref, base, want string
+	}{
+		{"/login", base, base + "/login"},
+		{"foo", base, base + "/foo"},
+		{"/", base, base + "/"},
+		{base + "/x", base, base + "/x"},  // already based: passes through
+		{base, base, base},                // exact base: passes through
+		{`/\evil`, base, base + `/\evil`}, // stays under base → local
+		{"//evil", base, base + "//evil"}, // stays under base → local (mid-path //)
+		{"/keep", "", "/keep"},            // no base: unchanged
+	}
+	for _, c := range cases {
+		got := rebase(c.ref, c.base)
+		if got != c.want {
+			t.Errorf("rebase(%q, %q) = %q, want %q", c.ref, c.base, got, c.want)
+		}
+		if c.base != "" && !isLocalPath(got) {
+			t.Errorf("rebase(%q, %q) = %q is not a local path", c.ref, c.base, got)
+		}
+	}
+}
