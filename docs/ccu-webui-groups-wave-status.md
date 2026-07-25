@@ -289,7 +289,13 @@ Field notes from `GroupEditPage.ftl` (the `save()` view-model):
   `<group_name> + " " + virtualDeviceSerialNumber`, but that serial is built
   from the always-zero draft id, so loom sends the **bare group name** instead
   (see §3 GR03 for the live rationale and the resulting `<name>:<n>` channels).
-- `assignedDevicesIds` = array of member `id`s (device/channel addresses).
+- `assignedDevicesIds` = member `id`s (device/channel addresses) as a
+  **JSON-encoded STRING**, NOT a native JSON array. HMServer's save handler
+  re-parses this field; a native array is silently dropped and the group
+  commits with **zero members**. Captured from the WebUI's `GroupEditPage`
+  save() (it sends the stringified form) and live-confirmed both ways: native
+  array → 0 members, `"[\"id1\",\"id2\"]"` string → members assigned. The
+  Go-`json.Marshal` form (no spaces) works.
 - After a successful save the WebUI additionally issues JSON-RPC
   `Device.setName` + `Channel.setName` to apply the `Gruppenname:Kanalnr`
   naming scheme, and the CCU runs a `CONFIG_PENDING` settle on the virtual

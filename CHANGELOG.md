@@ -10,6 +10,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Heating groups created from the UI are no longer empty.** Saving a group
+  with members created it with **zero members** — HMServer's `group/save`
+  handler expects `assignedDevicesIds` as a JSON-encoded *string*, but the
+  daemon sent a native JSON array, which HMServer silently drops. The daemon
+  now sends the stringified form, matching the CCU WebUI. Root cause captured
+  from the WebUI and live-confirmed both ways (native array → 0 members,
+  stringified → members assigned).
 - **Live WebSocket 403 through the remote-proxy add-on.** When the SPA was
   reached through a chained proxy (e.g. Traefik → remote-proxy → daemon), the
   `/api/v1/events` handshake still failed the WebSocket same-origin check
