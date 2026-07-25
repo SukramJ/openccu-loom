@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.3
+
+- **Live status stays connected.** The UI's live connection dropped and
+  reconnected about once a minute (a flickering indicator) because the browser
+  never answered the server heartbeat; it now does and stays up. This also
+  covers the chained-proxy case (Traefik in front of the remote-proxy add-on).
+- **Group member picker shows config-pending devices.** Devices that still have
+  a pending configuration are now listed greyed out with a "config pending"
+  hint instead of silently disappearing.
+
 ## 0.48.2
 
 - **Security fix.** Updated a bundled OpenAPI-validation library that could

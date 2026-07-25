@@ -6,6 +6,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.3]
+
+### Fixed
+
+- **Live connection no longer reconnects every minute.** The SPA never answered
+  the server's WebSocket heartbeat (`{op:"ping"}`), so on an idle page the
+  daemon's 60 s read deadline expired and tore the socket down — the live
+  indicator flickered once a minute. The client now replies with a pong and
+  stays connected.
+- **Live WebSocket behind a chained proxy.** The remote-proxy add-on
+  overwrote `X-Forwarded-Host` with its own upstream host, so a browser reaching
+  the daemon through Traefik → remote-proxy still failed the daemon's WebSocket
+  same-origin check. The proxy now preserves the browser-facing
+  `X-Forwarded-Host` (and `X-Forwarded-Proto`) a trusted upstream already set.
+
+### Changed
+
+- **Group member picker shows config-pending devices.** A device that still has
+  a pending configuration (`CONFIG_PENDING`) cannot be assigned to a group yet;
+  instead of hiding it, the picker now lists it greyed out with a "config
+  pending" hint so it is obvious why it is not selectable. Current members stay
+  selectable regardless. `GET /groups/suitable-members` /
+  `groups.suitable_members` carry a new `config_pending` flag (API 2.55.0).
+
 ## [0.48.2]
 
 ### Security

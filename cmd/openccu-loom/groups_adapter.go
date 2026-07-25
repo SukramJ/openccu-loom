@@ -127,6 +127,7 @@ func mapMemberCandidates(in []group.MemberCandidate) []handlers.SuitableMemberEn
 			ChannelNo:     m.ChannelNo,
 			Rooms:         m.Rooms,
 			Functions:     m.Functions,
+			ConfigPending: m.ConfigPending,
 		})
 	}
 	return out

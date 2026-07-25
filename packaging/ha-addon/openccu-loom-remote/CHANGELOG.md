@@ -4,6 +4,14 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.3
+
+**Fixes the live-connection flicker behind this proxy.** The proxy now preserves
+the browser-facing `X-Forwarded-Host` a trusted upstream (e.g. Traefik) set, so
+the daemon's live WebSocket accepts the handshake through the chained proxy.
+Update the paired instance to 0.48.3 too (it carries the matching WebSocket
+heartbeat fix and the group-picker change).
+
 # 0.48.2
 
 Version ride-along. No changes to the proxy itself; the fix ships in the paired

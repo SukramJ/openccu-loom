@@ -46,6 +46,15 @@ type WireDataPointPayload = {
   value?: unknown;
 };
 
+/** True for the server heartbeat frame `{op:"ping"}` the client must pong. */
+function isControlPing(raw: unknown): boolean {
+  return (
+    typeof raw === "object" &&
+    raw !== null &&
+    (raw as { op?: unknown }).op === "ping"
+  );
+}
+
 /**
  * Map a wire envelope to the SPA's internal `EventEnvelope` shape.
  * Returns null when the frame is a control op (`ping`/`pong`) or not
@@ -161,6 +170,20 @@ export function connectEvents(): EventStream {
       try {
         parsed = JSON.parse(msg.data);
       } catch {
+        return;
+      }
+      // The server heartbeats with {op:"ping"} every 30s and closes the socket
+      // when no client frame arrives within its 60s read deadline. On an idle
+      // page nothing else is sent, so without this pong the connection is torn
+      // down and re-established every minute — the live indicator flickers.
+      // (Browsers do not auto-answer application-level pings, only protocol
+      // PING control frames, which this server does not use.)
+      if (isControlPing(parsed)) {
+        try {
+          socket?.send(JSON.stringify({ op: "pong" }));
+        } catch {
+          // A transient send failure is recovered by the close→reconnect path.
+        }
         return;
       }
       const env = normalizeEvent(parsed);
