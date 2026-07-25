@@ -272,7 +272,10 @@ func stripPathPrefix(ref, prefix string) string {
 	case rest == "":
 		return "/"
 	case rest[0] == '/':
-		return rest
+		if isLocalPath(rest) {
+			return rest
+		}
+		return "/"
 	case rest[0] == '?' || rest[0] == '#':
 		return "/" + rest
 	default:
