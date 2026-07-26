@@ -125,6 +125,28 @@ func (i *Inbox) Replace(devices []InboxDevice) {
 	}
 }
 
+// Remove drops a single pending device by address, firing subscribers only
+// when the entry was actually present. It reconciles a stale entry the CCU no
+// longer knows (e.g. an accept that reported the device gone) immediately,
+// without waiting for the next full inbox sweep.
+func (i *Inbox) Remove(address string) {
+	i.mu.Lock()
+	if _, ok := i.devices[address]; !ok {
+		i.mu.Unlock()
+		return
+	}
+	delete(i.devices, address)
+	cbs := make([]func([]InboxDevice), len(i.callbacks))
+	copy(cbs, i.callbacks)
+	i.mu.Unlock()
+	snap := i.List()
+	for _, cb := range cbs {
+		if cb != nil {
+			cb(snap)
+		}
+	}
+}
+
 // OnUpdate registers a change handler. Returns an idempotent
 // unsubscribe closure.
 func (i *Inbox) OnUpdate(fn func([]InboxDevice)) func() {

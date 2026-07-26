@@ -369,7 +369,12 @@
         </div>
 
         <label class="flex items-center justify-between gap-3">
-          <span class="text-sm font-medium">{t("groups.operate_only_via_group")}</span>
+          <span class="flex min-w-0 flex-col">
+            <span class="text-sm font-medium">{t("groups.operate_only_via_group")}</span>
+            <span class="text-xs text-[var(--ha-secondary-text-color)]">
+              {t("groups.operate_only_via_group.help")}
+            </span>
+          </span>
           <Switch bind:checked={forbidSingle} disabled={saving} />
         </label>
 

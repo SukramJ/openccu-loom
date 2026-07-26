@@ -555,3 +555,83 @@ func TestMapCandidatesUnknownMemberLeavesEnrichmentEmpty(t *testing.T) {
 		t.Errorf("unexpected enrichment for unknown member: %+v", m)
 	}
 }
+
+// TestMapCandidatesResolvesBareDeviceAddress verifies the device-address
+// fallback: a member addressed by its bare device address (no channel suffix,
+// as some CCU heating-group members are — e.g. a wall thermostat) still resolves
+// the device name via the model rather than rendering the raw address.
+func TestMapCandidatesResolvesBareDeviceAddress(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	dev := device.New(device.Config{
+		InterfaceID:  "BidCos-RF",
+		Interface:    hmenum.InterfaceBidCosRF,
+		Address:      "000C9709AEF269",
+		Name:         "Wandthermostat DB",
+		Model:        "HmIP-STHD",
+		Rooms:        []string{"Duschbad"},
+		ProductGroup: hmenum.ProductGroupHM,
+	})
+	c.ModelRegistry.Put(dev)
+
+	got := mapCandidates(c, []backends.HeatingGroupMember{
+		{ID: "000C9709AEF269", SerialNumber: "000C9709AEF269", Type: "HEATING_CLIMATE_RECEIVER"},
+	})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	m := got[0]
+	if m.DeviceAddress != "000C9709AEF269" || m.DeviceName != "Wandthermostat DB" || m.DeviceModel != "HmIP-STHD" {
+		t.Errorf("bare-device-address enrichment = %+v, want name resolved", m)
+	}
+	if len(m.Rooms) != 1 || m.Rooms[0] != "Duschbad" {
+		t.Errorf("rooms fallback = %v, want [Duschbad]", m.Rooms)
+	}
+}
+
+// TestEnrichGroupMembersResolvesNames verifies the overview enrichment: a
+// group's members get their device/channel name and rooms resolved from the
+// model, while a member not in the model keeps only its address.
+func TestEnrichGroupMembersResolvesNames(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	dev := device.New(device.Config{
+		InterfaceID:  "BidCos-RF",
+		Interface:    hmenum.InterfaceBidCosRF,
+		Address:      "0001BBBB",
+		Name:         "Wohnzimmer Thermostat",
+		Model:        "HmIP-eTRV-2",
+		Rooms:        []string{"Wohnzimmer"},
+		ProductGroup: hmenum.ProductGroupHM,
+	})
+	c.ModelRegistry.Put(dev)
+	ch := dev.AddChannel("0001BBBB:1", 1, "HEATING_CLIMATE_RECEIVER", hmenum.ParamsetKeyValues)
+	ch.Name = "Heizen"
+
+	groups := []group.Group{{
+		ID:   1,
+		Name: "Wohnzimmer",
+		Members: []group.Member{
+			{Address: "0001BBBB:1"},
+			{Address: "9999ZZZZ:2"}, // not in model -> stays bare
+		},
+	}}
+	enrichGroupMembers(c, groups)
+
+	if m := groups[0].Members[0]; m.DeviceName != "Wohnzimmer Thermostat" ||
+		m.ChannelName != "Heizen" || m.DeviceModel != "HmIP-eTRV-2" {
+		t.Errorf("member[0] enrichment = %+v, want device+channel name", m)
+	}
+	if r := groups[0].Members[0].Rooms; len(r) != 1 || r[0] != "Wohnzimmer" {
+		t.Errorf("member[0] rooms = %v, want [Wohnzimmer]", r)
+	}
+	if m := groups[0].Members[1]; m.DeviceName != "" || m.ChannelName != "" {
+		t.Errorf("member[1] (unknown) should stay bare: %+v", m)
+	}
+}

@@ -50,6 +50,20 @@ type Member struct {
 	Address string
 	// TypeID is the member-type key (member.memberType.id).
 	TypeID string
+
+	// The fields below are resolved from the live device model by the adapter
+	// (they are not part of the groups.gson wire shape) so the overview can show
+	// each member by name instead of its bare address. Empty when the member is
+	// not (yet) in the model.
+
+	// DeviceName is the CCU-assigned name of the member's parent device.
+	DeviceName string
+	// DeviceModel is the parent device model (e.g. "HmIP-STHD").
+	DeviceModel string
+	// ChannelName is the CCU-assigned channel name, when the member is a channel.
+	ChannelName string
+	// Rooms are the member's assigned rooms (channel's, falling back to device).
+	Rooms []string
 }
 
 // wire mirrors the groups.gson serialization the CCU emits from its

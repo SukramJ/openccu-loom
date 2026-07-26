@@ -159,11 +159,20 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
+	var notInInbox bool
 	for _, u := range a.registry.List() {
 		if u.HubModel == nil {
 			continue
 		}
 		if err := u.HubModel.AcceptInboxDeviceRemote(ctx, address); err != nil {
+			if errors.Is(err, interfaces.ErrInboxDeviceNotFound) {
+				// This central no longer has the device in its inbox (it
+				// settled or was removed on the CCU). Drop the stale entry so
+				// the SPA updates immediately, and remember it in case no
+				// other central holds the device either.
+				u.HubModel.Inbox.Remove(address)
+				notInInbox = true
+			}
 			// Try the next central — the inbox may live on another CCU.
 			continue
 		}
@@ -185,6 +194,12 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(
 			return fmt.Errorf("%w: %w", interfaces.ErrAcceptConfigIncomplete, err)
 		}
 		return nil
+	}
+	if notInInbox {
+		// At least one central reported the device gone and none accepted it:
+		// the inbox entry is stale. Surface the 404-mapped sentinel rather than
+		// the generic no-backend error (502).
+		return fmt.Errorf("%w: device %s", interfaces.ErrInboxDeviceNotFound, address)
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
 }

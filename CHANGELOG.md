@@ -6,6 +6,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.7]
+
+### Added
+
+- **The heating-group overview shows member device names.** Each member in the
+  overview now resolves to its device/channel name and room from the live device
+  model instead of a bare address; a member the model does not know still falls
+  back to its address. Members addressed by a bare device address (no channel
+  suffix, as some CCU heating-group members are — e.g. a wall thermostat) now
+  resolve too, via a device-address fallback shared with the member picker. The
+  `GroupMemberEntry` gains `device_name` / `device_model` / `channel_name` /
+  `rooms`; API version → 2.56.0.
+- **The group editor's "operate only via group" toggle carries an inline help
+  text** explaining that the group's devices can then only be operated together
+  through the group, not individually.
+
+### Fixed
+
+- **Heating groups no longer leak into the pairing inbox.** The CCU's inbox
+  query returns every not-yet-configured object, which includes the virtual
+  backing device of a heating group (an `INT`-prefixed address on the
+  VirtualDevices interface). Those are managed through the group flow and can
+  never be accepted as pairing candidates, so a group would appear in the inbox
+  and then fail to accept. The daemon now filters CCU-internal virtual devices
+  out of the inbox, so they never surface as pairing candidates.
+- **Accepting a stale inbox entry returns 404 instead of 502.** When the
+  targeted device is no longer waiting in any central's inbox (it settled or was
+  removed on the CCU), `POST /devices/{addr}/accept` now answers `404 Not Found`
+  and drops the stale entry from the inbox view, rather than surfacing an
+  upstream-failure `502`. API version → 2.56.0.
+
 ## [0.48.6]
 
 ### Security

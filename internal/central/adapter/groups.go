@@ -99,5 +99,28 @@ func (a *GroupsDomain) groupsOf(ctx context.Context, unit *central.Unit) ([]grou
 	if err != nil {
 		return nil, err
 	}
-	return group.ParseGroupList(raw)
+	groups, err := group.ParseGroupList(raw)
+	if err != nil {
+		return nil, err
+	}
+	enrichGroupMembers(unit, groups)
+	return groups, nil
+}
+
+// enrichGroupMembers resolves each group member's device/channel name, model and
+// rooms from the live device model so the overview shows members by name instead
+// of their bare address. Best-effort: an unresolved member keeps only its
+// address. Shares resolveMemberIdentity with the suitable-members enrichment, so
+// a member addressed by its bare device address resolves the same way here.
+func enrichGroupMembers(unit *central.Unit, groups []group.Group) {
+	for gi := range groups {
+		members := groups[gi].Members
+		for mi := range members {
+			id := resolveMemberIdentity(unit, members[mi].Address)
+			members[mi].DeviceName = id.DeviceName
+			members[mi].DeviceModel = id.DeviceModel
+			members[mi].ChannelName = id.ChannelName
+			members[mi].Rooms = id.Rooms
+		}
+	}
 }

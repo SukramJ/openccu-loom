@@ -12931,7 +12931,7 @@ func TestHubJSONRPCWriter_BackupStatus_Success(t *testing.T) {
 
 func TestHubJSONRPCWriter_AcceptDeviceInInbox_Success(t *testing.T) {
 	t.Parallel()
-	srv := newBoost6JSONRPCServerAlwaysOK(t, "")
+	srv := newBoost6JSONRPCServerAlwaysOK(t, `{"success":true,"error":""}`)
 	defer srv.Close()
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)
@@ -12940,6 +12940,37 @@ func TestHubJSONRPCWriter_AcceptDeviceInInbox_Success(t *testing.T) {
 	err := w.AcceptDeviceInInbox(context.Background(), "DEV001")
 	if err != nil {
 		t.Fatalf("AcceptDeviceInInbox: %v", err)
+	}
+}
+
+// An "already accepted" device is reported by the ReGa script as success:true;
+// the writer treats the accept as idempotent (no error).
+func TestHubJSONRPCWriter_AcceptDeviceInInbox_AlreadyAccepted(t *testing.T) {
+	t.Parallel()
+	srv := newBoost6JSONRPCServerAlwaysOK(t, `{"success":true,"error":"Device already accepted"}`)
+	defer srv.Close()
+
+	jc := newBoost6JSONRPCClient(t, srv.URL)
+	r := newBoost6RegaRunner(t, jc)
+	w := &hubJSONRPCWriter{json: jc, rega: r}
+	if err := w.AcceptDeviceInInbox(context.Background(), "DEV001"); err != nil {
+		t.Fatalf("AcceptDeviceInInbox (already accepted): %v", err)
+	}
+}
+
+// A device that is no longer in the CCU inbox (script reports "Device not
+// found") maps to the ErrInboxDeviceNotFound sentinel so REST answers 404.
+func TestHubJSONRPCWriter_AcceptDeviceInInbox_NotFound(t *testing.T) {
+	t.Parallel()
+	srv := newBoost6JSONRPCServerAlwaysOK(t, `{"success":false,"error":"Device not found"}`)
+	defer srv.Close()
+
+	jc := newBoost6JSONRPCClient(t, srv.URL)
+	r := newBoost6RegaRunner(t, jc)
+	w := &hubJSONRPCWriter{json: jc, rega: r}
+	err := w.AcceptDeviceInInbox(context.Background(), "INT0000012")
+	if !errors.Is(err, interfaces.ErrInboxDeviceNotFound) {
+		t.Fatalf("AcceptDeviceInInbox: got %v, want ErrInboxDeviceNotFound", err)
 	}
 }
 
