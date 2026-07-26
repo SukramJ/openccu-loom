@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.55.0
+  version: 2.56.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2297,7 +2297,11 @@ paths:
         configuration (backward compatible). The follow-up steps run only
         after the accept succeeds; if the accept succeeds but a follow-up
         step fails the response is a 502 whose title states the device
-        was accepted so only the configuration needs re-applying.
+        was accepted so only the configuration needs re-applying. If the
+        address is no longer waiting in any central's inbox (it settled or
+        was removed on the CCU — e.g. the virtual backing device of a
+        heating group), the response is a 404 and the daemon drops the
+        stale entry from its inbox view.
       tags: [devices]
       security:
         - basicAuth: []
@@ -2328,6 +2332,7 @@ paths:
         "202":
           description: Accept dispatched
         "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/firmware/refresh:

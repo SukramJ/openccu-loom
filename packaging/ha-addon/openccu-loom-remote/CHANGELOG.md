@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.7
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (heating groups no longer stick in the device inbox) — update the
+instance to 0.48.7 too.
+
 # 0.48.6
 
 **Security.** Completes the redirect-rewriting hardening against open redirects

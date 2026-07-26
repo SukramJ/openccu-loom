@@ -171,6 +171,13 @@ func (o AcceptInboxOptions) HasConfig() bool {
 // only the configuration rather than re-accepting the device.
 var ErrAcceptConfigIncomplete = errors.New("device accepted but initial configuration incomplete")
 
+// ErrInboxDeviceNotFound signals that an accept targeted a device that is no
+// longer in any central's pairing inbox — it settled or was removed on the CCU
+// (a common case for the virtual backing device of a heating group). REST maps
+// it to 404 so a stale inbox entry is distinguishable from an upstream failure
+// (502); the daemon also drops the stale entry from its inbox view.
+var ErrInboxDeviceNotFound = errors.New("inbox device not found")
+
 // ErrChannelNotFound signals that a channel-scoped device-admin
 // operation named a channel number the device does not have. REST maps
 // it to 404 so a typo is distinguishable from an upstream failure.

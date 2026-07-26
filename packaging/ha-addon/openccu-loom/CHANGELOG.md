@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.7
+
+- **Heating groups no longer get stuck in the device inbox.** A heating
+  group's virtual backing device could appear in the inbox and then refuse to
+  be accepted; virtual devices are now kept out of the inbox entirely. Trying to
+  accept an inbox entry the CCU no longer knows now reports a clear "not in
+  inbox" (404) instead of a generic gateway error.
+
 ## 0.48.6
 
 - **Security.** Completed the remote-proxy open-redirect hardening flagged by

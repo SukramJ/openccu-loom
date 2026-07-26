@@ -344,6 +344,17 @@ func AcceptInboxDevice(admin DeviceAdmin) http.HandlerFunc {
 			opts.Functions = *req.Functions
 		}
 		if err := admin.AcceptInboxDevice(r.Context(), chi.URLParam(r, "addr"), opts); err != nil {
+			if errors.Is(err, interfaces.ErrInboxDeviceNotFound) {
+				// The device is no longer in any central's inbox (it settled or
+				// was removed on the CCU). This is a stale entry, not an upstream
+				// failure — surface 404 so the SPA distinguishes it from a 502
+				// and refreshes the inbox instead of retrying.
+				problem.Write(w, http.StatusNotFound, problem.New(problem.TypeNotFound, r,
+					"Device not in inbox",
+					"The device is no longer waiting in the inbox; it may have already "+
+						"been accepted or removed on the CCU."))
+				return
+			}
 			if errors.Is(err, interfaces.ErrAcceptConfigIncomplete) {
 				// The device WAS accepted; only the optional first-time
 				// configuration failed. Surface a distinct title so the
