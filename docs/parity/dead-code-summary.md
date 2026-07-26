@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 6d443e5e
-HEAD: 6d443e5e
+Generated: 56004e91
+HEAD: 56004e91
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26821 |
+| Total Exported | 26838 |
 | Reachable | 4639 |
-| Whitelisted | 19346 |
-| **Unreachable** | **2836** |
+| Whitelisted | 19361 |
+| **Unreachable** | **2838** |
 
 ## Top-20 Packages by Dead Code
 
@@ -198,4 +198,4 @@ HEAD: 6d443e5e
 | pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |
-| pkg/interfaces | 0 | 81 | 4 |
+| pkg/interfaces | 0 | 81 | 6 |
