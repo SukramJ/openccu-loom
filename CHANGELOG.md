@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.8]
+
+### Fixed
+
+- **The group editor shows members by name again.** 0.48.7 added daemon-resolved
+  member names, but the editor built its picker from the type's suitable-members
+  list and, for a member not in that list, kept only the address — so a group's
+  current members that the CCU reports as already-grouped bare device addresses
+  (no channel suffix) rendered as raw addresses in the picker and the selected
+  tray. The editor now carries the daemon-resolved `device_name` / `channel_name`
+  / `rooms` from the member row into that fallback, so those members (including
+  the wall thermostat that never resolved) show their names. SPA-only.
+
 ## [0.48.7]
 
 ### Added

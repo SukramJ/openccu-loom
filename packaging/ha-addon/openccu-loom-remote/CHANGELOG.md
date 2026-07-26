@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.8
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (group editor shows its members by name again) — update the instance to
+0.48.8 too.
+
 # 0.48.7
 
 Version ride-along. No changes to the proxy itself; the fix ships in the paired
