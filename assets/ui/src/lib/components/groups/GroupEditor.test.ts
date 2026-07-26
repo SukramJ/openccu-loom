@@ -132,6 +132,47 @@ describe("GroupEditor — edit", () => {
   });
 });
 
+describe("GroupEditor — enriched member fallback", () => {
+  it("uses a group member's daemon-resolved name when it is not in the suitable list", async () => {
+    // The CCU commonly reports already-grouped members as bare device addresses
+    // that the type's suitable list no longer surfaces. The member row still
+    // carries the daemon-resolved name, which the editor must use.
+    mockSuitable.mockResolvedValue({
+      assignable: [{ address: "AAA:1", type: "X", device_name: "Radiator" }],
+      leftover: [],
+    });
+
+    render(GroupEditor, {
+      props: {
+        central: "ccu-a",
+        group: {
+          id: 7,
+          name: "Duschbad",
+          type_id: "hmip.heating.group",
+          forbid_single_operation: false,
+          members: [
+            {
+              address: "000C9709AEF269",
+              type_id: "THERMOSTAT",
+              device_name: "Wandthermostat DB",
+              device_model: "HmIP-STHD",
+              rooms: ["Duschbad"],
+            },
+          ],
+        },
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+      },
+    });
+
+    // The device checkbox is labelled by the resolved name, never the address.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Wandthermostat DB")).toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText("000C9709AEF269")).not.toBeInTheDocument();
+  });
+});
+
 describe("GroupEditor — config-pending candidates", () => {
   it("shows a config-pending leftover device but keeps it non-selectable", async () => {
     mockSuitable.mockResolvedValue({

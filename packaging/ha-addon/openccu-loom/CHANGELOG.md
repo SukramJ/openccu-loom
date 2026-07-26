@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.8
+
+- **Group editor shows members by name again.** After 0.48.7 a group's current
+  members could show as bare addresses in the "edit group" dialog; they now show
+  their device name, room and channel like the overview.
+
 ## 0.48.7
 
 - **Heating groups no longer get stuck in the device inbox.** A heating

@@ -93,7 +93,21 @@
       for (const m of group?.members ?? []) {
         const existing = byAddr.get(m.address);
         if (existing) existing.selectable = true;
-        else byAddr.set(m.address, { address: m.address, type: m.type_id, selectable: true });
+        else
+          // Not in the type's suitable list — carry the daemon-resolved
+          // identification (device/channel name, model, rooms) the member row
+          // already provides so the picker and tray show its name, not the raw
+          // address.
+          byAddr.set(m.address, {
+            address: m.address,
+            type: m.type_id,
+            device_address: m.address.split(":")[0],
+            device_name: m.device_name,
+            device_model: m.device_model,
+            channel_name: m.channel_name,
+            rooms: m.rooms,
+            selectable: true,
+          });
       }
       candidates = [...byAddr.values()];
     } finally {
