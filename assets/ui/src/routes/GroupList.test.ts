@@ -87,6 +87,46 @@ describe("GroupList — rendering", () => {
     expect(screen.getByText(/ABC1234568:1/)).toBeInTheDocument();
   });
 
+  it("renders resolved member device names and falls back to the address otherwise", async () => {
+    mockGetGroups.mockResolvedValue([
+      {
+        central: "ccu1",
+        groups: [
+          {
+            id: 3,
+            name: "Bad",
+            forbid_single_operation: false,
+            type_id: "HEATING_CLIMATECONTROL_TRANSCEIVER",
+            type_label: "Heating group",
+            members: [
+              {
+                address: "000C9709AEF269:1",
+                type_id: "THERMOSTAT",
+                device_name: "Wandthermostat DB",
+                channel_name: "Heizen",
+                rooms: ["Duschbad"],
+              },
+              // No device_name -> the client falls back to the raw address.
+              { address: "00109709B13456:1", type_id: "SENSOR_WINDOW" },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    render(GroupList);
+
+    await waitFor(() => {
+      expect(screen.getByText("Wandthermostat DB")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Heizen/)).toBeInTheDocument();
+    expect(screen.getByText(/Duschbad/)).toBeInTheDocument();
+    // The resolved member shows its name, never the raw address.
+    expect(screen.queryByText(/000C9709AEF269/)).not.toBeInTheDocument();
+    // The unresolved member still falls back to its address.
+    expect(screen.getByText(/00109709B13456:1/)).toBeInTheDocument();
+  });
+
   it("falls back to type_id when type_label is empty", async () => {
     mockGetGroups.mockResolvedValue(ENTRIES);
 

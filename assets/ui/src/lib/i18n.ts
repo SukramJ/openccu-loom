@@ -3020,6 +3020,8 @@ const EN: Catalog = {
   "groups.editor.config_pending": "config pending",
   "groups.field.group_device_name": "Virtual device",
   "groups.operate_only_via_group": "Group-only operation",
+  "groups.operate_only_via_group.help":
+    "When on, the group's devices can only be operated together through the group, not individually.",
   "groups.members": "{count} members",
   "groups.members.empty": "No members",
 };
@@ -5997,6 +5999,8 @@ const DE: Catalog = {
   "groups.editor.config_pending": "Konfig. ausstehend",
   "groups.field.group_device_name": "Virtuelles Gerät",
   "groups.operate_only_via_group": "Nur Gruppenbedienung",
+  "groups.operate_only_via_group.help":
+    "Wenn aktiv, können die Geräte der Gruppe nur gemeinsam über die Gruppe bedient werden, nicht einzeln.",
   "groups.members": "{count} Mitglieder",
   "groups.members.empty": "Keine Mitglieder",
 };

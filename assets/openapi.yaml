@@ -7071,6 +7071,22 @@ components:
         type_id:
           type: string
           description: Member-type key.
+        device_name:
+          type: string
+          description: >-
+            CCU-assigned name of the member's parent device, resolved from the
+            live device model. Omitted when the member is not in the model; the
+            client then falls back to the address.
+        device_model:
+          type: string
+          description: Parent device model (e.g. "HmIP-STHD").
+        channel_name:
+          type: string
+          description: CCU-assigned channel name, when the member is a channel.
+        rooms:
+          type: array
+          items: { type: string }
+          description: Member's assigned rooms (channel's, falling back to the device's).
     CreateGroupRequest:
       type: object
       required: [type_id, name]

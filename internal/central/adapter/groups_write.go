@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/group"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -326,39 +327,80 @@ func mapCandidates(unit *central.Unit, in []backends.HeatingGroupMember) []group
 	return out
 }
 
+// memberIdentity holds the presentation fields resolved for a group-member
+// address from the live device model. Shared by the suitable-members candidate
+// enrichment and the group-listing member enrichment.
+type memberIdentity struct {
+	DeviceAddress string
+	DeviceName    string
+	DeviceModel   string
+	ChannelName   string
+	ChannelNo     int
+	Rooms         []string
+	Functions     []string
+	ConfigPending bool
+}
+
+// resolveMemberIdentity resolves a member address against the unit's device
+// model. A channel address ("<device>:<ch>") resolves the channel for its name,
+// number, rooms and functions; a bare device address — or a channel not present
+// in the model — falls back to the parent device so the device name still
+// resolves instead of leaving the caller to render the raw address. Best-effort:
+// a member not in the model (or a nil unit) yields empty fields.
+func resolveMemberIdentity(unit *central.Unit, address string) memberIdentity {
+	id := memberIdentity{DeviceAddress: deviceOf(address)}
+	if unit == nil {
+		return id
+	}
+	if ch := unit.GetChannel(address); ch != nil {
+		id.ChannelName = ch.Name
+		id.ChannelNo = ch.Number
+		id.Rooms = append([]string(nil), ch.Rooms...)
+		id.Functions = append([]string(nil), ch.Functions...)
+		fillDeviceIdentity(&id, ch.Device())
+		return id
+	}
+	if dev, ok := unit.ModelRegistry.Get(id.DeviceAddress); ok {
+		fillDeviceIdentity(&id, dev)
+	}
+	return id
+}
+
+// fillDeviceIdentity copies device-level fields onto id and backfills
+// rooms/functions from the device when the channel carried none.
+func fillDeviceIdentity(id *memberIdentity, dev *device.Device) {
+	if dev == nil {
+		return
+	}
+	id.DeviceAddress = dev.Address
+	id.DeviceName = dev.Name
+	id.DeviceModel = dev.Model
+	if av := dev.Availability(); av != nil {
+		id.ConfigPending = av.IsConfigPending()
+	}
+	// A channel often carries no room/function of its own; fall back to the
+	// device's assignment so every candidate can still be filtered by room.
+	if len(id.Rooms) == 0 {
+		id.Rooms = append([]string(nil), dev.Rooms...)
+	}
+	if len(id.Functions) == 0 {
+		id.Functions = append([]string(nil), dev.Functions...)
+	}
+}
+
 // enrichCandidate fills a candidate's identification fields (device/channel
 // name, model, channel number, rooms, functions) from the live device model so
 // the SPA can group and filter hundreds of candidates instead of rendering a
 // flat address list. Best-effort: a member not yet in the model — or a nil unit
 // — leaves the enrichment fields empty and the SPA falls back to the address.
 func enrichCandidate(c *group.MemberCandidate, unit *central.Unit) {
-	if unit == nil {
-		return
-	}
-	ch := unit.GetChannel(c.Address)
-	if ch == nil {
-		return
-	}
-	c.ChannelName = ch.Name
-	c.ChannelNo = ch.Number
-	c.Rooms = append([]string(nil), ch.Rooms...)
-	c.Functions = append([]string(nil), ch.Functions...)
-	dev := ch.Device()
-	if dev == nil {
-		return
-	}
-	c.DeviceAddress = dev.Address
-	c.DeviceName = dev.Name
-	c.DeviceModel = dev.Model
-	if av := dev.Availability(); av != nil {
-		c.ConfigPending = av.IsConfigPending()
-	}
-	// A channel often carries no room/function of its own; fall back to the
-	// device's assignment so every candidate can still be filtered by room.
-	if len(c.Rooms) == 0 {
-		c.Rooms = append([]string(nil), dev.Rooms...)
-	}
-	if len(c.Functions) == 0 {
-		c.Functions = append([]string(nil), dev.Functions...)
-	}
+	id := resolveMemberIdentity(unit, c.Address)
+	c.DeviceAddress = id.DeviceAddress
+	c.DeviceName = id.DeviceName
+	c.DeviceModel = id.DeviceModel
+	c.ChannelName = id.ChannelName
+	c.ChannelNo = id.ChannelNo
+	c.Rooms = id.Rooms
+	c.Functions = id.Functions
+	c.ConfigPending = id.ConfigPending
 }

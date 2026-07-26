@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.48.7]
 
+### Added
+
+- **The heating-group overview shows member device names.** Each member in the
+  overview now resolves to its device/channel name and room from the live device
+  model instead of a bare address; a member the model does not know still falls
+  back to its address. Members addressed by a bare device address (no channel
+  suffix, as some CCU heating-group members are — e.g. a wall thermostat) now
+  resolve too, via a device-address fallback shared with the member picker. The
+  `GroupMemberEntry` gains `device_name` / `device_model` / `channel_name` /
+  `rooms`; API version → 2.56.0.
+- **The group editor's "operate only via group" toggle carries an inline help
+  text** explaining that the group's devices can then only be operated together
+  through the group, not individually.
+
 ### Fixed
 
 - **Heating groups no longer leak into the pairing inbox.** The CCU's inbox

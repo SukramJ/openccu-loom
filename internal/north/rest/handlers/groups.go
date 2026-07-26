@@ -56,6 +56,16 @@ type GroupMemberEntry struct {
 	Address string `json:"address"`
 	// TypeID is the member-type key.
 	TypeID string `json:"type_id,omitempty"`
+	// DeviceName is the CCU-assigned name of the member's parent device,
+	// resolved from the live device model. Empty when the member is not in the
+	// model; the client then falls back to the address.
+	DeviceName string `json:"device_name,omitempty"`
+	// DeviceModel is the parent device model (e.g. "HmIP-STHD").
+	DeviceModel string `json:"device_model,omitempty"`
+	// ChannelName is the CCU-assigned channel name, when the member is a channel.
+	ChannelName string `json:"channel_name,omitempty"`
+	// Rooms are the member's assigned rooms (channel's, falling back to device).
+	Rooms []string `json:"rooms,omitempty"`
 }
 
 // ListGroups serves the read-only heating-group listing at

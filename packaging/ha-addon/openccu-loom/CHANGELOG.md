@@ -7,6 +7,9 @@
   be accepted; virtual devices are now kept out of the inbox entirely. Trying to
   accept an inbox entry the CCU no longer knows now reports a clear "not in
   inbox" (404) instead of a generic gateway error.
+- **The heating-group overview shows member device names** (with room and
+  channel) instead of bare addresses, and the group editor's "operate only via
+  group" switch now explains what it does.
 
 ## 0.48.6
 
