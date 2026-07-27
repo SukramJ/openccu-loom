@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.9
+
+- **Custom-DP unique_ids are channel-level again**, matching aiohomematic's
+  key shape — switching an HA entry between the direct-CCU and loom backends
+  migrates custom entities (climate, switch, cover, lock, siren) instead of
+  re-creating them.
+
 ## 0.48.8
 
 - **Group editor shows members by name again.** After 0.48.7 a group's current

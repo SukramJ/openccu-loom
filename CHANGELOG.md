@@ -6,6 +6,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.9]
+
+### Fixed
+
+- **Custom-DP `unique_id`s are channel-level again.** The REST summary
+  (`GET …/cdps`) and the WS `custom_data_point.state_changed` payload stamped
+  the parameter-level routing key (`…_state`, `…_level`,
+  `…_set_point_temperature`), but aiohomematic keys custom data points by
+  their primary channel alone. A consumer seeding its entity registry from the
+  summary (the HA drop-in) therefore minted keys that no longer matched the
+  aiohomematic twin — switching backends would re-create every custom entity
+  (climate, switch, cover, lock, siren) instead of migrating it. Both surfaces
+  now stamp the channel-level key; calculated data points keep their
+  parameter-level keys.
+
+### E2E
+
+- **`godevccu-e2e` mirrors virtual-receiver writes onto the state channel.**
+  Real HmIP actuator firmware aggregates the virtual-receiver group onto the
+  `…_TRANSMITTER` channel; without the mirroring, consumers that read state
+  there (aiohomematic's custom data points) never see a command take effect.
+  The driver now replicates successful `<FAMILY>_VIRTUAL_RECEIVER` writes onto
+  the sibling `<FAMILY>_TRANSMITTER` channel via the `OnSetValue` hook.
+
 ## [0.48.8]
 
 ### Fixed

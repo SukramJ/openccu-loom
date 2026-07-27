@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.9
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (channel-level custom-DP unique_ids for the HA drop-in) — update the
+instance to 0.48.9 too.
+
 # 0.48.8
 
 Version ride-along. No changes to the proxy itself; the fix ships in the paired

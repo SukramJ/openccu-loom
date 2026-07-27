@@ -882,13 +882,17 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 				if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
 					wireName = custom.WireName(dev, cdp, channelNo)
 				}
+				// CHANNEL-level key (no parameter): the reference stack keys
+				// custom data points by their primary channel; the summary
+				// (customDPUniqueID) and this payload must stamp the same
+				// shape so clients can correlate both surfaces.
 				b.wsHub.PublishCustomDataPointStateChangedKind(
 					envKind,
 					centralName, deviceAddr, channelNo,
 					wireName,
 					cdpkind.Of(cdp),
 					state, e.Timestamp(),
-					routingkey.CanonicalUniqueID(serialSuffix, cdp.DataPointKey().ChannelAddress, cdp.DataPointKey().Parameter, ""),
+					routingkey.CanonicalUniqueID(serialSuffix, cdp.DataPointKey().ChannelAddress, "", ""),
 				)
 			}
 		}

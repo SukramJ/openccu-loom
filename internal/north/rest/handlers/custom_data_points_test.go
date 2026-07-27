@@ -485,6 +485,19 @@ func TestCdpUniqueID_UniqueID(t *testing.T) {
 		}
 	})
 
+	t.Run("customDPUniqueID is channel-level (no parameter)", func(t *testing.T) {
+		t.Parallel()
+		// The reference stack keys custom data points by their primary
+		// channel alone; the HA drop-in contract requires the identical shape.
+		got := customDPUniqueID(dp, "vccu0000000")
+		if got != "loom_dev0200_1" {
+			t.Errorf("customDPUniqueID = %q, want %q", got, "loom_dev0200_1")
+		}
+		if got2 := customDPUniqueID(dp, ""); got2 != "" {
+			t.Errorf("customDPUniqueID = %q, want empty string when serialSuffix is empty", got2)
+		}
+	})
+
 	t.Run("list handler populates unique_id when serial is known", func(t *testing.T) {
 		t.Parallel()
 		d := newTestDevice("DEV0201", "HmIP-BSM")
