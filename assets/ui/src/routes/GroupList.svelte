@@ -213,14 +213,32 @@
                     {:else}
                       <ul class="flex flex-col gap-0.5">
                         {#each g.members as m (m.address)}
-                          <li class="font-mono text-xs text-[var(--ha-primary-text-color)]">
-                            {m.address}
-                            {#if m.type_id}
-                              <span class="text-[var(--ha-secondary-text-color)]">
-                                ({m.type_id})
-                              </span>
-                            {/if}
-                          </li>
+                          {#if m.device_name}
+                            <li
+                              class="min-w-0 truncate text-xs text-[var(--ha-primary-text-color)]"
+                            >
+                              <span class="font-medium">{m.device_name}</span>
+                              {#if m.channel_name && m.channel_name !== m.device_name}
+                                <span class="text-[var(--ha-secondary-text-color)]">
+                                  · {m.channel_name}</span
+                                >
+                              {/if}
+                              {#if m.rooms && m.rooms.length > 0}
+                                <span class="text-[var(--ha-secondary-text-color)]">
+                                  · {m.rooms.join(", ")}</span
+                                >
+                              {/if}
+                            </li>
+                          {:else}
+                            <li class="font-mono text-xs text-[var(--ha-primary-text-color)]">
+                              {m.address}
+                              {#if m.type_id}
+                                <span class="text-[var(--ha-secondary-text-color)]">
+                                  ({m.type_id})
+                                </span>
+                              {/if}
+                            </li>
+                          {/if}
                         {/each}
                       </ul>
                     {/if}

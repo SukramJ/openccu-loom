@@ -4,6 +4,52 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.48.9
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (channel-level custom-DP unique_ids for the HA drop-in) — update the
+instance to 0.48.9 too.
+
+# 0.48.8
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (group editor shows its members by name again) — update the instance to
+0.48.8 too.
+
+# 0.48.7
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (heating groups no longer stick in the device inbox) — update the
+instance to 0.48.7 too.
+
+# 0.48.6
+
+**Security.** Completes the redirect-rewriting hardening against open redirects
+(CodeQL). 0.48.5 gated the final rewrite; this closes the remaining leading-slash
+checks in the rewrite helpers so a `//host` / `/\host` target can never be
+emitted. Update the paired instance to 0.48.6 too. No user-visible change.
+
+# 0.48.5
+
+**Security & maintenance.** The proxy's redirect rewriting is hardened against
+open redirects (CodeQL), and dependencies are refreshed. Update the paired
+instance to 0.48.5 too. No user-visible change.
+
+# 0.48.4
+
+**Really fixes the live-connection flicker through this proxy.** 0.48.3's
+`X-Forwarded-Host` approach did not survive every proxy chain; the daemon now
+accepts the token-authenticated live WebSocket this proxy forwards regardless of
+the forwarded host. Update the paired instance to 0.48.4 too.
+
+# 0.48.3
+
+**Fixes the live-connection flicker behind this proxy.** The proxy now preserves
+the browser-facing `X-Forwarded-Host` a trusted upstream (e.g. Traefik) set, so
+the daemon's live WebSocket accepts the handshake through the chained proxy.
+Update the paired instance to 0.48.3 too (it carries the matching WebSocket
+heartbeat fix and the group-picker change).
+
 # 0.48.2
 
 Version ride-along. No changes to the proxy itself; the fix ships in the paired

@@ -206,6 +206,15 @@ func (b *CcuBackend) SaveHeatingGroup(ctx context.Context, in HeatingGroupSaveIn
 	if memberIDs == nil {
 		memberIDs = []string{}
 	}
+	// assignedDevicesIds must be a JSON-encoded STRING, not a native array —
+	// HMServer's save handler re-parses the field and silently drops a native
+	// array, committing an EMPTY group. The CCU WebUI sends it stringified too
+	// (captured from GroupEditPage save()); live-confirmed both here: a native
+	// array yields 0 members, the stringified form assigns them.
+	assigned, err := json.Marshal(memberIDs)
+	if err != nil {
+		return fmt.Errorf("ccu groups: marshal member ids: %w", err)
+	}
 	// groupDeviceName is the bare group name (no "INT<serial>" suffix). At save
 	// time the real group id is unknown — HMServer only assigns it on commit —
 	// so any serial we could build here (from the always-zero draft id) would be
@@ -218,7 +227,7 @@ func (b *CcuBackend) SaveHeatingGroup(ctx context.Context, in HeatingGroupSaveIn
 		"groupName":             jsEscape(in.Name),
 		"groupTypeId":           in.TypeID,
 		"forbidSingleOperation": in.ForbidSingleOperation,
-		"assignedDevicesIds":    memberIDs,
+		"assignedDevicesIds":    string(assigned),
 		"isNewGroup":            in.IsNew,
 		"groupDeviceName":       jsEscape(in.Name),
 	}

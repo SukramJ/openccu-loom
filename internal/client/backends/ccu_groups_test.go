@@ -129,14 +129,11 @@ func TestSaveHeatingGroupPostsFormEncodedJSONBody(t *testing.T) {
 	if got := gotBody["groupTypeId"]; got != in.TypeID {
 		t.Errorf("groupTypeId = %v, want %q", got, in.TypeID)
 	}
-	members, ok := gotBody["assignedDevicesIds"].([]any)
-	if !ok || len(members) != len(in.MemberIDs) {
-		t.Fatalf("assignedDevicesIds = %v, want %v", gotBody["assignedDevicesIds"], in.MemberIDs)
-	}
-	for i, m := range in.MemberIDs {
-		if members[i] != m {
-			t.Errorf("assignedDevicesIds[%d] = %v, want %q", i, members[i], m)
-		}
+	// assignedDevicesIds is a JSON-encoded STRING, not a native array — HMServer
+	// silently drops a native array and commits an empty group (live-confirmed).
+	wantAssigned, _ := json.Marshal(in.MemberIDs)
+	if got := gotBody["assignedDevicesIds"]; got != string(wantAssigned) {
+		t.Errorf("assignedDevicesIds = %#v, want %q", got, string(wantAssigned))
 	}
 	if got := gotBody["isNewGroup"]; got != true {
 		t.Errorf("isNewGroup = %v, want true", got)

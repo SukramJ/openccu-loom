@@ -40,7 +40,11 @@
   let selected = $state<Set<string>>(
     untrack(() => new Set((group?.members ?? []).map((m) => m.address))),
   );
-  let candidates = $state<SuitableMemberEntry[]>([]);
+  // A candidate plus whether it can currently be assigned. Non-selectable
+  // candidates (e.g. a device still config-pending) are shown with a hint
+  // rather than hidden.
+  type PickerMember = SuitableMemberEntry & { selectable: boolean };
+  let candidates = $state<PickerMember[]>([]);
 
   let loading = $state(true);
   let loadingMembers = $state(false);
@@ -71,15 +75,39 @@
     loadingMembers = true;
     try {
       const res = await api.groupSuitableMembers(type, central);
-      // Union of the assignable candidates and the group's current members,
-      // so an already-assigned member can be unchecked even if the type's
-      // suitable list no longer surfaces it.
-      const byAddr = new Map<string, SuitableMemberEntry>();
-      for (const m of res.assignable) byAddr.set(m.address, m);
+      const byAddr = new Map<string, PickerMember>();
+      // Assignable candidates are selectable — unless the device is still
+      // config-pending, in which case it is shown but not selectable.
+      for (const m of res.assignable)
+        byAddr.set(m.address, { ...m, selectable: !m.config_pending });
+      // Surface config-pending leftovers as non-selectable candidates (with a
+      // hint) instead of hiding them. The rest of the leftover list (devices of
+      // the wrong type) stays hidden — it would only be noise.
+      for (const m of res.leftover ?? []) {
+        if (m.config_pending && !byAddr.has(m.address))
+          byAddr.set(m.address, { ...m, selectable: false });
+      }
+      // The group's current members stay present AND selectable so they can be
+      // kept or removed even when the type's suitable list no longer surfaces
+      // them (or reports them config-pending).
       for (const m of group?.members ?? []) {
-        if (!byAddr.has(m.address)) {
-          byAddr.set(m.address, { address: m.address, type: m.type_id });
-        }
+        const existing = byAddr.get(m.address);
+        if (existing) existing.selectable = true;
+        else
+          // Not in the type's suitable list — carry the daemon-resolved
+          // identification (device/channel name, model, rooms) the member row
+          // already provides so the picker and tray show its name, not the raw
+          // address.
+          byAddr.set(m.address, {
+            address: m.address,
+            type: m.type_id,
+            device_address: m.address.split(":")[0],
+            device_name: m.device_name,
+            device_model: m.device_model,
+            channel_name: m.channel_name,
+            rooms: m.rooms,
+            selectable: true,
+          });
       }
       candidates = [...byAddr.values()];
     } finally {
@@ -97,7 +125,7 @@
   }
 
   // ── grouping / filtering ────────────────────────────────────────────────
-  type Channel = { address: string; name: string; no: number };
+  type Channel = { address: string; name: string; no: number; selectable: boolean };
   type DeviceGroup = {
     deviceAddress: string;
     deviceName: string;
@@ -106,6 +134,8 @@
     rooms: string[];
     functions: string[];
     channels: Channel[];
+    selectable: boolean;
+    configPending: boolean;
   };
 
   function channelLabel(m: SuitableMemberEntry): string {
@@ -128,6 +158,8 @@
           rooms: [...(m.rooms ?? [])],
           functions: [...(m.functions ?? [])],
           channels: [],
+          selectable: false,
+          configPending: false,
         };
         byDev.set(devAddr, g);
       }
@@ -138,7 +170,10 @@
         address: m.address,
         name: channelLabel(m),
         no: m.channel_no ?? Number(m.address.split(":")[1] ?? 0),
+        selectable: m.selectable,
       });
+      if (m.selectable) g.selectable = true;
+      if (m.config_pending) g.configPending = true;
     }
     const list = [...byDev.values()];
     for (const g of list) g.channels.sort((a, b) => a.no - b.no);
@@ -204,17 +239,25 @@
     return g.channels.filter((c) => selected.has(c.address)).length;
   }
 
+  const selectableAddrs = $derived(
+    new Set(candidates.filter((m) => m.selectable).map((m) => m.address)),
+  );
+
   function toggle(addr: string) {
     const s = new Set(selected);
     if (s.has(addr)) s.delete(addr);
-    else s.add(addr);
+    // A non-selectable channel (config-pending, not a current member) cannot be
+    // added; an already-selected one can always be removed.
+    else if (selectableAddrs.has(addr)) s.add(addr);
+    else return;
     selected = s;
   }
 
   function toggleDevice(g: DeviceGroup) {
+    if (!g.selectable) return;
     const s = new Set(selected);
     if (deviceState(g) === "all") g.channels.forEach((c) => s.delete(c.address));
-    else g.channels.forEach((c) => s.add(c.address));
+    else g.channels.forEach((c) => c.selectable && s.add(c.address));
     selected = s;
   }
 
@@ -227,7 +270,8 @@
 
   function selectVisible() {
     const s = new Set(selected);
-    for (const g of filtered) for (const c of g.channels) s.add(c.address);
+    for (const g of filtered)
+      for (const c of g.channels) if (c.selectable) s.add(c.address);
     selected = s;
   }
 
@@ -339,7 +383,12 @@
         </div>
 
         <label class="flex items-center justify-between gap-3">
-          <span class="text-sm font-medium">{t("groups.operate_only_via_group")}</span>
+          <span class="flex min-w-0 flex-col">
+            <span class="text-sm font-medium">{t("groups.operate_only_via_group")}</span>
+            <span class="text-xs text-[var(--ha-secondary-text-color)]">
+              {t("groups.operate_only_via_group.help")}
+            </span>
+          </span>
           <Switch bind:checked={forbidSingle} disabled={saving} />
         </label>
 
@@ -415,10 +464,11 @@
               {#each filtered as g (g.deviceAddress)}
                 {@const st = deviceState(g)}
                 {@const multi = g.channels.length > 1}
+                {@const locked = !g.selectable}
                 <div
                   class="overflow-hidden rounded-md border {st === 'some'
                     ? 'border-[var(--ha-primary-color)]/60'
-                    : 'border-[var(--ha-divider-color)]'}"
+                    : 'border-[var(--ha-divider-color)]'} {locked ? 'opacity-60' : ''}"
                 >
                   <div class="flex items-center gap-2.5 px-2 py-1.5">
                     <button
@@ -426,11 +476,11 @@
                       class="flex h-5 w-5 flex-none items-center justify-center rounded border text-[11px] font-bold text-white {st ===
                       'none'
                         ? 'border-[var(--ha-divider-color)] bg-transparent'
-                        : 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]'}"
+                        : 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]'} disabled:cursor-not-allowed"
                       role="checkbox"
                       aria-checked={st === "all" ? "true" : st === "some" ? "mixed" : "false"}
                       aria-label={g.deviceName}
-                      disabled={saving}
+                      disabled={saving || locked}
                       onclick={() => toggleDevice(g)}
                     >
                       {#if st === "all"}✓{:else if st === "some"}–{/if}
@@ -438,7 +488,8 @@
 
                     <button
                       type="button"
-                      class="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      class="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-not-allowed"
+                      disabled={saving || (!multi && locked)}
                       onclick={() => (multi ? toggleOpen(g.deviceAddress) : toggle(g.channels[0].address))}
                     >
                       <span class="min-w-0 flex-1">
@@ -454,6 +505,11 @@
                             <span class="font-mono text-[11px]">{g.deviceModel}</span>
                           {/if}
                           <span class="font-mono text-[11px] opacity-70">{g.deviceAddress}</span>
+                          {#if locked}
+                            <span class="rounded-full bg-[var(--ha-divider-color)] px-1.5 py-0.5 font-medium text-[var(--ha-secondary-text-color)]">
+                              {g.configPending ? t("groups.editor.config_pending") : t("groups.editor.not_selectable")}
+                            </span>
+                          {/if}
                         </span>
                       </span>
                       {#if multi}
@@ -472,17 +528,20 @@
                     <div class="border-t border-[var(--ha-divider-color)] bg-[var(--ha-secondary-background-color)]">
                       {#each g.channels as c (c.address)}
                         <label
-                          class="ml-2 flex cursor-pointer items-center gap-2.5 border-l-2 px-2.5 py-1.5 text-sm {selected.has(
+                          class="ml-2 flex items-center gap-2.5 border-l-2 px-2.5 py-1.5 text-sm {selected.has(
                             c.address,
                           )
                             ? 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]/5'
-                            : 'border-transparent hover:bg-[var(--ha-card-background-color)]'}"
+                            : 'border-transparent hover:bg-[var(--ha-card-background-color)]'} {c.selectable ||
+                          selected.has(c.address)
+                            ? 'cursor-pointer'
+                            : 'cursor-not-allowed opacity-60'}"
                         >
                           <input
                             type="checkbox"
                             class="h-4 w-4"
                             checked={selected.has(c.address)}
-                            disabled={saving}
+                            disabled={saving || (!c.selectable && !selected.has(c.address))}
                             onchange={() => toggle(c.address)}
                           />
                           <span class="flex-1">{c.name}</span>

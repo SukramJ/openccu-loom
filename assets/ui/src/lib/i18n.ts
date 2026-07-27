@@ -3016,8 +3016,12 @@ const EN: Catalog = {
   "groups.editor.clear_all": "Clear all",
   "groups.editor.no_selection": "Nothing selected yet — tap a device or channel.",
   "groups.editor.channel_fallback": "Channel {no}",
+  "groups.editor.not_selectable": "not assignable",
+  "groups.editor.config_pending": "config pending",
   "groups.field.group_device_name": "Virtual device",
   "groups.operate_only_via_group": "Group-only operation",
+  "groups.operate_only_via_group.help":
+    "When on, the group's devices can only be operated together through the group, not individually.",
   "groups.members": "{count} members",
   "groups.members.empty": "No members",
 };
@@ -5991,8 +5995,12 @@ const DE: Catalog = {
   "groups.editor.clear_all": "Alle abwählen",
   "groups.editor.no_selection": "Noch nichts ausgewählt — tippe auf ein Gerät oder einen Kanal.",
   "groups.editor.channel_fallback": "Kanal {no}",
+  "groups.editor.not_selectable": "nicht auswählbar",
+  "groups.editor.config_pending": "Konfig. ausstehend",
   "groups.field.group_device_name": "Virtuelles Gerät",
   "groups.operate_only_via_group": "Nur Gruppenbedienung",
+  "groups.operate_only_via_group.help":
+    "Wenn aktiv, können die Geräte der Gruppe nur gemeinsam über die Gruppe bedient werden, nicht einzeln.",
   "groups.members": "{count} Mitglieder",
   "groups.members.empty": "Keine Mitglieder",
 };

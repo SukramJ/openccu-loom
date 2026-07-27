@@ -73,6 +73,9 @@ type SuitableMemberEntry struct {
 	ChannelNo     int      `json:"channel_no,omitempty"`
 	Rooms         []string `json:"rooms,omitempty"`
 	Functions     []string `json:"functions,omitempty"`
+	// ConfigPending marks a device that still has a pending configuration and
+	// therefore cannot be assigned to a group yet.
+	ConfigPending bool `json:"config_pending,omitempty"`
 }
 
 // SuitableMembersResponse splits the candidate members into assignable and

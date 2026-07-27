@@ -6,6 +6,151 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.48.9]
+
+### Fixed
+
+- **Custom-DP `unique_id`s are channel-level again.** The REST summary
+  (`GET …/cdps`) and the WS `custom_data_point.state_changed` payload stamped
+  the parameter-level routing key (`…_state`, `…_level`,
+  `…_set_point_temperature`), but aiohomematic keys custom data points by
+  their primary channel alone. A consumer seeding its entity registry from the
+  summary (the HA drop-in) therefore minted keys that no longer matched the
+  aiohomematic twin — switching backends would re-create every custom entity
+  (climate, switch, cover, lock, siren) instead of migrating it. Both surfaces
+  now stamp the channel-level key; calculated data points keep their
+  parameter-level keys.
+
+### E2E
+
+- **`godevccu-e2e` mirrors virtual-receiver writes onto the state channel.**
+  Real HmIP actuator firmware aggregates the virtual-receiver group onto the
+  `…_TRANSMITTER` channel; without the mirroring, consumers that read state
+  there (aiohomematic's custom data points) never see a command take effect.
+  The driver now replicates successful `<FAMILY>_VIRTUAL_RECEIVER` writes onto
+  the sibling `<FAMILY>_TRANSMITTER` channel via the `OnSetValue` hook.
+
+## [0.48.8]
+
+### Fixed
+
+- **The group editor shows members by name again.** 0.48.7 added daemon-resolved
+  member names, but the editor built its picker from the type's suitable-members
+  list and, for a member not in that list, kept only the address — so a group's
+  current members that the CCU reports as already-grouped bare device addresses
+  (no channel suffix) rendered as raw addresses in the picker and the selected
+  tray. The editor now carries the daemon-resolved `device_name` / `channel_name`
+  / `rooms` from the member row into that fallback, so those members (including
+  the wall thermostat that never resolved) show their names. SPA-only.
+
+## [0.48.7]
+
+### Added
+
+- **The heating-group overview shows member device names.** Each member in the
+  overview now resolves to its device/channel name and room from the live device
+  model instead of a bare address; a member the model does not know still falls
+  back to its address. Members addressed by a bare device address (no channel
+  suffix, as some CCU heating-group members are — e.g. a wall thermostat) now
+  resolve too, via a device-address fallback shared with the member picker. The
+  `GroupMemberEntry` gains `device_name` / `device_model` / `channel_name` /
+  `rooms`; API version → 2.56.0.
+- **The group editor's "operate only via group" toggle carries an inline help
+  text** explaining that the group's devices can then only be operated together
+  through the group, not individually.
+
+### Fixed
+
+- **Heating groups no longer leak into the pairing inbox.** The CCU's inbox
+  query returns every not-yet-configured object, which includes the virtual
+  backing device of a heating group (an `INT`-prefixed address on the
+  VirtualDevices interface). Those are managed through the group flow and can
+  never be accepted as pairing candidates, so a group would appear in the inbox
+  and then fail to accept. The daemon now filters CCU-internal virtual devices
+  out of the inbox, so they never surface as pairing candidates.
+- **Accepting a stale inbox entry returns 404 instead of 502.** When the
+  targeted device is no longer waiting in any central's inbox (it settled or was
+  removed on the CCU), `POST /devices/{addr}/accept` now answers `404 Not Found`
+  and drops the stale entry from the inbox view, rather than surfacing an
+  upstream-failure `502`. API version → 2.56.0.
+
+## [0.48.6]
+
+### Security
+
+- **Complete the remote-proxy open-redirect hardening** (CodeQL
+  `go/bad-redirect-check`). 0.48.5 gated the final `Location` write, but three
+  helper functions in the rewrite path (`rewriteLocation`, `stripPathPrefix`,
+  `rebase`) still split their input on a bare leading-slash test, which the
+  scanner flags because such a check alone does not exclude the `//host` /
+  `/\host` open-redirect forms. The leading-slash decision now lives solely in
+  the complete `isLocalPath` gate: `rewriteLocation` forwards only genuine
+  local paths, `stripPathPrefix` collapses an unsafe `//…` / `/\…` remainder to
+  the base root, and `rebase` composes the browser base without any leading-slash
+  test on the (possibly upstream-controlled) reference. No user-visible change.
+
+## [0.48.5]
+
+### Security
+
+- **Harden the remote-proxy redirect rewriting against open redirects**
+  (CodeQL `go/bad-redirect-check`). The proxy now emits a rewritten `Location`
+  only when the computed target is a genuine local path — a single leading `/`
+  not followed by another `/` or a `\` — so a value such as `//host` or `/\host`
+  can never be turned into a protocol-relative redirect off-site.
+
+### Changed
+
+- **Dependency refresh.** Go and SPA dependencies bumped to their latest
+  compatible releases.
+
+## [0.48.4]
+
+### Fixed
+
+- **Heating groups created from the UI are no longer empty.** Saving a group
+  with members created it with **zero members** — HMServer's `group/save`
+  handler expects `assignedDevicesIds` as a JSON-encoded *string*, but the
+  daemon sent a native JSON array, which HMServer silently drops. The daemon
+  now sends the stringified form, matching the CCU WebUI. Root cause captured
+  from the WebUI and live-confirmed both ways (native array → 0 members,
+  stringified → members assigned).
+- **Live WebSocket 403 through the remote-proxy add-on.** When the SPA was
+  reached through a chained proxy (e.g. Traefik → remote-proxy → daemon), the
+  `/api/v1/events` handshake still failed the WebSocket same-origin check
+  because the browser's external Origin cannot be reconciled with the daemon's
+  internal Host across the chain — leaving the live indicator flickering. The
+  origin check now skips any handshake that carries an `Authorization` header
+  (Bearer/Basic), mirroring the CSRF middleware: such a request is not a CSRF
+  vector (CSRF rides ambient cookie auth, and a browser cannot set an
+  Authorization header on a WebSocket handshake), and the remote-proxy injects
+  a Bearer token while stripping the cookie. Cookie-authenticated handshakes
+  keep the origin protection.
+
+## [0.48.3]
+
+### Fixed
+
+- **Live connection no longer reconnects every minute.** The SPA never answered
+  the server's WebSocket heartbeat (`{op:"ping"}`), so on an idle page the
+  daemon's 60 s read deadline expired and tore the socket down — the live
+  indicator flickered once a minute. The client now replies with a pong and
+  stays connected.
+- **Live WebSocket behind a chained proxy.** The remote-proxy add-on
+  overwrote `X-Forwarded-Host` with its own upstream host, so a browser reaching
+  the daemon through Traefik → remote-proxy still failed the daemon's WebSocket
+  same-origin check. The proxy now preserves the browser-facing
+  `X-Forwarded-Host` (and `X-Forwarded-Proto`) a trusted upstream already set.
+
+### Changed
+
+- **Group member picker shows config-pending devices.** A device that still has
+  a pending configuration (`CONFIG_PENDING`) cannot be assigned to a group yet;
+  instead of hiding it, the picker now lists it greyed out with a "config
+  pending" hint so it is obvious why it is not selectable. Current members stay
+  selectable regardless. `GET /groups/suitable-members` /
+  `groups.suitable_members` carry a new `config_pending` flag (API 2.55.0).
+
 ## [0.48.2]
 
 ### Security

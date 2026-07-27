@@ -1,5 +1,59 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.48.9
+
+- **Custom-DP unique_ids are channel-level again**, matching aiohomematic's
+  key shape — switching an HA entry between the direct-CCU and loom backends
+  migrates custom entities (climate, switch, cover, lock, siren) instead of
+  re-creating them.
+
+## 0.48.8
+
+- **Group editor shows members by name again.** After 0.48.7 a group's current
+  members could show as bare addresses in the "edit group" dialog; they now show
+  their device name, room and channel like the overview.
+
+## 0.48.7
+
+- **Heating groups no longer get stuck in the device inbox.** A heating
+  group's virtual backing device could appear in the inbox and then refuse to
+  be accepted; virtual devices are now kept out of the inbox entirely. Trying to
+  accept an inbox entry the CCU no longer knows now reports a clear "not in
+  inbox" (404) instead of a generic gateway error.
+- **The heating-group overview shows member device names** (with room and
+  channel) instead of bare addresses, and the group editor's "operate only via
+  group" switch now explains what it does.
+
+## 0.48.6
+
+- **Security.** Completed the remote-proxy open-redirect hardening flagged by
+  CodeQL; 0.48.5 covered the final write, this closes the remaining rewrite
+  helpers. No user-visible change.
+
+## 0.48.5
+
+- **Security & maintenance.** Hardened the remote-proxy against open redirects
+  (CodeQL) and refreshed bundled dependencies. No user-visible change.
+
+## 0.48.4
+
+- **Heating groups you create in the UI keep their members.** Saving a group
+  with devices created it empty; groups are now saved with their members.
+- **Live status stays connected through the remote-proxy.** When the UI was
+  opened via the remote-proxy add-on (e.g. behind Traefik), the live connection
+  still dropped in a loop; the daemon now accepts the token-authenticated live
+  connection through the proxy chain.
+
+## 0.48.3
+
+- **Live status stays connected.** The UI's live connection dropped and
+  reconnected about once a minute (a flickering indicator) because the browser
+  never answered the server heartbeat; it now does and stays up. This also
+  covers the chained-proxy case (Traefik in front of the remote-proxy add-on).
+- **Group member picker shows config-pending devices.** Devices that still have
+  a pending configuration are now listed greyed out with a "config pending"
+  hint instead of silently disappearing.
+
 ## 0.48.2
 
 - **Security fix.** Updated a bundled OpenAPI-validation library that could

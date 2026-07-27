@@ -2323,7 +2323,11 @@ export interface paths {
          *     configuration (backward compatible). The follow-up steps run only
          *     after the accept succeeds; if the accept succeeds but a follow-up
          *     step fails the response is a 502 whose title states the device
-         *     was accepted so only the configuration needs re-applying.
+         *     was accepted so only the configuration needs re-applying. If the
+         *     address is no longer waiting in any central's inbox (it settled or
+         *     was removed on the CCU — e.g. the virtual backing device of a
+         *     heating group), the response is a 404 and the daemon drops the
+         *     stale entry from its inbox view.
          */
         post: operations["acceptInboxDevice"];
         delete?: never;
@@ -5340,6 +5344,14 @@ export interface components {
             address: string;
             /** @description Member-type key. */
             type_id?: string;
+            /** @description CCU-assigned name of the member's parent device, resolved from the live device model. Omitted when the member is not in the model; the client then falls back to the address. */
+            device_name?: string;
+            /** @description Parent device model (e.g. "HmIP-STHD"). */
+            device_model?: string;
+            /** @description CCU-assigned channel name, when the member is a channel. */
+            channel_name?: string;
+            /** @description Member's assigned rooms (channel's, falling back to the device's). */
+            rooms?: string[];
         };
         /** @description Body of POST /groups. */
         CreateGroupRequest: {
@@ -5384,6 +5396,8 @@ export interface components {
             rooms?: string[];
             /** @description Functions the channel (or its device) is assigned to. */
             functions?: string[];
+            /** @description True when the device still has a pending configuration (CONFIG_PENDING) and cannot be assigned to a group yet; a client shows it as a non-selectable candidate with a hint. */
+            config_pending?: boolean;
         };
         /** @description Candidate members for a group type. */
         SuitableMembersResponse: {
@@ -9921,6 +9935,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

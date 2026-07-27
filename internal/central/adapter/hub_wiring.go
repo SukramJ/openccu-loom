@@ -36,6 +36,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // NameMap maps a CCU device or channel address to its operator-
@@ -1164,6 +1165,15 @@ func loadInbox(ctx context.Context, r *rega.Runner, unit *central.Unit) error {
 		if d.Address == "" {
 			continue
 		}
+		if isVirtualInboxDevice(d.Address, d.Interface) {
+			// The CCU's inbox query lists every not-yet-configured object,
+			// which includes the virtual backing devices of heating groups
+			// (and other VirtualDevices entries). Those are created and
+			// managed through their own flows, never accepted as pairing
+			// candidates — filtering them here keeps them out of the pairing
+			// inbox instead of surfacing an entry the operator cannot accept.
+			continue
+		}
 		all = append(all, hub.InboxDevice{
 			DeviceID:  d.DeviceID,
 			Address:   d.Address,
@@ -1174,6 +1184,15 @@ func loadInbox(ctx context.Context, r *rega.Runner, unit *central.Unit) error {
 	}
 	unit.HubModel.Inbox.Replace(all)
 	return nil
+}
+
+// isVirtualInboxDevice reports whether an inbox entry is a CCU-internal virtual
+// device rather than a physical pairing candidate. Heating-group backing
+// devices carry an "INT"-prefixed address (serial = "INT" + zero-padded group
+// id); everything on the VirtualDevices interface is likewise virtual. Neither
+// is ever accepted through the pairing inbox.
+func isVirtualInboxDevice(address, iface string) bool {
+	return strings.HasPrefix(address, "INT") || iface == string(hmenum.InterfaceVirtualDevices)
 }
 
 // loadServiceMessages fetches active service messages via the ReGa script
@@ -2075,10 +2094,31 @@ func (w *hubJSONRPCWriter) BackupStatus(ctx context.Context) (string, error) {
 func (w *hubJSONRPCWriter) AcceptDeviceInInbox(
 	ctx context.Context, deviceAddress string,
 ) error {
-	_, err := w.rega.Run(ctx, hmenum.RegaScriptAcceptDeviceInInbox, map[string]string{
+	var resp struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error"`
+	}
+	if err := w.rega.RunJSON(ctx, hmenum.RegaScriptAcceptDeviceInInbox, map[string]string{
 		"device_address": deviceAddress,
-	})
-	return err
+	}, &resp); err != nil {
+		return err
+	}
+	if resp.Success {
+		// Accepted now, or already accepted — the script reports both as success.
+		return nil
+	}
+	// The script ran but reported a structured failure. "Device not found"
+	// means the address is no longer in the CCU inbox (settled or removed) — a
+	// stale entry, not an upstream fault — so surface the dedicated sentinel
+	// that REST maps to 404 instead of 502.
+	if strings.Contains(strings.ToLower(resp.Error), "not found") {
+		return fmt.Errorf("%w: %s", interfaces.ErrInboxDeviceNotFound, deviceAddress)
+	}
+	detail := resp.Error
+	if detail == "" {
+		detail = "accept rejected"
+	}
+	return fmt.Errorf("rega.AcceptDeviceInInbox(%s): %s", deviceAddress, detail)
 }
 
 // TriggerFirmwareUpdate runs OpenCCU's `checkFirmwareUpdate.sh` with

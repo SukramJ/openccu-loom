@@ -515,6 +515,31 @@ func TestInstanceProxyForwardingHeaders(t *testing.T) {
 	}
 }
 
+// TestInstanceProxyPreservesUpstreamForwardedHost pins that an X-Forwarded-Host
+// a trusted upstream proxy (e.g. Traefik) already set reaches the daemon
+// unchanged, rather than being overwritten with this hop's own host by
+// SetXForwarded. The daemon's WebSocket same-origin check compares the browser
+// Origin against X-Forwarded-Host; across a double proxy it must stay the
+// browser-facing host or the SPA's live WebSocket 403s.
+func TestInstanceProxyPreservesUpstreamForwardedHost(t *testing.T) {
+	upstream, capture := newProxyUpstreamFixture(t, nil)
+	proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: upstream.URL}})
+
+	resp := proxyGet(t, proxy.URL+"/", map[string]string{
+		"X-Forwarded-Host":  "loom.example",
+		"X-Forwarded-Proto": "https",
+	})
+	resp.Body.Close()
+
+	h := capture.Header()
+	if got := h.Get("X-Forwarded-Host"); got != "loom.example" {
+		t.Errorf("X-Forwarded-Host = %q, want loom.example (upstream value preserved)", got)
+	}
+	if got := h.Get("X-Forwarded-Proto"); got != "https" {
+		t.Errorf("X-Forwarded-Proto = %q, want https (upstream value preserved)", got)
+	}
+}
+
 func TestInstanceProxyUnreachableUpstream(t *testing.T) {
 	proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: proxyClosedUpstreamURL(t)}})
 
@@ -692,4 +717,101 @@ func TestInstanceProxyIngressPathTabSpoofRejected(t *testing.T) {
 			t.Errorf("Location = %q, want %q", got, want)
 		}
 	})
+}
+
+// TestIsLocalPath pins the open-redirect guard (go/bad-redirect-check): a
+// rewritten Location may only be emitted when it is an absolute-path reference
+// that a browser cannot reinterpret as an external URL — a single leading "/"
+// not immediately followed by another "/" or a "\".
+func TestIsLocalPath(t *testing.T) {
+	cases := map[string]bool{
+		"/":                true,
+		"/login":           true,
+		"/a/b?x=1":         true,
+		`/prefix/\evil`:    true, // backslash only in the middle is a normal path
+		"//evil.com":       false,
+		`/\evil.com`:       false,
+		"/%2F%2Fevil":      true, // encoded slashes are not a leading "//"
+		"":                 false,
+		"foo":              false,
+		"http://evil.com":  false,
+		"https://evil.com": false,
+	}
+	for s, want := range cases {
+		if got := isLocalPath(s); got != want {
+			t.Errorf("isLocalPath(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
+// TestInstanceProxyProtocolRelativeLocationNotRebased verifies a protocol-
+// relative redirect to a foreign host (//host) is treated like any other
+// foreign redirect — passed through, never fabricated into a base-prefixed
+// local path that still resolves off-site.
+func TestInstanceProxyProtocolRelativeLocationNotRebased(t *testing.T) {
+	const ingressHeader = "/api/hassio_ingress/abc"
+	const base = ingressHeader + "/i/alpha"
+	responder := &proxyLocationResponder{}
+	upstream, _ := newProxyUpstreamFixture(t, responder.handle)
+	proxy := newProxyServerFixture(t, []Instance{{Name: "alpha", URL: upstream.URL}})
+
+	responder.set(http.StatusFound, "//evil.example/x")
+	resp := proxyGet(t, proxy.URL+"/i/alpha/x", map[string]string{ingressPathHeader: ingressHeader})
+	resp.Body.Close()
+
+	if got := resp.Header.Get("Location"); strings.HasPrefix(got, base) {
+		t.Errorf("Location = %q was rebased under the base; a protocol-relative foreign host must not be", got)
+	}
+}
+
+// TestStripPathPrefixNeutralizesOpenRedirect pins the redirect-safety half of
+// stripPathPrefix (go/bad-redirect-check): the only branch that forwards the
+// tainted remainder is gated by the complete isLocalPath check, so an "//…" or
+// "/\…" remainder never survives as an off-site absolute-path reference.
+func TestStripPathPrefixNeutralizesOpenRedirect(t *testing.T) {
+	cases := []struct {
+		ref, prefix, want string
+	}{
+		{"/loom/login", "/loom", "/login"},
+		{"/loom/ok", "/loom", "/ok"},
+		{"/loom", "/loom", "/"},
+		{"/apple", "/app", "/apple"},    // literal, not a segment boundary
+		{"/loom?x=1", "/loom", "/?x=1"}, // query boundary keeps the base root
+		{"/loom//evil.example", "/loom", "/"},
+		{`/loom/\evil.example`, "/loom", "/"},
+		{"/anything", "", "/anything"}, // empty prefix is a no-op
+	}
+	for _, c := range cases {
+		if got := stripPathPrefix(c.ref, c.prefix); got != c.want {
+			t.Errorf("stripPathPrefix(%q, %q) = %q, want %q", c.ref, c.prefix, got, c.want)
+		}
+	}
+}
+
+// TestRebaseStaysLocal verifies rebase always yields a base-prefixed local path
+// (or the untouched already-based value), never an external URL, without any
+// bare leading-slash test on the possibly-tainted ref.
+func TestRebaseStaysLocal(t *testing.T) {
+	const base = "/i/alpha"
+	cases := []struct {
+		ref, base, want string
+	}{
+		{"/login", base, base + "/login"},
+		{"foo", base, base + "/foo"},
+		{"/", base, base + "/"},
+		{base + "/x", base, base + "/x"},  // already based: passes through
+		{base, base, base},                // exact base: passes through
+		{`/\evil`, base, base + `/\evil`}, // stays under base → local
+		{"//evil", base, base + "//evil"}, // stays under base → local (mid-path //)
+		{"/keep", "", "/keep"},            // no base: unchanged
+	}
+	for _, c := range cases {
+		got := rebase(c.ref, c.base)
+		if got != c.want {
+			t.Errorf("rebase(%q, %q) = %q, want %q", c.ref, c.base, got, c.want)
+		}
+		if c.base != "" && !isLocalPath(got) {
+			t.Errorf("rebase(%q, %q) = %q is not a local path", c.ref, c.base, got)
+		}
+	}
 }

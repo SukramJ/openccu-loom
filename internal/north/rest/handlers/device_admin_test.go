@@ -436,6 +436,22 @@ func TestAcceptInboxDevice_HappyPath(t *testing.T) {
 	}
 }
 
+// TestAcceptInboxDevice_NotInInbox_Returns404 verifies a stale inbox entry
+// (the device settled or was removed on the CCU) yields 404, not the generic
+// 502, so the SPA distinguishes it from an upstream failure.
+func TestAcceptInboxDevice_NotInInbox_Returns404(t *testing.T) {
+	t.Parallel()
+	admin := &stubDeviceAdmin{acceptErr: interfaces.ErrInboxDeviceNotFound}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "INT0000012"}))
+	w := httptest.NewRecorder()
+	AcceptInboxDevice(admin).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
 // TestAcceptInboxDevice_EmptyBody_AcceptsWithoutConfig verifies the
 // backward-compatible path: an empty request stream decodes to io.EOF,
 // which the handler treats as "no first-time configuration" and forwards

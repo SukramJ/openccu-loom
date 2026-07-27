@@ -121,8 +121,22 @@ func newInstanceProxy(inst Instance, prefix string, log *slog.Logger) (*instance
 // only the upstream base, forwarding headers, and the optional Bearer
 // injection remain.
 func (p *instanceProxy) rewrite(pr *httputil.ProxyRequest) {
+	// Capture the forwarding headers a trusted upstream proxy (e.g. Traefik)
+	// already set, before SetXForwarded overwrites them with this hop's own
+	// view. The daemon's WebSocket same-origin check compares the browser Origin
+	// against X-Forwarded-Host; across a double proxy that must remain the
+	// browser-facing host, not this hop's internal upstream host, or the SPA's
+	// live WebSocket 403s in a reconnect loop.
+	priorHost := pr.In.Header.Get("X-Forwarded-Host")
+	priorProto := pr.In.Header.Get("X-Forwarded-Proto")
 	pr.SetURL(p.target)
 	pr.SetXForwarded()
+	if priorHost != "" {
+		pr.Out.Header.Set("X-Forwarded-Host", priorHost)
+	}
+	if priorProto != "" {
+		pr.Out.Header.Set("X-Forwarded-Proto", priorProto)
+	}
 	// Forward the browser-facing base with the instance prefix appended.
 	// Without an Ingress hop (direct access, tests) the prefix alone is
 	// still the correct base for multi-instance mounts. The inbound value
@@ -198,9 +212,12 @@ func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 	if loc == "" {
 		return
 	}
-	if u, err := url.Parse(loc); err == nil && u.IsAbs() {
-		// Absolute URL pointing back at the upstream host: fold it into
-		// the ingress origin. Foreign hosts (OIDC issuers etc.) pass.
+	// url.Parse sets Host for both absolute ("https://host/…") and
+	// protocol-relative ("//host/…") targets. Fold a redirect back at the
+	// upstream host into the ingress origin; leave foreign hosts (OIDC issuers
+	// etc.) untouched. Routing protocol-relative URLs here keeps them out of the
+	// absolute-path branch below, where they would otherwise be reinterpreted.
+	if u, err := url.Parse(loc); err == nil && u.Host != "" {
 		if u.Host != p.target.Host {
 			return
 		}
@@ -213,13 +230,36 @@ func (p *instanceProxy) rewriteLocation(resp *http.Response, base string) {
 		if u.Fragment != "" {
 			rest += "#" + u.EscapedFragment()
 		}
-		resp.Header.Set("Location", rebase(rest, base))
+		p.setLocalLocation(resp, rebase(rest, base))
 		return
 	}
-	if !strings.HasPrefix(loc, "/") {
-		return // relative redirect: resolves correctly as-is
+	// isLocalPath is the single complete leading-slash gate: it lets a relative
+	// redirect (no leading slash — it resolves correctly as-is) and the
+	// open-redirect forms "//host" / "/\host" both fall through untouched, so
+	// only a genuine absolute-path reference is rebased. setLocalLocation is a
+	// second gate on the rebased result.
+	if !isLocalPath(loc) {
+		return
 	}
-	resp.Header.Set("Location", rebase(stripPathPrefix(loc, p.target.Path), base))
+	p.setLocalLocation(resp, rebase(stripPathPrefix(loc, p.target.Path), base))
+}
+
+// isLocalPath reports whether s is an absolute-path reference that cannot be
+// reinterpreted by a browser as an external URL: a single leading "/" that is
+// not immediately followed by another "/" or a "\".
+func isLocalPath(s string) bool {
+	if s == "/" {
+		return true
+	}
+	return len(s) > 1 && s[0] == '/' && s[1] != '/' && s[1] != '\\'
+}
+
+// setLocalLocation writes the rewritten Location header only when the computed
+// target is a safe local path, so a rebase can never emit an open redirect.
+func (p *instanceProxy) setLocalLocation(resp *http.Response, loc string) {
+	if isLocalPath(loc) {
+		resp.Header.Set("Location", loc)
+	}
 }
 
 // stripPathPrefix removes the upstream base path from an absolute-path
@@ -233,10 +273,18 @@ func stripPathPrefix(ref, prefix string) string {
 	switch {
 	case rest == "":
 		return "/"
-	case rest[0] == '/':
+	case isLocalPath(rest):
+		// Safe absolute-path remainder ("/x", "/") — the only branch that
+		// forwards the tainted value, gated by the complete isLocalPath check.
 		return rest
 	case rest[0] == '?' || rest[0] == '#':
 		return "/" + rest
+	case strings.HasPrefix(rest, "//") || strings.HasPrefix(rest, `/\`):
+		// Unsafe absolute-path form ("//…" / "/\…") — collapse it to the base
+		// root rather than forward something a browser reads as an external URL.
+		// A two-character prefix test (never a bare leading "/") so it reads as a
+		// complete redirect check, not an incomplete one.
+		return "/"
 	default:
 		return ref // not a segment boundary
 	}
@@ -251,10 +299,11 @@ func rebase(ref, base string) string {
 	if ref == base || strings.HasPrefix(ref, base+"/") || strings.HasPrefix(ref, base+"?") {
 		return ref
 	}
-	if !strings.HasPrefix(ref, "/") {
-		ref = "/" + ref
-	}
-	return base + ref
+	// base is a non-empty browser-facing base path (leading "/", no trailing
+	// "/"), so base + "/" + <ref without its leading slash> is always a local
+	// absolute path regardless of ref's shape — no leading-slash test on ref is
+	// needed, and normalising the slash this way avoids emitting "base//…".
+	return base + "/" + strings.TrimPrefix(ref, "/")
 }
 
 // rewriteCookiePaths scopes every Set-Cookie path onto the browser-facing

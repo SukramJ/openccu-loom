@@ -131,3 +131,81 @@ describe("GroupEditor — edit", () => {
     expect(mockToastSuccess).toHaveBeenCalledWith("groups.editor.updated");
   });
 });
+
+describe("GroupEditor — enriched member fallback", () => {
+  it("uses a group member's daemon-resolved name when it is not in the suitable list", async () => {
+    // The CCU commonly reports already-grouped members as bare device addresses
+    // that the type's suitable list no longer surfaces. The member row still
+    // carries the daemon-resolved name, which the editor must use.
+    mockSuitable.mockResolvedValue({
+      assignable: [{ address: "AAA:1", type: "X", device_name: "Radiator" }],
+      leftover: [],
+    });
+
+    render(GroupEditor, {
+      props: {
+        central: "ccu-a",
+        group: {
+          id: 7,
+          name: "Duschbad",
+          type_id: "hmip.heating.group",
+          forbid_single_operation: false,
+          members: [
+            {
+              address: "000C9709AEF269",
+              type_id: "THERMOSTAT",
+              device_name: "Wandthermostat DB",
+              device_model: "HmIP-STHD",
+              rooms: ["Duschbad"],
+            },
+          ],
+        },
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+      },
+    });
+
+    // The device checkbox is labelled by the resolved name, never the address.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Wandthermostat DB")).toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText("000C9709AEF269")).not.toBeInTheDocument();
+  });
+});
+
+describe("GroupEditor — config-pending candidates", () => {
+  it("shows a config-pending leftover device but keeps it non-selectable", async () => {
+    mockSuitable.mockResolvedValue({
+      assignable: [{ address: "AAA:1", type: "X", device_name: "Radiator" }],
+      leftover: [
+        { address: "PEND:1", type: "X", device_name: "Pending", config_pending: true },
+        { address: "WRONG:1", type: "Y", device_name: "WrongType" },
+      ],
+    });
+
+    render(GroupEditor, {
+      props: { central: "ccu-a", onClose: vi.fn(), onSaved: vi.fn() },
+    });
+
+    await waitFor(() => expect(screen.getByLabelText("Radiator")).toBeInTheDocument());
+
+    // The config-pending device is surfaced but its checkbox is disabled and
+    // carries the hint; a wrong-type leftover stays hidden (noise).
+    expect(screen.getByLabelText("Pending")).toBeDisabled();
+    expect(screen.getByText("groups.editor.config_pending")).toBeInTheDocument();
+    expect(screen.queryByLabelText("WrongType")).not.toBeInTheDocument();
+
+    // Selecting the assignable device and saving never picks up the pending one.
+    await fireEvent.click(screen.getByLabelText("Radiator"));
+    const name = screen.getByLabelText("groups.editor.name") as HTMLInputElement;
+    await fireEvent.input(name, { target: { value: "G" } });
+    await fireEvent.click(screen.getByText("common.save"));
+
+    await waitFor(() =>
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ members: ["AAA:1"] }),
+        "ccu-a",
+      ),
+    );
+  });
+});

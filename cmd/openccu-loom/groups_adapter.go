@@ -127,6 +127,7 @@ func mapMemberCandidates(in []group.MemberCandidate) []handlers.SuitableMemberEn
 			ChannelNo:     m.ChannelNo,
 			Rooms:         m.Rooms,
 			Functions:     m.Functions,
+			ConfigPending: m.ConfigPending,
 		})
 	}
 	return out
@@ -142,8 +143,12 @@ func mapGroups(groups []group.Group) []handlers.GroupEntry {
 		members := make([]handlers.GroupMemberEntry, 0, len(g.Members))
 		for _, m := range g.Members {
 			members = append(members, handlers.GroupMemberEntry{
-				Address: m.Address,
-				TypeID:  m.TypeID,
+				Address:     m.Address,
+				TypeID:      m.TypeID,
+				DeviceName:  m.DeviceName,
+				DeviceModel: m.DeviceModel,
+				ChannelName: m.ChannelName,
+				Rooms:       m.Rooms,
 			})
 		}
 		out = append(out, handlers.GroupEntry{
