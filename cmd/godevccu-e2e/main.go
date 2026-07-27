@@ -95,16 +95,24 @@ func run() error {
 			`or a comma-separated list (e.g. "HmIP-BDT,HmIP-SWDO")`)
 	flag.Parse()
 
+	var v *godevccu.VirtualCCU
 	v, err := godevccu.New(godevccu.Config{
-		Mode:          godevccu.BackendModeCCU,
-		Host:          *host,
-		XMLRPCPort:    *xmlRPCPort,
-		JSONRPCPort:   *jsonRPCPort,
-		Username:      *username,
-		Password:      *password,
-		AuthEnabled:   true,
-		Devices:       resolveDevices(*devicesFlag),
-		Serial:        "GODEVCCU0001",
+		Mode:        godevccu.BackendModeCCU,
+		Host:        *host,
+		XMLRPCPort:  *xmlRPCPort,
+		JSONRPCPort: *jsonRPCPort,
+		Username:    *username,
+		Password:    *password,
+		AuthEnabled: true,
+		Devices:     resolveDevices(*devicesFlag),
+		Serial:      "GODEVCCU0001",
+		// Real HmIP actuator firmware aggregates the virtual-receiver group
+		// onto the state (…_TRANSMITTER) channel; consumers that read state
+		// there (the reference stack's custom data points) never see a
+		// command take effect without this mirroring.
+		OnSetValue: func(address, valueKey string, value any) {
+			mirrorVirtualReceiverWrite(v, address, valueKey, value)
+		},
 		SetupDefaults: true,
 	})
 	if err != nil {
@@ -149,6 +157,66 @@ func tcpPort(addr net.Addr) int {
 		return tcp.Port
 	}
 	return 0
+}
+
+// mirrorVirtualReceiverWrite replicates a successful write on a
+// <FAMILY>_VIRTUAL_RECEIVER channel onto the device's <FAMILY>_TRANSMITTER
+// state channel, matching real HmIP actuator firmware where the state channel
+// reports the aggregated result of the virtual-receiver group. Parameters the
+// transmitter channel does not describe are skipped silently; writes on the
+// transmitter itself never recurse (its TYPE carries no receiver suffix).
+func mirrorVirtualReceiverWrite(v *godevccu.VirtualCCU, address, valueKey string, value any) {
+	if v == nil || !strings.Contains(address, ":") {
+		return
+	}
+	rpc := v.RPC()
+	desc, err := rpc.GetDeviceDescription(address)
+	if err != nil {
+		return
+	}
+	channelType, _ := desc["TYPE"].(string)
+	family, isReceiver := strings.CutSuffix(channelType, "_VIRTUAL_RECEIVER")
+	if !isReceiver {
+		return
+	}
+	parent, _ := desc["PARENT"].(string)
+	if parent == "" {
+		parent = strings.SplitN(address, ":", 2)[0]
+	}
+	parentDesc, err := rpc.GetDeviceDescription(parent)
+	if err != nil {
+		return
+	}
+	for _, child := range childAddresses(parentDesc["CHILDREN"]) {
+		childDesc, err := rpc.GetDeviceDescription(child)
+		if err != nil {
+			continue
+		}
+		if childType, _ := childDesc["TYPE"].(string); childType == family+"_TRANSMITTER" {
+			// Force semantics: state-channel parameters are usually not
+			// operator-writable; missing parameters make this a no-op.
+			_ = rpc.SimulateDeviceEvent(child, valueKey, value)
+			return
+		}
+	}
+}
+
+// childAddresses normalizes a device description CHILDREN attribute.
+func childAddresses(raw any) []string {
+	switch children := raw.(type) {
+	case []string:
+		return children
+	case []any:
+		out := make([]string, 0, len(children))
+		for _, child := range children {
+			if addr, ok := child.(string); ok {
+				out = append(out, addr)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 type setValueReq struct {

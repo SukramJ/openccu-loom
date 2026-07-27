@@ -38,11 +38,12 @@ type CustomDPSummary struct {
 	Name string `json:"name"`
 	// UniqueID is the canonical loom-namespaced routing key for this
 	// Custom-DP (the [routingkey.CanonicalUniqueID] result over the CDP's
-	// primary channel address + parameter) — identical to the value on the
-	// WS `custom_data_point.state_changed` payload. Lets a client seed its
-	// entity registry from the summary without recomputing the algorithm.
-	// Always present and non-empty (the central's serial is resolved before
-	// any entity is served — see [DataPointSummary.UniqueID]).
+	// primary channel address, CHANNEL-level: no parameter, mirroring the
+	// reference stack's custom-data-point keys) — identical to the value on
+	// the WS `custom_data_point.state_changed` payload. Lets a client seed
+	// its entity registry from the summary without recomputing the
+	// algorithm. Always present and non-empty (the central's serial is
+	// resolved before any entity is served — see [DataPointSummary.UniqueID]).
 	UniqueID            string   `json:"unique_id"`
 	Category            string   `json:"category"`
 	ChannelNo           int      `json:"channel_no"`
@@ -142,17 +143,31 @@ func supportedOperationsFor(cat hmenum.DataPointCategory) []string { //nolint:ex
 	}
 }
 
-// cdpUniqueID stamps the canonical loom routing key for a Custom-DP from its
-// primary channel address + parameter — identical to the WS
-// custom_data_point.state_changed payload (see eventbridge). Empty serial
-// suffix (central serial not yet known) yields "" so the omitempty field stays
-// absent.
+// cdpUniqueID stamps the canonical parameter-level loom routing key — used
+// for calculated data points, which the reference stack keys per parameter.
+// Empty serial suffix (central serial not yet known) yields "" so the
+// omitempty field stays absent.
 func cdpUniqueID(dp device.AttachableDataPoint, serialSuffix string) string {
 	if dp == nil || serialSuffix == "" {
 		return ""
 	}
 	k := dp.DataPointKey()
 	return routingkey.CanonicalUniqueID(serialSuffix, k.ChannelAddress, k.Parameter, "")
+}
+
+// customDPUniqueID stamps the canonical CHANNEL-level loom routing key for a
+// Custom-DP — identical to the WS custom_data_point.state_changed payload
+// (see eventbridge). The reference stack keys custom data points by their
+// primary channel alone (no parameter); the HA drop-in routing-key contract requires
+// the bit-identical shape, otherwise a backend switch re-creates every custom
+// entity (climate, switch, cover, lock, siren) instead of migrating it.
+// Empty serial suffix yields "".
+func customDPUniqueID(dp device.AttachableDataPoint, serialSuffix string) string {
+	if dp == nil || serialSuffix == "" {
+		return ""
+	}
+	k := dp.DataPointKey()
+	return routingkey.CanonicalUniqueID(serialSuffix, k.ChannelAddress, "", "")
 }
 
 // customDPConfig returns the Custom-DP's static configuration block
@@ -278,7 +293,7 @@ func ListCustomDataPoints(idx DeviceIndex, labels ParameterLabeler) http.Handler
 			nd := customDPNameData(dp, ch, labels)
 			out = append(out, CustomDPSummary{
 				Name:                customDPWireName(d, dp, ch.Number),
-				UniqueID:            cdpUniqueID(dp, serial),
+				UniqueID:            customDPUniqueID(dp, serial),
 				Category:            string(cat),
 				ChannelNo:           ch.Number,
 				SupportedOperations: supportedOperationsFor(cat),
