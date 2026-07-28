@@ -1,6 +1,6 @@
 {
-  "generated": "56004e91",
-  "head": "56004e91",
+  "generated": "36ce3ad3",
+  "head": "36ce3ad3",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 26838,
+    "total_exported": 26843,
     "reachable": 4482,
-    "whitelisted": 19361,
-    "unreachable": 2995
+    "whitelisted": 19364,
+    "unreachable": 2997
   },
   "by_package": [
     {
@@ -547,7 +547,7 @@
     {
       "package": "internal/north/mqtt",
       "unreachable_funcs": 0,
-      "unreachable_types": 79,
+      "unreachable_types": 81,
       "unreachable_other": 4
     },
     {
@@ -14680,14 +14680,28 @@
       "package": "internal/north/mqtt",
       "identifier": "HubInfo",
       "file": "internal/north/mqtt/hub_discovery.go",
-      "line": 71,
+      "line": 79,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "HubInfo",
       "file": "internal/north/mqtt/hub_discovery.go",
-      "line": 71,
+      "line": 79,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "HubProgramSpec",
+      "file": "internal/north/mqtt/hub_discovery.go",
+      "line": 443,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "HubProgramSpec",
+      "file": "internal/north/mqtt/hub_discovery.go",
+      "line": 443,
       "kind": "type"
     },
     {
@@ -43310,6 +43324,13 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestProgramSpecForEnabledDefaultProjection",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_mqtt_publisher_test.go",
+      "line": 602
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestProgramUpdateReachesMQTT",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_mqtt_publisher_test.go",
@@ -46800,6 +46821,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/hub_mqtt_publisher_test.go",
       "line": 440
+    },
+    {
+      "package": "internal/central/adapter",
+      "identifier": "TestSysvarSpecForEnabledDefaultProjection",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/hub_mqtt_publisher_test.go",
+      "line": 576
     },
     {
       "package": "internal/central/adapter",
@@ -117076,6 +117104,13 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "TestHubDiscoveryEnabledByDefaultPassThrough",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/mqtt/hub_discovery_test.go",
+      "line": 1089
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "TestHubDiscoverySkipsWithoutSerial",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/parity_round1_test.go",
@@ -120880,28 +120915,28 @@
       "identifier": "CustomDPDetail",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 101
+      "line": 102
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CustomDPDetail",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 101
+      "line": 102
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CustomDPOperationRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 110
+      "line": 111
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CustomDPOperationRequest",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 110
+      "line": 111
     },
     {
       "package": "internal/north/rest/handlers",
@@ -122448,14 +122483,14 @@
       "identifier": "GetCustomDataPoint",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 301
+      "line": 316
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetCustomDataPoint",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 301
+      "line": 316
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123386,14 +123421,14 @@
       "identifier": "InvokeCustomDataPoint",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 334
+      "line": 349
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InvokeCustomDataPoint",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 334
+      "line": 349
     },
     {
       "package": "internal/north/rest/handlers",
@@ -123708,14 +123743,14 @@
       "identifier": "ListCustomDataPoints",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 252
+      "line": 267
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListCustomDataPoints",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/custom_data_points.go",
-      "line": 252
+      "line": 267
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130645,14 +130680,14 @@
       "identifier": "TestListCustomDataPoints_PostfixTranslation",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/custom_data_points_test.go",
-      "line": 590
+      "line": 603
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestListCustomDataPoints_WireNames",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/custom_data_points_test.go",
-      "line": 555
+      "line": 568
     },
     {
       "package": "internal/north/rest/handlers",

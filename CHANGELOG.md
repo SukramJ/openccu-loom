@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.49.0]
+
+### Changed
+
+- **Sysvar/program markers now steer Home Assistant's enabled-by-default.**
+  The marker-derived `enabled_default` flag (config `sysvar_markers` /
+  `program_markers`) was computed, surfaced on REST and the raw MQTT config
+  plane — but never reached the HA discovery payloads, so it had no effect in
+  Home Assistant. Sysvar and program discovery now carries
+  `enabled_by_default`, matching the reference stack's entity-registry
+  default: with markers configured, entries whose CCU description matches a
+  marker arrive enabled (internal entries via the `INTERNAL` marker); without
+  markers every sysvar/program entity arrives disabled and the operator
+  enables the ones they want per entity. HA applies the hint only when an
+  entity is first added to its registry, so already-discovered entities on
+  existing installs keep their current enabled/disabled state.
+
 ## [0.48.9]
 
 ### Fixed

@@ -1368,9 +1368,9 @@ const EN: Catalog = {
   "config.help.centrals.behavior.light_last_brightness":
     "When turning a light on, restore the last non-zero brightness the CCU reported rather than switching to full (100%); default true.",
   "config.help.centrals.behavior.program_markers":
-    "Restrict program hub entities to those whose CCU description carries one of these marker tokens (prefix match, e.g. HAHM, HX); empty includes everything.",
+    "Restrict program hub entities to those whose CCU description carries one of these marker tokens (prefix match, e.g. HAHM, HX); empty includes everything. Marker-matched programs arrive enabled in Home Assistant's MQTT discovery; without markers all program entities arrive disabled by default.",
   "config.help.centrals.behavior.sysvar_markers":
-    "Restrict sysvar hub entities to those whose CCU description carries one of these marker tokens (prefix match); empty includes everything.",
+    "Restrict sysvar hub entities to those whose CCU description carries one of these marker tokens (prefix match); empty includes everything. Marker-matched sysvars arrive enabled in Home Assistant's MQTT discovery; without markers all sysvar entities arrive disabled by default.",
   "config.help.centrals.behavior.sysvar_scan_interval":
     "How often the daemon refreshes system variables from the CCU; zero uses the compiled-in default.",
   "config.help.centrals.behavior.use_group_channel_for_cover_state":
@@ -4373,9 +4373,9 @@ const DE: Catalog = {
   "config.help.centrals.behavior.light_last_brightness":
     "Beim Einschalten eines Lichts die zuletzt von der CCU gemeldete Helligkeit (≠ 0) wiederherstellen statt auf 100 % zu gehen. Standard: an.",
   "config.help.centrals.behavior.program_markers":
-    "Programm-Hub-Entitäten auf solche beschränken, deren CCU-Beschreibung einen dieser Marker-Token trägt (Präfix-Match, z. B. HAHM, HX); leer = alles einschließen.",
+    "Programm-Hub-Entitäten auf solche beschränken, deren CCU-Beschreibung einen dieser Marker-Token trägt (Präfix-Match, z. B. HAHM, HX); leer = alles einschließen. Programme mit Marker-Treffer kommen in Home Assistants MQTT-Discovery aktiviert an; ohne Marker sind alle Programm-Entitäten standardmäßig deaktiviert.",
   "config.help.centrals.behavior.sysvar_markers":
-    "Systemvariablen-Hub-Entitäten auf solche beschränken, deren CCU-Beschreibung einen dieser Marker-Token trägt (Präfix-Match); leer = alles einschließen.",
+    "Systemvariablen-Hub-Entitäten auf solche beschränken, deren CCU-Beschreibung einen dieser Marker-Token trägt (Präfix-Match); leer = alles einschließen. Systemvariablen mit Marker-Treffer kommen in Home Assistants MQTT-Discovery aktiviert an; ohne Marker sind alle Systemvariablen-Entitäten standardmäßig deaktiviert.",
   "config.help.centrals.behavior.sysvar_scan_interval":
     "Wie oft der Daemon Systemvariablen von der CCU aktualisiert; 0 = Daemon-Standard.",
   "config.help.centrals.behavior.use_group_channel_for_cover_state":

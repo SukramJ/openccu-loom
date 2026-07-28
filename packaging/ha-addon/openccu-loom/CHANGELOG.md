@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.49.0
+
+- **Sysvar/program markers now control which entities Home Assistant enables
+  by default.** With `sysvar_markers` / `program_markers` configured, only
+  system variables and programs whose CCU description carries a marker arrive
+  enabled; without markers they arrive disabled and you enable the ones you
+  want in HA's entity registry. Entities HA already knows keep their current
+  enabled/disabled state.
+
 ## 0.48.9
 
 - **Custom-DP unique_ids are channel-level again**, matching aiohomematic's
