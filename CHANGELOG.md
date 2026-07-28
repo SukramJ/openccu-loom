@@ -20,6 +20,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (API 3.2.0, additive); assignments persist in the daemon's database —
   the CCU itself knows nothing of areas.
 
+### Changed
+
+- The Matter schema snapshot now pins matter.js v0.17.7 (was a v0.17.5-alpha
+  commit). No cluster IDs, cluster revisions, attribute IDs or device-type
+  revisions changed between the two — the regenerated
+  `internal/north/matter/schema/` output is byte-identical, only the
+  provenance stamp moves.
+
+### Fixed
+
+- **Matter secure sessions now reject replayed message counters below the
+  first counter observed.** The MRP duplicate-detection window anchors on
+  the first counter a session receives; for an encrypted session every
+  counter below that anchor must count as already-received (Matter Core
+  Spec §4.5.4.1 replay protection), but the window started empty and
+  accepted up to 32 of them once each. Unsecured / PASE traffic keeps the
+  empty seed — there duplicate detection is not a security control and a
+  legitimately reordered message just below the first one seen has to stay
+  acceptable. Mirrors the per-variant `initialBitmap` in matter.js
+  `MessageReceptionState.ts`.
+
 ## [0.49.2]
 
 ### Changed

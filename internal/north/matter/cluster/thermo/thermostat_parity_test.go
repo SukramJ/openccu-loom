@@ -77,7 +77,7 @@ type statusCoder interface{ MatterStatusCode() im.StatusCode }
 // TestParityMatterJS_Thermostat_SetpointConstraintError verifies that
 // writing OccupiedHeatingSetpoint / OccupiedCoolingSetpoint outside
 // [min, max] returns ConstraintError (0x87). Mirrors matter.js
-// ThermostatServer.ts:#assertSetpointWithinLimits (lines 911-924).
+// ThermostatServer.ts:#assertSetpointWithinLimits (lines 879-892).
 func TestParityMatterJS_Thermostat_SetpointConstraintError(t *testing.T) {
 	t.Parallel()
 
@@ -133,7 +133,7 @@ func TestParityMatterJS_Thermostat_SetpointConstraintError(t *testing.T) {
 }
 
 // TestParityMatterJS_Thermostat_SetpointWithinLimitsAccepted verifies that
-// valid setpoints are accepted. Mirrors matter.js ThermostatServer.ts:762,911.
+// valid setpoints are accepted. Mirrors matter.js ThermostatServer.ts:732,879.
 func TestParityMatterJS_Thermostat_SetpointWithinLimitsAccepted(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -239,7 +239,7 @@ func TestParityMatterJS_Thermostat_SetpointRaiseLowerAppliesDelta(t *testing.T) 
 
 // TestParityMatterJS_Thermostat_SetpointRaiseLowerClampsToLimits verifies
 // that SetpointRaiseLower clamps to limits rather than exceeding them.
-// Mirrors matter.js ThermostatServer.ts:#clampSetpointToLimits (lines 893-906).
+// Mirrors matter.js ThermostatServer.ts:#clampSetpointToLimits (lines 864-874).
 func TestParityMatterJS_Thermostat_SetpointRaiseLowerClampsToLimits(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

@@ -37,25 +37,38 @@ const maxCounterIncrease2Pow31 = int64(1) << 31
 //     is rejected as a duplicate, because a secure session MUST
 //     re-establish before its counter wraps rather than reuse a nonce.
 //
+// The two variants also seed the bitmap differently when they anchor on
+// their first counter — see [Window.initialBitmap].
+//
 // Concurrency: Window is safe for concurrent use; lookups and updates
 // are serialised through an internal mutex.
 type Window struct {
-	mu       sync.Mutex
-	max      uint32 // highest counter seen (tracked separately from the bitmap)
-	bitmap   uint32 // bit i set ⇒ counter (max-(i+1)) was received
-	primed   bool   // false until the first counter is recorded
-	rollover bool   // true ⇒ modular ±2^31 diff; false ⇒ plain subtraction
+	mu sync.Mutex
+	// initialBitmap seeds bitmap when the window anchors on its first
+	// counter. Mirrors matter.js MessageReceptionState.ts
+	// initialBitmap: all-1s for encrypted messages, so every sub-anchor
+	// counter counts as already-received (Core Spec §4.5.4.1 replay
+	// protection); 0 for unencrypted messages, where duplicate
+	// detection is not a security control and a message reordered just
+	// below the first one seen must stay acceptable.
+	initialBitmap uint32
+	max           uint32 // highest counter seen (tracked separately from the bitmap)
+	bitmap        uint32 // bit i set ⇒ counter (max-(i+1)) was received
+	primed        bool   // false until the first counter is recorded
+	rollover      bool   // true ⇒ modular ±2^31 diff; false ⇒ plain subtraction
 }
 
 // NewWindow returns a fresh rollover duplicate-detection window for
-// unsecured sessions.
-func NewWindow() *Window { return &Window{rollover: true} }
+// unsecured sessions. The bitmap starts empty, mirroring matter.js
+// MessageReceptionStateUnencryptedWithRollover.
+func NewWindow() *Window { return &Window{rollover: true, initialBitmap: 0} }
 
 // NewWindowNoRollover returns a fresh no-rollover window for secure
 // sessions. A secure-session counter that wraps is rejected rather than
-// accepted, matching matter.js
+// accepted, and the bitmap anchors full so no counter below the first
+// one seen is ever accepted, matching matter.js
 // MessageReceptionStateEncryptedWithoutRollover.
-func NewWindowNoRollover() *Window { return &Window{rollover: false} }
+func NewWindowNoRollover() *Window { return &Window{rollover: false, initialBitmap: ^uint32(0)} }
 
 // diff computes the signed distance between counter c and the current
 // max. For the rollover variant it applies the ±2^31 modular fold
@@ -86,7 +99,7 @@ func (w *Window) Accept(c uint32) bool {
 
 	if !w.primed {
 		w.max = c
-		w.bitmap = 0 // no historical counters recorded yet
+		w.bitmap = w.initialBitmap
 		w.primed = true
 		return true
 	}

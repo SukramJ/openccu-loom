@@ -42,6 +42,53 @@ func TestNoRolloverWindowRejectsWrappedCounter(t *testing.T) {
 	}
 }
 
+// TestNoRolloverWindowSeedsFullBitmap — a secure-session window anchors
+// on the first counter it sees and marks every sub-maximum counter as
+// already-received, so a message below the anchor is a duplicate even
+// though the window has never observed it. Mirrors matter.js
+// MessageReceptionStateEncryptedWithoutRollover.initialBitmap (all-1s,
+// packages/protocol/src/protocol/MessageReceptionState.ts) and the
+// Core Spec §4.5.4.1 replay rule for encrypted messages.
+func TestNoRolloverWindowSeedsFullBitmap(t *testing.T) {
+	w := NewWindowNoRollover()
+	if !w.Accept(100) {
+		t.Fatal("prime Accept(100) should be fresh")
+	}
+	if w.Accept(99) {
+		t.Fatal("Accept(99) = anchor-1 must be a duplicate on a secure window (bitmap seeded all-1s)")
+	}
+	if w.Accept(68) {
+		t.Fatal("Accept(68) = anchor-32 must be a duplicate on a secure window (bitmap seeded all-1s)")
+	}
+	// Advancing past the anchor stays fresh — the seed only closes the
+	// backwards direction.
+	if !w.Accept(101) {
+		t.Fatal("Accept(101) ahead of the anchor should be fresh")
+	}
+	if w.Accept(100) {
+		t.Fatal("Accept(100) after advancing should be a duplicate")
+	}
+}
+
+// TestRolloverWindowSeedsEmptyBitmap — the unsecured / PASE window
+// starts with an empty bitmap, so a legitimately reordered message just
+// below the first counter observed is still accepted. Mirrors matter.js
+// MessageReceptionStateUnencryptedWithRollover.initialBitmap (0):
+// unencrypted duplicate detection is not a security control, and CHIP
+// has never seeded a full window there.
+func TestRolloverWindowSeedsEmptyBitmap(t *testing.T) {
+	w := NewWindow()
+	if !w.Accept(100) {
+		t.Fatal("prime Accept(100) should be fresh")
+	}
+	if !w.Accept(99) {
+		t.Fatal("Accept(99) = anchor-1 must stay acceptable on an unsecured window (bitmap seeded empty)")
+	}
+	if w.Accept(99) {
+		t.Fatal("Accept(99) again should be a duplicate")
+	}
+}
+
 // TestRolloverWindowAcceptsWrappedCounter — the unsecured rollover
 // window treats a wrap-around as a fresh, advancing counter (±2^31
 // modular fold). Mirrors matter.js

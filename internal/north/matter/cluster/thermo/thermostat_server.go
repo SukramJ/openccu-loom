@@ -303,7 +303,7 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 			return fmt.Errorf("thermostat: OccupiedHeatingSetpoint: expected numeric, got %T", value)
 		}
 		// Reject values outside [minHeat, maxHeat] per matter.js
-		// ThermostatServer.ts:#assertSetpointWithinLimits (lines 911-924).
+		// ThermostatServer.ts:#assertSetpointWithinLimits (lines 879-892).
 		if v < s.minHeat {
 			return thermoConstraintErr{fmt.Sprintf("thermostat: OccupiedHeatingSetpoint %d below MinHeatSetpointLimit %d", v, s.minHeat)}
 		}
@@ -321,7 +321,7 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 			return fmt.Errorf("thermostat: OccupiedCoolingSetpoint: expected numeric, got %T", value)
 		}
 		// Reject values outside [minCool, maxCool] per matter.js
-		// ThermostatServer.ts:#assertSetpointWithinLimits (lines 911-924).
+		// ThermostatServer.ts:#assertSetpointWithinLimits (lines 879-892).
 		if v < s.minCool {
 			return thermoConstraintErr{fmt.Sprintf("thermostat: OccupiedCoolingSetpoint %d below MinCoolSetpointLimit %d", v, s.minCool)}
 		}

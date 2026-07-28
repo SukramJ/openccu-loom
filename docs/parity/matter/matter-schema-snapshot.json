@@ -4,7 +4,7 @@
     "specificationVersion": 17170432,
     "interactionModelRevision": 12,
     "dataModelRevision": 21,
-    "sourceCommit": "fd65e989bd43944a01fda2b78c7b2205cb119da3"
+    "sourceCommit": "a688a47b5ec3d35dca66d14fe1232c32b97f8407"
   },
   "deviceTypes": [
     {
