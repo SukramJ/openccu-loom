@@ -16,7 +16,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Journal & health, table half (docs/alarm-concept.md §12.5). The base
-  // table is an authoritative server-side query — area/class/time-range
+  // table is an authoritative server-side query — zone/class/time-range
   // filters all apply there, so results are correct beyond whatever the
   // shared live buffer happens to hold. New entries then live-prepend from
   // alarmPanelStore.journal (see that store's doc comment: "the Journal
@@ -52,7 +52,7 @@
     config: "default",
   };
 
-  let areaFilter = $state("");
+  let zoneFilter = $state("");
   let classFilter = $state<AlarmJournalClass | "">("");
   let fromLocal = $state("");
   let toLocal = $state("");
@@ -77,7 +77,7 @@
     error = null;
     try {
       entries = await api.listAlarmJournal({
-        area: areaFilter || undefined,
+        zone: zoneFilter || undefined,
         class: classFilter || undefined,
         from: toRFC3339(fromLocal),
         to: toRFC3339(toLocal),
@@ -96,7 +96,7 @@
   // by onMount(load), so the first pass through this effect is skipped.
   let firstRun = true;
   $effect(() => {
-    void [areaFilter, classFilter, fromLocal, toLocal];
+    void [zoneFilter, classFilter, fromLocal, toLocal];
     if (firstRun) {
       firstRun = false;
       return;
@@ -105,7 +105,7 @@
   });
 
   function matchesFilters(e: AlarmJournalEntry): boolean {
-    if (areaFilter && e.area_id !== areaFilter) return false;
+    if (zoneFilter && e.zone_id !== zoneFilter) return false;
     if (classFilter && e.class !== classFilter) return false;
     const whenMs = new Date(e.when).getTime();
     if (fromLocal) {
@@ -133,8 +133,8 @@
     if (matching.length > 0) entries = [...matching, ...entries];
   });
 
-  function areaName(id: string): string {
-    return store.areasConfig.find((a) => a.id === id)?.name ?? id;
+  function zoneName(id: string): string {
+    return store.zonesConfig.find((a) => a.id === id)?.name ?? id;
   }
 
   function fmtTime(iso: string): string {
@@ -157,7 +157,7 @@
   function exportCsv() {
     const header = [
       t("alarm.journal.col.when"),
-      t("alarm.journal.col.area"),
+      t("alarm.journal.col.zone"),
       t("alarm.journal.col.class"),
       t("alarm.journal.col.event"),
       t("alarm.journal.col.actor"),
@@ -165,7 +165,7 @@
     ];
     const rows = entries.map((e) => [
       fmtTime(e.when),
-      areaName(e.area_id),
+      zoneName(e.zone_id),
       t(`alarm.journal_class.${e.class}`),
       e.event,
       e.actor ?? "",
@@ -190,14 +190,14 @@
   <div class="mb-4 flex flex-wrap items-end gap-3">
     <div class="flex flex-col gap-1.5">
       <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">
-        {t("alarm.journal.filter.area")}
+        {t("alarm.journal.filter.zone")}
       </span>
       <Select
         class="w-40"
-        bind:value={areaFilter}
+        bind:value={zoneFilter}
         options={[
           { value: "", label: t("alarm.journal.filter.all") },
-          ...store.areasConfig.map((a) => ({ value: a.id, label: a.name })),
+          ...store.zonesConfig.map((a) => ({ value: a.id, label: a.name })),
         ]}
       />
     </div>
@@ -268,7 +268,7 @@
         <thead class="sticky top-0 z-10 bg-[var(--ha-card-background-color)]">
           <tr class="border-b border-[var(--ha-divider-color)] text-left">
             <th class="p-2 font-medium">{t("alarm.journal.col.when")}</th>
-            <th class="p-2 font-medium">{t("alarm.journal.col.area")}</th>
+            <th class="p-2 font-medium">{t("alarm.journal.col.zone")}</th>
             <th class="p-2 font-medium">{t("alarm.journal.col.class")}</th>
             <th class="p-2 font-medium">{t("alarm.journal.col.event")}</th>
             <th class="p-2 font-medium">{t("alarm.journal.col.actor")}</th>
@@ -281,7 +281,7 @@
               <td class="whitespace-nowrap p-2 text-[var(--ha-secondary-text-color)]">
                 {fmtTime(e.when)}
               </td>
-              <td class="p-2">{areaName(e.area_id)}</td>
+              <td class="p-2">{zoneName(e.zone_id)}</td>
               <td class="p-2">
                 <Badge variant={CLASS_VARIANT[e.class]}>
                   {t(`alarm.journal_class.${e.class}`)}

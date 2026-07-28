@@ -137,7 +137,7 @@ func TestWatchdog_UnobservedStateCountsAsNotVerified(t *testing.T) {
 // outputs are never touched.
 func TestStopAll_CancelsPendingWatchdogAndStopsEveryClass(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedOutputs(outputRow("notify", hmenum.AlarmOutputClassNotification, OutputConfig{}))
 
 	opts := engine.FireOptions{Policy: engine.OutputPolicy{ExcludeOutdoor: true}}

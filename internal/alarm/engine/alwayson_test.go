@@ -27,14 +27,14 @@ type alwaysOnCause struct {
 
 func TestAlwaysOn_HazardTriggersFromDisarmedIndependentOfArmState(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
 	h.start()
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
 	h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if n := h.outputs.fireCount(); n != 1 {
 		t.Fatalf("FireCycle count = %d, want 1", n)
 	}
@@ -57,7 +57,7 @@ func TestAlwaysOn_HazardTriggersFromDisarmedIndependentOfArmState(t *testing.T) 
 
 func TestAlwaysOn_PanicSensorHonorsPerSensorSilentFlag(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("panic-1", "eg", hmenum.AlarmSensorTypePanic, engine.SensorConfig{
 		AlwaysOn: true, PanicSilent: true,
 	})
@@ -65,7 +65,7 @@ func TestAlwaysOn_PanicSensorHonorsPerSensorSilentFlag(t *testing.T) {
 
 	h.eng.HandleSensorEvent(h.ctx, "panic-1", true)
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	fire := h.outputs.lastFire(t)
 	if !fire.Opts.Policy.Silent {
 		t.Fatalf("panic policy = %+v, want Silent=true (per-sensor PanicSilent)", fire.Opts.Policy)
@@ -86,17 +86,17 @@ func TestAlwaysOn_PanicSensorHonorsPerSensorSilentFlag(t *testing.T) {
 func TestAlwaysOn_ElapsedReturnsToTheStateItInterrupted(t *testing.T) {
 	t.Run("disarmed before stays disarmed after", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedStandardArea()
+		h.seedStandardZone()
 		h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
 		h.start()
 
 		h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
-		h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-		// The area's mode was "disarmed" (no Modes entry) at trigger time,
+		// The zone's mode was "disarmed" (no Modes entry) at trigger time,
 		// so the trigger window falls back to the engine default.
 		h.advance(engine.DefaultTriggerSeconds * time.Second)
-		h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+		h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 		if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeDisarmed {
 			t.Fatalf("mode after the always-on episode = %s, want disarmed", got)
 		}
@@ -110,17 +110,17 @@ func TestAlwaysOn_ElapsedReturnsToTheStateItInterrupted(t *testing.T) {
 
 	t.Run("armed before resumes armed after with a recaptured baseline", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedStandardArea()
+		h.seedStandardZone()
 		h.seedSensor("panic-1", "eg", hmenum.AlarmSensorTypePanic, engine.SensorConfig{AlwaysOn: true})
 		h.start()
 		h.armFull()
 
 		h.eng.HandleSensorEvent(h.ctx, "panic-1", true)
-		h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+		h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
-		// Full mode's configured trigger time (defaultAreaConfig: 60s).
+		// Full mode's configured trigger time (defaultZoneConfig: 60s).
 		h.advance(60 * time.Second)
-		h.wantState("eg", hmenum.AlarmAreaStateArmed)
+		h.wantState("eg", hmenum.AlarmZoneStateArmed)
 		if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeFull {
 			t.Fatalf("mode after the always-on episode = %s, want full (resumed)", got)
 		}
@@ -129,7 +129,7 @@ func TestAlwaysOn_ElapsedReturnsToTheStateItInterrupted(t *testing.T) {
 
 func TestAlwaysOn_SilenceStopsOutputsWithoutEndingTheEpisodeEarly(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
 	h.start()
 
@@ -145,7 +145,7 @@ func TestAlwaysOn_SilenceStopsOutputsWithoutEndingTheEpisodeEarly(t *testing.T) 
 	if n := h.outputs.stopCount(); n < 1 {
 		t.Fatalf("StopAll calls = %d, want >= 1", n)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	got, ok, err := h.incidents.Get(h.ctx, inc.ID)
 	if err != nil || !ok || !got.Silenced {
@@ -156,18 +156,18 @@ func TestAlwaysOn_SilenceStopsOutputsWithoutEndingTheEpisodeEarly(t *testing.T) 
 	// intrusion incident it never runs retrigger cycles at all); it
 	// still returns to the interrupted state once the window elapses.
 	h.advance(engine.DefaultTriggerSeconds * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 }
 
 func TestAlwaysOn_SecondActivationWhileTriggeredLayersOutputsOnTheSameIncident(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
 	h.seedSensor("panic-1", "eg", hmenum.AlarmSensorTypePanic, engine.SensorConfig{AlwaysOn: true})
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	inc, ok := h.openIncident("eg")
 	if !ok {
 		t.Fatal("expected an open incident")
@@ -192,7 +192,7 @@ func TestAlwaysOn_SecondActivationWhileTriggeredLayersOutputsOnTheSameIncident(t
 
 func TestAlwaysOn_FiresDuringARunningWalkTest(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
 	h.start()
 
@@ -203,7 +203,7 @@ func TestAlwaysOn_FiresDuringARunningWalkTest(t *testing.T) {
 	h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
 
 	// A real hazard must never be swallowed by a walk-test session.
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if n := h.outputs.fireCount(); n != 1 {
 		t.Fatalf("FireCycle count = %d, want 1", n)
 	}
@@ -211,16 +211,16 @@ func TestAlwaysOn_FiresDuringARunningWalkTest(t *testing.T) {
 
 func TestAlwaysOn_RestoreAfterWindowElapsedWhileDownReturnsToPreTriggerState(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("hazard-1", "eg", hmenum.AlarmSensorTypeHazard, engine.SensorConfig{AlwaysOn: true})
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "hazard-1", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	h.restart(engine.DefaultTriggerSeconds*time.Second + time.Minute)
 
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if _, ok := h.openIncident("eg"); ok {
 		t.Fatal("incident should be closed after the restore")
 	}
@@ -228,16 +228,16 @@ func TestAlwaysOn_RestoreAfterWindowElapsedWhileDownReturnsToPreTriggerState(t *
 
 func TestAlwaysOn_RestoreInsideTheWindowResumesWithTheClassPolicy(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("panic-1", "eg", hmenum.AlarmSensorTypePanic, engine.SensorConfig{AlwaysOn: true})
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "panic-1", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	h.restart(5 * time.Second)
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	fire := h.outputs.lastFire(t)
 	if fire.Opts.Policy.Silent {
 		t.Fatalf("restored panic policy = %+v, want loud (default PanicOutputs)", fire.Opts.Policy)

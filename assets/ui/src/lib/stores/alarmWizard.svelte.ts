@@ -18,7 +18,7 @@ const DEFAULT_DELAYS = { exit: 30, entry: 15, trigger: 180 } as const;
 
 // The engine hard-caps one mode's trigger_time_s at MaxTriggerSeconds
 // (internal/alarm/engine/config.go) — the delays step clamps to match
-// so a wizard-created area never ships with a value the engine would
+// so a wizard-created zone never ships with a value the engine would
 // silently clamp on its own.
 export const ALARM_WIZARD_MAX_TRIGGER_SECONDS = 600;
 
@@ -34,21 +34,21 @@ function defaultDelays(): AlarmWizardDelays {
  * Svelte 5 rune-based store for the alarm setup wizard (docs/alarm-
  * concept.md §12.3, pattern: alarmPanel.svelte.ts). A module singleton
  * holds every step's collected data, so navigating away from the
- * wizard route (e.g. to double-check an existing area) and back
+ * wizard route (e.g. to double-check an existing zone) and back
  * preserves progress instead of resetting on unmount. AlarmWizard.svelte
  * is a thin view over this store; `finish()`'s API orchestration and
  * the toast/redirect side effects stay in the component.
  */
 function createAlarmWizardStore() {
   let step = $state(1);
-  let areaName = $state("");
+  let zoneName = $state("");
   let delays = $state<AlarmWizardDelays>(defaultDelays());
   let selectedSensors = $state<AlarmSensor[]>([]);
   let selectedOutputs = $state<AlarmOutput[]>([]);
-  // Set once finish() successfully creates the area, so a retry after a
+  // Set once finish() successfully creates the zone, so a retry after a
   // partial failure (e.g. the sensors PUT fails) updates the existing
-  // area instead of creating a duplicate.
-  let createdAreaId = $state<string | null>(null);
+  // zone instead of creating a duplicate.
+  let createdZoneId = $state<string | null>(null);
 
   // Output-candidate cache, fetched once on first entry into the
   // outputs step and reused for the rest of the wizard session.
@@ -71,15 +71,15 @@ function createAlarmWizardStore() {
   // and "skip" means "keep the sensible default", not "leave it
   // half-filled".
   function skip() {
-    if (step === 1) areaName = "";
+    if (step === 1) zoneName = "";
     if (step === 2) selectedSensors = [];
     if (step === 3) selectedOutputs = [];
     if (step === 4) delays = defaultDelays();
     next();
   }
 
-  function setAreaName(name: string) {
-    areaName = name;
+  function setZoneName(name: string) {
+    zoneName = name;
   }
 
   function setDelay(mode: AlarmWizardMode, field: AlarmWizardDelayField, raw: string) {
@@ -114,8 +114,8 @@ function createAlarmWizardStore() {
     selectedOutputs = selectedOutputs.filter((o) => o.id !== id);
   }
 
-  function setCreatedAreaId(id: string | null) {
-    createdAreaId = id;
+  function setCreatedZoneId(id: string | null) {
+    createdZoneId = id;
   }
 
   async function loadOutputCandidates() {
@@ -143,11 +143,11 @@ function createAlarmWizardStore() {
 
   function reset() {
     step = 1;
-    areaName = "";
+    zoneName = "";
     delays = defaultDelays();
     selectedSensors = [];
     selectedOutputs = [];
-    createdAreaId = null;
+    createdZoneId = null;
     // The output-candidate cache is a read-only capability list, not
     // per-run wizard data — leave it in place for the next run.
   }
@@ -156,8 +156,8 @@ function createAlarmWizardStore() {
     get step() {
       return step;
     },
-    get areaName() {
-      return areaName;
+    get zoneName() {
+      return zoneName;
     },
     get delays() {
       return delays;
@@ -168,8 +168,8 @@ function createAlarmWizardStore() {
     get selectedOutputs() {
       return selectedOutputs;
     },
-    get createdAreaId() {
-      return createdAreaId;
+    get createdZoneId() {
+      return createdZoneId;
     },
     get outputCandidates() {
       return outputCandidates;
@@ -184,7 +184,7 @@ function createAlarmWizardStore() {
     back,
     next,
     skip,
-    setAreaName,
+    setZoneName,
     setDelay,
     resetDelays,
     hasSensor,
@@ -193,7 +193,7 @@ function createAlarmWizardStore() {
     hasOutput,
     addOutput,
     removeOutput,
-    setCreatedAreaId,
+    setCreatedZoneId,
     loadOutputCandidates,
     retryOutputCandidates,
     reset,

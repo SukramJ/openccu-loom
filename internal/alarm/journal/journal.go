@@ -63,7 +63,7 @@ func (j *Journal) Append(ctx context.Context, e engine.JournalEntry) (int64, err
 	now := j.clk.Now()
 	id, err := j.store.Append(ctx, sqlitestore.AlarmJournalEntry{
 		TsMS:        now.UnixMilli(),
-		AreaID:      e.AreaID,
+		ZoneID:      e.ZoneID,
 		Class:       e.Class,
 		Event:       e.Event,
 		Actor:       e.Actor,
@@ -79,7 +79,7 @@ func (j *Journal) Append(ctx context.Context, e engine.JournalEntry) (int64, err
 		j.publish(hmevent.AlarmJournalAppendedEvent{
 			Base:    hmevent.NewBaseAt(now),
 			EntryID: id,
-			AreaID:  e.AreaID,
+			ZoneID:  e.ZoneID,
 			Class:   e.Class,
 			Event:   e.Event,
 			Actor:   e.Actor,

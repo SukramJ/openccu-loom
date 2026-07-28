@@ -30,8 +30,8 @@ degenerate case with one entry under that segment.
 > `openccu-loom`). `<central>` is the CCU name from the daemon config
 > (e.g. `GoOtto`). `<iface>` is the interface ID (e.g. `HmIP-RF`).
 > `<addr>` is the device address (e.g. `000C9709AEF157`). `<ch>` is
-> the channel number. `<param>` is the wire-parameter name. `<area>`
-> is an alarm-area id, or the reserved pseudo-area id `master`.
+> the channel number. `<param>` is the wire-parameter name. `<zone>`
+> is an alarm-zone id, or the reserved pseudo-zone id `master`.
 
 > The channel press-event topic carries a JSON envelope
 > `{"event_type": "<type>", "available": true, "modified_at": "…"}`.
@@ -55,9 +55,9 @@ degenerate case with one entry under that segment.
 | Device availability | `<base>/<central>/<iface>/<addr>/availability` |
 | Device info snapshot | `<base>/<central>/<iface>/<addr>/info` |
 | Device diagnostics | `<base>/<central>/<iface>/<addr>/diagnostics` |
-| Alarm area state † | `<base>/alarm/<area>/state` |
-| Alarm area availability † | `<base>/alarm/<area>/availability` |
-| Alarm area event † (not retained) | `<base>/alarm/<area>/event` |
+| Alarm zone state † | `<base>/alarm/<zone>/state` |
+| Alarm zone availability † | `<base>/alarm/<zone>/availability` |
+| Alarm zone event † (not retained) | `<base>/alarm/<zone>/event` |
 
 Go builder methods: `TopicBuilder.ParameterState`, `TopicBuilder.SlotState`,
 `TopicBuilder.DeviceAvailability`, `TopicBuilder.DeviceInfo`,
@@ -73,7 +73,7 @@ below.
 | Write single parameter (VALUES) | `<base>/<central>/<iface>/<addr>/<ch>/values/<param>/set` |
 | Write MASTER parameter | `<base>/<central>/<iface>/<addr>/<ch>/master/<param>/set` |
 | Custom-DP service method | `<base>/<central>/<iface>/<addr>/<ch>/custom/<kind>/set/<method>` |
-| Alarm area command † | `<base>/alarm/<area>/set` |
+| Alarm zone command † | `<base>/alarm/<zone>/set` |
 
 Go builder methods: `TopicBuilder.ParameterCommand`, `TopicBuilder.SlotCommand`,
 `TopicBuilder.CustomDPServiceMethod`.
@@ -112,9 +112,9 @@ free functions rather than `TopicBuilder` methods: `naming.MQTTHubSysvarState`,
 
 ### Alarm topics (daemon-level, no `<central>`)
 
-Alarm areas (`docs/alarm-concept.md` §14) are daemon-level objects: an
-area's sensors and outputs are `(central_name, DataPointKey)` pairs and
-routinely span more than one configured CCU, so an area has no single
+Alarm zones (`docs/alarm-concept.md` §14) are daemon-level objects: an
+zone's sensors and outputs are `(central_name, DataPointKey)` pairs and
+routinely span more than one configured CCU, so a zone has no single
 owning central to place in the `<central>` segment. The alarm subtree
 therefore omits it — a **deliberate extension** of the "every topic
 carries `<central>`" rule from
@@ -130,43 +130,43 @@ for the rationale.
 > `ARM_*`/`DISARM`/`SILENCE`. Restrict write access to `<base>/alarm/#`
 > if the broker is not fully trusted.
 
-`<area>` is either a configured alarm-area id or the reserved
-pseudo-area id `master`. The `master` topics are published only when
-2 or more areas are configured and aggregate every real area: any
+`<zone>` is either a configured alarm-zone id or the reserved
+pseudo-zone id `master`. The `master` topics are published only when
+2 or more zones are configured and aggregate every real zone: any
 `triggered` wins, else any `pending`, else any `arming`, else
-all-`disarmed`, else the shared mode token when every armed area
+all-`disarmed`, else the shared mode token when every armed zone
 agrees, otherwise `armed_away` for a mixed set. Master **arm** is
-best-effort — each area arms independently and a failure surfaces as
-a per-area `FAILED_TO_ARM` detail rather than failing the whole
+best-effort — each zone arms independently and a failure surfaces as
+a per-zone `FAILED_TO_ARM` detail rather than failing the whole
 request (`docs/alarm-concept.md` §18 item 5, "matches G5"); master
-**disarm** disarms every area unconditionally.
+**disarm** disarms every zone unconditionally.
 
-#### `<base>/alarm/<area>/state` (retained)
+#### `<base>/alarm/<zone>/state` (retained)
 
 A bare HA `alarm_control_panel` state token, not JSON:
 `disarmed`, `arming`, `pending`, `triggered`, `armed_home`,
 `armed_away`, `armed_night`, `armed_vacation`, `armed_custom_bypass`.
-Mapped from the engine's `(AlarmAreaState, AlarmMode)` pair: bare
+Mapped from the engine's `(AlarmZoneState, AlarmMode)` pair: bare
 `disarmed`/`arming`/`pending`/`triggered` states map to the
 like-named token regardless of mode; an `armed` state maps by mode —
 `perimeter`→`armed_home`, `full`→`armed_away`, `night`→`armed_night`,
 `vacation`→`armed_vacation`, `custom`→`armed_custom_bypass`.
 
-#### `<base>/alarm/<area>/availability` (retained)
+#### `<base>/alarm/<zone>/availability` (retained)
 
 `online` / `offline`, driven by `AlarmHealthChangedEvent` and the
 alarm-service lifecycle (offline while the engine is stopped or the
 daemon is shutting down).
 
-#### `<base>/alarm/<area>/event` (JSON, not retained, QoS 0)
+#### `<base>/alarm/<zone>/event` (JSON, not retained, QoS 0)
 
 Follows the general event-topic policy below. Payload shape:
 
 ```json
 {
   "type": "TRIGGER",
-  "area_id": "eg",
-  "area_name": "Erdgeschoss",
+  "zone_id": "eg",
+  "zone_name": "Erdgeschoss",
   "changed_by": "",
   "mode": "full",
   "open_sensors": ["..."],
@@ -179,7 +179,7 @@ Follows the general event-topic policy below. Payload shape:
 and `delay_s` are present only where meaningful (e.g. `FAILED_TO_ARM`
 carries `open_sensors`; a `pending`→`triggered` transition may carry
 `delay_s`). `INVALID_CODE` and `DURESS` extend this vocabulary once
-per-area codes ship (`docs/alarm-concept.md` §13.3, §15 item 6).
+per-zone codes ship (`docs/alarm-concept.md` §13.3, §15 item 6).
 
 `NOTIFICATION` (0.43.1) is published once per enrolled notification
 output at incident-fire time — for every mode the output is enrolled
@@ -190,8 +190,8 @@ name, or its id when unnamed.
 ```json
 {
   "type": "NOTIFICATION",
-  "area_id": "eg",
-  "area_name": "Erdgeschoss",
+  "zone_id": "eg",
+  "zone_name": "Erdgeschoss",
   "output": "Doorbell"
 }
 ```
@@ -203,7 +203,7 @@ independent of the webhook plane's own `notify_webhook` flag. The
 `alarm.notification` WebSocket broadcast (topic `alarm.panel`) is
 unconditional and always fires alongside, regardless of either flag.
 
-#### `<base>/alarm/<area>/set` (command, not retained, QoS 1)
+#### `<base>/alarm/<zone>/set` (command, not retained, QoS 1)
 
 Two accepted payload forms:
 
@@ -212,10 +212,10 @@ Two accepted payload forms:
    mapped through the inverse of the state table above.
 2. **JSON form**: `{"action": "ARM_HOME", "code": "1234"}` — `action`
    accepts the same HA tokens; `code` is accepted but ignored until
-   per-area PIN policy ships.
+   per-zone PIN policy ships.
 
 **Loom extension**: `{"action": "SILENCE"}` mutes an active
-siren/output on a `triggered` area without disarming it. This is not
+siren/output on a `triggered` zone without disarming it. This is not
 part of HA's own `alarm_control_panel` command vocabulary — it is
 documented here as a raw-plane-only extension
 (`docs/alarm-concept.md` §13.3).

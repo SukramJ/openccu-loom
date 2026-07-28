@@ -2,7 +2,7 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // Package engine implements the alarm-panel arm-state machine: one
-// machine per alarm area, driven by normalized sensor activations and
+// machine per alarm zone, driven by normalized sensor activations and
 // countdown timers on the injected clock seam.
 //
 // The engine is domain core (docs/alarm-concept.md §14): it owns

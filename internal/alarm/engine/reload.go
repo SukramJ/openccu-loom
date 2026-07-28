@@ -12,11 +12,11 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// Reload re-reads areas and sensors from the stores while preserving
-// the runtime state of surviving areas — the management surface calls
-// it after every configuration write. Surviving areas keep their
+// Reload re-reads zones and sensors from the stores while preserving
+// the runtime state of surviving zones — the management surface calls
+// it after every configuration write. Surviving zones keep their
 // machine state, bypass list, open incident, and running countdowns;
-// new areas start disarmed; removed areas are disarmed (silence
+// new zones start disarmed; removed zones are disarmed (silence
 // implied) before they vanish, never dropped mid-alarm.
 func (e *Engine) Reload(ctx context.Context) error {
 	e.mu.Lock()
@@ -25,81 +25,81 @@ func (e *Engine) Reload(ctx context.Context) error {
 		return errors.New("engine: not started")
 	}
 
-	areaRows, err := e.areasStore.GetAll(ctx)
+	zoneRows, err := e.zonesStore.GetAll(ctx)
 	if err != nil {
-		return fmt.Errorf("engine: reload areas: %w", err)
+		return fmt.Errorf("engine: reload zones: %w", err)
 	}
 	sensorRows, err := e.sensorsStore.GetAll(ctx)
 	if err != nil {
 		return fmt.Errorf("engine: reload sensors: %w", err)
 	}
 
-	type desiredArea struct {
+	type desiredZone struct {
 		name string
-		cfg  AreaConfig
+		cfg  ZoneConfig
 	}
-	desired := map[string]*desiredArea{}
-	for i := range areaRows {
-		row := &areaRows[i]
-		cfg, err := ParseAreaConfig(row.ConfigJSON)
+	desired := map[string]*desiredZone{}
+	for i := range zoneRows {
+		row := &zoneRows[i]
+		cfg, err := ParseZoneConfig(row.ConfigJSON)
 		if err != nil {
-			// Keep the previously loaded configuration of this area
+			// Keep the previously loaded configuration of this zone
 			// rather than dropping it mid-flight; skip loudly (S7).
-			e.log.Error("alarm area config unparseable — keeping previous config", "area", row.ID, "error", err)
+			e.log.Error("alarm zone config unparseable — keeping previous config", "zone", row.ID, "error", err)
 			if _, jerr := e.journal.Append(ctx, JournalEntry{
-				AreaID: row.ID, Class: hmenum.AlarmJournalClassFault,
-				Event: "area_config_unparseable", Details: map[string]any{"error": err.Error()},
+				ZoneID: row.ID, Class: hmenum.AlarmJournalClassFault,
+				Event: "zone_config_unparseable", Details: map[string]any{"error": err.Error()},
 			}); jerr != nil {
 				e.log.Error("alarm journal append failed", "error", jerr)
 			}
-			if prev, ok := e.areas[row.ID]; ok {
-				desired[row.ID] = &desiredArea{name: prev.name, cfg: prev.cfg}
+			if prev, ok := e.zones[row.ID]; ok {
+				desired[row.ID] = &desiredZone{name: prev.name, cfg: prev.cfg}
 			}
 			continue
 		}
-		desired[row.ID] = &desiredArea{name: row.Name, cfg: cfg}
+		desired[row.ID] = &desiredZone{name: row.Name, cfg: cfg}
 	}
 
-	// Drop removed areas. The management surface refuses to delete a
-	// non-disarmed area, but a direct store write must still never
+	// Drop removed zones. The management surface refuses to delete a
+	// non-disarmed zone, but a direct store write must still never
 	// leave an orphaned alarm running: disarm first, loudly.
-	for id, a := range e.areas {
+	for id, a := range e.zones {
 		if _, keep := desired[id]; keep {
 			continue
 		}
-		if a.state != hmenum.AlarmAreaStateDisarmed {
+		if a.state != hmenum.AlarmZoneStateDisarmed {
 			e.journalEntry(ctx, a, JournalEntry{
-				Class: hmenum.AlarmJournalClassFault, Event: "area_removed_while_armed",
+				Class: hmenum.AlarmJournalClassFault, Event: "zone_removed_while_armed",
 			})
 			e.disarmLocked(ctx, a, "engine:reload", "engine")
 		}
 		a.cancelTimers()
-		// A post-trigger-disarmed area may still hold a pending
+		// A post-trigger-disarmed zone may still hold a pending
 		// auto-rearm; cancelTimers deliberately leaves it alone, so an
-		// area drop must cancel it explicitly or the scheduler goroutine
-		// outlives the area until its deadline.
+		// zone drop must cancel it explicitly or the scheduler goroutine
+		// outlives the zone until its deadline.
 		a.cancelAutoRearm()
 		if err := e.stateStore.Delete(ctx, id); err != nil {
-			e.log.Error("alarm state delete failed", "area", id, "error", err)
+			e.log.Error("alarm state delete failed", "zone", id, "error", err)
 		}
-		delete(e.areas, id)
+		delete(e.zones, id)
 	}
 
-	// Update surviving areas, create new ones.
+	// Update surviving zones, create new ones.
 	for id, d := range desired {
-		a, exists := e.areas[id]
+		a, exists := e.zones[id]
 		if !exists {
-			a = &area{
+			a = &zone{
 				id:        id,
 				name:      d.name,
 				cfg:       d.cfg,
 				sensors:   map[string]*sensorState{},
-				state:     hmenum.AlarmAreaStateDisarmed,
+				state:     hmenum.AlarmZoneStateDisarmed,
 				mode:      hmenum.AlarmModeDisarmed,
 				bypassed:  map[string]bool{},
 				openAtArm: map[string]bool{},
 			}
-			e.areas[id] = a
+			e.zones[id] = a
 			e.persist(ctx, a)
 			continue
 		}
@@ -128,30 +128,30 @@ func (e *Engine) Reload(ctx context.Context) error {
 // of surviving sensors and pruning references to removed ones. The
 // caller holds the lock.
 func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitestore.AlarmSensorRow) {
-	newSensorsByArea := map[string]map[string]*sensorState{}
+	newSensorsByZone := map[string]map[string]*sensorState{}
 	newIndex := map[string]string{}
 	for i := range sensorRows {
 		row := &sensorRows[i]
-		a, ok := e.areas[row.AreaID]
+		a, ok := e.zones[row.ZoneID]
 		if !ok {
-			e.log.Warn("alarm sensor references unknown area", "sensor", row.ID, "area", row.AreaID)
+			e.log.Warn("alarm sensor references unknown zone", "sensor", row.ID, "zone", row.ZoneID)
 			continue
 		}
 		cfg, err := ParseSensorConfig(row.ConfigJSON)
 		if err != nil {
 			e.log.Error("alarm sensor config unparseable — sensor skipped", "sensor", row.ID, "error", err)
 			if _, jerr := e.journal.Append(ctx, JournalEntry{
-				AreaID: row.AreaID, Class: hmenum.AlarmJournalClassFault,
+				ZoneID: row.ZoneID, Class: hmenum.AlarmJournalClassFault,
 				Event: "sensor_config_unparseable", Details: map[string]any{"sensor_id": row.ID, "error": err.Error()},
 			}); jerr != nil {
 				e.log.Error("alarm journal append failed", "error", jerr)
 			}
 			continue
 		}
-		set := newSensorsByArea[row.AreaID]
+		set := newSensorsByZone[row.ZoneID]
 		if set == nil {
 			set = map[string]*sensorState{}
-			newSensorsByArea[row.AreaID] = set
+			newSensorsByZone[row.ZoneID] = set
 		}
 		if old, ok := a.sensors[row.ID]; ok {
 			old.row = *row
@@ -160,10 +160,10 @@ func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitesto
 		} else {
 			set[row.ID] = &sensorState{row: *row, cfg: cfg, available: true}
 		}
-		newIndex[row.ID] = row.AreaID
+		newIndex[row.ID] = row.ZoneID
 	}
-	for id, a := range e.areas {
-		set := newSensorsByArea[id]
+	for id, a := range e.zones {
+		set := newSensorsByZone[id]
 		if set == nil {
 			set = map[string]*sensorState{}
 		}
@@ -192,7 +192,7 @@ func (e *Engine) reloadSensorsLocked(ctx context.Context, sensorRows []sqlitesto
 
 // disarmLocked is the internal disarm transition for engine-initiated
 // paths that already hold the lock.
-func (e *Engine) disarmLocked(ctx context.Context, a *area, by, source string) {
+func (e *Engine) disarmLocked(ctx context.Context, a *zone, by, source string) {
 	from := a.state
 	a.cancelTimers()
 	a.cancelAutoRearm()
@@ -200,7 +200,7 @@ func (e *Engine) disarmLocked(ctx context.Context, a *area, by, source string) {
 		e.silenceIncident(ctx, a, by, source)
 		e.closeIncident(ctx, a, closeReasonDisarm)
 	}
-	a.state = hmenum.AlarmAreaStateDisarmed
+	a.state = hmenum.AlarmZoneStateDisarmed
 	a.mode = hmenum.AlarmModeDisarmed
 	a.bypassed = map[string]bool{}
 	a.openAtArm = map[string]bool{}

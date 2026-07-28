@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
-import type { AlarmArea, AlarmOutput, DeviceSummary } from "$lib/api/types";
+import type { AlarmZone, AlarmOutput, DeviceSummary } from "$lib/api/types";
 
-let mockAreasConfig: AlarmArea[] = [];
+let mockZonesConfig: AlarmZone[] = [];
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
-    get areasConfig() {
-      return mockAreasConfig;
+    get zonesConfig() {
+      return mockZonesConfig;
     },
     refresh: vi.fn().mockResolvedValue(undefined),
   },
@@ -24,13 +24,13 @@ vi.mock("$lib/stores/devices.svelte", () => ({
   },
 }));
 
-const mockListAlarmAreaOutputs = vi.fn();
-const mockPutAlarmAreaOutputs = vi.fn();
+const mockListAlarmZoneOutputs = vi.fn();
+const mockPutAlarmZoneOutputs = vi.fn();
 const mockTestAlarmOutput = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
-    listAlarmAreaOutputs: (...args: unknown[]) => mockListAlarmAreaOutputs(...args),
-    putAlarmAreaOutputs: (...args: unknown[]) => mockPutAlarmAreaOutputs(...args),
+    listAlarmZoneOutputs: (...args: unknown[]) => mockListAlarmZoneOutputs(...args),
+    putAlarmZoneOutputs: (...args: unknown[]) => mockPutAlarmZoneOutputs(...args),
     testAlarmOutput: (...args: unknown[]) => mockTestAlarmOutput(...args),
   },
   friendlyError: (err: unknown) => (err instanceof Error ? err.message : "error"),
@@ -65,10 +65,10 @@ function output(overrides: Partial<AlarmOutput> = {}): AlarmOutput {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAreasConfig = [{ id: "area-1", name: "Ground floor" }];
+  mockZonesConfig = [{ id: "zone-1", name: "Ground floor" }];
   mockDevices = [];
-  mockListAlarmAreaOutputs.mockResolvedValue([output()]);
-  mockPutAlarmAreaOutputs.mockResolvedValue(undefined);
+  mockListAlarmZoneOutputs.mockResolvedValue([output()]);
+  mockPutAlarmZoneOutputs.mockResolvedValue(undefined);
   mockTestAlarmOutput.mockResolvedValue(undefined);
   mockConfirmAsk.mockResolvedValue(false);
 });
@@ -79,7 +79,7 @@ afterEach(() => {
 
 describe("AlarmOutputs — smoke-sounder caveat", () => {
   it("shows the smoke caveat copy only for smoke_sounder outputs", async () => {
-    mockListAlarmAreaOutputs.mockResolvedValueOnce([
+    mockListAlarmZoneOutputs.mockResolvedValueOnce([
       output({ id: "o1", class: "smoke_sounder", name: "Kitchen smoke sounder" }),
     ]);
     const { findByText } = render(AlarmOutputs);
@@ -89,7 +89,7 @@ describe("AlarmOutputs — smoke-sounder caveat", () => {
   });
 
   it("does not show the smoke caveat for a plain acoustic siren", async () => {
-    mockListAlarmAreaOutputs.mockResolvedValueOnce([output({ class: "acoustic_siren" })]);
+    mockListAlarmZoneOutputs.mockResolvedValueOnce([output({ class: "acoustic_siren" })]);
     const { findByText, queryByText } = render(AlarmOutputs);
 
     await findByText("Hallway siren");
@@ -99,7 +99,7 @@ describe("AlarmOutputs — smoke-sounder caveat", () => {
 
 describe("AlarmOutputs — test fire", () => {
   it("asks for confirmation before firing and skips the call when declined", async () => {
-    mockListAlarmAreaOutputs.mockResolvedValueOnce([output()]);
+    mockListAlarmZoneOutputs.mockResolvedValueOnce([output()]);
     mockConfirmAsk.mockResolvedValueOnce(false);
     const { findByText, getByRole } = render(AlarmOutputs);
     await findByText("Hallway siren");
@@ -111,7 +111,7 @@ describe("AlarmOutputs — test fire", () => {
   });
 
   it("fires the output once confirmation is accepted", async () => {
-    mockListAlarmAreaOutputs.mockResolvedValueOnce([output()]);
+    mockListAlarmZoneOutputs.mockResolvedValueOnce([output()]);
     mockConfirmAsk.mockResolvedValueOnce(true);
     const { findByText, getByRole } = render(AlarmOutputs);
     await findByText("Hallway siren");

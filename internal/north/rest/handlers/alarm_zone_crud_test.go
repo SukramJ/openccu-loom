@@ -18,209 +18,209 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// marshalAreaConfig serializes an engine.AreaConfig into the raw JSON
-// document the AlarmArea.Config wire field carries verbatim.
-func marshalAreaConfig(t *testing.T, cfg engine.AreaConfig) json.RawMessage {
+// marshalZoneConfig serializes an engine.ZoneConfig into the raw JSON
+// document the AlarmZone.Config wire field carries verbatim.
+func marshalZoneConfig(t *testing.T, cfg engine.ZoneConfig) json.RawMessage {
 	t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		t.Fatalf("marshal area config: %v", err)
+		t.Fatalf("marshal zone config: %v", err)
 	}
 	return b
 }
 
-func alarmAreaRequestBody(t *testing.T, area hmapi.AlarmArea) *bytes.Reader {
+func alarmZoneRequestBody(t *testing.T, zone hmapi.AlarmZone) *bytes.Reader {
 	t.Helper()
-	b, err := json.Marshal(area)
+	b, err := json.Marshal(zone)
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
 	}
 	return bytes.NewReader(b)
 }
 
-// --- ListAlarmAreas / GetAlarmArea ---
+// --- ListAlarmZones / GetAlarmZone ---
 
-func TestListAlarmAreas_Empty(t *testing.T) {
+func TestListAlarmZones_Empty(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/areas", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/zones", http.NoBody)
 	w := httptest.NewRecorder()
-	ListAlarmAreas(fx).ServeHTTP(w, req)
+	ListAlarmZones(fx).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
 	}
-	var body []hmapi.AlarmArea
+	var body []hmapi.AlarmZone
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if len(body) != 0 {
-		t.Fatalf("areas = %+v, want empty", body)
+		t.Fatalf("zones = %+v, want empty", body)
 	}
 }
 
-func TestListAlarmAreas_ReturnsSeededAreas(t *testing.T) {
+func TestListAlarmZones_ReturnsSeededAreas(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(30, 15, 60))
-	fx.seedArea("og", "Obergeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
+	fx.seedZone("og", "Obergeschoss", fullModeZoneConfig(0, 0, 60))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/areas", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/zones", http.NoBody)
 	w := httptest.NewRecorder()
-	ListAlarmAreas(fx).ServeHTTP(w, req)
+	ListAlarmZones(fx).ServeHTTP(w, req)
 
-	var body []hmapi.AlarmArea
+	var body []hmapi.AlarmZone
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if len(body) != 2 {
-		t.Fatalf("areas = %+v, want 2", body)
+		t.Fatalf("zones = %+v, want 2", body)
 	}
 }
 
-func TestGetAlarmArea_UnknownID_Returns404(t *testing.T) {
+func TestGetAlarmZone_UnknownID_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/areas/missing", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/zones/missing", http.NoBody)
 	req = withChiParam(req, "id", "missing")
 	w := httptest.NewRecorder()
-	GetAlarmArea(fx).ServeHTTP(w, req)
+	GetAlarmZone(fx).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404, body=%s", w.Code, w.Body.String())
 	}
 }
 
-func TestGetAlarmArea_ReturnsSeeded(t *testing.T) {
+func TestGetAlarmZone_ReturnsSeeded(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(30, 15, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/areas/eg", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/zones/eg", http.NoBody)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	GetAlarmArea(fx).ServeHTTP(w, req)
+	GetAlarmZone(fx).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
 	}
-	var body hmapi.AlarmArea
+	var body hmapi.AlarmZone
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if body.ID != "eg" || body.Name != "Erdgeschoss" {
-		t.Errorf("area = %+v, want id=eg name=Erdgeschoss", body)
+		t.Errorf("zone = %+v, want id=eg name=Erdgeschoss", body)
 	}
 }
 
-// --- CreateAlarmArea ---
+// --- CreateAlarmZone ---
 
-func TestCreateAlarmArea_HappyPath_Returns201AndRecordsAudit(t *testing.T) {
+func TestCreateAlarmZone_HappyPath_Returns201AndRecordsAudit(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 	rec := &captureRecorder{}
 
-	body := alarmAreaRequestBody(t, hmapi.AlarmArea{
+	body := alarmZoneRequestBody(t, hmapi.AlarmZone{
 		Name:   "Erdgeschoss",
-		Config: marshalAreaConfig(t, fullModeAreaConfig(30, 15, 60)),
+		Config: marshalZoneConfig(t, fullModeZoneConfig(30, 15, 60)),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones", body)
 	w := httptest.NewRecorder()
-	CreateAlarmArea(fx, rec).ServeHTTP(w, req)
+	CreateAlarmZone(fx, rec).ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201, body=%s", w.Code, w.Body.String())
 	}
-	var created hmapi.AlarmArea
+	var created hmapi.AlarmZone
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if created.ID == "" {
-		t.Error("created area has no server-generated id")
+		t.Error("created zone has no server-generated id")
 	}
 	if created.Name != "Erdgeschoss" {
 		t.Errorf("name = %q, want Erdgeschoss", created.Name)
 	}
-	// The new area must be immediately visible through the engine —
-	// CreateAlarmArea reloads before responding.
-	if _, ok := fx.eng.Area(created.ID); !ok {
-		t.Error("created area not visible through the engine after Reload")
+	// The new zone must be immediately visible through the engine —
+	// CreateAlarmZone reloads before responding.
+	if _, ok := fx.eng.Zone(created.ID); !ok {
+		t.Error("created zone not visible through the engine after Reload")
 	}
 	if len(rec.entries) != 1 || rec.entries[0].Action != audit.ActionAlarmConfigChange {
 		t.Fatalf("audit entries = %+v, want one alarm_config_change", rec.entries)
 	}
 }
 
-func TestCreateAlarmArea_InvalidConfig_Returns422(t *testing.T) {
+func TestCreateAlarmZone_InvalidConfig_Returns422(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
-	body := alarmAreaRequestBody(t, hmapi.AlarmArea{
+	body := alarmZoneRequestBody(t, hmapi.AlarmZone{
 		Name:   "Bad",
 		Config: json.RawMessage(`{"modes":123}`),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones", body)
 	w := httptest.NewRecorder()
-	CreateAlarmArea(fx, nil).ServeHTTP(w, req)
+	CreateAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422, body=%s", w.Code, w.Body.String())
 	}
 }
 
-func TestCreateAlarmArea_MalformedJSON_Returns400(t *testing.T) {
+func TestCreateAlarmZone_MalformedJSON_Returns400(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas", strings.NewReader("{not-json"))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones", strings.NewReader("{not-json"))
 	w := httptest.NewRecorder()
-	CreateAlarmArea(fx, nil).ServeHTTP(w, req)
+	CreateAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400, body=%s", w.Code, w.Body.String())
 	}
 }
 
-// --- PutAlarmArea ---
+// --- PutAlarmZone ---
 
-func TestPutAlarmArea_UnknownID_Returns404(t *testing.T) {
+func TestPutAlarmZone_UnknownID_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
-	body := alarmAreaRequestBody(t, hmapi.AlarmArea{Name: "x", Config: marshalAreaConfig(t, fullModeAreaConfig(0, 0, 60))})
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/missing", body)
+	body := alarmZoneRequestBody(t, hmapi.AlarmZone{Name: "x", Config: marshalZoneConfig(t, fullModeZoneConfig(0, 0, 60))})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/zones/missing", body)
 	req = withChiParam(req, "id", "missing")
 	w := httptest.NewRecorder()
-	PutAlarmArea(fx, nil).ServeHTTP(w, req)
+	PutAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404, body=%s", w.Code, w.Body.String())
 	}
 }
 
-func TestPutAlarmArea_HappyPath_Returns204AndPersists(t *testing.T) {
+func TestPutAlarmZone_HappyPath_Returns204AndPersists(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(30, 15, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
 	rec := &captureRecorder{}
 
-	newBody := alarmAreaRequestBody(t, hmapi.AlarmArea{
+	newBody := alarmZoneRequestBody(t, hmapi.AlarmZone{
 		Name:   "Erdgeschoss Renamed",
-		Config: marshalAreaConfig(t, fullModeAreaConfig(45, 20, 90)),
+		Config: marshalZoneConfig(t, fullModeZoneConfig(45, 20, 90)),
 	})
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg", newBody)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/zones/eg", newBody)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	PutAlarmArea(fx, rec).ServeHTTP(w, req)
+	PutAlarmZone(fx, rec).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
 	}
-	row, ok, err := fx.stores.Areas.Get(context.Background(), "eg")
+	row, ok, err := fx.stores.Zones.Get(context.Background(), "eg")
 	if err != nil || !ok {
-		t.Fatalf("get area after put: ok=%v err=%v", ok, err)
+		t.Fatalf("get zone after put: ok=%v err=%v", ok, err)
 	}
 	if row.Name != "Erdgeschoss Renamed" {
 		t.Errorf("name = %q, want Erdgeschoss Renamed", row.Name)
@@ -230,67 +230,67 @@ func TestPutAlarmArea_HappyPath_Returns204AndPersists(t *testing.T) {
 	}
 }
 
-// --- DeleteAlarmArea ---
+// --- DeleteAlarmZone ---
 
-func TestDeleteAlarmArea_UnknownID_Returns404(t *testing.T) {
+func TestDeleteAlarmZone_UnknownID_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/alarm/areas/missing", http.NoBody)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/alarm/zones/missing", http.NoBody)
 	req = withChiParam(req, "id", "missing")
 	w := httptest.NewRecorder()
-	DeleteAlarmArea(fx, nil).ServeHTTP(w, req)
+	DeleteAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404, body=%s", w.Code, w.Body.String())
 	}
 }
 
-func TestDeleteAlarmArea_WhileArmed_Returns409(t *testing.T) {
+func TestDeleteAlarmZone_WhileArmed_Returns409(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	if _, err := fx.eng.Arm(context.Background(), "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/alarm/areas/eg", http.NoBody)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/alarm/zones/eg", http.NoBody)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	DeleteAlarmArea(fx, nil).ServeHTTP(w, req)
+	DeleteAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409, body=%s", w.Code, w.Body.String())
 	}
 }
 
-func TestDeleteAlarmArea_WhileDisarmed_Returns204AndCascadesSensorsOutputs(t *testing.T) {
+func TestDeleteAlarmZone_WhileDisarmed_Returns204AndCascadesSensorsOutputs(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	fx.seedOutput("siren", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
 	rec := &captureRecorder{}
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/alarm/areas/eg", http.NoBody)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/alarm/zones/eg", http.NoBody)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	DeleteAlarmArea(fx, rec).ServeHTTP(w, req)
+	DeleteAlarmZone(fx, rec).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
 	}
-	if _, ok, _ := fx.stores.Areas.Get(context.Background(), "eg"); ok {
-		t.Error("area row still present after delete")
+	if _, ok, _ := fx.stores.Zones.Get(context.Background(), "eg"); ok {
+		t.Error("zone row still present after delete")
 	}
-	sensors, err := fx.stores.Sensors.ListByArea(context.Background(), "eg")
+	sensors, err := fx.stores.Sensors.ListByZone(context.Background(), "eg")
 	if err != nil {
 		t.Fatalf("list sensors: %v", err)
 	}
 	if len(sensors) != 0 {
 		t.Errorf("sensors = %+v, want cascaded delete", sensors)
 	}
-	outs, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	outs, err := fx.stores.Outputs.ListByZone(context.Background(), "eg")
 	if err != nil {
 		t.Fatalf("list outputs: %v", err)
 	}
@@ -317,30 +317,30 @@ func putSensorsBody(id, channel string) string {
 		`","parameter":"STATE","type":"door","name":"Door","config":{"modes":["full"]}}]`
 }
 
-// TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted pins the
-// cross-area row-identity contract: a client-supplied id round-trips
+// TestPutAlarmZoneOutputs_RowIDFromAnotherArea_IsReminted pins the
+// cross-zone row-identity contract: a client-supplied id round-trips
 // (own rows and fresh ids alike) UNLESS it collides with another
-// area's row — that one is re-minted server-side instead of failing
+// zone's row — that one is re-minted server-side instead of failing
 // the whole replace on the PRIMARY KEY. Clients have derived ids from
-// the channel key, so enrolling the same siren in a second area hit
+// the channel key, so enrolling the same siren in a second zone hit
 // exactly that as an opaque 500.
-func TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted(t *testing.T) {
+func TestPutAlarmZoneOutputs_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
-	fx.seedArea("og", "Obergeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
+	fx.seedZone("og", "Obergeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedOutput("shared-key", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/og/outputs",
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/zones/og/outputs",
 		strings.NewReader(putOutputsBody("shared-key", "shared-key:1")))
 	req = withChiParam(req, "id", "og")
 	w := httptest.NewRecorder()
-	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+	PutAlarmZoneOutputs(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
 	}
-	og, err := fx.stores.Outputs.ListByArea(context.Background(), "og")
+	og, err := fx.stores.Outputs.ListByZone(context.Background(), "og")
 	if err != nil {
 		t.Fatalf("list og outputs: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 	if og[0].ID == "" || og[0].ID == "shared-key" {
 		t.Errorf("og row id = %q, want a fresh non-empty id distinct from the eg row", og[0].ID)
 	}
-	eg, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	eg, err := fx.stores.Outputs.ListByZone(context.Background(), "eg")
 	if err != nil {
 		t.Fatalf("list eg outputs: %v", err)
 	}
@@ -359,27 +359,27 @@ func TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 	}
 }
 
-// TestPutAlarmAreaOutputs_OwnRowID_RoundTrips pins the stability leg of
-// the same contract: a row carrying one of THIS area's existing ids
+// TestPutAlarmZoneOutputs_OwnRowID_RoundTrips pins the stability leg of
+// the same contract: a row carrying one of THIS zone's existing ids
 // keeps it (the outputs tab round-trips rows verbatim on save), and a
 // fresh non-colliding client id is honoured too (covered by the
 // replace-semantics suite in alarm_sensors_outputs_test.go).
-func TestPutAlarmAreaOutputs_OwnRowID_RoundTrips(t *testing.T) {
+func TestPutAlarmZoneOutputs_OwnRowID_RoundTrips(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedOutput("mine", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs",
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/zones/eg/outputs",
 		strings.NewReader(putOutputsBody("mine", "mine:1")))
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+	PutAlarmZoneOutputs(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
 	}
-	rows, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	rows, err := fx.stores.Outputs.ListByZone(context.Background(), "eg")
 	if err != nil {
 		t.Fatalf("list outputs: %v", err)
 	}
@@ -388,27 +388,27 @@ func TestPutAlarmAreaOutputs_OwnRowID_RoundTrips(t *testing.T) {
 	}
 }
 
-// TestPutAlarmAreaSensors_RowIDFromAnotherArea_IsReminted mirrors the
-// output contract for sensors: the same PRIMARY KEY across areas must
+// TestPutAlarmZoneSensors_RowIDFromAnotherArea_IsReminted mirrors the
+// output contract for sensors: the same PRIMARY KEY across zones must
 // re-mint, not 500 — the sensor table shares the id-derivation history.
-func TestPutAlarmAreaSensors_RowIDFromAnotherArea_IsReminted(t *testing.T) {
+func TestPutAlarmZoneSensors_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
-	fx.seedArea("og", "Obergeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
+	fx.seedZone("og", "Obergeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedSensor("shared-door", "eg", hmenum.AlarmSensorTypeDoor,
 		engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/og/sensors",
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/zones/og/sensors",
 		strings.NewReader(putSensorsBody("shared-door", "shared-door:1")))
 	req = withChiParam(req, "id", "og")
 	w := httptest.NewRecorder()
-	PutAlarmAreaSensors(fx, nil).ServeHTTP(w, req)
+	PutAlarmZoneSensors(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
 	}
-	og, err := fx.stores.Sensors.ListByArea(context.Background(), "og")
+	og, err := fx.stores.Sensors.ListByZone(context.Background(), "og")
 	if err != nil {
 		t.Fatalf("list og sensors: %v", err)
 	}
@@ -418,7 +418,7 @@ func TestPutAlarmAreaSensors_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 	if og[0].ID == "" || og[0].ID == "shared-door" {
 		t.Errorf("og row id = %q, want a fresh non-empty id distinct from the eg row", og[0].ID)
 	}
-	eg, err := fx.stores.Sensors.ListByArea(context.Background(), "eg")
+	eg, err := fx.stores.Sensors.ListByZone(context.Background(), "eg")
 	if err != nil {
 		t.Fatalf("list eg sensors: %v", err)
 	}
@@ -427,28 +427,28 @@ func TestPutAlarmAreaSensors_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 	}
 }
 
-// TestPutAlarmAreaOutputs_DuplicateIDsInPayload_AreReminted pins the
+// TestPutAlarmZoneOutputs_DuplicateIDsInPayload_AreReminted pins the
 // in-payload leg: two rows carrying the same id must not collide with
 // each other either — the second occurrence gets a fresh id.
-func TestPutAlarmAreaOutputs_DuplicateIDsInPayload_AreReminted(t *testing.T) {
+func TestPutAlarmZoneOutputs_DuplicateIDsInPayload_AreReminted(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedOutput("dup", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
 
 	body := `[{"id":"dup","class":"acoustic_siren","central":"` + alarmFixtureCentral +
 		`","channel_address":"a:1","config":{"modes":["full"]}},` +
 		`{"id":"dup","class":"acoustic_siren","central":"` + alarmFixtureCentral +
 		`","channel_address":"b:1","config":{"modes":["full"]}}]`
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/zones/eg/outputs", strings.NewReader(body))
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+	PutAlarmZoneOutputs(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
 	}
-	rows, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	rows, err := fx.stores.Outputs.ListByZone(context.Background(), "eg")
 	if err != nil {
 		t.Fatalf("list outputs: %v", err)
 	}

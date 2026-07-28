@@ -17,7 +17,7 @@ import (
 // chirp-class outputs.
 func TestChirp_ArmSquawkPlaysToneOnChirpOutputOnly(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	if err := h.mgr.Chirp(h.ctx, "eg", engine.ChirpRequest{Kind: engine.ChirpArmSquawk}); err != nil {
 		t.Fatalf("Chirp: %v", err)
@@ -52,7 +52,7 @@ func TestChirp_ArmSquawkPlaysToneOnChirpOutputOnly(t *testing.T) {
 // dropped.
 func TestChirp_RateLimitDropsSecondEmissionWithinGap(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	req := engine.ChirpRequest{Kind: engine.ChirpArmSquawk}
 	if err := h.mgr.Chirp(h.ctx, "eg", req); err != nil {
@@ -73,7 +73,7 @@ func TestChirp_RateLimitDropsSecondEmissionWithinGap(t *testing.T) {
 // ten, and dropped otherwise.
 func TestChirp_CountdownTickPatternThinsAsRemainingShrinks(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	tick := func(remaining time.Duration) {
 		t.Helper()
 		if err := h.mgr.Chirp(h.ctx, "eg", engine.ChirpRequest{Kind: engine.ChirpCountdownTick, Remaining: remaining}); err != nil {
@@ -105,12 +105,12 @@ func TestChirp_CountdownTickPatternThinsAsRemainingShrinks(t *testing.T) {
 	}
 }
 
-// TestChirp_SuppressedWhileAreaActivationInFlight covers S5 case 21:
-// any chirp for an area with a pending alarm activation is dropped —
+// TestChirp_SuppressedWhileZoneActivationInFlight covers S5 case 21:
+// any chirp for an zone with a pending alarm activation is dropped —
 // chirp radio budget never competes with a stop.
-func TestChirp_SuppressedWhileAreaActivationInFlight(t *testing.T) {
+func TestChirp_SuppressedWhileZoneActivationInFlight(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	opts := engine.FireOptions{Policy: engine.OutputPolicy{ExcludeOutdoor: true}}
 	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(21, hmenum.AlarmModeFull), opts); err != nil {

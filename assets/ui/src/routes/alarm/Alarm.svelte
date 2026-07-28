@@ -11,7 +11,7 @@
   // fetch) and the tab sub-router; each tab's view is code-split and
   // reads the shared alarmPanelStore. The Setup wizard is not a tab —
   // it is reached from the header action and from the Overview empty
-  // state (§12.3, re-runnable per area).
+  // state (§12.3, re-runnable per zone).
 
   type Tab =
     | "overview"

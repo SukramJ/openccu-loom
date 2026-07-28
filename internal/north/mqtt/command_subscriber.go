@@ -97,24 +97,24 @@ type InstallModeSink interface {
 // AlarmSink is the optional domain-facing contract for the daemon-level
 // alarm engine. The composition root wires it over the alarm service's
 // engine (source "mqtt"); when nil the subscriber drops alarm commands
-// with a debug breadcrumb. Areas are daemon-level, so the command topic
+// with a debug breadcrumb. Zones are daemon-level, so the command topic
 // omits the <central> segment every other command topic carries — a
 // deliberate extension of the raw command plane (docs/alarm-concept.md
-// §13.3). The reserved area segment "master" routes to the aggregate
+// §13.3). The reserved zone segment "master" routes to the aggregate
 // arm/disarm verbs.
 type AlarmSink interface {
 	// Arm / Disarm / Silence carry the optional code parsed from the JSON
 	// command envelope (docs/alarm-concept.md §11). The sink validates it
 	// through the engine's code policy; an empty code is code-free.
-	Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error
-	Disarm(ctx context.Context, areaID, code string) error
-	Silence(ctx context.Context, areaID, code string) error
-	// Panic fires the engine's loud panic path for an area (the HA
+	Arm(ctx context.Context, zoneID string, mode hmenum.AlarmMode, code string) error
+	Disarm(ctx context.Context, zoneID, code string) error
+	Silence(ctx context.Context, zoneID, code string) error
+	// Panic fires the engine's loud panic path for an zone (the HA
 	// TRIGGER command, docs/alarm-concept.md §7).
-	Panic(ctx context.Context, areaID string) error
-	// Master verbs act on every area at once and stay code-free — a single
-	// code cannot express the union of per-area policies (the individual
-	// area panels carry the code prompt).
+	Panic(ctx context.Context, zoneID string) error
+	// Master verbs act on every zone at once and stay code-free — a single
+	// code cannot express the union of per-zone policies (the individual
+	// zone panels carry the code prompt).
 	MasterArm(ctx context.Context, mode hmenum.AlarmMode) error
 	MasterDisarm(ctx context.Context) error
 }
@@ -398,9 +398,9 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe schedule_switch: %w", err)
 	}
-	// {base}/alarm/{area}/set — the daemon-level alarm arm/disarm/silence
-	// plane. Areas are daemon-level, so the topic carries no <central>
-	// segment; the reserved <area> "master" routes to the aggregate verbs.
+	// {base}/alarm/{zone}/set — the daemon-level alarm arm/disarm/silence
+	// plane. Zones are daemon-level, so the topic carries no <central>
+	// segment; the reserved <zone> "master" routes to the aggregate verbs.
 	if _, err := c.sub.Subscribe(ctx, base+"/alarm/+/set", c.qos, LegacyHandler(c.handleAlarmCommand)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe alarm_command: %w", err)
@@ -797,8 +797,8 @@ type alarmCommandPayload struct {
 	Code   string `json:"code"`
 }
 
-// handleAlarmCommand routes a payload from `<base>/alarm/<area>/set` into
-// the alarm sink. The <area> segment is an area ID or the reserved
+// handleAlarmCommand routes a payload from `<base>/alarm/<zone>/set` into
+// the alarm sink. The <zone> segment is an zone ID or the reserved
 // "master" token; the payload is either a bare HA command string
 // (ARM_HOME / ARM_AWAY / … / DISARM, plus the SILENCE extension) or the
 // JSON {"action":…,"code":…} envelope. Unknown payloads are logged and
@@ -808,13 +808,13 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 		c.logger.Debug("mqtt.command.alarm.retained_drop", slog.String("topic", topic))
 		return
 	}
-	// <base>/alarm/<area>/set
+	// <base>/alarm/<zone>/set
 	parts := strings.Split(topic, "/")
 	if len(parts) != 4 || parts[1] != "alarm" || parts[3] != "set" {
 		c.logger.Warn("mqtt.command.alarm.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	area := parts[2]
+	zone := parts[2]
 	action, code := parseAlarmAction(body)
 	if action == "" {
 		c.logger.Warn("mqtt.command.alarm.empty_payload", slog.String("topic", topic))
@@ -827,7 +827,7 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 		return
 	}
 	c.incReceivedCommands()
-	c.dispatchAlarm(topic, area, action, code)
+	c.dispatchAlarm(topic, zone, action, code)
 }
 
 // alarmCommandTrigger is the HA panic command routed onto the engine's
@@ -835,12 +835,12 @@ func (c *CommandSubscriber) handleAlarmCommand(topic string, body []byte, retain
 const alarmCommandTrigger = "TRIGGER"
 
 // dispatchAlarm resolves the HA command string onto the alarm verb and
-// enqueues it. The reserved "master" area routes to the aggregate verbs;
+// enqueues it. The reserved "master" zone routes to the aggregate verbs;
 // SILENCE and TRIGGER have no master form and are dropped for it. The
-// parsed code is threaded into the per-area verbs and validated by the
+// parsed code is threaded into the per-zone verbs and validated by the
 // sink; the master verbs stay code-free.
-func (c *CommandSubscriber) dispatchAlarm(topic, area, action, code string) {
-	master := area == alarmMasterArea
+func (c *CommandSubscriber) dispatchAlarm(topic, zone, action, code string) {
+	master := zone == alarmMasterZone
 	switch action {
 	case alarmpanel.HAAlarmCommandDisarm:
 		c.dispatcher.Enqueue(topic, func() {
@@ -850,7 +850,7 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action, code string) {
 			if master {
 				err = c.alarmSink.MasterDisarm(ctx)
 			} else {
-				err = c.alarmSink.Disarm(ctx, area, code)
+				err = c.alarmSink.Disarm(ctx, zone, code)
 			}
 			if err != nil {
 				c.logger.Warn("mqtt.command.alarm.disarm",
@@ -865,7 +865,7 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action, code string) {
 		c.dispatcher.Enqueue(topic, func() {
 			ctx, cancel := context.WithCancel(c.lifecycleCtx)
 			defer cancel()
-			if err := c.alarmSink.Silence(ctx, area, code); err != nil {
+			if err := c.alarmSink.Silence(ctx, zone, code); err != nil {
 				c.logger.Warn("mqtt.command.alarm.silence",
 					slog.String("topic", topic), slog.String("err", err.Error()))
 			}
@@ -878,7 +878,7 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action, code string) {
 		c.dispatcher.Enqueue(topic, func() {
 			ctx, cancel := context.WithCancel(c.lifecycleCtx)
 			defer cancel()
-			if err := c.alarmSink.Panic(ctx, area); err != nil {
+			if err := c.alarmSink.Panic(ctx, zone); err != nil {
 				c.logger.Warn("mqtt.command.alarm.trigger",
 					slog.String("topic", topic), slog.String("err", err.Error()))
 			}
@@ -897,7 +897,7 @@ func (c *CommandSubscriber) dispatchAlarm(topic, area, action, code string) {
 			if master {
 				err = c.alarmSink.MasterArm(ctx, mode)
 			} else {
-				err = c.alarmSink.Arm(ctx, area, mode, code)
+				err = c.alarmSink.Arm(ctx, zone, mode, code)
 			}
 			if err != nil {
 				c.logger.Warn("mqtt.command.alarm.arm",

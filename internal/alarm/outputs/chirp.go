@@ -18,23 +18,23 @@ import (
 const chirpDuration = time.Second
 
 // Chirp implements engine.OutputPort: best-effort confirmation
-// squawks and countdown ticks on the area's chirp outputs. Chirps
+// squawks and countdown ticks on the zone's chirp outputs. Chirps
 // degrade first (S5): emissions are rate-limited per output, ticks
 // thin to an accelerating pattern, and every chirp is suppressed
 // while an alarm activation is in flight — chirp radio budget must
 // never compete with a stop.
-func (m *Manager) Chirp(ctx context.Context, areaID string, req engine.ChirpRequest) error {
+func (m *Manager) Chirp(ctx context.Context, zoneID string, req engine.ChirpRequest) error {
 	m.mu.Lock()
-	instances := append([]*instance(nil), m.byArea[areaID]...)
-	areaBusy := false
+	instances := append([]*instance(nil), m.byZone[zoneID]...)
+	zoneBusy := false
 	for _, act := range m.active {
-		if act.areaID == areaID {
-			areaBusy = true
+		if act.zoneID == zoneID {
+			zoneBusy = true
 			break
 		}
 	}
 	m.mu.Unlock()
-	if areaBusy {
+	if zoneBusy {
 		return nil
 	}
 	if isTick(req.Kind) && !tickDue(req.Remaining) {

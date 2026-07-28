@@ -12,15 +12,15 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// AlarmIncident is one trigger episode of an alarm area. It carries
+// AlarmIncident is one trigger episode of an alarm zone. It carries
 // the safety-critical persisted counters: the silenced flag (silence
 // is incident-scoped and survives restarts), the re-trigger cycle
 // counter, the cumulative acoustic-milliseconds ledger, and the
 // restore-driven re-fire counter feeding the restart-loop breaker.
-// ClosedAtMS == 0 marks the open incident of an area.
+// ClosedAtMS == 0 marks the open incident of an zone.
 type AlarmIncident struct {
 	ID                int64
-	AreaID            string
+	ZoneID            string
 	Mode              hmenum.AlarmMode
 	CauseJSON         string
 	StartedAtMS       int64
@@ -50,13 +50,13 @@ func NewAlarmIncidentStore(db *sql.DB) *AlarmIncidentStore { return &AlarmIncide
 // Create inserts a new incident and returns its ID.
 func (s *AlarmIncidentStore) Create(ctx context.Context, inc AlarmIncident) (int64, error) {
 	const q = `
-INSERT INTO alarm_incidents (area_id, mode, cause_json, started_at_ms, trigger_deadline_ms,
+INSERT INTO alarm_incidents (zone_id, mode, cause_json, started_at_ms, trigger_deadline_ms,
     silenced, silenced_at_ms, silenced_by, retrigger_cycles, acoustic_ms, restore_refires,
     closed_at_ms, close_reason)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := s.db.ExecContext(
 		ctx, q,
-		inc.AreaID, string(inc.Mode), inc.CauseJSON, inc.StartedAtMS, inc.TriggerDeadlineMS,
+		inc.ZoneID, string(inc.Mode), inc.CauseJSON, inc.StartedAtMS, inc.TriggerDeadlineMS,
 		boolToInt(inc.Silenced), inc.SilencedAtMS, inc.SilencedBy, inc.RetriggerCycles,
 		inc.AcousticMS, inc.RestoreRefires, inc.ClosedAtMS, inc.CloseReason,
 	)
@@ -79,13 +79,13 @@ func (s *AlarmIncidentStore) Get(ctx context.Context, id int64) (AlarmIncident, 
 	return inc, true, nil
 }
 
-// GetOpenByArea returns the open (not yet closed) incident of areaID.
+// GetOpenByZone returns the open (not yet closed) incident of zoneID.
 // The boolean reports whether one exists. The engine keeps at most one
-// incident open per area; if historical corruption ever leaves more,
+// incident open per zone; if historical corruption ever leaves more,
 // the newest wins.
-func (s *AlarmIncidentStore) GetOpenByArea(ctx context.Context, areaID string) (AlarmIncident, bool, error) {
-	q := alarmIncidentSelect + ` WHERE area_id = ? AND closed_at_ms = 0 ORDER BY id DESC LIMIT 1`
-	inc, err := scanAlarmIncident(s.db.QueryRowContext(ctx, q, areaID))
+func (s *AlarmIncidentStore) GetOpenByZone(ctx context.Context, zoneID string) (AlarmIncident, bool, error) {
+	q := alarmIncidentSelect + ` WHERE zone_id = ? AND closed_at_ms = 0 ORDER BY id DESC LIMIT 1`
+	inc, err := scanAlarmIncident(s.db.QueryRowContext(ctx, q, zoneID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return AlarmIncident{}, false, nil
 	}
@@ -95,11 +95,11 @@ func (s *AlarmIncidentStore) GetOpenByArea(ctx context.Context, areaID string) (
 	return inc, true, nil
 }
 
-// ListByArea returns incidents of areaID, newest first. limit <= 0
+// ListByZone returns incidents of zoneID, newest first. limit <= 0
 // returns every row.
-func (s *AlarmIncidentStore) ListByArea(ctx context.Context, areaID string, limit int) ([]AlarmIncident, error) {
-	q := alarmIncidentSelect + ` WHERE area_id = ? ORDER BY id DESC`
-	args := []any{areaID}
+func (s *AlarmIncidentStore) ListByZone(ctx context.Context, zoneID string, limit int) ([]AlarmIncident, error) {
+	q := alarmIncidentSelect + ` WHERE zone_id = ? ORDER BY id DESC`
+	args := []any{zoneID}
 	if limit > 0 {
 		q += ` LIMIT ?`
 		args = append(args, limit)
@@ -212,7 +212,7 @@ func boolToInt(b bool) int {
 }
 
 const alarmIncidentSelect = `
-SELECT id, area_id, mode, cause_json, started_at_ms, trigger_deadline_ms,
+SELECT id, zone_id, mode, cause_json, started_at_ms, trigger_deadline_ms,
     silenced, silenced_at_ms, silenced_by, retrigger_cycles, acoustic_ms,
     restore_refires, closed_at_ms, close_reason
 FROM alarm_incidents`
@@ -221,7 +221,7 @@ func scanAlarmIncident(sc scannable) (AlarmIncident, error) {
 	var inc AlarmIncident
 	var mode string
 	var silenced int
-	if err := sc.Scan(&inc.ID, &inc.AreaID, &mode, &inc.CauseJSON, &inc.StartedAtMS,
+	if err := sc.Scan(&inc.ID, &inc.ZoneID, &mode, &inc.CauseJSON, &inc.StartedAtMS,
 		&inc.TriggerDeadlineMS, &silenced, &inc.SilencedAtMS, &inc.SilencedBy,
 		&inc.RetriggerCycles, &inc.AcousticMS, &inc.RestoreRefires,
 		&inc.ClosedAtMS, &inc.CloseReason); err != nil {

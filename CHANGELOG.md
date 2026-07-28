@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.49.2]
 
+### Changed
+
+- **The alarm system's armable unit is now called a "zone" everywhere** —
+  formerly "area", which is being freed up for the upcoming room-grouping
+  concept above CCU rooms. This is a deliberate breaking rename across the
+  whole surface (no external API consumers yet): REST paths
+  (`/api/v1/alarm/zones…`), request/response fields (`zone_id`,
+  `zone_name`), WebSocket commands/broadcasts, MQTT alarm topics
+  (`<base>/alarm/<zone>/…`, pseudo-zone `master`), the `hmcli` output, the
+  SPA (UI texts DE "Zone"/EN "zone"), and the SQLite schema — a
+  data-preserving migration renames the tables/columns in place,
+  including the ids inside stored code bindings.
+
 ### Fixed
 
 - **The same siren (or any output/sensor) can now be enrolled in more than

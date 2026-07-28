@@ -1,25 +1,25 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
-import type { AlarmArea } from "$lib/api/types";
+import type { AlarmZone } from "$lib/api/types";
 
-let mockAreasConfig: AlarmArea[] = [];
+let mockZonesConfig: AlarmZone[] = [];
 const mockRefresh = vi.fn().mockResolvedValue(undefined);
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
-    get areasConfig() {
-      return mockAreasConfig;
+    get zonesConfig() {
+      return mockZonesConfig;
     },
     refresh: (...args: unknown[]) => mockRefresh(...args),
   },
 }));
 
-const mockGetAlarmArea = vi.fn();
-const mockPutAlarmArea = vi.fn();
+const mockGetAlarmZone = vi.fn();
+const mockPutAlarmZone = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
-    getAlarmArea: (...args: unknown[]) => mockGetAlarmArea(...args),
-    putAlarmArea: (...args: unknown[]) => mockPutAlarmArea(...args),
+    getAlarmZone: (...args: unknown[]) => mockGetAlarmZone(...args),
+    putAlarmZone: (...args: unknown[]) => mockPutAlarmZone(...args),
   },
   friendlyError: (err: unknown) => (err instanceof Error ? err.message : "error"),
 }));
@@ -34,8 +34,8 @@ vi.mock("$lib/i18n", () => ({
 
 import AlarmPolicies from "./AlarmPolicies.svelte";
 
-function area(config: Record<string, unknown> = {}) {
-  return { id: "area-1", name: "Ground floor", position: 1, config };
+function zone(config: Record<string, unknown> = {}) {
+  return { id: "zone-1", name: "Ground floor", position: 1, config };
 }
 
 // Locates a Switch by the text of the <label> that wraps it — every toggle
@@ -54,9 +54,9 @@ function switchByLabel(container: HTMLElement, text: string): HTMLElement {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAreasConfig = [{ id: "area-1", name: "Ground floor" }];
-  mockGetAlarmArea.mockResolvedValue(area());
-  mockPutAlarmArea.mockResolvedValue(undefined);
+  mockZonesConfig = [{ id: "zone-1", name: "Ground floor" }];
+  mockGetAlarmZone.mockResolvedValue(zone());
+  mockPutAlarmZone.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -99,7 +99,7 @@ describe("AlarmPolicies — schedules", () => {
 });
 
 describe("AlarmPolicies — code policy toggles persist via the mocked client", () => {
-  it("flips require_arm on and saves it through putAlarmArea", async () => {
+  it("flips require_arm on and saves it through putAlarmZone", async () => {
     const { container, getByRole, findByText } = render(AlarmPolicies);
     await findByText("alarm.policies.section.codes");
 
@@ -110,13 +110,13 @@ describe("AlarmPolicies — code policy toggles persist via the mocked client", 
     expect(requireArm).toHaveAttribute("aria-checked", "true");
 
     // The dirty banner appears once the local draft differs from the
-    // loaded config, offering the Save that PUTs the whole area back.
+    // loaded config, offering the Save that PUTs the whole zone back.
     expect(getByRole("button", { name: "common.save" })).toBeTruthy();
     await fireEvent.click(getByRole("button", { name: "common.save" }));
 
-    await waitFor(() => expect(mockPutAlarmArea).toHaveBeenCalledOnce());
-    const [id, sent] = mockPutAlarmArea.mock.calls[0];
-    expect(id).toBe("area-1");
+    await waitFor(() => expect(mockPutAlarmZone).toHaveBeenCalledOnce());
+    const [id, sent] = mockPutAlarmZone.mock.calls[0];
+    expect(id).toBe("zone-1");
     expect(sent.config.code_policy.require_arm).toBe(true);
   });
 
@@ -133,14 +133,14 @@ describe("AlarmPolicies — code policy toggles persist via the mocked client", 
     await fireEvent.click(silentSwitch);
     await fireEvent.click(getByRole("button", { name: "common.save" }));
 
-    await waitFor(() => expect(mockPutAlarmArea).toHaveBeenCalledOnce());
-    const sent = mockPutAlarmArea.mock.calls[0][1];
+    await waitFor(() => expect(mockPutAlarmZone).toHaveBeenCalledOnce());
+    const sent = mockPutAlarmZone.mock.calls[0][1];
     expect(sent.config.hazard_outputs.silent).toBe(true);
   });
 
   it("loads an existing require_disarm=false policy into the tri-state select as 'never'", async () => {
-    mockGetAlarmArea.mockResolvedValueOnce(
-      area({ code_policy: { require_disarm: false } }),
+    mockGetAlarmZone.mockResolvedValueOnce(
+      zone({ code_policy: { require_disarm: false } }),
     );
     const { findByText } = render(AlarmPolicies);
 

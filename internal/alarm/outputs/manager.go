@@ -76,7 +76,7 @@ type Manager struct {
 	stopVerifyWindow time.Duration
 
 	mu        sync.Mutex
-	byArea    map[string][]*instance
+	byZone    map[string][]*instance
 	active    map[string]*activation // by output ID
 	demands   map[string]demandRec   // by output ID; see arbitration.go
 	lastChirp map[string]time.Time
@@ -116,7 +116,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		defaultSiren:     cfg.DefaultSirenDuration,
 		maxPerIncident:   cfg.MaxAcousticPerIncident,
 		stopVerifyWindow: cfg.StopVerifyWindow,
-		byArea:           map[string][]*instance{},
+		byZone:           map[string][]*instance{},
 		active:           map[string]*activation{},
 		demands:          map[string]demandRec{},
 		lastChirp:        map[string]time.Time{},
@@ -139,20 +139,20 @@ func (m *Manager) Reload(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("outputs: load rows: %w", err)
 	}
-	byArea := map[string][]*instance{}
+	byZone := map[string][]*instance{}
 	for i := range rows {
 		row := rows[i]
 		cfg, err := ParseOutputConfig(row.ConfigJSON)
 		if err != nil {
 			return fmt.Errorf("outputs: output %q: %w", row.ID, err)
 		}
-		byArea[row.AreaID] = append(byArea[row.AreaID], &instance{row: row, cfg: cfg})
+		byZone[row.ZoneID] = append(byZone[row.ZoneID], &instance{row: row, cfg: cfg})
 	}
-	for _, list := range byArea {
+	for _, list := range byZone {
 		sort.Slice(list, func(i, j int) bool { return list[i].row.ID < list[j].row.ID })
 	}
 	m.mu.Lock()
-	m.byArea = byArea
+	m.byZone = byZone
 	m.mu.Unlock()
 	rowIDs := make(map[string]struct{}, len(rows))
 	for i := range rows {
@@ -167,9 +167,9 @@ func (m *Manager) Reload(ctx context.Context) error {
 // ledger before each device write (S1 over-count direction); a
 // per-output failure is journaled and joined into the returned error,
 // but never stops the remaining outputs from firing.
-func (m *Manager) FireCycle(ctx context.Context, areaID string, incident sqlitestore.AlarmIncident, opts engine.FireOptions) error {
+func (m *Manager) FireCycle(ctx context.Context, zoneID string, incident sqlitestore.AlarmIncident, opts engine.FireOptions) error {
 	m.mu.Lock()
-	instances := append([]*instance(nil), m.byArea[areaID]...)
+	instances := append([]*instance(nil), m.byZone[zoneID]...)
 	m.mu.Unlock()
 
 	remaining := m.acousticBudget(ctx, incident)
@@ -208,7 +208,7 @@ func (m *Manager) FireCycle(ctx context.Context, areaID string, incident sqlites
 			// own path.
 		}
 		if err != nil {
-			m.journalFault(ctx, areaID, "output_fire_failed", inst.row.ID, incident.ID, err)
+			m.journalFault(ctx, zoneID, "output_fire_failed", inst.row.ID, incident.ID, err)
 			errs = append(errs, fmt.Errorf("output %s: %w", inst.row.ID, err))
 		}
 	}
@@ -216,13 +216,13 @@ func (m *Manager) FireCycle(ctx context.Context, areaID string, incident sqlites
 }
 
 // StopAll implements engine.OutputPort: silence every sounding output
-// of the area at critical priority. Notification outputs are never
+// of the zone at critical priority. Notification outputs are never
 // touched; stopping more than necessary is the safe direction, so
 // every stoppable class is addressed regardless of activation
 // records.
-func (m *Manager) StopAll(ctx context.Context, areaID string, incidentID int64) error {
+func (m *Manager) StopAll(ctx context.Context, zoneID string, incidentID int64) error {
 	m.mu.Lock()
-	instances := append([]*instance(nil), m.byArea[areaID]...)
+	instances := append([]*instance(nil), m.byZone[zoneID]...)
 	m.mu.Unlock()
 
 	var errs []error
@@ -232,7 +232,7 @@ func (m *Manager) StopAll(ctx context.Context, areaID string, incidentID int64) 
 			hmenum.AlarmOutputClassSwitchedSiren, hmenum.AlarmOutputClassSmokeSounder,
 			hmenum.AlarmOutputClassAlarmLight, hmenum.AlarmOutputClassChirp:
 			if err := m.stopAndVerify(ctx, inst, incidentID); err != nil {
-				m.journalFault(ctx, areaID, "output_stop_failed", inst.row.ID, incidentID, err)
+				m.journalFault(ctx, zoneID, "output_stop_failed", inst.row.ID, incidentID, err)
 				errs = append(errs, fmt.Errorf("output %s: %w", inst.row.ID, err))
 			}
 		case hmenum.AlarmOutputClassNotification, hmenum.AlarmOutputClassSysvarMirror:
@@ -295,7 +295,7 @@ func (m *Manager) fireSiren(ctx context.Context, inst *instance, incidentID int6
 			return err
 		}
 		if d <= 0 {
-			m.journalFault(ctx, inst.row.AreaID, "acoustic_budget_exhausted", inst.row.ID, incidentID, nil)
+			m.journalFault(ctx, inst.row.ZoneID, "acoustic_budget_exhausted", inst.row.ID, incidentID, nil)
 			return nil
 		}
 		on.Duration = d
@@ -351,7 +351,7 @@ func (m *Manager) fireSwitchedSiren(ctx context.Context, inst *instance, inciden
 		return err
 	}
 	if d <= 0 {
-		m.journalFault(ctx, inst.row.AreaID, "acoustic_budget_exhausted", inst.row.ID, incidentID, nil)
+		m.journalFault(ctx, inst.row.ZoneID, "acoustic_budget_exhausted", inst.row.ID, incidentID, nil)
 		return nil
 	}
 	if err := dev.TurnOnBounded(ctx, d, inst.cfg.Level, hmenum.CommandPriorityHigh); err != nil {
@@ -376,7 +376,7 @@ func (m *Manager) fireSmokeSounder(ctx context.Context, inst *instance, incident
 		return err
 	}
 	if d <= 0 {
-		m.journalFault(ctx, inst.row.AreaID, "acoustic_budget_exhausted", inst.row.ID, incidentID, nil)
+		m.journalFault(ctx, inst.row.ZoneID, "acoustic_budget_exhausted", inst.row.ID, incidentID, nil)
 		return nil
 	}
 	// Watchdog first: if the activation write succeeds but the
@@ -430,16 +430,16 @@ func classEligible(class hmenum.AlarmOutputClass, opts engine.FireOptions) bool 
 }
 
 // journalFault records a driver fault (fail-visible, S7).
-func (m *Manager) journalFault(ctx context.Context, areaID, event, outputID string, incidentID int64, cause error) {
+func (m *Manager) journalFault(ctx context.Context, zoneID, event, outputID string, incidentID int64, cause error) {
 	details := map[string]any{"output_id": outputID}
 	if cause != nil {
 		details["error"] = cause.Error()
 	}
 	if _, err := m.journal.Append(ctx, engine.JournalEntry{
-		AreaID: areaID, Class: hmenum.AlarmJournalClassFault, Event: event,
+		ZoneID: zoneID, Class: hmenum.AlarmJournalClassFault, Event: event,
 		IncidentID: incidentID, Details: details,
 	}); err != nil {
-		m.log.Error("alarm output journal append failed", "area", areaID, "event", event, "error", err)
+		m.log.Error("alarm output journal append failed", "zone", zoneID, "event", event, "error", err)
 	}
 }
 

@@ -18,27 +18,27 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// armRequest builds a POST /alarm/areas/{id}/arm request with a chi "id"
+// armRequest builds a POST /alarm/zones/{id}/arm request with a chi "id"
 // route param already attached.
-func armRequest(t *testing.T, areaID string, body hmapi.AlarmArmRequest) *http.Request {
+func armRequest(t *testing.T, zoneID string, body hmapi.AlarmArmRequest) *http.Request {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas/"+areaID+"/arm", jsonRequestBody(t, body))
-	return withChiParam(req, "id", areaID)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones/"+zoneID+"/arm", jsonRequestBody(t, body))
+	return withChiParam(req, "id", zoneID)
 }
 
-// TestArmAlarmArea_HappyPath_Returns200WithBypassedList verifies a
+// TestArmAlarmZone_HappyPath_Returns200WithBypassedList verifies a
 // successful arm answers 200 with the resulting state, the exit-delay
 // length, and the (explicitly requested) bypass list.
-func TestArmAlarmArea_HappyPath_Returns200WithBypassedList(t *testing.T) {
+func TestArmAlarmZone_HappyPath_Returns200WithBypassedList(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(30, 15, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
 	fx.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	rec := &captureRecorder{}
 
 	req := armRequest(t, "eg", hmapi.AlarmArmRequest{Mode: string(hmenum.AlarmModeFull), Bypass: []string{"door"}})
 	w := httptest.NewRecorder()
-	ArmAlarmArea(fx, rec).ServeHTTP(w, req)
+	ArmAlarmZone(fx, rec).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
@@ -47,7 +47,7 @@ func TestArmAlarmArea_HappyPath_Returns200WithBypassedList(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &accepted); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if accepted.State != string(hmenum.AlarmAreaStateArming) {
+	if accepted.State != string(hmenum.AlarmZoneStateArming) {
 		t.Errorf("state = %q, want arming", accepted.State)
 	}
 	if accepted.ExitDelayS != 30 {
@@ -61,19 +61,19 @@ func TestArmAlarmArea_HappyPath_Returns200WithBypassedList(t *testing.T) {
 	}
 }
 
-// TestArmAlarmArea_NotReady_Returns409WithBlockers verifies an arm
+// TestArmAlarmZone_NotReady_Returns409WithBlockers verifies an arm
 // attempt against an open, non-bypassed sensor is refused with 409 and
 // the problem body's field errors name the blocking sensor.
-func TestArmAlarmArea_NotReady_Returns409WithBlockers(t *testing.T) {
+func TestArmAlarmZone_NotReady_Returns409WithBlockers(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	fx.eng.HandleSensorEvent(context.Background(), "door", true)
 
 	req := armRequest(t, "eg", hmapi.AlarmArmRequest{Mode: string(hmenum.AlarmModeFull)})
 	w := httptest.NewRecorder()
-	ArmAlarmArea(fx, nil).ServeHTTP(w, req)
+	ArmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409, body=%s", w.Code, w.Body.String())
@@ -85,25 +85,25 @@ func TestArmAlarmArea_NotReady_Returns409WithBlockers(t *testing.T) {
 	if len(problemBody.Errors) != 1 || problemBody.Errors[0].Field != "door" {
 		t.Errorf("problem errors = %+v, want one field error naming door", problemBody.Errors)
 	}
-	// The area must not have moved off disarmed.
-	snap, ok := fx.eng.Area("eg")
-	if !ok || snap.State != hmenum.AlarmAreaStateDisarmed {
-		t.Errorf("area state = %+v, want to remain disarmed after refusal", snap)
+	// The zone must not have moved off disarmed.
+	snap, ok := fx.eng.Zone("eg")
+	if !ok || snap.State != hmenum.AlarmZoneStateDisarmed {
+		t.Errorf("zone state = %+v, want to remain disarmed after refusal", snap)
 	}
 }
 
-// TestArmAlarmArea_ForceArm_Returns200AndBypassesBlockers verifies
+// TestArmAlarmZone_ForceArm_Returns200AndBypassesBlockers verifies
 // force=true accepts the arm despite the blocker and reports it bypassed.
-func TestArmAlarmArea_ForceArm_Returns200AndBypassesBlockers(t *testing.T) {
+func TestArmAlarmZone_ForceArm_Returns200AndBypassesBlockers(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	fx.eng.HandleSensorEvent(context.Background(), "door", true)
 
 	req := armRequest(t, "eg", hmapi.AlarmArmRequest{Mode: string(hmenum.AlarmModeFull), Force: true, SkipDelay: true})
 	w := httptest.NewRecorder()
-	ArmAlarmArea(fx, nil).ServeHTTP(w, req)
+	ArmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
@@ -112,7 +112,7 @@ func TestArmAlarmArea_ForceArm_Returns200AndBypassesBlockers(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &accepted); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if accepted.State != string(hmenum.AlarmAreaStateArmed) {
+	if accepted.State != string(hmenum.AlarmZoneStateArmed) {
 		t.Errorf("state = %q, want armed (skip_delay)", accepted.State)
 	}
 	sort.Strings(accepted.Bypassed)
@@ -121,44 +121,44 @@ func TestArmAlarmArea_ForceArm_Returns200AndBypassesBlockers(t *testing.T) {
 	}
 }
 
-func TestArmAlarmArea_UnknownArea_Returns404(t *testing.T) {
+func TestArmAlarmZone_UnknownZone_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
 	req := armRequest(t, "missing", hmapi.AlarmArmRequest{Mode: string(hmenum.AlarmModeFull)})
 	w := httptest.NewRecorder()
-	ArmAlarmArea(fx, nil).ServeHTTP(w, req)
+	ArmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404, body=%s", w.Code, w.Body.String())
 	}
 }
 
-func TestArmAlarmArea_InvalidMode_Returns400(t *testing.T) {
+func TestArmAlarmZone_InvalidMode_Returns400(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 
 	req := armRequest(t, "eg", hmapi.AlarmArmRequest{Mode: "not-a-mode"})
 	w := httptest.NewRecorder()
-	ArmAlarmArea(fx, nil).ServeHTTP(w, req)
+	ArmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400, body=%s", w.Code, w.Body.String())
 	}
 }
 
-// TestArmAlarmArea_UnconfiguredMode_Returns400 verifies arming into a
-// syntactically valid mode the area does not configure is rejected, not
+// TestArmAlarmZone_UnconfiguredMode_Returns400 verifies arming into a
+// syntactically valid mode the zone does not configure is rejected, not
 // silently accepted.
-func TestArmAlarmArea_UnconfiguredMode_Returns400(t *testing.T) {
+func TestArmAlarmZone_UnconfiguredMode_Returns400(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 
 	req := armRequest(t, "eg", hmapi.AlarmArmRequest{Mode: string(hmenum.AlarmModeNight)})
 	w := httptest.NewRecorder()
-	ArmAlarmArea(fx, nil).ServeHTTP(w, req)
+	ArmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400, body=%s", w.Code, w.Body.String())

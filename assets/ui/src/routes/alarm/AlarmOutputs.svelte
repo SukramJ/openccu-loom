@@ -27,7 +27,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Output picker (docs/alarm-concept.md §7 / §12.2). Manages the enrolled
-  // output set of one alarm area as class cards. Each card carries the
+  // output set of one alarm zone as class cards. Each card carries the
   // class Badge, per-mode assignment chips, loud/silent policy, outdoor +
   // shared-with-CCU switches, and the duration/tone/pattern/level fields
   // its class supports. Smoke-sounder and switched-siren classes render
@@ -107,9 +107,9 @@
   const OUTPUT_RE =
     /asir|sir|swsd|ps[m]?\b|psm|switch|schalt|dimmer|dim|light|licht|lamp|relay|relais|bsm|fsm|dr\b|mp3/i;
 
-  // --- area state --------------------------------------------------
-  const areas = $derived(alarmPanelStore.areasConfig);
-  let areaId = $state("");
+  // --- zone state --------------------------------------------------
+  const zones = $derived(alarmPanelStore.zonesConfig);
+  let zoneId = $state("");
 
   let outputs = $state<AlarmOutput[]>([]);
   let loading = $state(false);
@@ -316,14 +316,14 @@
 
   // --- data loading ------------------------------------------------
   async function loadOutputs() {
-    if (!areaId) {
+    if (!zoneId) {
       outputs = [];
       return;
     }
     loading = true;
     loadError = null;
     try {
-      outputs = await api.listAlarmAreaOutputs(areaId);
+      outputs = await api.listAlarmZoneOutputs(zoneId);
       dirty = false;
     } catch (err) {
       loadError = friendlyError(err, t);
@@ -333,10 +333,10 @@
   }
 
   async function save() {
-    if (!areaId) return;
+    if (!zoneId) return;
     saving = true;
     try {
-      await api.putAlarmAreaOutputs(areaId, outputs);
+      await api.putAlarmZoneOutputs(zoneId, outputs);
       toastStore.success(t("alarm.toast.saved"));
       dirty = false;
       await alarmPanelStore.refresh();
@@ -512,18 +512,18 @@
     if (e.key === "Escape" && addOpen) addOpen = false;
   }
 
-  const areaOptions = $derived(areas.map((a) => ({ value: a.id, label: a.name })));
+  const zoneOptions = $derived(zones.map((a) => ({ value: a.id, label: a.name })));
 
   $effect(() => {
-    if (areas.length > 0 && !areas.some((a) => a.id === areaId)) {
-      areaId = areas[0].id;
+    if (zones.length > 0 && !zones.some((a) => a.id === zoneId)) {
+      zoneId = zones[0].id;
     }
   });
 
   let loadedFor = $state("");
   $effect(() => {
-    if (areaId && areaId !== loadedFor) {
-      loadedFor = areaId;
+    if (zoneId && zoneId !== loadedFor) {
+      loadedFor = zoneId;
       void loadOutputs();
     }
   });
@@ -537,11 +537,11 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if alarmPanelStore.loading && areas.length === 0}
+{#if alarmPanelStore.loading && zones.length === 0}
   <LoadingState />
-{:else if alarmPanelStore.error && areas.length === 0}
+{:else if alarmPanelStore.error && zones.length === 0}
   <ErrorState message={alarmPanelStore.error} onRetry={() => void alarmPanelStore.refresh()} />
-{:else if areas.length === 0}
+{:else if zones.length === 0}
   <EmptyState
     icon="mdi:shield-home"
     message={t("alarm.overview.empty")}
@@ -554,12 +554,12 @@
     {/snippet}
   </EmptyState>
 {:else}
-  <!-- Toolbar: area selector + add -->
+  <!-- Toolbar: zone selector + add -->
   <div class="mb-4 flex flex-wrap items-center gap-3">
     <label class="flex items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]">
-      <span>{t("alarm.sensors.area")}</span>
+      <span>{t("alarm.sensors.zone")}</span>
       <div class="min-w-48">
-        <Select options={areaOptions} bind:value={areaId} />
+        <Select options={zoneOptions} bind:value={zoneId} />
       </div>
     </label>
     <Button size="sm" class="ml-auto" onclick={openAdd}>

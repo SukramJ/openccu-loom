@@ -40,7 +40,7 @@ func (f *fakeWSAlarmCodeAdmin) GetCode(_ context.Context, id string) (hmapi.Alar
 func (f *fakeWSAlarmCodeAdmin) CreateCode(_ context.Context, req hmapi.AlarmCodeRequest) (hmapi.AlarmCode, error) {
 	f.nextID++
 	id := "c" + string(rune('0'+f.nextID))
-	c := hmapi.AlarmCode{ID: id, Name: req.Name, Kind: req.Kind, Duress: req.Duress, Perms: req.Perms, Areas: req.Areas, Enabled: req.Enabled}
+	c := hmapi.AlarmCode{ID: id, Name: req.Name, Kind: req.Kind, Duress: req.Duress, Perms: req.Perms, Zones: req.Zones, Enabled: req.Enabled}
 	f.codes[id] = c
 	return c, nil
 }
@@ -49,7 +49,7 @@ func (f *fakeWSAlarmCodeAdmin) UpdateCode(_ context.Context, id string, req hmap
 	if _, ok := f.codes[id]; !ok {
 		return hmapi.AlarmCode{}, false, nil
 	}
-	c := hmapi.AlarmCode{ID: id, Name: req.Name, Kind: req.Kind, Duress: req.Duress, Perms: req.Perms, Areas: req.Areas, Enabled: req.Enabled}
+	c := hmapi.AlarmCode{ID: id, Name: req.Name, Kind: req.Kind, Duress: req.Duress, Perms: req.Perms, Zones: req.Zones, Enabled: req.Enabled}
 	f.codes[id] = c
 	return c, true, nil
 }

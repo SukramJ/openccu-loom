@@ -21,7 +21,7 @@ import (
 type AlarmJournalEntry struct {
 	ID          int64
 	TsMS        int64
-	AreaID      string
+	ZoneID      string
 	Class       hmenum.AlarmJournalClass
 	Event       string
 	Actor       string
@@ -32,12 +32,12 @@ type AlarmJournalEntry struct {
 }
 
 // AlarmJournalFilter bounds an AlarmJournalStore.Query call. The zero value
-// of every field disables that criterion: AreaID "" matches every area,
+// of every field disables that criterion: ZoneID "" matches every zone,
 // Class "" matches every class, FromMS/ToMS 0 leaves that time bound open,
 // IncidentID 0 matches every entry regardless of incident, and Limit <= 0
 // returns every matching row.
 type AlarmJournalFilter struct {
-	AreaID        string
+	ZoneID        string
 	Class         hmenum.AlarmJournalClass
 	FromMS        int64
 	ToMS          int64
@@ -58,11 +58,11 @@ func NewAlarmJournalStore(db *sql.DB) *AlarmJournalStore { return &AlarmJournalS
 // input — the row id is always assigned by the database.
 func (s *AlarmJournalStore) Append(ctx context.Context, e AlarmJournalEntry) (int64, error) {
 	const q = `
-INSERT INTO alarm_journal (ts_ms, area_id, class, event, actor, source, incident_id, hidden, details_json)
+INSERT INTO alarm_journal (ts_ms, zone_id, class, event, actor, source, incident_id, hidden, details_json)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := s.db.ExecContext(
 		ctx, q,
-		e.TsMS, e.AreaID, string(e.Class), e.Event, e.Actor, e.Source, e.IncidentID,
+		e.TsMS, e.ZoneID, string(e.Class), e.Event, e.Actor, e.Source, e.IncidentID,
 		boolToInt(e.Hidden), e.DetailsJSON,
 	)
 	if err != nil {
@@ -80,9 +80,9 @@ func (s *AlarmJournalStore) Query(ctx context.Context, f AlarmJournalFilter) ([]
 		where []string
 		args  []any
 	)
-	if f.AreaID != "" {
-		where = append(where, "area_id = ?")
-		args = append(args, f.AreaID)
+	if f.ZoneID != "" {
+		where = append(where, "zone_id = ?")
+		args = append(args, f.ZoneID)
 	}
 	if f.Class != "" {
 		where = append(where, "class = ?")
@@ -105,7 +105,7 @@ func (s *AlarmJournalStore) Query(ctx context.Context, f AlarmJournalFilter) ([]
 	}
 
 	q := `
-SELECT id, ts_ms, area_id, class, event, actor, source, incident_id, hidden, details_json
+SELECT id, ts_ms, zone_id, class, event, actor, source, incident_id, hidden, details_json
 FROM alarm_journal`
 	if len(where) > 0 {
 		// The joined fragments are fixed literals; every value travels as a
@@ -150,7 +150,7 @@ func scanAlarmJournalEntry(sc scannable) (AlarmJournalEntry, error) {
 	var e AlarmJournalEntry
 	var class string
 	var hidden int
-	if err := sc.Scan(&e.ID, &e.TsMS, &e.AreaID, &class, &e.Event, &e.Actor, &e.Source,
+	if err := sc.Scan(&e.ID, &e.TsMS, &e.ZoneID, &class, &e.Event, &e.Actor, &e.Source,
 		&e.IncidentID, &hidden, &e.DetailsJSON); err != nil {
 		return AlarmJournalEntry{}, err
 	}

@@ -29,7 +29,7 @@ const (
 // mode membership (always-on hazard/panic sensors never pass through
 // here, so neither filter can delay a hazard or panic alarm). Both
 // windows are seconds-short and deliberately not restart-persisted.
-func (e *Engine) gateSensorActivation(ctx context.Context, a *area, s *sensorState, sensorID string) {
+func (e *Engine) gateSensorActivation(ctx context.Context, a *zone, s *sensorState, sensorID string) {
 	if d := time.Duration(s.cfg.HoldTimeSeconds) * time.Second; d > 0 {
 		e.scheduleHold(a, s, sensorID, d)
 		return
@@ -43,14 +43,14 @@ func (e *Engine) gateSensorActivation(ctx context.Context, a *area, s *sensorSta
 // caller holds the lock.
 //
 //nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
-func (e *Engine) scheduleHold(a *area, s *sensorState, sensorID string, d time.Duration) {
+func (e *Engine) scheduleHold(a *zone, s *sensorState, sensorID string, d time.Duration) {
 	s.cancelHold()
 	seq := s.holdSeq
-	areaID := a.id
+	zoneID := a.id
 	s.holdCancel = e.sched.Schedule(d, func() {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		aa, ok := e.areas[areaID]
+		aa, ok := e.zones[zoneID]
 		if !ok {
 			return
 		}
@@ -70,10 +70,10 @@ func (e *Engine) scheduleHold(a *area, s *sensorState, sensorID string, d time.D
 
 // gateCrossZone applies the cross-zoning group rule and dispatches the
 // activation when it passes. A suppressed first hit is journaled — a
-// single-sensor activation of an armed area must stay visible (S7),
+// single-sensor activation of an armed zone must stay visible (S7),
 // it just does not sound the sirens on its own. The caller holds the
 // lock.
-func (e *Engine) gateCrossZone(ctx context.Context, a *area, s *sensorState, sensorID string) {
+func (e *Engine) gateCrossZone(ctx context.Context, a *zone, s *sensorState, sensorID string) {
 	group := s.cfg.Group
 	if group == "" {
 		e.dispatchSensorActivation(ctx, a, s, sensorID)

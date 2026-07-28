@@ -8,8 +8,8 @@
 // internal/north/rest/router.go) against the same in-process
 // central/godevccu stack alarm_engine_e2e_test.go drives at the
 // engine level. Where that file calls engine.Engine verbs directly,
-// this one walks the same shape (create area, enroll a sensor, arm,
-// trip it, silence) entirely over HTTP: POST /alarm/areas, PUT
+// this one walks the same shape (create zone, enroll a sensor, arm,
+// trip it, silence) entirely over HTTP: POST /alarm/zones, PUT
 // .../sensors, POST .../arm, GET /alarm/state polled to triggered,
 // POST .../silence, then the persisted incident is read back from the
 // store to confirm the silence landed.
@@ -126,25 +126,25 @@ func (h *alarmRestHarness) do(method, path string, body, out any) *http.Response
 	return res
 }
 
-// waitAlarmState polls GET /alarm/state until areaID reports want or
+// waitAlarmState polls GET /alarm/state until zoneID reports want or
 // the timeout elapses, returning the last observed state.
-func (h *alarmRestHarness) waitAlarmState(areaID string, want hmenum.AlarmAreaState, timeout time.Duration) hmenum.AlarmAreaState {
+func (h *alarmRestHarness) waitAlarmState(zoneID string, want hmenum.AlarmZoneState, timeout time.Duration) hmenum.AlarmZoneState {
 	h.t.Helper()
 	deadline := time.Now().Add(timeout)
-	var last hmenum.AlarmAreaState
+	var last hmenum.AlarmZoneState
 	for {
 		var body struct {
-			Areas []hmapi.AlarmAreaStatus `json:"areas"`
+			Zones []hmapi.AlarmZoneStatus `json:"zones"`
 		}
 		res := h.do(http.MethodGet, "/alarm/state", nil, &body)
 		if res.StatusCode != http.StatusOK {
 			h.t.Fatalf("GET /alarm/state: status %d", res.StatusCode)
 		}
-		for _, a := range body.Areas {
-			if a.ID != areaID {
+		for _, a := range body.Zones {
+			if a.ID != zoneID {
 				continue
 			}
-			last = hmenum.AlarmAreaState(a.State)
+			last = hmenum.AlarmZoneState(a.State)
 			if last == want {
 				return last
 			}
@@ -157,7 +157,7 @@ func (h *alarmRestHarness) waitAlarmState(areaID string, want hmenum.AlarmAreaSt
 }
 
 // TestAlarmRestFullChainCreateArmTriggerSilence walks the whole
-// management + arm-cycle surface over HTTP: create an area, enroll the
+// management + arm-cycle surface over HTTP: create an zone, enroll the
 // SWDO window contact as a sensor, arm it, trip the window open on the
 // wire, poll the live state to triggered, silence over REST, and
 // confirm the incident is persisted silenced.
@@ -166,24 +166,24 @@ func TestAlarmRestFullChainCreateArmTriggerSilence(t *testing.T) {
 	ctx := context.Background()
 	stateKey := h.swdoStateKey()
 
-	// 1. Create the area via POST /alarm/areas.
-	areaCfg, err := json.Marshal(engine.AreaConfig{
+	// 1. Create the zone via POST /alarm/zones.
+	areaCfg, err := json.Marshal(engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {TriggerSeconds: 30},
 		},
 	})
 	if err != nil {
-		t.Fatalf("marshal area config: %v", err)
+		t.Fatalf("marshal zone config: %v", err)
 	}
-	var area hmapi.AlarmArea
-	res := h.do(http.MethodPost, "/alarm/areas", hmapi.AlarmArea{
+	var zone hmapi.AlarmZone
+	res := h.do(http.MethodPost, "/alarm/zones", hmapi.AlarmZone{
 		Name: "Erdgeschoss", Config: areaCfg,
-	}, &area)
+	}, &zone)
 	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("POST /alarm/areas: status %d", res.StatusCode)
+		t.Fatalf("POST /alarm/zones: status %d", res.StatusCode)
 	}
-	if area.ID == "" {
-		t.Fatal("POST /alarm/areas: response carried no server-generated id")
+	if zone.ID == "" {
+		t.Fatal("POST /alarm/zones: response carried no server-generated id")
 	}
 
 	// 2. Enroll the SWDO window contact via PUT .../sensors (bulk
@@ -194,7 +194,7 @@ func TestAlarmRestFullChainCreateArmTriggerSilence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal sensor config: %v", err)
 	}
-	res = h.do(http.MethodPut, "/alarm/areas/"+area.ID+"/sensors", []hmapi.AlarmSensor{{
+	res = h.do(http.MethodPut, "/alarm/zones/"+zone.ID+"/sensors", []hmapi.AlarmSensor{{
 		Central:        h.centralName(),
 		InterfaceID:    stateKey.InterfaceID,
 		ChannelAddress: stateKey.ChannelAddress,
@@ -204,40 +204,40 @@ func TestAlarmRestFullChainCreateArmTriggerSilence(t *testing.T) {
 		Config:         sensorCfg,
 	}}, nil)
 	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("PUT /alarm/areas/%s/sensors: status %d", area.ID, res.StatusCode)
+		t.Fatalf("PUT /alarm/zones/%s/sensors: status %d", zone.ID, res.StatusCode)
 	}
 
 	// 3. Arm via POST .../arm (skip_delay so the transition is
 	// synchronous — no exit-delay wait needed).
 	var accepted hmapi.AlarmArmAccepted
-	res = h.do(http.MethodPost, "/alarm/areas/"+area.ID+"/arm", hmapi.AlarmArmRequest{
+	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/arm", hmapi.AlarmArmRequest{
 		Mode: string(hmenum.AlarmModeFull), SkipDelay: true,
 	}, &accepted)
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("POST /alarm/areas/%s/arm: status %d", area.ID, res.StatusCode)
+		t.Fatalf("POST /alarm/zones/%s/arm: status %d", zone.ID, res.StatusCode)
 	}
-	if accepted.State != string(hmenum.AlarmAreaStateArmed) {
+	if accepted.State != string(hmenum.AlarmZoneStateArmed) {
 		t.Fatalf("arm response state = %q, want armed", accepted.State)
 	}
 
 	// 4. Open the window on the wire and poll GET /alarm/state until
-	// the area reports triggered.
+	// the zone reports triggered.
 	h.h.resetEvents()
 	h.injectWindow(stateKey, true)
-	if st := h.waitAlarmState(area.ID, hmenum.AlarmAreaStateTriggered, 3*time.Second); st != hmenum.AlarmAreaStateTriggered {
-		t.Fatalf("area state after window open = %q, want triggered", st)
+	if st := h.waitAlarmState(zone.ID, hmenum.AlarmZoneStateTriggered, 3*time.Second); st != hmenum.AlarmZoneStateTriggered {
+		t.Fatalf("zone state after window open = %q, want triggered", st)
 	}
 
 	// 5. Silence via REST.
-	res = h.do(http.MethodPost, "/alarm/areas/"+area.ID+"/silence", nil, nil)
+	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/silence", nil, nil)
 	if res.StatusCode != http.StatusNoContent {
-		t.Fatalf("POST /alarm/areas/%s/silence: status %d", area.ID, res.StatusCode)
+		t.Fatalf("POST /alarm/zones/%s/silence: status %d", zone.ID, res.StatusCode)
 	}
 
 	// 6. The incident is persisted silenced (the store-level assertion
 	// alarm_engine_e2e_test.go also makes after its engine-level
 	// silence call).
-	inc, ok, err := h.stores.Incidents.GetOpenByArea(ctx, area.ID)
+	inc, ok, err := h.stores.Incidents.GetOpenByZone(ctx, zone.ID)
 	if err != nil {
 		t.Fatalf("get open incident: %v", err)
 	}

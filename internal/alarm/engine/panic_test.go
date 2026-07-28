@@ -18,13 +18,13 @@ import (
 
 func TestPanicTrigger_LoudByDefaultUsesTheAcousticPolicy(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	if err := h.eng.PanicTrigger(h.ctx, "eg", false, "tester", "wall-button"); err != nil {
 		t.Fatalf("panic trigger: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if fire := h.outputs.lastFire(t); fire.Opts.Policy.Silent {
 		t.Fatalf("policy = %+v, want loud", fire.Opts.Policy)
 	}
@@ -36,7 +36,7 @@ func TestPanicTrigger_LoudByDefaultUsesTheAcousticPolicy(t *testing.T) {
 
 func TestPanicTrigger_SilentSuppressesAcousticOutputs(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	if err := h.eng.PanicTrigger(h.ctx, "eg", true, "tester", "duress"); err != nil {
@@ -49,9 +49,9 @@ func TestPanicTrigger_SilentSuppressesAcousticOutputs(t *testing.T) {
 
 func TestPanicTrigger_ConfiguredSilentPolicyCannotBeForcedLoud(t *testing.T) {
 	h := newHarness(t)
-	cfg := defaultAreaConfig()
+	cfg := defaultZoneConfig()
 	cfg.PanicOutputs = engine.OutputPolicy{Silent: true}
-	h.seedArea("eg", "Erdgeschoss", cfg)
+	h.seedZone("eg", "Erdgeschoss", cfg)
 	h.start()
 
 	if err := h.eng.PanicTrigger(h.ctx, "eg", false, "tester", "wall-button"); err != nil {
@@ -62,19 +62,19 @@ func TestPanicTrigger_ConfiguredSilentPolicyCannotBeForcedLoud(t *testing.T) {
 	}
 }
 
-func TestPanicTrigger_UnknownAreaReturnsError(t *testing.T) {
+func TestPanicTrigger_UnknownZoneReturnsError(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
-	if err := h.eng.PanicTrigger(h.ctx, "nope", false, "tester", "test"); !errors.Is(err, engine.ErrUnknownArea) {
-		t.Fatalf("err = %v, want ErrUnknownArea", err)
+	if err := h.eng.PanicTrigger(h.ctx, "nope", false, "tester", "test"); !errors.Is(err, engine.ErrUnknownZone) {
+		t.Fatalf("err = %v, want ErrUnknownZone", err)
 	}
 }
 
 func TestPanicTrigger_BeforeStartReturnsInvalidState(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.build() // constructed, not started
 
 	if err := h.eng.PanicTrigger(h.ctx, "eg", false, "tester", "test"); !errors.Is(err, engine.ErrInvalidState) {
@@ -84,17 +84,17 @@ func TestPanicTrigger_BeforeStartReturnsInvalidState(t *testing.T) {
 
 func TestPanicTrigger_FromArmedResumesArmedAfterTheEpisode(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
 	if err := h.eng.PanicTrigger(h.ctx, "eg", false, "tester", "wall-button"); err != nil {
 		t.Fatalf("panic trigger: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	h.advance(60 * time.Second) // full mode's configured trigger time
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeFull {
 		t.Fatalf("mode after the panic episode = %s, want full (resumed)", got)
 	}

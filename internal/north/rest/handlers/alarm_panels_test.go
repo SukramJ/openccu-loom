@@ -39,7 +39,7 @@ func TestListAlarmPanels_AlwaysSerializesBothCodePolicyKeys(t *testing.T) {
 		panels: []alarmpanel.Panel{
 			{
 				UniqueID:           alarmpanel.PanelUniqueID("eg"),
-				AreaID:             "eg",
+				ZoneID:             "eg",
 				Name:               "Erdgeschoss",
 				State:              "disarmed",
 				Available:          true,

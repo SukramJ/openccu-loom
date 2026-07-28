@@ -28,13 +28,13 @@ func TestStateToken_FullStateModeGrid(t *testing.T) {
 	t.Parallel()
 
 	nonArmed := []struct {
-		state hmenum.AlarmAreaState
+		state hmenum.AlarmZoneState
 		want  string
 	}{
-		{hmenum.AlarmAreaStateDisarmed, HAAlarmStateDisarmed},
-		{hmenum.AlarmAreaStateArming, HAAlarmStateArming},
-		{hmenum.AlarmAreaStatePending, HAAlarmStatePending},
-		{hmenum.AlarmAreaStateTriggered, HAAlarmStateTriggered},
+		{hmenum.AlarmZoneStateDisarmed, HAAlarmStateDisarmed},
+		{hmenum.AlarmZoneStateArming, HAAlarmStateArming},
+		{hmenum.AlarmZoneStatePending, HAAlarmStatePending},
+		{hmenum.AlarmZoneStateTriggered, HAAlarmStateTriggered},
 	}
 	for _, c := range nonArmed {
 		for _, mode := range append([]hmenum.AlarmMode{hmenum.AlarmModeDisarmed}, allAlarmModes...) {
@@ -56,7 +56,7 @@ func TestStateToken_FullStateModeGrid(t *testing.T) {
 		{hmenum.AlarmModeCustom, HAAlarmStateArmedCustomBypass},
 	}
 	for _, c := range armed {
-		got := StateToken(hmenum.AlarmAreaStateArmed, c.mode)
+		got := StateToken(hmenum.AlarmZoneStateArmed, c.mode)
 		if got != c.want {
 			t.Errorf("StateToken(armed, %s) = %q, want %q", c.mode, got, c.want)
 		}
@@ -64,25 +64,25 @@ func TestStateToken_FullStateModeGrid(t *testing.T) {
 }
 
 // TestStateToken_ArmedUnknownModeFallsBackToAway locks the
-// documented safety fallback: an armed area must never render as
+// documented safety fallback: an armed zone must never render as
 // disarmed just because its mode is missing or unrecognized.
 func TestStateToken_ArmedUnknownModeFallsBackToAway(t *testing.T) {
 	t.Parallel()
 	cases := []hmenum.AlarmMode{"", hmenum.AlarmModeDisarmed, "bogus-mode"}
 	for _, mode := range cases {
-		got := StateToken(hmenum.AlarmAreaStateArmed, mode)
+		got := StateToken(hmenum.AlarmZoneStateArmed, mode)
 		if got != HAAlarmStateArmedAway {
 			t.Errorf("StateToken(armed, %q) = %q, want fallback %q", mode, got, HAAlarmStateArmedAway)
 		}
 	}
 }
 
-// TestStateToken_UnknownAreaStateFallsBackToDisarmed covers a
+// TestStateToken_UnknownZoneStateFallsBackToDisarmed covers a
 // state value outside the defined enum — the mapper must not panic or
 // emit an empty/invalid token.
-func TestStateToken_UnknownAreaStateFallsBackToDisarmed(t *testing.T) {
+func TestStateToken_UnknownZoneStateFallsBackToDisarmed(t *testing.T) {
 	t.Parallel()
-	got := StateToken(hmenum.AlarmAreaState("bogus-state"), hmenum.AlarmModeFull)
+	got := StateToken(hmenum.AlarmZoneState("bogus-state"), hmenum.AlarmModeFull)
 	if got != HAAlarmStateDisarmed {
 		t.Fatalf("StateToken(bogus-state, full) = %q, want %q", got, HAAlarmStateDisarmed)
 	}
@@ -115,7 +115,7 @@ func TestArmModeForCommand_FullInverseMapping(t *testing.T) {
 		}
 		// Round-trip: arming in the resolved mode must render back to
 		// the HA state token the command name is built from.
-		token := StateToken(hmenum.AlarmAreaStateArmed, mode)
+		token := StateToken(hmenum.AlarmZoneStateArmed, mode)
 		wantToken := armCommandToArmedToken(c.cmd)
 		if token != wantToken {
 			t.Errorf("round-trip %s -> mode %s -> token %q, want %q", c.cmd, mode, token, wantToken)
@@ -245,7 +245,7 @@ func TestSupportedFeatures_OrderAndFilter(t *testing.T) {
 	}
 }
 
-// TestSupportedFeatures_Empty covers an area with no configured
+// TestSupportedFeatures_Empty covers an zone with no configured
 // modes: the discovery payload must carry an empty (not nil-panicking)
 // feature list.
 func TestSupportedFeatures_Empty(t *testing.T) {

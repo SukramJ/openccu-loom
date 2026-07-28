@@ -20,10 +20,10 @@ import (
 // seedJournalEntry appends a raw journal row directly through the
 // store, bypassing the engine — the journal query tests only care
 // about the store round trip and the handler's filter parsing.
-func seedJournalEntry(t *testing.T, fx *alarmPanelFixture, areaID string, class hmenum.AlarmJournalClass, event string, when time.Time) int64 {
+func seedJournalEntry(t *testing.T, fx *alarmPanelFixture, zoneID string, class hmenum.AlarmJournalClass, event string, when time.Time) int64 {
 	t.Helper()
 	id, err := fx.stores.Journal.Append(context.Background(), sqlitestore.AlarmJournalEntry{
-		TsMS: when.UnixMilli(), AreaID: areaID, Class: class, Event: event,
+		TsMS: when.UnixMilli(), ZoneID: zoneID, Class: class, Event: event,
 	})
 	if err != nil {
 		t.Fatalf("seed journal entry: %v", err)
@@ -40,14 +40,14 @@ func journalRequest(t *testing.T, query url.Values) *http.Request {
 	return httptest.NewRequest(http.MethodGet, target, http.NoBody)
 }
 
-func TestListAlarmJournal_FiltersByArea(t *testing.T) {
+func TestListAlarmJournal_FiltersByZone(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 	base := alarmFixtureStart
 	seedJournalEntry(t, fx, "eg", hmenum.AlarmJournalClassArm, "armed", base)
 	seedJournalEntry(t, fx, "og", hmenum.AlarmJournalClassArm, "armed", base)
 
-	q := url.Values{"area": {"eg"}}
+	q := url.Values{"zone": {"eg"}}
 	w := httptest.NewRecorder()
 	ListAlarmJournal(fx).ServeHTTP(w, journalRequest(t, q))
 
@@ -58,8 +58,8 @@ func TestListAlarmJournal_FiltersByArea(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(body) != 1 || body[0].AreaID != "eg" {
-		t.Fatalf("entries = %+v, want exactly one for area=eg", body)
+	if len(body) != 1 || body[0].ZoneID != "eg" {
+		t.Fatalf("entries = %+v, want exactly one for zone=eg", body)
 	}
 }
 

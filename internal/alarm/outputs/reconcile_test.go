@@ -27,7 +27,7 @@ func containsOutput(out []SoundingOutput, outputID string) (SoundingOutput, bool
 // it is both active and flagged as an intrusion sounder.
 func TestReconcile_SoundingReportsOnlyObservedActiveOutputs(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	h.siren("sirA").setAcoustic(true, true)
 	out := h.mgr.Sounding(h.ctx, "eg")

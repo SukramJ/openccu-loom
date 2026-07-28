@@ -65,17 +65,17 @@ func alarmEnvelope(t *testing.T, r recorded) (ev envelope, payload map[string]an
 }
 
 // TestOutboundForwardsAlarmStateChanged covers the baseline alarm-plane
-// shape: no `central` field (areas are daemon-level), the event type
+// shape: no `central` field (zones are daemon-level), the event type
 // header matches the hmevent EventType string, and the nested `alarm`
-// detail carries the area/state transition.
+// detail carries the zone/state transition.
 func TestOutboundForwardsAlarmStateChanged(t *testing.T) {
 	t.Parallel()
 	ft := &fakeTransport{}
 	_, bus := alarmOutboundFixture(t, ft)
 
 	events.Publish(bus, hmevent.AlarmStateChangedEvent{
-		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss",
-		From: hmenum.AlarmAreaStateDisarmed, To: hmenum.AlarmAreaStateArmed,
+		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
+		From: hmenum.AlarmZoneStateDisarmed, To: hmenum.AlarmZoneStateArmed,
 		Mode: hmenum.AlarmModeFull, ChangedBy: "op1", Source: "rest-operator",
 	})
 	waitForCount(t, ft, 1, 2*time.Second)
@@ -86,13 +86,13 @@ func TestOutboundForwardsAlarmStateChanged(t *testing.T) {
 	}
 	env, detail := alarmEnvelope(t, r)
 	if env.Central != "" {
-		t.Errorf("central = %q, want empty (areas are daemon-level)", env.Central)
+		t.Errorf("central = %q, want empty (zones are daemon-level)", env.Central)
 	}
 	if env.Event != string(hmevent.EventTypeAlarmStateChanged) {
 		t.Errorf("event = %q, want %q", env.Event, hmevent.EventTypeAlarmStateChanged)
 	}
-	if detail["area_id"] != "eg" || detail["from_state"] != "disarmed" || detail["to_state"] != "armed" {
-		t.Errorf("alarm detail = %+v, want area_id=eg from_state=disarmed to_state=armed", detail)
+	if detail["zone_id"] != "eg" || detail["from_state"] != "disarmed" || detail["to_state"] != "armed" {
+		t.Errorf("alarm detail = %+v, want zone_id=eg from_state=disarmed to_state=armed", detail)
 	}
 	if detail["changed_by"] != "op1" || detail["source"] != "rest-operator" {
 		t.Errorf("alarm detail = %+v, want changed_by=op1 source=rest-operator", detail)
@@ -107,7 +107,7 @@ func TestOutboundForwardsAlarmTriggered(t *testing.T) {
 	_, bus := alarmOutboundFixture(t, ft)
 
 	events.Publish(bus, hmevent.AlarmTriggeredEvent{
-		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss",
+		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		IncidentID: 42, SensorID: "window", SensorName: "Window", Cause: "sensor", Mode: hmenum.AlarmModeFull,
 	})
 	waitForCount(t, ft, 1, 2*time.Second)
@@ -136,7 +136,7 @@ func TestOutboundForwardsAlarmDuress(t *testing.T) {
 	_, bus := alarmOutboundFixture(t, ft)
 
 	events.Publish(bus, hmevent.AlarmDuressEvent{
-		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss",
+		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		Verb: "disarm", By: "Under Duress", Source: "mqtt", IncidentID: 7,
 	})
 	waitForCount(t, ft, 1, 2*time.Second)
@@ -164,7 +164,7 @@ func TestOutboundForwardsAlarmReminder(t *testing.T) {
 	_, bus := alarmOutboundFixture(t, ft)
 
 	events.Publish(bus, hmevent.AlarmReminderEvent{
-		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss", Mode: hmenum.AlarmModeFull,
+		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss", Mode: hmenum.AlarmModeFull,
 	})
 	waitForCount(t, ft, 1, 2*time.Second)
 
@@ -173,8 +173,8 @@ func TestOutboundForwardsAlarmReminder(t *testing.T) {
 		t.Errorf("X-OpenCCU-Event = %q, want %q", got, hmevent.EventTypeAlarmReminder)
 	}
 	_, detail := alarmEnvelope(t, r)
-	if detail["area_id"] != "eg" || detail["mode"] != "full" {
-		t.Errorf("alarm detail = %+v, want area_id=eg mode=full", detail)
+	if detail["zone_id"] != "eg" || detail["mode"] != "full" {
+		t.Errorf("alarm detail = %+v, want zone_id=eg mode=full", detail)
 	}
 }
 
@@ -188,7 +188,7 @@ func TestOutboundForwardsAlarmNotification(t *testing.T) {
 	_, bus := alarmOutboundFixture(t, ft)
 
 	events.Publish(bus, hmevent.AlarmNotificationEvent{
-		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss",
+		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 9, Mode: hmenum.AlarmModeFull,
 		MQTT: true, Webhook: true,
 	})
@@ -202,8 +202,8 @@ func TestOutboundForwardsAlarmNotification(t *testing.T) {
 	if detail["output_id"] != "notify1" || detail["output_name"] != "Doorbell" {
 		t.Errorf("alarm detail = %+v, want output_id=notify1 output_name=Doorbell", detail)
 	}
-	if detail["area_id"] != "eg" || detail["mode"] != "full" {
-		t.Errorf("alarm detail = %+v, want area_id=eg mode=full", detail)
+	if detail["zone_id"] != "eg" || detail["mode"] != "full" {
+		t.Errorf("alarm detail = %+v, want zone_id=eg mode=full", detail)
 	}
 	if v, ok := detail["incident_id"].(float64); !ok || int64(v) != 9 {
 		t.Errorf("incident_id = %v, want 9", detail["incident_id"])
@@ -220,7 +220,7 @@ func TestOutboundSkipsAlarmNotificationWhenWebhookDisabled(t *testing.T) {
 	_, bus := alarmOutboundFixture(t, ft)
 
 	events.Publish(bus, hmevent.AlarmNotificationEvent{
-		Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg", AreaName: "Erdgeschoss",
+		Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg", ZoneName: "Erdgeschoss",
 		OutputID: "notify1", OutputName: "Doorbell", IncidentID: 9, Mode: hmenum.AlarmModeFull,
 		MQTT: true, Webhook: false,
 	})
@@ -251,8 +251,8 @@ func TestOutboundAlarmEventTypeFilterAppliesToAlarmPlane(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = o.Stop(context.Background()) })
 
-	events.Publish(bus, hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg"})
-	events.Publish(bus, hmevent.AlarmTriggeredEvent{Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg"})
+	events.Publish(bus, hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
+	events.Publish(bus, hmevent.AlarmTriggeredEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
 	waitForCount(t, ft, 1, 2*time.Second)
 
 	// Give a filtered-out delivery a moment it could have arrived in.
@@ -276,7 +276,7 @@ func TestOutboundStopUnsubscribesAlarmBus(t *testing.T) {
 	if err := o.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	events.Publish(bus, hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), AreaID: "eg"})
+	events.Publish(bus, hmevent.AlarmStateChangedEvent{Base: hmevent.NewBaseAt(fixedNow), ZoneID: "eg"})
 
 	time.Sleep(50 * time.Millisecond)
 	if ft.count() != 0 {

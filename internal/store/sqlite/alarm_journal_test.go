@@ -15,10 +15,10 @@ func freshAlarmJournalStore(t *testing.T) *AlarmJournalStore {
 	return NewAlarmJournalStore(openTestDB(t, "alarm_journal.db"))
 }
 
-func baseAlarmJournalEntry(areaID string, tsMS int64, class hmenum.AlarmJournalClass) AlarmJournalEntry {
+func baseAlarmJournalEntry(zoneID string, tsMS int64, class hmenum.AlarmJournalClass) AlarmJournalEntry {
 	return AlarmJournalEntry{
 		TsMS:        tsMS,
-		AreaID:      areaID,
+		ZoneID:      zoneID,
 		Class:       class,
 		Event:       "test-event",
 		Actor:       "operator",
@@ -35,13 +35,13 @@ func TestAlarmJournalStoreAppendReturnsIncreasingIDs(t *testing.T) {
 	s := freshAlarmJournalStore(t)
 	ctx := context.Background()
 
-	e1 := baseAlarmJournalEntry("area-1", 1000, hmenum.AlarmJournalClassArm)
+	e1 := baseAlarmJournalEntry("zone-1", 1000, hmenum.AlarmJournalClassArm)
 	e1.ID = 999 // must be ignored
 	id1, err := s.Append(ctx, e1)
 	if err != nil {
 		t.Fatalf("Append 1: %v", err)
 	}
-	id2, err := s.Append(ctx, baseAlarmJournalEntry("area-1", 1001, hmenum.AlarmJournalClassArm))
+	id2, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", 1001, hmenum.AlarmJournalClassArm))
 	if err != nil {
 		t.Fatalf("Append 2: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestAlarmJournalStoreQueryNewestFirst(t *testing.T) {
 
 	ids := make([]int64, 0, 5)
 	for i := range 5 {
-		id, err := s.Append(ctx, baseAlarmJournalEntry("area-1", int64(1000+i), hmenum.AlarmJournalClassArm))
+		id, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", int64(1000+i), hmenum.AlarmJournalClassArm))
 		if err != nil {
 			t.Fatalf("Append %d: %v", i, err)
 		}
@@ -83,25 +83,25 @@ func TestAlarmJournalStoreQueryNewestFirst(t *testing.T) {
 	}
 }
 
-// TestAlarmJournalStoreQueryFilterByArea verifies AreaID filters to that
-// area's entries only, and "" (zero value) matches every area.
-func TestAlarmJournalStoreQueryFilterByArea(t *testing.T) {
+// TestAlarmJournalStoreQueryFilterByZone verifies ZoneID filters to that
+// zone's entries only, and "" (zero value) matches every zone.
+func TestAlarmJournalStoreQueryFilterByZone(t *testing.T) {
 	s := freshAlarmJournalStore(t)
 	ctx := context.Background()
 
-	if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", 1000, hmenum.AlarmJournalClassArm)); err != nil {
-		t.Fatalf("Append area-1: %v", err)
+	if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", 1000, hmenum.AlarmJournalClassArm)); err != nil {
+		t.Fatalf("Append zone-1: %v", err)
 	}
-	if _, err := s.Append(ctx, baseAlarmJournalEntry("area-2", 1001, hmenum.AlarmJournalClassArm)); err != nil {
-		t.Fatalf("Append area-2: %v", err)
+	if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-2", 1001, hmenum.AlarmJournalClassArm)); err != nil {
+		t.Fatalf("Append zone-2: %v", err)
 	}
 
-	got, err := s.Query(ctx, AlarmJournalFilter{AreaID: "area-1"})
+	got, err := s.Query(ctx, AlarmJournalFilter{ZoneID: "zone-1"})
 	if err != nil {
-		t.Fatalf("Query area-1: %v", err)
+		t.Fatalf("Query zone-1: %v", err)
 	}
-	if len(got) != 1 || got[0].AreaID != "area-1" {
-		t.Fatalf("got=%+v want single area-1 entry", got)
+	if len(got) != 1 || got[0].ZoneID != "zone-1" {
+		t.Fatalf("got=%+v want single zone-1 entry", got)
 	}
 
 	all, err := s.Query(ctx, AlarmJournalFilter{})
@@ -109,7 +109,7 @@ func TestAlarmJournalStoreQueryFilterByArea(t *testing.T) {
 		t.Fatalf("Query all: %v", err)
 	}
 	if len(all) != 2 {
-		t.Fatalf("len=%d want 2 (AreaID zero value matches every area)", len(all))
+		t.Fatalf("len=%d want 2 (ZoneID zero value matches every zone)", len(all))
 	}
 }
 
@@ -119,10 +119,10 @@ func TestAlarmJournalStoreQueryFilterByClass(t *testing.T) {
 	s := freshAlarmJournalStore(t)
 	ctx := context.Background()
 
-	if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", 1000, hmenum.AlarmJournalClassArm)); err != nil {
+	if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", 1000, hmenum.AlarmJournalClassArm)); err != nil {
 		t.Fatalf("Append arm: %v", err)
 	}
-	if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", 1001, hmenum.AlarmJournalClassTrigger)); err != nil {
+	if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", 1001, hmenum.AlarmJournalClassTrigger)); err != nil {
 		t.Fatalf("Append trigger: %v", err)
 	}
 
@@ -149,12 +149,12 @@ func TestAlarmJournalStoreQueryFilterByIncidentID(t *testing.T) {
 	s := freshAlarmJournalStore(t)
 	ctx := context.Background()
 
-	withIncident := baseAlarmJournalEntry("area-1", 1000, hmenum.AlarmJournalClassTrigger)
+	withIncident := baseAlarmJournalEntry("zone-1", 1000, hmenum.AlarmJournalClassTrigger)
 	withIncident.IncidentID = 42
 	if _, err := s.Append(ctx, withIncident); err != nil {
 		t.Fatalf("Append with incident: %v", err)
 	}
-	if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", 1001, hmenum.AlarmJournalClassArm)); err != nil {
+	if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", 1001, hmenum.AlarmJournalClassArm)); err != nil {
 		t.Fatalf("Append without incident: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestAlarmJournalStoreQueryFromToRangeInclusive(t *testing.T) {
 	ctx := context.Background()
 
 	for _, ts := range []int64{1000, 2000, 3000, 4000, 5000} {
-		if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", ts, hmenum.AlarmJournalClassArm)); err != nil {
+		if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", ts, hmenum.AlarmJournalClassArm)); err != nil {
 			t.Fatalf("Append ts=%d: %v", ts, err)
 		}
 	}
@@ -217,7 +217,7 @@ func TestAlarmJournalStoreQueryLimitHonored(t *testing.T) {
 	ctx := context.Background()
 
 	for i := range 5 {
-		if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", int64(1000+i), hmenum.AlarmJournalClassArm)); err != nil {
+		if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", int64(1000+i), hmenum.AlarmJournalClassArm)); err != nil {
 			t.Fatalf("Append %d: %v", i, err)
 		}
 	}
@@ -249,8 +249,8 @@ func TestAlarmJournalStoreQueryHiddenExcludedByDefault(t *testing.T) {
 	s := freshAlarmJournalStore(t)
 	ctx := context.Background()
 
-	visible := baseAlarmJournalEntry("area-1", 1000, hmenum.AlarmJournalClassArm)
-	hidden := baseAlarmJournalEntry("area-1", 1001, hmenum.AlarmJournalClassSilence)
+	visible := baseAlarmJournalEntry("zone-1", 1000, hmenum.AlarmJournalClassArm)
+	hidden := baseAlarmJournalEntry("zone-1", 1001, hmenum.AlarmJournalClassSilence)
 	hidden.Hidden = true
 	hidden.Event = "duress"
 
@@ -300,15 +300,15 @@ func TestAlarmJournalStorePurgeBefore(t *testing.T) {
 	s := freshAlarmJournalStore(t)
 	ctx := context.Background()
 
-	hiddenOld := baseAlarmJournalEntry("area-1", 1000, hmenum.AlarmJournalClassSilence)
+	hiddenOld := baseAlarmJournalEntry("zone-1", 1000, hmenum.AlarmJournalClassSilence)
 	hiddenOld.Hidden = true
 	if _, err := s.Append(ctx, hiddenOld); err != nil {
 		t.Fatalf("Append hiddenOld: %v", err)
 	}
-	if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", 2000, hmenum.AlarmJournalClassArm)); err != nil {
+	if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", 2000, hmenum.AlarmJournalClassArm)); err != nil {
 		t.Fatalf("Append at 2000: %v", err)
 	}
-	if _, err := s.Append(ctx, baseAlarmJournalEntry("area-1", 3000, hmenum.AlarmJournalClassArm)); err != nil {
+	if _, err := s.Append(ctx, baseAlarmJournalEntry("zone-1", 3000, hmenum.AlarmJournalClassArm)); err != nil {
 		t.Fatalf("Append at 3000: %v", err)
 	}
 

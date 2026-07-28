@@ -5,8 +5,8 @@ import type { AlarmJournalEntry } from "$lib/api/types";
 
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
-    get areasConfig() {
-      return [{ id: "area-1", name: "Ground floor" }];
+    get zonesConfig() {
+      return [{ id: "zone-1", name: "Ground floor" }];
     },
     get journal() {
       return [] as AlarmJournalEntry[];
@@ -34,7 +34,7 @@ function entry(overrides: Partial<AlarmJournalEntry> = {}): AlarmJournalEntry {
   return {
     id: 1,
     when: "2026-07-14T10:00:00Z",
-    area_id: "area-1",
+    zone_id: "zone-1",
     class: "arm",
     event: "armed",
     actor: "admin",

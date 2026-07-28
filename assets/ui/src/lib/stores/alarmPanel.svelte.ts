@@ -4,8 +4,8 @@ import { toastStore } from "./toast.svelte";
 import { subscribe } from "./events.svelte";
 import { authStore } from "./auth.svelte";
 import type {
-  AlarmArea,
-  AlarmAreaStatus,
+  AlarmZone,
+  AlarmZoneStatus,
   AlarmArmAccepted,
   AlarmArmRequest,
   AlarmCountdownPayload,
@@ -34,7 +34,7 @@ type Countdown = {
 type WalkTestProgress = { seen: number; total: number };
 
 // Alarm-subsystem health, mirrored from `alarm.health_changed` and the
-// per-area status snapshot. `note` is a stable English machine string.
+// per-zone status snapshot. `note` is a stable English machine string.
 type AlarmHealth = { healthy: boolean; note: string };
 
 // Newest-first journal ring buffer size (docs/alarm-concept.md §12.5 —
@@ -44,35 +44,35 @@ const JOURNAL_MAX = 200;
 
 /**
  * Svelte 5 rune-based store for the alarm panel. One singleton shared by
- * every alarm view: the Overview reads `areas`/`countdowns`/`readiness`,
+ * every alarm view: the Overview reads `zones`/`countdowns`/`readiness`,
  * the Journal reads `journal`, the Walk-test view reads `walktest`, and
  * the health chip reads `health`. `ensureStream()` wires the WS pump and
  * the 1 s decay ticker; `close()` tears both down. Structure mirrors
  * devices.svelte.ts.
  */
 function createAlarmPanelStore() {
-  // Live per-area status (state machine + incident + countdown snapshot).
-  // LiveAreaStatus widens the REST DTO: the live triggered broadcast
+  // Live per-zone status (state machine + incident + countdown snapshot).
+  // LiveZoneStatus widens the REST DTO: the live triggered broadcast
   // carries the cause and sensor name, which the snapshot endpoint
   // reconstructs from the journal instead — keep them when we have them.
-  type LiveIncident = NonNullable<AlarmAreaStatus["incident"]> & {
+  type LiveIncident = NonNullable<AlarmZoneStatus["incident"]> & {
     cause?: string;
     sensor_name?: string;
   };
-  type LiveAreaStatus = Omit<AlarmAreaStatus, "incident"> & { incident?: LiveIncident };
-  let areas = $state<LiveAreaStatus[]>([]);
-  // Config-level area list (identity + ordering) — drives "no areas yet"
+  type LiveZoneStatus = Omit<AlarmZoneStatus, "incident"> & { incident?: LiveIncident };
+  let zones = $state<LiveZoneStatus[]>([]);
+  // Config-level zone list (identity + ordering) — drives "no zones yet"
   // empty state + the wizard entry point.
-  let areasConfig = $state<AlarmArea[]>([]);
-  // Per-area, per-mode arm readiness, keyed areaId → mode → verdict.
+  let zonesConfig = $state<AlarmZone[]>([]);
+  // Per-zone, per-mode arm readiness, keyed zoneId → mode → verdict.
   let readiness = $state<Record<string, Record<string, AlarmModeReadiness>>>(
     {},
   );
-  // Running exit/entry countdowns, keyed by areaId; decayed locally.
+  // Running exit/entry countdowns, keyed by zoneId; decayed locally.
   let countdowns = $state<Record<string, Countdown>>({});
   // Newest-first live journal tail (capped at JOURNAL_MAX).
   let journal = $state<AlarmJournalEntry[]>([]);
-  // Live walk-test progress per area.
+  // Live walk-test progress per zone.
   let walktest = $state<Record<string, WalkTestProgress>>({});
   // Alarm-subsystem health. Defaults healthy until told otherwise.
   let health = $state<AlarmHealth>({ healthy: true, note: "" });
@@ -84,8 +84,8 @@ function createAlarmPanelStore() {
   let unsub: (() => void) | null = null;
   let ticker: ReturnType<typeof setInterval> | null = null;
 
-  function areaIndex(id: string): number {
-    return areas.findIndex((a) => a.id === id);
+  function zoneIndex(id: string): number {
+    return zones.findIndex((a) => a.id === id);
   }
 
   async function refresh() {
@@ -94,18 +94,18 @@ function createAlarmPanelStore() {
     try {
       const [state, config, entries] = await Promise.all([
         api.getAlarmState(),
-        api.listAlarmAreas(),
+        api.listAlarmZones(),
         api.listAlarmJournal({ limit: JOURNAL_MAX }),
       ]);
-      areas = state.areas;
-      areasConfig = config;
+      zones = state.zones;
+      zonesConfig = config;
       journal = entries.slice(0, JOURNAL_MAX);
       // Seed the derived maps from the authoritative status snapshot so
       // the first paint is correct before any WS frame arrives.
       const nextReadiness: Record<string, Record<string, AlarmModeReadiness>> =
         {};
       const nextCountdowns: Record<string, Countdown> = {};
-      for (const a of state.areas) {
+      for (const a of state.zones) {
         if (a.readiness) nextReadiness[a.id] = a.readiness;
         if (
           a.countdown &&
@@ -165,15 +165,15 @@ function createAlarmPanelStore() {
     switch (ev.type) {
       case "alarm.state_changed": {
         const p = ev.payload as AlarmStateChangedPayload;
-        const i = areaIndex(p.area_id);
+        const i = zoneIndex(p.zone_id);
         if (i >= 0) {
-          areas[i] = { ...areas[i], state: p.new_state, mode: p.mode };
+          zones[i] = { ...zones[i], state: p.new_state, mode: p.mode };
         }
         // Exit/entry countdown only lives while arming/pending; drop it
         // on any other transition so a stale ring cannot linger.
         if (p.new_state !== "arming" && p.new_state !== "pending") {
-          if (countdowns[p.area_id]) {
-            delete countdowns[p.area_id];
+          if (countdowns[p.zone_id]) {
+            delete countdowns[p.zone_id];
             countdowns = { ...countdowns };
           }
         }
@@ -183,7 +183,7 @@ function createAlarmPanelStore() {
         const p = ev.payload as AlarmCountdownPayload;
         countdowns = {
           ...countdowns,
-          [p.area_id]: {
+          [p.zone_id]: {
             kind: p.kind,
             remaining_s: p.remaining_s,
             total_s: p.total_s,
@@ -193,19 +193,19 @@ function createAlarmPanelStore() {
       }
       case "alarm.readiness_changed": {
         const p = ev.payload as AlarmReadinessChangedPayload;
-        readiness = { ...readiness, [p.area_id]: p.readiness };
-        const i = areaIndex(p.area_id);
-        if (i >= 0) areas[i] = { ...areas[i], readiness: p.readiness };
+        readiness = { ...readiness, [p.zone_id]: p.readiness };
+        const i = zoneIndex(p.zone_id);
+        if (i >= 0) zones[i] = { ...zones[i], readiness: p.readiness };
         break;
       }
       case "alarm.triggered": {
         const p = ev.payload as AlarmTriggeredPayload;
-        const i = areaIndex(p.area_id);
+        const i = zoneIndex(p.zone_id);
         if (i >= 0) {
-          areas[i] = {
-            ...areas[i],
+          zones[i] = {
+            ...zones[i],
             state: "triggered",
-            mode: p.mode ?? areas[i].mode,
+            mode: p.mode ?? zones[i].mode,
             incident: {
               id: String(p.incident_id),
               silenced: false,
@@ -218,12 +218,12 @@ function createAlarmPanelStore() {
       }
       case "alarm.journal_appended": {
         const p = ev.payload as AlarmJournalAppendedPayload;
-        if (p.event === "silenced" && p.area_id) {
-          const i = areaIndex(p.area_id);
-          const inc = i >= 0 ? areas[i].incident : undefined;
+        if (p.event === "silenced" && p.zone_id) {
+          const i = zoneIndex(p.zone_id);
+          const inc = i >= 0 ? zones[i].incident : undefined;
           if (i >= 0 && inc) {
-            areas[i] = {
-              ...areas[i],
+            zones[i] = {
+              ...zones[i],
               incident: { ...inc, silenced: true },
             };
           }
@@ -234,7 +234,7 @@ function createAlarmPanelStore() {
         const entry: AlarmJournalEntry = {
           id: p.entry_id,
           when: new Date().toISOString(),
-          area_id: p.area_id ?? "",
+          zone_id: p.zone_id ?? "",
           class: p.class,
           event: p.event,
           actor: p.actor,
@@ -247,7 +247,7 @@ function createAlarmPanelStore() {
         const p = ev.payload as AlarmWalkTestProgressPayload;
         walktest = {
           ...walktest,
-          [p.area_id]: { seen: p.seen, total: p.total },
+          [p.zone_id]: { seen: p.seen, total: p.total },
         };
         break;
       }
@@ -270,7 +270,7 @@ function createAlarmPanelStore() {
     req: AlarmArmRequest,
   ): Promise<AlarmArmAccepted | null> {
     try {
-      return await api.armAlarmArea(id, req);
+      return await api.armAlarmZone(id, req);
     } catch (err) {
       toastStore.error(t("alarm.toast.arm_failed"), friendlyError(err, t));
       return null;
@@ -279,7 +279,7 @@ function createAlarmPanelStore() {
 
   async function disarm(id: string, code?: string): Promise<boolean> {
     try {
-      await api.disarmAlarmArea(id, code);
+      await api.disarmAlarmZone(id, code);
       return true;
     } catch (err) {
       toastStore.error(t("alarm.toast.disarm_failed"), friendlyError(err, t));
@@ -292,7 +292,7 @@ function createAlarmPanelStore() {
   // wiring a per-surface silence policy; the human panel leaves it unset.
   async function silence(id: string, code?: string): Promise<boolean> {
     try {
-      await api.silenceAlarmArea(id, code);
+      await api.silenceAlarmZone(id, code);
       return true;
     } catch (err) {
       toastStore.error(t("alarm.toast.silence_failed"), friendlyError(err, t));
@@ -302,7 +302,7 @@ function createAlarmPanelStore() {
 
   async function silenceAll(): Promise<boolean> {
     try {
-      await api.silenceAllAlarmAreas();
+      await api.silenceAllAlarmZones();
       return true;
     } catch (err) {
       toastStore.error(t("alarm.toast.silence_failed"), friendlyError(err, t));
@@ -312,7 +312,7 @@ function createAlarmPanelStore() {
 
   async function acknowledge(id: string): Promise<boolean> {
     try {
-      await api.acknowledgeAlarmArea(id);
+      await api.acknowledgeAlarmZone(id);
       return true;
     } catch (err) {
       toastStore.error(t("alarm.toast.ack_failed"), friendlyError(err, t));
@@ -321,11 +321,11 @@ function createAlarmPanelStore() {
   }
 
   return {
-    get areas() {
-      return areas;
+    get zones() {
+      return zones;
     },
-    get areasConfig() {
-      return areasConfig;
+    get zonesConfig() {
+      return zonesConfig;
     },
     get readiness() {
       return readiness;

@@ -33,7 +33,7 @@ var (
 func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly bool) error {
 	m.mu.Lock()
 	var inst *instance
-	for _, list := range m.byArea {
+	for _, list := range m.byZone {
 		for _, cand := range list {
 			if cand.row.ID == outputID {
 				inst = cand
@@ -47,7 +47,7 @@ func (m *Manager) TestFire(ctx context.Context, outputID string, opticalOnly boo
 	}
 
 	journalTest := func() {
-		m.journalFault(ctx, inst.row.AreaID, "output_test_fired", inst.row.ID, 0, nil)
+		m.journalFault(ctx, inst.row.ZoneID, "output_test_fired", inst.row.ID, 0, nil)
 	}
 	switch inst.row.Class {
 	case hmenum.AlarmOutputClassAcousticSiren, hmenum.AlarmOutputClassOpticalSiren, hmenum.AlarmOutputClassChirp:

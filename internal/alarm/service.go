@@ -4,7 +4,7 @@
 // Package alarm wires the alarm engine, its output-driver layer, and
 // the per-central event subscriptions into one daemon-level service
 // (docs/alarm-concept.md §14). The service owns a dedicated alarm
-// event bus: areas are daemon-level while every central owns its own
+// event bus: zones are daemon-level while every central owns its own
 // bus, so north-bound surfaces subscribe to the alarm bus instead of
 // fanning across centrals.
 package alarm
@@ -94,7 +94,7 @@ type Service struct {
 // can wire that publisher in one line via SetArmFailureHook. A nil
 // hook (the default) means the schedule chain's AutoArm failures stay
 // journal-only (docs/alarm-concept.md §15 row 19).
-type ArmFailureHook func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string)
+type ArmFailureHook func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string)
 
 // NewService builds the alarm service. Construction is cheap and
 // side-effect free; Start loads state and subscribes.
@@ -173,7 +173,7 @@ func NewService(deps Deps) (*Service, error) {
 
 	eng, err := engine.New(engine.Deps{
 		Clock:               clk,
-		Areas:               deps.Stores.Areas,
+		Zones:               deps.Stores.Zones,
 		Sensors:             deps.Stores.Sensors,
 		State:               deps.Stores.State,
 		Incidents:           deps.Stores.Incidents,
@@ -194,15 +194,15 @@ func NewService(deps Deps) (*Service, error) {
 	s.panels = newPanelRegistry(deps.Settings.MasterPanelName)
 	s.intents = newIntentRouter(s)
 	s.schedules = newScheduleRunner(scheduleRunnerDeps{
-		Areas:   deps.Stores.Areas,
+		Zones:   deps.Stores.Zones,
 		Engine:  eng,
 		Journal: s.journal,
 		Publish: s.publish,
 		Clock:   clk,
 		Logger:  logger,
-		ArmFailure: func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string) {
+		ArmFailure: func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string) {
 			if hook := s.armFailureHookRef(); hook != nil {
-				hook(areaID, areaName, mode, blockers)
+				hook(zoneID, zoneName, mode, blockers)
 			}
 		},
 	})
@@ -244,35 +244,35 @@ func (s *Service) NotifyCodesChanged() {
 	s.refreshPanelCodePolicies(context.Background())
 }
 
-// EffectiveCodePolicy resolves the per-area arm/disarm code requirement
+// EffectiveCodePolicy resolves the per-zone arm/disarm code requirement
 // exactly as the engine will enforce it (docs/alarm-concept.md
-// §11/§13.3): the policy half comes from the area config (RequireDisarm
+// §11/§13.3): the policy half comes from the zone config (RequireDisarm
 // defaults to required when nil), and the "codes exist" half from the
-// codes facade — an area without an applicable enabled pin code
+// codes facade — an zone without an applicable enabled pin code
 // advertises no requirement (the engine passes an empty code through),
-// while an area with one advertises it even off the nil default, so
+// while an zone with one advertises it even off the nil default, so
 // clients prompt for the code the engine is going to demand.
 // Advertising either half alone would trap disarm: requirement-without-
 // codes leaves the client prompting for a code that cannot exist,
 // codes-without-requirement makes it send a bare disarm the engine
-// refuses. A missing area, parse error, or absent store degrades to no
+// refuses. A missing zone, parse error, or absent store degrades to no
 // requirement.
-func (s *Service) EffectiveCodePolicy(ctx context.Context, areaID string) (armRequired, disarmRequired bool) {
-	if s.stores == nil || s.stores.Areas == nil {
+func (s *Service) EffectiveCodePolicy(ctx context.Context, zoneID string) (armRequired, disarmRequired bool) {
+	if s.stores == nil || s.stores.Zones == nil {
 		return false, false
 	}
-	row, ok, err := s.stores.Areas.Get(ctx, areaID)
+	row, ok, err := s.stores.Zones.Get(ctx, zoneID)
 	if err != nil || !ok {
 		return false, false
 	}
-	cfg, err := engine.ParseAreaConfig(row.ConfigJSON)
+	cfg, err := engine.ParseZoneConfig(row.ConfigJSON)
 	if err != nil {
 		return false, false
 	}
 	armRequired = cfg.CodePolicy.RequireArm
 	disarmRequired = cfg.CodePolicy.RequireDisarm == nil || *cfg.CodePolicy.RequireDisarm
 	if armRequired || disarmRequired {
-		hasPIN := s.codes != nil && s.codes.HasPINCodes(ctx, areaID)
+		hasPIN := s.codes != nil && s.codes.HasPINCodes(ctx, zoneID)
 		armRequired = armRequired && hasPIN
 		disarmRequired = disarmRequired && hasPIN
 	}
@@ -307,7 +307,7 @@ func (a codeSourceAdapter) Rows(ctx context.Context) ([]CodeRow, error) {
 				Disarm:  r.Perms.Disarm,
 				Silence: r.Perms.Silence,
 			},
-			Areas: r.Areas,
+			Zones: r.Zones,
 			Binding: CodeBinding{
 				Central:        r.Binding.Central,
 				DeviceAddress:  r.Binding.DeviceAddress,
@@ -316,7 +316,7 @@ func (a codeSourceAdapter) Rows(ctx context.Context) ([]CodeRow, error) {
 				ChannelAddress: r.Binding.ChannelAddress,
 				Parameter:      r.Binding.Parameter,
 				Action:         r.Binding.Action,
-				AreaID:         r.Binding.AreaID,
+				ZoneID:         r.Binding.ZoneID,
 			},
 			ValidFromMS:  r.ValidFromMS,
 			ValidUntilMS: r.ValidUntilMS,
@@ -371,7 +371,7 @@ func (s *Service) Manager() *outputs.Manager { return s.manager }
 func (s *Service) Stores() *Stores { return s.stores }
 
 // Reload re-reads the alarm configuration after a management write:
-// output rows, event-routing indexes, and the engine's areas/sensors.
+// output rows, event-routing indexes, and the engine's zones/sensors.
 func (s *Service) Reload(ctx context.Context) error {
 	if err := s.manager.Reload(ctx); err != nil {
 		return err
@@ -510,20 +510,20 @@ func (s *Service) DetachCentral(name string) {
 // on the alarm bus (outputs.NotificationSink); MQTT, webhook, and WS
 // pick it up per their plane flag.
 func (s *Service) notifyOutputFired(row sqlitestore.AlarmOutputRow, cfg outputs.OutputConfig, incident sqlitestore.AlarmIncident) {
-	areaName := ""
+	zoneName := ""
 	if s.engine != nil {
-		areas := s.engine.Areas()
-		for i := range areas {
-			if areas[i].ID == row.AreaID {
-				areaName = areas[i].Name
+		zones := s.engine.Zones()
+		for i := range zones {
+			if zones[i].ID == row.ZoneID {
+				zoneName = zones[i].Name
 				break
 			}
 		}
 	}
 	events.Publish(s.bus, hmevent.AlarmNotificationEvent{
 		Base:       hmevent.NewBaseAt(s.clk.Now()),
-		AreaID:     row.AreaID,
-		AreaName:   areaName,
+		ZoneID:     row.ZoneID,
+		ZoneName:   zoneName,
 		OutputID:   row.ID,
 		OutputName: row.Name,
 		IncidentID: incident.ID,
@@ -571,18 +571,18 @@ type sinkFunc func(hmevent.Event)
 // Publish implements engine.EventSink.
 func (f sinkFunc) Publish(e hmevent.Event) { f(e) }
 
-// reconcile runs the S4 pass over every area: sounding sirens of
-// armed areas are adopted as incidents; sounding sirens of disarmed,
-// unshared areas are stopped.
+// reconcile runs the S4 pass over every zone: sounding sirens of
+// armed zones are adopted as incidents; sounding sirens of disarmed,
+// unshared zones are stopped.
 func (s *Service) reconcile(ctx context.Context) {
-	areas := s.engine.Areas()
-	for i := range areas {
-		snap := &areas[i]
+	zones := s.engine.Zones()
+	for i := range zones {
+		snap := &zones[i]
 		sounding := s.manager.Sounding(ctx, snap.ID)
 		if len(sounding) == 0 {
 			continue
 		}
-		armed := snap.State != hmenum.AlarmAreaStateDisarmed
+		armed := snap.State != hmenum.AlarmZoneStateDisarmed
 		if armed {
 			ids := make([]string, 0, len(sounding))
 			for _, so := range sounding {
@@ -590,13 +590,13 @@ func (s *Service) reconcile(ctx context.Context) {
 			}
 			adopted, err := s.engine.AdoptSounding(ctx, snap.ID, ids)
 			if err != nil {
-				s.log.Error("alarm reconcile adoption failed", "area", snap.ID, "error", err)
+				s.log.Error("alarm reconcile adoption failed", "zone", snap.ID, "error", err)
 				continue
 			}
 			if !adopted {
 				continue // already alarming — no re-accounting
 			}
-			if snap2, ok := s.engine.Area(snap.ID); ok && snap2.IncidentID != 0 {
+			if snap2, ok := s.engine.Zone(snap.ID); ok && snap2.IncidentID != 0 {
 				s.manager.AdoptBounded(ctx, snap.ID, snap2.IncidentID, ids)
 			}
 		} else {

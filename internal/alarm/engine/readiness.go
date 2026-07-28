@@ -15,7 +15,7 @@ import (
 // (docs/alarm-concept.md §6.3). Sensors that would auto-bypass and
 // sensors that are already bypassed appear as warnings, not blockers —
 // they cannot fail an arm. The caller holds the engine lock.
-func (a *area) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadiness {
+func (a *zone) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadiness {
 	rd, _ := a.readinessDetail(mode)
 	return rd
 }
@@ -24,7 +24,7 @@ func (a *area) computeReadiness(mode hmenum.AlarmMode) hmevent.AlarmModeReadines
 // the arm but are flagged bypass_auto: an arm excludes them until the
 // next disarm instead of failing (§6.2) — the exclusion is recorded,
 // never silent. The caller holds the engine lock.
-func (a *area) readinessDetail(mode hmenum.AlarmMode) (verdict hmevent.AlarmModeReadiness, autoBypassed []string) {
+func (a *zone) readinessDetail(mode hmenum.AlarmMode) (verdict hmevent.AlarmModeReadiness, autoBypassed []string) {
 	pol := a.cfg.Blockers
 	var blockers, warnings, autoBypass []string
 	classify := func(id string, p hmenum.AlarmBlockerPolicy, auto bool) {
@@ -76,7 +76,7 @@ func (a *area) readinessDetail(mode hmenum.AlarmMode) (verdict hmevent.AlarmMode
 // refreshReadiness recomputes all configured modes of a and publishes
 // a readiness event when the verdict changed. The caller holds the
 // engine lock.
-func (e *Engine) refreshReadiness(a *area) {
+func (e *Engine) refreshReadiness(a *zone) {
 	next := make(map[hmenum.AlarmMode]hmevent.AlarmModeReadiness, len(a.cfg.Modes))
 	for mode := range a.cfg.Modes {
 		next[mode] = a.computeReadiness(mode)
@@ -87,7 +87,7 @@ func (e *Engine) refreshReadiness(a *area) {
 	a.readiness = next
 	e.sink.Publish(hmevent.AlarmReadinessChangedEvent{
 		Base:      hmevent.NewBaseAt(e.clk.Now()),
-		AreaID:    a.id,
+		ZoneID:    a.id,
 		Readiness: next,
 	})
 }

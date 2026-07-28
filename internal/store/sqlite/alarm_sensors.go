@@ -19,7 +19,7 @@ import (
 // ConfigJSON.
 type AlarmSensorRow struct {
 	ID             string
-	AreaID         string
+	ZoneID         string
 	CentralName    string
 	InterfaceID    string
 	ChannelAddress string
@@ -44,11 +44,11 @@ func NewAlarmSensorStore(db *sql.DB) *AlarmSensorStore { return &AlarmSensorStor
 // created_at_ms untouched.
 func (s *AlarmSensorStore) Upsert(ctx context.Context, row AlarmSensorRow) error {
 	const q = `
-INSERT INTO alarm_sensors (id, area_id, central_name, interface_id, channel_address, parameter,
+INSERT INTO alarm_sensors (id, zone_id, central_name, interface_id, channel_address, parameter,
     sensor_type, name, config_json, created_at_ms, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
-    area_id = excluded.area_id,
+    zone_id = excluded.zone_id,
     central_name = excluded.central_name,
     interface_id = excluded.interface_id,
     channel_address = excluded.channel_address,
@@ -59,7 +59,7 @@ ON CONFLICT(id) DO UPDATE SET
     updated_at_ms = excluded.updated_at_ms`
 	_, err := s.db.ExecContext(
 		ctx, q,
-		row.ID, row.AreaID, row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter,
+		row.ID, row.ZoneID, row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter,
 		string(row.SensorType), row.Name, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
 	)
 	if err != nil {
@@ -80,13 +80,13 @@ func (s *AlarmSensorStore) Get(ctx context.Context, id string) (AlarmSensorRow, 
 	return row, true, nil
 }
 
-// ListByArea returns the sensors enrolled in areaID, ordered by name then
+// ListByZone returns the sensors enrolled in zoneID, ordered by name then
 // id.
-func (s *AlarmSensorStore) ListByArea(ctx context.Context, areaID string) ([]AlarmSensorRow, error) {
-	q := alarmSensorSelect + ` WHERE area_id = ? ORDER BY name, id`
-	rows, err := s.db.QueryContext(ctx, q, areaID)
+func (s *AlarmSensorStore) ListByZone(ctx context.Context, zoneID string) ([]AlarmSensorRow, error) {
+	q := alarmSensorSelect + ` WHERE zone_id = ? ORDER BY name, id`
+	rows, err := s.db.QueryContext(ctx, q, zoneID)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite: list alarm sensors by area: %w", err)
+		return nil, fmt.Errorf("sqlite: list alarm sensors by zone: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []AlarmSensorRow
@@ -100,10 +100,10 @@ func (s *AlarmSensorStore) ListByArea(ctx context.Context, areaID string) ([]Ala
 	return out, rows.Err()
 }
 
-// GetAll returns every enrolled alarm sensor, ordered by area, then name,
+// GetAll returns every enrolled alarm sensor, ordered by zone, then name,
 // then id.
 func (s *AlarmSensorStore) GetAll(ctx context.Context) ([]AlarmSensorRow, error) {
-	q := alarmSensorSelect + ` ORDER BY area_id, name, id`
+	q := alarmSensorSelect + ` ORDER BY zone_id, name, id`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get all alarm sensors: %w", err)
@@ -128,25 +128,25 @@ func (s *AlarmSensorStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// DeleteByArea removes every sensor enrolled in areaID and returns the
-// number of rows deleted (area-deletion cascade).
-func (s *AlarmSensorStore) DeleteByArea(ctx context.Context, areaID string) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM alarm_sensors WHERE area_id = ?`, areaID)
+// DeleteByZone removes every sensor enrolled in zoneID and returns the
+// number of rows deleted (zone-deletion cascade).
+func (s *AlarmSensorStore) DeleteByZone(ctx context.Context, zoneID string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM alarm_sensors WHERE zone_id = ?`, zoneID)
 	if err != nil {
-		return 0, fmt.Errorf("sqlite: delete alarm sensors by area: %w", err)
+		return 0, fmt.Errorf("sqlite: delete alarm sensors by zone: %w", err)
 	}
 	return res.RowsAffected()
 }
 
 const alarmSensorSelect = `
-SELECT id, area_id, central_name, interface_id, channel_address, parameter,
+SELECT id, zone_id, central_name, interface_id, channel_address, parameter,
     sensor_type, name, config_json, created_at_ms, updated_at_ms
 FROM alarm_sensors`
 
 func scanAlarmSensorRow(sc scannable) (AlarmSensorRow, error) {
 	var row AlarmSensorRow
 	var sensorType string
-	if err := sc.Scan(&row.ID, &row.AreaID, &row.CentralName, &row.InterfaceID, &row.ChannelAddress,
+	if err := sc.Scan(&row.ID, &row.ZoneID, &row.CentralName, &row.InterfaceID, &row.ChannelAddress,
 		&row.Parameter, &sensorType, &row.Name, &row.ConfigJSON, &row.CreatedAtMS, &row.UpdatedAtMS); err != nil {
 		return AlarmSensorRow{}, err
 	}
@@ -154,28 +154,28 @@ func scanAlarmSensorRow(sc scannable) (AlarmSensorRow, error) {
 	return row, nil
 }
 
-// ReplaceByArea atomically replaces the sensor set of an area: the
+// ReplaceByZone atomically replaces the sensor set of an zone: the
 // delete and every insert run in one transaction, so a mid-write
 // failure can never persist a partial set (the alarm engine would
 // otherwise silently reload a truncated configuration).
-func (s *AlarmSensorStore) ReplaceByArea(ctx context.Context, areaID string, rows []AlarmSensorRow) error {
+func (s *AlarmSensorStore) ReplaceByZone(ctx context.Context, zoneID string, rows []AlarmSensorRow) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("sqlite: replace alarm sensors: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM alarm_sensors WHERE area_id = ?`, areaID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM alarm_sensors WHERE zone_id = ?`, zoneID); err != nil {
 		return fmt.Errorf("sqlite: replace alarm sensors: %w", err)
 	}
 	const q = `
-INSERT INTO alarm_sensors (id, area_id, central_name, interface_id, channel_address, parameter,
+INSERT INTO alarm_sensors (id, zone_id, central_name, interface_id, channel_address, parameter,
     sensor_type, name, config_json, created_at_ms, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	for i := range rows {
 		row := &rows[i]
 		if _, err := tx.ExecContext(
 			ctx, q,
-			row.ID, areaID, row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter,
+			row.ID, zoneID, row.CentralName, row.InterfaceID, row.ChannelAddress, row.Parameter,
 			string(row.SensorType), row.Name, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
 		); err != nil {
 			return fmt.Errorf("sqlite: replace alarm sensors: %w", err)

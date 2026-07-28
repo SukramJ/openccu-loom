@@ -20,7 +20,7 @@ import (
 // sink runs under the engine lock).
 type panelRegistry struct {
 	mu         sync.Mutex
-	byArea     map[string]*alarmpanel.Panel
+	byZone     map[string]*alarmpanel.Panel
 	health     bool
 	masterName string
 }
@@ -29,23 +29,23 @@ func newPanelRegistry(masterName string) *panelRegistry {
 	if masterName == "" {
 		masterName = "Alarm system"
 	}
-	return &panelRegistry{byArea: map[string]*alarmpanel.Panel{}, health: true, masterName: masterName}
+	return &panelRegistry{byZone: map[string]*alarmpanel.Panel{}, health: true, masterName: masterName}
 }
 
-// Panels returns the entity snapshots, areas sorted by ID, the master
-// aggregate (present with two or more areas) last.
+// Panels returns the entity snapshots, zones sorted by ID, the master
+// aggregate (present with two or more zones) last.
 func (s *Service) Panels() []alarmpanel.Panel {
 	r := s.panels
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	ids := make([]string, 0, len(r.byArea))
-	for id := range r.byArea {
+	ids := make([]string, 0, len(r.byZone))
+	for id := range r.byZone {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	out := make([]alarmpanel.Panel, 0, len(ids)+1)
 	for _, id := range ids {
-		out = append(out, *r.byArea[id])
+		out = append(out, *r.byZone[id])
 	}
 	if master, ok := r.masterLocked(); ok {
 		out = append(out, master)
@@ -53,22 +53,22 @@ func (s *Service) Panels() []alarmpanel.Panel {
 	return out
 }
 
-// seedPanels (re)builds the registry from the configured areas and the
+// seedPanels (re)builds the registry from the configured zones and the
 // engine snapshots. Called from Start and Reload — never from the
 // event path.
 func (s *Service) seedPanels(ctx context.Context) {
-	snaps := s.engine.Areas()
+	snaps := s.engine.Zones()
 	r := s.panels
 	r.mu.Lock()
 	known := map[string]bool{}
 	for i := range snaps {
 		snap := &snaps[i]
 		known[snap.ID] = true
-		modes := s.modesForArea(ctx, snap.ID)
+		modes := s.modesForZone(ctx, snap.ID)
 		armReq, disarmReq := s.EffectiveCodePolicy(ctx, snap.ID)
-		r.byArea[snap.ID] = &alarmpanel.Panel{
+		r.byZone[snap.ID] = &alarmpanel.Panel{
 			UniqueID:           alarmpanel.PanelUniqueID(snap.ID),
-			AreaID:             snap.ID,
+			ZoneID:             snap.ID,
 			Name:               snap.Name,
 			Modes:              modes,
 			State:              alarmpanel.StateToken(snap.State, snap.Mode),
@@ -78,14 +78,14 @@ func (s *Service) seedPanels(ctx context.Context) {
 		}
 	}
 	var removed []alarmpanel.Panel
-	for id, p := range r.byArea {
+	for id, p := range r.byZone {
 		if !known[id] {
 			removed = append(removed, *p)
-			delete(r.byArea, id)
+			delete(r.byZone, id)
 		}
 	}
-	panels := make([]alarmpanel.Panel, 0, len(r.byArea))
-	for _, p := range r.byArea {
+	panels := make([]alarmpanel.Panel, 0, len(r.byZone))
+	for _, p := range r.byZone {
 		panels = append(panels, *p)
 	}
 	master, hasMaster := r.masterLocked()
@@ -102,14 +102,14 @@ func (s *Service) seedPanels(ctx context.Context) {
 	}
 }
 
-// modesForArea reads the configured modes of an area from the store
+// modesForZone reads the configured modes of an zone from the store
 // (outside the event path).
-func (s *Service) modesForArea(ctx context.Context, areaID string) []hmenum.AlarmMode {
-	row, ok, err := s.stores.Areas.Get(ctx, areaID)
+func (s *Service) modesForZone(ctx context.Context, zoneID string) []hmenum.AlarmMode {
+	row, ok, err := s.stores.Zones.Get(ctx, zoneID)
 	if err != nil || !ok {
 		return nil
 	}
-	cfg, err := engine.ParseAreaConfig(row.ConfigJSON)
+	cfg, err := engine.ParseZoneConfig(row.ConfigJSON)
 	if err != nil {
 		return nil
 	}
@@ -126,16 +126,16 @@ func (s *Service) modesForArea(ctx context.Context, areaID string) []hmenum.Alar
 func (s *Service) onPanelStateEvent(e hmevent.AlarmStateChangedEvent) {
 	r := s.panels
 	r.mu.Lock()
-	p, ok := r.byArea[e.AreaID]
+	p, ok := r.byZone[e.ZoneID]
 	if !ok {
 		p = &alarmpanel.Panel{
-			UniqueID: alarmpanel.PanelUniqueID(e.AreaID),
-			AreaID:   e.AreaID,
+			UniqueID: alarmpanel.PanelUniqueID(e.ZoneID),
+			ZoneID:   e.ZoneID,
 		}
-		r.byArea[e.AreaID] = p
+		r.byZone[e.ZoneID] = p
 	}
-	if e.AreaName != "" {
-		p.Name = e.AreaName
+	if e.ZoneName != "" {
+		p.Name = e.ZoneName
 	}
 	p.State = alarmpanel.StateToken(e.To, e.Mode)
 	p.Available = r.health
@@ -158,8 +158,8 @@ func (s *Service) onPanelHealthEvent(e hmevent.AlarmHealthChangedEvent) {
 		return
 	}
 	r.health = e.Healthy
-	panels := make([]alarmpanel.Panel, 0, len(r.byArea))
-	for _, p := range r.byArea {
+	panels := make([]alarmpanel.Panel, 0, len(r.byZone))
+	for _, p := range r.byZone {
 		p.Available = e.Healthy
 		panels = append(panels, *p)
 	}
@@ -174,27 +174,27 @@ func (s *Service) onPanelHealthEvent(e hmevent.AlarmHealthChangedEvent) {
 	}
 }
 
-// masterLocked aggregates the master panel; present with ≥2 areas.
-// The caller holds the registry lock. The code flags are the any-area
+// masterLocked aggregates the master panel; present with ≥2 zones.
+// The caller holds the registry lock. The code flags are the any-zone
 // union: a client driving the aggregate prompts upfront when any
-// member area will demand a code and fans the entered code out to the
-// per-area verbs. (The MQTT master *command topic* stays code-free by
-// design — its aggregate verbs cannot carry per-area codes — so its
+// member zone will demand a code and fans the entered code out to the
+// per-zone verbs. (The MQTT master *command topic* stays code-free by
+// design — its aggregate verbs cannot carry per-zone codes — so its
 // discovery config diverges deliberately from this projection.)
 func (r *panelRegistry) masterLocked() (alarmpanel.Panel, bool) {
-	if len(r.byArea) < 2 {
+	if len(r.byZone) < 2 {
 		return alarmpanel.Panel{}, false
 	}
-	tokens := make([]string, 0, len(r.byArea))
+	tokens := make([]string, 0, len(r.byZone))
 	var armReq, disarmReq bool
-	for _, p := range r.byArea {
+	for _, p := range r.byZone {
 		tokens = append(tokens, p.State)
 		armReq = armReq || p.CodeArmRequired
 		disarmReq = disarmReq || p.CodeDisarmRequired
 	}
 	return alarmpanel.Panel{
-		UniqueID:           alarmpanel.PanelUniqueID(alarmpanel.MasterAreaID),
-		AreaID:             alarmpanel.MasterAreaID,
+		UniqueID:           alarmpanel.PanelUniqueID(alarmpanel.MasterZoneID),
+		ZoneID:             alarmpanel.MasterZoneID,
 		Name:               r.masterName,
 		State:              alarmpanel.MasterStateToken(tokens),
 		Available:          r.health,
@@ -209,7 +209,7 @@ func (s *Service) publishPanel(p alarmpanel.Panel, removed bool) {
 	s.publish(hmevent.AlarmPanelChangedEvent{
 		Base:               hmevent.NewBaseAt(s.clk.Now()),
 		UniqueID:           p.UniqueID,
-		AreaID:             p.AreaID,
+		ZoneID:             p.ZoneID,
 		Name:               p.Name,
 		State:              p.State,
 		Available:          p.Available,
@@ -230,8 +230,8 @@ func (s *Service) refreshPanelCodePolicies(ctx context.Context) {
 		return
 	}
 	r.mu.Lock()
-	ids := make([]string, 0, len(r.byArea))
-	for id := range r.byArea {
+	ids := make([]string, 0, len(r.byZone))
+	for id := range r.byZone {
 		ids = append(ids, id)
 	}
 	r.mu.Unlock()
@@ -246,7 +246,7 @@ func (s *Service) refreshPanelCodePolicies(ctx context.Context) {
 	r.mu.Lock()
 	var changed []alarmpanel.Panel
 	for id, f := range derived {
-		p, ok := r.byArea[id]
+		p, ok := r.byZone[id]
 		if !ok || (p.CodeArmRequired == f.arm && p.CodeDisarmRequired == f.disarm) {
 			continue
 		}

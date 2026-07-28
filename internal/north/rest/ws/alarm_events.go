@@ -10,9 +10,9 @@ import (
 )
 
 // alarmPanelTopic is the single WebSocket topic every alarm_panel
-// broadcast rides. Areas are daemon-level (not per-central), so the
+// broadcast rides. Zones are daemon-level (not per-central), so the
 // alarm surface publishes on one flat topic and the payload carries the
-// area_id — mirrors the wsapi.json `alarm.panel` topic.
+// zone_id — mirrors the wsapi.json `alarm.panel` topic.
 const alarmPanelTopic = "alarm.panel"
 
 // Broadcast Type labels for the alarm_panel family. These are the
@@ -36,8 +36,8 @@ const (
 // AlarmStateChangedPayload is the broadcast payload for an arm-state
 // transition (alarm.state_changed).
 type AlarmStateChangedPayload struct {
-	AreaID     string `json:"area_id"`
-	AreaName   string `json:"area_name"`
+	ZoneID     string `json:"zone_id"`
+	ZoneName   string `json:"zone_name"`
 	OldState   string `json:"old_state"`
 	NewState   string `json:"new_state"`
 	Mode       string `json:"mode,omitempty"`
@@ -51,7 +51,7 @@ type AlarmStateChangedPayload struct {
 // milliseconds (source fidelity) and whole seconds (display parity with
 // the panel status DTO's countdown).
 type AlarmCountdownPayload struct {
-	AreaID      string `json:"area_id"`
+	ZoneID      string `json:"zone_id"`
 	Kind        string `json:"kind"`
 	RemainingMS int64  `json:"remaining_ms"`
 	TotalMS     int64  `json:"total_ms"`
@@ -63,15 +63,15 @@ type AlarmCountdownPayload struct {
 // ready-to-arm recomputation (alarm.readiness_changed). The map is keyed
 // by mode name, reusing the REST readiness verdict shape.
 type AlarmReadinessChangedPayload struct {
-	AreaID    string                              `json:"area_id"`
+	ZoneID    string                              `json:"zone_id"`
 	Readiness map[string]hmapi.AlarmModeReadiness `json:"readiness"`
 }
 
-// AlarmTriggeredPayload is the broadcast payload for an area entering
+// AlarmTriggeredPayload is the broadcast payload for an zone entering
 // triggered (alarm.triggered).
 type AlarmTriggeredPayload struct {
-	AreaID     string `json:"area_id"`
-	AreaName   string `json:"area_name"`
+	ZoneID     string `json:"zone_id"`
+	ZoneName   string `json:"zone_name"`
 	IncidentID int64  `json:"incident_id"`
 	SensorID   string `json:"sensor_id,omitempty"`
 	SensorName string `json:"sensor_name,omitempty"`
@@ -83,8 +83,8 @@ type AlarmTriggeredPayload struct {
 // notification output firing for an alarm (one-shot at fire time,
 // never cancelled by a later silence).
 type AlarmNotificationPayload struct {
-	AreaID     string `json:"area_id"`
-	AreaName   string `json:"area_name,omitempty"`
+	ZoneID     string `json:"zone_id"`
+	ZoneName   string `json:"zone_name,omitempty"`
 	OutputID   string `json:"output_id"`
 	OutputName string `json:"output_name,omitempty"`
 	IncidentID int64  `json:"incident_id"`
@@ -96,7 +96,7 @@ type AlarmNotificationPayload struct {
 // the details — consumers query the journal for the full row.
 type AlarmJournalAppendedPayload struct {
 	EntryID    int64  `json:"entry_id"`
-	AreaID     string `json:"area_id,omitempty"`
+	ZoneID     string `json:"zone_id,omitempty"`
 	Class      string `json:"class"`
 	Event      string `json:"event"`
 	Actor      string `json:"actor,omitempty"`
@@ -106,7 +106,7 @@ type AlarmJournalAppendedPayload struct {
 // AlarmWalkTestProgressPayload is the broadcast payload for a walk-test
 // sensor activation (alarm.walktest_progress).
 type AlarmWalkTestProgressPayload struct {
-	AreaID     string `json:"area_id"`
+	ZoneID     string `json:"zone_id"`
 	SensorID   string `json:"sensor_id"`
 	SensorName string `json:"sensor_name,omitempty"`
 	Seen       int    `json:"seen"`
@@ -115,7 +115,7 @@ type AlarmWalkTestProgressPayload struct {
 
 // AlarmHealthChangedPayload is the broadcast payload for an
 // alarm-service health transition (alarm.health_changed). It is
-// service-global, so it carries no area_id.
+// service-global, so it carries no zone_id.
 type AlarmHealthChangedPayload struct {
 	Healthy bool   `json:"healthy"`
 	Note    string `json:"note"`
@@ -123,7 +123,7 @@ type AlarmHealthChangedPayload struct {
 
 // AlarmPanelSubscriber bridges the daemon-level alarm event bus onto the
 // WebSocket [*Hub]. Unlike [HubEventsSubscriber] it subscribes to one
-// shared bus (areas are daemon-level, not per-central), so there is no
+// shared bus (zones are daemon-level, not per-central), so there is no
 // per-central fan-out — one handler per alarm event type.
 type AlarmPanelSubscriber struct {
 	bus    *events.Bus
@@ -171,8 +171,8 @@ func (s *AlarmPanelSubscriber) onStateChanged(e hmevent.AlarmStateChangedEvent) 
 		Type:  broadcastAlarmStateChanged,
 		When:  e.Timestamp(),
 		Payload: AlarmStateChangedPayload{
-			AreaID:     e.AreaID,
-			AreaName:   e.AreaName,
+			ZoneID:     e.ZoneID,
+			ZoneName:   e.ZoneName,
 			OldState:   string(e.From),
 			NewState:   string(e.To),
 			Mode:       string(e.Mode),
@@ -189,7 +189,7 @@ func (s *AlarmPanelSubscriber) onCountdown(e hmevent.AlarmCountdownEvent) {
 		Type:  broadcastAlarmCountdown,
 		When:  e.Timestamp(),
 		Payload: AlarmCountdownPayload{
-			AreaID:      e.AreaID,
+			ZoneID:      e.ZoneID,
 			Kind:        e.Kind,
 			RemainingMS: e.RemainingMS,
 			TotalMS:     e.TotalMS,
@@ -205,7 +205,7 @@ func (s *AlarmPanelSubscriber) onReadinessChanged(e hmevent.AlarmReadinessChange
 		Type:  broadcastAlarmReadinessChanged,
 		When:  e.Timestamp(),
 		Payload: AlarmReadinessChangedPayload{
-			AreaID:    e.AreaID,
+			ZoneID:    e.ZoneID,
 			Readiness: alarmReadinessDTO(e.Readiness),
 		},
 	})
@@ -217,8 +217,8 @@ func (s *AlarmPanelSubscriber) onNotification(e hmevent.AlarmNotificationEvent) 
 		Type:  broadcastAlarmNotification,
 		When:  e.Timestamp(),
 		Payload: AlarmNotificationPayload{
-			AreaID:     e.AreaID,
-			AreaName:   e.AreaName,
+			ZoneID:     e.ZoneID,
+			ZoneName:   e.ZoneName,
 			OutputID:   e.OutputID,
 			OutputName: e.OutputName,
 			IncidentID: e.IncidentID,
@@ -233,8 +233,8 @@ func (s *AlarmPanelSubscriber) onTriggered(e hmevent.AlarmTriggeredEvent) {
 		Type:  broadcastAlarmTriggered,
 		When:  e.Timestamp(),
 		Payload: AlarmTriggeredPayload{
-			AreaID:     e.AreaID,
-			AreaName:   e.AreaName,
+			ZoneID:     e.ZoneID,
+			ZoneName:   e.ZoneName,
 			IncidentID: e.IncidentID,
 			SensorID:   e.SensorID,
 			SensorName: e.SensorName,
@@ -251,7 +251,7 @@ func (s *AlarmPanelSubscriber) onJournalAppended(e hmevent.AlarmJournalAppendedE
 		When:  e.Timestamp(),
 		Payload: AlarmJournalAppendedPayload{
 			EntryID:    e.EntryID,
-			AreaID:     e.AreaID,
+			ZoneID:     e.ZoneID,
 			Class:      string(e.Class),
 			Event:      e.Event,
 			Actor:      e.Actor,
@@ -266,7 +266,7 @@ func (s *AlarmPanelSubscriber) onWalkTest(e hmevent.AlarmWalkTestEvent) {
 		Type:  broadcastAlarmWalkTestProgress,
 		When:  e.Timestamp(),
 		Payload: AlarmWalkTestProgressPayload{
-			AreaID:     e.AreaID,
+			ZoneID:     e.ZoneID,
 			SensorID:   e.SensorID,
 			SensorName: e.SensorName,
 			Seen:       e.Seen,
@@ -291,7 +291,7 @@ func (s *AlarmPanelSubscriber) onHealthChanged(e hmevent.AlarmHealthChangedEvent
 // projection change (alarm.panel_changed).
 type AlarmPanelChangedPayload struct {
 	UniqueID  string `json:"unique_id"`
-	AreaID    string `json:"area_id"`
+	ZoneID    string `json:"zone_id"`
 	Name      string `json:"name"`
 	State     string `json:"state"`
 	Available bool   `json:"available"`
@@ -304,11 +304,11 @@ type AlarmPanelChangedPayload struct {
 
 // AlarmReminderPayload is the broadcast payload for an arm-schedule
 // reminder (alarm.reminder): a schedule elapsed with AutoArm off while
-// the area was not in the scheduled mode, so the engine notifies rather
+// the zone was not in the scheduled mode, so the engine notifies rather
 // than arming (docs/alarm-concept.md §15 row 19).
 type AlarmReminderPayload struct {
-	AreaID   string `json:"area_id"`
-	AreaName string `json:"area_name,omitempty"`
+	ZoneID   string `json:"zone_id"`
+	ZoneName string `json:"zone_name,omitempty"`
 	Mode     string `json:"mode"`
 }
 
@@ -321,8 +321,8 @@ func (s *AlarmPanelSubscriber) onReminder(e hmevent.AlarmReminderEvent) {
 		Type:  broadcastAlarmReminder,
 		When:  e.Timestamp(),
 		Payload: AlarmReminderPayload{
-			AreaID:   e.AreaID,
-			AreaName: e.AreaName,
+			ZoneID:   e.ZoneID,
+			ZoneName: e.ZoneName,
 			Mode:     string(e.Mode),
 		},
 	})
@@ -338,7 +338,7 @@ func (s *AlarmPanelSubscriber) onPanelChanged(e hmevent.AlarmPanelChangedEvent) 
 		When:  e.Timestamp(),
 		Payload: AlarmPanelChangedPayload{
 			UniqueID:           e.UniqueID,
-			AreaID:             e.AreaID,
+			ZoneID:             e.ZoneID,
 			Name:               e.Name,
 			State:              e.State,
 			Available:          e.Available,

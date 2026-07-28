@@ -13,15 +13,15 @@ import (
 )
 
 // AlarmStateRow is the continuously persisted arm-state of one alarm
-// area. TimersJSON carries the redundant timer tuples (wall deadline,
+// zone. TimersJSON carries the redundant timer tuples (wall deadline,
 // remaining duration, persist-time timestamp, boot counter) that let a
 // restart restore or expire countdowns deterministically and detect
 // implausible clocks. ContextJSON carries per-sensor runtime markers a
 // restore must not lose (sensors open at arm completion, the pending
 // cause). The engine owns both encodings.
 type AlarmStateRow struct {
-	AreaID      string
-	State       hmenum.AlarmAreaState
+	ZoneID      string
+	State       hmenum.AlarmZoneState
 	Mode        hmenum.AlarmMode
 	BypassJSON  string
 	IncidentID  int64
@@ -30,7 +30,7 @@ type AlarmStateRow struct {
 	UpdatedAtMS int64
 }
 
-// AlarmStateStore persists the per-area arm state (one row per area,
+// AlarmStateStore persists the per-zone arm state (one row per zone,
 // written through on every transition).
 type AlarmStateStore struct {
 	db *sql.DB
@@ -39,12 +39,12 @@ type AlarmStateStore struct {
 // NewAlarmStateStore returns a store backed by db.
 func NewAlarmStateStore(db *sql.DB) *AlarmStateStore { return &AlarmStateStore{db: db} }
 
-// Upsert writes the full state row for row.AreaID.
+// Upsert writes the full state row for row.ZoneID.
 func (s *AlarmStateStore) Upsert(ctx context.Context, row AlarmStateRow) error {
 	const q = `
-INSERT INTO alarm_state (area_id, state, mode, bypass_json, incident_id, timers_json, context_json, updated_at_ms)
+INSERT INTO alarm_state (zone_id, state, mode, bypass_json, incident_id, timers_json, context_json, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(area_id) DO UPDATE SET
+ON CONFLICT(zone_id) DO UPDATE SET
     state = excluded.state,
     mode = excluded.mode,
     bypass_json = excluded.bypass_json,
@@ -54,7 +54,7 @@ ON CONFLICT(area_id) DO UPDATE SET
     updated_at_ms = excluded.updated_at_ms`
 	_, err := s.db.ExecContext(
 		ctx, q,
-		row.AreaID, string(row.State), string(row.Mode), row.BypassJSON,
+		row.ZoneID, string(row.State), string(row.Mode), row.BypassJSON,
 		row.IncidentID, row.TimersJSON, row.ContextJSON, row.UpdatedAtMS,
 	)
 	if err != nil {
@@ -63,13 +63,13 @@ ON CONFLICT(area_id) DO UPDATE SET
 	return nil
 }
 
-// Get returns the persisted state of areaID. The boolean reports
+// Get returns the persisted state of zoneID. The boolean reports
 // whether a row exists.
-func (s *AlarmStateStore) Get(ctx context.Context, areaID string) (AlarmStateRow, bool, error) {
+func (s *AlarmStateStore) Get(ctx context.Context, zoneID string) (AlarmStateRow, bool, error) {
 	const q = `
-SELECT area_id, state, mode, bypass_json, incident_id, timers_json, context_json, updated_at_ms
-FROM alarm_state WHERE area_id = ?`
-	row, err := scanAlarmStateRow(s.db.QueryRowContext(ctx, q, areaID))
+SELECT zone_id, state, mode, bypass_json, incident_id, timers_json, context_json, updated_at_ms
+FROM alarm_state WHERE zone_id = ?`
+	row, err := scanAlarmStateRow(s.db.QueryRowContext(ctx, q, zoneID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return AlarmStateRow{}, false, nil
 	}
@@ -79,11 +79,11 @@ FROM alarm_state WHERE area_id = ?`
 	return row, true, nil
 }
 
-// GetAll returns every persisted area state.
+// GetAll returns every persisted zone state.
 func (s *AlarmStateStore) GetAll(ctx context.Context) ([]AlarmStateRow, error) {
 	const q = `
-SELECT area_id, state, mode, bypass_json, incident_id, timers_json, context_json, updated_at_ms
-FROM alarm_state ORDER BY area_id`
+SELECT zone_id, state, mode, bypass_json, incident_id, timers_json, context_json, updated_at_ms
+FROM alarm_state ORDER BY zone_id`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get all alarm states: %w", err)
@@ -100,9 +100,9 @@ FROM alarm_state ORDER BY area_id`
 	return out, rows.Err()
 }
 
-// Delete removes the state row of areaID (area deletion).
-func (s *AlarmStateStore) Delete(ctx context.Context, areaID string) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM alarm_state WHERE area_id = ?`, areaID); err != nil {
+// Delete removes the state row of zoneID (zone deletion).
+func (s *AlarmStateStore) Delete(ctx context.Context, zoneID string) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM alarm_state WHERE zone_id = ?`, zoneID); err != nil {
 		return fmt.Errorf("sqlite: delete alarm state: %w", err)
 	}
 	return nil
@@ -111,11 +111,11 @@ func (s *AlarmStateStore) Delete(ctx context.Context, areaID string) error {
 func scanAlarmStateRow(sc scannable) (AlarmStateRow, error) {
 	var row AlarmStateRow
 	var state, mode string
-	if err := sc.Scan(&row.AreaID, &state, &mode, &row.BypassJSON,
+	if err := sc.Scan(&row.ZoneID, &state, &mode, &row.BypassJSON,
 		&row.IncidentID, &row.TimersJSON, &row.ContextJSON, &row.UpdatedAtMS); err != nil {
 		return AlarmStateRow{}, err
 	}
-	row.State = hmenum.AlarmAreaState(state)
+	row.State = hmenum.AlarmZoneState(state)
 	row.Mode = hmenum.AlarmMode(mode)
 	return row, nil
 }

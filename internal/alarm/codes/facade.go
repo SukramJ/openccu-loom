@@ -46,9 +46,9 @@ type Perms struct {
 
 // Binding is the parsed binding_json union for the hardware code
 // kinds (docs/alarm-concept.md §11). keypad_slot uses
-// Central/DeviceAddress/Slot plus the arm target (ArmMode/AreaID);
+// Central/DeviceAddress/Slot plus the arm target (ArmMode/ZoneID);
 // remote_key uses Central/ChannelAddress/Parameter plus the action
-// target (Action/AreaID).
+// target (Action/ZoneID).
 type Binding struct {
 	Central        string `json:"central,omitempty"`
 	DeviceAddress  string `json:"device_address,omitempty"`
@@ -57,7 +57,7 @@ type Binding struct {
 	ChannelAddress string `json:"channel_address,omitempty"`
 	Parameter      string `json:"parameter,omitempty"`
 	Action         string `json:"action,omitempty"`
-	AreaID         string `json:"area_id,omitempty"`
+	ZoneID         string `json:"zone_id,omitempty"`
 }
 
 // Row is one parsed alarm_codes row, with the argon2id hash stripped:
@@ -68,7 +68,7 @@ type Row struct {
 	Kind         Kind
 	Duress       bool
 	Perms        Perms
-	Areas        []string
+	Zones        []string
 	Binding      Binding
 	ValidFromMS  int64
 	ValidUntilMS int64
@@ -127,7 +127,7 @@ type pinCandidate struct {
 	id, name, hash string
 	duress         bool
 	perms          Perms
-	areas          []string
+	zones          []string
 	validFromMS    int64
 	validUntilMS   int64
 }
@@ -136,11 +136,11 @@ type pinCandidate struct {
 // §11). See the engine.CodeValidator doc comment for the full
 // contract; in short: a correct code returns its identity + duress
 // flag with a nil error, a wrong or missing-but-required code returns
-// engine.ErrInvalidCode, and an empty code against an area with no
+// engine.ErrInvalidCode, and an empty code against an zone with no
 // applicable enabled pin code is a no-op pass-through (nil error,
 // empty identity) so a code policy can never lock everyone out when no
 // codes exist.
-func (f *Facade) Validate(ctx context.Context, areaID, verb, code, source string) (identity string, duress bool, err error) {
+func (f *Facade) Validate(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool, err error) {
 	now := f.clk.Now()
 	// Operator (break-glass) sources are exempt from rate limiting: the
 	// session is already the authenticated factor, so a lockout protects
@@ -150,26 +150,26 @@ func (f *Facade) Validate(ctx context.Context, areaID, verb, code, source string
 	opSource := engine.IsOperatorSource(source)
 	if !opSource {
 		if allowed, remaining := f.limiter.allow(source, now); !allowed {
-			f.journalFault(ctx, areaID, source, "code_locked_out", map[string]any{
+			f.journalFault(ctx, zoneID, source, "code_locked_out", map[string]any{
 				"remaining_s": int(remaining.Seconds()),
 			})
 			return "", false, engine.ErrInvalidCode
 		}
 	}
 
-	candidates, err := f.pinCandidates(ctx, areaID, now.UnixMilli())
+	candidates, err := f.pinCandidates(ctx, zoneID, now.UnixMilli())
 	if err != nil {
 		return "", false, fmt.Errorf("codes: validate: %w", err)
 	}
 
 	if code == "" {
 		if len(candidates) == 0 {
-			// No applicable pin code exists for this area: the "codes
+			// No applicable pin code exists for this zone: the "codes
 			// exist" half of an effective RequireDisarm/RequireArm
 			// policy resolves to inert.
 			return "", false, nil
 		}
-		f.recordInvalid(ctx, areaID, source, "code_missing", opSource)
+		f.recordInvalid(ctx, zoneID, source, "code_missing", opSource)
 		return "", false, engine.ErrInvalidCode
 	}
 
@@ -178,7 +178,7 @@ func (f *Facade) Validate(ctx context.Context, areaID, verb, code, source string
 			continue
 		}
 		if !permits(c.perms, verb) {
-			f.journalFault(ctx, areaID, source, "code_permission_denied", map[string]any{
+			f.journalFault(ctx, zoneID, source, "code_permission_denied", map[string]any{
 				"code_id": c.id, "verb": verb,
 			})
 			return "", false, engine.ErrInvalidCode
@@ -187,18 +187,18 @@ func (f *Facade) Validate(ctx context.Context, areaID, verb, code, source string
 		return c.name, c.duress, nil
 	}
 
-	f.recordInvalid(ctx, areaID, source, "invalid_code", opSource)
+	f.recordInvalid(ctx, zoneID, source, "invalid_code", opSource)
 	return "", false, engine.ErrInvalidCode
 }
 
 // HasPINCodes reports whether any enabled, in-validity pin code applies
-// to areaID — the "codes exist" half of the effective code requirement
+// to zoneID — the "codes exist" half of the effective code requirement
 // (docs/alarm-concept.md §11). MQTT discovery uses it to advertise
 // code_arm_required / code_disarm_required exactly as the engine will
 // enforce them: a policy default resolves to required only while such a
 // code exists, so HA prompts for a code precisely when one is needed.
-func (f *Facade) HasPINCodes(ctx context.Context, areaID string) bool {
-	cands, err := f.pinCandidates(ctx, areaID, f.clk.Now().UnixMilli())
+func (f *Facade) HasPINCodes(ctx context.Context, zoneID string) bool {
+	cands, err := f.pinCandidates(ctx, zoneID, f.clk.Now().UnixMilli())
 	return err == nil && len(cands) > 0
 }
 
@@ -224,8 +224,8 @@ func (f *Facade) Rows(ctx context.Context) ([]Row, error) {
 }
 
 // pinCandidates loads every enabled, in-validity-window pin-kind code
-// applicable to areaID (Areas empty means every area).
-func (f *Facade) pinCandidates(ctx context.Context, areaID string, nowMS int64) ([]pinCandidate, error) {
+// applicable to zoneID (Zones empty means every zone).
+func (f *Facade) pinCandidates(ctx context.Context, zoneID string, nowMS int64) ([]pinCandidate, error) {
 	dbRows, err := f.store.GetAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load rows: %w", err)
@@ -249,17 +249,17 @@ func (f *Facade) pinCandidates(ctx context.Context, areaID string, nowMS int64) 
 				continue
 			}
 		}
-		areas, err := parseAreas(r.AreasJSON)
+		zones, err := parseZones(r.ZonesJSON)
 		if err != nil {
-			f.log.Error("alarm code areas_json malformed, skipping", "id", r.ID, "error", err)
+			f.log.Error("alarm code zones_json malformed, skipping", "id", r.ID, "error", err)
 			continue
 		}
-		if len(areas) > 0 && !slices.Contains(areas, areaID) {
+		if len(zones) > 0 && !slices.Contains(zones, zoneID) {
 			continue
 		}
 		out = append(out, pinCandidate{
 			id: r.ID, name: r.Name, hash: r.Hash, duress: r.Duress,
-			perms: perms, areas: areas,
+			perms: perms, zones: zones,
 			validFromMS: r.ValidFromMS, validUntilMS: r.ValidUntilMS,
 		})
 	}
@@ -272,8 +272,8 @@ func (f *Facade) pinCandidates(ctx context.Context, areaID string, nowMS int64) 
 // engaged a new lockout. Operator sources journal only — their wrong
 // attempts must never accumulate toward a lockout that would later
 // suppress duress detection.
-func (f *Facade) recordInvalid(ctx context.Context, areaID, source, event string, operatorSource bool) {
-	f.journalFault(ctx, areaID, source, event, nil)
+func (f *Facade) recordInvalid(ctx context.Context, zoneID, source, event string, operatorSource bool) {
+	f.journalFault(ctx, zoneID, source, event, nil)
 	if operatorSource {
 		return
 	}
@@ -281,20 +281,20 @@ func (f *Facade) recordInvalid(ctx context.Context, areaID, source, event string
 	if lockout <= 0 {
 		return
 	}
-	f.log.Warn("alarm code source locked out", "source", source, "area", areaID, "lockout_s", lockout.Seconds())
-	f.journalFault(ctx, areaID, source, "code_lockout", map[string]any{
+	f.log.Warn("alarm code source locked out", "source", source, "zone", zoneID, "lockout_s", lockout.Seconds())
+	f.journalFault(ctx, zoneID, source, "code_lockout", map[string]any{
 		"lockout_s": int(lockout.Seconds()),
 	})
 }
 
 // journalFault appends a fault-class journal entry, logging (never
 // blocking on) a journal failure. A nil Journal is a silent no-op.
-func (f *Facade) journalFault(ctx context.Context, areaID, source, event string, details map[string]any) {
+func (f *Facade) journalFault(ctx context.Context, zoneID, source, event string, details map[string]any) {
 	if f.journal == nil {
 		return
 	}
 	if _, err := f.journal.Append(ctx, engine.JournalEntry{
-		AreaID: areaID, Class: hmenum.AlarmJournalClassFault, Event: event,
+		ZoneID: zoneID, Class: hmenum.AlarmJournalClassFault, Event: event,
 		Source: source, Details: details,
 	}); err != nil {
 		f.log.Error("alarm code journal append failed", "event", event, "error", err)
@@ -325,9 +325,9 @@ func parseRow(r *sqlitestore.AlarmCodeRow) (Row, error) {
 			return Row{}, fmt.Errorf("perms_json: %w", err)
 		}
 	}
-	areas, err := parseAreas(r.AreasJSON)
+	zones, err := parseZones(r.ZonesJSON)
 	if err != nil {
-		return Row{}, fmt.Errorf("areas_json: %w", err)
+		return Row{}, fmt.Errorf("zones_json: %w", err)
 	}
 	var binding Binding
 	if r.BindingJSON != "" {
@@ -337,20 +337,20 @@ func parseRow(r *sqlitestore.AlarmCodeRow) (Row, error) {
 	}
 	return Row{
 		ID: r.ID, Name: r.Name, Kind: Kind(r.Kind), Duress: r.Duress,
-		Perms: perms, Areas: areas, Binding: binding,
+		Perms: perms, Zones: zones, Binding: binding,
 		ValidFromMS: r.ValidFromMS, ValidUntilMS: r.ValidUntilMS, Enabled: r.Enabled,
 	}, nil
 }
 
-// parseAreas decodes areas_json, treating an empty string the same as
-// "[]" (every area).
-func parseAreas(areasJSON string) ([]string, error) {
-	if areasJSON == "" || areasJSON == "[]" {
+// parseZones decodes zones_json, treating an empty string the same as
+// "[]" (every zone).
+func parseZones(zonesJSON string) ([]string, error) {
+	if zonesJSON == "" || zonesJSON == "[]" {
 		return nil, nil
 	}
-	var areas []string
-	if err := json.Unmarshal([]byte(areasJSON), &areas); err != nil {
+	var zones []string
+	if err := json.Unmarshal([]byte(zonesJSON), &zones); err != nil {
 		return nil, err
 	}
-	return areas, nil
+	return zones, nil
 }

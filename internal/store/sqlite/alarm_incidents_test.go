@@ -15,9 +15,9 @@ func freshAlarmIncidentStore(t *testing.T) *AlarmIncidentStore {
 	return NewAlarmIncidentStore(openTestDB(t, "alarm_incidents.db"))
 }
 
-func baseAlarmIncident(areaID string, startedAtMS int64) AlarmIncident {
+func baseAlarmIncident(zoneID string, startedAtMS int64) AlarmIncident {
 	return AlarmIncident{
-		AreaID:            areaID,
+		ZoneID:            zoneID,
 		Mode:              hmenum.AlarmModeFull,
 		CauseJSON:         `{"sensor_id":"sensor-1"}`,
 		StartedAtMS:       startedAtMS,
@@ -39,7 +39,7 @@ func TestAlarmIncidentStoreCreateGetRoundTrip(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	inc := baseAlarmIncident("area-1", 1000)
+	inc := baseAlarmIncident("zone-1", 1000)
 	id, err := s.Create(ctx, inc)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -79,51 +79,51 @@ func TestAlarmIncidentStoreGetMissingReturnsFalse(t *testing.T) {
 	}
 }
 
-// TestAlarmIncidentStoreGetOpenByAreaNoneOpen verifies GetOpenByArea
-// returns false when the area has no incidents at all.
-func TestAlarmIncidentStoreGetOpenByAreaNoneOpen(t *testing.T) {
+// TestAlarmIncidentStoreGetOpenByZoneNoneOpen verifies GetOpenByZone
+// returns false when the zone has no incidents at all.
+func TestAlarmIncidentStoreGetOpenByZoneNoneOpen(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	_, ok, err := s.GetOpenByArea(ctx, "area-1")
+	_, ok, err := s.GetOpenByZone(ctx, "zone-1")
 	if err != nil {
-		t.Fatalf("GetOpenByArea: %v", err)
+		t.Fatalf("GetOpenByZone: %v", err)
 	}
 	if ok {
-		t.Fatal("GetOpenByArea: want ok=false for area with no incidents")
+		t.Fatal("GetOpenByZone: want ok=false for zone with no incidents")
 	}
 }
 
-// TestAlarmIncidentStoreGetOpenByAreaOneOpen verifies GetOpenByArea finds
-// the single open incident of an area.
-func TestAlarmIncidentStoreGetOpenByAreaOneOpen(t *testing.T) {
+// TestAlarmIncidentStoreGetOpenByZoneOneOpen verifies GetOpenByZone finds
+// the single open incident of an zone.
+func TestAlarmIncidentStoreGetOpenByZoneOneOpen(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 
-	got, ok, err := s.GetOpenByArea(ctx, "area-1")
+	got, ok, err := s.GetOpenByZone(ctx, "zone-1")
 	if err != nil {
-		t.Fatalf("GetOpenByArea: %v", err)
+		t.Fatalf("GetOpenByZone: %v", err)
 	}
 	if !ok {
-		t.Fatal("GetOpenByArea: want ok=true")
+		t.Fatal("GetOpenByZone: want ok=true")
 	}
 	if got.ID != id {
 		t.Errorf("got.ID=%d want %d", got.ID, id)
 	}
 }
 
-// TestAlarmIncidentStoreGetOpenByAreaClosedOnlyReturnsFalse verifies that
-// GetOpenByArea does not return a closed incident.
-func TestAlarmIncidentStoreGetOpenByAreaClosedOnlyReturnsFalse(t *testing.T) {
+// TestAlarmIncidentStoreGetOpenByZoneClosedOnlyReturnsFalse verifies that
+// GetOpenByZone does not return a closed incident.
+func TestAlarmIncidentStoreGetOpenByZoneClosedOnlyReturnsFalse(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -131,64 +131,64 @@ func TestAlarmIncidentStoreGetOpenByAreaClosedOnlyReturnsFalse(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	_, ok, err := s.GetOpenByArea(ctx, "area-1")
+	_, ok, err := s.GetOpenByZone(ctx, "zone-1")
 	if err != nil {
-		t.Fatalf("GetOpenByArea: %v", err)
+		t.Fatalf("GetOpenByZone: %v", err)
 	}
 	if ok {
-		t.Fatal("GetOpenByArea: want ok=false when the only incident is closed")
+		t.Fatal("GetOpenByZone: want ok=false when the only incident is closed")
 	}
 }
 
-// TestAlarmIncidentStoreGetOpenByAreaTwoOpenNewestWins verifies that if
-// historical corruption ever leaves two open incidents for one area, the
+// TestAlarmIncidentStoreGetOpenByZoneTwoOpenNewestWins verifies that if
+// historical corruption ever leaves two open incidents for one zone, the
 // newest (highest id) one wins.
-func TestAlarmIncidentStoreGetOpenByAreaTwoOpenNewestWins(t *testing.T) {
+func TestAlarmIncidentStoreGetOpenByZoneTwoOpenNewestWins(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	_, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	_, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create 1: %v", err)
 	}
-	id2, err := s.Create(ctx, baseAlarmIncident("area-1", 2000))
+	id2, err := s.Create(ctx, baseAlarmIncident("zone-1", 2000))
 	if err != nil {
 		t.Fatalf("Create 2: %v", err)
 	}
 
-	got, ok, err := s.GetOpenByArea(ctx, "area-1")
+	got, ok, err := s.GetOpenByZone(ctx, "zone-1")
 	if err != nil {
-		t.Fatalf("GetOpenByArea: %v", err)
+		t.Fatalf("GetOpenByZone: %v", err)
 	}
 	if !ok {
-		t.Fatal("GetOpenByArea: want ok=true")
+		t.Fatal("GetOpenByZone: want ok=true")
 	}
 	if got.ID != id2 {
 		t.Errorf("got.ID=%d want newest id=%d", got.ID, id2)
 	}
 }
 
-// TestAlarmIncidentStoreListByArea verifies ListByArea returns incidents of
-// the given area newest-first, and that limit caps the result.
-func TestAlarmIncidentStoreListByArea(t *testing.T) {
+// TestAlarmIncidentStoreListByZone verifies ListByZone returns incidents of
+// the given zone newest-first, and that limit caps the result.
+func TestAlarmIncidentStoreListByZone(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
 	ids := make([]int64, 0, 3)
 	for i := range 3 {
-		id, err := s.Create(ctx, baseAlarmIncident("area-1", int64(1000+i)))
+		id, err := s.Create(ctx, baseAlarmIncident("zone-1", int64(1000+i)))
 		if err != nil {
 			t.Fatalf("Create %d: %v", i, err)
 		}
 		ids = append(ids, id)
 	}
-	if _, err := s.Create(ctx, baseAlarmIncident("area-2", 5000)); err != nil {
-		t.Fatalf("Create area-2: %v", err)
+	if _, err := s.Create(ctx, baseAlarmIncident("zone-2", 5000)); err != nil {
+		t.Fatalf("Create zone-2: %v", err)
 	}
 
-	got, err := s.ListByArea(ctx, "area-1", 0)
+	got, err := s.ListByZone(ctx, "zone-1", 0)
 	if err != nil {
-		t.Fatalf("ListByArea: %v", err)
+		t.Fatalf("ListByZone: %v", err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d want 3", len(got))
@@ -200,9 +200,9 @@ func TestAlarmIncidentStoreListByArea(t *testing.T) {
 		}
 	}
 
-	limited, err := s.ListByArea(ctx, "area-1", 2)
+	limited, err := s.ListByZone(ctx, "zone-1", 2)
 	if err != nil {
-		t.Fatalf("ListByArea limited: %v", err)
+		t.Fatalf("ListByZone limited: %v", err)
 	}
 	if len(limited) != 2 {
 		t.Fatalf("limited len=%d want 2", len(limited))
@@ -217,7 +217,7 @@ func TestAlarmIncidentStoreMarkSilencedFirstCallWins(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestAlarmIncidentStoreAddAcousticMSAccumulates(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestAlarmIncidentStoreIncrementRetriggerCycles(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestAlarmIncidentStoreIncrementRestoreRefires(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestAlarmIncidentStoreSetTriggerDeadline(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestAlarmIncidentStoreCloseFirstCallWins(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	id, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	id, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestAlarmIncidentStorePurgeClosedBefore(t *testing.T) {
 	s := freshAlarmIncidentStore(t)
 	ctx := context.Background()
 
-	closedOld, err := s.Create(ctx, baseAlarmIncident("area-1", 1000))
+	closedOld, err := s.Create(ctx, baseAlarmIncident("zone-1", 1000))
 	if err != nil {
 		t.Fatalf("Create closedOld: %v", err)
 	}
@@ -420,7 +420,7 @@ func TestAlarmIncidentStorePurgeClosedBefore(t *testing.T) {
 		t.Fatalf("Close closedOld: %v", err)
 	}
 
-	closedRecent, err := s.Create(ctx, baseAlarmIncident("area-1", 2000))
+	closedRecent, err := s.Create(ctx, baseAlarmIncident("zone-1", 2000))
 	if err != nil {
 		t.Fatalf("Create closedRecent: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestAlarmIncidentStorePurgeClosedBefore(t *testing.T) {
 		t.Fatalf("Close closedRecent: %v", err)
 	}
 
-	stillOpen, err := s.Create(ctx, baseAlarmIncident("area-2", 3000))
+	stillOpen, err := s.Create(ctx, baseAlarmIncident("zone-2", 3000))
 	if err != nil {
 		t.Fatalf("Create stillOpen: %v", err)
 	}

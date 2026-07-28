@@ -16,14 +16,14 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-func walkTestRequest(areaID, action string) *http.Request {
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas/"+areaID+"/walktest/"+action, http.NoBody)
-	return withChiParam(req, "id", areaID)
+func walkTestRequest(zoneID, action string) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones/"+zoneID+"/walktest/"+action, http.NoBody)
+	return withChiParam(req, "id", zoneID)
 }
 
-func walkTestStatusRequest(areaID string) *http.Request {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/areas/"+areaID+"/walktest", http.NoBody)
-	return withChiParam(req, "id", areaID)
+func walkTestStatusRequest(zoneID string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/zones/"+zoneID+"/walktest", http.NoBody)
+	return withChiParam(req, "id", zoneID)
 }
 
 // --- StartAlarmWalkTest ---
@@ -31,7 +31,7 @@ func walkTestStatusRequest(areaID string) *http.Request {
 func TestStartAlarmWalkTest_HappyPath_Returns204(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	rec := &captureRecorder{}
 
 	w := httptest.NewRecorder()
@@ -45,7 +45,7 @@ func TestStartAlarmWalkTest_HappyPath_Returns204(t *testing.T) {
 	}
 }
 
-func TestStartAlarmWalkTest_UnknownArea_Returns404(t *testing.T) {
+func TestStartAlarmWalkTest_UnknownZone_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
@@ -58,11 +58,11 @@ func TestStartAlarmWalkTest_UnknownArea_Returns404(t *testing.T) {
 }
 
 // TestStartAlarmWalkTest_WhileArmed_Returns409 verifies a walk test can
-// only start on a disarmed area — starting it while armed is refused.
+// only start on a disarmed zone — starting it while armed is refused.
 func TestStartAlarmWalkTest_WhileArmed_Returns409(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	if _, err := fx.eng.Arm(context.Background(), "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestStartAlarmWalkTest_WhileArmed_Returns409(t *testing.T) {
 func TestStartAlarmWalkTest_AlreadyActive_Returns409(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	if err := fx.eng.WalkTestStart(context.Background(), "eg", "tester", "test"); err != nil {
 		t.Fatalf("walk test start: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestStartAlarmWalkTest_AlreadyActive_Returns409(t *testing.T) {
 
 // --- GetAlarmWalkTestStatus ---
 
-func TestGetAlarmWalkTestStatus_UnknownArea_Returns404(t *testing.T) {
+func TestGetAlarmWalkTestStatus_UnknownZone_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
@@ -111,7 +111,7 @@ func TestGetAlarmWalkTestStatus_UnknownArea_Returns404(t *testing.T) {
 func TestGetAlarmWalkTestStatus_ReflectsSeenSensors(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	fx.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	if err := fx.eng.WalkTestStart(context.Background(), "eg", "tester", "test"); err != nil {
@@ -146,9 +146,9 @@ func TestGetAlarmWalkTestStatus_ReflectsSeenSensors(t *testing.T) {
 		t.Error("window.tested = true, want false (never activated)")
 	}
 	// The state machine must not have evaluated the activation: the
-	// area stays disarmed throughout a walk test.
-	if snap, ok := fx.eng.Area("eg"); !ok || snap.State != hmenum.AlarmAreaStateDisarmed {
-		t.Errorf("area state = %+v, want to remain disarmed during walk test", snap)
+	// zone stays disarmed throughout a walk test.
+	if snap, ok := fx.eng.Zone("eg"); !ok || snap.State != hmenum.AlarmZoneStateDisarmed {
+		t.Errorf("zone state = %+v, want to remain disarmed during walk test", snap)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestGetAlarmWalkTestStatus_ReflectsSeenSensors(t *testing.T) {
 func TestStopAlarmWalkTest_HappyPath_Returns204(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	if err := fx.eng.WalkTestStart(context.Background(), "eg", "tester", "test"); err != nil {
 		t.Fatalf("walk test start: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestStopAlarmWalkTest_HappyPath_Returns204(t *testing.T) {
 func TestStopAlarmWalkTest_NotActive_Returns409(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 
 	w := httptest.NewRecorder()
 	StopAlarmWalkTest(fx, nil).ServeHTTP(w, walkTestRequest("eg", "stop"))
@@ -194,7 +194,7 @@ func TestStopAlarmWalkTest_NotActive_Returns409(t *testing.T) {
 	}
 }
 
-func TestStopAlarmWalkTest_UnknownArea_Returns404(t *testing.T) {
+func TestStopAlarmWalkTest_UnknownZone_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
