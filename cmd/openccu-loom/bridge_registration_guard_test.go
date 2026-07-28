@@ -69,7 +69,7 @@ func TestNorthBridgeRegistrationCompleteAndOrdered(t *testing.T) {
 	var got []string
 	select {
 	case got = <-gotCh:
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for onNorthBridges callback")
 	}
 
@@ -79,7 +79,7 @@ func TestNorthBridgeRegistrationCompleteAndOrdered(t *testing.T) {
 		if err != nil {
 			t.Errorf("daemon returned error after cancel: %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Error("daemon did not shut down in time")
 	}
 
@@ -139,7 +139,7 @@ func TestNorthBridgeRegistrationIncludesMatterWhenEnabled(t *testing.T) {
 	var got []string
 	select {
 	case got = <-gotCh:
-	case <-time.After(25 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for onNorthBridges callback")
 	}
 
@@ -149,7 +149,7 @@ func TestNorthBridgeRegistrationIncludesMatterWhenEnabled(t *testing.T) {
 		if err != nil {
 			t.Errorf("daemon returned error after cancel: %v", err)
 		}
-	case <-time.After(25 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Error("daemon did not shut down in time")
 	}
 

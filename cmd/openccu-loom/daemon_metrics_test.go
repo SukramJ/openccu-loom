@@ -102,7 +102,7 @@ func TestDaemonBootInstantiatesAggregatorPerCentral(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServe: %v", err)
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(30 * time.Second):
 		// Generous to accommodate -race overhead.
 		t.Fatal("daemonServe did not shut down in time")
 	}

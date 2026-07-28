@@ -79,7 +79,7 @@ func TestDaemonServeBootsAndShutsDownGracefully(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemon returned: %v", err)
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(30 * time.Second):
 		// Generous to accommodate -race overhead on slower CI hosts;
 		// the actual non-race shutdown completes in well under a second.
 		t.Fatal("daemon did not shut down in time")
@@ -101,7 +101,7 @@ func TestDaemonServeAcceptsDefaultsWithoutCentrals(t *testing.T) {
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(15 * time.Second):
+	case <-time.After(30 * time.Second):
 		// Same -race-overhead allowance as the sibling test above.
 		t.Fatal("shutdown timeout")
 	}
