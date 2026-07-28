@@ -318,11 +318,11 @@ func putSensorsBody(id, channel string) string {
 }
 
 // TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted pins the
-// cross-area row-identity contract: a client-supplied output id only
-// round-trips rows of the SAME area. An id colliding with another
-// area's row must be re-minted server-side instead of failing the
-// whole replace on the PRIMARY KEY — clients have derived ids from the
-// channel key, so enrolling the same siren in a second area hit
+// cross-area row-identity contract: a client-supplied id round-trips
+// (own rows and fresh ids alike) UNLESS it collides with another
+// area's row — that one is re-minted server-side instead of failing
+// the whole replace on the PRIMARY KEY. Clients have derived ids from
+// the channel key, so enrolling the same siren in a second area hit
 // exactly that as an opaque 500.
 func TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 	t.Parallel()
@@ -360,9 +360,10 @@ func TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted(t *testing.T) {
 }
 
 // TestPutAlarmAreaOutputs_OwnRowID_RoundTrips pins the stability leg of
-// the same contract: replacing an area's set with a row that carries
-// one of THIS area's existing ids keeps that id (the outputs tab
-// round-trips rows verbatim on save).
+// the same contract: a row carrying one of THIS area's existing ids
+// keeps it (the outputs tab round-trips rows verbatim on save), and a
+// fresh non-colliding client id is honoured too (covered by the
+// replace-semantics suite in alarm_sensors_outputs_test.go).
 func TestPutAlarmAreaOutputs_OwnRowID_RoundTrips(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)

@@ -232,21 +232,23 @@ func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
-		existing, err := p.Stores().Sensors.ListByArea(r.Context(), id)
+		all, err := p.Stores().Sensors.GetAll(r.Context())
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm sensors failed", err)
 			return
 		}
-		ownIDs := make(map[string]struct{}, len(existing))
-		for i := range existing {
-			ownIDs[existing[i].ID] = struct{}{}
+		foreignIDs := make(map[string]struct{}, len(all))
+		for i := range all {
+			if all[i].AreaID != id {
+				foreignIDs[all[i].ID] = struct{}{}
+			}
 		}
 		seen := make(map[string]struct{}, len(in))
 		now := time.Now().UnixMilli()
 		rows := make([]sqlitestore.AlarmSensorRow, 0, len(in))
 		for i := range in {
 			s := &in[i]
-			sid := resolveRowID(ownIDs, seen, s.ID)
+			sid := resolveRowID(foreignIDs, seen, s.ID)
 			rows = append(rows, sqlitestore.AlarmSensorRow{
 				ID:             sid,
 				AreaID:         id,
@@ -350,21 +352,23 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
-		existing, err := p.Stores().Outputs.ListByArea(r.Context(), id)
+		all, err := p.Stores().Outputs.GetAll(r.Context())
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm outputs failed", err)
 			return
 		}
-		ownIDs := make(map[string]struct{}, len(existing))
-		for i := range existing {
-			ownIDs[existing[i].ID] = struct{}{}
+		foreignIDs := make(map[string]struct{}, len(all))
+		for i := range all {
+			if all[i].AreaID != id {
+				foreignIDs[all[i].ID] = struct{}{}
+			}
 		}
 		seen := make(map[string]struct{}, len(in))
 		now := time.Now().UnixMilli()
 		rows := make([]sqlitestore.AlarmOutputRow, 0, len(in))
 		for i := range in {
 			o := &in[i]
-			oid := resolveRowID(ownIDs, seen, o.ID)
+			oid := resolveRowID(foreignIDs, seen, o.ID)
 			rows = append(rows, sqlitestore.AlarmOutputRow{
 				ID:             oid,
 				AreaID:         id,
@@ -392,20 +396,20 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 }
 
 // resolveRowID returns the row id to persist for one incoming
-// sensor/output replace row. A client-supplied id is kept only when it
-// round-trips one of THIS area's existing rows and has not been used
-// earlier in the same payload; everything else gets a fresh UUID. Ids
-// are an intra-area stability hint, not a global identity — clients
-// have derived them from the channel key, so enrolling the same channel
-// in a second area collided with the first area's PRIMARY KEY and
-// failed the whole replace as an opaque 500.
-func resolveRowID(ownIDs, seen map[string]struct{}, id string) string {
+// sensor/output replace row. A client-supplied id round-trips (rows of
+// this area keep their identity, and a client may choose fresh ids)
+// UNLESS it already belongs to ANOTHER area's row or repeats within
+// the payload — those get a fresh UUID instead of failing the whole
+// replace on the PRIMARY KEY. Clients have derived ids from the
+// channel key, so enrolling the same channel in a second area collided
+// with the first area's row and 500ed opaquely.
+func resolveRowID(foreignIDs, seen map[string]struct{}, id string) string {
 	if id != "" {
-		if _, own := ownIDs[id]; own {
-			if _, dup := seen[id]; !dup {
-				seen[id] = struct{}{}
-				return id
-			}
+		_, foreign := foreignIDs[id]
+		_, dup := seen[id]
+		if !foreign && !dup {
+			seen[id] = struct{}{}
+			return id
 		}
 	}
 	fresh := uuid.NewString()
