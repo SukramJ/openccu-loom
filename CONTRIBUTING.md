@@ -3,6 +3,9 @@
 Thank you for your interest — here is what we need from every
 pull request.
 
+> **AI policy:** AI-assisted contributions are welcome; autonomous
+> agent submissions are not. See [`AI_POLICY.md`](./AI_POLICY.md).
+
 ## Before you open a PR
 
 - Skim [`SPECIFICATION.md`](./SPECIFICATION.md). It is the source of
