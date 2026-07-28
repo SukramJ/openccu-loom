@@ -13,11 +13,11 @@ import "sync"
 // MSG_COUNTER_WINDOW_SIZE.
 const windowSize = 32
 
-// maxCounterIncrease2Pow31 is the ±2^31 modular-distance threshold used
-// by the rollover reception state to decide whether a counter that is
-// numerically smaller than the maximum is a wrap-around (fresh) or a
-// genuine older value. Mirrors matter.js MAX_COUNTER_INCREASE_2POW31.
-const maxCounterIncrease2Pow31 = int64(1) << 31
+// maxCounter32 is the largest 32-bit message counter. The rollover
+// variant folds distances around it, so a counter on the far side of the
+// wrap is measured by its short modular distance rather than its
+// numeric one. Mirrors matter.js MAX_COUNTER_VALUE_32BIT.
+const maxCounter32 = int64(0xFFFFFFFF)
 
 // Window is the sliding-window duplicate detector for inbound message
 // counters. It tracks the highest counter seen (max) separately and a
@@ -26,10 +26,11 @@ const maxCounterIncrease2Pow31 = int64(1) << 31
 //
 // Two variants exist, mirroring matter.js MessageReceptionState:
 //
-//   - [NewWindow] — the rollover variant used for unsecured sessions.
-//     A counter numerically below max but within 2^31 (modularly) is a
-//     wrap-around and treated as fresh; used where a free-running
-//     counter may legitimately roll over.
+//   - [NewWindow] — the rollover variant used for unsecured sessions,
+//     mirroring matter.js MessageReceptionStateUnencryptedWithRollover.
+//     Only the 32 counters directly below max count as "behind";
+//     everything further back is a restarted free-running counter and
+//     rolls the window forward onto it. See [Window.diff].
 //   - [NewWindowNoRollover] — the no-rollover variant used for secure
 //     sessions, mirroring matter.js
 //     MessageReceptionStateEncryptedWithoutRollover (NodeSession.ts:118).
@@ -55,7 +56,7 @@ type Window struct {
 	max           uint32 // highest counter seen (tracked separately from the bitmap)
 	bitmap        uint32 // bit i set ⇒ counter (max-(i+1)) was received
 	primed        bool   // false until the first counter is recorded
-	rollover      bool   // true ⇒ modular ±2^31 diff; false ⇒ plain subtraction
+	rollover      bool   // true ⇒ fold distances at ±windowSize; false ⇒ plain subtraction
 }
 
 // NewWindow returns a fresh rollover duplicate-detection window for
@@ -71,20 +72,31 @@ func NewWindow() *Window { return &Window{rollover: true, initialBitmap: 0} }
 func NewWindowNoRollover() *Window { return &Window{rollover: false, initialBitmap: ^uint32(0)} }
 
 // diff computes the signed distance between counter c and the current
-// max. For the rollover variant it applies the ±2^31 modular fold
-// (matter.js MessageReceptionStateEncryptedWithRollover.calculateDiff);
-// for the no-rollover variant it is plain subtraction (matter.js
+// max.
+//
+// For the no-rollover variant it is plain subtraction (matter.js
 // MessageReceptionStateEncryptedWithoutRollover.calculateDiff).
+//
+// For the rollover variant it folds at ±[windowSize], mirroring matter.js
+// MessageReceptionStateUnencryptedWithRollover.calculateDiff. Only the 32
+// counters immediately below max are read as "behind"; anything further
+// back is reported as a large forward distance so [Window.Accept] rolls
+// the window onto it. A free-running unsecured counter restarts whenever
+// its peer reboots, and treating that restart as a 4-billion-message
+// replay would blank the peer until it climbed back over the old maximum.
+// The symmetric case — a counter just below max but on the far side of
+// the 2^32 wrap — folds back into the window instead of reading as a
+// forward jump.
 func (w *Window) diff(c uint32) int64 {
 	d := int64(c) - int64(w.max)
 	if !w.rollover {
 		return d
 	}
 	switch {
-	case d >= maxCounterIncrease2Pow31:
-		d -= int64(1) << 32
-	case d < -maxCounterIncrease2Pow31:
-		d += int64(1) << 32
+	case d > 0 && maxCounter32-d < windowSize:
+		d -= maxCounter32 + 1 // pre-wrap counter: just behind max, not far ahead
+	case d < -windowSize:
+		d += maxCounter32 + 1 // peer restarted its counter: roll the window forward onto c
 	}
 	return d
 }

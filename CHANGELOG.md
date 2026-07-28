@@ -40,6 +40,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   legitimately reordered message just below the first one seen has to stay
   acceptable. Mirrors the per-variant `initialBitmap` in matter.js
   `MessageReceptionState.ts`.
+- **A commissioner that restarts its message counter is no longer locked
+  out.** The unsecured / PASE reception window measured how far back a
+  counter sat using the rule for encrypted sessions, so a peer that
+  rebooted and resumed counting from a low value looked like a
+  four-billion-message replay: every packet was dropped until it climbed
+  back past the pre-restart maximum, and because these windows are kept
+  per source node across sessions, the lockout outlived the handshake that
+  triggered it. The window now folds distances the way matter.js
+  `MessageReceptionStateUnencryptedWithRollover` does — only the 32
+  counters directly below the maximum count as "behind", anything further
+  back rolls the window forward onto the restarted trajectory. Secure
+  sessions keep the strict reading.
 
 ## [0.49.2]
 
