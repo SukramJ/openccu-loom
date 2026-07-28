@@ -542,6 +542,13 @@ Test mode: every output offers a **test fire** (short duration, reduced
 pattern — optical-only option for neighbours' sake) from the UI, mirroring
 the HmIP "Test-Alarm" button.
 
+Sharing: the same device channel may be enrolled as an output in more
+than one area. The output manager arbitrates stops per channel: a stop
+from one area is deferred while any other area still demands the
+channel, so a shared siren keeps sounding until the **last** alarming
+area silences it. Demand tracking is in-memory — after a daemon restart
+every stop proceeds (the safe direction, device off).
+
 ---
 
 ## 8. Siren safety: "a siren can always be silenced"

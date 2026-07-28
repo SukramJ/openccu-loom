@@ -230,9 +230,19 @@
       }
       // Always send both bulk PUTs — an empty array is a valid full-set
       // replace, and a retry must be able to reconcile away rows a prior
-      // attempt already wrote before the operator deselected them.
-      await api.putAlarmAreaSensors(id, store.selectedSensors);
-      await api.putAlarmAreaOutputs(id, store.selectedOutputs);
+      // attempt already wrote before the operator deselected them. The
+      // local ids are channel-derived selection keys, not row identities
+      // — send them empty so the server mints per-area UUIDs (the same
+      // channel enrolled in a second area must never collide with the
+      // first area's row).
+      await api.putAlarmAreaSensors(
+        id,
+        store.selectedSensors.map((s) => ({ ...s, id: "" })),
+      );
+      await api.putAlarmAreaOutputs(
+        id,
+        store.selectedOutputs.map((o) => ({ ...o, id: "" })),
+      );
       await alarmPanelStore.refresh();
       toastStore.success(t("alarm.toast.saved"), name);
       store.reset();
