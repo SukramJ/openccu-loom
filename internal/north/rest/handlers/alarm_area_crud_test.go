@@ -301,3 +301,161 @@ func TestDeleteAlarmArea_WhileDisarmed_Returns204AndCascadesSensorsOutputs(t *te
 		t.Fatalf("audit entries = %+v, want one alarm_config_change", rec.entries)
 	}
 }
+
+// putOutputsBody builds the wire body for one output enrollment with an
+// explicit row id, mirroring what the setup wizard sends.
+func putOutputsBody(id, channel string) string {
+	return `[{"id":"` + id + `","class":"acoustic_siren","central":"` + alarmFixtureCentral +
+		`","channel_address":"` + channel + `","name":"Siren","config":{"modes":["full"]}}]`
+}
+
+// putSensorsBody builds the wire body for one sensor enrollment with an
+// explicit row id, mirroring what the setup wizard sends.
+func putSensorsBody(id, channel string) string {
+	return `[{"id":"` + id + `","central":"` + alarmFixtureCentral +
+		`","interface_id":"HmIP-RF","channel_address":"` + channel +
+		`","parameter":"STATE","type":"door","name":"Door","config":{"modes":["full"]}}]`
+}
+
+// TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted pins the
+// cross-area row-identity contract: a client-supplied id round-trips
+// (own rows and fresh ids alike) UNLESS it collides with another
+// area's row — that one is re-minted server-side instead of failing
+// the whole replace on the PRIMARY KEY. Clients have derived ids from
+// the channel key, so enrolling the same siren in a second area hit
+// exactly that as an opaque 500.
+func TestPutAlarmAreaOutputs_RowIDFromAnotherArea_IsReminted(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedArea("og", "Obergeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedOutput("shared-key", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/og/outputs",
+		strings.NewReader(putOutputsBody("shared-key", "shared-key:1")))
+	req = withChiParam(req, "id", "og")
+	w := httptest.NewRecorder()
+	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
+	}
+	og, err := fx.stores.Outputs.ListByArea(context.Background(), "og")
+	if err != nil {
+		t.Fatalf("list og outputs: %v", err)
+	}
+	if len(og) != 1 {
+		t.Fatalf("og outputs = %d rows, want 1", len(og))
+	}
+	if og[0].ID == "" || og[0].ID == "shared-key" {
+		t.Errorf("og row id = %q, want a fresh non-empty id distinct from the eg row", og[0].ID)
+	}
+	eg, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	if err != nil {
+		t.Fatalf("list eg outputs: %v", err)
+	}
+	if len(eg) != 1 || eg[0].ID != "shared-key" {
+		t.Errorf("eg outputs = %+v, want the original shared-key row untouched", eg)
+	}
+}
+
+// TestPutAlarmAreaOutputs_OwnRowID_RoundTrips pins the stability leg of
+// the same contract: a row carrying one of THIS area's existing ids
+// keeps it (the outputs tab round-trips rows verbatim on save), and a
+// fresh non-colliding client id is honoured too (covered by the
+// replace-semantics suite in alarm_sensors_outputs_test.go).
+func TestPutAlarmAreaOutputs_OwnRowID_RoundTrips(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedOutput("mine", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs",
+		strings.NewReader(putOutputsBody("mine", "mine:1")))
+	req = withChiParam(req, "id", "eg")
+	w := httptest.NewRecorder()
+	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
+	}
+	rows, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	if err != nil {
+		t.Fatalf("list outputs: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "mine" {
+		t.Errorf("rows = %+v, want the id to round-trip unchanged", rows)
+	}
+}
+
+// TestPutAlarmAreaSensors_RowIDFromAnotherArea_IsReminted mirrors the
+// output contract for sensors: the same PRIMARY KEY across areas must
+// re-mint, not 500 — the sensor table shares the id-derivation history.
+func TestPutAlarmAreaSensors_RowIDFromAnotherArea_IsReminted(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedArea("og", "Obergeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedSensor("shared-door", "eg", hmenum.AlarmSensorTypeDoor,
+		engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/og/sensors",
+		strings.NewReader(putSensorsBody("shared-door", "shared-door:1")))
+	req = withChiParam(req, "id", "og")
+	w := httptest.NewRecorder()
+	PutAlarmAreaSensors(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
+	}
+	og, err := fx.stores.Sensors.ListByArea(context.Background(), "og")
+	if err != nil {
+		t.Fatalf("list og sensors: %v", err)
+	}
+	if len(og) != 1 {
+		t.Fatalf("og sensors = %d rows, want 1", len(og))
+	}
+	if og[0].ID == "" || og[0].ID == "shared-door" {
+		t.Errorf("og row id = %q, want a fresh non-empty id distinct from the eg row", og[0].ID)
+	}
+	eg, err := fx.stores.Sensors.ListByArea(context.Background(), "eg")
+	if err != nil {
+		t.Fatalf("list eg sensors: %v", err)
+	}
+	if len(eg) != 1 || eg[0].ID != "shared-door" {
+		t.Errorf("eg sensors = %+v, want the original shared-door row untouched", eg)
+	}
+}
+
+// TestPutAlarmAreaOutputs_DuplicateIDsInPayload_AreReminted pins the
+// in-payload leg: two rows carrying the same id must not collide with
+// each other either — the second occurrence gets a fresh id.
+func TestPutAlarmAreaOutputs_DuplicateIDsInPayload_AreReminted(t *testing.T) {
+	t.Parallel()
+	fx := newAlarmPanelFixture(t)
+	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedOutput("dup", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
+
+	body := `[{"id":"dup","class":"acoustic_siren","central":"` + alarmFixtureCentral +
+		`","channel_address":"a:1","config":{"modes":["full"]}},` +
+		`{"id":"dup","class":"acoustic_siren","central":"` + alarmFixtureCentral +
+		`","channel_address":"b:1","config":{"modes":["full"]}}]`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/areas/eg/outputs", strings.NewReader(body))
+	req = withChiParam(req, "id", "eg")
+	w := httptest.NewRecorder()
+	PutAlarmAreaOutputs(fx, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
+	}
+	rows, err := fx.stores.Outputs.ListByArea(context.Background(), "eg")
+	if err != nil {
+		t.Fatalf("list outputs: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	if rows[0].ID == rows[1].ID {
+		t.Errorf("both rows share id %q, want distinct ids", rows[0].ID)
+	}
+}

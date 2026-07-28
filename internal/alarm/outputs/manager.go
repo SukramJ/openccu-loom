@@ -78,6 +78,7 @@ type Manager struct {
 	mu        sync.Mutex
 	byArea    map[string][]*instance
 	active    map[string]*activation // by output ID
+	demands   map[string]demandRec   // by output ID; see arbitration.go
 	lastChirp map[string]time.Time
 }
 
@@ -117,6 +118,7 @@ func NewManager(cfg Config) (*Manager, error) {
 		stopVerifyWindow: cfg.StopVerifyWindow,
 		byArea:           map[string][]*instance{},
 		active:           map[string]*activation{},
+		demands:          map[string]demandRec{},
 		lastChirp:        map[string]time.Time{},
 	}
 	if m.defaultSiren <= 0 {
@@ -152,6 +154,11 @@ func (m *Manager) Reload(ctx context.Context) error {
 	m.mu.Lock()
 	m.byArea = byArea
 	m.mu.Unlock()
+	rowIDs := make(map[string]struct{}, len(rows))
+	for i := range rows {
+		rowIDs[rows[i].ID] = struct{}{}
+	}
+	m.pruneDemands(rowIDs)
 	return nil
 }
 
@@ -326,6 +333,7 @@ func (m *Manager) fireSiren(ctx context.Context, inst *instance, incidentID int6
 	if err := dev.TurnOn(ctx, on, hmenum.CommandPriorityHigh); err != nil {
 		return err
 	}
+	m.noteDemand(inst)
 	m.armStopWatchdog(inst, incidentID, d, m.sirenStopper(inst, acoustic))
 	return nil
 }
@@ -349,6 +357,7 @@ func (m *Manager) fireSwitchedSiren(ctx context.Context, inst *instance, inciden
 	if err := dev.TurnOnBounded(ctx, d, inst.cfg.Level, hmenum.CommandPriorityHigh); err != nil {
 		return err
 	}
+	m.noteDemand(inst)
 	m.armStopWatchdog(inst, incidentID, d, m.actuatorStopper(inst))
 	return nil
 }
@@ -372,6 +381,7 @@ func (m *Manager) fireSmokeSounder(ctx context.Context, inst *instance, incident
 	}
 	// Watchdog first: if the activation write succeeds but the
 	// process dies before scheduling, nothing bounds this device.
+	m.noteDemand(inst)
 	m.armStopWatchdog(inst, incidentID, d, m.smokeStopper(inst))
 	if err := dev.TurnOn(ctx, hmenum.CommandPriorityHigh); err != nil {
 		m.cancelWatchdog(inst.row.ID)
@@ -389,7 +399,13 @@ func (m *Manager) fireAlarmLight(ctx context.Context, inst *instance, incidentID
 		return err
 	}
 	_ = incidentID
-	return dev.TurnOnSteady(ctx, inst.cfg.Level, hmenum.CommandPriorityHigh)
+	if err := dev.TurnOnSteady(ctx, inst.cfg.Level, hmenum.CommandPriorityHigh); err != nil {
+		return err
+	}
+	// Steady-on has no watchdog — the demand is released by the
+	// eventual StopAll (or pruned when the row disappears).
+	m.noteDemand(inst)
+	return nil
 }
 
 // classEligible applies the policy filter of the cycle.

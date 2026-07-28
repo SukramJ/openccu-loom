@@ -4,11 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
-# 0.49.1
+# 0.49.2
 
-Version ride-along. No changes to the proxy itself; the fix ships in the paired
-instance (alarm setup wizard selects sensors/outputs inline and no longer dead-
-ends on first run) — update the instance to 0.49.1 too.
+Version ride-along. No changes to the proxy itself; the fixes ship in the paired
+instance (alarm setup wizard selects sensors/outputs inline; sirens shareable
+across alarm zones without save errors) — update the instance to 0.49.2 too.
 
 # 0.49.0
 

@@ -232,14 +232,23 @@ func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
+		all, err := p.Stores().Sensors.GetAll(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm sensors failed", err)
+			return
+		}
+		foreignIDs := make(map[string]struct{}, len(all))
+		for i := range all {
+			if all[i].AreaID != id {
+				foreignIDs[all[i].ID] = struct{}{}
+			}
+		}
+		seen := make(map[string]struct{}, len(in))
 		now := time.Now().UnixMilli()
 		rows := make([]sqlitestore.AlarmSensorRow, 0, len(in))
 		for i := range in {
 			s := &in[i]
-			sid := s.ID
-			if sid == "" {
-				sid = uuid.NewString()
-			}
+			sid := resolveRowID(foreignIDs, seen, s.ID)
 			rows = append(rows, sqlitestore.AlarmSensorRow{
 				ID:             sid,
 				AreaID:         id,
@@ -343,14 +352,23 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
+		all, err := p.Stores().Outputs.GetAll(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm outputs failed", err)
+			return
+		}
+		foreignIDs := make(map[string]struct{}, len(all))
+		for i := range all {
+			if all[i].AreaID != id {
+				foreignIDs[all[i].ID] = struct{}{}
+			}
+		}
+		seen := make(map[string]struct{}, len(in))
 		now := time.Now().UnixMilli()
 		rows := make([]sqlitestore.AlarmOutputRow, 0, len(in))
 		for i := range in {
 			o := &in[i]
-			oid := o.ID
-			if oid == "" {
-				oid = uuid.NewString()
-			}
+			oid := resolveRowID(foreignIDs, seen, o.ID)
 			rows = append(rows, sqlitestore.AlarmOutputRow{
 				ID:             oid,
 				AreaID:         id,
@@ -375,6 +393,28 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "outputs_replace="+id)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// resolveRowID returns the row id to persist for one incoming
+// sensor/output replace row. A client-supplied id round-trips (rows of
+// this area keep their identity, and a client may choose fresh ids)
+// UNLESS it already belongs to ANOTHER area's row or repeats within
+// the payload — those get a fresh UUID instead of failing the whole
+// replace on the PRIMARY KEY. Clients have derived ids from the
+// channel key, so enrolling the same channel in a second area collided
+// with the first area's row and 500ed opaquely.
+func resolveRowID(foreignIDs, seen map[string]struct{}, id string) string {
+	if id != "" {
+		_, foreign := foreignIDs[id]
+		_, dup := seen[id]
+		if !foreign && !dup {
+			seen[id] = struct{}{}
+			return id
+		}
+	}
+	fresh := uuid.NewString()
+	seen[fresh] = struct{}{}
+	return fresh
 }
 
 // alarmAreaExists reports whether an area id is persisted.

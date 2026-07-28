@@ -1,6 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.49.1
+## 0.49.2
+
+- **Sirens can now serve more than one alarm area.** Enrolling a siren
+  (or sensor) that another area already uses no longer fails the save
+  with an internal error — and a shared siren keeps sounding until the
+  **last** alarming area silences it, instead of going quiet when any
+  single area stops.
+
 
 - **Alarm setup wizard actually works end to end.** Sensors and outputs are
   now selected directly inside the wizard (steps 2 and 3) instead of linking

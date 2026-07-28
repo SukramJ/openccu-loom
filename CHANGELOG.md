@@ -6,10 +6,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.49.1]
+## [0.49.2]
 
 ### Fixed
 
+- **The same siren (or any output/sensor) can now be enrolled in more than
+  one alarm area.** Enrolling a channel in a second area failed with an
+  opaque 500: clients derived the row id from the channel key, so the
+  second area's row collided with the first area's PRIMARY KEY and the
+  whole outputs/sensors replace aborted — the area was created but its
+  sirens never attached. Row ids are now an intra-area concern: the
+  server keeps a client id only when it round-trips one of the SAME
+  area's rows and mints a fresh UUID otherwise (cross-area collisions and
+  in-payload duplicates included), and the wizard no longer sends
+  channel-derived ids at all.
+- **Shared outputs stop only when the last area releases them.** With one
+  siren enrolled in two areas, silencing or finishing area A used to
+  switch the device off even while area B was still alarming. The output
+  manager now tracks per-channel demands: a stop for a channel another
+  area still claims is deferred (logged as
+  `alarm.output_stop_deferred_shared`), and the device turns off with the
+  last demanding area. Demands are in-memory — after a daemon restart
+  every stop proceeds, which is the safe direction.
 - **The alarm setup wizard configures sensors and outputs inline.** Steps 2
   and 3 used to link to the sensors/outputs tabs — which require an existing
   alarm area, while the wizard only creates the area on Finish. First-run
