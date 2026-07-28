@@ -28,11 +28,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `alarm.output_stop_deferred_shared`), and the device turns off with the
   last demanding area. Demands are in-memory — after a daemon restart
   every stop proceeds, which is the safe direction.
-
-## [0.49.1]
-
-### Fixed
-
 - **The alarm setup wizard configures sensors and outputs inline.** Steps 2
   and 3 used to link to the sensors/outputs tabs — which require an existing
   alarm area, while the wizard only creates the area on Finish. First-run

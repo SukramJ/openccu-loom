@@ -8,7 +8,6 @@
   **last** alarming area silences it, instead of going quiet when any
   single area stops.
 
-## 0.49.1
 
 - **Alarm setup wizard actually works end to end.** Sensors and outputs are
   now selected directly inside the wizard (steps 2 and 3) instead of linking
