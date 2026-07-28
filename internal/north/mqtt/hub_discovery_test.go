@@ -367,7 +367,7 @@ func TestSysvarPayloadListWritableOptions(t *testing.T) {
 func TestProgramBuilderHappyPath(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "Morning Lights", "")
+	item := db.BuildProgramDiscovery("ccu-01", HubProgramSpec{ID: "PRG_42", Name: "Morning Lights"})
 
 	if !item.OK {
 		t.Fatal("expected OK=true")
@@ -405,7 +405,7 @@ func TestProgramBuilderHappyPath(t *testing.T) {
 func TestProgramBuilderEmptyNameFallsBackToID(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "", "")
+	item := db.BuildProgramDiscovery("ccu-01", HubProgramSpec{ID: "PRG_42"})
 	if !item.OK {
 		t.Fatal("expected OK=true")
 	}
@@ -418,7 +418,7 @@ func TestProgramBuilderEmptyNameFallsBackToID(t *testing.T) {
 func TestProgramBuilderEmptyIDReturnsNotOK(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "", "X", "")
+	item := db.BuildProgramDiscovery("ccu-01", HubProgramSpec{Name: "X"})
 	if item.OK {
 		t.Fatal("expected OK=false for empty program id")
 	}
@@ -1077,5 +1077,68 @@ func TestSysvarDiscoveryStringWritable_IsSensor(t *testing.T) {
 	m := jsonMap(t, item)
 	if _, hasCmd := m["command_topic"]; hasCmd {
 		t.Fatal("string sysvar sensor must not carry command_topic")
+	}
+}
+
+// ─── enabled_by_default pass-through (sysvar + program) ─────────────────────
+
+// TestHubDiscoveryEnabledByDefaultPassThrough pins that the
+// marker-derived EnabledDefault flag on both [HubSysvarSpec] and
+// [HubProgramSpec] flows straight into the discovery payload's
+// `enabled_by_default` key, for both the true and false case.
+func TestHubDiscoveryEnabledByDefaultPassThrough(t *testing.T) {
+	t.Parallel()
+	db := newHubBuilder()
+
+	sysvarCases := []struct {
+		name string
+		want bool
+	}{
+		{name: "sysvar enabled", want: true},
+		{name: "sysvar disabled", want: false},
+	}
+	for _, tc := range sysvarCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
+				Name:           "Active",
+				ValueType:      hmenum.HubValueTypeLogic,
+				EnabledDefault: tc.want,
+			})
+			m := jsonMap(t, item)
+			got, ok := m["enabled_by_default"]
+			if !ok {
+				t.Fatal("expected enabled_by_default key in sysvar discovery payload")
+			}
+			if got != tc.want {
+				t.Fatalf("enabled_by_default: got %v want %v", got, tc.want)
+			}
+		})
+	}
+
+	programCases := []struct {
+		name string
+		want bool
+	}{
+		{name: "program enabled", want: true},
+		{name: "program disabled", want: false},
+	}
+	for _, tc := range programCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			item := db.BuildProgramDiscovery("ccu-01", HubProgramSpec{
+				ID:             "PRG_1",
+				Name:           "Morning",
+				EnabledDefault: tc.want,
+			})
+			m := jsonMap(t, item)
+			got, ok := m["enabled_by_default"]
+			if !ok {
+				t.Fatal("expected enabled_by_default key in program discovery payload")
+			}
+			if got != tc.want {
+				t.Fatalf("enabled_by_default: got %v want %v", got, tc.want)
+			}
+		})
 	}
 }

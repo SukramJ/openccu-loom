@@ -54,8 +54,16 @@ type HubSysvarSpec struct {
 	// sysvars as writable HA entities (switch / select / number / text);
 	// everything else is a read-only sensor or binary_sensor.
 	IsExtended bool
-	Min        *float64
-	Max        *float64
+	// EnabledDefault carries the marker-derived enabled-by-default flag
+	// into HA's `enabled_by_default` registry hint: the entity registry
+	// entry is created disabled unless the sysvar's CCU description
+	// matched a configured marker token. HA applies the hint only when
+	// the entity is first added, so an operator's later enable/disable
+	// choice sticks. Mirrors the reference stack's entity-registry
+	// default for hub data points.
+	EnabledDefault bool
+	Min            *float64
+	Max            *float64
 	// DeviceAddress, when non-empty, is the physical CCU device this sysvar is
 	// linked to because its name carries the device's (or one of its channels')
 	// identifier. It moves the HA entity from the synthetic central hub card
@@ -273,14 +281,15 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "sysvar", routingkey.HubSlug(sv.Name), "")
 
 	body := map[string]any{
-		"name":              displaySysvarName(sv),
-		"unique_id":         uniqueID,
-		"object_id":         uniqueID,
-		"state_topic":       stateTopic,
-		"availability":      hubAvailability(d.TopicBuilder),
-		"availability_mode": "all",
-		"device":            hubEntityDeviceBlock(centralName, sv.DeviceAddress, d.hubFor(centralName)),
-		"origin":            BuildOriginInfo(),
+		"name":               displaySysvarName(sv),
+		"unique_id":          uniqueID,
+		"object_id":          uniqueID,
+		"state_topic":        stateTopic,
+		"enabled_by_default": sv.EnabledDefault,
+		"availability":       hubAvailability(d.TopicBuilder),
+		"availability_mode":  "all",
+		"device":             hubEntityDeviceBlock(centralName, sv.DeviceAddress, d.hubFor(centralName)),
+		"origin":             BuildOriginInfo(),
 	}
 
 	// `editable` selects the writable HA surface. The reference stack
@@ -428,52 +437,68 @@ func displaySysvarName(sv HubSysvarSpec) string {
 
 // ----------------------------- Program ----------------------------
 
+// HubProgramSpec is the narrow read-side contract on a CCU program that
+// the discovery builder needs — mirrors [HubSysvarSpec] so the bridge
+// stays free of the `internal/model/hub` import.
+type HubProgramSpec struct {
+	ID   string
+	Name string
+	// DeviceAddress, when non-empty, links the program to a physical CCU
+	// device (see [hubEntityDeviceBlock]). Empty for an unlinked,
+	// hub-level program.
+	DeviceAddress string
+	// EnabledDefault carries the marker-derived enabled-by-default flag
+	// into HA's `enabled_by_default` registry hint (see
+	// [HubSysvarSpec.EnabledDefault]).
+	EnabledDefault bool
+}
+
 // BuildProgramDiscovery emits one HA `switch` per CCU program.
 // `turn_on` triggers the program (write to /trigger); state reflects
-// the most recent execution active flag. deviceAddress, when non-empty, links
-// the program to a physical CCU device (see [hubEntityDeviceBlock]).
-func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name, deviceAddress string) DiscoveryItem {
-	if id == "" {
+// the most recent execution active flag.
+func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName string, p HubProgramSpec) DiscoveryItem {
+	if p.ID == "" {
 		return DiscoveryItem{}
 	}
 	serial10, ok := d.hubSerial(centralName)
 	if !ok {
 		return DiscoveryItem{}
 	}
-	stateTopic := naming.MQTTHubProgramState(d.BridgeBase, centralName, id)
-	commandTopic := naming.MQTTHubProgramTrigger(d.BridgeBase, centralName, id)
+	stateTopic := naming.MQTTHubProgramState(d.BridgeBase, centralName, p.ID)
+	commandTopic := naming.MQTTHubProgramTrigger(d.BridgeBase, centralName, p.ID)
 	// Programs are keyed by NAME (slug), not by ID. When no name is supplied,
 	// fall back to the ID slug so the unique_id stays stable across renames.
-	programSlug := routingkey.HubSlug(name)
+	programSlug := routingkey.HubSlug(p.Name)
 	if programSlug == "" {
-		programSlug = routingkey.HubSlug(id)
+		programSlug = routingkey.HubSlug(p.ID)
 	}
 	uniqueID := routingkey.CanonicalUniqueID(serial10, "program", programSlug, "")
-	displayName := name
+	displayName := p.Name
 	if displayName == "" {
-		displayName = id
+		displayName = p.ID
 	}
 	body := map[string]any{
-		"name":              displayName,
-		"unique_id":         uniqueID,
-		"object_id":         uniqueID,
-		"state_topic":       stateTopic,
-		"command_topic":     commandTopic,
-		"payload_on":        "true",
-		"payload_off":       "false",
-		"state_on":          "true",
-		"state_off":         "false",
-		"optimistic":        false,
-		"availability":      hubAvailability(d.TopicBuilder),
-		"availability_mode": "all",
-		"device":            hubEntityDeviceBlock(centralName, deviceAddress, d.hubFor(centralName)),
-		"origin":            BuildOriginInfo(),
+		"name":               displayName,
+		"unique_id":          uniqueID,
+		"object_id":          uniqueID,
+		"state_topic":        stateTopic,
+		"command_topic":      commandTopic,
+		"payload_on":         "true",
+		"payload_off":        "false",
+		"state_on":           "true",
+		"state_off":          "false",
+		"optimistic":         false,
+		"enabled_by_default": p.EnabledDefault,
+		"availability":       hubAvailability(d.TopicBuilder),
+		"availability_mode":  "all",
+		"device":             hubEntityDeviceBlock(centralName, p.DeviceAddress, d.hubFor(centralName)),
+		"origin":             BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSwitch), NodeID: hubNodeID(centralName, "programs"), ObjectID: safeLower(id), Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSwitch), NodeID: hubNodeID(centralName, "programs"), ObjectID: safeLower(p.ID), Payload: buf, OK: true}
 }
 
 // ------------------- AlarmMessages / ServiceMessages -------------

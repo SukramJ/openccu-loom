@@ -421,7 +421,7 @@ func (p *HubMQTTPublisher) wireOneProgram(
 		return
 	}
 	active, _ := prog.Active()
-	_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, prog.ID, prog.Name, prog.DeviceAddress()))
+	_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, programSpecFor(prog)))
 	w.PublishProgramState(ctx, centralName, prog, active)
 	p.addUnsub(prog.OnUpdate(func(e hub.ProgramEvent) {
 		w.PublishProgramState(ctx, centralName, prog, e.Active)
@@ -456,16 +456,29 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 // and republishHubEntityDiscovery so both build an identical payload.
 func sysvarSpecFor(sv *hub.Sysvar) mqtt.HubSysvarSpec {
 	return mqtt.HubSysvarSpec{
-		Name:          sv.Name,
-		Description:   sv.Description,
-		Unit:          sv.Unit,
-		ValueList:     sv.ValueList,
-		ValueType:     sv.ValueType,
-		Writable:      sv.Writer != nil,
-		IsExtended:    sv.IsExtended,
-		Min:           paramValueAsFloat(sv.Min),
-		Max:           paramValueAsFloat(sv.Max),
-		DeviceAddress: sv.DeviceAddress(),
+		Name:           sv.Name,
+		Description:    sv.Description,
+		Unit:           sv.Unit,
+		ValueList:      sv.ValueList,
+		ValueType:      sv.ValueType,
+		Writable:       sv.Writer != nil,
+		IsExtended:     sv.IsExtended,
+		EnabledDefault: sv.EnabledByDefault(),
+		Min:            paramValueAsFloat(sv.Min),
+		Max:            paramValueAsFloat(sv.Max),
+		DeviceAddress:  sv.DeviceAddress(),
+	}
+}
+
+// programSpecFor projects a model program onto the narrow discovery
+// contract. Shared by wireOneProgram and republishHubEntityDiscovery so
+// both build an identical payload.
+func programSpecFor(prog *hub.Program) mqtt.HubProgramSpec {
+	return mqtt.HubProgramSpec{
+		ID:             prog.ID,
+		Name:           prog.Name,
+		DeviceAddress:  prog.DeviceAddress(),
+		EnabledDefault: prog.EnabledByDefault(),
 	}
 }
 
@@ -487,7 +500,7 @@ func (p *HubMQTTPublisher) republishHubEntityDiscovery(
 		if prog == nil || prog.IsInternal {
 			continue
 		}
-		_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, prog.ID, prog.Name, prog.DeviceAddress()))
+		_ = b.PublishHubDiscovery(ctx, disco.BuildProgramDiscovery(centralName, programSpecFor(prog)))
 	}
 	for _, sv := range hubModel.Sysvars() {
 		if sv == nil {

@@ -566,3 +566,57 @@ func TestMQTTDiscoveryFilterDoesNotSuppressUpdatesForInternalPrograms(t *testing
 		t.Errorf("internal program topic must never appear in MQTT; topics=%v", publishedTopics(pub))
 	}
 }
+
+// ─── sysvarSpecFor / programSpecFor EnabledDefault projection ───────────────
+
+// TestSysvarSpecForEnabledDefaultProjection verifies that sysvarSpecFor
+// carries the sysvar's EnabledByDefault() result through to
+// [mqtt.HubSysvarSpec.EnabledDefault] unchanged, for both the true and
+// false case.
+func TestSysvarSpecForEnabledDefaultProjection(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{name: "enabled", want: true},
+		{name: "disabled", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			sv := hub.NewSysvar("ccu-01", "Active", "", hmenum.HubValueTypeLogic, nil)
+			sv.EnabledDefault = tc.want
+			spec := sysvarSpecFor(sv)
+			if spec.EnabledDefault != tc.want {
+				t.Fatalf("EnabledDefault: got %v want %v", spec.EnabledDefault, tc.want)
+			}
+		})
+	}
+}
+
+// TestProgramSpecForEnabledDefaultProjection verifies that
+// programSpecFor carries the program's EnabledByDefault() result
+// through to [mqtt.HubProgramSpec.EnabledDefault] unchanged, for both
+// the true and false case.
+func TestProgramSpecForEnabledDefaultProjection(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{name: "enabled", want: true},
+		{name: "disabled", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			prog := hub.NewProgram("ccu-01", "PRG_1", "Morning", "", false, nil)
+			prog.EnabledDefault = tc.want
+			spec := programSpecFor(prog)
+			if spec.EnabledDefault != tc.want {
+				t.Fatalf("EnabledDefault: got %v want %v", spec.EnabledDefault, tc.want)
+			}
+		})
+	}
+}
