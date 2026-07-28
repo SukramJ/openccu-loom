@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 56004e91
-HEAD: 56004e91
+Generated: 36ce3ad3
+HEAD: 36ce3ad3
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26838 |
+| Total Exported | 26843 |
 | Reachable | 4639 |
-| Whitelisted | 19361 |
-| **Unreachable** | **2838** |
+| Whitelisted | 19364 |
+| **Unreachable** | **2840** |
 
 ## Top-20 Packages by Dead Code
 
@@ -181,7 +181,7 @@ HEAD: 56004e91
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 8 | 0 |
-| internal/north/mqtt | 0 | 79 | 4 |
+| internal/north/mqtt | 0 | 81 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |
