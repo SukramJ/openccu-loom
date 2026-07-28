@@ -138,6 +138,7 @@ const EN: Catalog = {
   "alarm.sensors.modes": "Modes",
   "alarm.sensors.filter.room": "Room",
   "alarm.sensors.filter.function": "Function",
+  "alarm.sensors.filter.area": "Area",
   "alarm.sensors.filter.type": "Type",
   "alarm.sensors.filter.interface": "Interface",
   "alarm.sensors.filter.status": "Status",
@@ -939,6 +940,7 @@ const EN: Catalog = {
   "overview.filter.central_title": "CCU",
   "overview.filter.room_title": "Room",
   "overview.filter.function_title": "Function",
+  "overview.filter.area_title": "Area",
   "overview.search_placeholder": "Search devices…",
   "overview.empty": "No devices yet.",
   "overview.empty_filtered": "No devices match the current filters.",
@@ -2723,6 +2725,7 @@ const EN: Catalog = {
   "device.aria.configure_sub_tabs": "Configure sub-tabs",
   "device.aria.top_tabs": "Top tabs",
   "devicelist.all": "All",
+  "devicelist.all_areas": "All areas",
   "devicelist.all_rooms": "All rooms",
   "devicelist.apply": "Apply",
   "devicelist.availability": "Availability",
@@ -2744,6 +2747,7 @@ const EN: Catalog = {
   "devicelist.group_by_interface": "Group by interface",
   "devicelist.last_updated": "Last updated {time}",
   "devicelist.load_error": "Error loading: {error}",
+  "devicelist.area": "Area",
   "devicelist.room": "Room",
   "devicelist.room_aria": "Room for selection",
   "devicelist.room_placeholder": "Room (empty = remove)",
@@ -3035,6 +3039,22 @@ const EN: Catalog = {
     "When on, the group's devices can only be operated together through the group, not individually.",
   "groups.members": "{count} members",
   "groups.members.empty": "No members",
+  // --- Areas (operator-defined room groupings above CCU rooms) ---
+  "areas.title": "Areas",
+  "areas.hint":
+    "Group CCU rooms into a larger area — a floor, a shed, a terrace roof. Distinct from alarm zones.",
+  "areas.empty": "No areas configured.",
+  "areas.col.rooms_count": "Rooms",
+  "areas.placeholder": "Area name…",
+  "areas.assign_rooms": "Assign rooms",
+  "areas.delete_confirm": "Remove area?",
+  "areas.delete_confirm.body": "Its room assignments are cleared; the rooms themselves are unaffected.",
+  "areas.rooms_dialog.title": "Assign rooms — {name}",
+  "areas.rooms_dialog.hint":
+    "Checking a room moves it here from its current area — a room can only belong to one area at a time.",
+  "areas.rooms_dialog.search_placeholder": "Search rooms…",
+  "areas.rooms_dialog.empty": "No rooms known yet — assign a room to a device first.",
+  "areas.rooms_dialog.current_area": "currently: {name}",
 };
 
 const DE: Catalog = {
@@ -3138,6 +3158,7 @@ const DE: Catalog = {
   "alarm.sensors.modes": "Modi",
   "alarm.sensors.filter.room": "Raum",
   "alarm.sensors.filter.function": "Gewerk",
+  "alarm.sensors.filter.area": "Bereich",
   "alarm.sensors.filter.type": "Typ",
   "alarm.sensors.filter.interface": "Schnittstelle",
   "alarm.sensors.filter.status": "Status",
@@ -3959,6 +3980,7 @@ const DE: Catalog = {
   "overview.filter.central_title": "CCU",
   "overview.filter.room_title": "Raum",
   "overview.filter.function_title": "Gewerk",
+  "overview.filter.area_title": "Bereich",
   "overview.search_placeholder": "Geräte durchsuchen…",
   "overview.empty": "Noch keine Geräte.",
   "overview.empty_filtered": "Keine Geräte entsprechen den aktuellen Filtern.",
@@ -5713,6 +5735,7 @@ const DE: Catalog = {
   "device.aria.configure_sub_tabs": "Konfigurations-Unter-Tabs",
   "device.aria.top_tabs": "Haupt-Tabs",
   "devicelist.all": "Alle",
+  "devicelist.all_areas": "Alle Bereiche",
   "devicelist.all_rooms": "Alle Räume",
   "devicelist.apply": "Übernehmen",
   "devicelist.availability": "Verfügbarkeit",
@@ -5734,6 +5757,7 @@ const DE: Catalog = {
   "devicelist.group_by_interface": "Nach Interface gruppieren",
   "devicelist.last_updated": "Zuletzt aktualisiert {time}",
   "devicelist.load_error": "Fehler beim Laden: {error}",
+  "devicelist.area": "Bereich",
   "devicelist.room": "Raum",
   "devicelist.room_aria": "Raum für Auswahl",
   "devicelist.room_placeholder": "Raum (leer = entfernen)",
@@ -6025,6 +6049,23 @@ const DE: Catalog = {
     "Wenn aktiv, können die Geräte der Gruppe nur gemeinsam über die Gruppe bedient werden, nicht einzeln.",
   "groups.members": "{count} Mitglieder",
   "groups.members.empty": "Keine Mitglieder",
+  // --- Areas (Bereiche — Raumgruppen oberhalb der CCU-Räume) ---
+  "areas.title": "Bereiche",
+  "areas.hint":
+    "Fasse CCU-Räume zu einem größeren Bereich zusammen — eine Etage, einen Schuppen, eine Terrassenüberdachung. Nicht zu verwechseln mit Alarmzonen.",
+  "areas.empty": "Keine Bereiche konfiguriert.",
+  "areas.col.rooms_count": "Räume",
+  "areas.placeholder": "Bereichsname…",
+  "areas.assign_rooms": "Räume zuweisen",
+  "areas.delete_confirm": "Bereich entfernen?",
+  "areas.delete_confirm.body":
+    "Die Raumzuordnungen werden aufgehoben; die Räume selbst bleiben unverändert.",
+  "areas.rooms_dialog.title": "Räume zuweisen — {name}",
+  "areas.rooms_dialog.hint":
+    "Ein Häkchen verschiebt den Raum aus seinem aktuellen Bereich hierher — ein Raum kann immer nur einem Bereich angehören.",
+  "areas.rooms_dialog.search_placeholder": "Räume suchen…",
+  "areas.rooms_dialog.empty": "Noch keine Räume bekannt — weise zunächst einem Gerät einen Raum zu.",
+  "areas.rooms_dialog.current_area": "aktuell: {name}",
 };
 
 const catalogs: Record<string, Catalog> = { en: EN, de: DE };

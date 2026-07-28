@@ -116,6 +116,7 @@ type restMountDeps struct {
 	passwordSvc handlers.SelfPasswordService
 	prefSvc     handlers.UserPreferencesService
 	diagramSvc  handlers.DiagramConfigService
+	areaSvc     handlers.AreaAdmin
 	tokenSvc    handlers.TokenAdminService
 	centSvc     handlers.CentralAdminService
 	discovery   *handlers.DiscoveryDeps
@@ -245,6 +246,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		TokenPurger:             d.sqTokens,
 		Preferences:             d.prefSvc,
 		Diagrams:                d.diagramSvc,
+		Areas:                   d.areaSvc,
 		RoomFunctionAdmin:       d.roomFunctionAdmin,
 		TLSCert:                 tlsCertSvc,
 		TokenAdmin:              d.tokenSvc,

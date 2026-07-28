@@ -25,6 +25,22 @@ vi.mock("$lib/stores/devices.svelte", () => ({
   },
 }));
 
+// Whole-module mock (not just $lib/api/client) so the real areas.svelte.ts
+// never pulls in auth.svelte.ts's module-level setUnauthorizedHandler side
+// effect, which this file's minimal api-client mock does not export.
+// Mutable so the area-filter tests below can opt a couple of areas in.
+let mockAreas: { id: string; name: string }[] = [];
+let mockAreaIdOf: (central: string, room: string) => string | undefined = () => undefined;
+vi.mock("$lib/stores/areas.svelte", () => ({
+  areasStore: {
+    get areas() {
+      return mockAreas;
+    },
+    ensureLoaded: vi.fn(),
+    areaIdOf: (central: string, room: string) => mockAreaIdOf(central, room),
+  },
+}));
+
 const mockCreateAlarmZone = vi.fn();
 const mockPutAlarmZone = vi.fn();
 const mockPutAlarmZoneSensors = vi.fn();
@@ -120,6 +136,8 @@ function secondOutputCandidate(overrides: Partial<AlarmOutputCandidate> = {}): A
 beforeEach(() => {
   vi.clearAllMocks();
   mockDevices = [];
+  mockAreas = [];
+  mockAreaIdOf = () => undefined;
   mockRefresh.mockResolvedValue(undefined);
   mockCreateAlarmZone.mockResolvedValue({ id: "zone-1", name: "Ground floor" });
   mockPutAlarmZone.mockResolvedValue(undefined);
@@ -351,6 +369,60 @@ describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
     const outputRow = await screen.findByText("Hallway siren");
     expect(outputRow.closest("label")?.textContent).toContain("HmIP-ASIR-2");
     expect(outputRow.closest("label")?.textContent).toContain("Hallway");
+  });
+});
+
+describe("AlarmWizard — area filter (steps 2 and 3)", () => {
+  it("hides the area select on both steps when no areas are defined", async () => {
+    mockDevices = [device({ address: "SWDO001", name: "Front door", rooms: ["Hallway"] })];
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await screen.findByText("Front door");
+    expect(screen.queryByRole("combobox", { name: "alarm.sensors.filter.area" })).toBeNull();
+
+    await next(); // -> outputs
+    await screen.findByText("Hallway siren");
+    expect(screen.queryByRole("combobox", { name: "alarm.sensors.filter.area" })).toBeNull();
+  });
+
+  it("the area filter narrows the sensor candidate list (step 2)", async () => {
+    mockAreas = [{ id: "upstairs", name: "Upstairs" }];
+    mockAreaIdOf = (central, room) =>
+      central === "ccu1" && room === "Hallway" ? "upstairs" : undefined;
+    mockDevices = [
+      device({ address: "SWDO001", name: "Front door", model: "HmIP-SWDO", rooms: ["Hallway"] }),
+      device({ address: "SWDO002", name: "Back door", model: "HmIP-SWDO", rooms: ["Garage"] }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+
+    expect(await screen.findByText("Front door")).toBeTruthy();
+    expect(screen.getByText("Back door")).toBeTruthy();
+
+    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.area" }), {
+      target: { value: "upstairs" },
+    });
+
+    expect(screen.getByText("Front door")).toBeTruthy();
+    expect(screen.queryByText("Back door")).toBeNull();
+  });
+
+  it("the area filter narrows the output candidate list (step 3)", async () => {
+    mockAreas = [{ id: "upstairs", name: "Upstairs" }];
+    mockAreaIdOf = (central, room) =>
+      central === "ccu1" && room === "Hallway" ? "upstairs" : undefined;
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await next(); // -> outputs
+    await screen.findByText("Hallway siren");
+    expect(screen.getByText("Attic light")).toBeTruthy();
+
+    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.area" }), {
+      target: { value: "upstairs" },
+    });
+
+    expect(screen.getByText("Hallway siren")).toBeTruthy();
+    expect(screen.queryByText("Attic light")).toBeNull();
   });
 });
 

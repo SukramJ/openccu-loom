@@ -19,6 +19,7 @@
   import { onMount, untrack } from "svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import { subscribe } from "$lib/stores/events.svelte";
   import { api } from "$lib/api/client";
   import type {
@@ -54,6 +55,7 @@
   let centralFilter = $state(saved.filters.central);
   let roomFilter = $state(saved.filters.room);
   let functionFilter = $state(saved.filters.function);
+  let areaFilter = $state(saved.filters.area);
 
   $effect(() => {
     // Depend only on the local filter state (read here). The writes to
@@ -65,10 +67,11 @@
     const c = centralFilter;
     const r = roomFilter;
     const f = functionFilter;
+    const ar = areaFilter;
     const s = search;
     untrack(() => {
       saved.groupMode = gm;
-      saved.filters = { central: c, room: r, function: f, search: s };
+      saved.filters = { central: c, room: r, function: f, area: ar, search: s };
       persistOverviewPrefs();
     });
   });
@@ -78,6 +81,7 @@
     deviceStore.ensureStream();
     centralStore.refresh();
     centralStore.ensureStream();
+    areasStore.ensureLoaded();
     // A central finishing bring-up makes its devices fetchable; refresh
     // the moment one flips to ready so the initializing state resolves
     // into live tiles without an operator reload.
@@ -106,14 +110,23 @@
   );
   const rooms = $derived(distinctRooms(deviceStore.items, centralFilter || undefined));
   const functions = $derived(distinctFunctions(deviceStore.items, centralFilter || undefined));
+  // Hidden entirely when no areas are defined (settings/
+  // RoomsFunctionsAdmin.svelte). areasStore.areas is already sorted.
+  const areas = $derived(areasStore.areas);
 
   const groups = $derived(
-    buildOverviewGroups(deviceStore.items, groupMode, {
-      central: centralFilter,
-      room: roomFilter,
-      function: functionFilter,
-      search,
-    }),
+    buildOverviewGroups(
+      deviceStore.items,
+      groupMode,
+      {
+        central: centralFilter,
+        room: roomFilter,
+        function: functionFilter,
+        area: areaFilter,
+        search,
+      },
+      areasStore.areaIdOf,
+    ),
   );
 
   function groupLabel(group: DeviceOverviewGroup): string {
@@ -271,6 +284,18 @@
             <option value="">{t("overview.filter.all_functions")}</option>
             {#each functions as f (f)}
               <option value={f}>{f}</option>
+            {/each}
+          </select>
+        {/if}
+        {#if areas.length > 0}
+          <select
+            bind:value={areaFilter}
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+            title={t("overview.filter.area_title")}
+          >
+            <option value="">{t("devicelist.all_areas")}</option>
+            {#each areas as a (a.id)}
+              <option value={a.id}>{a.name}</option>
             {/each}
           </select>
         {/if}

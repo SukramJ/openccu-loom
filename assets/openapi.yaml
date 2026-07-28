@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.1.0
+  version: 3.2.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3664,6 +3664,96 @@ paths:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
+  /areas:
+    get:
+      operationId: listAreas
+      summary: Operator-defined room groupings (areas) with their assigned rooms
+      tags: [hub]
+      responses:
+        "200":
+          description: Area list, ordered by position then name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Area" }
+    post:
+      operationId: createArea
+      summary: Create an area (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Area" }
+      responses:
+        "201":
+          description: Created (server-generated id)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Area" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /areas/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    put:
+      operationId: putArea
+      summary: Rename/reorder an area (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Area" }
+      responses:
+        "204": { description: Updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      operationId: deleteArea
+      summary: Delete an area and clear its room assignments (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /areas/{id}/rooms:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    put:
+      operationId: putAreaRooms
+      summary: Replace the full room set of an area (operator)
+      description: >-
+        Full-set replace: rooms omitted from the body are unassigned from
+        the area. A room already assigned to ANOTHER area moves to this
+        one (one area per room).
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/AreaRoomRef" }
+      responses:
+        "204": { description: Replaced }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /programs/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
@@ -10499,6 +10589,34 @@ components:
       properties:
         name: { type: string }
         device_count: { type: integer }
+
+    Area:
+      type: object
+      required: [id, name]
+      description: >-
+        Operator-defined room grouping above CCU rooms (a floor, a shed,
+        a terrace roof). Distinct from alarm zones. Rooms are (central,
+        room) pairs; one area per room.
+      properties:
+        id:
+          type: string
+          description: Server-generated on create; ignored in the create body.
+        name: { type: string }
+        position:
+          type: integer
+          description: Manual sort order (ascending), ties by name.
+        rooms:
+          type: array
+          description: Assigned rooms; read-only here (replace via PUT /areas/{id}/rooms).
+          items: { $ref: "#/components/schemas/AreaRoomRef" }
+
+    AreaRoomRef:
+      type: object
+      required: [central, room]
+      description: One CCU room assignment of an area.
+      properties:
+        central: { type: string, description: Central (CCU) name owning the room. }
+        room: { type: string, description: CCU room name on that central. }
 
     AlarmZoneConfig:
       type: object

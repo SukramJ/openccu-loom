@@ -527,6 +527,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if auditDB != nil {
 		diagramSvc = newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB))
 	}
+	// Areas (operator-defined room groupings) live in the main app DB,
+	// same as diagrams/preferences. *sqlitestore.AreaStore satisfies
+	// handlers.AreaAdmin directly — no adapter needed.
+	var areaSvc handlers.AreaAdmin
+	if auditDB != nil {
+		areaSvc = sqlitestore.NewAreaStore(auditDB)
+	}
 	tokenAdminSvc := rw.tokenAdmin
 	// Wrap the persisted CentralAdminService so POST/PUT/DELETE
 	// /admin/centrals also drive the live orchestrator built above — the
@@ -730,6 +737,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		passwordSvc:             selfPasswordSvc,
 		prefSvc:                 prefSvc,
 		diagramSvc:              diagramSvc,
+		areaSvc:                 areaSvc,
 		tokenSvc:                tokenAdminSvc,
 		centSvc:                 centralAdminSvc,
 		discovery:               discoveryDeps,
