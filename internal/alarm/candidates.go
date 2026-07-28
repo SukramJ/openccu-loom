@@ -32,6 +32,11 @@ type OutputCandidate struct {
 	// ALARM_SWITCH_VIRTUAL_RECEIVER) — the translation key prefix for
 	// localised ENUM value labels.
 	ChannelType string
+	// Rooms / Functions are the channel's CCU room and function
+	// assignments so pickers can filter and label candidates without a
+	// second lookup.
+	Rooms     []string
+	Functions []string
 	// Classes are the device-backed output classes this channel can
 	// carry, in the canonical class order.
 	Classes []hmenum.AlarmOutputClass
@@ -151,6 +156,8 @@ func (s *Service) OutputCandidates(class hmenum.AlarmOutputClass) []OutputCandid
 				cand.ChannelNo = ch.Number
 				cand.ChannelName = ch.NameData().ChannelName
 				cand.ChannelType = ch.Type
+				cand.Rooms = append([]string(nil), ch.Rooms...)
+				cand.Functions = append([]string(nil), ch.Functions...)
 				out = append(out, cand)
 			}
 		}

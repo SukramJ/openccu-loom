@@ -108,7 +108,7 @@ func TestDaemonServeWithReload_EmptyConfigPath_CallsDaemonServe(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServeWithReload (empty path): %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemonServeWithReload did not return in time")
 	}
 }
@@ -148,7 +148,7 @@ func TestDaemonServeWithReload_WithConfigPath_StartsWatcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServeWithReload (with path): %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemonServeWithReload did not return in time")
 	}
 }

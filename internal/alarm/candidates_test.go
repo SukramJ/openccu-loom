@@ -551,6 +551,8 @@ func TestOutputCandidatesPopulatesMetadata(t *testing.T) {
 	t.Parallel()
 
 	ch := newSwitchChannel(t, "VCU2128127", "VCU2128127:4", 4, false)
+	ch.Rooms = []string{"Living Room"}
+	ch.Functions = []string{"Security"}
 	dev := ch.Device()
 	reg := newCandidatesRegistry(t, "my-ccu", dev)
 
@@ -577,6 +579,12 @@ func TestOutputCandidatesPopulatesMetadata(t *testing.T) {
 	}
 	if c.ChannelNo != 4 {
 		t.Errorf("ChannelNo = %d, want 4", c.ChannelNo)
+	}
+	if !slices.Equal(c.Rooms, []string{"Living Room"}) {
+		t.Errorf("Rooms = %v, want [Living Room]", c.Rooms)
+	}
+	if !slices.Equal(c.Functions, []string{"Security"}) {
+		t.Errorf("Functions = %v, want [Security]", c.Functions)
 	}
 }
 

@@ -71,15 +71,20 @@ function device(overrides: Partial<DeviceSummary> = {}): DeviceSummary {
   };
 }
 
-// The canonical (and, deliberately, only) output candidate this file ever
-// fetches. alarmWizardStore's output-candidate cache is intentionally NOT
-// cleared by store.reset() (it is a read-only capability list meant to
-// survive a wizard reset — see alarmWizard.svelte.ts) — so once any test in
-// this file reaches step 3, the module-singleton store caches whatever this
-// mock resolved for the rest of the file's run. Keeping that resolved value
-// fixed and consistent (rather than reconfiguring it per test) means every
-// later test that lands on step 3 sees the same, predictable candidate
-// regardless of which test happened to trigger the first real fetch.
+// The canonical output candidates this file's shared cache resolves to.
+// alarmWizardStore's output-candidate cache is intentionally NOT cleared by
+// store.reset() (it is a read-only capability list meant to survive a
+// wizard reset — see alarmWizard.svelte.ts) — so once any test in this file
+// reaches step 3, the module-singleton store caches whatever this mock
+// resolved for the rest of the file's run. Keeping that resolved value fixed
+// and consistent (rather than reconfiguring it per test) means every later
+// test that lands on step 3 sees the same, predictable candidates
+// regardless of which test happened to trigger the first real fetch. Two
+// candidates (not one) so the room/function/sort narrowing added on top of
+// the picker has something to narrow: their room ("Hallway" vs
+// "Zzz-Utility") is deliberately chosen so name-order and room-order
+// disagree, proving a sort-field change actually re-orders the rows rather
+// than coincidentally leaving them as-is.
 function outputCandidate(overrides: Partial<AlarmOutputCandidate> = {}): AlarmOutputCandidate {
   return {
     central: "ccu1",
@@ -89,10 +94,27 @@ function outputCandidate(overrides: Partial<AlarmOutputCandidate> = {}): AlarmOu
     channel_address: "SIR001:3",
     channel_no: 3,
     channel_name: "Hallway siren",
+    rooms: ["Hallway"],
+    functions: ["Security"],
     classes: ["acoustic_siren"],
     kind: "acoustic_siren",
     ...overrides,
   };
+}
+function secondOutputCandidate(overrides: Partial<AlarmOutputCandidate> = {}): AlarmOutputCandidate {
+  return outputCandidate({
+    device_address: "LGT001",
+    device_name: "Attic light",
+    model: "HmIP-BSL",
+    channel_address: "LGT001:1",
+    channel_no: 1,
+    channel_name: "Attic light",
+    rooms: ["Zzz-Utility"],
+    functions: ["Lighting"],
+    classes: ["alarm_light"],
+    kind: "light",
+    ...overrides,
+  });
 }
 
 beforeEach(() => {
@@ -103,7 +125,7 @@ beforeEach(() => {
   mockPutAlarmZone.mockResolvedValue(undefined);
   mockPutAlarmZoneSensors.mockResolvedValue(undefined);
   mockPutAlarmZoneOutputs.mockResolvedValue(undefined);
-  mockListAlarmOutputCandidates.mockResolvedValue([outputCandidate()]);
+  mockListAlarmOutputCandidates.mockResolvedValue([outputCandidate(), secondOutputCandidate()]);
   location.hash = "";
   // The wizard store is a module singleton (state survives navigating away
   // from the route) — reset it so each test starts from step 1 regardless
@@ -132,8 +154,8 @@ async function skip() {
 // This describe MUST run first: it is the only place in the file that
 // controls the *first* call to listAlarmOutputCandidates (a pending
 // promise, then a rejection), and it is what seeds the shared cache with
-// outputCandidate() via the retry. Every later test that reaches step 3
-// relies on that cached candidate already being present.
+// both candidates via the retry. Every later test that reaches step 3
+// relies on that cached pair already being present.
 describe("AlarmWizard — output picker (step 3)", () => {
   it("shows a loading state, then an error on failure; retry recovers with the candidate list", async () => {
     let rejectFirstFetch!: (err: Error) => void;
@@ -157,9 +179,10 @@ describe("AlarmWizard — output picker (step 3)", () => {
     await fireEvent.click(screen.getByRole("button", { name: "common.reload" }));
 
     // The retry's call falls through to the mock's persistent resolved
-    // value (the canonical candidate) — recovery shows the row and clears
-    // the error.
+    // value (the two cached candidates) — recovery shows both rows and
+    // clears the error.
     expect(await screen.findByText("Hallway siren")).toBeTruthy();
+    expect(screen.getByText("Attic light")).toBeTruthy();
     expect(screen.queryByText(/boom/)).toBeNull();
     expect(mockListAlarmOutputCandidates).toHaveBeenCalledTimes(2);
   });
@@ -169,10 +192,10 @@ describe("AlarmWizard — output picker (step 3)", () => {
     await next(); // -> sensors
     await next(); // -> outputs
 
-    // Reuses the candidate the previous test already cached — the guard in
-    // loadOutputCandidates() skips a redundant fetch once loaded.
+    // Reuses the candidates the previous test already cached — the guard
+    // in loadOutputCandidates() skips a redundant fetch once loaded.
     await screen.findByText("Hallway siren");
-    const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
+    const checkbox = screen.getByRole("checkbox", { name: "Hallway siren" }) as HTMLInputElement;
     expect(checkbox.checked).toBe(false);
 
     await fireEvent.click(checkbox);
@@ -189,6 +212,145 @@ describe("AlarmWizard — output picker (step 3)", () => {
 
     expect(alarmWizardStore.selectedOutputs).toHaveLength(0);
     expect(checkbox.checked).toBe(false);
+  });
+});
+
+describe("AlarmWizard — sensor/output picker search, filter, sort", () => {
+  it("the outputs search box narrows the candidate list to the match", async () => {
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await next(); // -> outputs
+    await screen.findByText("Hallway siren");
+    expect(screen.getByText("Attic light")).toBeTruthy();
+
+    await fireEvent.input(screen.getByPlaceholderText("common.search"), {
+      target: { value: "Attic" },
+    });
+
+    expect(screen.getByText("Attic light")).toBeTruthy();
+    expect(screen.queryByText("Hallway siren")).toBeNull();
+  });
+
+  it("the room filter narrows the sensor candidate list (step 2)", async () => {
+    mockDevices = [
+      device({ address: "SWDO001", name: "Front door", model: "HmIP-SWDO", rooms: ["Hallway"] }),
+      device({ address: "SWDO002", name: "Back door", model: "HmIP-SWDO", rooms: ["Garage"] }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+
+    expect(await screen.findByText("Front door")).toBeTruthy();
+    expect(screen.getByText("Back door")).toBeTruthy();
+
+    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.room" }), {
+      target: { value: "Garage" },
+    });
+
+    expect(screen.queryByText("Front door")).toBeNull();
+    expect(screen.getByText("Back door")).toBeTruthy();
+  });
+
+  it("the room filter narrows the output candidate list (step 3)", async () => {
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await next(); // -> outputs
+    await screen.findByText("Hallway siren");
+    expect(screen.getByText("Attic light")).toBeTruthy();
+
+    await fireEvent.change(screen.getByRole("combobox", { name: "alarm.sensors.filter.room" }), {
+      target: { value: "Hallway" },
+    });
+
+    expect(screen.getByText("Hallway siren")).toBeTruthy();
+    expect(screen.queryByText("Attic light")).toBeNull();
+  });
+
+  it("changing the sort field reorders the output candidate rows", async () => {
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await next(); // -> outputs
+    await screen.findByText("Hallway siren");
+
+    // Default sort is by name: "Attic light" sorts before "Hallway siren".
+    const byName = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(byName.map((c) => c.getAttribute("aria-label"))).toEqual([
+      "Attic light",
+      "Hallway siren",
+    ]);
+
+    await fireEvent.change(screen.getByRole("combobox", { name: "common.sort" }), {
+      target: { value: "room" },
+    });
+
+    // By room, "Hallway" sorts before "Zzz-Utility" — the opposite order,
+    // proving the sort field actually drives the row order.
+    const byRoom = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(byRoom.map((c) => c.getAttribute("aria-label"))).toEqual([
+      "Hallway siren",
+      "Attic light",
+    ]);
+  });
+
+  it("changing the sort field reorders the sensor candidate rows (step 2)", async () => {
+    mockDevices = [
+      device({
+        address: "SWDO001",
+        name: "Zebra door",
+        model: "HmIP-SWDO",
+        rooms: ["Attic"],
+      }),
+      device({
+        address: "SWDO002",
+        name: "Apple door",
+        model: "HmIP-SWDO",
+        rooms: ["Zzz-Utility"],
+      }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+    await screen.findByText("Zebra door");
+
+    // Default sort is by name: "Apple door" before "Zebra door".
+    const byName = screen.getAllByRole("checkbox", { name: /door/ }) as HTMLInputElement[];
+    expect(byName.map((c) => c.getAttribute("aria-label"))).toEqual([
+      "Apple door",
+      "Zebra door",
+    ]);
+
+    await fireEvent.change(screen.getByRole("combobox", { name: "common.sort" }), {
+      target: { value: "room" },
+    });
+
+    // By room, "Attic" sorts before "Zzz-Utility" — Zebra door (room
+    // Attic) now comes first, the opposite of the name-sorted order.
+    const byRoom = screen.getAllByRole("checkbox", { name: /door/ }) as HTMLInputElement[];
+    expect(byRoom.map((c) => c.getAttribute("aria-label"))).toEqual([
+      "Zebra door",
+      "Apple door",
+    ]);
+  });
+
+  it("sensor and output rows render the device/candidate model label and room", async () => {
+    mockDevices = [
+      device({
+        address: "SWDO001",
+        name: "Front door",
+        model: "HmIP-SWDO",
+        model_label: "Fensterkontakt",
+        rooms: ["Kitchen"],
+      }),
+    ];
+    render(AlarmWizard);
+    await next(); // -> sensors
+
+    const sensorCard = await screen.findByText("Front door");
+    expect(sensorCard.closest("label")?.textContent).toContain("Fensterkontakt");
+    expect(sensorCard.closest("label")?.textContent).toContain("Kitchen");
+
+    await next(); // -> outputs
+    const outputRow = await screen.findByText("Hallway siren");
+    expect(outputRow.closest("label")?.textContent).toContain("HmIP-ASIR-2");
+    expect(outputRow.closest("label")?.textContent).toContain("Hallway");
   });
 });
 
@@ -262,8 +424,8 @@ describe("AlarmWizard — skip clears the current step's data before advancing",
     render(AlarmWizard);
     await next(); // -> sensors
     await next(); // -> outputs
-    await screen.findByText("Hallway siren"); // the shared cached candidate
-    await fireEvent.click(screen.getByRole("checkbox"));
+    await screen.findByText("Hallway siren"); // the shared cached candidates
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Hallway siren" }));
     expect(alarmWizardStore.selectedOutputs).toHaveLength(1);
 
     await skip();
@@ -364,8 +526,8 @@ describe("AlarmWizard — finish (happy path)", () => {
     const [, sensorCheckbox] = screen.getAllByRole("checkbox");
     await fireEvent.click(sensorCheckbox);
     await next(); // -> outputs
-    await screen.findByText("Hallway siren"); // the shared cached candidate
-    await fireEvent.click(screen.getByRole("checkbox"));
+    await screen.findByText("Hallway siren"); // the shared cached candidates
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Hallway siren" }));
     await next(); // -> delays
     await next(); // -> codes
     await next(); // -> done

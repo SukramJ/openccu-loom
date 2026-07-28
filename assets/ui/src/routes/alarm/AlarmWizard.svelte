@@ -13,7 +13,12 @@
   import { t } from "$lib/i18n";
   import {
     buildCandidates,
+    distinctValues,
+    filterOutputCandidates,
     guessSensorBinding,
+    sortPickerRows,
+    type PickerSortField,
+    type PickerSortKey,
   } from "$lib/alarm/sensorCandidates";
   import type {
     AlarmZone,
@@ -94,13 +99,30 @@
 
   let sensorSearch = $state("");
   let sensorShowAll = $state(false);
-  const sensorCandidates = $derived(
+  let sensorRoom = $state("");
+  let sensorFunc = $state("");
+  let sensorSort = $state<PickerSortField>("name");
+  const sensorCandidatesFiltered = $derived(
     buildCandidates(deviceStore.items, {
       query: sensorSearch,
       showAll: sensorShowAll,
+      room: sensorRoom,
+      func: sensorFunc,
       limit: 60,
     }),
   );
+  function sensorSortKey(d: DeviceSummary): PickerSortKey {
+    return {
+      name: d.name || d.address,
+      room: (d.rooms ?? [])[0] ?? "",
+      model: d.model_label || d.model,
+    };
+  }
+  const sensorCandidates = $derived(
+    sortPickerRows(sensorCandidatesFiltered, sensorSort, sensorSortKey),
+  );
+  const sensorRoomOptions = $derived(distinctValues(deviceStore.items, (d) => d.rooms));
+  const sensorFuncOptions = $derived(distinctValues(deviceStore.items, (d) => d.functions));
   function sensorRowId(device: DeviceSummary, channel: string, parameter: string): string {
     return `${device.central ?? ""}|${channel}|${parameter}`;
   }
@@ -146,7 +168,49 @@
     if (cls === "alarm_light") base.level = 1;
     return base;
   }
-  const outputRows = $derived(store.outputCandidates.filter((c) => c.classes.length > 0));
+
+  // deviceByAddr resolves a candidate's model LABEL from the live device
+  // inventory (mirrors AlarmSensors.svelte's own deviceByAddr) — the
+  // candidate DTO only carries the raw wire `model`, not the localised
+  // label the device list already has cached.
+  const deviceByAddr = $derived.by(() => {
+    const m = new Map<string, DeviceSummary>();
+    for (const d of deviceStore.items) m.set(d.address, d);
+    return m;
+  });
+  function outputModelLabel(c: AlarmOutputCandidate): string {
+    const d = deviceByAddr.get(c.device_address);
+    return d?.model_label || d?.model || c.model;
+  }
+
+  let outputSearch = $state("");
+  let outputRoom = $state("");
+  let outputFunc = $state("");
+  let outputSort = $state<PickerSortField>("name");
+  const outputCandidatesEligible = $derived(
+    store.outputCandidates.filter((c) => c.classes.length > 0),
+  );
+  const outputCandidatesFiltered = $derived(
+    filterOutputCandidates(outputCandidatesEligible, {
+      query: outputSearch,
+      room: outputRoom,
+      func: outputFunc,
+    }),
+  );
+  function outputSortKey(c: AlarmOutputCandidate): PickerSortKey {
+    return {
+      name: c.channel_name || c.device_name || c.channel_address,
+      room: (c.rooms ?? [])[0] ?? "",
+      model: outputModelLabel(c),
+    };
+  }
+  const outputRows = $derived(
+    sortPickerRows(outputCandidatesFiltered, outputSort, outputSortKey),
+  );
+  const outputRoomOptions = $derived(distinctValues(outputCandidatesEligible, (c) => c.rooms));
+  const outputFuncOptions = $derived(
+    distinctValues(outputCandidatesEligible, (c) => c.functions),
+  );
   function outputRowId(c: AlarmOutputCandidate, cls: AlarmOutputClass): string {
     return `${c.central}|${c.channel_address}|${cls}`;
   }
@@ -301,10 +365,45 @@
       <p class="mb-4 text-sm text-[var(--ha-secondary-text-color)]">
         {t("alarm.wizard.sensors.hint")}
       </p>
-      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div class="min-w-48 flex-1">
+      <div class="mb-2 flex flex-wrap items-center gap-2">
+        <div class="min-w-40 flex-1">
           <Input type="search" placeholder={t("common.search")} bind:value={sensorSearch} />
         </div>
+        <select
+          value={sensorRoom}
+          onchange={(e) => (sensorRoom = e.currentTarget.value)}
+          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+          title={t("alarm.sensors.filter.room")}
+          aria-label={t("alarm.sensors.filter.room")}
+        >
+          <option value="">{t("alarm.sensors.filter.all")}</option>
+          {#each sensorRoomOptions as r (r)}
+            <option value={r}>{r}</option>
+          {/each}
+        </select>
+        <select
+          value={sensorFunc}
+          onchange={(e) => (sensorFunc = e.currentTarget.value)}
+          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+          title={t("alarm.sensors.filter.function")}
+          aria-label={t("alarm.sensors.filter.function")}
+        >
+          <option value="">{t("alarm.sensors.filter.all")}</option>
+          {#each sensorFuncOptions as f (f)}
+            <option value={f}>{f}</option>
+          {/each}
+        </select>
+        <select
+          value={sensorSort}
+          onchange={(e) => (sensorSort = e.currentTarget.value as PickerSortField)}
+          class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+          title={t("common.sort")}
+          aria-label={t("common.sort")}
+        >
+          <option value="name">{t("alarm.wizard.sort.name")}</option>
+          <option value="room">{t("alarm.wizard.sort.room")}</option>
+          <option value="model">{t("alarm.wizard.sort.model")}</option>
+        </select>
         <label class="flex items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
           <input type="checkbox" bind:checked={sensorShowAll} />
           {t("alarm.sensors.add.show_all")}
@@ -330,6 +429,7 @@
                 class="h-4 w-4 shrink-0 cursor-pointer accent-[var(--ha-primary-color)]"
                 checked={id !== "" && store.hasSensor(id)}
                 disabled={!binding}
+                aria-label={d.name || d.address}
                 onchange={(e) => toggleSensor(d, e.currentTarget.checked)}
               />
               <div class="min-w-0 flex-1">
@@ -338,6 +438,11 @@
                 </p>
                 <p class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">
                   {d.address}{binding ? ` · ${binding.channel}:${binding.parameter}` : ""}
+                </p>
+                <p class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                  {d.model_label || d.model}{(d.rooms ?? []).length > 0
+                    ? ` · ${(d.rooms ?? []).join(", ")}`
+                    : ""}
                 </p>
               </div>
               {#if binding}
@@ -360,6 +465,46 @@
           onRetry={() => store.retryOutputCandidates()}
         />
       {:else}
+        <div class="mb-2 flex flex-wrap items-center gap-2">
+          <div class="min-w-40 flex-1">
+            <Input type="search" placeholder={t("common.search")} bind:value={outputSearch} />
+          </div>
+          <select
+            value={outputRoom}
+            onchange={(e) => (outputRoom = e.currentTarget.value)}
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+            title={t("alarm.sensors.filter.room")}
+            aria-label={t("alarm.sensors.filter.room")}
+          >
+            <option value="">{t("alarm.sensors.filter.all")}</option>
+            {#each outputRoomOptions as r (r)}
+              <option value={r}>{r}</option>
+            {/each}
+          </select>
+          <select
+            value={outputFunc}
+            onchange={(e) => (outputFunc = e.currentTarget.value)}
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+            title={t("alarm.sensors.filter.function")}
+            aria-label={t("alarm.sensors.filter.function")}
+          >
+            <option value="">{t("alarm.sensors.filter.all")}</option>
+            {#each outputFuncOptions as f (f)}
+              <option value={f}>{f}</option>
+            {/each}
+          </select>
+          <select
+            value={outputSort}
+            onchange={(e) => (outputSort = e.currentTarget.value as PickerSortField)}
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+            title={t("common.sort")}
+            aria-label={t("common.sort")}
+          >
+            <option value="name">{t("alarm.wizard.sort.name")}</option>
+            <option value="room">{t("alarm.wizard.sort.room")}</option>
+            <option value="model">{t("alarm.wizard.sort.model")}</option>
+          </select>
+        </div>
         <p class="mb-2 text-xs text-[var(--ha-secondary-text-color)]">
           {t("alarm.sensors.selected", { count: store.selectedOutputs.length })}
         </p>
@@ -379,6 +524,7 @@
                   type="checkbox"
                   class="h-4 w-4 shrink-0 cursor-pointer accent-[var(--ha-primary-color)]"
                   checked={store.hasOutput(id)}
+                  aria-label={c.channel_name || c.device_name || c.channel_address}
                   onchange={(e) => toggleOutput(c, e.currentTarget.checked)}
                 />
                 <div class="min-w-0 flex-1">
@@ -386,8 +532,13 @@
                     {c.channel_name || c.device_name || c.channel_address}
                   </p>
                   <p class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">
-                    {c.model} · {c.channel_address}
+                    {outputModelLabel(c)} · {c.channel_address}
                   </p>
+                  {#if (c.rooms ?? []).length > 0 || (c.functions ?? []).length > 0}
+                    <p class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                      {[...(c.rooms ?? []), ...(c.functions ?? [])].join(" · ")}
+                    </p>
+                  {/if}
                 </div>
                 <Badge>{t(`alarm.output_class.${cls}`)}</Badge>
               </label>

@@ -137,6 +137,7 @@ const EN: Catalog = {
   "alarm.sensors.selected": "{count} selected",
   "alarm.sensors.modes": "Modes",
   "alarm.sensors.filter.room": "Room",
+  "alarm.sensors.filter.function": "Function",
   "alarm.sensors.filter.type": "Type",
   "alarm.sensors.filter.interface": "Interface",
   "alarm.sensors.filter.status": "Status",
@@ -402,6 +403,9 @@ const EN: Catalog = {
     "Try a different search, or enable the show-all toggle above to widen the candidate list beyond security-relevant devices.",
   "alarm.wizard.sensors.hint":
     "Pick the door, window, and motion sensors to enroll below — search by name or address, or show every device.",
+  "alarm.wizard.sort.name": "Name",
+  "alarm.wizard.sort.room": "Room",
+  "alarm.wizard.sort.model": "Model",
   "alarm.wizard.summary.delay_line": "{mode} {exit}/{entry}/{trigger}s",
   "alarm.wizard.summary.delays": "Delays",
   // Alarm codes (docs/alarm-concept.md §11).
@@ -3133,6 +3137,7 @@ const DE: Catalog = {
   "alarm.sensors.selected": "{count} ausgewählt",
   "alarm.sensors.modes": "Modi",
   "alarm.sensors.filter.room": "Raum",
+  "alarm.sensors.filter.function": "Gewerk",
   "alarm.sensors.filter.type": "Typ",
   "alarm.sensors.filter.interface": "Schnittstelle",
   "alarm.sensors.filter.status": "Status",
@@ -3398,6 +3403,9 @@ const DE: Catalog = {
     "Versuche eine andere Suche oder aktiviere oben den Alle-anzeigen-Schalter, um die Kandidatenliste über sicherheitsrelevante Geräte hinaus zu erweitern.",
   "alarm.wizard.sensors.hint":
     "Wähle unten die Tür-, Fenster- und Bewegungssensoren aus, die aufgenommen werden sollen — nach Name oder Adresse suchen oder alle Geräte anzeigen.",
+  "alarm.wizard.sort.name": "Name",
+  "alarm.wizard.sort.room": "Raum",
+  "alarm.wizard.sort.model": "Modell",
   "alarm.wizard.summary.delay_line": "{mode} {exit}/{entry}/{trigger}s",
   "alarm.wizard.summary.delays": "Verzögerungen",
   // Alarm codes (docs/alarm-concept.md §11).

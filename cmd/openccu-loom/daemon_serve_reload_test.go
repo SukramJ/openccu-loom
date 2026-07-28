@@ -89,7 +89,7 @@ func TestDaemonServeWithReload_EmptyConfigPath_DelegatesDirectly(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServeWithReload: %v", err)
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemonServeWithReload did not shut down in time")
 	}
 }

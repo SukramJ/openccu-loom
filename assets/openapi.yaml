@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.0.0
+  version: 3.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10602,6 +10602,14 @@ components:
         channel_address: { type: string }
         channel_no: { type: integer }
         channel_name: { type: string }
+        rooms:
+          type: array
+          description: The channel's CCU room assignments (picker filter/label).
+          items: { type: string }
+        functions:
+          type: array
+          description: The channel's CCU function assignments (picker filter/label).
+          items: { type: string }
         classes:
           type: array
           description: >-
