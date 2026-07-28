@@ -6,6 +6,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.49.1]
+
+### Fixed
+
+- **The alarm setup wizard configures sensors and outputs inline.** Steps 2
+  and 3 used to link to the sensors/outputs tabs — which require an existing
+  alarm area, while the wizard only creates the area on Finish. First-run
+  users following the wizard's own links landed on an empty page whose only
+  action led back to a freshly reset wizard. The wizard now embeds real
+  pickers: security-device sensor candidates (search + show-all) in step 2,
+  output candidates in step 3; Finish applies everything in order (create
+  area → sensors → outputs) and a partial failure keeps the created area id
+  so a retry updates instead of duplicating the area.
+- **Wizard progress survives navigation.** Step, area name, delays, and
+  selections moved into a store — leaving the wizard and coming back no
+  longer silently restarts it at step 1.
+- **Honest wizard steps.** Step 5 no longer claims PIN codes ship "in a
+  later release" (the Codes tab exists); the trigger-time input now caps at
+  the engine's 600 s ceiling instead of accepting values the engine silently
+  clamps at runtime.
+- **Alarm tabs distinguish "loading" from "no areas".** The sensors,
+  outputs, policies, and codes tabs showed the "no alarm areas yet" empty
+  state while the area list was still loading — and permanently if the
+  fetch failed. They now show the shared loading and error (with retry)
+  surfaces and only report "no areas" after a successful, genuinely empty
+  load.
+
 ## [0.49.0]
 
 ### Changed

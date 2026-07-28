@@ -929,10 +929,18 @@ excellent UX and visual clarity. Design:
 
 ### 12.3 Setup wizard
 
-First-run guided flow: ① create areas → ② review auto-proposed sensors
-(room by room) → ③ pick outputs & loud/silent per mode → ④ delays + chirps
-→ ⑤ codes/users → ⑥ walk test → done. Each step is skippable; the wizard
-is re-runnable per area.
+First-run guided flow: ① name the area → ② select sensors inline
+(security-device candidates with search + show-all toggle) → ③ select
+outputs inline (from the output-candidate list) → ④ delays per mode
+(trigger time capped at the engine's 600 s ceiling) → ⑤ codes pointer
+(managed on the Codes tab once the area exists) → ⑥ summary + finish.
+Finish applies everything against the API in order (create area →
+sensors → outputs); a partial failure keeps the created area id so a
+retry updates instead of duplicating. Each step is skippable (skip
+clears that step's collected data); wizard progress lives in a store
+and survives navigating away and back. Chirp fine-tuning, per-mode
+loud/silent grouping, and the walk test stay on their dedicated tabs
+after finish.
 
 ### 12.4 Walk test
 

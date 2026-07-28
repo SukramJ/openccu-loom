@@ -4,12 +4,21 @@ import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import type { AlarmArea, AlarmSensor, DeviceSummary } from "$lib/api/types";
 
 let mockAreasConfig: AlarmArea[] = [];
+let mockAreasLoading = false;
+let mockAreasError: string | null = null;
+const mockAreasRefresh = vi.fn().mockResolvedValue(undefined);
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
     get areasConfig() {
       return mockAreasConfig;
     },
-    refresh: vi.fn().mockResolvedValue(undefined),
+    get loading() {
+      return mockAreasLoading;
+    },
+    get error() {
+      return mockAreasError;
+    },
+    refresh: (...args: unknown[]) => mockAreasRefresh(...args),
   },
 }));
 
@@ -62,6 +71,8 @@ function sensor(overrides: Partial<AlarmSensor> = {}): AlarmSensor {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAreasConfig = [{ id: "area-1", name: "Ground floor" }];
+  mockAreasLoading = false;
+  mockAreasError = null;
   mockDevices = [];
   mockListAlarmAreaSensors.mockResolvedValue([sensor()]);
   mockPutAlarmAreaSensors.mockResolvedValue(undefined);
@@ -69,6 +80,57 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+});
+
+describe("AlarmSensors — areas-loading gate", () => {
+  it("shows the shared loading state while the first areas load is in flight", () => {
+    mockAreasLoading = true;
+    mockAreasConfig = [];
+    const { getByRole, queryByText } = render(AlarmSensors);
+
+    expect(getByRole("status")).toBeTruthy();
+    // The gate short-circuits before the toolbar/area-selector ever mounts.
+    expect(queryByText("alarm.sensors.area")).toBeNull();
+  });
+
+  it("shows the shared error state on a failed areas refresh, and retry re-triggers the store refresh", async () => {
+    mockAreasLoading = false;
+    mockAreasError = "network unreachable";
+    mockAreasConfig = [];
+    const { getByRole, container } = render(AlarmSensors);
+
+    expect(container.textContent).toContain("network unreachable");
+
+    await fireEvent.click(getByRole("button", { name: "common.reload" }));
+    expect(mockAreasRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("shows the empty state with a wizard link on a successful load with no areas", () => {
+    mockAreasLoading = false;
+    mockAreasError = null;
+    mockAreasConfig = [];
+    const { getByText, getByRole } = render(AlarmSensors);
+
+    expect(getByText("alarm.overview.empty")).toBeTruthy();
+    const link = getByRole("link", { name: /alarm.wizard.launch/ });
+    expect(link).toHaveAttribute("href", "#/alarm/wizard");
+  });
+
+  it("renders the sensor picker UI once areas are present", async () => {
+    mockAreasLoading = false;
+    mockAreasError = null;
+    mockAreasConfig = [{ id: "area-1", name: "Ground floor" }];
+    const { findByText, getByRole } = render(AlarmSensors);
+
+    // The toolbar (area selector + add button) is part of the picker, not
+    // the gate, so its presence marks a successful pass through the gate.
+    // The area <Select> sits inside a <label>, which takes over the
+    // trigger's accessible name — so the label key, not the selected area
+    // name, is what a screen reader (and this query) sees.
+    expect(await findByText("alarm.sensors.area")).toBeTruthy();
+    expect(getByRole("button", { name: "alarm.sensors.area" })).toBeTruthy();
+    expect(getByRole("button", { name: /alarm.sensors.add/ })).toBeTruthy();
+  });
 });
 
 describe("AlarmSensors — card grid + matrix toggle", () => {
