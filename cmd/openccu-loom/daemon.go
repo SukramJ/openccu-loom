@@ -517,23 +517,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if sqUsers != nil {
 		selfPasswordSvc = sqUsers
 	}
-	// Per-user preferences (favorites / dashboard) live in the main app
-	// DB. Nil interface when persistence is disabled so the routes drop.
-	var prefSvc handlers.UserPreferencesService
-	if auditDB != nil {
-		prefSvc = sqlitestore.NewUserPreferencesStore(auditDB)
-	}
-	var diagramSvc handlers.DiagramConfigService
-	if auditDB != nil {
-		diagramSvc = newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB))
-	}
-	// Areas (operator-defined room groupings) live in the main app DB,
-	// same as diagrams/preferences. *sqlitestore.AreaStore satisfies
-	// handlers.AreaAdmin directly — no adapter needed.
-	var areaSvc handlers.AreaAdmin
-	if auditDB != nil {
-		areaSvc = sqlitestore.NewAreaStore(auditDB)
-	}
+	prefSvc, diagramSvc, areaSvc := appDBServices(auditDB)
 	tokenAdminSvc := rw.tokenAdmin
 	// Wrap the persisted CentralAdminService so POST/PUT/DELETE
 	// /admin/centrals also drive the live orchestrator built above — the

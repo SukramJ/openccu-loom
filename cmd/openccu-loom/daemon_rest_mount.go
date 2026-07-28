@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"time"
@@ -489,4 +490,18 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		slog.String("path", path),
 		slog.Bool("allow_writes", cfg.North.MCP.AllowWrites))
 	return mux
+}
+
+// appDBServices constructs the main-app-DB-backed REST services
+// (per-user preferences, diagram configs, areas). All three return nil
+// when persistence is disabled so their routes drop.
+func appDBServices(auditDB *sql.DB) (handlers.UserPreferencesService, handlers.DiagramConfigService, handlers.AreaAdmin) {
+	if auditDB == nil {
+		return nil, nil, nil
+	}
+	// *sqlitestore.AreaStore satisfies handlers.AreaAdmin directly — no
+	// adapter needed.
+	return sqlitestore.NewUserPreferencesStore(auditDB),
+		newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB)),
+		sqlitestore.NewAreaStore(auditDB)
 }

@@ -1,11 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.49.2
+## 0.49.3
 
 - **Areas: group your rooms into floors or outbuildings.** Assign CCU
   rooms to operator-defined areas (e.g. ground floor, shed) in the rooms
   administration and filter the device list, overview, alarm pickers,
   and group editor by area.
+
+## 0.49.2
+
 - **Alarm wizard lists are searchable and filterable.** The outputs step
   has a search box now; sensor and output pickers filter by room and
   function, sort by name/room/model, and show the device model and rooms
