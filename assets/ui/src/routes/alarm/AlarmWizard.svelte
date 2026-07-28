@@ -16,7 +16,7 @@
     guessSensorBinding,
   } from "$lib/alarm/sensorCandidates";
   import type {
-    AlarmArea,
+    AlarmZone,
     AlarmOutput,
     AlarmOutputCandidate,
     AlarmOutputClass,
@@ -37,19 +37,19 @@
   // Setup wizard (docs/alarm-concept.md §12.3), skeleton pattern borrowed
   // from routes/Setup.svelte: step dots + Back/Skip/Next footer, one atomic
   // write on the last step. Steps ②/③ used to be bare links into the
-  // sensor/output picker tabs — but those tabs require an existing area,
-  // and the area itself is only created on Finish, so a first-run operator
+  // sensor/output picker tabs — but those tabs require an existing zone,
+  // and the zone itself is only created on Finish, so a first-run operator
   // hit a dead end and looped back to a reset wizard. Both steps now embed
   // a simplified inline picker instead, collecting sensor/output rows in
   // the same DTO shape the full pickers save, applied together with the
-  // area on Finish. Step ⑤ (codes/users) stays a pointer at the Codes tab —
-  // codes need a real area id to attach to, same as the full picker tabs.
+  // zone on Finish. Step ⑤ (codes/users) stays a pointer at the Codes tab —
+  // codes need a real zone id to attach to, same as the full picker tabs.
   // All collected state lives in alarmWizardStore so navigating away and
   // back preserves progress instead of resetting on unmount.
 
   const store = alarmWizardStore;
 
-  const STEP_KEYS = ["areas", "sensors", "outputs", "delays", "codes", "done"] as const;
+  const STEP_KEYS = ["zones", "sensors", "outputs", "delays", "codes", "done"] as const;
   const TOTAL = STEP_KEYS.length;
 
   let submitting = $state(false);
@@ -195,7 +195,7 @@
     if (submitting) return;
     submitting = true;
     try {
-      const name = store.areaName.trim() || t("alarm.wizard.area.default_name");
+      const name = store.zoneName.trim() || t("alarm.wizard.zone.default_name");
       const modes: Record<
         string,
         { exit_delay_s: number; entry_delay_s: number; trigger_time_s: number }
@@ -207,39 +207,39 @@
           trigger_time_s: store.delays[m].trigger,
         };
       }
-      const area: AlarmArea = { id: store.createdAreaId ?? "", name, config: { modes } };
-      // A retry after a partial failure must never create a second area —
-      // once createdAreaId is set, every subsequent attempt PUTs it. If
-      // that area vanished in the meantime (operator deleted it on the
+      const zone: AlarmZone = { id: store.createdZoneId ?? "", name, config: { modes } };
+      // A retry after a partial failure must never create a second zone —
+      // once createdZoneId is set, every subsequent attempt PUTs it. If
+      // that zone vanished in the meantime (operator deleted it on the
       // overview between attempts), the PUT 404s: fall back to creating
       // a fresh one instead of dead-ending on the stale id forever.
-      let id = store.createdAreaId;
+      let id = store.createdZoneId;
       if (id) {
         try {
-          await api.putAlarmArea(id, area);
+          await api.putAlarmZone(id, zone);
         } catch (err) {
           if (!(err instanceof ApiError && err.status === 404)) throw err;
-          store.setCreatedAreaId(null);
+          store.setCreatedZoneId(null);
           id = null;
         }
       }
       if (!id) {
-        const created = await api.createAlarmArea({ ...area, id: "" });
+        const created = await api.createAlarmZone({ ...zone, id: "" });
         id = created.id;
-        store.setCreatedAreaId(id);
+        store.setCreatedZoneId(id);
       }
       // Always send both bulk PUTs — an empty array is a valid full-set
       // replace, and a retry must be able to reconcile away rows a prior
       // attempt already wrote before the operator deselected them. The
       // local ids are channel-derived selection keys, not row identities
-      // — send them empty so the server mints per-area UUIDs (the same
-      // channel enrolled in a second area must never collide with the
-      // first area's row).
-      await api.putAlarmAreaSensors(
+      // — send them empty so the server mints per-zone UUIDs (the same
+      // channel enrolled in a second zone must never collide with the
+      // first zone's row).
+      await api.putAlarmZoneSensors(
         id,
         store.selectedSensors.map((s) => ({ ...s, id: "" })),
       );
-      await api.putAlarmAreaOutputs(
+      await api.putAlarmZoneOutputs(
         id,
         store.selectedOutputs.map((o) => ({ ...o, id: "" })),
       );
@@ -248,7 +248,7 @@
       store.reset();
       location.hash = "#/alarm";
     } catch (err) {
-      // Keep every collected step (including createdAreaId) so the
+      // Keep every collected step (including createdZoneId) so the
       // operator can just hit Finish again once the underlying issue is
       // fixed — never silently drop their work on a failed save.
       toastStore.error(t("alarm.toast.save_failed"), friendlyError(err, t));
@@ -283,17 +283,17 @@
     </p>
 
     {#if store.step === 1}
-      <h2 class="mb-1 text-lg font-semibold">{t("alarm.wizard.step.areas")}</h2>
+      <h2 class="mb-1 text-lg font-semibold">{t("alarm.wizard.step.zones")}</h2>
       <p class="mb-4 text-sm text-[var(--ha-secondary-text-color)]">
-        {t("alarm.wizard.area.hint")}
+        {t("alarm.wizard.zone.hint")}
       </p>
       <label class="block">
-        <span class="mb-1 block text-sm font-medium">{t("alarm.area.name")}</span>
+        <span class="mb-1 block text-sm font-medium">{t("alarm.zone.name")}</span>
         <Input
           type="text"
-          placeholder={t("alarm.wizard.area.default_name")}
-          value={store.areaName}
-          oninput={(e) => store.setAreaName(e.currentTarget.value)}
+          placeholder={t("alarm.wizard.zone.default_name")}
+          value={store.zoneName}
+          oninput={(e) => store.setZoneName(e.currentTarget.value)}
         />
       </label>
     {:else if store.step === 2}
@@ -469,9 +469,9 @@
       </p>
       <Card class="p-4 text-sm">
         <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-          <dt class="text-[var(--ha-secondary-text-color)]">{t("alarm.area.name")}</dt>
+          <dt class="text-[var(--ha-secondary-text-color)]">{t("alarm.zone.name")}</dt>
           <dd class="font-medium">
-            {store.areaName.trim() || t("alarm.wizard.area.default_name")}
+            {store.zoneName.trim() || t("alarm.wizard.zone.default_name")}
           </dd>
           <dt class="text-[var(--ha-secondary-text-color)]">{t("alarm.wizard.step.sensors")}</dt>
           <dd class="font-medium">{store.selectedSensors.length}</dd>

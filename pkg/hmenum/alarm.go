@@ -3,22 +3,22 @@
 
 package hmenum
 
-// AlarmMode is a named protection level of an alarm area. The string
+// AlarmMode is a named protection level of an alarm zone. The string
 // form is wire-stable: it appears in the REST/WS API, MQTT payloads,
 // and the persisted alarm state. "disarmed" doubles as the active mode
-// of a disarmed area so every surface can render mode without a
+// of a disarmed zone so every surface can render mode without a
 // nullable field. See docs/alarm-concept.md §4 for the mode-naming
 // mapping (UI localization, HA vocabulary).
 type AlarmMode string
 
 // AlarmMode values.
 const (
-	// AlarmModeDisarmed is the mode of an area that is not armed.
+	// AlarmModeDisarmed is the mode of an zone that is not armed.
 	AlarmModeDisarmed AlarmMode = "disarmed"
 	// AlarmModePerimeter arms the user-curated perimeter subset
 	// (Hüllschutz): typically door/window contacts and rotary handles.
 	AlarmModePerimeter AlarmMode = "perimeter"
-	// AlarmModeFull arms every sensor assigned to the area
+	// AlarmModeFull arms every sensor assigned to the zone
 	// (Vollschutz).
 	AlarmModeFull AlarmMode = "full"
 	// AlarmModeNight arms the night subset.
@@ -46,33 +46,33 @@ func (m AlarmMode) Valid() bool {
 // disarmed).
 func (m AlarmMode) Armed() bool { return m.Valid() && m != AlarmModeDisarmed }
 
-// AlarmAreaState is the arm-state-machine state of one alarm area.
+// AlarmZoneState is the arm-state-machine state of one alarm zone.
 // The vocabulary follows the HA alarm_control_panel model so every
 // integration maps 1:1 (docs/alarm-concept.md §5).
-type AlarmAreaState string
+type AlarmZoneState string
 
-// AlarmAreaState values.
+// AlarmZoneState values.
 const (
-	// AlarmAreaStateDisarmed means no protection is active.
-	AlarmAreaStateDisarmed AlarmAreaState = "disarmed"
-	// AlarmAreaStateArming means the exit delay is running.
-	AlarmAreaStateArming AlarmAreaState = "arming"
-	// AlarmAreaStateArmed means the area is armed in its active mode.
-	AlarmAreaStateArmed AlarmAreaState = "armed"
-	// AlarmAreaStatePending means a delayed sensor tripped and the
+	// AlarmZoneStateDisarmed means no protection is active.
+	AlarmZoneStateDisarmed AlarmZoneState = "disarmed"
+	// AlarmZoneStateArming means the exit delay is running.
+	AlarmZoneStateArming AlarmZoneState = "arming"
+	// AlarmZoneStateArmed means the zone is armed in its active mode.
+	AlarmZoneStateArmed AlarmZoneState = "armed"
+	// AlarmZoneStatePending means a delayed sensor tripped and the
 	// entry delay is running; a valid disarm here produces no alarm.
-	AlarmAreaStatePending AlarmAreaState = "pending"
-	// AlarmAreaStateTriggered means an alarm incident is active.
-	AlarmAreaStateTriggered AlarmAreaState = "triggered"
+	AlarmZoneStatePending AlarmZoneState = "pending"
+	// AlarmZoneStateTriggered means an alarm incident is active.
+	AlarmZoneStateTriggered AlarmZoneState = "triggered"
 )
 
 // String returns the wire representation.
-func (s AlarmAreaState) String() string { return string(s) }
+func (s AlarmZoneState) String() string { return string(s) }
 
-// Valid reports whether s is one of the defined area states.
-func (s AlarmAreaState) Valid() bool {
+// Valid reports whether s is one of the defined zone states.
+func (s AlarmZoneState) Valid() bool {
 	switch s {
-	case AlarmAreaStateDisarmed, AlarmAreaStateArming, AlarmAreaStateArmed, AlarmAreaStatePending, AlarmAreaStateTriggered:
+	case AlarmZoneStateDisarmed, AlarmZoneStateArming, AlarmZoneStateArmed, AlarmZoneStatePending, AlarmZoneStateTriggered:
 		return true
 	default:
 		return false
@@ -150,7 +150,7 @@ const (
 	// AlarmOutputClassNotification is an MQTT/webhook/WS notification
 	// target; never cancelled by silence.
 	AlarmOutputClassNotification AlarmOutputClass = "notification"
-	// AlarmOutputClassSysvarMirror mirrors area state into a CCU
+	// AlarmOutputClassSysvarMirror mirrors zone state into a CCU
 	// system variable for interop with CCU programs.
 	AlarmOutputClassSysvarMirror AlarmOutputClass = "sysvar_mirror"
 )
@@ -277,14 +277,14 @@ func (p AlarmPostTriggerPolicy) Valid() bool {
 	}
 }
 
-// AlarmCentralLossPolicy decides how an armed area reacts when a
+// AlarmCentralLossPolicy decides how an armed zone reacts when a
 // whole central is lost (docs/alarm-concept.md §10.1) — never
 // silently.
 type AlarmCentralLossPolicy string
 
 // AlarmCentralLossPolicy values.
 const (
-	// AlarmCentralLossAlert keeps the area armed, shows degraded
+	// AlarmCentralLossAlert keeps the zone armed, shows degraded
 	// coverage, and notifies loudly (default).
 	AlarmCentralLossAlert AlarmCentralLossPolicy = "alert"
 	// AlarmCentralLossTrigger treats the loss as an activation

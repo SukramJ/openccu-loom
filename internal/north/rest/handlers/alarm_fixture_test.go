@@ -79,7 +79,7 @@ func (f *alarmPanelFixture) Reload(ctx context.Context) error {
 }
 
 // newAlarmPanelFixture builds an empty, started fixture on a fresh
-// temporary database: no areas, no sensors, no outputs. Tests seed
+// temporary database: no zones, no sensors, no outputs. Tests seed
 // through the seed* helpers (direct store writes + reload) or by
 // driving the CRUD handlers under test.
 func newAlarmPanelFixture(t *testing.T) *alarmPanelFixture {
@@ -112,7 +112,7 @@ func newAlarmPanelFixture(t *testing.T) *alarmPanelFixture {
 
 	eng, err := engine.New(engine.Deps{
 		Clock:     clk,
-		Areas:     stores.Areas,
+		Zones:     stores.Zones,
 		Sensors:   stores.Sensors,
 		State:     stores.State,
 		Incidents: stores.Incidents,
@@ -130,25 +130,25 @@ func newAlarmPanelFixture(t *testing.T) *alarmPanelFixture {
 	return &alarmPanelFixture{t: t, stores: stores, eng: eng, mgr: mgr, resolver: resolver, clk: clk}
 }
 
-// seedArea persists an area row and reloads the engine so it takes
+// seedZone persists an zone row and reloads the engine so it takes
 // effect immediately.
-func (f *alarmPanelFixture) seedArea(id, name string, cfg engine.AreaConfig) {
+func (f *alarmPanelFixture) seedZone(id, name string, cfg engine.ZoneConfig) {
 	f.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		f.t.Fatalf("marshal area config: %v", err)
+		f.t.Fatalf("marshal zone config: %v", err)
 	}
 	now := f.clk.Now().UnixMilli()
-	if err := f.stores.Areas.Upsert(context.Background(), sqlitestore.AlarmAreaRow{
+	if err := f.stores.Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
-		f.t.Fatalf("seed area %s: %v", id, err)
+		f.t.Fatalf("seed zone %s: %v", id, err)
 	}
 	f.mustReload()
 }
 
-// seedSensor persists a sensor row under areaID and reloads.
-func (f *alarmPanelFixture) seedSensor(id, areaID string, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
+// seedSensor persists a sensor row under zoneID and reloads.
+func (f *alarmPanelFixture) seedSensor(id, zoneID string, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
 	f.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
@@ -156,7 +156,7 @@ func (f *alarmPanelFixture) seedSensor(id, areaID string, typ hmenum.AlarmSensor
 	}
 	now := f.clk.Now().UnixMilli()
 	if err := f.stores.Sensors.Upsert(context.Background(), sqlitestore.AlarmSensorRow{
-		ID: id, AreaID: areaID, CentralName: alarmFixtureCentral, InterfaceID: "HmIP-RF",
+		ID: id, ZoneID: zoneID, CentralName: alarmFixtureCentral, InterfaceID: "HmIP-RF",
 		ChannelAddress: id + ":1", Parameter: "STATE", SensorType: typ,
 		Name: id, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -165,9 +165,9 @@ func (f *alarmPanelFixture) seedSensor(id, areaID string, typ hmenum.AlarmSensor
 	f.mustReload()
 }
 
-// seedOutput persists an output row under areaID, registers a fake
+// seedOutput persists an output row under zoneID, registers a fake
 // device for classes that resolve one, and reloads the manager.
-func (f *alarmPanelFixture) seedOutput(id, areaID string, class hmenum.AlarmOutputClass, cfg outputs.OutputConfig) {
+func (f *alarmPanelFixture) seedOutput(id, zoneID string, class hmenum.AlarmOutputClass, cfg outputs.OutputConfig) {
 	f.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
@@ -176,7 +176,7 @@ func (f *alarmPanelFixture) seedOutput(id, areaID string, class hmenum.AlarmOutp
 	now := f.clk.Now().UnixMilli()
 	channel := id + ":1"
 	if err := f.stores.Outputs.Upsert(context.Background(), sqlitestore.AlarmOutputRow{
-		ID: id, AreaID: areaID, Class: class, CentralName: alarmFixtureCentral,
+		ID: id, ZoneID: zoneID, Class: class, CentralName: alarmFixtureCentral,
 		ChannelAddress: channel, Name: id, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
 		f.t.Fatalf("seed output %s: %v", id, err)
@@ -200,11 +200,11 @@ func (f *alarmPanelFixture) mustReload() {
 	}
 }
 
-// fullModeAreaConfig builds a single-mode ("full") area configuration
+// fullModeZoneConfig builds a single-mode ("full") zone configuration
 // with the given delays — the standard shape most alarm handler tests
 // arm against.
-func fullModeAreaConfig(exitDelayS, entryDelayS, triggerS int) engine.AreaConfig {
-	return engine.AreaConfig{
+func fullModeZoneConfig(exitDelayS, entryDelayS, triggerS int) engine.ZoneConfig {
+	return engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {
 				ExitDelaySeconds:  exitDelayS,

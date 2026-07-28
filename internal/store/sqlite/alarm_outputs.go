@@ -22,7 +22,7 @@ import (
 // ConfigJSON.
 type AlarmOutputRow struct {
 	ID             string
-	AreaID         string
+	ZoneID         string
 	Class          hmenum.AlarmOutputClass
 	CentralName    string
 	InterfaceID    string
@@ -46,11 +46,11 @@ func NewAlarmOutputStore(db *sql.DB) *AlarmOutputStore { return &AlarmOutputStor
 // created_at_ms untouched.
 func (s *AlarmOutputStore) Upsert(ctx context.Context, row AlarmOutputRow) error {
 	const q = `
-INSERT INTO alarm_outputs (id, area_id, class, central_name, interface_id, channel_address,
+INSERT INTO alarm_outputs (id, zone_id, class, central_name, interface_id, channel_address,
     name, config_json, created_at_ms, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
-    area_id = excluded.area_id,
+    zone_id = excluded.zone_id,
     class = excluded.class,
     central_name = excluded.central_name,
     interface_id = excluded.interface_id,
@@ -60,7 +60,7 @@ ON CONFLICT(id) DO UPDATE SET
     updated_at_ms = excluded.updated_at_ms`
 	_, err := s.db.ExecContext(
 		ctx, q,
-		row.ID, row.AreaID, string(row.Class), row.CentralName, row.InterfaceID, row.ChannelAddress,
+		row.ID, row.ZoneID, string(row.Class), row.CentralName, row.InterfaceID, row.ChannelAddress,
 		row.Name, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
 	)
 	if err != nil {
@@ -81,13 +81,13 @@ func (s *AlarmOutputStore) Get(ctx context.Context, id string) (AlarmOutputRow, 
 	return row, true, nil
 }
 
-// ListByArea returns the outputs enrolled in areaID, ordered by name then
+// ListByZone returns the outputs enrolled in zoneID, ordered by name then
 // id.
-func (s *AlarmOutputStore) ListByArea(ctx context.Context, areaID string) ([]AlarmOutputRow, error) {
-	q := alarmOutputSelect + ` WHERE area_id = ? ORDER BY name, id`
-	rows, err := s.db.QueryContext(ctx, q, areaID)
+func (s *AlarmOutputStore) ListByZone(ctx context.Context, zoneID string) ([]AlarmOutputRow, error) {
+	q := alarmOutputSelect + ` WHERE zone_id = ? ORDER BY name, id`
+	rows, err := s.db.QueryContext(ctx, q, zoneID)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite: list alarm outputs by area: %w", err)
+		return nil, fmt.Errorf("sqlite: list alarm outputs by zone: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []AlarmOutputRow
@@ -101,10 +101,10 @@ func (s *AlarmOutputStore) ListByArea(ctx context.Context, areaID string) ([]Ala
 	return out, rows.Err()
 }
 
-// GetAll returns every enrolled alarm output, ordered by area, then name,
+// GetAll returns every enrolled alarm output, ordered by zone, then name,
 // then id.
 func (s *AlarmOutputStore) GetAll(ctx context.Context) ([]AlarmOutputRow, error) {
-	q := alarmOutputSelect + ` ORDER BY area_id, name, id`
+	q := alarmOutputSelect + ` ORDER BY zone_id, name, id`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get all alarm outputs: %w", err)
@@ -129,25 +129,25 @@ func (s *AlarmOutputStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// DeleteByArea removes every output enrolled in areaID and returns the
-// number of rows deleted (area-deletion cascade).
-func (s *AlarmOutputStore) DeleteByArea(ctx context.Context, areaID string) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM alarm_outputs WHERE area_id = ?`, areaID)
+// DeleteByZone removes every output enrolled in zoneID and returns the
+// number of rows deleted (zone-deletion cascade).
+func (s *AlarmOutputStore) DeleteByZone(ctx context.Context, zoneID string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM alarm_outputs WHERE zone_id = ?`, zoneID)
 	if err != nil {
-		return 0, fmt.Errorf("sqlite: delete alarm outputs by area: %w", err)
+		return 0, fmt.Errorf("sqlite: delete alarm outputs by zone: %w", err)
 	}
 	return res.RowsAffected()
 }
 
 const alarmOutputSelect = `
-SELECT id, area_id, class, central_name, interface_id, channel_address,
+SELECT id, zone_id, class, central_name, interface_id, channel_address,
     name, config_json, created_at_ms, updated_at_ms
 FROM alarm_outputs`
 
 func scanAlarmOutputRow(sc scannable) (AlarmOutputRow, error) {
 	var row AlarmOutputRow
 	var class string
-	if err := sc.Scan(&row.ID, &row.AreaID, &class, &row.CentralName, &row.InterfaceID, &row.ChannelAddress,
+	if err := sc.Scan(&row.ID, &row.ZoneID, &class, &row.CentralName, &row.InterfaceID, &row.ChannelAddress,
 		&row.Name, &row.ConfigJSON, &row.CreatedAtMS, &row.UpdatedAtMS); err != nil {
 		return AlarmOutputRow{}, err
 	}
@@ -155,26 +155,26 @@ func scanAlarmOutputRow(sc scannable) (AlarmOutputRow, error) {
 	return row, nil
 }
 
-// ReplaceByArea atomically replaces the output set of an area — one
+// ReplaceByZone atomically replaces the output set of an zone — one
 // transaction, no partial sets on failure (mirrors the sensor store).
-func (s *AlarmOutputStore) ReplaceByArea(ctx context.Context, areaID string, rows []AlarmOutputRow) error {
+func (s *AlarmOutputStore) ReplaceByZone(ctx context.Context, zoneID string, rows []AlarmOutputRow) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("sqlite: replace alarm outputs: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM alarm_outputs WHERE area_id = ?`, areaID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM alarm_outputs WHERE zone_id = ?`, zoneID); err != nil {
 		return fmt.Errorf("sqlite: replace alarm outputs: %w", err)
 	}
 	const q = `
-INSERT INTO alarm_outputs (id, area_id, class, central_name, interface_id, channel_address,
+INSERT INTO alarm_outputs (id, zone_id, class, central_name, interface_id, channel_address,
     name, config_json, created_at_ms, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	for i := range rows {
 		row := &rows[i]
 		if _, err := tx.ExecContext(
 			ctx, q,
-			row.ID, areaID, string(row.Class), row.CentralName, row.InterfaceID, row.ChannelAddress,
+			row.ID, zoneID, string(row.Class), row.CentralName, row.InterfaceID, row.ChannelAddress,
 			row.Name, row.ConfigJSON, row.CreatedAtMS, row.UpdatedAtMS,
 		); err != nil {
 			return fmt.Errorf("sqlite: replace alarm outputs: %w", err)

@@ -30,7 +30,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Sensor picker (docs/alarm-concept.md §12.2). Manages the ENROLLED
-  // sensor set of one alarm area: an area selector, a left filter rail,
+  // sensor set of one alarm zone: a zone selector, a left filter rail,
   // a card grid (or dense matrix table) with per-card mode-matrix chips,
   // a detail slide-over for the full flag set, an add-sensor flow with
   // device-picker assist + type presets (§6.1), and a bulk bar. Edits
@@ -54,7 +54,7 @@
   // rendered separately as their own value fields in the drawer. `chime`
   // is the door-chime-while-disarmed flag (§15 row 23,
   // internal/alarm/engine/config.go SensorConfig.Chime) — plays a chirp
-  // when the sensor activates while its area is disarmed.
+  // when the sensor activates while its zone is disarmed.
   const BOOL_FLAGS = [
     "use_exit_delay",
     "use_entry_delay",
@@ -75,9 +75,9 @@
     panic: "mdi:bell-alert",
   };
 
-  // --- area state --------------------------------------------------
-  const areas = $derived(alarmPanelStore.areasConfig);
-  let areaId = $state("");
+  // --- zone state --------------------------------------------------
+  const zones = $derived(alarmPanelStore.zonesConfig);
+  let zoneId = $state("");
 
   let sensors = $state<AlarmSensor[]>([]);
   let loading = $state(false);
@@ -172,14 +172,14 @@
 
   // --- data loading ------------------------------------------------
   async function loadSensors() {
-    if (!areaId) {
+    if (!zoneId) {
       sensors = [];
       return;
     }
     loading = true;
     loadError = null;
     try {
-      sensors = await api.listAlarmAreaSensors(areaId);
+      sensors = await api.listAlarmZoneSensors(zoneId);
       dirty = false;
       selected = new Set();
     } catch (err) {
@@ -190,10 +190,10 @@
   }
 
   async function save() {
-    if (!areaId) return;
+    if (!zoneId) return;
     saving = true;
     try {
-      await api.putAlarmAreaSensors(areaId, sensors);
+      await api.putAlarmZoneSensors(zoneId, sensors);
       toastStore.success(t("alarm.toast.saved"));
       dirty = false;
       // Sensor membership feeds per-mode readiness, so refresh the shared
@@ -281,7 +281,7 @@
   }
   function bulkRemove() {
     // Local edit only — reversible via the Discard action until Save, so
-    // no confirm dialog is warranted here (unlike a live area delete).
+    // no confirm dialog is warranted here (unlike a live zone delete).
     sensors = sensors.filter((s) => !selected.has(s.id));
     selected = new Set();
     markDirty();
@@ -387,23 +387,23 @@
     else if (drawerId) drawerId = null;
   }
 
-  const areaOptions = $derived(
-    areas.map((a) => ({ value: a.id, label: a.name })),
+  const zoneOptions = $derived(
+    zones.map((a) => ({ value: a.id, label: a.name })),
   );
 
   $effect(() => {
-    // Default to (and re-pin on) the first area; reloads its sensor set
-    // whenever the selected area changes.
-    if (areas.length > 0 && !areas.some((a) => a.id === areaId)) {
-      areaId = areas[0].id;
+    // Default to (and re-pin on) the first zone; reloads its sensor set
+    // whenever the selected zone changes.
+    if (zones.length > 0 && !zones.some((a) => a.id === zoneId)) {
+      zoneId = zones[0].id;
     }
   });
 
-  // Reload sensors whenever the pinned area id changes.
+  // Reload sensors whenever the pinned zone id changes.
   let loadedFor = $state("");
   $effect(() => {
-    if (areaId && areaId !== loadedFor) {
-      loadedFor = areaId;
+    if (zoneId && zoneId !== loadedFor) {
+      loadedFor = zoneId;
       void loadSensors();
     }
   });
@@ -423,11 +423,11 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if alarmPanelStore.loading && areas.length === 0}
+{#if alarmPanelStore.loading && zones.length === 0}
   <LoadingState />
-{:else if alarmPanelStore.error && areas.length === 0}
+{:else if alarmPanelStore.error && zones.length === 0}
   <ErrorState message={alarmPanelStore.error} onRetry={() => void alarmPanelStore.refresh()} />
-{:else if areas.length === 0}
+{:else if zones.length === 0}
   <EmptyState
     icon="mdi:shield-home"
     message={t("alarm.overview.empty")}
@@ -440,12 +440,12 @@
     {/snippet}
   </EmptyState>
 {:else}
-  <!-- Toolbar: area selector + add + view toggle -->
+  <!-- Toolbar: zone selector + add + view toggle -->
   <div class="mb-4 flex flex-wrap items-center gap-3">
     <label class="flex items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]">
-      <span>{t("alarm.sensors.area")}</span>
+      <span>{t("alarm.sensors.zone")}</span>
       <div class="min-w-48">
-        <Select options={areaOptions} bind:value={areaId} />
+        <Select options={zoneOptions} bind:value={zoneId} />
       </div>
     </label>
 

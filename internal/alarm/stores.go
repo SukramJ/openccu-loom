@@ -12,7 +12,7 @@ import (
 // Stores bundles the eight alarm access types over the shared daemon
 // database handle.
 type Stores struct {
-	Areas     *sqlitestore.AlarmAreaStore
+	Zones     *sqlitestore.AlarmZoneStore
 	Sensors   *sqlitestore.AlarmSensorStore
 	Outputs   *sqlitestore.AlarmOutputStore
 	State     *sqlitestore.AlarmStateStore
@@ -25,7 +25,7 @@ type Stores struct {
 // NewStores builds the bundle on db.
 func NewStores(db *sql.DB) *Stores {
 	return &Stores{
-		Areas:     sqlitestore.NewAlarmAreaStore(db),
+		Zones:     sqlitestore.NewAlarmZoneStore(db),
 		Sensors:   sqlitestore.NewAlarmSensorStore(db),
 		Outputs:   sqlitestore.NewAlarmOutputStore(db),
 		State:     sqlitestore.NewAlarmStateStore(db),

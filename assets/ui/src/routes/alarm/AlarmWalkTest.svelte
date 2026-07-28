@@ -20,19 +20,19 @@
   // The seen/total progress bar tracks the shared alarmPanelStore's live
   // `walktest_progress` counter (WS-driven, near-instant). The per-sensor
   // checklist itself has no WS payload — `alarm.walktest_progress` only
-  // carries the area-level count — so each time that counter moves this
+  // carries the zone-level count — so each time that counter moves this
   // view re-fetches GET .../walktest to learn which row just ticked.
 
   const store = alarmPanelStore;
 
-  let selectedAreaId = $state("");
+  let selectedZoneId = $state("");
   let status = $state<AlarmWalkTestStatus | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
   let busy = $state(false);
 
-  // Guards against an in-flight request for a previously selected area
-  // overwriting the checklist after the user has already switched areas.
+  // Guards against an in-flight request for a previously selected zone
+  // overwriting the checklist after the user has already switched zones.
   let requestId = 0;
 
   async function loadStatus(id: string) {
@@ -49,17 +49,17 @@
     }
   }
 
-  // Auto-select the first configured area once the store has loaded.
+  // Auto-select the first configured zone once the store has loaded.
   $effect(() => {
-    if (!selectedAreaId && store.areasConfig.length > 0) {
-      selectedAreaId = store.areasConfig[0].id;
+    if (!selectedZoneId && store.zonesConfig.length > 0) {
+      selectedZoneId = store.zonesConfig[0].id;
     }
   });
 
-  // Reload the checklist whenever the selected area changes or its live
+  // Reload the checklist whenever the selected zone changes or its live
   // WS tick counter moves.
   $effect(() => {
-    const id = selectedAreaId;
+    const id = selectedZoneId;
     const tick = id ? store.walktest[id]?.seen : undefined;
     void tick;
     if (!id) {
@@ -70,7 +70,7 @@
   });
 
   const progress = $derived.by(() => {
-    const live = selectedAreaId ? store.walktest[selectedAreaId] : undefined;
+    const live = selectedZoneId ? store.walktest[selectedZoneId] : undefined;
     if (live) return live;
     if (status) {
       return {
@@ -83,7 +83,7 @@
 
   const active = $derived(
     status?.active ??
-      store.areas.find((a) => a.id === selectedAreaId)?.walktest_active ??
+      store.zones.find((a) => a.id === selectedZoneId)?.walktest_active ??
       false,
   );
 
@@ -92,12 +92,12 @@
   );
 
   async function start() {
-    if (!selectedAreaId || busy) return;
+    if (!selectedZoneId || busy) return;
     busy = true;
     try {
-      await api.startAlarmWalkTest(selectedAreaId);
+      await api.startAlarmWalkTest(selectedZoneId);
       toastStore.success(t("alarm.toast.walktest_started"));
-      await loadStatus(selectedAreaId);
+      await loadStatus(selectedZoneId);
     } catch (err) {
       toastStore.error(t("alarm.toast.walktest_start_failed"), friendlyError(err, t));
     } finally {
@@ -106,11 +106,11 @@
   }
 
   async function stop() {
-    if (!selectedAreaId || busy) return;
+    if (!selectedZoneId || busy) return;
     busy = true;
     try {
-      await api.stopAlarmWalkTest(selectedAreaId);
-      await loadStatus(selectedAreaId);
+      await api.stopAlarmWalkTest(selectedZoneId);
+      await loadStatus(selectedZoneId);
       const seen = status?.sensors.filter((s) => s.tested).length ?? 0;
       const total = status?.sensors.length ?? 0;
       toastStore.success(
@@ -137,7 +137,7 @@
 </script>
 
 <div>
-  {#if store.areasConfig.length === 0}
+  {#if store.zonesConfig.length === 0}
     <EmptyState
       icon="mdi:gesture-tap-button"
       message={t("alarm.overview.empty")}
@@ -153,12 +153,12 @@
     <div class="mb-4 flex flex-wrap items-end gap-3">
       <div class="flex flex-col gap-1.5">
         <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">
-          {t("alarm.walktest.select_area")}
+          {t("alarm.walktest.select_zone")}
         </span>
         <Select
           class="w-48"
-          bind:value={selectedAreaId}
-          options={store.areasConfig.map((a) => ({ value: a.id, label: a.name }))}
+          bind:value={selectedZoneId}
+          options={store.zonesConfig.map((a) => ({ value: a.id, label: a.name }))}
         />
       </div>
 
@@ -170,14 +170,14 @@
         <Button variant="outline" onclick={stop} disabled={!active || busy}>
           {t("alarm.walktest.stop")}
         </Button>
-        <Button onclick={start} disabled={active || busy || !selectedAreaId}>
+        <Button onclick={start} disabled={active || busy || !selectedZoneId}>
           {t("alarm.walktest.start")}
         </Button>
       </div>
     </div>
 
     {#if error}
-      <ErrorState message={error} onRetry={() => loadStatus(selectedAreaId)} class="mb-4" />
+      <ErrorState message={error} onRetry={() => loadStatus(selectedZoneId)} class="mb-4" />
     {/if}
 
     {#if loading && !status}

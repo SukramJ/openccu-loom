@@ -36,11 +36,11 @@ const (
 )
 
 // alarmEventPayload is the JSON body published on the non-retained
-// `<base>/alarm/<area>/event` topic (docs/alarm-concept.md §13.3).
+// `<base>/alarm/<zone>/event` topic (docs/alarm-concept.md §13.3).
 type alarmEventPayload struct {
 	Type        string   `json:"type"`
-	AreaID      string   `json:"area_id"`
-	AreaName    string   `json:"area_name,omitempty"`
+	ZoneID      string   `json:"zone_id"`
+	ZoneName    string   `json:"zone_name,omitempty"`
 	ChangedBy   string   `json:"changed_by,omitempty"`
 	Mode        string   `json:"mode,omitempty"`
 	OpenSensors []string `json:"open_sensors,omitempty"`
@@ -52,14 +52,14 @@ type alarmEventPayload struct {
 
 // alarmEventMsg is one queued non-retained event-topic publish.
 type alarmEventMsg struct {
-	area string
+	zone string
 	body []byte
 }
 
 // AlarmMQTTPublisher mirrors the daemon-level alarm engine onto the MQTT
 // alarm plane: a retained HA alarm_control_panel discovery config, a
-// retained plain-token state, and a retained availability flag per area
-// (plus an aggregate master panel once two or more areas exist), and a
+// retained plain-token state, and a retained availability flag per zone
+// (plus an aggregate master panel once two or more zones exist), and a
 // non-retained JSON event stream. It follows the [SystemStatusPublisher]
 // shape — Start subscribes the alarm bus, Stop drops the subscriptions.
 //
@@ -80,9 +80,9 @@ type AlarmMQTTPublisher struct {
 	mu          sync.Mutex
 	started     bool
 	healthy     bool
-	knownAreas  map[string]bool   // areaID → retained discovery+state currently published
+	knownZones  map[string]bool   // zoneID → retained discovery+state currently published
 	masterKnown bool              // aggregate master panel currently published
-	names       map[string]string // areaID → last-seen display name (for event JSON)
+	names       map[string]string // zoneID → last-seen display name (for event JSON)
 
 	unsubs      []func()
 	reconcileCh chan struct{}
@@ -102,7 +102,7 @@ func NewAlarmMQTTPublisher(svc *alarm.Service, wiring *Wiring, logger *slog.Logg
 		wiring:      wiring,
 		logger:      logger,
 		healthy:     true,
-		knownAreas:  map[string]bool{},
+		knownZones:  map[string]bool{},
 		names:       map[string]string{},
 		reconcileCh: make(chan struct{}, 1),
 		eventCh:     make(chan alarmEventMsg, 64),
@@ -121,9 +121,9 @@ func NewAlarmMQTTPublisher(svc *alarm.Service, wiring *Wiring, logger *slog.Logg
 }
 
 // Start subscribes to the alarm bus and launches the reconcile worker.
-// The readiness subscription is the area-set-change trigger: the engine
-// fires a readiness event for every area on start and on reload, which is
-// the only signal a freshly-loaded disarmed area emits — the worker turns
+// The readiness subscription is the zone-set-change trigger: the engine
+// fires a readiness event for every zone on start and on reload, which is
+// the only signal a freshly-loaded disarmed zone emits — the worker turns
 // it into the initial retained discovery + state publish. Safe to call
 // once; subsequent calls are no-ops.
 func (p *AlarmMQTTPublisher) Start() {
@@ -180,18 +180,18 @@ func (p *AlarmMQTTPublisher) Stop() {
 }
 
 // PublishFailedToArm emits a non-retained FAILED_TO_ARM event for one
-// area. The composition root wires this as the master-arm failure hook so
-// a best-effort master arm reports each area it could not arm, with the
+// zone. The composition root wires this as the master-arm failure hook so
+// a best-effort master arm reports each zone it could not arm, with the
 // blocking sensors. Safe to call from any goroutine.
-func (p *AlarmMQTTPublisher) PublishFailedToArm(areaID, areaName string, mode hmenum.AlarmMode, blockers []string) {
-	name := areaName
+func (p *AlarmMQTTPublisher) PublishFailedToArm(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string) {
+	name := zoneName
 	if name == "" {
-		name = p.lookupName(areaID)
+		name = p.lookupName(zoneID)
 	}
-	p.enqueueEvent(areaID, alarmEventPayload{
+	p.enqueueEvent(zoneID, alarmEventPayload{
 		Type:        alarmEventTypeFailedToArm,
-		AreaID:      areaID,
-		AreaName:    name,
+		ZoneID:      zoneID,
+		ZoneName:    name,
 		Mode:        string(mode),
 		OpenSensors: blockers,
 	})
@@ -200,16 +200,16 @@ func (p *AlarmMQTTPublisher) PublishFailedToArm(areaID, areaName string, mode hm
 // --- bus handlers (run on the engine goroutine — lock-free only) ---
 
 func (p *AlarmMQTTPublisher) onStateChanged(e hmevent.AlarmStateChangedEvent) {
-	p.rememberName(e.AreaID, e.AreaName)
+	p.rememberName(e.ZoneID, e.ZoneName)
 	switch e.To {
-	case hmenum.AlarmAreaStateArmed:
-		p.enqueueEvent(e.AreaID, alarmEventPayload{
-			Type: alarmEventTypeArmed, AreaID: e.AreaID, AreaName: e.AreaName,
+	case hmenum.AlarmZoneStateArmed:
+		p.enqueueEvent(e.ZoneID, alarmEventPayload{
+			Type: alarmEventTypeArmed, ZoneID: e.ZoneID, ZoneName: e.ZoneName,
 			ChangedBy: e.ChangedBy, Mode: string(e.Mode),
 		})
-	case hmenum.AlarmAreaStateDisarmed:
-		p.enqueueEvent(e.AreaID, alarmEventPayload{
-			Type: alarmEventTypeDisarmed, AreaID: e.AreaID, AreaName: e.AreaName,
+	case hmenum.AlarmZoneStateDisarmed:
+		p.enqueueEvent(e.ZoneID, alarmEventPayload{
+			Type: alarmEventTypeDisarmed, ZoneID: e.ZoneID, ZoneName: e.ZoneName,
 			ChangedBy: e.ChangedBy,
 		})
 	default:
@@ -219,39 +219,39 @@ func (p *AlarmMQTTPublisher) onStateChanged(e hmevent.AlarmStateChangedEvent) {
 }
 
 func (p *AlarmMQTTPublisher) onTriggered(e hmevent.AlarmTriggeredEvent) {
-	p.rememberName(e.AreaID, e.AreaName)
+	p.rememberName(e.ZoneID, e.ZoneName)
 	pay := alarmEventPayload{
-		Type: alarmEventTypeTrigger, AreaID: e.AreaID, AreaName: e.AreaName, Mode: string(e.Mode),
+		Type: alarmEventTypeTrigger, ZoneID: e.ZoneID, ZoneName: e.ZoneName, Mode: string(e.Mode),
 	}
 	if e.SensorName != "" {
 		pay.OpenSensors = []string{e.SensorName}
 	}
-	p.enqueueEvent(e.AreaID, pay)
+	p.enqueueEvent(e.ZoneID, pay)
 	p.signalReconcile()
 }
 
 // onNotification publishes one enrolled notification output's fire
-// signal on the area's event topic; outputs that opted out of the
+// signal on the zone's event topic; outputs that opted out of the
 // MQTT plane are skipped.
 func (p *AlarmMQTTPublisher) onNotification(e hmevent.AlarmNotificationEvent) {
 	if !e.MQTT {
 		return
 	}
-	p.rememberName(e.AreaID, e.AreaName)
+	p.rememberName(e.ZoneID, e.ZoneName)
 	name := e.OutputName
 	if name == "" {
 		name = e.OutputID
 	}
-	p.enqueueEvent(e.AreaID, alarmEventPayload{
-		Type: alarmEventTypeNotification, AreaID: e.AreaID, AreaName: e.AreaName,
+	p.enqueueEvent(e.ZoneID, alarmEventPayload{
+		Type: alarmEventTypeNotification, ZoneID: e.ZoneID, ZoneName: e.ZoneName,
 		Mode: string(e.Mode), Output: name,
 	})
 }
 
 func (p *AlarmMQTTPublisher) onJournalAppended(e hmevent.AlarmJournalAppendedEvent) {
 	if e.Class == hmenum.AlarmJournalClassSilence && e.Event == "silenced" {
-		p.enqueueEvent(e.AreaID, alarmEventPayload{
-			Type: alarmEventTypeSilenced, AreaID: e.AreaID, AreaName: p.lookupName(e.AreaID),
+		p.enqueueEvent(e.ZoneID, alarmEventPayload{
+			Type: alarmEventTypeSilenced, ZoneID: e.ZoneID, ZoneName: p.lookupName(e.ZoneID),
 			ChangedBy: e.Actor,
 		})
 	}
@@ -264,9 +264,9 @@ func (p *AlarmMQTTPublisher) onReadinessChanged(_ hmevent.AlarmReadinessChangedE
 
 // onPanelChanged reconciles on every entity-projection change. This is
 // the lifecycle trigger the state events cannot provide: a disarmed
-// area's deletion and the master panel's 2-to-1 retraction emit no
+// zone's deletion and the master panel's 2-to-1 retraction emit no
 // state transition, only a panel event — without this subscription the
-// retained discovery/state/availability of a deleted area would ghost
+// retained discovery/state/availability of a deleted zone would ghost
 // in the broker forever.
 func (p *AlarmMQTTPublisher) onPanelChanged(_ hmevent.AlarmPanelChangedEvent) {
 	p.signalReconcile()
@@ -313,9 +313,9 @@ func (p *AlarmMQTTPublisher) run() {
 }
 
 // reconcile publishes retained discovery + availability + state for every
-// current area and the master panel, and retracts anything that vanished.
+// current zone and the master panel, and retracts anything that vanished.
 // It runs on the single worker goroutine, so reading engine snapshots and
-// mutating knownAreas/masterKnown needs no lock. p.mu guards only the
+// mutating knownZones/masterKnown needs no lock. p.mu guards only the
 // cross-goroutine fields (healthy, names) and is never held across broker
 // I/O — the engine-goroutine handlers take p.mu, so holding it during a
 // slow publish would stall the engine.
@@ -330,7 +330,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 	}
 	ctx := context.Background()
 	base := b.topics.Base
-	snaps := eng.Areas()
+	snaps := eng.Zones()
 
 	current := make(map[string]bool, len(snaps))
 	for i := range snaps {
@@ -344,7 +344,7 @@ func (p *AlarmMQTTPublisher) reconcile() {
 	for i := range snaps {
 		p.names[snaps[i].ID] = snaps[i].Name
 	}
-	for id := range p.knownAreas {
+	for id := range p.knownZones {
 		if !current[id] {
 			delete(p.names, id)
 		}
@@ -359,48 +359,48 @@ func (p *AlarmMQTTPublisher) reconcile() {
 		for _, m := range modes {
 			union[m] = true
 		}
-		armReq, disarmReq := p.areaCodePolicy(ctx, s.ID)
+		armReq, disarmReq := p.zoneCodePolicy(ctx, s.ID)
 		item := BuildAlarmPanelDiscovery(base, s.ID, s.Name, modes, false, armReq, disarmReq)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
-			p.logger.Warn("mqtt.alarm.discovery", slog.String("area", s.ID), slog.String("err", err.Error()))
+			p.logger.Warn("mqtt.alarm.discovery", slog.String("zone", s.ID), slog.String("err", err.Error()))
 		}
 		if err := b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, s.ID), healthy); err != nil {
-			p.logger.Warn("mqtt.alarm.availability", slog.String("area", s.ID), slog.String("err", err.Error()))
+			p.logger.Warn("mqtt.alarm.availability", slog.String("zone", s.ID), slog.String("err", err.Error()))
 		}
 		token := alarmpanel.StateToken(s.State, s.Mode)
 		tokens = append(tokens, token)
 		if err := b.PublishAlarmState(ctx, alarmStateTopic(base, s.ID), token); err != nil {
-			p.logger.Warn("mqtt.alarm.state", slog.String("area", s.ID), slog.String("err", err.Error()))
+			p.logger.Warn("mqtt.alarm.state", slog.String("zone", s.ID), slog.String("err", err.Error()))
 		}
-		p.knownAreas[s.ID] = true
+		p.knownZones[s.ID] = true
 	}
 
-	for id := range p.knownAreas {
+	for id := range p.knownZones {
 		if current[id] {
 			continue
 		}
 		p.retractPanel(ctx, b, base, id)
-		delete(p.knownAreas, id)
+		delete(p.knownZones, id)
 	}
 
 	if len(snaps) >= 2 {
 		modes := modesFromSet(union)
-		// The master panel arms/disarms every area at once; a single code
-		// gate cannot express the union of per-area policies, so it stays
-		// code-free (code entry happens on the individual area panels).
-		item := BuildAlarmPanelDiscovery(base, alarmMasterArea, p.masterName(), modes, true, false, false)
+		// The master panel arms/disarms every zone at once; a single code
+		// gate cannot express the union of per-zone policies, so it stays
+		// code-free (code entry happens on the individual zone panels).
+		item := BuildAlarmPanelDiscovery(base, alarmMasterZone, p.masterName(), modes, true, false, false)
 		if err := b.PublishAlarmDiscovery(ctx, item); err != nil {
-			p.logger.Warn("mqtt.alarm.discovery", slog.String("area", alarmMasterArea), slog.String("err", err.Error()))
+			p.logger.Warn("mqtt.alarm.discovery", slog.String("zone", alarmMasterZone), slog.String("err", err.Error()))
 		}
-		if err := b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, alarmMasterArea), healthy); err != nil {
-			p.logger.Warn("mqtt.alarm.availability", slog.String("area", alarmMasterArea), slog.String("err", err.Error()))
+		if err := b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, alarmMasterZone), healthy); err != nil {
+			p.logger.Warn("mqtt.alarm.availability", slog.String("zone", alarmMasterZone), slog.String("err", err.Error()))
 		}
-		if err := b.PublishAlarmState(ctx, alarmStateTopic(base, alarmMasterArea), alarmpanel.MasterStateToken(tokens)); err != nil {
-			p.logger.Warn("mqtt.alarm.state", slog.String("area", alarmMasterArea), slog.String("err", err.Error()))
+		if err := b.PublishAlarmState(ctx, alarmStateTopic(base, alarmMasterZone), alarmpanel.MasterStateToken(tokens)); err != nil {
+			p.logger.Warn("mqtt.alarm.state", slog.String("zone", alarmMasterZone), slog.String("err", err.Error()))
 		}
 		p.masterKnown = true
 	} else if p.masterKnown {
-		p.retractPanel(ctx, b, base, alarmMasterArea)
+		p.retractPanel(ctx, b, base, alarmMasterZone)
 		p.masterKnown = false
 	}
 }
@@ -408,12 +408,12 @@ func (p *AlarmMQTTPublisher) reconcile() {
 // retractPanel clears the retained discovery, state, and availability of a
 // panel that no longer exists (empty payloads delete the retained
 // messages). Runs on the worker goroutine.
-func (p *AlarmMQTTPublisher) retractPanel(ctx context.Context, b *Bridge, base, area string) {
-	if err := b.RetractAlarmDiscovery(ctx, string(HAComponentAlarmControlPanel), alarmDiscoveryNodeID, area); err != nil {
-		p.logger.Warn("mqtt.alarm.retract_discovery", slog.String("area", area), slog.String("err", err.Error()))
+func (p *AlarmMQTTPublisher) retractPanel(ctx context.Context, b *Bridge, base, zone string) {
+	if err := b.RetractAlarmDiscovery(ctx, string(HAComponentAlarmControlPanel), alarmDiscoveryNodeID, zone); err != nil {
+		p.logger.Warn("mqtt.alarm.retract_discovery", slog.String("zone", zone), slog.String("err", err.Error()))
 	}
-	_ = b.RetractAlarmTopic(ctx, alarmStateTopic(base, area))
-	_ = b.RetractAlarmTopic(ctx, alarmAvailabilityTopic(base, area))
+	_ = b.RetractAlarmTopic(ctx, alarmStateTopic(base, zone))
+	_ = b.RetractAlarmTopic(ctx, alarmAvailabilityTopic(base, zone))
 }
 
 func (p *AlarmMQTTPublisher) publishEventMsg(msg alarmEventMsg) {
@@ -421,9 +421,9 @@ func (p *AlarmMQTTPublisher) publishEventMsg(msg alarmEventMsg) {
 	if b == nil {
 		return
 	}
-	topic := alarmEventTopic(b.topics.Base, msg.area)
+	topic := alarmEventTopic(b.topics.Base, msg.zone)
 	if err := b.PublishAlarmEvent(context.Background(), topic, msg.body); err != nil {
-		p.logger.Warn("mqtt.alarm.event.publish", slog.String("area", msg.area), slog.String("err", err.Error()))
+		p.logger.Warn("mqtt.alarm.event.publish", slog.String("zone", msg.zone), slog.String("err", err.Error()))
 	}
 }
 
@@ -435,12 +435,12 @@ func (p *AlarmMQTTPublisher) publishOfflineAll() {
 	ctx := context.Background()
 	base := b.topics.Base
 	// Called from Stop after the worker goroutine has joined (see Stop's
-	// <-p.doneCh), so knownAreas/masterKnown are quiescent — no lock needed.
-	for id := range p.knownAreas {
+	// <-p.doneCh), so knownZones/masterKnown are quiescent — no lock needed.
+	for id := range p.knownZones {
 		_ = b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, id), false)
 	}
 	if p.masterKnown {
-		_ = b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, alarmMasterArea), false)
+		_ = b.PublishAlarmAvailability(ctx, alarmAvailabilityTopic(base, alarmMasterZone), false)
 	}
 }
 
@@ -453,32 +453,32 @@ func (p *AlarmMQTTPublisher) signalReconcile() {
 	}
 }
 
-func (p *AlarmMQTTPublisher) enqueueEvent(area string, pay alarmEventPayload) {
+func (p *AlarmMQTTPublisher) enqueueEvent(zone string, pay alarmEventPayload) {
 	body, err := json.Marshal(pay)
 	if err != nil {
-		p.logger.Warn("mqtt.alarm.event.marshal", slog.String("area", area), slog.String("err", err.Error()))
+		p.logger.Warn("mqtt.alarm.event.marshal", slog.String("zone", zone), slog.String("err", err.Error()))
 		return
 	}
 	select {
-	case p.eventCh <- alarmEventMsg{area: area, body: body}:
+	case p.eventCh <- alarmEventMsg{zone: zone, body: body}:
 	default:
-		p.logger.Warn("mqtt.alarm.event.drop", slog.String("area", area))
+		p.logger.Warn("mqtt.alarm.event.drop", slog.String("zone", zone))
 	}
 }
 
-func (p *AlarmMQTTPublisher) rememberName(areaID, name string) {
+func (p *AlarmMQTTPublisher) rememberName(zoneID, name string) {
 	if name == "" {
 		return
 	}
 	p.mu.Lock()
-	p.names[areaID] = name
+	p.names[zoneID] = name
 	p.mu.Unlock()
 }
 
-func (p *AlarmMQTTPublisher) lookupName(areaID string) string {
+func (p *AlarmMQTTPublisher) lookupName(zoneID string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.names[areaID]
+	return p.names[zoneID]
 }
 
 func (p *AlarmMQTTPublisher) masterName() string {
@@ -490,16 +490,16 @@ func (p *AlarmMQTTPublisher) masterName() string {
 	return alarmMasterNameFallback
 }
 
-// areaCodePolicy resolves the per-area arm/disarm code requirement for
-// the discovery flags. The derivation (area-config policy half AND the
+// zoneCodePolicy resolves the per-zone arm/disarm code requirement for
+// the discovery flags. The derivation (zone-config policy half AND the
 // "an applicable enabled pin code exists" half, docs/alarm-concept.md
 // §11/§13.3) is the service's — the REST/WS panel entities carry the
 // same flags, so the two surfaces can never diverge.
-func (p *AlarmMQTTPublisher) areaCodePolicy(ctx context.Context, areaID string) (armReq, disarmReq bool) {
-	return p.svc.EffectiveCodePolicy(ctx, areaID)
+func (p *AlarmMQTTPublisher) zoneCodePolicy(ctx context.Context, zoneID string) (armReq, disarmReq bool) {
+	return p.svc.EffectiveCodePolicy(ctx, zoneID)
 }
 
-// modesFromReadiness extracts the configured protection modes of an area
+// modesFromReadiness extracts the configured protection modes of an zone
 // from its per-mode readiness map (the engine computes readiness for
 // exactly the configured modes). Order is irrelevant — the discovery
 // builder re-orders features canonically.
@@ -550,7 +550,7 @@ func (b *Bridge) RetractAlarmDiscovery(ctx context.Context, component, nodeID, o
 }
 
 // PublishAlarmState publishes the retained plain HA state token for an
-// area (or the master panel).
+// zone (or the master panel).
 func (b *Bridge) PublishAlarmState(ctx context.Context, topic, token string) error {
 	return b.client.Publish(ctx, topic, []byte(token), b.cfg.QoS.State, true)
 }

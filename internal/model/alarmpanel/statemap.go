@@ -6,7 +6,7 @@ package alarmpanel
 import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 
 // HA alarm_control_panel state tokens. These are the plain strings the
-// retained `<base>/alarm/<area>/state` topic carries and that Home
+// retained `<base>/alarm/<zone>/state` topic carries and that Home
 // Assistant's alarm_control_panel entity renders 1:1. Wire-stable.
 const (
 	HAAlarmStateDisarmed          = "disarmed"
@@ -22,7 +22,7 @@ const (
 
 // HA alarm_control_panel command payloads. Home Assistant publishes one
 // of these bare strings (or the JSON `{"action":"…"}` form) to the
-// `<base>/alarm/<area>/set` command topic.
+// `<base>/alarm/<zone>/set` command topic.
 //
 //nolint:gosec // HA command vocabulary tokens, not credentials
 const (
@@ -38,22 +38,22 @@ const (
 	HAAlarmCommandSilence = "SILENCE"
 )
 
-// StateToken maps an engine (area-state, mode) pair onto the HA
+// StateToken maps an engine (zone-state, mode) pair onto the HA
 // alarm_control_panel state token. The armed state resolves through the
-// active mode; every other state maps directly. An armed area whose mode
+// active mode; every other state maps directly. An armed zone whose mode
 // is unexpected falls back to the away token — an armed panel must never
 // render as disarmed.
-func StateToken(state hmenum.AlarmAreaState, mode hmenum.AlarmMode) string {
+func StateToken(state hmenum.AlarmZoneState, mode hmenum.AlarmMode) string {
 	switch state {
-	case hmenum.AlarmAreaStateDisarmed:
+	case hmenum.AlarmZoneStateDisarmed:
 		return HAAlarmStateDisarmed
-	case hmenum.AlarmAreaStateArming:
+	case hmenum.AlarmZoneStateArming:
 		return HAAlarmStateArming
-	case hmenum.AlarmAreaStatePending:
+	case hmenum.AlarmZoneStatePending:
 		return HAAlarmStatePending
-	case hmenum.AlarmAreaStateTriggered:
+	case hmenum.AlarmZoneStateTriggered:
 		return HAAlarmStateTriggered
-	case hmenum.AlarmAreaStateArmed:
+	case hmenum.AlarmZoneStateArmed:
 		return armedTokenForMode(mode)
 	default:
 		return HAAlarmStateDisarmed
@@ -99,7 +99,7 @@ func ArmModeForCommand(cmd string) (mode hmenum.AlarmMode, ok bool) {
 	}
 }
 
-// MasterStateToken aggregates the per-area HA state tokens onto the
+// MasterStateToken aggregates the per-zone HA state tokens onto the
 // single master-panel token (docs/alarm-concept.md §13.3 decision): any
 // triggered wins, then pending, then arming; a set that is entirely one
 // token collapses to that token (all disarmed → disarmed, all armed in

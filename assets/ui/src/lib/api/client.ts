@@ -1,8 +1,8 @@
 import type {
-  AlarmArea,
+  AlarmZone,
   AlarmArmAccepted,
   AlarmArmRequest,
-  AlarmAreaStatus,
+  AlarmZoneStatus,
   AlarmCode,
   AlarmCodeRequest,
   AlarmJournalClass,
@@ -1714,58 +1714,58 @@ export const api = {
     );
   },
   // --- Alarm panel (native intrusion-alarm engine) --------------
-  // docs/alarm-concept.md §13. Areas are daemon-level (no central
+  // docs/alarm-concept.md §13. Zones are daemon-level (no central
   // scoping in the path); sensors/outputs reference (central,
   // channel_address) inside their bodies. Control verbs
   // (arm/disarm/silence/…) are the safety surface — the alarm store
   // wraps them so a failure toasts but never blocks the UI (S3/S6).
   getAlarmState() {
-    return request<{ areas: AlarmAreaStatus[] }>(`/alarm/state`);
+    return request<{ zones: AlarmZoneStatus[] }>(`/alarm/state`);
   },
-  listAlarmAreas() {
-    return request<AlarmArea[]>(`/alarm/areas`);
+  listAlarmZones() {
+    return request<AlarmZone[]>(`/alarm/zones`);
   },
-  createAlarmArea(area: AlarmArea) {
-    return request<AlarmArea>(`/alarm/areas`, {
+  createAlarmZone(zone: AlarmZone) {
+    return request<AlarmZone>(`/alarm/zones`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(area),
+      body: JSON.stringify(zone),
     });
   },
-  getAlarmArea(id: string) {
-    return request<AlarmArea>(`/alarm/areas/${encodeURIComponent(id)}`);
+  getAlarmZone(id: string) {
+    return request<AlarmZone>(`/alarm/zones/${encodeURIComponent(id)}`);
   },
-  putAlarmArea(id: string, area: AlarmArea) {
-    return request<void>(`/alarm/areas/${encodeURIComponent(id)}`, {
+  putAlarmZone(id: string, zone: AlarmZone) {
+    return request<void>(`/alarm/zones/${encodeURIComponent(id)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(area),
+      body: JSON.stringify(zone),
     });
   },
-  deleteAlarmArea(id: string) {
-    return request<void>(`/alarm/areas/${encodeURIComponent(id)}`, {
+  deleteAlarmZone(id: string) {
+    return request<void>(`/alarm/zones/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
   },
-  listAlarmAreaSensors(id: string) {
+  listAlarmZoneSensors(id: string) {
     return request<AlarmSensor[]>(
-      `/alarm/areas/${encodeURIComponent(id)}/sensors`,
+      `/alarm/zones/${encodeURIComponent(id)}/sensors`,
     );
   },
-  putAlarmAreaSensors(id: string, sensors: AlarmSensor[]) {
-    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/sensors`, {
+  putAlarmZoneSensors(id: string, sensors: AlarmSensor[]) {
+    return request<void>(`/alarm/zones/${encodeURIComponent(id)}/sensors`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(sensors),
     });
   },
-  listAlarmAreaOutputs(id: string) {
+  listAlarmZoneOutputs(id: string) {
     return request<AlarmOutput[]>(
-      `/alarm/areas/${encodeURIComponent(id)}/outputs`,
+      `/alarm/zones/${encodeURIComponent(id)}/outputs`,
     );
   },
-  putAlarmAreaOutputs(id: string, outputs: AlarmOutput[]) {
-    return request<void>(`/alarm/areas/${encodeURIComponent(id)}/outputs`, {
+  putAlarmZoneOutputs(id: string, outputs: AlarmOutput[]) {
+    return request<void>(`/alarm/zones/${encodeURIComponent(id)}/outputs`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(outputs),
@@ -1778,9 +1778,9 @@ export const api = {
   listAlarmRemoteKeyCandidates() {
     return request<AlarmRemoteKeyCandidate[]>(`/alarm/remote-key-candidates`);
   },
-  armAlarmArea(id: string, req: AlarmArmRequest) {
+  armAlarmZone(id: string, req: AlarmArmRequest) {
     return request<AlarmArmAccepted>(
-      `/alarm/areas/${encodeURIComponent(id)}/arm`,
+      `/alarm/zones/${encodeURIComponent(id)}/arm`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1788,30 +1788,30 @@ export const api = {
       },
     );
   },
-  disarmAlarmArea(id: string, code?: string) {
+  disarmAlarmZone(id: string, code?: string) {
     return request<void>(
-      `/alarm/areas/${encodeURIComponent(id)}/disarm`,
+      `/alarm/zones/${encodeURIComponent(id)}/disarm`,
       alarmVerbInit(code),
     );
   },
-  silenceAlarmArea(id: string, code?: string) {
+  silenceAlarmZone(id: string, code?: string) {
     return request<void>(
-      `/alarm/areas/${encodeURIComponent(id)}/silence`,
+      `/alarm/zones/${encodeURIComponent(id)}/silence`,
       alarmVerbInit(code),
     );
   },
-  acknowledgeAlarmArea(id: string) {
+  acknowledgeAlarmZone(id: string) {
     return request<void>(
-      `/alarm/areas/${encodeURIComponent(id)}/acknowledge`,
+      `/alarm/zones/${encodeURIComponent(id)}/acknowledge`,
       { method: "POST" },
     );
   },
-  silenceAllAlarmAreas() {
+  silenceAllAlarmZones() {
     return request<void>(`/alarm/silence-all`, { method: "POST" });
   },
-  getAlarmAreaReadiness(id: string) {
+  getAlarmZoneReadiness(id: string) {
     return request<Record<string, AlarmModeReadiness>>(
-      `/alarm/areas/${encodeURIComponent(id)}/readiness`,
+      `/alarm/zones/${encodeURIComponent(id)}/readiness`,
     );
   },
   // Alarm codes (operator-gated; hash + cleartext PIN never returned —
@@ -1844,7 +1844,7 @@ export const api = {
   },
   listAlarmJournal(
     p: {
-      area?: string;
+      zone?: string;
       class?: AlarmJournalClass;
       from?: string;
       to?: string;
@@ -1852,7 +1852,7 @@ export const api = {
     } = {},
   ) {
     const qs = new URLSearchParams();
-    if (p.area) qs.set("area", p.area);
+    if (p.zone) qs.set("zone", p.zone);
     if (p.class) qs.set("class", p.class);
     if (p.from) qs.set("from", p.from);
     if (p.to) qs.set("to", p.to);
@@ -1862,19 +1862,19 @@ export const api = {
   },
   startAlarmWalkTest(id: string) {
     return request<void>(
-      `/alarm/areas/${encodeURIComponent(id)}/walktest/start`,
+      `/alarm/zones/${encodeURIComponent(id)}/walktest/start`,
       { method: "POST" },
     );
   },
   stopAlarmWalkTest(id: string) {
     return request<void>(
-      `/alarm/areas/${encodeURIComponent(id)}/walktest/stop`,
+      `/alarm/zones/${encodeURIComponent(id)}/walktest/stop`,
       { method: "POST" },
     );
   },
   getAlarmWalkTestStatus(id: string) {
     return request<AlarmWalkTestStatus>(
-      `/alarm/areas/${encodeURIComponent(id)}/walktest`,
+      `/alarm/zones/${encodeURIComponent(id)}/walktest`,
     );
   },
   testAlarmOutput(id: string, req: AlarmOutputTestRequest = {}) {

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mockAllApis, mockAlarmTriggered, mockAlarmWizardDevices } from './helpers/mock-api';
 
 // Alarm section (#/alarm, docs/alarm-concept.md §12). mockAllApis now wires
-// sane defaults for every /api/v1/alarm/* route: two areas — "Erdgeschoss"
+// sane defaults for every /api/v1/alarm/* route: two zones — "Erdgeschoss"
 // (armed, full protection, steady state) and "Dachgeschoss" (disarmed) —
 // three sensors, two outputs (one acoustic siren, one smoke-detector
 // sounder) and a five-entry journal.
@@ -36,7 +36,7 @@ test.describe('Alarm', () => {
     await expect(page).toHaveTitle('Alarm system — OpenCCU-Loom');
   });
 
-  test('overview shows both area cards with localized state badges', async ({ page }) => {
+  test('overview shows both zone cards with localized state badges', async ({ page }) => {
     await page.goto('http://localhost:5173/app/#/alarm');
     await page.waitForSelector('#main');
 
@@ -45,7 +45,7 @@ test.describe('Alarm', () => {
 
     // The state badge is the sole direct <span> child of each card's header
     // row (the icon+name block is the other child) — scoping this way avoids
-    // the ambiguity of "Disarmed" also appearing on that area's mode button.
+    // the ambiguity of "Disarmed" also appearing on that zone's mode button.
     const egHeader = page
       .locator('div.flex.items-start.justify-between.gap-3')
       .filter({ hasText: 'Erdgeschoss' });
@@ -151,7 +151,7 @@ test.describe('Alarm', () => {
       // single-match assumption below).
       if (route.request().method() !== 'POST') return route.fallback();
       created = route.request().postDataJSON();
-      return route.fulfill({ json: { id: 'code-new', ...created, areas: [], enabled: true } });
+      return route.fulfill({ json: { id: 'code-new', ...created, zones: [], enabled: true } });
     });
 
     await page.goto('http://localhost:5173/app/#/alarm/codes');
@@ -165,7 +165,7 @@ test.describe('Alarm', () => {
     await expect(dialog.getByText('nothing changes on the panel', { exact: false })).toHaveCount(0);
 
     // Scoped to the dialog: "Name" is a common accessible name reused by
-    // several other fields across the SPA (area name, sensor name, …), so
+    // several other fields across the SPA (zone name, sensor name, …), so
     // an unscoped getByLabel would be a strict-mode trap the moment any of
     // those mount alongside this drawer.
     await dialog.getByLabel('Name', { exact: true }).fill('Notfall-Test');
@@ -186,14 +186,14 @@ test.describe('Alarm', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
-  test('policies tab: adding a schedule row and saving PUTs it back through the area config', async ({ page }) => {
+  test('policies tab: adding a schedule row and saving PUTs it back through the zone config', async ({ page }) => {
     let putBody: { config?: { schedules?: unknown[] } } | null = null;
-    await page.route('**/api/v1/alarm/areas/area-eg', (route) => {
+    await page.route('**/api/v1/alarm/zones/zone-eg', (route) => {
       if (route.request().method() === 'PUT') {
         putBody = route.request().postDataJSON();
         return route.fulfill({ status: 200 });
       }
-      return route.fulfill({ json: { id: 'area-eg', name: 'Erdgeschoss', position: 1, config: {} } });
+      return route.fulfill({ json: { id: 'zone-eg', name: 'Erdgeschoss', position: 1, config: {} } });
     });
 
     await page.goto('http://localhost:5173/app/#/alarm/policies');
@@ -211,11 +211,11 @@ test.describe('Alarm', () => {
     expect(putBody?.config?.schedules).toHaveLength(1);
   });
 
-  test('silence acts on the first tap for a triggered area, with no confirm dialog', async ({ page }) => {
+  test('silence acts on the first tap for a triggered zone, with no confirm dialog', async ({ page }) => {
     await mockAlarmTriggered(page);
 
     let silenceCalls = 0;
-    await page.route('**/api/v1/alarm/areas/area-eg/silence', (route) => {
+    await page.route('**/api/v1/alarm/zones/zone-eg/silence', (route) => {
       silenceCalls += 1;
       return route.fulfill({ status: 200 });
     });
@@ -235,8 +235,8 @@ test.describe('Alarm', () => {
 });
 
 // Setup wizard (docs/alarm-concept.md §12.3). Steps ②/③ used to be bare
-// links out into the area-less sensor/output picker tabs — a dead end,
-// since those tabs need an existing area and the area itself is only
+// links out into the zone-less sensor/output picker tabs — a dead end,
+// since those tabs need an existing zone and the zone itself is only
 // created on Finish. Both steps now embed a simplified inline picker
 // instead; this suite pins the fix by asserting the candidates render and
 // are selectable directly on the wizard step, not just linked to.
@@ -252,33 +252,33 @@ test.describe('Alarm — setup wizard', () => {
     });
   });
 
-  test('steps through area, sensors and outputs inline, then finishes by posting the area followed by the sensors and outputs bulk PUTs', async ({ page }) => {
-    let postedArea: { name?: string; config?: unknown } | null = null;
+  test('steps through zone, sensors and outputs inline, then finishes by posting the zone followed by the sensors and outputs bulk PUTs', async ({ page }) => {
+    let postedZone: { name?: string; config?: unknown } | null = null;
     let putSensors: Array<Record<string, unknown>> | null = null;
     let putOutputs: Array<Record<string, unknown>> | null = null;
     // Records the three writes in call order — the finish() handler must
-    // create the area before either bulk PUT, and sensors before outputs.
+    // create the zone before either bulk PUT, and sensors before outputs.
     const calls: string[] = [];
 
-    // The default fixture-backed POST /alarm/areas route always returns
-    // id "area-eg" regardless of the posted body, so the PUT targets below
+    // The default fixture-backed POST /alarm/zones route always returns
+    // id "zone-eg" regardless of the posted body, so the PUT targets below
     // can be pinned to that literal id and still exercise the real
     // create-then-PUT sequence finish() performs.
-    await page.route('**/api/v1/alarm/areas', (route) => {
+    await page.route('**/api/v1/alarm/zones', (route) => {
       if (route.request().method() !== 'POST') return route.fallback();
-      postedArea = route.request().postDataJSON();
-      calls.push('area');
+      postedZone = route.request().postDataJSON();
+      calls.push('zone');
       return route.fulfill({
-        json: { id: 'area-eg', name: postedArea?.name, position: 1, config: postedArea?.config ?? {} },
+        json: { id: 'zone-eg', name: postedZone?.name, position: 1, config: postedZone?.config ?? {} },
       });
     });
-    await page.route('**/api/v1/alarm/areas/area-eg/sensors', (route) => {
+    await page.route('**/api/v1/alarm/zones/zone-eg/sensors', (route) => {
       if (route.request().method() !== 'PUT') return route.fallback();
       putSensors = route.request().postDataJSON();
       calls.push('sensors');
       return route.fulfill({ status: 200 });
     });
-    await page.route('**/api/v1/alarm/areas/area-eg/outputs', (route) => {
+    await page.route('**/api/v1/alarm/zones/zone-eg/outputs', (route) => {
       if (route.request().method() !== 'PUT') return route.fallback();
       putOutputs = route.request().postDataJSON();
       calls.push('outputs');
@@ -288,13 +288,13 @@ test.describe('Alarm — setup wizard', () => {
     await page.goto('http://localhost:5173/app/#/alarm/wizard');
     await page.waitForSelector('#main');
 
-    // Step 1 — area name.
-    await expect(page.getByRole('heading', { name: 'Areas', level: 2 })).toBeVisible();
+    // Step 1 — zone name.
+    await expect(page.getByRole('heading', { name: 'Zones', level: 2 })).toBeVisible();
     await page.getByLabel('Name', { exact: true }).fill('Keller');
     await page.getByRole('button', { name: 'Next' }).click();
 
     // Step 2 — sensors: the mocked device candidate renders inline and is
-    // directly selectable, with no link out to the (area-less) picker tab.
+    // directly selectable, with no link out to the (zone-less) picker tab.
     await expect(page.getByRole('heading', { name: 'Sensors', level: 2 })).toBeVisible();
     await expect(page.locator('a[href="#/alarm/picker"]')).toHaveCount(0);
     const sensorRow = page.locator('label').filter({ hasText: 'Eingangstür' });
@@ -328,9 +328,9 @@ test.describe('Alarm — setup wizard', () => {
     await expect(summary.locator('dt', { hasText: 'Outputs' }).locator('xpath=following-sibling::dd[1]')).toHaveText('1');
     await page.getByRole('button', { name: 'Finish' }).click();
 
-    await expect.poll(() => calls).toEqual(['area', 'sensors', 'outputs']);
+    await expect.poll(() => calls).toEqual(['zone', 'sensors', 'outputs']);
 
-    expect(postedArea?.name).toBe('Keller');
+    expect(postedZone?.name).toBe('Keller');
 
     expect(putSensors).toHaveLength(1);
     expect(putSensors?.[0]).toMatchObject({
@@ -348,7 +348,7 @@ test.describe('Alarm — setup wizard', () => {
     await expect(page).toHaveURL(/#\/alarm$/);
   });
 
-  test('preserves the entered area name and sensor selection across navigating away from the wizard and back', async ({ page }) => {
+  test('preserves the entered zone name and sensor selection across navigating away from the wizard and back', async ({ page }) => {
     await page.goto('http://localhost:5173/app/#/alarm/wizard');
     await page.waitForSelector('#main');
 
@@ -377,9 +377,9 @@ test.describe('Alarm — setup wizard', () => {
     await expect(page.getByText('1 selected')).toBeVisible();
     await expect(sensorRow.getByRole('checkbox')).toBeChecked();
 
-    // Back to step 1 confirms the area name itself also survived.
+    // Back to step 1 confirms the zone name itself also survived.
     await page.getByRole('button', { name: 'Back' }).click();
-    await expect(page.getByRole('heading', { name: 'Areas', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Zones', level: 2 })).toBeVisible();
     await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Keller');
   });
 });

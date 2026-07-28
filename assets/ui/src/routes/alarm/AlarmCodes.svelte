@@ -46,7 +46,7 @@
   let unavailable = $state(false);
   let saving = $state(false);
 
-  const areas = $derived(alarmPanelStore.areasConfig);
+  const zones = $derived(alarmPanelStore.zonesConfig);
 
   // --- editor draft ------------------------------------------------
   type Draft = {
@@ -56,11 +56,11 @@
     pin: string; // write-only; blank keeps the stored hash on edit
     duress: boolean;
     perms: { arm: boolean; disarm: boolean; silence: boolean };
-    areas: string[]; // empty → every area
+    zones: string[]; // empty → every zone
     bindingText: string; // raw JSON for the hardware kinds
     // Guided remote-key binding fields (kind remote_key, non-expert):
     // serialized into the binding document on save.
-    remote: { central: string; channelAddress: string; parameter: string; action: string; areaId: string };
+    remote: { central: string; channelAddress: string; parameter: string; action: string; zoneId: string };
     remoteExpert: boolean; // raw-JSON fallback for remote_key
     validFrom: string; // datetime-local string
     validUntil: string;
@@ -150,8 +150,8 @@
   const editing = $derived(draft?.id != null);
 
   // --- helpers -----------------------------------------------------
-  function areaName(id: string): string {
-    return areas.find((a) => a.id === id)?.name ?? id;
+  function zoneName(id: string): string {
+    return zones.find((a) => a.id === id)?.name ?? id;
   }
 
   function fmtDate(ms: number): string {
@@ -215,9 +215,9 @@
       pin: "",
       duress: false,
       perms: { arm: false, disarm: true, silence: false },
-      areas: [],
+      zones: [],
       bindingText: "",
-      remote: { central: "", channelAddress: "", parameter: "", action: "arm:full", areaId: "" },
+      remote: { central: "", channelAddress: "", parameter: "", action: "arm:full", zoneId: "" },
       remoteExpert: false,
       validFrom: "",
       validUntil: "",
@@ -238,7 +238,7 @@
         disarm: c.perms.disarm,
         silence: c.perms.silence,
       },
-      areas: [...(c.areas ?? [])],
+      zones: [...(c.zones ?? [])],
       bindingText: c.binding != null ? JSON.stringify(c.binding, null, 2) : "",
       remote: parseRemoteBinding(c),
       remoteExpert: c.kind === "remote_key" && c.binding != null && parseRemoteBinding(c).channelAddress === "",
@@ -252,7 +252,7 @@
   // the guided fields; a document the guided editor can't represent
   // (no channel address) sends the editor to the raw-JSON fallback.
   function parseRemoteBinding(c: AlarmCode): Draft["remote"] {
-    const empty = { central: "", channelAddress: "", parameter: "", action: "arm:full", areaId: "" };
+    const empty = { central: "", channelAddress: "", parameter: "", action: "arm:full", zoneId: "" };
     if (c.kind !== "remote_key" || c.binding == null || typeof c.binding !== "object") return empty;
     const b = c.binding as Record<string, unknown>;
     const str = (k: string) => (typeof b[k] === "string" ? (b[k] as string) : "");
@@ -262,16 +262,16 @@
       channelAddress: str("channel_address"),
       parameter: str("parameter") || "PRESS_SHORT",
       action: str("action") || "arm:full",
-      areaId: str("area_id"),
+      zoneId: str("zone_id"),
     };
   }
 
-  function toggleArea(id: string) {
+  function toggleZone(id: string) {
     if (!draft) return;
-    const set = new Set(draft.areas);
+    const set = new Set(draft.zones);
     if (set.has(id)) set.delete(id);
     else set.add(id);
-    draft = { ...draft, areas: areas.map((a) => a.id).filter((x) => set.has(x)) };
+    draft = { ...draft, zones: zones.map((a) => a.id).filter((x) => set.has(x)) };
   }
 
   // Build the write body from the draft, or null with saveError set on a
@@ -289,9 +289,9 @@
     let binding: unknown;
     if (d.kind === "remote_key" && !d.remoteExpert) {
       // Guided remote-key binding: assemble the document from the
-      // picked key + trigger + action + area.
+      // picked key + trigger + action + zone.
       const r = d.remote;
-      if (!r.channelAddress || !r.parameter || !r.action || !r.areaId) {
+      if (!r.channelAddress || !r.parameter || !r.action || !r.zoneId) {
         saveError = t("alarm.codes.error.remote_incomplete");
         return null;
       }
@@ -300,7 +300,7 @@
         channel_address: r.channelAddress,
         parameter: r.parameter,
         action: r.action,
-        area_id: r.areaId,
+        zone_id: r.zoneId,
       };
     } else if (d.kind !== "pin" && d.bindingText.trim() !== "") {
       try {
@@ -324,7 +324,7 @@
     } else if (binding !== undefined) {
       req.binding = binding;
     }
-    if (d.areas.length > 0) req.areas = d.areas;
+    if (d.zones.length > 0) req.zones = d.zones;
     const from = inputToMs(d.validFrom);
     const until = inputToMs(d.validUntil);
     if (from) req.valid_from_ms = from;
@@ -468,14 +468,14 @@
           {/each}
         </div>
 
-        <!-- Areas -->
+        <!-- Zones -->
         <div class="flex flex-wrap items-center gap-1.5 text-xs text-[var(--ha-secondary-text-color)]">
-          <span>{t("alarm.codes.areas")}</span>
-          {#if !c.areas || c.areas.length === 0}
-            <span class="text-[var(--ha-primary-text-color)]">{t("alarm.codes.areas.all")}</span>
+          <span>{t("alarm.codes.zones")}</span>
+          {#if !c.zones || c.zones.length === 0}
+            <span class="text-[var(--ha-primary-text-color)]">{t("alarm.codes.zones.all")}</span>
           {:else}
             <span class="text-[var(--ha-primary-text-color)]">
-              {c.areas.map(areaName).join(", ")}
+              {c.zones.map(zoneName).join(", ")}
             </span>
           {/if}
         </div>
@@ -573,7 +573,7 @@
         </div>
       {:else if draft.kind === "remote_key" && !draft.remoteExpert}
         <!-- Guided remote-key binding: pick a physical key, its trigger,
-             the action, and the target area (e.g. HmIP-KRCA keyfob). -->
+             the action, and the target zone (e.g. HmIP-KRCA keyfob). -->
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.remote.key")}</span>
@@ -639,13 +639,13 @@
             </label>
           </div>
           <label class="flex flex-col gap-1 text-xs text-[var(--ha-secondary-text-color)]">
-            {t("alarm.codes.remote.area")}
+            {t("alarm.codes.remote.zone")}
             <Select
-              value={draft.remote.areaId}
-              onValueChange={(v) => draft && (draft = { ...draft, remote: { ...draft.remote, areaId: v } })}
-              options={areas.map((a) => ({ value: a.id, label: a.name }))}
+              value={draft.remote.zoneId}
+              onValueChange={(v) => draft && (draft = { ...draft, remote: { ...draft.remote, zoneId: v } })}
+              options={zones.map((a) => ({ value: a.id, label: a.name }))}
             />
-            <span>{t("alarm.codes.remote.area.hint")}</span>
+            <span>{t("alarm.codes.remote.zone.hint")}</span>
           </label>
         {/if}
       {:else}
@@ -693,33 +693,33 @@
         </label>
       </div>
 
-      <!-- Areas -->
+      <!-- Zones -->
       <div class="flex flex-col gap-2">
-        <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.areas")}</span>
-        {#if alarmPanelStore.loading && areas.length === 0}
-          <!-- The area list is a fetch shared with the rest of the alarm
+        <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.zones")}</span>
+        {#if alarmPanelStore.loading && zones.length === 0}
+          <!-- The zone list is a fetch shared with the rest of the alarm
                section (alarmPanelStore.refresh()); while it is still in
-               flight, "applies to all areas" below would be misleading —
-               areas may exist and just haven't loaded yet. -->
+               flight, "applies to all zones" below would be misleading —
+               zones may exist and just haven't loaded yet. -->
           <LoadingState class="py-2" />
-        {:else if alarmPanelStore.error && areas.length === 0}
+        {:else if alarmPanelStore.error && zones.length === 0}
           <ErrorState
             message={alarmPanelStore.error}
             onRetry={() => void alarmPanelStore.refresh()}
             class="py-2"
           />
-        {:else if areas.length === 0}
-          <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.areas.all")}</p>
+        {:else if zones.length === 0}
+          <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.zones.all")}</p>
         {:else}
-          <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.areas.help")}</p>
+          <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.zones.help")}</p>
           <div class="flex flex-col gap-1">
-            {#each areas as a (a.id)}
+            {#each zones as a (a.id)}
               <label class="flex items-center gap-2 text-sm text-[var(--ha-primary-text-color)]">
                 <input
                   type="checkbox"
                   class="h-4 w-4 accent-[var(--ha-primary-color)]"
-                  checked={draft.areas.includes(a.id)}
-                  onchange={() => toggleArea(a.id)}
+                  checked={draft.zones.includes(a.id)}
+                  onchange={() => toggleZone(a.id)}
                 />
                 <span class="truncate">{a.name}</span>
               </label>

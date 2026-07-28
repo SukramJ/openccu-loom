@@ -15,10 +15,10 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestAlarmState_NoAreas_ReturnsEmptyList verifies GET /alarm/state on a
-// freshly started engine (no configured areas) answers 200 with an empty
-// areas array rather than null or an error.
-func TestAlarmState_NoAreas_ReturnsEmptyList(t *testing.T) {
+// TestAlarmState_NoZones_ReturnsEmptyList verifies GET /alarm/state on a
+// freshly started engine (no configured zones) answers 200 with an empty
+// zones array rather than null or an error.
+func TestAlarmState_NoZones_ReturnsEmptyList(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
@@ -33,18 +33,18 @@ func TestAlarmState_NoAreas_ReturnsEmptyList(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body.Areas == nil || len(body.Areas) != 0 {
-		t.Fatalf("areas = %+v, want empty non-nil slice", body.Areas)
+	if body.Zones == nil || len(body.Zones) != 0 {
+		t.Fatalf("zones = %+v, want empty non-nil slice", body.Zones)
 	}
 }
 
 // TestAlarmState_ReflectsModeAndReadinessBeforeArm verifies the disarmed
-// snapshot carries the area's per-mode readiness (including blockers from
+// snapshot carries the zone's per-mode readiness (including blockers from
 // an already-open sensor) but no mode, incident, or countdown.
 func TestAlarmState_ReflectsModeAndReadinessBeforeArm(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(30, 15, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
 	fx.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -61,25 +61,25 @@ func TestAlarmState_ReflectsModeAndReadinessBeforeArm(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(body.Areas) != 1 {
-		t.Fatalf("areas = %+v, want exactly one", body.Areas)
+	if len(body.Zones) != 1 {
+		t.Fatalf("zones = %+v, want exactly one", body.Zones)
 	}
-	area := body.Areas[0]
-	if area.State != string(hmenum.AlarmAreaStateDisarmed) {
-		t.Errorf("state = %q, want disarmed", area.State)
+	zone := body.Zones[0]
+	if zone.State != string(hmenum.AlarmZoneStateDisarmed) {
+		t.Errorf("state = %q, want disarmed", zone.State)
 	}
-	if area.Mode != "" {
-		t.Errorf("mode = %q, want empty while disarmed", area.Mode)
+	if zone.Mode != "" {
+		t.Errorf("mode = %q, want empty while disarmed", zone.Mode)
 	}
-	if area.Incident != nil {
-		t.Errorf("incident = %+v, want nil while disarmed", area.Incident)
+	if zone.Incident != nil {
+		t.Errorf("incident = %+v, want nil while disarmed", zone.Incident)
 	}
-	if area.Countdown != nil {
-		t.Errorf("countdown = %+v, want nil while disarmed", area.Countdown)
+	if zone.Countdown != nil {
+		t.Errorf("countdown = %+v, want nil while disarmed", zone.Countdown)
 	}
-	rd, ok := area.Readiness[string(hmenum.AlarmModeFull)]
+	rd, ok := zone.Readiness[string(hmenum.AlarmModeFull)]
 	if !ok {
-		t.Fatalf("readiness missing full mode: %+v", area.Readiness)
+		t.Fatalf("readiness missing full mode: %+v", zone.Readiness)
 	}
 	if rd.Ready {
 		t.Error("ready = true, want false with door open and no bypass")
@@ -89,12 +89,12 @@ func TestAlarmState_ReflectsModeAndReadinessBeforeArm(t *testing.T) {
 	}
 }
 
-// TestAlarmState_ExitDelayCountdown verifies an arming area surfaces a
+// TestAlarmState_ExitDelayCountdown verifies an arming zone surfaces a
 // running exit-delay countdown with the mode's configured total.
 func TestAlarmState_ExitDelayCountdown(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(30, 15, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
 
 	if _, err := fx.eng.Arm(context.Background(), "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull}); err != nil {
 		t.Fatalf("arm: %v", err)
@@ -108,30 +108,30 @@ func TestAlarmState_ExitDelayCountdown(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	area := body.Areas[0]
-	if area.State != string(hmenum.AlarmAreaStateArming) {
-		t.Fatalf("state = %q, want arming", area.State)
+	zone := body.Zones[0]
+	if zone.State != string(hmenum.AlarmZoneStateArming) {
+		t.Fatalf("state = %q, want arming", zone.State)
 	}
-	if area.Countdown == nil {
+	if zone.Countdown == nil {
 		t.Fatal("countdown = nil, want an active exit-delay countdown")
 	}
-	if area.Countdown.Kind != alarmCountdownExit {
-		t.Errorf("countdown.kind = %q, want %q", area.Countdown.Kind, alarmCountdownExit)
+	if zone.Countdown.Kind != alarmCountdownExit {
+		t.Errorf("countdown.kind = %q, want %q", zone.Countdown.Kind, alarmCountdownExit)
 	}
-	if area.Countdown.TotalS != 30 {
-		t.Errorf("countdown.total_s = %d, want 30", area.Countdown.TotalS)
+	if zone.Countdown.TotalS != 30 {
+		t.Errorf("countdown.total_s = %d, want 30", zone.Countdown.TotalS)
 	}
-	if area.Countdown.RemainingS <= 0 || area.Countdown.RemainingS > 30 {
-		t.Errorf("countdown.remaining_s = %d, want in (0, 30]", area.Countdown.RemainingS)
+	if zone.Countdown.RemainingS <= 0 || zone.Countdown.RemainingS > 30 {
+		t.Errorf("countdown.remaining_s = %d, want in (0, 30]", zone.Countdown.RemainingS)
 	}
 }
 
 // TestAlarmState_WalkTestActiveReflected verifies a running walk-test
-// session flips walktest_active on the area's status.
+// session flips walktest_active on the zone's status.
 func TestAlarmState_WalkTestActiveReflected(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 
 	if err := fx.eng.WalkTestStart(context.Background(), "eg", "tester", "test"); err != nil {
 		t.Fatalf("walk test start: %v", err)
@@ -145,43 +145,43 @@ func TestAlarmState_WalkTestActiveReflected(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if !body.Areas[0].WalkTestActive {
+	if !body.Zones[0].WalkTestActive {
 		t.Error("walktest_active = false, want true")
 	}
 }
 
-// --- GetAlarmAreaReadiness ---
+// --- GetAlarmZoneReadiness ---
 
-// TestGetAlarmAreaReadiness_UnknownArea_Returns404 verifies the readiness
-// endpoint answers the shared 404 for an unenrolled area id.
-func TestGetAlarmAreaReadiness_UnknownArea_Returns404(t *testing.T) {
+// TestGetAlarmZoneReadiness_UnknownZone_Returns404 verifies the readiness
+// endpoint answers the shared 404 for an unenrolled zone id.
+func TestGetAlarmZoneReadiness_UnknownZone_Returns404(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/areas/missing/readiness", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/zones/missing/readiness", http.NoBody)
 	req = withChiParam(req, "id", "missing")
 	w := httptest.NewRecorder()
-	GetAlarmAreaReadiness(fx).ServeHTTP(w, req)
+	GetAlarmZoneReadiness(fx).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404, body=%s", w.Code, w.Body.String())
 	}
 }
 
-// TestGetAlarmAreaReadiness_ReturnsPerModeVerdict verifies the endpoint
+// TestGetAlarmZoneReadiness_ReturnsPerModeVerdict verifies the endpoint
 // renders one readiness verdict per configured mode, keyed by mode name.
-func TestGetAlarmAreaReadiness_ReturnsPerModeVerdict(t *testing.T) {
+func TestGetAlarmZoneReadiness_ReturnsPerModeVerdict(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(30, 15, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(30, 15, 60))
 	fx.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/areas/eg/readiness", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alarm/zones/eg/readiness", http.NoBody)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	GetAlarmAreaReadiness(fx).ServeHTTP(w, req)
+	GetAlarmZoneReadiness(fx).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())

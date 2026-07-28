@@ -119,7 +119,7 @@ func (s *Service) onDataPoint(centralName string, e hmevent.DataPointValueChange
 // journalDeviceBlocked records a keypad temporary/permanent lockout as a
 // fault-class journal entry (fail-visible, S7). The lockout is a
 // device-level signal, so the entry carries the device address rather
-// than an area — clearing it stays operator/WebUI-owned per Q4.
+// than an zone — clearing it stays operator/WebUI-owned per Q4.
 func (s *Service) journalDeviceBlocked(ctx context.Context, centralName string, key hmtypes.DataPointKey) {
 	if _, err := s.journal.Append(ctx, engine.JournalEntry{
 		Class:  hmenum.AlarmJournalClassFault,
@@ -173,7 +173,7 @@ func (s *Service) onConnectivity(centralName string, e hmevent.ConnectivityChang
 	s.mu.Unlock()
 
 	if nowAllDown != wasAllDown {
-		// Whole-central transition: the engine applies the area
+		// Whole-central transition: the engine applies the zone
 		// central-loss policy (alert or trigger) — never silently.
 		s.engine.HandleCentralConnectivity(ctx, centralName, !nowAllDown)
 		if !nowAllDown {

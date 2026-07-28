@@ -1,6 +1,6 @@
 <script lang="ts">
   // PIN pad (docs/alarm-concept.md §12.1). A large, touch-friendly digit
-  // grid used by the Overview's disarm/arm flow whenever an area's code
+  // grid used by the Overview's disarm/arm flow whenever a zone's code
   // policy requires a code — and, by the same safety rule, NEVER for
   // silence (S3: silencing a screaming siren is one tap, never gated).
   //

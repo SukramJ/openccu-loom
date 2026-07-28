@@ -141,27 +141,27 @@ func (h *sysvarHarness) wireCentral(name string) (*fakeSysvarWriter, *fakeSysvar
 	return writer, creator
 }
 
-// seedArea persists a minimal armable area: mode "full" with no exit
+// seedZone persists a minimal armable zone: mode "full" with no exit
 // delay, so Arm completes synchronously, mirroring intents_test.go's
-// seedArea.
-func (h *sysvarHarness) seedArea(id, name string) {
+// seedZone.
+func (h *sysvarHarness) seedZone(id, name string) {
 	h.t.Helper()
-	cfg := engine.AreaConfig{Modes: map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}}}
+	cfg := engine.ZoneConfig{Modes: map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}}}
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		h.t.Fatalf("marshal area config: %v", err)
+		h.t.Fatalf("marshal zone config: %v", err)
 	}
 	now := h.clk.Now().UnixMilli()
-	if err := h.svc.Stores().Areas.Upsert(h.ctx, sqlitestore.AlarmAreaRow{
+	if err := h.svc.Stores().Zones.Upsert(h.ctx, sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
-		h.t.Fatalf("seed area: %v", err)
+		h.t.Fatalf("seed zone: %v", err)
 	}
 }
 
-// seedOutput persists a sysvar_mirror output row under areaID,
+// seedOutput persists a sysvar_mirror output row under zoneID,
 // resolving under centralName, with cfg as its parsed configuration.
-func (h *sysvarHarness) seedOutput(id, areaID, centralName string, cfg mirrorConfig) {
+func (h *sysvarHarness) seedOutput(id, zoneID, centralName string, cfg mirrorConfig) {
 	h.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
@@ -169,7 +169,7 @@ func (h *sysvarHarness) seedOutput(id, areaID, centralName string, cfg mirrorCon
 	}
 	now := h.clk.Now().UnixMilli()
 	if err := h.svc.Stores().Outputs.Upsert(h.ctx, sqlitestore.AlarmOutputRow{
-		ID: id, AreaID: areaID, Class: hmenum.AlarmOutputClassSysvarMirror,
+		ID: id, ZoneID: zoneID, Class: hmenum.AlarmOutputClassSysvarMirror,
 		CentralName: centralName, Name: id, ConfigJSON: string(b),
 		CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -187,13 +187,13 @@ func (h *sysvarHarness) start() {
 	h.t.Cleanup(func() { _ = h.svc.Stop(context.Background()) })
 }
 
-// areaState reads the engine's current state for id, failing if
+// zoneState reads the engine's current state for id, failing if
 // unknown.
-func (h *sysvarHarness) areaState(id string) hmenum.AlarmAreaState {
+func (h *sysvarHarness) zoneState(id string) hmenum.AlarmZoneState {
 	h.t.Helper()
-	snap, ok := h.svc.Engine().Area(id)
+	snap, ok := h.svc.Engine().Zone(id)
 	if !ok {
-		h.t.Fatalf("unknown area %q", id)
+		h.t.Fatalf("unknown zone %q", id)
 	}
 	return snap.State
 }
@@ -202,19 +202,19 @@ func (h *sysvarHarness) areaState(id string) hmenum.AlarmAreaState {
 
 // TestSysvarMirrorExisting_ExportsTrueWhenTriggered verifies an
 // existing-mode target (sysvar_existing=true) writes a plain bool
-// true while the area is triggered, and never calls CreateSysvarEnum
+// true while the zone is triggered, and never calls CreateSysvarEnum
 // — the variable is operator-owned and never created/retyped by the
 // mirror.
 func TestSysvarMirrorExisting_ExportsTrueWhenTriggered(t *testing.T) {
 	t.Parallel()
 	h := newSysvarHarness(t)
 	writer, creator := h.wireCentral("ccu1")
-	h.seedArea("eg", "Erdgeschoss")
+	h.seedZone("eg", "Erdgeschoss")
 	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmState", SysvarExisting: true})
 	h.start()
 
 	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{
-		AreaID: "eg", To: hmenum.AlarmAreaStateTriggered, Mode: hmenum.AlarmModeFull,
+		ZoneID: "eg", To: hmenum.AlarmZoneStateTriggered, Mode: hmenum.AlarmModeFull,
 	})
 
 	calls := writer.callsSnapshot()
@@ -241,12 +241,12 @@ func TestSysvarMirrorExisting_ExportsFalseOnModeChange(t *testing.T) {
 	t.Parallel()
 	h := newSysvarHarness(t)
 	writer, creator := h.wireCentral("ccu1")
-	h.seedArea("eg", "Erdgeschoss")
+	h.seedZone("eg", "Erdgeschoss")
 	h.seedOutput("mirror1", "eg", "ccu1", mirrorConfig{SysvarName: "AlarmState", SysvarExisting: true})
 	h.start()
 
 	h.svc.sysvarMirror.onStateChanged(hmevent.AlarmStateChangedEvent{
-		AreaID: "eg", To: hmenum.AlarmAreaStateArmed, Mode: hmenum.AlarmModeFull,
+		ZoneID: "eg", To: hmenum.AlarmZoneStateArmed, Mode: hmenum.AlarmModeFull,
 	})
 
 	calls := writer.callsSnapshot()
@@ -269,14 +269,14 @@ func TestSysvarMirrorExisting_ExportsFalseOnModeChange(t *testing.T) {
 // target is never turned into an arm intent — a bool carries no mode,
 // so mirrorTargets excludes it from onInbound's match set entirely —
 // while the same inbound value on an ordinary managed mirror target
-// still arms its area, confirming the exclusion is scoped to the
+// still arms its zone, confirming the exclusion is scoped to the
 // existing-mode target and does not regress the managed path.
 func TestSysvarMirrorOnInbound_ExistingModeTargetProducesNoIntentButManagedTargetDoes(t *testing.T) {
 	t.Parallel()
 	h := newSysvarHarness(t)
 	h.wireCentral("ccu1")
-	h.seedArea("existing", "Existing Area")
-	h.seedArea("managed", "Managed Area")
+	h.seedZone("existing", "Existing Zone")
+	h.seedZone("managed", "Managed Zone")
 	h.seedOutput("mirrorExisting", "existing", "ccu1", mirrorConfig{SysvarName: "ExistingVar", SysvarExisting: true})
 	h.seedOutput("mirrorManaged", "managed", "ccu1", mirrorConfig{SysvarName: "ManagedVar"})
 	h.start()
@@ -284,13 +284,13 @@ func TestSysvarMirrorOnInbound_ExistingModeTargetProducesNoIntentButManagedTarge
 	// Index 2 is AlarmModeFull (sysvarIndexByMode). On the
 	// existing-mode target this must be a no-op.
 	h.svc.sysvarMirror.onInbound("ccu1", hmevent.SysvarChangedEvent{Name: "ExistingVar", NewValue: hmtypes.IntValue(2)})
-	if got := h.areaState("existing"); got != hmenum.AlarmAreaStateDisarmed {
-		t.Fatalf("existing area state = %s, want disarmed (existing-mode target must never route an intent)", got)
+	if got := h.zoneState("existing"); got != hmenum.AlarmZoneStateDisarmed {
+		t.Fatalf("existing zone state = %s, want disarmed (existing-mode target must never route an intent)", got)
 	}
 
-	// The identical index on the managed target still arms its area.
+	// The identical index on the managed target still arms its zone.
 	h.svc.sysvarMirror.onInbound("ccu1", hmevent.SysvarChangedEvent{Name: "ManagedVar", NewValue: hmtypes.IntValue(2)})
-	if got := h.areaState("managed"); got != hmenum.AlarmAreaStateArmed {
-		t.Fatalf("managed area state = %s, want armed (managed sysvar target must still route an intent)", got)
+	if got := h.zoneState("managed"); got != hmenum.AlarmZoneStateArmed {
+		t.Fatalf("managed zone state = %s, want armed (managed sysvar target must still route an intent)", got)
 	}
 }

@@ -39,10 +39,10 @@ func TestAlarmPanelSubscriberStateChanged(t *testing.T) {
 
 	events.Publish(bus, hmevent.AlarmStateChangedEvent{
 		Base:       hmevent.NewBase(),
-		AreaID:     "eg",
-		AreaName:   "Erdgeschoss",
-		From:       hmenum.AlarmAreaStateDisarmed,
-		To:         hmenum.AlarmAreaStateArmed,
+		ZoneID:     "eg",
+		ZoneName:   "Erdgeschoss",
+		From:       hmenum.AlarmZoneStateDisarmed,
+		To:         hmenum.AlarmZoneStateArmed,
 		Mode:       hmenum.AlarmModeFull,
 		ChangedBy:  "operator",
 		Source:     "rest",
@@ -57,8 +57,8 @@ func TestAlarmPanelSubscriberStateChanged(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmStateChangedPayload", ev.Payload)
 	}
-	if p.AreaID != "eg" || p.AreaName != "Erdgeschoss" {
-		t.Fatalf("area fields = %+v", p)
+	if p.ZoneID != "eg" || p.ZoneName != "Erdgeschoss" {
+		t.Fatalf("zone fields = %+v", p)
 	}
 	if p.OldState != "disarmed" || p.NewState != "armed" || p.Mode != "full" {
 		t.Fatalf("transition fields = %+v", p)
@@ -77,7 +77,7 @@ func TestAlarmPanelSubscriberCountdown(t *testing.T) {
 
 	events.Publish(bus, hmevent.AlarmCountdownEvent{
 		Base:        hmevent.NewBase(),
-		AreaID:      "eg",
+		ZoneID:      "eg",
 		Kind:        "exit_delay",
 		RemainingMS: 12_000,
 		TotalMS:     30_000,
@@ -91,8 +91,8 @@ func TestAlarmPanelSubscriberCountdown(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmCountdownPayload", ev.Payload)
 	}
-	if p.AreaID != "eg" || p.Kind != "exit_delay" {
-		t.Fatalf("area/kind fields = %+v", p)
+	if p.ZoneID != "eg" || p.Kind != "exit_delay" {
+		t.Fatalf("zone/kind fields = %+v", p)
 	}
 	if p.RemainingMS != 12_000 || p.TotalMS != 30_000 {
 		t.Fatalf("ms fields = %+v", p)
@@ -111,7 +111,7 @@ func TestAlarmPanelSubscriberReadinessChanged(t *testing.T) {
 
 	events.Publish(bus, hmevent.AlarmReadinessChangedEvent{
 		Base:   hmevent.NewBase(),
-		AreaID: "eg",
+		ZoneID: "eg",
 		Readiness: map[hmenum.AlarmMode]hmevent.AlarmModeReadiness{
 			hmenum.AlarmModeFull: {Ready: false, Blockers: []string{"window"}},
 		},
@@ -125,8 +125,8 @@ func TestAlarmPanelSubscriberReadinessChanged(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmReadinessChangedPayload", ev.Payload)
 	}
-	if p.AreaID != "eg" {
-		t.Fatalf("area_id = %q, want eg", p.AreaID)
+	if p.ZoneID != "eg" {
+		t.Fatalf("zone_id = %q, want eg", p.ZoneID)
 	}
 	full, ok := p.Readiness["full"]
 	if !ok {
@@ -146,8 +146,8 @@ func TestAlarmPanelSubscriberTriggered(t *testing.T) {
 
 	events.Publish(bus, hmevent.AlarmTriggeredEvent{
 		Base:       hmevent.NewBase(),
-		AreaID:     "eg",
-		AreaName:   "Erdgeschoss",
+		ZoneID:     "eg",
+		ZoneName:   "Erdgeschoss",
 		IncidentID: 42,
 		SensorID:   "window",
 		SensorName: "Kitchen window",
@@ -163,8 +163,8 @@ func TestAlarmPanelSubscriberTriggered(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmTriggeredPayload", ev.Payload)
 	}
-	if p.AreaID != "eg" || p.IncidentID != 42 {
-		t.Fatalf("area/incident fields = %+v", p)
+	if p.ZoneID != "eg" || p.IncidentID != 42 {
+		t.Fatalf("zone/incident fields = %+v", p)
 	}
 	if p.SensorID != "window" || p.SensorName != "Kitchen window" || p.Cause != "sensor" {
 		t.Fatalf("cause fields = %+v", p)
@@ -183,8 +183,8 @@ func TestAlarmPanelSubscriberNotification(t *testing.T) {
 
 	events.Publish(bus, hmevent.AlarmNotificationEvent{
 		Base:       hmevent.NewBase(),
-		AreaID:     "eg",
-		AreaName:   "Erdgeschoss",
+		ZoneID:     "eg",
+		ZoneName:   "Erdgeschoss",
 		OutputID:   "notify1",
 		OutputName: "Doorbell",
 		IncidentID: 9,
@@ -201,8 +201,8 @@ func TestAlarmPanelSubscriberNotification(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmNotificationPayload", ev.Payload)
 	}
-	if p.AreaID != "eg" || p.AreaName != "Erdgeschoss" {
-		t.Fatalf("area fields = %+v", p)
+	if p.ZoneID != "eg" || p.ZoneName != "Erdgeschoss" {
+		t.Fatalf("zone fields = %+v", p)
 	}
 	if p.OutputID != "notify1" || p.OutputName != "Doorbell" {
 		t.Fatalf("output fields = %+v", p)
@@ -225,7 +225,7 @@ func TestAlarmPanelSubscriberJournalAppended(t *testing.T) {
 	events.Publish(bus, hmevent.AlarmJournalAppendedEvent{
 		Base:       hmevent.NewBase(),
 		EntryID:    7,
-		AreaID:     "eg",
+		ZoneID:     "eg",
 		Class:      hmenum.AlarmJournalClassArm,
 		Event:      "armed",
 		Actor:      "operator",
@@ -240,8 +240,8 @@ func TestAlarmPanelSubscriberJournalAppended(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmJournalAppendedPayload", ev.Payload)
 	}
-	if p.EntryID != 7 || p.AreaID != "eg" {
-		t.Fatalf("entry/area fields = %+v", p)
+	if p.EntryID != 7 || p.ZoneID != "eg" {
+		t.Fatalf("entry/zone fields = %+v", p)
 	}
 	if p.Class != string(hmenum.AlarmJournalClassArm) || p.Event != "armed" || p.Actor != "operator" {
 		t.Fatalf("class/event/actor fields = %+v", p)
@@ -257,7 +257,7 @@ func TestAlarmPanelSubscriberWalkTestProgress(t *testing.T) {
 
 	events.Publish(bus, hmevent.AlarmWalkTestEvent{
 		Base:       hmevent.NewBase(),
-		AreaID:     "eg",
+		ZoneID:     "eg",
 		SensorID:   "window",
 		SensorName: "Kitchen window",
 		Seen:       2,
@@ -272,7 +272,7 @@ func TestAlarmPanelSubscriberWalkTestProgress(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmWalkTestProgressPayload", ev.Payload)
 	}
-	if p.AreaID != "eg" || p.SensorID != "window" || p.SensorName != "Kitchen window" {
+	if p.ZoneID != "eg" || p.SensorID != "window" || p.SensorName != "Kitchen window" {
 		t.Fatalf("sensor fields = %+v", p)
 	}
 	if p.Seen != 2 || p.Total != 5 {
@@ -282,7 +282,7 @@ func TestAlarmPanelSubscriberWalkTestProgress(t *testing.T) {
 
 // TestAlarmPanelSubscriberHealthChanged verifies an
 // AlarmHealthChangedEvent fans out as alarm.health_changed. The
-// payload is service-global (no area_id) even though the broadcast
+// payload is service-global (no zone_id) even though the broadcast
 // still rides the shared alarm.panel topic.
 func TestAlarmPanelSubscriberHealthChanged(t *testing.T) {
 	t.Parallel()
@@ -322,7 +322,7 @@ func TestAlarmPanelSubscriberPanelChanged(t *testing.T) {
 	events.Publish(bus, hmevent.AlarmPanelChangedEvent{
 		Base:               hmevent.NewBase(),
 		UniqueID:           "openccu-loom_alarm_eg",
-		AreaID:             "eg",
+		ZoneID:             "eg",
 		Name:               "Erdgeschoss",
 		State:              "armed_away",
 		Available:          true,
@@ -338,7 +338,7 @@ func TestAlarmPanelSubscriberPanelChanged(t *testing.T) {
 	if !ok {
 		t.Fatalf("payload type %T, want AlarmPanelChangedPayload", ev.Payload)
 	}
-	if p.UniqueID != "openccu-loom_alarm_eg" || p.AreaID != "eg" {
+	if p.UniqueID != "openccu-loom_alarm_eg" || p.ZoneID != "eg" {
 		t.Fatalf("identity fields = %+v", p)
 	}
 	if !p.CodeArmRequired || !p.CodeDisarmRequired {

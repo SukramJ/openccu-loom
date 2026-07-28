@@ -90,13 +90,13 @@ func (s *manualScheduler) pendingCount() int {
 	return len(s.timers)
 }
 
-// fakeAreaStore implements engine.AreaStore over an in-memory row set.
-type fakeAreaStore struct {
-	rows []sqlitestore.AlarmAreaRow
+// fakeZoneStore implements engine.ZoneStore over an in-memory row set.
+type fakeZoneStore struct {
+	rows []sqlitestore.AlarmZoneRow
 	err  error
 }
 
-func (f *fakeAreaStore) GetAll(context.Context) ([]sqlitestore.AlarmAreaRow, error) {
+func (f *fakeZoneStore) GetAll(context.Context) ([]sqlitestore.AlarmZoneRow, error) {
 	return f.rows, f.err
 }
 
@@ -104,15 +104,15 @@ func (f *fakeAreaStore) GetAll(context.Context) ([]sqlitestore.AlarmAreaRow, err
 // snapshot map, with a controllable Arm outcome and a call recorder.
 type fakeScheduleEngine struct {
 	mu       sync.Mutex
-	areas    map[string]engine.AreaSnapshot
+	zones    map[string]engine.ZoneSnapshot
 	armErr   error
 	armCalls []engine.ArmRequest
 }
 
-func (f *fakeScheduleEngine) Area(id string) (engine.AreaSnapshot, bool) {
+func (f *fakeScheduleEngine) Zone(id string) (engine.ZoneSnapshot, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	snap, ok := f.areas[id]
+	snap, ok := f.zones[id]
 	return snap, ok
 }
 
@@ -123,7 +123,7 @@ func (f *fakeScheduleEngine) Arm(_ context.Context, _ string, req engine.ArmRequ
 	if f.armErr != nil {
 		return engine.ArmResult{}, f.armErr
 	}
-	return engine.ArmResult{State: hmenum.AlarmAreaStateArmed}, nil
+	return engine.ArmResult{State: hmenum.AlarmZoneStateArmed}, nil
 }
 
 // fakeJournalRecorder implements engine.Journal, recording every entry.
@@ -173,7 +173,7 @@ func TestScheduleFireSkipsWhenAlreadyInMode(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
 	pub := &publishRecorder{}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeFull},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
@@ -181,7 +181,7 @@ func TestScheduleFireSkipsWhenAlreadyInMode(t *testing.T) {
 	})
 
 	r.fire(context.Background(), scheduleEntry{
-		areaID: "a1", areaName: "House",
+		zoneID: "a1", zoneName: "House",
 		sched: engine.AlarmSchedule{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: true},
 	})
 
@@ -200,7 +200,7 @@ func TestScheduleFireReminderWhenAutoArmOff(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
 	pub := &publishRecorder{}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
@@ -208,7 +208,7 @@ func TestScheduleFireReminderWhenAutoArmOff(t *testing.T) {
 	})
 
 	r.fire(context.Background(), scheduleEntry{
-		areaID: "a1", areaName: "House",
+		zoneID: "a1", zoneName: "House",
 		sched: engine.AlarmSchedule{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: false},
 	})
 
@@ -216,8 +216,8 @@ func TestScheduleFireReminderWhenAutoArmOff(t *testing.T) {
 	if len(entries) != 1 || entries[0].Event != "arm_reminder" || entries[0].Class != hmenum.AlarmJournalClassArm {
 		t.Fatalf("expected one arm_reminder/Arm-class journal entry, got %+v", entries)
 	}
-	if entries[0].AreaID != "a1" || entries[0].Source != alarmSourceSchedule {
-		t.Fatalf("journal entry area/source mismatch: %+v", entries[0])
+	if entries[0].ZoneID != "a1" || entries[0].Source != alarmSourceSchedule {
+		t.Fatalf("journal entry zone/source mismatch: %+v", entries[0])
 	}
 
 	events := pub.snapshot()
@@ -228,7 +228,7 @@ func TestScheduleFireReminderWhenAutoArmOff(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected AlarmReminderEvent, got %T", events[0])
 	}
-	if rem.AreaID != "a1" || rem.AreaName != "House" || rem.Mode != hmenum.AlarmModeFull {
+	if rem.ZoneID != "a1" || rem.ZoneName != "House" || rem.Mode != hmenum.AlarmModeFull {
 		t.Fatalf("unexpected reminder payload: %+v", rem)
 	}
 	if len(eng.armCalls) != 0 {
@@ -240,7 +240,7 @@ func TestScheduleFireAutoArmSuccess(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
 	pub := &publishRecorder{}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
@@ -248,7 +248,7 @@ func TestScheduleFireAutoArmSuccess(t *testing.T) {
 	})
 
 	r.fire(context.Background(), scheduleEntry{
-		areaID: "a1", areaName: "House",
+		zoneID: "a1", zoneName: "House",
 		sched: engine.AlarmSchedule{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: true},
 	})
 
@@ -271,24 +271,24 @@ func TestScheduleFireAutoArmNotReadyNotifiesHookWhenWired(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
 	eng := &fakeScheduleEngine{
-		areas:  map[string]engine.AreaSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
+		zones:  map[string]engine.ZoneSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
 		armErr: &engine.NotReadyError{Blockers: []string{"sensor-1", "sensor-2"}},
 	}
 	var hookCalls int
 	var gotBlockers []string
 	r := newScheduleRunner(scheduleRunnerDeps{
 		Engine: eng, Journal: journal, Clock: clk,
-		ArmFailure: func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string) {
+		ArmFailure: func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string) {
 			hookCalls++
 			gotBlockers = blockers
-			if areaID != "a1" || areaName != "House" || mode != hmenum.AlarmModeFull {
-				t.Errorf("unexpected hook args: area=%s name=%s mode=%s", areaID, areaName, mode)
+			if zoneID != "a1" || zoneName != "House" || mode != hmenum.AlarmModeFull {
+				t.Errorf("unexpected hook args: zone=%s name=%s mode=%s", zoneID, zoneName, mode)
 			}
 		},
 	})
 
 	r.fire(context.Background(), scheduleEntry{
-		areaID: "a1", areaName: "House",
+		zoneID: "a1", zoneName: "House",
 		sched: engine.AlarmSchedule{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: true},
 	})
 
@@ -311,13 +311,13 @@ func TestScheduleFireAutoArmNotReadyJournalOnlyWithoutHook(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
 	eng := &fakeScheduleEngine{
-		areas:  map[string]engine.AreaSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
+		zones:  map[string]engine.ZoneSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
 		armErr: &engine.NotReadyError{Blockers: []string{"sensor-1"}},
 	}
 	r := newScheduleRunner(scheduleRunnerDeps{Engine: eng, Journal: journal, Clock: clk})
 
 	r.fire(context.Background(), scheduleEntry{
-		areaID: "a1", areaName: "House",
+		zoneID: "a1", zoneName: "House",
 		sched: engine.AlarmSchedule{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: true},
 	})
 
@@ -332,7 +332,7 @@ func TestScheduleFireAutoArmOtherErrorJournalsGeneric(t *testing.T) {
 	journal := &fakeJournalRecorder{}
 	var hookCalls int
 	eng := &fakeScheduleEngine{
-		areas:  map[string]engine.AreaSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
+		zones:  map[string]engine.ZoneSnapshot{"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed}},
 		armErr: engine.ErrUnknownMode,
 	}
 	r := newScheduleRunner(scheduleRunnerDeps{
@@ -341,7 +341,7 @@ func TestScheduleFireAutoArmOtherErrorJournalsGeneric(t *testing.T) {
 	})
 
 	r.fire(context.Background(), scheduleEntry{
-		areaID: "a1", areaName: "House",
+		zoneID: "a1", zoneName: "House",
 		sched: engine.AlarmSchedule{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: true},
 	})
 
@@ -354,51 +354,51 @@ func TestScheduleFireAutoArmOtherErrorJournalsGeneric(t *testing.T) {
 	}
 }
 
-func TestScheduleFireUnknownAreaIsNoop(t *testing.T) {
+func TestScheduleFireUnknownZoneIsNoop(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	journal := &fakeJournalRecorder{}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{}}
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{}}
 	r := newScheduleRunner(scheduleRunnerDeps{Engine: eng, Journal: journal, Clock: clk})
 
 	r.fire(context.Background(), scheduleEntry{
-		areaID: "gone", areaName: "Gone",
+		zoneID: "gone", zoneName: "Gone",
 		sched: engine.AlarmSchedule{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: true},
 	})
 
 	if len(journal.snapshot()) != 0 || len(eng.armCalls) != 0 {
-		t.Fatalf("expected a no-op for a removed area, got journal=%+v armCalls=%d", journal.snapshot(), len(eng.armCalls))
+		t.Fatalf("expected a no-op for a removed zone, got journal=%+v armCalls=%d", journal.snapshot(), len(eng.armCalls))
 	}
 }
 
 // --- chain lifecycle tests ---
 
-func areaRow(t *testing.T, id, name string, cfg engine.AreaConfig) sqlitestore.AlarmAreaRow {
+func zoneRow(t *testing.T, id, name string, cfg engine.ZoneConfig) sqlitestore.AlarmZoneRow {
 	t.Helper()
-	raw, err := marshalAreaConfig(cfg)
+	raw, err := marshalZoneConfig(cfg)
 	if err != nil {
-		t.Fatalf("marshal area config: %v", err)
+		t.Fatalf("marshal zone config: %v", err)
 	}
-	return sqlitestore.AlarmAreaRow{ID: id, Name: name, ConfigJSON: raw}
+	return sqlitestore.AlarmZoneRow{ID: id, Name: name, ConfigJSON: raw}
 }
 
 func TestScheduleStartBuildsOneChainPerScheduleEntry(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	sched := newManualScheduler(clk)
-	store := &fakeAreaStore{rows: []sqlitestore.AlarmAreaRow{
-		areaRow(t, "a1", "House", engine.AreaConfig{Schedules: []engine.AlarmSchedule{
+	store := &fakeZoneStore{rows: []sqlitestore.AlarmZoneRow{
+		zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
 			{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: true},
 			{Time: "07:00", Mode: hmenum.AlarmModeDisarmed},
 		}}),
-		areaRow(t, "a2", "Garage", engine.AreaConfig{Schedules: []engine.AlarmSchedule{
+		zoneRow(t, "a2", "Garage", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
 			{Time: "23:00", Mode: hmenum.AlarmModePerimeter},
 		}}),
 	}}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
 		"a2": {ID: "a2", Mode: hmenum.AlarmModeDisarmed},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
-		Areas: store, Engine: eng, Clock: clk, Scheduler: sched,
+		Zones: store, Engine: eng, Clock: clk, Scheduler: sched,
 	})
 
 	r.start(context.Background())
@@ -411,18 +411,18 @@ func TestScheduleStartBuildsOneChainPerScheduleEntry(t *testing.T) {
 func TestScheduleChainFiresAtTheRightTimeAndRechains(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart) // Tuesday 12:00 UTC
 	sched := newManualScheduler(clk)
-	store := &fakeAreaStore{rows: []sqlitestore.AlarmAreaRow{
-		areaRow(t, "a1", "House", engine.AreaConfig{Schedules: []engine.AlarmSchedule{
+	store := &fakeZoneStore{rows: []sqlitestore.AlarmZoneRow{
+		zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
 			{Time: "22:00", Mode: hmenum.AlarmModeFull, AutoArm: false},
 		}}),
 	}}
 	journal := &fakeJournalRecorder{}
 	pub := &publishRecorder{}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
-		Areas: store, Engine: eng, Journal: journal, Publish: pub.publish,
+		Zones: store, Engine: eng, Journal: journal, Publish: pub.publish,
 		Clock: clk, Scheduler: sched,
 	})
 	r.start(context.Background())
@@ -442,7 +442,7 @@ func TestScheduleChainFiresAtTheRightTimeAndRechains(t *testing.T) {
 	}
 
 	// The chain must have re-armed itself for the next occurrence
-	// (tomorrow 22:00), not left the area unscheduled.
+	// (tomorrow 22:00), not left the zone unscheduled.
 	if got := sched.pendingCount(); got != 1 {
 		t.Fatalf("expected the chain to re-schedule itself after firing, got %d pending", got)
 	}
@@ -458,17 +458,17 @@ func TestScheduleChainFiresAtTheRightTimeAndRechains(t *testing.T) {
 func TestScheduleStopCancelsAllChains(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	sched := newManualScheduler(clk)
-	store := &fakeAreaStore{rows: []sqlitestore.AlarmAreaRow{
-		areaRow(t, "a1", "House", engine.AreaConfig{Schedules: []engine.AlarmSchedule{
+	store := &fakeZoneStore{rows: []sqlitestore.AlarmZoneRow{
+		zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
 			{Time: "22:00", Mode: hmenum.AlarmModeFull},
 		}}),
 	}}
 	journal := &fakeJournalRecorder{}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
-		Areas: store, Engine: eng, Journal: journal, Clock: clk, Scheduler: sched,
+		Zones: store, Engine: eng, Journal: journal, Clock: clk, Scheduler: sched,
 	})
 	r.start(context.Background())
 	r.stop()
@@ -487,16 +487,16 @@ func TestScheduleStopCancelsAllChains(t *testing.T) {
 func TestScheduleStartRecomputesChainsOnReload(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	sched := newManualScheduler(clk)
-	store := &fakeAreaStore{rows: []sqlitestore.AlarmAreaRow{
-		areaRow(t, "a1", "House", engine.AreaConfig{Schedules: []engine.AlarmSchedule{
+	store := &fakeZoneStore{rows: []sqlitestore.AlarmZoneRow{
+		zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
 			{Time: "22:00", Mode: hmenum.AlarmModeFull},
 		}}),
 	}}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
-		Areas: store, Engine: eng, Clock: clk, Scheduler: sched,
+		Zones: store, Engine: eng, Clock: clk, Scheduler: sched,
 	})
 	r.start(context.Background())
 	if got := sched.pendingCount(); got != 1 {
@@ -505,7 +505,7 @@ func TestScheduleStartRecomputesChainsOnReload(t *testing.T) {
 
 	// Simulate a config write dropping the schedule entirely (e.g. the
 	// operator removed it), then Reload recomputing the chains.
-	store.rows = []sqlitestore.AlarmAreaRow{areaRow(t, "a1", "House", engine.AreaConfig{})}
+	store.rows = []sqlitestore.AlarmZoneRow{zoneRow(t, "a1", "House", engine.ZoneConfig{})}
 	r.start(context.Background())
 
 	if got := sched.pendingCount(); got != 0 {
@@ -516,17 +516,17 @@ func TestScheduleStartRecomputesChainsOnReload(t *testing.T) {
 func TestScheduleChainSkipsInvalidTimeWithoutCrashing(t *testing.T) {
 	clk := clock.NewFake(scheduleTestStart)
 	sched := newManualScheduler(clk)
-	store := &fakeAreaStore{rows: []sqlitestore.AlarmAreaRow{
-		areaRow(t, "a1", "House", engine.AreaConfig{Schedules: []engine.AlarmSchedule{
+	store := &fakeZoneStore{rows: []sqlitestore.AlarmZoneRow{
+		zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
 			{Time: "not-a-time", Mode: hmenum.AlarmModeFull},
 			{Time: "22:00", Mode: hmenum.AlarmModeFull},
 		}}),
 	}}
-	eng := &fakeScheduleEngine{areas: map[string]engine.AreaSnapshot{
+	eng := &fakeScheduleEngine{zones: map[string]engine.ZoneSnapshot{
 		"a1": {ID: "a1", Mode: hmenum.AlarmModeDisarmed},
 	}}
 	r := newScheduleRunner(scheduleRunnerDeps{
-		Areas: store, Engine: eng, Clock: clk, Scheduler: sched,
+		Zones: store, Engine: eng, Clock: clk, Scheduler: sched,
 	})
 
 	r.start(context.Background())
@@ -536,27 +536,27 @@ func TestScheduleChainSkipsInvalidTimeWithoutCrashing(t *testing.T) {
 	}
 }
 
-func TestScheduleLoadEntriesSkipsMalformedAreaConfig(t *testing.T) {
-	store := &fakeAreaStore{rows: []sqlitestore.AlarmAreaRow{
+func TestScheduleLoadEntriesSkipsMalformedZoneConfig(t *testing.T) {
+	store := &fakeZoneStore{rows: []sqlitestore.AlarmZoneRow{
 		{ID: "bad", Name: "Bad", ConfigJSON: "{not json"},
-		areaRow(t, "a1", "House", engine.AreaConfig{Schedules: []engine.AlarmSchedule{
+		zoneRow(t, "a1", "House", engine.ZoneConfig{Schedules: []engine.AlarmSchedule{
 			{Time: "22:00", Mode: hmenum.AlarmModeFull},
 		}}),
 	}}
-	r := newScheduleRunner(scheduleRunnerDeps{Areas: store, Clock: clock.NewFake(scheduleTestStart)})
+	r := newScheduleRunner(scheduleRunnerDeps{Zones: store, Clock: clock.NewFake(scheduleTestStart)})
 
 	entries, err := r.loadEntries(context.Background())
 	if err != nil {
 		t.Fatalf("loadEntries returned an error: %v", err)
 	}
-	if len(entries) != 1 || entries[0].areaID != "a1" {
-		t.Fatalf("expected only the well-formed area's schedule, got %+v", entries)
+	if len(entries) != 1 || entries[0].zoneID != "a1" {
+		t.Fatalf("expected only the well-formed zone's schedule, got %+v", entries)
 	}
 }
 
 func TestScheduleLoadEntriesPropagatesStoreError(t *testing.T) {
-	store := &fakeAreaStore{err: errors.New("db unavailable")}
-	r := newScheduleRunner(scheduleRunnerDeps{Areas: store, Clock: clock.NewFake(scheduleTestStart)})
+	store := &fakeZoneStore{err: errors.New("db unavailable")}
+	r := newScheduleRunner(scheduleRunnerDeps{Zones: store, Clock: clock.NewFake(scheduleTestStart)})
 
 	if _, err := r.loadEntries(context.Background()); err == nil {
 		t.Fatal("expected loadEntries to propagate the store error")
@@ -650,9 +650,9 @@ func TestNextFire(t *testing.T) {
 	})
 }
 
-// marshalAreaConfig encodes cfg into the alarm_areas.config_json wire
+// marshalZoneConfig encodes cfg into the alarm_zones.config_json wire
 // format, for test fixtures.
-func marshalAreaConfig(cfg engine.AreaConfig) (string, error) {
+func marshalZoneConfig(cfg engine.ZoneConfig) (string, error) {
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return "", err

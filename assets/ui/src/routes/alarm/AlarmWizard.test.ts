@@ -25,17 +25,17 @@ vi.mock("$lib/stores/devices.svelte", () => ({
   },
 }));
 
-const mockCreateAlarmArea = vi.fn();
-const mockPutAlarmArea = vi.fn();
-const mockPutAlarmAreaSensors = vi.fn();
-const mockPutAlarmAreaOutputs = vi.fn();
+const mockCreateAlarmZone = vi.fn();
+const mockPutAlarmZone = vi.fn();
+const mockPutAlarmZoneSensors = vi.fn();
+const mockPutAlarmZoneOutputs = vi.fn();
 const mockListAlarmOutputCandidates = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
-    createAlarmArea: (...args: unknown[]) => mockCreateAlarmArea(...args),
-    putAlarmArea: (...args: unknown[]) => mockPutAlarmArea(...args),
-    putAlarmAreaSensors: (...args: unknown[]) => mockPutAlarmAreaSensors(...args),
-    putAlarmAreaOutputs: (...args: unknown[]) => mockPutAlarmAreaOutputs(...args),
+    createAlarmZone: (...args: unknown[]) => mockCreateAlarmZone(...args),
+    putAlarmZone: (...args: unknown[]) => mockPutAlarmZone(...args),
+    putAlarmZoneSensors: (...args: unknown[]) => mockPutAlarmZoneSensors(...args),
+    putAlarmZoneOutputs: (...args: unknown[]) => mockPutAlarmZoneOutputs(...args),
     listAlarmOutputCandidates: (...args: unknown[]) => mockListAlarmOutputCandidates(...args),
   },
   friendlyError: (err: unknown) => (err instanceof Error ? err.message : "error"),
@@ -99,10 +99,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockDevices = [];
   mockRefresh.mockResolvedValue(undefined);
-  mockCreateAlarmArea.mockResolvedValue({ id: "area-1", name: "Ground floor" });
-  mockPutAlarmArea.mockResolvedValue(undefined);
-  mockPutAlarmAreaSensors.mockResolvedValue(undefined);
-  mockPutAlarmAreaOutputs.mockResolvedValue(undefined);
+  mockCreateAlarmZone.mockResolvedValue({ id: "zone-1", name: "Ground floor" });
+  mockPutAlarmZone.mockResolvedValue(undefined);
+  mockPutAlarmZoneSensors.mockResolvedValue(undefined);
+  mockPutAlarmZoneOutputs.mockResolvedValue(undefined);
   mockListAlarmOutputCandidates.mockResolvedValue([outputCandidate()]);
   location.hash = "";
   // The wizard store is a module singleton (state survives navigating away
@@ -196,7 +196,7 @@ describe("AlarmWizard — step navigation", () => {
   it("advances through every step in order via Next", async () => {
     render(AlarmWizard);
 
-    expect(screen.getByText("alarm.wizard.step.areas")).toBeTruthy();
+    expect(screen.getByText("alarm.wizard.step.zones")).toBeTruthy();
     await next();
     expect(screen.getByText("alarm.wizard.step.sensors")).toBeTruthy();
     await next();
@@ -211,7 +211,7 @@ describe("AlarmWizard — step navigation", () => {
 
   it("Back returns to the previous step without losing what was already entered", async () => {
     render(AlarmWizard);
-    await fireEvent.input(screen.getByLabelText("alarm.area.name"), {
+    await fireEvent.input(screen.getByLabelText("alarm.zone.name"), {
       target: { value: "Ground floor" },
     });
     await next();
@@ -219,8 +219,8 @@ describe("AlarmWizard — step navigation", () => {
 
     await back();
 
-    expect(screen.getByText("alarm.wizard.step.areas")).toBeTruthy();
-    expect((screen.getByLabelText("alarm.area.name") as HTMLInputElement).value).toBe(
+    expect(screen.getByText("alarm.wizard.step.zones")).toBeTruthy();
+    expect((screen.getByLabelText("alarm.zone.name") as HTMLInputElement).value).toBe(
       "Ground floor",
     );
   });
@@ -232,16 +232,16 @@ describe("AlarmWizard — step navigation", () => {
 });
 
 describe("AlarmWizard — skip clears the current step's data before advancing", () => {
-  it("skip on the area step clears the entered name", async () => {
+  it("skip on the zone step clears the entered name", async () => {
     render(AlarmWizard);
-    await fireEvent.input(screen.getByLabelText("alarm.area.name"), {
+    await fireEvent.input(screen.getByLabelText("alarm.zone.name"), {
       target: { value: "Ground floor" },
     });
 
     await skip();
 
     expect(alarmWizardStore.step).toBe(2);
-    expect(alarmWizardStore.areaName).toBe("");
+    expect(alarmWizardStore.zoneName).toBe("");
   });
 
   it("skip on the sensors step clears every sensor selected on it", async () => {
@@ -353,11 +353,11 @@ describe("AlarmWizard — delay clamp (step 4)", () => {
 });
 
 describe("AlarmWizard — finish (happy path)", () => {
-  it("creates the area, then PUTs sensors, then PUTs outputs — in that order — refreshes the panel, resets the wizard, and returns to the overview", async () => {
+  it("creates the zone, then PUTs sensors, then PUTs outputs — in that order — refreshes the panel, resets the wizard, and returns to the overview", async () => {
     mockDevices = [device()];
     render(AlarmWizard);
 
-    await fireEvent.input(screen.getByLabelText("alarm.area.name"), {
+    await fireEvent.input(screen.getByLabelText("alarm.zone.name"), {
       target: { value: "Ground floor" },
     });
     await next(); // -> sensors
@@ -375,46 +375,46 @@ describe("AlarmWizard — finish (happy path)", () => {
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalledOnce());
 
-    expect(mockCreateAlarmArea).toHaveBeenCalledOnce();
-    expect(mockCreateAlarmArea.mock.calls[0][0]).toMatchObject({ name: "Ground floor" });
+    expect(mockCreateAlarmZone).toHaveBeenCalledOnce();
+    expect(mockCreateAlarmZone.mock.calls[0][0]).toMatchObject({ name: "Ground floor" });
 
-    expect(mockPutAlarmAreaSensors).toHaveBeenCalledOnce();
-    expect(mockPutAlarmAreaSensors.mock.calls[0][0]).toBe("area-1");
-    expect(mockPutAlarmAreaSensors.mock.calls[0][1]).toMatchObject([
+    expect(mockPutAlarmZoneSensors).toHaveBeenCalledOnce();
+    expect(mockPutAlarmZoneSensors.mock.calls[0][0]).toBe("zone-1");
+    expect(mockPutAlarmZoneSensors.mock.calls[0][1]).toMatchObject([
       { channel_address: "SWDO001:1" },
     ]);
 
-    expect(mockPutAlarmAreaOutputs).toHaveBeenCalledOnce();
-    expect(mockPutAlarmAreaOutputs.mock.calls[0][0]).toBe("area-1");
-    expect(mockPutAlarmAreaOutputs.mock.calls[0][1]).toMatchObject([
+    expect(mockPutAlarmZoneOutputs).toHaveBeenCalledOnce();
+    expect(mockPutAlarmZoneOutputs.mock.calls[0][0]).toBe("zone-1");
+    expect(mockPutAlarmZoneOutputs.mock.calls[0][1]).toMatchObject([
       { channel_address: "SIR001:3" },
     ]);
 
-    // Ordering matters: the area write always precedes both PUTs, and
+    // Ordering matters: the zone write always precedes both PUTs, and
     // sensors are always written before outputs.
-    expect(mockCreateAlarmArea.mock.invocationCallOrder[0]).toBeLessThan(
-      mockPutAlarmAreaSensors.mock.invocationCallOrder[0],
+    expect(mockCreateAlarmZone.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPutAlarmZoneSensors.mock.invocationCallOrder[0],
     );
-    expect(mockPutAlarmAreaSensors.mock.invocationCallOrder[0]).toBeLessThan(
-      mockPutAlarmAreaOutputs.mock.invocationCallOrder[0],
+    expect(mockPutAlarmZoneSensors.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPutAlarmZoneOutputs.mock.invocationCallOrder[0],
     );
-    expect(mockPutAlarmAreaOutputs.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mockPutAlarmZoneOutputs.mock.invocationCallOrder[0]).toBeLessThan(
       mockRefresh.mock.invocationCallOrder[0],
     );
 
     expect(alarmWizardStore.step).toBe(1);
-    expect(alarmWizardStore.areaName).toBe("");
-    expect(alarmWizardStore.createdAreaId).toBeNull();
+    expect(alarmWizardStore.zoneName).toBe("");
+    expect(alarmWizardStore.createdZoneId).toBeNull();
     expect(location.hash).toBe("#/alarm");
   });
 });
 
-describe("AlarmWizard — finish partial failure keeps the created area", () => {
-  it("does not create a second area on retry once the sensors PUT has failed", async () => {
+describe("AlarmWizard — finish partial failure keeps the created zone", () => {
+  it("does not create a second zone on retry once the sensors PUT has failed", async () => {
     mockDevices = [device()];
     render(AlarmWizard);
 
-    await fireEvent.input(screen.getByLabelText("alarm.area.name"), {
+    await fireEvent.input(screen.getByLabelText("alarm.zone.name"), {
       target: { value: "Ground floor" },
     });
     await next(); // -> sensors
@@ -425,39 +425,39 @@ describe("AlarmWizard — finish partial failure keeps the created area", () => 
     await next(); // -> codes
     await next(); // -> done
 
-    mockPutAlarmAreaSensors.mockRejectedValueOnce(new Error("network down"));
+    mockPutAlarmZoneSensors.mockRejectedValueOnce(new Error("network down"));
 
     await fireEvent.click(screen.getByRole("button", { name: /alarm.wizard.finish/ }));
 
-    await waitFor(() => expect(mockPutAlarmAreaSensors).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mockPutAlarmZoneSensors).toHaveBeenCalledOnce());
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /alarm.wizard.finish/ })).not.toBeDisabled(),
     );
 
-    expect(mockCreateAlarmArea).toHaveBeenCalledOnce();
-    expect(mockPutAlarmArea).not.toHaveBeenCalled();
-    // The failure is caught, not thrown further — the area id it created
-    // must survive so a retry never re-creates the area.
-    expect(alarmWizardStore.createdAreaId).toBe("area-1");
+    expect(mockCreateAlarmZone).toHaveBeenCalledOnce();
+    expect(mockPutAlarmZone).not.toHaveBeenCalled();
+    // The failure is caught, not thrown further — the zone id it created
+    // must survive so a retry never re-creates the zone.
+    expect(alarmWizardStore.createdZoneId).toBe("zone-1");
     expect(mockRefresh).not.toHaveBeenCalled();
     expect(location.hash).toBe("");
 
     // Retry: the sensors PUT succeeds this time.
-    mockPutAlarmAreaSensors.mockResolvedValueOnce(undefined);
+    mockPutAlarmZoneSensors.mockResolvedValueOnce(undefined);
     await fireEvent.click(screen.getByRole("button", { name: /alarm.wizard.finish/ }));
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalledOnce());
 
-    // Still exactly one createAlarmArea call across both attempts — the
-    // retry goes through putAlarmArea against the already-created id
-    // instead of creating a duplicate area.
-    expect(mockCreateAlarmArea).toHaveBeenCalledOnce();
-    expect(mockPutAlarmArea).toHaveBeenCalledOnce();
-    expect(mockPutAlarmArea).toHaveBeenCalledWith(
-      "area-1",
-      expect.objectContaining({ id: "area-1", name: "Ground floor" }),
+    // Still exactly one createAlarmZone call across both attempts — the
+    // retry goes through putAlarmZone against the already-created id
+    // instead of creating a duplicate zone.
+    expect(mockCreateAlarmZone).toHaveBeenCalledOnce();
+    expect(mockPutAlarmZone).toHaveBeenCalledOnce();
+    expect(mockPutAlarmZone).toHaveBeenCalledWith(
+      "zone-1",
+      expect.objectContaining({ id: "zone-1", name: "Ground floor" }),
     );
-    expect(mockPutAlarmAreaSensors).toHaveBeenCalledTimes(2);
+    expect(mockPutAlarmZoneSensors).toHaveBeenCalledTimes(2);
     expect(location.hash).toBe("#/alarm");
   });
 });
@@ -465,7 +465,7 @@ describe("AlarmWizard — finish partial failure keeps the created area", () => 
 describe("AlarmWizard — progress survives a route unmount/remount", () => {
   it("keeps step + collected data in the store across unmounting and remounting the wizard route", async () => {
     const first = render(AlarmWizard);
-    await fireEvent.input(screen.getByLabelText("alarm.area.name"), {
+    await fireEvent.input(screen.getByLabelText("alarm.zone.name"), {
       target: { value: "Ground floor" },
     });
     await next(); // -> sensors
@@ -478,6 +478,6 @@ describe("AlarmWizard — progress survives a route unmount/remount", () => {
     render(AlarmWizard);
 
     expect(screen.getByText("alarm.wizard.step.sensors")).toBeTruthy();
-    expect(alarmWizardStore.areaName).toBe("Ground floor");
+    expect(alarmWizardStore.zoneName).toBe("Ground floor");
   });
 });

@@ -41,7 +41,7 @@ type OutputConfig struct {
 	// split.
 	Outdoor bool `json:"outdoor,omitempty"`
 	// SharedWithCCU declares a third-party owner (CCU programs):
-	// reconciliation never auto-stops this output while its area is
+	// reconciliation never auto-stops this output while its zone is
 	// disarmed (S4).
 	SharedWithCCU bool `json:"shared_with_ccu,omitempty"`
 	// DurationSeconds bounds one acoustic activation; 0 selects the

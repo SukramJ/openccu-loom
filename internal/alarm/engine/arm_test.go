@@ -19,16 +19,16 @@ import (
 
 func TestArm_FullHappyPathArmsAfterExitDelay(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArming)
+	h.wantState("eg", hmenum.AlarmZoneStateArming)
 
 	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModeFull {
 		t.Fatalf("mode = %s, want full", got)
 	}
@@ -40,55 +40,55 @@ func TestArm_FullHappyPathArmsAfterExitDelay(t *testing.T) {
 	if len(changes) != 2 {
 		t.Fatalf("state changes = %+v, want 2 entries", changes)
 	}
-	if changes[0].From != hmenum.AlarmAreaStateDisarmed || changes[0].To != hmenum.AlarmAreaStateArming {
+	if changes[0].From != hmenum.AlarmZoneStateDisarmed || changes[0].To != hmenum.AlarmZoneStateArming {
 		t.Fatalf("first state change = %+v, want disarmed->arming", changes[0])
 	}
-	if changes[1].From != hmenum.AlarmAreaStateArming || changes[1].To != hmenum.AlarmAreaStateArmed {
+	if changes[1].From != hmenum.AlarmZoneStateArming || changes[1].To != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("second state change = %+v, want arming->armed", changes[1])
 	}
 }
 
 func TestArm_PerimeterImmediateArmsWithoutDelay(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	res, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModePerimeter, By: "tester"})
 	if err != nil {
 		t.Fatalf("arm: %v", err)
 	}
-	if res.State != hmenum.AlarmAreaStateArmed {
+	if res.State != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("result state = %s, want armed", res.State)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
 	changes := h.sink.stateChanges()
 	if len(changes) != 1 {
 		t.Fatalf("state changes = %+v, want a single entry", changes)
 	}
-	if changes[0].From != hmenum.AlarmAreaStateDisarmed || changes[0].To != hmenum.AlarmAreaStateArmed {
+	if changes[0].From != hmenum.AlarmZoneStateDisarmed || changes[0].To != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("state change = %+v, want disarmed->armed", changes[0])
 	}
 }
 
 func TestArm_SkipDelayArmsFullImmediately(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	res, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true, By: "tester"})
 	if err != nil {
 		t.Fatalf("arm: %v", err)
 	}
-	if res.State != hmenum.AlarmAreaStateArmed {
+	if res.State != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("result state = %s, want armed", res.State)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 }
 
 func TestArm_RefusedWithoutForceReportsBlockers(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
@@ -100,12 +100,12 @@ func TestArm_RefusedWithoutForceReportsBlockers(t *testing.T) {
 	if got := sortedStrings(nre.Blockers); len(got) != 1 || got[0] != "window" {
 		t.Fatalf("blockers = %v, want [window]", got)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 }
 
 func TestArm_ForceArmsAndBypassesBlockers(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
@@ -126,7 +126,7 @@ func TestArm_ForceArmsAndBypassesBlockers(t *testing.T) {
 
 func TestArm_ExplicitBypassAcceptedWithoutForce(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
@@ -141,20 +141,20 @@ func TestArm_ExplicitBypassAcceptedWithoutForce(t *testing.T) {
 	}
 }
 
-func TestArm_UnknownAreaReturnsError(t *testing.T) {
+func TestArm_UnknownZoneReturnsError(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	_, err := h.eng.Arm(h.ctx, "does-not-exist", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
-	if !errors.Is(err, engine.ErrUnknownArea) {
-		t.Fatalf("err = %v, want ErrUnknownArea", err)
+	if !errors.Is(err, engine.ErrUnknownZone) {
+		t.Fatalf("err = %v, want ErrUnknownZone", err)
 	}
 }
 
 func TestArm_UnconfiguredModeReturnsError(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeNight, By: "tester"})
@@ -165,7 +165,7 @@ func TestArm_UnconfiguredModeReturnsError(t *testing.T) {
 
 func TestArm_DisarmedModeReturnsError(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeDisarmed, By: "tester"})
@@ -176,11 +176,11 @@ func TestArm_DisarmedModeReturnsError(t *testing.T) {
 
 func TestArm_WhilePendingReturnsInvalidState(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmAreaStatePending)
+	h.wantState("eg", hmenum.AlarmZoneStatePending)
 
 	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
 	if !errors.Is(err, engine.ErrInvalidState) {
@@ -190,11 +190,11 @@ func TestArm_WhilePendingReturnsInvalidState(t *testing.T) {
 
 func TestArm_WhileTriggeredReturnsInvalidState(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	_, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"})
 	if !errors.Is(err, engine.ErrInvalidState) {
@@ -204,7 +204,7 @@ func TestArm_WhileTriggeredReturnsInvalidState(t *testing.T) {
 
 func TestArm_ReArmChangesModeWithoutError(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
@@ -212,7 +212,7 @@ func TestArm_ReArmChangesModeWithoutError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-arm: %v", err)
 	}
-	if res.State != hmenum.AlarmAreaStateArmed {
+	if res.State != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("result state = %s, want armed", res.State)
 	}
 	if got := h.mustSnapshot("eg").Mode; got != hmenum.AlarmModePerimeter {
@@ -222,7 +222,7 @@ func TestArm_ReArmChangesModeWithoutError(t *testing.T) {
 
 func TestArm_InstantSensorDuringExitDelayTriggersImmediately(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
@@ -230,7 +230,7 @@ func TestArm_InstantSensorDuringExitDelayTriggersImmediately(t *testing.T) {
 	}
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if n := h.outputs.fireCount(); n != 1 {
 		t.Fatalf("FireCycle count = %d, want 1", n)
 	}
@@ -238,17 +238,17 @@ func TestArm_InstantSensorDuringExitDelayTriggersImmediately(t *testing.T) {
 
 func TestArm_ExitDelayFlaggedSensorDoesNotInterruptArming(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
 	h.eng.HandleSensorEvent(h.ctx, "motion", true)
-	h.wantState("eg", hmenum.AlarmAreaStateArming)
+	h.wantState("eg", hmenum.AlarmZoneStateArming)
 
 	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if n := h.outputs.fireCount(); n != 0 {
 		t.Fatalf("FireCycle count = %d, want 0", n)
 	}
@@ -256,7 +256,7 @@ func TestArm_ExitDelayFlaggedSensorDoesNotInterruptArming(t *testing.T) {
 
 func TestArm_AfterClosingDebounceCompletesEarly(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("og", "Obergeschoss", defaultAreaConfig())
+	h.seedZone("og", "Obergeschoss", defaultZoneConfig())
 	h.seedSensor("closer", "og", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes:           []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		UseExitDelay:    true,
@@ -269,12 +269,12 @@ func TestArm_AfterClosingDebounceCompletesEarly(t *testing.T) {
 	}
 	h.eng.HandleSensorEvent(h.ctx, "closer", true)
 	h.eng.HandleSensorEvent(h.ctx, "closer", false)
-	h.wantState("og", hmenum.AlarmAreaStateArming)
+	h.wantState("og", hmenum.AlarmZoneStateArming)
 
 	// The 5 s settle timer completes the arm long before the 30 s
 	// exit delay would have elapsed on its own.
 	h.advance(5 * time.Second)
-	h.wantState("og", hmenum.AlarmAreaStateArmed)
+	h.wantState("og", hmenum.AlarmZoneStateArmed)
 	if !h.journal.has("armed_after_closing") {
 		t.Fatalf("missing armed_after_closing journal entry; got %v", h.journal.events())
 	}
@@ -282,7 +282,7 @@ func TestArm_AfterClosingDebounceCompletesEarly(t *testing.T) {
 
 func TestArm_AfterClosingDebounceAbortsOnReopen(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("og", "Obergeschoss", defaultAreaConfig())
+	h.seedZone("og", "Obergeschoss", defaultZoneConfig())
 	h.seedSensor("closer", "og", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes:           []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		UseExitDelay:    true,
@@ -300,5 +300,5 @@ func TestArm_AfterClosingDebounceAbortsOnReopen(t *testing.T) {
 	h.eng.HandleSensorEvent(h.ctx, "closer", true)
 
 	h.advance(5 * time.Second)
-	h.wantState("og", hmenum.AlarmAreaStateArming)
+	h.wantState("og", hmenum.AlarmZoneStateArming)
 }

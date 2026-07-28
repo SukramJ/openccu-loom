@@ -4656,7 +4656,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Current live status of every alarm area */
+        /** Current live status of every alarm zone */
         get: operations["getAlarmState"];
         put?: never;
         post?: never;
@@ -4666,25 +4666,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas": {
+    "/alarm/zones": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List all configured alarm areas */
-        get: operations["listAlarmAreas"];
+        /** List all configured alarm zones */
+        get: operations["listAlarmZones"];
         put?: never;
-        /** Create a new alarm area (operator) */
-        post: operations["createAlarmArea"];
+        /** Create a new alarm zone (operator) */
+        post: operations["createAlarmZone"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}": {
+    "/alarm/zones/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -4693,22 +4693,22 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Get a single alarm area by id */
-        get: operations["getAlarmArea"];
-        /** Replace an alarm area (operator) */
-        put: operations["putAlarmArea"];
+        /** Get a single alarm zone by id */
+        get: operations["getAlarmZone"];
+        /** Replace an alarm zone (operator) */
+        put: operations["putAlarmZone"];
         post?: never;
         /**
-         * Delete an alarm area (operator)
-         * @description Refused with 409 unless the area is currently disarmed.
+         * Delete an alarm zone (operator)
+         * @description Refused with 409 unless the zone is currently disarmed.
          */
-        delete: operations["deleteAlarmArea"];
+        delete: operations["deleteAlarmZone"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/sensors": {
+    "/alarm/zones/{id}/sensors": {
         parameters: {
             query?: never;
             header?: never;
@@ -4717,36 +4717,13 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List the sensors enrolled in an alarm area */
-        get: operations["listAlarmAreaSensors"];
+        /** List the sensors enrolled in an alarm zone */
+        get: operations["listAlarmZoneSensors"];
         /**
-         * Replace the full sensor set of an alarm area (operator)
-         * @description Bulk replace — the request body is the complete desired sensor list for the area; sensors omitted from the body are removed.
+         * Replace the full sensor set of an alarm zone (operator)
+         * @description Bulk replace — the request body is the complete desired sensor list for the zone; sensors omitted from the body are removed.
          */
-        put: operations["putAlarmAreaSensors"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alarm/areas/{id}/outputs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        /** List the outputs enrolled in an alarm area */
-        get: operations["listAlarmAreaOutputs"];
-        /**
-         * Replace the full output set of an alarm area (operator)
-         * @description Bulk replace — the request body is the complete desired output list for the area; outputs omitted from the body are removed.
-         */
-        put: operations["putAlarmAreaOutputs"];
+        put: operations["putAlarmZoneSensors"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4754,7 +4731,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/arm": {
+    "/alarm/zones/{id}/outputs": {
         parameters: {
             query?: never;
             header?: never;
@@ -4763,17 +4740,21 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Arm an alarm area (operator) */
-        post: operations["armAlarmArea"];
+        /** List the outputs enrolled in an alarm zone */
+        get: operations["listAlarmZoneOutputs"];
+        /**
+         * Replace the full output set of an alarm zone (operator)
+         * @description Bulk replace — the request body is the complete desired output list for the zone; outputs omitted from the body are removed.
+         */
+        put: operations["putAlarmZoneOutputs"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/disarm": {
+    "/alarm/zones/{id}/arm": {
         parameters: {
             query?: never;
             header?: never;
@@ -4784,15 +4765,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Disarm an alarm area (operator) */
-        post: operations["disarmAlarmArea"];
+        /** Arm an alarm zone (operator) */
+        post: operations["armAlarmZone"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/silence": {
+    "/alarm/zones/{id}/disarm": {
         parameters: {
             query?: never;
             header?: never;
@@ -4803,15 +4784,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Silence the active incident on an alarm area without disarming (operator) */
-        post: operations["silenceAlarmArea"];
+        /** Disarm an alarm zone (operator) */
+        post: operations["disarmAlarmZone"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/acknowledge": {
+    "/alarm/zones/{id}/silence": {
         parameters: {
             query?: never;
             header?: never;
@@ -4822,8 +4803,27 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Acknowledge (clear) a finished incident on an alarm area (operator) */
-        post: operations["acknowledgeAlarmArea"];
+        /** Silence the active incident on an alarm zone without disarming (operator) */
+        post: operations["silenceAlarmZone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alarm/zones/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge (clear) a finished incident on an alarm zone (operator) */
+        post: operations["acknowledgeAlarmZone"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4839,15 +4839,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Silence the active incident on every alarm area at once (operator) */
-        post: operations["silenceAllAlarmAreas"];
+        /** Silence the active incident on every alarm zone at once (operator) */
+        post: operations["silenceAllAlarmZones"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/readiness": {
+    "/alarm/zones/{id}/readiness": {
         parameters: {
             query?: never;
             header?: never;
@@ -4856,8 +4856,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Per-mode arm-readiness of an alarm area */
-        get: operations["getAlarmAreaReadiness"];
+        /** Per-mode arm-readiness of an alarm zone */
+        get: operations["getAlarmZoneReadiness"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4875,8 +4875,8 @@ export interface paths {
         };
         /**
          * List the alarm-control-panel entity projections
-         * @description The HA-facing entity view of every alarm area (plus the
-         *     aggregate master panel when two or more areas exist) — the
+         * @description The HA-facing entity view of every alarm zone (plus the
+         *     aggregate master panel when two or more zones exist) — the
          *     same projection the MQTT discovery entities and the
          *     `alarm.panel_changed` WebSocket broadcast carry.
          */
@@ -4906,7 +4906,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/walktest/start": {
+    "/alarm/zones/{id}/walktest/start": {
         parameters: {
             query?: never;
             header?: never;
@@ -4917,7 +4917,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start a walk-test session on an alarm area (operator) */
+        /** Start a walk-test session on an alarm zone (operator) */
         post: operations["startAlarmWalkTest"];
         delete?: never;
         options?: never;
@@ -4925,7 +4925,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/walktest/stop": {
+    "/alarm/zones/{id}/walktest/stop": {
         parameters: {
             query?: never;
             header?: never;
@@ -4936,7 +4936,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stop the running walk-test session on an alarm area (operator) */
+        /** Stop the running walk-test session on an alarm zone (operator) */
         post: operations["stopAlarmWalkTest"];
         delete?: never;
         options?: never;
@@ -4944,7 +4944,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/alarm/areas/{id}/walktest": {
+    "/alarm/zones/{id}/walktest": {
         parameters: {
             query?: never;
             header?: never;
@@ -4953,7 +4953,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Live status of an alarm area's walk-test session */
+        /** Live status of an alarm zone's walk-test session */
         get: operations["getAlarmWalkTestStatus"];
         put?: never;
         post?: never;
@@ -5710,7 +5710,7 @@ export interface components {
             /**
              * @description The channel's single resolved room with the group-master
              *     fallback applied. Empty when no unique room can be
-             *     resolved. External clients use it as the suggested area of
+             *     resolved. External clients use it as the suggested zone of
              *     the channel group's sub-device.
              */
             room?: string;
@@ -7060,11 +7060,11 @@ export interface components {
         /**
          * @description Payload of an `alarm.state_changed` broadcast. Topic
          *     `alarm.panel`. Fires on every arm-state-machine transition of
-         *     an alarm area (docs/alarm-concept.md §5).
+         *     an alarm zone (docs/alarm-concept.md §5).
          */
         AlarmStateChangedPayload: {
-            area_id: string;
-            area_name: string;
+            zone_id: string;
+            zone_name: string;
             /** @enum {string} */
             old_state: "disarmed" | "arming" | "armed" | "pending" | "triggered";
             /** @enum {string} */
@@ -7087,10 +7087,10 @@ export interface components {
         /**
          * @description Payload of an `alarm.countdown` broadcast. Topic `alarm.panel`.
          *     Ticks once per second while an exit or entry delay runs on an
-         *     alarm area.
+         *     alarm zone.
          */
         AlarmCountdownPayload: {
-            area_id: string;
+            zone_id: string;
             /** @enum {string} */
             kind: "exit_delay" | "entry_delay";
             remaining_s: number;
@@ -7103,11 +7103,11 @@ export interface components {
         /**
          * @description Payload of an `alarm.readiness_changed` broadcast. Topic
          *     `alarm.panel`. Fires when the ready-to-arm computation of an
-         *     area changes for at least one mode (docs/alarm-concept.md
+         *     zone changes for at least one mode (docs/alarm-concept.md
          *     §6.3). Carries the full per-mode map, not a delta.
          */
         AlarmReadinessChangedPayload: {
-            area_id: string;
+            zone_id: string;
             /** @description Per-mode arming readiness, keyed by mode name. */
             readiness: {
                 [key: string]: components["schemas"]["AlarmModeReadiness"];
@@ -7120,8 +7120,8 @@ export interface components {
          *     silence.
          */
         AlarmNotificationPayload: {
-            area_id: string;
-            area_name?: string;
+            zone_id: string;
+            zone_name?: string;
             output_id: string;
             output_name?: string;
             /** Format: int64 */
@@ -7130,12 +7130,12 @@ export interface components {
         };
         /**
          * @description Payload of an `alarm.triggered` broadcast. Topic `alarm.panel`.
-         *     Fires when an area enters `triggered` and an incident is
+         *     Fires when an zone enters `triggered` and an incident is
          *     opened (or re-adopted after a restart / reconnect).
          */
         AlarmTriggeredPayload: {
-            area_id: string;
-            area_name: string;
+            zone_id: string;
+            zone_name: string;
             /** Format: int64 */
             incident_id: number;
             /** @description Triggering sensor id; omitted when the cause is not a sensor. */
@@ -7152,11 +7152,11 @@ export interface components {
         /**
          * @description Alarm-control-panel entity projection (model category
          *     `alarm_control_panel`), identical across REST, WebSocket, and
-         *     MQTT. `area_id` is `master` for the aggregate panel.
+         *     MQTT. `zone_id` is `master` for the aggregate panel.
          */
         AlarmPanelEntity: {
             unique_id: string;
-            area_id: string;
+            zone_id: string;
             name: string;
             category: string;
             /** @enum {string} */
@@ -7165,15 +7165,15 @@ export interface components {
             available: boolean;
             master?: boolean;
             /**
-             * @description Effective per-area code requirement for arming: the area's
+             * @description Effective per-zone code requirement for arming: the zone's
              *     code policy AND an applicable enabled pin code exists —
              *     exactly the requirement the daemon enforces, so a client
              *     prompts for a code precisely when one is needed. The master
-             *     aggregate carries `true` when any member area requires one.
+             *     aggregate carries `true` when any member zone requires one.
              */
             code_arm_required: boolean;
             /**
-             * @description Effective per-area code requirement for disarming; same
+             * @description Effective per-zone code requirement for disarming; same
              *     derivation and master aggregation as `code_arm_required`.
              */
             code_disarm_required: boolean;
@@ -7181,13 +7181,13 @@ export interface components {
         /**
          * @description Payload of an `alarm.panel_changed` broadcast. Topic
          *     `alarm.panel`. Fires whenever a panel entity's projection
-         *     changes; `removed` marks a deleted area's panel.
+         *     changes; `removed` marks a deleted zone's panel.
          *     `code_arm_required` / `code_disarm_required` mirror the
          *     `AlarmPanelEntity` flags so live code-policy edits propagate.
          */
         AlarmPanelChangedPayload: {
             unique_id: string;
-            area_id: string;
+            zone_id: string;
             name: string;
             state: string;
             available: boolean;
@@ -7198,13 +7198,13 @@ export interface components {
         /**
          * @description Payload of an `alarm.reminder` broadcast. Topic `alarm.panel`.
          *     Fires when an arm schedule elapses with auto-arm off while the
-         *     area is not in the scheduled mode — the engine notifies rather
+         *     zone is not in the scheduled mode — the engine notifies rather
          *     than arming (docs/alarm-concept.md §15 row 19).
          */
         AlarmReminderPayload: {
-            area_id: string;
-            area_name?: string;
-            /** @description The protection mode the schedule expected the area to be in. */
+            zone_id: string;
+            zone_name?: string;
+            /** @description The protection mode the schedule expected the zone to be in. */
             mode: string;
         };
         /**
@@ -7217,7 +7217,7 @@ export interface components {
             /** Format: int64 */
             entry_id: number;
             /** @description Omitted for engine-global entries. */
-            area_id?: string;
+            zone_id?: string;
             /** @enum {string} */
             class: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
             /** @description Stable machine-readable event token within the class. */
@@ -7236,7 +7236,7 @@ export interface components {
          *     sensor activation.
          */
         AlarmWalkTestProgressPayload: {
-            area_id: string;
+            zone_id: string;
             sensor_id: string;
             sensor_name?: string;
             /** @description Number of enrolled sensors that have reported an activation so far this session. */
@@ -8072,19 +8072,19 @@ export interface components {
             name: string;
             device_count: number;
         };
-        /** @description Free-form, engine-owned document describing an alarm area's arming modes and per-mode policy (entry/exit delays, output policy, post-trigger policy, central-loss policy, blocker policies — see docs/alarm-concept.md §14). The REST and WebSocket layers pass this document through unvalidated; the alarm engine is the sole owner of its schema and versioning. */
-        AlarmAreaConfig: {
+        /** @description Free-form, engine-owned document describing an alarm zone's arming modes and per-mode policy (entry/exit delays, output policy, post-trigger policy, central-loss policy, blocker policies — see docs/alarm-concept.md §14). The REST and WebSocket layers pass this document through unvalidated; the alarm engine is the sole owner of its schema and versioning. */
+        AlarmZoneConfig: {
             [key: string]: unknown;
         };
-        /** @description One alarm area — an independently armable partition with its own arm state, sensor set, and output set (docs/alarm-concept.md §14). */
-        AlarmArea: {
+        /** @description One alarm zone — an independently armable partition with its own arm state, sensor set, and output set (docs/alarm-concept.md §14). */
+        AlarmZone: {
             id: string;
             name: string;
-            /** @description Display ordering hint for the SPA area list. */
+            /** @description Display ordering hint for the SPA zone list. */
             position?: number;
-            config?: components["schemas"]["AlarmAreaConfig"];
+            config?: components["schemas"]["AlarmZoneConfig"];
         };
-        /** @description One CCU data point enrolled into an alarm area as a sensor input (door/window contact, motion, tamper, hazard, panic — docs/alarm-concept.md §6.1). */
+        /** @description One CCU data point enrolled into an alarm zone as a sensor input (door/window contact, motion, tamper, hazard, panic — docs/alarm-concept.md §6.1). */
         AlarmSensor: {
             id: string;
             /** @description Owning CCU (central name). */
@@ -8103,7 +8103,7 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** @description One CCU actuator enrolled into an alarm area as an alarm consequence — siren, switched siren, smoke-detector sounder, alarm light, chirp emitter, notification target, or sysvar mirror (docs/alarm-concept.md §7). */
+        /** @description One CCU actuator enrolled into an alarm zone as an alarm consequence — siren, switched siren, smoke-detector sounder, alarm light, chirp emitter, notification target, or sysvar mirror (docs/alarm-concept.md §7). */
         AlarmOutput: {
             id: string;
             /**
@@ -8162,7 +8162,7 @@ export interface components {
             /** @description Press parameters this key offers, in dispatch order (PRESS_SHORT before PRESS_LONG). */
             parameters: ("PRESS_SHORT" | "PRESS_LONG")[];
         };
-        /** @description Whether an alarm area is ready to arm into one specific mode. */
+        /** @description Whether an alarm zone is ready to arm into one specific mode. */
         AlarmModeReadiness: {
             /** @description True when the mode can be armed without `force`. */
             ready: boolean;
@@ -8171,8 +8171,8 @@ export interface components {
             /** @description Sensor ids with non-blocking health warnings for this mode. */
             warnings?: string[];
         };
-        /** @description One alarm area's live status, as returned by GET /alarm/state and GET /alarm/areas/{id}/status views. */
-        AlarmAreaStatus: {
+        /** @description One alarm zone's live status, as returned by GET /alarm/state and GET /alarm/zones/{id}/status views. */
+        AlarmZoneStatus: {
             id: string;
             name: string;
             /**
@@ -8187,7 +8187,7 @@ export interface components {
             mode?: "disarmed" | "perimeter" | "full" | "night" | "vacation" | "custom";
             /** @description Sensor ids currently bypassed for the active/pending arm. */
             bypassed?: string[];
-            /** @description The area's open incident, present only while `state` is `triggered`. */
+            /** @description The zone's open incident, present only while `state` is `triggered`. */
             incident?: {
                 id?: string;
                 silenced?: boolean;
@@ -8203,7 +8203,7 @@ export interface components {
             readiness?: {
                 [key: string]: components["schemas"]["AlarmModeReadiness"];
             };
-            /** @description True while a walk-test session is running on this area. */
+            /** @description True while a walk-test session is running on this zone. */
             walktest_active: boolean;
         };
         AlarmArmRequest: {
@@ -8218,12 +8218,12 @@ export interface components {
             skip_delay?: boolean;
             /** @description Sensor ids to bypass for this arm attempt. */
             bypass?: string[];
-            /** @description Alarm code supplied with the arm, when the area's code policy requires one (or to surface a duress code). Never logged or persisted in cleartext. */
+            /** @description Alarm code supplied with the arm, when the zone's code policy requires one (or to surface a duress code). Never logged or persisted in cleartext. */
             code?: string;
         };
         /** @description Optional body of the code-carrying verbs (disarm / silence / acknowledge). An absent body acts without a code. */
         AlarmVerbRequest: {
-            /** @description Alarm code for the verb, when the area's code policy requires one. Never logged or persisted in cleartext. */
+            /** @description Alarm code for the verb, when the zone's code policy requires one. Never logged or persisted in cleartext. */
             code?: string;
         };
         /** @description Per-code verb permissions. */
@@ -8244,8 +8244,8 @@ export interface components {
             /** @description A PIN that disarms normally but fires a silent duress alarm. Only meaningful for the pin kind. */
             duress?: boolean;
             perms: components["schemas"]["AlarmCodePerms"];
-            /** @description Restrict to these area ids; empty means every area. */
-            areas?: string[];
+            /** @description Restrict to these zone ids; empty means every zone. */
+            zones?: string[];
             /** @description Engine-owned hardware-binding document for the keypad_slot / remote_key kinds; absent for pin codes. */
             binding?: unknown;
             /**
@@ -8273,7 +8273,7 @@ export interface components {
             pin?: string;
             duress?: boolean;
             perms: components["schemas"]["AlarmCodePerms"];
-            areas?: string[];
+            zones?: string[];
             /** @description Engine-owned hardware-binding document (keypad_slot / remote_key). */
             binding?: unknown;
             /** Format: int64 */
@@ -8284,13 +8284,13 @@ export interface components {
         };
         AlarmArmAccepted: {
             /**
-             * @description Resulting area state.
+             * @description Resulting zone state.
              * @enum {string}
              */
             state: "arming" | "armed";
             /** @description Sensor ids actually bypassed for this arm. */
             bypassed?: string[];
-            /** @description Exit delay in seconds the area is now counting down; 0 when armed immediately. */
+            /** @description Exit delay in seconds the zone is now counting down; 0 when armed immediately. */
             exit_delay_s?: number;
         };
         /** @description One entry in the alarm engine's append-only event journal (docs/alarm-concept.md §14), as returned by GET /alarm/journal. */
@@ -8299,7 +8299,7 @@ export interface components {
             id: number;
             /** Format: date-time */
             when: string;
-            area_id: string;
+            zone_id: string;
             /**
              * @description Journal bucket used by the `class` query filter.
              * @enum {string}
@@ -8321,12 +8321,12 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** @description Live status of a walk-test session on one alarm area, as returned by GET /alarm/areas/{id}/walktest. */
+        /** @description Live status of a walk-test session on one alarm zone, as returned by GET /alarm/zones/{id}/walktest. */
         AlarmWalkTestStatus: {
             active: boolean;
             /** Format: date-time */
             started_at?: string;
-            /** @description One row per sensor enrolled in the area, tracking walk-test coverage. */
+            /** @description One row per sensor enrolled in the zone, tracking walk-test coverage. */
             sensors: {
                 id: string;
                 name?: string;
@@ -8378,7 +8378,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description The area's code policy requires a code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist (docs/alarm-concept.md §16). */
+        /** @description The zone's code policy requires a code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist (docs/alarm-concept.md §16). */
         AlarmInvalidCode: {
             headers: {
                 [name: string]: unknown;
@@ -13968,20 +13968,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Per-area alarm status. */
+            /** @description Per-zone alarm status. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        areas: components["schemas"]["AlarmAreaStatus"][];
+                        zones: components["schemas"]["AlarmZoneStatus"][];
                     };
                 };
             };
         };
     };
-    listAlarmAreas: {
+    listAlarmZones: {
         parameters: {
             query?: never;
             header?: never;
@@ -13990,18 +13990,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Alarm area list */
+            /** @description Alarm zone list */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AlarmArea"][];
+                    "application/json": components["schemas"]["AlarmZone"][];
                 };
             };
         };
     };
-    createAlarmArea: {
+    createAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14010,7 +14010,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AlarmArea"];
+                "application/json": components["schemas"]["AlarmZone"];
             };
         };
         responses: {
@@ -14020,14 +14020,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AlarmArea"];
+                    "application/json": components["schemas"]["AlarmZone"];
                 };
             };
             400: components["responses"]["BadRequest"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
-    getAlarmArea: {
+    getAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14044,13 +14044,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AlarmArea"];
+                    "application/json": components["schemas"]["AlarmZone"];
                 };
             };
             404: components["responses"]["NotFound"];
         };
     };
-    putAlarmArea: {
+    putAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14061,7 +14061,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AlarmArea"];
+                "application/json": components["schemas"]["AlarmZone"];
             };
         };
         responses: {
@@ -14077,7 +14077,7 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
-    deleteAlarmArea: {
+    deleteAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14099,7 +14099,7 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
-    listAlarmAreaSensors: {
+    listAlarmZoneSensors: {
         parameters: {
             query?: never;
             header?: never;
@@ -14122,7 +14122,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    putAlarmAreaSensors: {
+    putAlarmZoneSensors: {
         parameters: {
             query?: never;
             header?: never;
@@ -14149,7 +14149,7 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
-    listAlarmAreaOutputs: {
+    listAlarmZoneOutputs: {
         parameters: {
             query?: never;
             header?: never;
@@ -14172,7 +14172,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    putAlarmAreaOutputs: {
+    putAlarmZoneOutputs: {
         parameters: {
             query?: never;
             header?: never;
@@ -14199,7 +14199,7 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
-    armAlarmArea: {
+    armAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14214,7 +14214,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Arming accepted. The area may now be counting down an exit delay (state `arming`) or already armed (`exit_delay_s: 0`). */
+            /** @description Arming accepted. The zone may now be counting down an exit delay (state `arming`) or already armed (`exit_delay_s: 0`). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14224,7 +14224,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            /** @description The area's code policy requires an arm code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist. */
+            /** @description The zone's code policy requires an arm code and the supplied `code` is missing or wrong. The detail stays opaque (`invalid_code`) so a prober learns nothing about which codes exist. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -14245,7 +14245,7 @@ export interface operations {
             };
         };
     };
-    disarmAlarmArea: {
+    disarmAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14273,7 +14273,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    silenceAlarmArea: {
+    silenceAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14301,7 +14301,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    acknowledgeAlarmArea: {
+    acknowledgeAlarmZone: {
         parameters: {
             query?: never;
             header?: never;
@@ -14328,7 +14328,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    silenceAllAlarmAreas: {
+    silenceAllAlarmZones: {
         parameters: {
             query?: never;
             header?: never;
@@ -14346,7 +14346,7 @@ export interface operations {
             };
         };
     };
-    getAlarmAreaReadiness: {
+    getAlarmZoneReadiness: {
         parameters: {
             query?: never;
             header?: never;
@@ -14357,7 +14357,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Readiness verdict for every mode configured on the area, keyed by mode name. */
+            /** @description Readiness verdict for every mode configured on the zone, keyed by mode name. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14395,8 +14395,8 @@ export interface operations {
     listAlarmJournal: {
         parameters: {
             query?: {
-                /** @description Only return entries for this alarm area id. */
-                area?: string;
+                /** @description Only return entries for this alarm zone id. */
+                zone?: string;
                 /** @description Only return entries in this journal class. */
                 class?: "arm" | "disarm" | "trigger" | "silence" | "bypass" | "fault" | "test" | "config";
                 /** @description Only return entries at-or-after this value (inclusive, RFC3339). Returns 400 if the value cannot be parsed. */

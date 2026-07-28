@@ -33,10 +33,10 @@ func readinessEvents(h *harness) []hmevent.AlarmReadinessChangedEvent {
 
 func TestHealth_TamperWhileDisarmedIsJournaled(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("tamper1", "eg", hmenum.AlarmSensorTypeTamper, engine.SensorConfig{})
 	h.start()
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
 	h.eng.HandleSensorEvent(h.ctx, "tamper1", true)
 	if !h.journal.has("tamper_while_disarmed") {
@@ -46,7 +46,7 @@ func TestHealth_TamperWhileDisarmedIsJournaled(t *testing.T) {
 
 func TestHealth_UnavailabilityWarnsWhileArmedByDefault(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
@@ -54,12 +54,12 @@ func TestHealth_UnavailabilityWarnsWhileArmedByDefault(t *testing.T) {
 	if !h.journal.has("sensor_unavailable_while_armed") {
 		t.Fatalf("missing sensor_unavailable_while_armed journal entry; got %v", h.journal.events())
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 }
 
 func TestHealth_UnavailabilityTriggersWhenFlagged(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.seedSensor("flaky", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes:                  []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		TriggerWhenUnavailable: true,
@@ -68,12 +68,12 @@ func TestHealth_UnavailabilityTriggersWhenFlagged(t *testing.T) {
 	h.armFull()
 
 	h.eng.SetSensorAvailability(h.ctx, "flaky", false)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 }
 
 func TestHealth_SabotageBlocksArm(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	h.eng.SetSensorHealth(h.ctx, "window", engine.SensorHealth{Sabotage: true})
@@ -93,7 +93,7 @@ func TestHealth_SabotageBlocksArm(t *testing.T) {
 
 func TestHealth_LowBatteryWarnsWithoutBlockingArm(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	h.eng.SetSensorHealth(h.ctx, "window", engine.SensorHealth{LowBattery: true})
@@ -121,7 +121,7 @@ func TestHealth_LowBatteryWarnsWithoutBlockingArm(t *testing.T) {
 
 func TestHealth_CentralLossAlertKeepsArmedAndJournals(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
@@ -129,7 +129,7 @@ func TestHealth_CentralLossAlertKeepsArmedAndJournals(t *testing.T) {
 	if !h.journal.has("central_lost_while_armed") {
 		t.Fatalf("missing central_lost_while_armed journal entry; got %v", h.journal.events())
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
 	h.eng.HandleCentralConnectivity(h.ctx, "ccu-test", true)
 	if !h.journal.has("central_restored") {
@@ -139,9 +139,9 @@ func TestHealth_CentralLossAlertKeepsArmedAndJournals(t *testing.T) {
 
 func TestHealth_CentralLossTriggerPolicyTriggers(t *testing.T) {
 	h := newHarness(t)
-	cfg := defaultAreaConfig()
+	cfg := defaultZoneConfig()
 	cfg.CentralLoss = hmenum.AlarmCentralLossTrigger
-	h.seedArea("eg", "Erdgeschoss", cfg)
+	h.seedZone("eg", "Erdgeschoss", cfg)
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -149,12 +149,12 @@ func TestHealth_CentralLossTriggerPolicyTriggers(t *testing.T) {
 	h.armFull()
 
 	h.eng.HandleCentralConnectivity(h.ctx, "ccu-test", false)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 }
 
 func TestHealth_ReadinessEventReflectsSensorOpenAndClose(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	snap := h.mustSnapshot("eg")
@@ -197,7 +197,7 @@ func TestHealth_ReadinessEventReflectsSensorOpenAndClose(t *testing.T) {
 
 func TestHealth_AllowOpenAfterArmingOnlyTriggersOnReactivation(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("stayopen", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes:                []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		AllowOpenAfterArming: true,
@@ -209,11 +209,11 @@ func TestHealth_AllowOpenAfterArmingOnlyTriggersOnReactivation(t *testing.T) {
 		t.Fatalf("arm: %v", err)
 	}
 	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
 	h.eng.HandleSensorEvent(h.ctx, "stayopen", false)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
 	h.eng.HandleSensorEvent(h.ctx, "stayopen", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 }

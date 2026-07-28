@@ -39,20 +39,20 @@ type WalkTestStatus struct {
 	Sensors   []WalkTestSensor
 }
 
-// WalkTestStart begins a walk test on a disarmed area: every sensor
+// WalkTestStart begins a walk test on a disarmed zone: every sensor
 // activation is recorded and journaled instead of evaluated — the
 // checklist view ticks live without arming anything.
-func (e *Engine) WalkTestStart(ctx context.Context, areaID, by, source string) error {
+func (e *Engine) WalkTestStart(ctx context.Context, zoneID, by, source string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.started {
 		return ErrInvalidState
 	}
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return ErrUnknownArea
+		return ErrUnknownZone
 	}
-	if a.state != hmenum.AlarmAreaStateDisarmed {
+	if a.state != hmenum.AlarmZoneStateDisarmed {
 		return ErrInvalidState
 	}
 	if a.walk != nil {
@@ -67,12 +67,12 @@ func (e *Engine) WalkTestStart(ctx context.Context, areaID, by, source string) e
 
 // WalkTestStop ends the session and journals the report (verified and
 // missing sensors).
-func (e *Engine) WalkTestStop(ctx context.Context, areaID, by, source string) (WalkTestStatus, error) {
+func (e *Engine) WalkTestStop(ctx context.Context, zoneID, by, source string) (WalkTestStatus, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return WalkTestStatus{}, ErrUnknownArea
+		return WalkTestStatus{}, ErrUnknownZone
 	}
 	if a.walk == nil {
 		return WalkTestStatus{}, ErrInvalidState
@@ -93,13 +93,13 @@ func (e *Engine) WalkTestStop(ctx context.Context, areaID, by, source string) (W
 	return status, nil
 }
 
-// WalkTestStatus reports the running (or absent) session of an area.
-func (e *Engine) WalkTestStatus(areaID string) (WalkTestStatus, error) {
+// WalkTestStatus reports the running (or absent) session of an zone.
+func (e *Engine) WalkTestStatus(zoneID string) (WalkTestStatus, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return WalkTestStatus{}, ErrUnknownArea
+		return WalkTestStatus{}, ErrUnknownZone
 	}
 	if a.walk == nil {
 		return WalkTestStatus{Active: false}, nil
@@ -109,7 +109,7 @@ func (e *Engine) WalkTestStatus(areaID string) (WalkTestStatus, error) {
 
 // walkStatusLocked builds the progress snapshot. The caller holds the
 // lock and has checked a.walk != nil.
-func (e *Engine) walkStatusLocked(a *area) WalkTestStatus {
+func (e *Engine) walkStatusLocked(a *zone) WalkTestStatus {
 	st := WalkTestStatus{Active: true, StartedAt: a.walk.startedAt}
 	ids := sortedSensorIDs(a)
 	for _, id := range ids {
@@ -131,8 +131,8 @@ func (e *Engine) walkStatusLocked(a *area) WalkTestStatus {
 
 // walkTestObserve records a sensor activation during a running
 // session. The caller holds the lock; returns true when consumed.
-func (e *Engine) walkTestObserve(ctx context.Context, a *area, sensorID string, active bool) bool {
-	if a.walk == nil || a.state != hmenum.AlarmAreaStateDisarmed {
+func (e *Engine) walkTestObserve(ctx context.Context, a *zone, sensorID string, active bool) bool {
+	if a.walk == nil || a.state != hmenum.AlarmZoneStateDisarmed {
 		return false
 	}
 	if !active {
@@ -152,7 +152,7 @@ func (e *Engine) walkTestObserve(ctx context.Context, a *area, sensorID string, 
 		st := e.walkStatusLocked(a)
 		e.sink.Publish(hmevent.AlarmWalkTestEvent{
 			Base:   hmevent.NewBaseAt(now),
-			AreaID: a.id, SensorID: sensorID, SensorName: s.row.Name,
+			ZoneID: a.id, SensorID: sensorID, SensorName: s.row.Name,
 			Seen: st.Seen, Total: st.Total,
 		})
 	}

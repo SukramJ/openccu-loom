@@ -35,13 +35,13 @@ vi.mock("$lib/i18n", () => ({
 vi.mock("$lib/api/client", () => ({
   api: {
     getAlarmState: vi.fn(),
-    listAlarmAreas: vi.fn(),
+    listAlarmZones: vi.fn(),
     listAlarmJournal: vi.fn(),
-    armAlarmArea: vi.fn(),
-    disarmAlarmArea: vi.fn(),
-    silenceAlarmArea: vi.fn(),
-    silenceAllAlarmAreas: vi.fn(),
-    acknowledgeAlarmArea: vi.fn(),
+    armAlarmZone: vi.fn(),
+    disarmAlarmZone: vi.fn(),
+    silenceAlarmZone: vi.fn(),
+    silenceAllAlarmZones: vi.fn(),
+    acknowledgeAlarmZone: vi.fn(),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -57,11 +57,11 @@ vi.mock("$lib/api/client", () => ({
 
 import { api } from "$lib/api/client";
 import { alarmPanelStore } from "./alarmPanel.svelte";
-import type { AlarmAreaStatus } from "$lib/api/types";
+import type { AlarmZoneStatus } from "$lib/api/types";
 
-function area(overrides: Partial<AlarmAreaStatus> = {}): AlarmAreaStatus {
+function zone(overrides: Partial<AlarmZoneStatus> = {}): AlarmZoneStatus {
   return {
-    id: "area-1",
+    id: "zone-1",
     name: "Ground floor",
     state: "disarmed",
     walktest_active: false,
@@ -70,14 +70,14 @@ function area(overrides: Partial<AlarmAreaStatus> = {}): AlarmAreaStatus {
 }
 
 const getAlarmStateMock = api.getAlarmState as ReturnType<typeof vi.fn>;
-const listAlarmAreasMock = api.listAlarmAreas as ReturnType<typeof vi.fn>;
+const listAlarmZonesMock = api.listAlarmZones as ReturnType<typeof vi.fn>;
 const listAlarmJournalMock = api.listAlarmJournal as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   capturedHandler = null;
-  getAlarmStateMock.mockResolvedValue({ areas: [area()] });
-  listAlarmAreasMock.mockResolvedValue([{ id: "area-1", name: "Ground floor" }]);
+  getAlarmStateMock.mockResolvedValue({ zones: [zone()] });
+  listAlarmZonesMock.mockResolvedValue([{ id: "zone-1", name: "Ground floor" }]);
   listAlarmJournalMock.mockResolvedValue([]);
 });
 
@@ -93,19 +93,19 @@ async function seedAndSubscribe() {
 }
 
 describe("alarmPanelStore.refresh", () => {
-  it("seeds areas/readiness/countdowns from GET /alarm/state", async () => {
+  it("seeds zones/readiness/countdowns from GET /alarm/state", async () => {
     getAlarmStateMock.mockResolvedValueOnce({
-      areas: [
-        area({
+      zones: [
+        zone({
           readiness: { perimeter: { ready: true } },
           countdown: { kind: "exit_delay", remaining_s: 12, total_s: 30 },
         }),
       ],
     });
     await alarmPanelStore.refresh();
-    expect(alarmPanelStore.areas).toHaveLength(1);
-    expect(alarmPanelStore.readiness["area-1"].perimeter.ready).toBe(true);
-    expect(alarmPanelStore.countdowns["area-1"]).toEqual({
+    expect(alarmPanelStore.zones).toHaveLength(1);
+    expect(alarmPanelStore.readiness["zone-1"].perimeter.ready).toBe(true);
+    expect(alarmPanelStore.countdowns["zone-1"]).toEqual({
       kind: "exit_delay",
       remaining_s: 12,
       total_s: 30,
@@ -114,10 +114,10 @@ describe("alarmPanelStore.refresh", () => {
 });
 
 describe("alarmPanelStore.applyEvent — alarm.state_changed", () => {
-  it("updates the matching area's state + mode and clears a stale countdown", async () => {
+  it("updates the matching zone's state + mode and clears a stale countdown", async () => {
     getAlarmStateMock.mockResolvedValueOnce({
-      areas: [
-        area({
+      zones: [
+        zone({
           state: "arming",
           mode: "full",
           countdown: { kind: "exit_delay", remaining_s: 5, total_s: 30 },
@@ -125,34 +125,34 @@ describe("alarmPanelStore.applyEvent — alarm.state_changed", () => {
       ],
     });
     const handler = await seedAndSubscribe();
-    expect(alarmPanelStore.countdowns["area-1"]).toBeDefined();
+    expect(alarmPanelStore.countdowns["zone-1"]).toBeDefined();
 
     handler({
       type: "alarm.state_changed",
       payload: {
-        area_id: "area-1",
-        area_name: "Ground floor",
+        zone_id: "zone-1",
+        zone_name: "Ground floor",
         old_state: "arming",
         new_state: "armed",
         mode: "full",
       },
     });
 
-    expect(alarmPanelStore.areas[0].state).toBe("armed");
-    expect(alarmPanelStore.areas[0].mode).toBe("full");
+    expect(alarmPanelStore.zones[0].state).toBe("armed");
+    expect(alarmPanelStore.zones[0].mode).toBe("full");
     // armed is neither "arming" nor "pending" → the running countdown is dropped.
-    expect(alarmPanelStore.countdowns["area-1"]).toBeUndefined();
+    expect(alarmPanelStore.countdowns["zone-1"]).toBeUndefined();
   });
 });
 
 describe("alarmPanelStore.applyEvent — alarm.countdown", () => {
-  it("seats the countdown for the area", async () => {
+  it("seats the countdown for the zone", async () => {
     const handler = await seedAndSubscribe();
     handler({
       type: "alarm.countdown",
-      payload: { area_id: "area-1", kind: "entry_delay", remaining_s: 8, total_s: 15 },
+      payload: { zone_id: "zone-1", kind: "entry_delay", remaining_s: 8, total_s: 15 },
     });
-    expect(alarmPanelStore.countdowns["area-1"]).toEqual({
+    expect(alarmPanelStore.countdowns["zone-1"]).toEqual({
       kind: "entry_delay",
       remaining_s: 8,
       total_s: 15,
@@ -161,40 +161,40 @@ describe("alarmPanelStore.applyEvent — alarm.countdown", () => {
 });
 
 describe("alarmPanelStore.applyEvent — alarm.readiness_changed", () => {
-  it("replaces the per-mode readiness map for the area", async () => {
+  it("replaces the per-mode readiness map for the zone", async () => {
     const handler = await seedAndSubscribe();
     handler({
       type: "alarm.readiness_changed",
       payload: {
-        area_id: "area-1",
+        zone_id: "zone-1",
         readiness: { full: { ready: false, blockers: ["sensor-9"] } },
       },
     });
-    expect(alarmPanelStore.readiness["area-1"].full.ready).toBe(false);
-    expect(alarmPanelStore.readiness["area-1"].full.blockers).toEqual(["sensor-9"]);
-    expect(alarmPanelStore.areas[0].readiness?.full.ready).toBe(false);
+    expect(alarmPanelStore.readiness["zone-1"].full.ready).toBe(false);
+    expect(alarmPanelStore.readiness["zone-1"].full.blockers).toEqual(["sensor-9"]);
+    expect(alarmPanelStore.zones[0].readiness?.full.ready).toBe(false);
   });
 });
 
 describe("alarmPanelStore.applyEvent — alarm.triggered", () => {
-  it("flips the area to triggered and opens an unsilenced incident", async () => {
+  it("flips the zone to triggered and opens an unsilenced incident", async () => {
     const handler = await seedAndSubscribe();
     handler({
       type: "alarm.triggered",
       payload: {
-        area_id: "area-1",
-        area_name: "Ground floor",
+        zone_id: "zone-1",
+        zone_name: "Ground floor",
         incident_id: 42,
         cause: "sensor",
         mode: "full",
       },
     });
-    expect(alarmPanelStore.areas[0].state).toBe("triggered");
-    expect(alarmPanelStore.areas[0].mode).toBe("full");
-    expect(alarmPanelStore.areas[0].incident).toMatchObject({ id: "42", silenced: false });
+    expect(alarmPanelStore.zones[0].state).toBe("triggered");
+    expect(alarmPanelStore.zones[0].mode).toBe("full");
+    expect(alarmPanelStore.zones[0].incident).toMatchObject({ id: "42", silenced: false });
     // The live broadcast's cause survives into the incident so the
     // triggered surface can name the sensor without a refresh.
-    expect(alarmPanelStore.areas[0].incident?.cause).toBe("sensor");
+    expect(alarmPanelStore.zones[0].incident?.cause).toBe("sensor");
   });
 });
 
@@ -206,7 +206,7 @@ describe("alarmPanelStore.applyEvent — alarm.journal_appended", () => {
       type: "alarm.journal_appended",
       payload: {
         entry_id: 7,
-        area_id: "area-1",
+        zone_id: "zone-1",
         class: "arm",
         event: "armed",
         actor: "admin",
@@ -215,7 +215,7 @@ describe("alarmPanelStore.applyEvent — alarm.journal_appended", () => {
     expect(alarmPanelStore.journal).toHaveLength(1);
     expect(alarmPanelStore.journal[0]).toMatchObject({
       id: 7,
-      area_id: "area-1",
+      zone_id: "zone-1",
       class: "arm",
       event: "armed",
       actor: "admin",
@@ -224,13 +224,13 @@ describe("alarmPanelStore.applyEvent — alarm.journal_appended", () => {
 });
 
 describe("alarmPanelStore.applyEvent — alarm.walktest_progress", () => {
-  it("records the seen/total counter for the area", async () => {
+  it("records the seen/total counter for the zone", async () => {
     const handler = await seedAndSubscribe();
     handler({
       type: "alarm.walktest_progress",
-      payload: { area_id: "area-1", sensor_id: "s1", seen: 2, total: 5 },
+      payload: { zone_id: "zone-1", sensor_id: "s1", seen: 2, total: 5 },
     });
-    expect(alarmPanelStore.walktest["area-1"]).toEqual({ seen: 2, total: 5 });
+    expect(alarmPanelStore.walktest["zone-1"]).toEqual({ seen: 2, total: 5 });
   });
 });
 
@@ -251,10 +251,10 @@ describe("alarmPanelStore.applyEvent — alarm.health_changed", () => {
 
 describe("alarmPanelStore verbs — failure surfaces a toast, never throws", () => {
   it("silence() swallows a rejected API call into a toast and returns false", async () => {
-    (api.silenceAlarmArea as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+    (api.silenceAlarmZone as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("central unreachable"),
     );
-    const ok = await alarmPanelStore.silence("area-1");
+    const ok = await alarmPanelStore.silence("zone-1");
     expect(ok).toBe(false);
     expect(mockToastError).toHaveBeenCalledOnce();
   });

@@ -2,11 +2,15 @@
 
 ## 0.49.2
 
-- **Sirens can now serve more than one alarm area.** Enrolling a siren
-  (or sensor) that another area already uses no longer fails the save
+- **Alarm "areas" are now "zones".** The armable alarm unit is called a
+  zone throughout the UI, API, and MQTT topics — the term "area" is
+  freed up for the upcoming room grouping. Existing alarm configuration
+  migrates automatically.
+- **Sirens can now serve more than one alarm zone.** Enrolling a siren
+  (or sensor) that another zone already uses no longer fails the save
   with an internal error — and a shared siren keeps sounding until the
-  **last** alarming area silences it, instead of going quiet when any
-  single area stops.
+  **last** alarming zone silences it, instead of going quiet when any
+  single zone stops.
 
 
 - **Alarm setup wizard actually works end to end.** Sensors and outputs are

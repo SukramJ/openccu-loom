@@ -136,7 +136,7 @@ func newAlarmVerbCodeFixture(t *testing.T, validator *fakeVerbCodeValidator) *al
 
 	eng, err := engine.New(engine.Deps{
 		Clock:     clk,
-		Areas:     stores.Areas,
+		Zones:     stores.Zones,
 		Sensors:   stores.Sensors,
 		State:     stores.State,
 		Incidents: stores.Incidents,
@@ -154,23 +154,23 @@ func newAlarmVerbCodeFixture(t *testing.T, validator *fakeVerbCodeValidator) *al
 	return &alarmVerbCodeFixture{t: t, stores: stores, eng: eng, sink: sink, clk: clk}
 }
 
-// seedCodePolicyArea persists a single-mode "full" area with the given
+// seedCodePolicyZone persists a single-mode "full" zone with the given
 // code policy and reloads the engine.
-func (f *alarmVerbCodeFixture) seedCodePolicyArea(id, name string, policy engine.CodePolicy) {
+func (f *alarmVerbCodeFixture) seedCodePolicyZone(id, name string, policy engine.CodePolicy) {
 	f.t.Helper()
-	cfg := engine.AreaConfig{
+	cfg := engine.ZoneConfig{
 		Modes:      map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {TriggerSeconds: 60}},
 		CodePolicy: policy,
 	}
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		f.t.Fatalf("marshal area config: %v", err)
+		f.t.Fatalf("marshal zone config: %v", err)
 	}
 	now := f.clk.Now().UnixMilli()
-	if err := f.stores.Areas.Upsert(context.Background(), sqlitestore.AlarmAreaRow{
+	if err := f.stores.Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
-		f.t.Fatalf("seed area %s: %v", id, err)
+		f.t.Fatalf("seed zone %s: %v", id, err)
 	}
 	if err := f.eng.Reload(context.Background()); err != nil {
 		f.t.Fatalf("reload: %v", err)
@@ -184,11 +184,11 @@ func requireDisarmTrue() *bool {
 }
 
 // hiddenJournalEvents returns every (including hidden) journal entry of
-// areaID for assertions on the duress fan-out's hidden journal row.
-func (f *alarmVerbCodeFixture) hiddenJournalEvents(areaID string) []sqlitestore.AlarmJournalEntry {
+// zoneID for assertions on the duress fan-out's hidden journal row.
+func (f *alarmVerbCodeFixture) hiddenJournalEvents(zoneID string) []sqlitestore.AlarmJournalEntry {
 	f.t.Helper()
 	rows, err := f.stores.Journal.Query(context.Background(), sqlitestore.AlarmJournalFilter{
-		AreaID: areaID, IncludeHidden: true, Limit: 100,
+		ZoneID: zoneID, IncludeHidden: true, Limit: 100,
 	})
 	if err != nil {
 		f.t.Fatalf("journal query: %v", err)
@@ -198,61 +198,61 @@ func (f *alarmVerbCodeFixture) hiddenJournalEvents(areaID string) []sqlitestore.
 
 // --- disarm ---
 
-// TestDisarmAlarmArea_UnrecognizedCode_StillSucceeds_OperatorBypass pins
+// TestDisarmAlarmZone_UnrecognizedCode_StillSucceeds_OperatorBypass pins
 // the S6 break-glass rule at the REST surface: even with RequireDisarm
 // forced on and a code supplied that the validator refuses, the
 // operator-attributed rest-operator source is never blocked.
-func TestDisarmAlarmArea_UnrecognizedCode_StillSucceeds_OperatorBypass(t *testing.T) {
+func TestDisarmAlarmZone_UnrecognizedCode_StillSucceeds_OperatorBypass(t *testing.T) {
 	t.Parallel()
 	validator := &fakeVerbCodeValidator{codes: map[string]fakeVerbCodeEntry{}}
 	fx := newAlarmVerbCodeFixture(t, validator)
-	fx.seedCodePolicyArea("eg", "Erdgeschoss", engine.CodePolicy{RequireDisarm: requireDisarmTrue()})
+	fx.seedCodePolicyZone("eg", "Erdgeschoss", engine.CodePolicy{RequireDisarm: requireDisarmTrue()})
 	if _, err := fx.eng.Arm(context.Background(), "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
 
 	body := strings.NewReader(`{"code":"0000"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas/eg/disarm", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones/eg/disarm", body)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	DisarmAlarmArea(fx, nil).ServeHTTP(w, req)
+	DisarmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204 (operator bypass), body=%s", w.Code, w.Body.String())
 	}
-	if snap, ok := fx.eng.Area("eg"); !ok || snap.State != hmenum.AlarmAreaStateDisarmed {
-		t.Fatalf("area state = %+v, want disarmed", snap)
+	if snap, ok := fx.eng.Zone("eg"); !ok || snap.State != hmenum.AlarmZoneStateDisarmed {
+		t.Fatalf("zone state = %+v, want disarmed", snap)
 	}
 }
 
-// TestDisarmAlarmArea_DuressCode_FiresDuressEventAndHiddenJournalEntry
+// TestDisarmAlarmZone_DuressCode_FiresDuressEventAndHiddenJournalEntry
 // covers the meaningful code behaviour REST cannot bypass: a duress
-// code disarms normally (204, area disarmed) while silently firing
+// code disarms normally (204, zone disarmed) while silently firing
 // AlarmDuressEvent on the bus and a Hidden journal row — never a
 // visible journal entry, never a WS broadcast (docs/alarm-concept.md
 // §11).
-func TestDisarmAlarmArea_DuressCode_FiresDuressEventAndHiddenJournalEntry(t *testing.T) {
+func TestDisarmAlarmZone_DuressCode_FiresDuressEventAndHiddenJournalEntry(t *testing.T) {
 	t.Parallel()
 	validator := &fakeVerbCodeValidator{codes: map[string]fakeVerbCodeEntry{
 		"9999": {identity: "Under Duress", duress: true, perms: map[string]bool{"disarm": true}},
 	}}
 	fx := newAlarmVerbCodeFixture(t, validator)
-	fx.seedCodePolicyArea("eg", "Erdgeschoss", engine.CodePolicy{})
+	fx.seedCodePolicyZone("eg", "Erdgeschoss", engine.CodePolicy{})
 	if _, err := fx.eng.Arm(context.Background(), "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
 
 	body := strings.NewReader(`{"code":"9999"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas/eg/disarm", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones/eg/disarm", body)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	DisarmAlarmArea(fx, nil).ServeHTTP(w, req)
+	DisarmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
 	}
-	if snap, ok := fx.eng.Area("eg"); !ok || snap.State != hmenum.AlarmAreaStateDisarmed {
-		t.Fatalf("area state = %+v, want disarmed", snap)
+	if snap, ok := fx.eng.Zone("eg"); !ok || snap.State != hmenum.AlarmZoneStateDisarmed {
+		t.Fatalf("zone state = %+v, want disarmed", snap)
 	}
 
 	duress := fx.sink.duressEvents()
@@ -265,8 +265,8 @@ func TestDisarmAlarmArea_DuressCode_FiresDuressEventAndHiddenJournalEntry(t *tes
 	// identity-substitution branch (`by == ""`) never triggers for this
 	// surface — only MQTT/keypad callers with no prior identity adopt
 	// the code's display name as `by`.
-	if duress[0].Verb != "disarm" || duress[0].AreaID != "eg" || duress[0].By != "anonymous" {
-		t.Errorf("duress event = %+v, want verb=disarm area=eg by=anonymous", duress[0])
+	if duress[0].Verb != "disarm" || duress[0].ZoneID != "eg" || duress[0].By != "anonymous" {
+		t.Errorf("duress event = %+v, want verb=disarm zone=eg by=anonymous", duress[0])
 	}
 
 	found := false
@@ -283,25 +283,25 @@ func TestDisarmAlarmArea_DuressCode_FiresDuressEventAndHiddenJournalEntry(t *tes
 	}
 }
 
-// TestDisarmAlarmArea_ValidNonDuressCode_NoDuressEvent is the negative
+// TestDisarmAlarmZone_ValidNonDuressCode_NoDuressEvent is the negative
 // counterpart: a code that authenticates but is not flagged duress must
 // never fire the duress fan-out.
-func TestDisarmAlarmArea_ValidNonDuressCode_NoDuressEvent(t *testing.T) {
+func TestDisarmAlarmZone_ValidNonDuressCode_NoDuressEvent(t *testing.T) {
 	t.Parallel()
 	validator := &fakeVerbCodeValidator{codes: map[string]fakeVerbCodeEntry{
 		"1234": {identity: "Markus", duress: false, perms: map[string]bool{"disarm": true}},
 	}}
 	fx := newAlarmVerbCodeFixture(t, validator)
-	fx.seedCodePolicyArea("eg", "Erdgeschoss", engine.CodePolicy{})
+	fx.seedCodePolicyZone("eg", "Erdgeschoss", engine.CodePolicy{})
 	if _, err := fx.eng.Arm(context.Background(), "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
 
 	body := strings.NewReader(`{"code":"1234"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas/eg/disarm", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones/eg/disarm", body)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	DisarmAlarmArea(fx, nil).ServeHTTP(w, req)
+	DisarmAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())
@@ -313,26 +313,26 @@ func TestDisarmAlarmArea_ValidNonDuressCode_NoDuressEvent(t *testing.T) {
 
 // --- arm ---
 
-// TestArmAlarmArea_DuressCode_Returns200AndFiresDuressEvent covers the
+// TestArmAlarmZone_DuressCode_Returns200AndFiresDuressEvent covers the
 // arm verb's own code field (hmapi.AlarmArmRequest.Code): a duress code
 // arms normally and fires the same silent fan-out as disarm/silence.
-func TestArmAlarmArea_DuressCode_Returns200AndFiresDuressEvent(t *testing.T) {
+func TestArmAlarmZone_DuressCode_Returns200AndFiresDuressEvent(t *testing.T) {
 	t.Parallel()
 	validator := &fakeVerbCodeValidator{codes: map[string]fakeVerbCodeEntry{
 		"9999": {identity: "Under Duress", duress: true, perms: map[string]bool{"arm": true}},
 	}}
 	fx := newAlarmVerbCodeFixture(t, validator)
-	fx.seedCodePolicyArea("eg", "Erdgeschoss", engine.CodePolicy{})
+	fx.seedCodePolicyZone("eg", "Erdgeschoss", engine.CodePolicy{})
 
 	reqBody, err := json.Marshal(hmapi.AlarmArmRequest{Mode: string(hmenum.AlarmModeFull), SkipDelay: true, Code: "9999"})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas/eg/arm", strings.NewReader(string(reqBody)))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones/eg/arm", strings.NewReader(string(reqBody)))
 	req = withChiParam(req, "id", "eg")
 	rec := &captureRecorder{}
 	w := httptest.NewRecorder()
-	ArmAlarmArea(fx, rec).ServeHTTP(w, req)
+	ArmAlarmZone(fx, rec).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
@@ -341,7 +341,7 @@ func TestArmAlarmArea_DuressCode_Returns200AndFiresDuressEvent(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &accepted); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if accepted.State != string(hmenum.AlarmAreaStateArmed) {
+	if accepted.State != string(hmenum.AlarmZoneStateArmed) {
 		t.Fatalf("state = %q, want armed", accepted.State)
 	}
 	duress := fx.sink.duressEvents()
@@ -352,25 +352,25 @@ func TestArmAlarmArea_DuressCode_Returns200AndFiresDuressEvent(t *testing.T) {
 
 // --- silence ---
 
-// TestSilenceAlarmArea_DuressCode_FiresDuressEvent covers the silence
+// TestSilenceAlarmZone_DuressCode_FiresDuressEvent covers the silence
 // verb's own code field: even though silence is code-free by default
 // (S3), a supplied duress code still fires the fan-out.
-func TestSilenceAlarmArea_DuressCode_FiresDuressEvent(t *testing.T) {
+func TestSilenceAlarmZone_DuressCode_FiresDuressEvent(t *testing.T) {
 	t.Parallel()
 	validator := &fakeVerbCodeValidator{codes: map[string]fakeVerbCodeEntry{
 		"9999": {identity: "Under Duress", duress: true, perms: map[string]bool{"silence": true}},
 	}}
 	fx := newAlarmVerbCodeFixture(t, validator)
-	fx.seedCodePolicyArea("eg", "Erdgeschoss", engine.CodePolicy{})
+	fx.seedCodePolicyZone("eg", "Erdgeschoss", engine.CodePolicy{})
 	if _, err := fx.eng.Arm(context.Background(), "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, SkipDelay: true}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
 
 	body := strings.NewReader(`{"code":"9999"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/areas/eg/silence", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/zones/eg/silence", body)
 	req = withChiParam(req, "id", "eg")
 	w := httptest.NewRecorder()
-	SilenceAlarmArea(fx, nil).ServeHTTP(w, req)
+	SilenceAlarmZone(fx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204, body=%s", w.Code, w.Body.String())

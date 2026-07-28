@@ -15,10 +15,10 @@ func freshAlarmStateStore(t *testing.T) *AlarmStateStore {
 	return NewAlarmStateStore(openTestDB(t, "alarm_state.db"))
 }
 
-func baseAlarmStateRow(areaID string) AlarmStateRow {
+func baseAlarmStateRow(zoneID string) AlarmStateRow {
 	return AlarmStateRow{
-		AreaID:      areaID,
-		State:       hmenum.AlarmAreaStateDisarmed,
+		ZoneID:      zoneID,
+		State:       hmenum.AlarmZoneStateDisarmed,
 		Mode:        hmenum.AlarmModeDisarmed,
 		BypassJSON:  `["sensor-1"]`,
 		IncidentID:  0,
@@ -29,18 +29,18 @@ func baseAlarmStateRow(areaID string) AlarmStateRow {
 }
 
 // TestAlarmStateStoreUpsertInsertRoundTrip verifies that Upsert on a new
-// area inserts a row and every field, including ContextJSON, survives the
+// zone inserts a row and every field, including ContextJSON, survives the
 // Upsert -> Get round trip.
 func TestAlarmStateStoreUpsertInsertRoundTrip(t *testing.T) {
 	s := freshAlarmStateStore(t)
 	ctx := context.Background()
 
-	row := baseAlarmStateRow("area-1")
+	row := baseAlarmStateRow("zone-1")
 	if err := s.Upsert(ctx, row); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	got, ok, err := s.Get(ctx, "area-1")
+	got, ok, err := s.Get(ctx, "zone-1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -53,20 +53,20 @@ func TestAlarmStateStoreUpsertInsertRoundTrip(t *testing.T) {
 }
 
 // TestAlarmStateStoreUpsertUpdateRoundTrip verifies that a second Upsert on
-// the same area overwrites every field, including ContextJSON — unlike the
+// the same zone overwrites every field, including ContextJSON — unlike the
 // relational tables, alarm_state has no created_at_ms to preserve.
 func TestAlarmStateStoreUpsertUpdateRoundTrip(t *testing.T) {
 	s := freshAlarmStateStore(t)
 	ctx := context.Background()
 
-	row := baseAlarmStateRow("area-1")
+	row := baseAlarmStateRow("zone-1")
 	if err := s.Upsert(ctx, row); err != nil {
 		t.Fatalf("Upsert 1: %v", err)
 	}
 
 	updated := AlarmStateRow{
-		AreaID:      "area-1",
-		State:       hmenum.AlarmAreaStateArmed,
+		ZoneID:      "zone-1",
+		State:       hmenum.AlarmZoneStateArmed,
 		Mode:        hmenum.AlarmModeFull,
 		BypassJSON:  `[]`,
 		IncidentID:  7,
@@ -78,7 +78,7 @@ func TestAlarmStateStoreUpsertUpdateRoundTrip(t *testing.T) {
 		t.Fatalf("Upsert 2: %v", err)
 	}
 
-	got, ok, err := s.Get(ctx, "area-1")
+	got, ok, err := s.Get(ctx, "zone-1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestAlarmStateStoreUpsertUpdateRoundTrip(t *testing.T) {
 }
 
 // TestAlarmStateStoreGetMissingReturnsFalse verifies that Get on an unknown
-// area returns the zero value, false, nil.
+// zone returns the zero value, false, nil.
 func TestAlarmStateStoreGetMissingReturnsFalse(t *testing.T) {
 	s := freshAlarmStateStore(t)
 	ctx := context.Background()
@@ -108,13 +108,13 @@ func TestAlarmStateStoreGetMissingReturnsFalse(t *testing.T) {
 	}
 }
 
-// TestAlarmStateStoreGetAllOrderedByAreaID verifies GetAll returns every
-// area state ordered by area_id.
-func TestAlarmStateStoreGetAllOrderedByAreaID(t *testing.T) {
+// TestAlarmStateStoreGetAllOrderedByZoneID verifies GetAll returns every
+// zone state ordered by zone_id.
+func TestAlarmStateStoreGetAllOrderedByZoneID(t *testing.T) {
 	s := freshAlarmStateStore(t)
 	ctx := context.Background()
 
-	for _, id := range []string{"area-c", "area-a", "area-b"} {
+	for _, id := range []string{"zone-c", "zone-a", "zone-b"} {
 		if err := s.Upsert(ctx, baseAlarmStateRow(id)); err != nil {
 			t.Fatalf("Upsert %s: %v", id, err)
 		}
@@ -127,44 +127,44 @@ func TestAlarmStateStoreGetAllOrderedByAreaID(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("len=%d want 3", len(got))
 	}
-	wantOrder := []string{"area-a", "area-b", "area-c"}
+	wantOrder := []string{"zone-a", "zone-b", "zone-c"}
 	for i, id := range wantOrder {
-		if got[i].AreaID != id {
-			t.Errorf("got[%d].AreaID=%q want %q", i, got[i].AreaID, id)
+		if got[i].ZoneID != id {
+			t.Errorf("got[%d].ZoneID=%q want %q", i, got[i].ZoneID, id)
 		}
 	}
 }
 
 // TestAlarmStateStoreDelete verifies Delete removes exactly the targeted
-// area's state row.
+// zone's state row.
 func TestAlarmStateStoreDelete(t *testing.T) {
 	s := freshAlarmStateStore(t)
 	ctx := context.Background()
 
-	if err := s.Upsert(ctx, baseAlarmStateRow("area-1")); err != nil {
-		t.Fatalf("Upsert area-1: %v", err)
+	if err := s.Upsert(ctx, baseAlarmStateRow("zone-1")); err != nil {
+		t.Fatalf("Upsert zone-1: %v", err)
 	}
-	if err := s.Upsert(ctx, baseAlarmStateRow("area-2")); err != nil {
-		t.Fatalf("Upsert area-2: %v", err)
+	if err := s.Upsert(ctx, baseAlarmStateRow("zone-2")); err != nil {
+		t.Fatalf("Upsert zone-2: %v", err)
 	}
 
-	if err := s.Delete(ctx, "area-1"); err != nil {
+	if err := s.Delete(ctx, "zone-1"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	_, ok, err := s.Get(ctx, "area-1")
+	_, ok, err := s.Get(ctx, "zone-1")
 	if err != nil {
 		t.Fatalf("Get after delete: %v", err)
 	}
 	if ok {
-		t.Error("area-1 state still exists after Delete")
+		t.Error("zone-1 state still exists after Delete")
 	}
 
-	_, ok, err = s.Get(ctx, "area-2")
+	_, ok, err = s.Get(ctx, "zone-2")
 	if err != nil {
-		t.Fatalf("Get area-2: %v", err)
+		t.Fatalf("Get zone-2: %v", err)
 	}
 	if !ok {
-		t.Error("area-2 state must survive Delete of area-1")
+		t.Error("zone-2 state must survive Delete of zone-1")
 	}
 }

@@ -1,7 +1,7 @@
 {
-  "areas": [
+  "zones": [
     {
-      "id": "area-eg",
+      "id": "zone-eg",
       "name": "Erdgeschoss",
       "state": "triggered",
       "mode": "full",
@@ -9,7 +9,7 @@
       "incident": { "id": "501", "silenced": false }
     },
     {
-      "id": "area-og",
+      "id": "zone-og",
       "name": "Dachgeschoss",
       "state": "disarmed",
       "walktest_active": false

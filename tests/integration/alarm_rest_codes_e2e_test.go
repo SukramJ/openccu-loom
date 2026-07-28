@@ -7,11 +7,11 @@
 // arm/disarm verbs' `code` body field, layered on the same
 // central/godevccu stack alarm_rest_e2e_test.go drives. Where that file
 // exercises the sensor/output plane, this one walks the codes plane end
-// to end through the real HTTP surface: create an area, create a PIN
+// to end through the real HTTP surface: create an zone, create a PIN
 // code via POST /alarm/codes (argon2id hashing happens inside the real
 // codes facade — see internal/alarm/codes's own unit tests for that
 // layer in isolation), arm, disarm supplying the code, and confirm the
-// area actually left the armed state.
+// zone actually left the armed state.
 package integration
 
 import (
@@ -61,8 +61,8 @@ func newAlarmRestCodesHarness(t *testing.T) *alarmRestHarness {
 }
 
 // TestAlarmRestCodeRequiredDisarmFlow walks a PIN code through the real
-// argon2id-backed store: create area, create the code, arm, disarm
-// supplying the correct code (204, area actually disarms). It then
+// argon2id-backed store: create zone, create the code, arm, disarm
+// supplying the correct code (204, zone actually disarms). It then
 // re-arms and disarms again supplying a code the store does not
 // recognize — this also succeeds, pinning the S6 break-glass rule
 // (docs/alarm-concept.md §11) at the full-stack level: every REST write
@@ -76,24 +76,24 @@ func newAlarmRestCodesHarness(t *testing.T) *alarmRestHarness {
 func TestAlarmRestCodeRequiredDisarmFlow(t *testing.T) {
 	h := newAlarmRestCodesHarness(t)
 
-	areaCfg, err := json.Marshal(engine.AreaConfig{
+	areaCfg, err := json.Marshal(engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {TriggerSeconds: 30},
 		},
 	})
 	if err != nil {
-		t.Fatalf("marshal area config: %v", err)
+		t.Fatalf("marshal zone config: %v", err)
 	}
-	var area hmapi.AlarmArea
-	res := h.do(http.MethodPost, "/alarm/areas", hmapi.AlarmArea{Name: "Erdgeschoss", Config: areaCfg}, &area)
+	var zone hmapi.AlarmZone
+	res := h.do(http.MethodPost, "/alarm/zones", hmapi.AlarmZone{Name: "Erdgeschoss", Config: areaCfg}, &zone)
 	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("POST /alarm/areas: status %d", res.StatusCode)
+		t.Fatalf("POST /alarm/zones: status %d", res.StatusCode)
 	}
 
 	var code hmapi.AlarmCode
 	res = h.do(http.MethodPost, "/alarm/codes", hmapi.AlarmCodeRequest{
 		Name: "Markus", Kind: "pin", PIN: "1234", Enabled: true,
-		Perms: hmapi.AlarmCodePerms{Disarm: true}, Areas: []string{area.ID},
+		Perms: hmapi.AlarmCodePerms{Disarm: true}, Zones: []string{zone.ID},
 	}, &code)
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("POST /alarm/codes: status %d", res.StatusCode)
@@ -103,32 +103,32 @@ func TestAlarmRestCodeRequiredDisarmFlow(t *testing.T) {
 	}
 
 	armReq := hmapi.AlarmArmRequest{Mode: string(hmenum.AlarmModeFull), SkipDelay: true}
-	res = h.do(http.MethodPost, "/alarm/areas/"+area.ID+"/arm", armReq, nil)
+	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/arm", armReq, nil)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("POST .../arm: status %d", res.StatusCode)
 	}
-	if st := h.waitAlarmState(area.ID, hmenum.AlarmAreaStateArmed, 2*time.Second); st != hmenum.AlarmAreaStateArmed {
-		t.Fatalf("area state after arm = %q, want armed", st)
+	if st := h.waitAlarmState(zone.ID, hmenum.AlarmZoneStateArmed, 2*time.Second); st != hmenum.AlarmZoneStateArmed {
+		t.Fatalf("zone state after arm = %q, want armed", st)
 	}
 
-	res = h.do(http.MethodPost, "/alarm/areas/"+area.ID+"/disarm", hmapi.AlarmVerbRequest{Code: "1234"}, nil)
+	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/disarm", hmapi.AlarmVerbRequest{Code: "1234"}, nil)
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("POST .../disarm with the correct code: status %d", res.StatusCode)
 	}
-	if st := h.waitAlarmState(area.ID, hmenum.AlarmAreaStateDisarmed, 2*time.Second); st != hmenum.AlarmAreaStateDisarmed {
-		t.Fatalf("area state after disarm = %q, want disarmed", st)
+	if st := h.waitAlarmState(zone.ID, hmenum.AlarmZoneStateDisarmed, 2*time.Second); st != hmenum.AlarmZoneStateDisarmed {
+		t.Fatalf("zone state after disarm = %q, want disarmed", st)
 	}
 
 	// Re-arm, then disarm with a code the store does not recognize.
-	res = h.do(http.MethodPost, "/alarm/areas/"+area.ID+"/arm", armReq, nil)
+	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/arm", armReq, nil)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("POST .../arm (2nd): status %d", res.StatusCode)
 	}
-	res = h.do(http.MethodPost, "/alarm/areas/"+area.ID+"/disarm", hmapi.AlarmVerbRequest{Code: "0000"}, nil)
+	res = h.do(http.MethodPost, "/alarm/zones/"+zone.ID+"/disarm", hmapi.AlarmVerbRequest{Code: "0000"}, nil)
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("POST .../disarm with an unrecognized code: status %d, want 204 (operator-session bypass)", res.StatusCode)
 	}
-	if st := h.waitAlarmState(area.ID, hmenum.AlarmAreaStateDisarmed, 2*time.Second); st != hmenum.AlarmAreaStateDisarmed {
-		t.Fatalf("area state after wrong-code disarm = %q, want disarmed", st)
+	if st := h.waitAlarmState(zone.ID, hmenum.AlarmZoneStateDisarmed, 2*time.Second); st != hmenum.AlarmZoneStateDisarmed {
+		t.Fatalf("zone state after wrong-code disarm = %q, want disarmed", st)
 	}
 }

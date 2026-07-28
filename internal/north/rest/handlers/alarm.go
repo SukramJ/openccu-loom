@@ -80,27 +80,27 @@ const (
 
 // alarmStateResponse is the envelope of GET /alarm/state.
 type alarmStateResponse struct {
-	Areas []hmapi.AlarmAreaStatus `json:"areas"`
+	Zones []hmapi.AlarmZoneStatus `json:"zones"`
 }
 
-// AlarmState renders the live status of every alarm area.
+// AlarmState renders the live status of every alarm zone.
 func AlarmState(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		snaps := p.Engine().Areas()
-		areas := make([]hmapi.AlarmAreaStatus, 0, len(snaps))
+		snaps := p.Engine().Zones()
+		zones := make([]hmapi.AlarmZoneStatus, 0, len(snaps))
 		for i := range snaps {
-			areas = append(areas, alarmAreaStatus(r.Context(), p, snaps[i]))
+			zones = append(zones, alarmZoneStatus(r.Context(), p, snaps[i]))
 		}
-		JSON(w, http.StatusOK, alarmStateResponse{Areas: areas})
+		JSON(w, http.StatusOK, alarmStateResponse{Zones: zones})
 	}
 }
 
-// GetAlarmAreaReadiness renders the per-mode arm-readiness of one area,
+// GetAlarmZoneReadiness renders the per-mode arm-readiness of one zone,
 // keyed by mode name.
-func GetAlarmAreaReadiness(p AlarmPanel) http.HandlerFunc {
+func GetAlarmZoneReadiness(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		snap, ok := p.Engine().Area(id)
+		snap, ok := p.Engine().Zone(id)
 		if !ok {
 			writeAlarmNotFound(w, r)
 			return
@@ -113,10 +113,10 @@ func GetAlarmAreaReadiness(p AlarmPanel) http.HandlerFunc {
 	}
 }
 
-// ArmAlarmArea arms an area into the requested mode, mapping a
+// ArmAlarmZone arms an zone into the requested mode, mapping a
 // not-ready refusal to a 409 whose problem detail carries the blocking
 // sensor ids.
-func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+func ArmAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		var req hmapi.AlarmArmRequest
@@ -144,7 +144,7 @@ func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 		if err != nil {
 			var notReady *engine.NotReadyError
 			switch {
-			case errors.Is(err, engine.ErrUnknownArea):
+			case errors.Is(err, engine.ErrUnknownZone):
 				writeAlarmNotFound(w, r)
 			case errors.Is(err, engine.ErrInvalidCode):
 				writeAlarmInvalidCode(w, r)
@@ -152,16 +152,16 @@ func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				writeArmNotReady(w, r, notReady.Blockers)
 			case errors.Is(err, engine.ErrUnknownMode):
 				problem.Write(w, http.StatusBadRequest,
-					problem.New(problem.TypeBadRequest, r, "Mode not configured for area", ""))
+					problem.New(problem.TypeBadRequest, r, "Mode not configured for zone", ""))
 			case errors.Is(err, engine.ErrInvalidState):
 				problem.Write(w, http.StatusConflict,
-					problem.New(problem.TypeConflict, r, "Area cannot be armed in its current state", ""))
+					problem.New(problem.TypeConflict, r, "Zone cannot be armed in its current state", ""))
 			default:
 				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Arm failed", err)
 			}
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmArm, "area="+id+" mode="+req.Mode)
+		recordAlarm(rec, r, audit.ActionAlarmArm, "zone="+id+" mode="+req.Mode)
 		JSON(w, http.StatusOK, hmapi.AlarmArmAccepted{
 			State:      string(res.State),
 			Bypassed:   res.Bypassed,
@@ -170,10 +170,10 @@ func ArmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
-// DisarmAlarmArea returns an area to disarmed. The optional body carries
+// DisarmAlarmZone returns an zone to disarmed. The optional body carries
 // a disarm code (docs/alarm-concept.md §11); an absent body disarms
 // code-free, which the operator-session source is permitted to do (S6).
-func DisarmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+func DisarmAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		code, ok := decodeAlarmVerbCode(w, r)
@@ -184,16 +184,16 @@ func DisarmAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			writeAlarmVerbError(w, r, err, "Disarm failed")
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmDisarm, "area="+id)
+		recordAlarm(rec, r, audit.ActionAlarmDisarm, "zone="+id)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-// SilenceAlarmArea silences the active incident of one area without
+// SilenceAlarmZone silences the active incident of one zone without
 // disarming it. The optional body carries a silence code for surfaces
 // whose per-surface policy requires one (silence is code-free by default
 // per S3).
-func SilenceAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+func SilenceAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		code, ok := decodeAlarmVerbCode(w, r)
@@ -204,15 +204,15 @@ func SilenceAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			writeAlarmVerbError(w, r, err, "Silence failed")
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmSilence, "area="+id)
+		recordAlarm(rec, r, audit.ActionAlarmSilence, "zone="+id)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-// AcknowledgeAlarmArea marks the area's open incident as seen. It accepts
+// AcknowledgeAlarmZone marks the zone's open incident as seen. It accepts
 // the shared optional code body for surface symmetry, but acknowledge is
 // journal-only with no code gate, so a supplied code is inert here.
-func AcknowledgeAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+func AcknowledgeAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if _, ok := decodeAlarmVerbCode(w, r); !ok {
@@ -221,7 +221,7 @@ func AcknowledgeAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 		err := p.Engine().Acknowledge(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST)
 		switch {
 		case err == nil:
-		case errors.Is(err, engine.ErrUnknownArea):
+		case errors.Is(err, engine.ErrUnknownZone):
 			writeAlarmNotFound(w, r)
 			return
 		case errors.Is(err, engine.ErrNoIncident):
@@ -232,16 +232,16 @@ func AcknowledgeAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Acknowledge failed", err)
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmAcknowledge, "area="+id)
+		recordAlarm(rec, r, audit.ActionAlarmAcknowledge, "zone="+id)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-// SilenceAllAlarmAreas silences every area's active incident at once.
-func SilenceAllAlarmAreas(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+// SilenceAllAlarmZones silences every zone's active incident at once.
+func SilenceAllAlarmZones(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p.Engine().SilenceAll(r.Context(), identityFromCtx(r.Context()), alarmSourceREST)
-		recordAlarm(rec, r, audit.ActionAlarmSilence, "area=all")
+		recordAlarm(rec, r, audit.ActionAlarmSilence, "zone=all")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -268,14 +268,14 @@ func ListAlarmJournal(p AlarmPanel) http.HandlerFunc {
 	}
 }
 
-// StartAlarmWalkTest begins a walk-test session on a disarmed area.
+// StartAlarmWalkTest begins a walk-test session on a disarmed zone.
 func StartAlarmWalkTest(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		err := p.Engine().WalkTestStart(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST)
 		switch {
 		case err == nil:
-		case errors.Is(err, engine.ErrUnknownArea):
+		case errors.Is(err, engine.ErrUnknownZone):
 			writeAlarmNotFound(w, r)
 			return
 		case errors.Is(err, engine.ErrWalkTestActive):
@@ -284,25 +284,25 @@ func StartAlarmWalkTest(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			return
 		case errors.Is(err, engine.ErrInvalidState):
 			problem.Write(w, http.StatusConflict,
-				problem.New(problem.TypeConflict, r, "Area must be disarmed to start a walk test", ""))
+				problem.New(problem.TypeConflict, r, "Zone must be disarmed to start a walk test", ""))
 			return
 		default:
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Walk test start failed", err)
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmWalkTest, "area="+id+" op=start")
+		recordAlarm(rec, r, audit.ActionAlarmWalkTest, "zone="+id+" op=start")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-// StopAlarmWalkTest ends the running walk-test session of an area.
+// StopAlarmWalkTest ends the running walk-test session of an zone.
 func StopAlarmWalkTest(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		_, err := p.Engine().WalkTestStop(r.Context(), id, identityFromCtx(r.Context()), alarmSourceREST)
 		switch {
 		case err == nil:
-		case errors.Is(err, engine.ErrUnknownArea):
+		case errors.Is(err, engine.ErrUnknownZone):
 			writeAlarmNotFound(w, r)
 			return
 		case errors.Is(err, engine.ErrInvalidState):
@@ -313,12 +313,12 @@ func StopAlarmWalkTest(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Walk test stop failed", err)
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmWalkTest, "area="+id+" op=stop")
+		recordAlarm(rec, r, audit.ActionAlarmWalkTest, "zone="+id+" op=stop")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-// GetAlarmWalkTestStatus renders the live status of an area's walk-test
+// GetAlarmWalkTestStatus renders the live status of an zone's walk-test
 // session.
 func GetAlarmWalkTestStatus(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -368,15 +368,15 @@ func TestAlarmOutput(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 
 // --- mapping + shared helpers ---
 
-// alarmAreaStatus maps an engine area snapshot onto the wire status DTO.
-func alarmAreaStatus(ctx context.Context, p AlarmPanel, snap engine.AreaSnapshot) hmapi.AlarmAreaStatus {
-	st := hmapi.AlarmAreaStatus{
+// alarmZoneStatus maps an engine zone snapshot onto the wire status DTO.
+func alarmZoneStatus(ctx context.Context, p AlarmPanel, snap engine.ZoneSnapshot) hmapi.AlarmZoneStatus {
+	st := hmapi.AlarmZoneStatus{
 		ID:       snap.ID,
 		Name:     snap.Name,
 		State:    string(snap.State),
 		Bypassed: snap.Bypassed,
 	}
-	// The engine keeps a disarmed area's mode at "disarmed"; the wire
+	// The engine keeps a disarmed zone's mode at "disarmed"; the wire
 	// leaves it empty so surfaces render mode without a nullable field.
 	if snap.Mode != hmenum.AlarmModeDisarmed {
 		st.Mode = string(snap.Mode)
@@ -402,17 +402,17 @@ func alarmAreaStatus(ctx context.Context, p AlarmPanel, snap engine.AreaSnapshot
 
 // alarmCountdown surfaces a running exit/entry countdown. The engine
 // snapshot carries only the remaining duration, so the total is sourced
-// from the area's mode configuration; when it is unavailable the total
+// from the zone's mode configuration; when it is unavailable the total
 // degrades to the remaining value rather than a misleading zero.
-func alarmCountdown(ctx context.Context, p AlarmPanel, snap engine.AreaSnapshot) *hmapi.AlarmCountdown {
+func alarmCountdown(ctx context.Context, p AlarmPanel, snap engine.ZoneSnapshot) *hmapi.AlarmCountdown {
 	kind := snap.TimerKind
 	if kind != alarmCountdownExit && kind != alarmCountdownEntry {
 		return nil
 	}
 	remaining := durationSeconds(snap.TimerRemaining)
 	total := remaining
-	if row, ok, err := p.Stores().Areas.Get(ctx, snap.ID); err == nil && ok {
-		if cfg, cerr := engine.ParseAreaConfig(row.ConfigJSON); cerr == nil {
+	if row, ok, err := p.Stores().Zones.Get(ctx, snap.ID); err == nil && ok {
+		if cfg, cerr := engine.ParseZoneConfig(row.ConfigJSON); cerr == nil {
 			if mc, present := cfg.Modes[snap.Mode]; present {
 				switch {
 				case kind == alarmCountdownExit && mc.ExitDelaySeconds > 0:
@@ -443,7 +443,7 @@ func apiJournalEntry(e sqlitestore.AlarmJournalEntry) hmapi.AlarmJournalEntry {
 	out := hmapi.AlarmJournalEntry{
 		ID:         e.ID,
 		When:       time.UnixMilli(e.TsMS).UTC(),
-		AreaID:     e.AreaID,
+		ZoneID:     e.ZoneID,
 		Class:      string(e.Class),
 		Event:      e.Event,
 		Actor:      e.Actor,
@@ -485,7 +485,7 @@ func apiWalkTestStatus(st engine.WalkTestStatus) hmapi.AlarmWalkTestStatus {
 func parseAlarmJournalFilter(r *http.Request) (f sqlitestore.AlarmJournalFilter, errMsg string) { //nolint:gocritic // named returns clarify the dual-return semantics
 	q := r.URL.Query()
 	f = sqlitestore.AlarmJournalFilter{
-		AreaID: q.Get("area"),
+		ZoneID: q.Get("zone"),
 		Limit:  alarmJournalDefaultLimit,
 	}
 	if cl := q.Get("class"); cl != "" {
@@ -540,11 +540,11 @@ func writeArmNotReady(w http.ResponseWriter, r *http.Request, blockers []string)
 }
 
 // writeAlarmVerbError maps a bare engine verb error onto a problem
-// response: an unknown area is a 404, a refused code a 403, everything
+// response: an unknown zone is a 404, a refused code a 403, everything
 // else a masked 500.
 func writeAlarmVerbError(w http.ResponseWriter, r *http.Request, err error, title string) {
 	switch {
-	case errors.Is(err, engine.ErrUnknownArea):
+	case errors.Is(err, engine.ErrUnknownZone):
 		writeAlarmNotFound(w, r)
 	case errors.Is(err, engine.ErrInvalidCode):
 		writeAlarmInvalidCode(w, r)
@@ -576,7 +576,7 @@ func decodeAlarmVerbCode(w http.ResponseWriter, r *http.Request) (code string, o
 	return req.Code, true
 }
 
-// writeAlarmNotFound writes the shared 404 for an unknown alarm area or
+// writeAlarmNotFound writes the shared 404 for an unknown alarm zone or
 // output id.
 func writeAlarmNotFound(w http.ResponseWriter, r *http.Request) {
 	problem.Write(w, http.StatusNotFound,
@@ -619,7 +619,7 @@ func ListAlarmPanels(p AlarmPanel) http.HandlerFunc {
 			}
 			out = append(out, hmapi.AlarmPanelEntity{
 				UniqueID:           pan.UniqueID,
-				AreaID:             pan.AreaID,
+				ZoneID:             pan.ZoneID,
 				Name:               pan.Name,
 				Category:           string(pan.Category()),
 				State:              pan.State,

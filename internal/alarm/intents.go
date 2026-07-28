@@ -23,8 +23,8 @@ var (
 	// errUnknownAction reports a remote binding whose action string is
 	// not one of arm:<mode> / disarm / silence / panic.
 	errUnknownAction = errors.New("alarm: unknown remote binding action")
-	// errBindingIncomplete reports a binding missing its target area.
-	errBindingIncomplete = errors.New("alarm: code binding missing area")
+	// errBindingIncomplete reports a binding missing its target zone.
+	errBindingIncomplete = errors.New("alarm: code binding missing zone")
 	// errPanicUnsupported reports a remote panic key with no engine
 	// panic path wired.
 	errPanicUnsupported = errors.New("alarm: engine has no panic path")
@@ -53,8 +53,8 @@ type CodePerms struct {
 
 // CodeBinding is the parsed binding_json union for the hardware code
 // kinds. keypad_slot uses Central/DeviceAddress/Slot plus the arm
-// target (ArmMode/AreaID); remote_key uses Central/ChannelAddress/
-// Parameter plus the action target (Action/AreaID).
+// target (ArmMode/ZoneID); remote_key uses Central/ChannelAddress/
+// Parameter plus the action target (Action/ZoneID).
 type CodeBinding struct {
 	Central        string `json:"central,omitempty"`
 	DeviceAddress  string `json:"device_address,omitempty"`
@@ -63,7 +63,7 @@ type CodeBinding struct {
 	ChannelAddress string `json:"channel_address,omitempty"`
 	Parameter      string `json:"parameter,omitempty"`
 	Action         string `json:"action,omitempty"`
-	AreaID         string `json:"area_id,omitempty"`
+	ZoneID         string `json:"zone_id,omitempty"`
 }
 
 // CodeRow is one parsed alarm_codes row (migration 028) as the intent
@@ -77,7 +77,7 @@ type CodeRow struct {
 	Kind         CodeKind
 	Duress       bool
 	Perms        CodePerms
-	Areas        []string
+	Zones        []string
 	Binding      CodeBinding
 	ValidFromMS  int64
 	ValidUntilMS int64
@@ -97,7 +97,7 @@ type CodeSource interface {
 // panic key degrades to a visible fault rather than a compile
 // dependency when the panic path is not yet present.
 type panicTriggerer interface {
-	PanicTrigger(ctx context.Context, areaID string, silent bool) error
+	PanicTrigger(ctx context.Context, zoneID string, silent bool) error
 }
 
 // wkpCorrelationWindow bounds how long a WKP CODE_ID/CODE_STATE scan
@@ -295,7 +295,7 @@ func (r *intentRouter) dispatchRemoteAction(ctx context.Context, row *CodeRow) {
 			r.journalPermissionDenied(ctx, row, "remote", "silence")
 			return
 		}
-		if err := r.svc.engine.Silence(ctx, row.Binding.AreaID, row.Name, "remote"); err != nil {
+		if err := r.svc.engine.Silence(ctx, row.Binding.ZoneID, row.Name, "remote"); err != nil {
 			r.journalActionFault(ctx, row, "remote", "silence", err)
 		}
 	case action == "panic":
@@ -305,11 +305,11 @@ func (r *intentRouter) dispatchRemoteAction(ctx context.Context, row *CodeRow) {
 	}
 }
 
-// dispatchArm arms the code's bound area in the requested mode. An empty
+// dispatchArm arms the code's bound zone in the requested mode. An empty
 // mode defaults to full protection (docs/alarm-concept.md §11).
 func (r *intentRouter) dispatchArm(ctx context.Context, row *CodeRow, mode, source string) {
-	areaID := row.Binding.AreaID
-	if areaID == "" {
+	zoneID := row.Binding.ZoneID
+	if zoneID == "" {
 		r.journalActionFault(ctx, row, source, "arm", errBindingIncomplete)
 		return
 	}
@@ -317,19 +317,19 @@ func (r *intentRouter) dispatchArm(ctx context.Context, row *CodeRow, mode, sour
 	if m == "" {
 		m = hmenum.AlarmModeFull
 	}
-	if _, err := r.svc.engine.Arm(ctx, areaID, engine.ArmRequest{Mode: m, By: row.Name, Source: source}); err != nil {
+	if _, err := r.svc.engine.Arm(ctx, zoneID, engine.ArmRequest{Mode: m, By: row.Name, Source: source}); err != nil {
 		r.journalActionFault(ctx, row, source, "arm", err)
 	}
 }
 
-// dispatchDisarm disarms the code's bound area.
+// dispatchDisarm disarms the code's bound zone.
 func (r *intentRouter) dispatchDisarm(ctx context.Context, row *CodeRow, source string) {
-	areaID := row.Binding.AreaID
-	if areaID == "" {
+	zoneID := row.Binding.ZoneID
+	if zoneID == "" {
 		r.journalActionFault(ctx, row, source, "disarm", errBindingIncomplete)
 		return
 	}
-	if err := r.svc.engine.Disarm(ctx, areaID, row.Name, source); err != nil {
+	if err := r.svc.engine.Disarm(ctx, zoneID, row.Name, source); err != nil {
 		r.journalActionFault(ctx, row, source, "disarm", err)
 	}
 }
@@ -342,7 +342,7 @@ func (r *intentRouter) dispatchPanic(ctx context.Context, row *CodeRow) {
 		r.journalActionFault(ctx, row, "remote", "panic", errPanicUnsupported)
 		return
 	}
-	if err := pt.PanicTrigger(ctx, row.Binding.AreaID, false); err != nil {
+	if err := pt.PanicTrigger(ctx, row.Binding.ZoneID, false); err != nil {
 		r.journalActionFault(ctx, row, "remote", "panic", err)
 	}
 }
@@ -388,7 +388,7 @@ func (r *intentRouter) journalKeypadUnmatched(ctx context.Context, centralName, 
 // lacking the verb permission (fail-visible, S7).
 func (r *intentRouter) journalPermissionDenied(ctx context.Context, row *CodeRow, source, verb string) {
 	r.append(ctx, engine.JournalEntry{
-		AreaID: row.Binding.AreaID,
+		ZoneID: row.Binding.ZoneID,
 		Class:  hmenum.AlarmJournalClassFault,
 		Event:  "code_permission_denied",
 		Actor:  row.Name,
@@ -407,7 +407,7 @@ func (r *intentRouter) journalActionFault(ctx context.Context, row *CodeRow, sou
 		details["error"] = cause.Error()
 	}
 	r.append(ctx, engine.JournalEntry{
-		AreaID:  row.Binding.AreaID,
+		ZoneID:  row.Binding.ZoneID,
 		Class:   hmenum.AlarmJournalClassFault,
 		Event:   "code_action_failed",
 		Actor:   row.Name,

@@ -106,17 +106,17 @@ func alarmActor(ctx context.Context) string {
 
 // --- argument shapes ---
 
-// alarmAreaArgs is the shared shape for the per-area verbs and reads. The
+// alarmZoneArgs is the shared shape for the per-zone verbs and reads. The
 // optional code carries an alarm code for the code-gated verbs
 // (docs/alarm-concept.md §11); it is ignored by the reads.
-type alarmAreaArgs struct {
-	AreaID string `json:"area_id"`
+type alarmZoneArgs struct {
+	ZoneID string `json:"zone_id"`
 	Code   string `json:"code,omitempty"`
 }
 
 // alarmArmArgs is the shape for alarm_panel.arm.
 type alarmArmArgs struct {
-	AreaID    string   `json:"area_id"`
+	ZoneID    string   `json:"zone_id"`
 	Mode      string   `json:"mode"`
 	Force     bool     `json:"force,omitempty"`
 	SkipDelay bool     `json:"skip_delay,omitempty"`
@@ -127,7 +127,7 @@ type alarmArmArgs struct {
 // alarmJournalArgs is the shape for alarm_panel.journal. From/To are
 // RFC3339 timestamps; empty leaves the bound open.
 type alarmJournalArgs struct {
-	AreaID string `json:"area_id,omitempty"`
+	ZoneID string `json:"zone_id,omitempty"`
 	Class  string `json:"class,omitempty"`
 	From   string `json:"from,omitempty"`
 	To     string `json:"to,omitempty"`
@@ -142,8 +142,8 @@ func alarmArmHandler(q AlarmPanelQuery) CommandHandler {
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		if args.AreaID == "" {
-			return nil, NewCommandError(CommandErrorBadRequest, "area_id required")
+		if args.ZoneID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "zone_id required")
 		}
 		if args.Mode == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "mode required")
@@ -152,7 +152,7 @@ func alarmArmHandler(q AlarmPanelQuery) CommandHandler {
 		if eng == nil {
 			return nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
 		}
-		res, err := eng.Arm(ctx, args.AreaID, engine.ArmRequest{
+		res, err := eng.Arm(ctx, args.ZoneID, engine.ArmRequest{
 			Mode:      hmenum.AlarmMode(args.Mode),
 			Force:     args.Force,
 			SkipDelay: args.SkipDelay,
@@ -174,27 +174,27 @@ func alarmArmHandler(q AlarmPanelQuery) CommandHandler {
 
 func alarmDisarmHandler(q AlarmPanelQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		args, eng, err := alarmAreaTarget(q, raw)
+		args, eng, err := alarmZoneTarget(q, raw)
 		if err != nil {
 			return nil, err
 		}
-		if err := eng.DisarmWithCode(ctx, args.AreaID, alarmActor(ctx), alarmSourceWS, args.Code); err != nil {
+		if err := eng.DisarmWithCode(ctx, args.ZoneID, alarmActor(ctx), alarmSourceWS, args.Code); err != nil {
 			return nil, alarmEngineError(err)
 		}
-		return map[string]any{"disarmed": true, "area_id": args.AreaID}, nil
+		return map[string]any{"disarmed": true, "zone_id": args.ZoneID}, nil
 	}
 }
 
 func alarmSilenceHandler(q AlarmPanelQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		args, eng, err := alarmAreaTarget(q, raw)
+		args, eng, err := alarmZoneTarget(q, raw)
 		if err != nil {
 			return nil, err
 		}
-		if err := eng.SilenceWithCode(ctx, args.AreaID, alarmActor(ctx), alarmSourceWS, args.Code); err != nil {
+		if err := eng.SilenceWithCode(ctx, args.ZoneID, alarmActor(ctx), alarmSourceWS, args.Code); err != nil {
 			return nil, alarmEngineError(err)
 		}
-		return map[string]any{"silenced": true, "area_id": args.AreaID}, nil
+		return map[string]any{"silenced": true, "zone_id": args.ZoneID}, nil
 	}
 }
 
@@ -211,17 +211,17 @@ func alarmSilenceAllHandler(q AlarmPanelQuery) CommandHandler {
 
 func alarmAcknowledgeHandler(q AlarmPanelQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
-		// Acknowledge accepts the shared {area_id, code} shape for symmetry
+		// Acknowledge accepts the shared {zone_id, code} shape for symmetry
 		// but is journal-only with no code gate, so a supplied code is
 		// inert here.
-		args, eng, err := alarmAreaTarget(q, raw)
+		args, eng, err := alarmZoneTarget(q, raw)
 		if err != nil {
 			return nil, err
 		}
-		if err := eng.Acknowledge(ctx, args.AreaID, alarmActor(ctx), alarmSourceWS); err != nil {
+		if err := eng.Acknowledge(ctx, args.ZoneID, alarmActor(ctx), alarmSourceWS); err != nil {
 			return nil, alarmEngineError(err)
 		}
-		return map[string]any{"acknowledged": true, "area_id": args.AreaID}, nil
+		return map[string]any{"acknowledged": true, "zone_id": args.ZoneID}, nil
 	}
 }
 
@@ -233,34 +233,34 @@ func alarmStateHandler(q AlarmPanelQuery) CommandHandler {
 		if eng == nil {
 			return nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
 		}
-		snaps := eng.Areas()
-		areas := make([]hmapi.AlarmAreaStatus, 0, len(snaps))
+		snaps := eng.Zones()
+		zones := make([]hmapi.AlarmZoneStatus, 0, len(snaps))
 		for i := range snaps {
-			areas = append(areas, alarmAreaStatus(eng, snaps[i]))
+			zones = append(zones, alarmZoneStatus(eng, snaps[i]))
 		}
-		return map[string]any{"areas": areas}, nil
+		return map[string]any{"zones": zones}, nil
 	}
 }
 
 func alarmReadinessHandler(q AlarmPanelQuery) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
-		var args alarmAreaArgs
+		var args alarmZoneArgs
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		if args.AreaID == "" {
-			return nil, NewCommandError(CommandErrorBadRequest, "area_id required")
+		if args.ZoneID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "zone_id required")
 		}
 		eng := q.Engine()
 		if eng == nil {
 			return nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
 		}
-		snap, ok := eng.Area(args.AreaID)
+		snap, ok := eng.Zone(args.ZoneID)
 		if !ok {
-			return nil, NewCommandError("not_found", "no alarm area "+args.AreaID)
+			return nil, NewCommandError("not_found", "no alarm zone "+args.ZoneID)
 		}
 		return map[string]any{
-			"area_id":   args.AreaID,
+			"zone_id":   args.ZoneID,
 			"readiness": alarmReadinessDTO(snap.Readiness),
 		}, nil
 	}
@@ -291,7 +291,7 @@ func alarmJournalHandler(q AlarmPanelQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorBadRequest, "class: unknown journal class")
 		}
 		filter := sqlitestore.AlarmJournalFilter{
-			AreaID: args.AreaID,
+			ZoneID: args.ZoneID,
 			Class:  hmenum.AlarmJournalClass(args.Class),
 			Limit:  limit,
 		}
@@ -323,18 +323,18 @@ func alarmJournalHandler(q AlarmPanelQuery) CommandHandler {
 
 func alarmWalkTestStatusHandler(q AlarmPanelQuery) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
-		var args alarmAreaArgs
+		var args alarmZoneArgs
 		if err := decodeOrEmpty(raw, &args); err != nil {
 			return nil, err
 		}
-		if args.AreaID == "" {
-			return nil, NewCommandError(CommandErrorBadRequest, "area_id required")
+		if args.ZoneID == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "zone_id required")
 		}
 		eng := q.Engine()
 		if eng == nil {
 			return nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
 		}
-		wt, err := eng.WalkTestStatus(args.AreaID)
+		wt, err := eng.WalkTestStatus(args.ZoneID)
 		if err != nil {
 			return nil, alarmEngineError(err)
 		}
@@ -344,37 +344,37 @@ func alarmWalkTestStatusHandler(q AlarmPanelQuery) CommandHandler {
 
 // --- shared helpers ---
 
-// alarmAreaTarget decodes the shared {area_id, code} body and resolves
+// alarmZoneTarget decodes the shared {zone_id, code} body and resolves
 // the engine, returning the bad_request / internal command errors the
-// per-area verbs share.
-func alarmAreaTarget(q AlarmPanelQuery, raw json.RawMessage) (alarmAreaArgs, *engine.Engine, error) {
-	var args alarmAreaArgs
+// per-zone verbs share.
+func alarmZoneTarget(q AlarmPanelQuery, raw json.RawMessage) (alarmZoneArgs, *engine.Engine, error) {
+	var args alarmZoneArgs
 	if err := decodeOrEmpty(raw, &args); err != nil {
-		return alarmAreaArgs{}, nil, err
+		return alarmZoneArgs{}, nil, err
 	}
-	if args.AreaID == "" {
-		return alarmAreaArgs{}, nil, NewCommandError(CommandErrorBadRequest, "area_id required")
+	if args.ZoneID == "" {
+		return alarmZoneArgs{}, nil, NewCommandError(CommandErrorBadRequest, "zone_id required")
 	}
 	eng := q.Engine()
 	if eng == nil {
-		return alarmAreaArgs{}, nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
+		return alarmZoneArgs{}, nil, NewCommandError(CommandErrorInternal, "alarm engine not available")
 	}
 	return args, eng, nil
 }
 
-// alarmAreaStatus renders one engine snapshot as the REST-shaped status
+// alarmZoneStatus renders one engine snapshot as the REST-shaped status
 // DTO. The exit/entry countdown carries only remaining_s here — the
 // snapshot does not retain the countdown total; the live alarm.countdown
 // broadcast carries total_ms for surfaces that need the full bar.
-func alarmAreaStatus(eng *engine.Engine, snap engine.AreaSnapshot) hmapi.AlarmAreaStatus {
-	st := hmapi.AlarmAreaStatus{
+func alarmZoneStatus(eng *engine.Engine, snap engine.ZoneSnapshot) hmapi.AlarmZoneStatus {
+	st := hmapi.AlarmZoneStatus{
 		ID:        snap.ID,
 		Name:      snap.Name,
 		State:     string(snap.State),
 		Bypassed:  snap.Bypassed,
 		Readiness: alarmReadinessDTO(snap.Readiness),
 	}
-	if snap.State != hmenum.AlarmAreaStateDisarmed {
+	if snap.State != hmenum.AlarmZoneStateDisarmed {
 		st.Mode = string(snap.Mode)
 	}
 	if snap.IncidentID != 0 {
@@ -418,7 +418,7 @@ func alarmJournalDTO(r sqlitestore.AlarmJournalEntry) hmapi.AlarmJournalEntry {
 	e := hmapi.AlarmJournalEntry{
 		ID:         r.ID,
 		When:       time.UnixMilli(r.TsMS).UTC(),
-		AreaID:     r.AreaID,
+		ZoneID:     r.ZoneID,
 		Class:      string(r.Class),
 		Event:      r.Event,
 		Actor:      r.Actor,
@@ -457,7 +457,7 @@ func alarmWalkTestDTO(wt engine.WalkTestStatus) hmapi.AlarmWalkTestStatus {
 }
 
 // alarmEngineError maps the engine's sentinel + typed errors onto WS
-// command-error codes, mirroring the REST status mapping: unknown area →
+// command-error codes, mirroring the REST status mapping: unknown zone →
 // not_found, unknown mode → bad_request, wrong state / no incident →
 // conflict, and a refused arm → not_ready with the blocking sensor ids.
 func alarmEngineError(err error) *CommandError {
@@ -470,7 +470,7 @@ func alarmEngineError(err error) *CommandError {
 		return NewCommandError("not_ready", msg)
 	}
 	switch {
-	case errors.Is(err, engine.ErrUnknownArea):
+	case errors.Is(err, engine.ErrUnknownZone):
 		return NewCommandError("not_found", err.Error())
 	case errors.Is(err, engine.ErrInvalidCode):
 		// A missing/wrong code is a forbidden action; the message stays
@@ -618,7 +618,7 @@ func alarmPanelPanelsHandler(svc AlarmPanelQuery) CommandHandler {
 			}
 			out = append(out, hmapi.AlarmPanelEntity{
 				UniqueID:           p.UniqueID,
-				AreaID:             p.AreaID,
+				ZoneID:             p.ZoneID,
 				Name:               p.Name,
 				Category:           string(p.Category()),
 				State:              p.State,

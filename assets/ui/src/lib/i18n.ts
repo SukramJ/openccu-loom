@@ -42,7 +42,7 @@ const EN: Catalog = {
   //     alarm-messages surface (see "messages.*"): this is loom's own
   //     intrusion-alarm engine ("Alarm system" / "Alarmanlage"). ---
   "alarm.title": "Alarm system",
-  "alarm.subtitle": "Areas, sensors, sirens — loom's local-first intrusion alarm.",
+  "alarm.subtitle": "Zones, sensors, sirens — loom's local-first intrusion alarm.",
   "alarm.tab.overview": "Overview",
   "alarm.tab.sensors": "Sensors",
   "alarm.tab.outputs": "Outputs",
@@ -64,12 +64,12 @@ const EN: Catalog = {
   "alarm.state.pending": "Entry delay…",
   "alarm.state.triggered": "Alarm",
   // Overview (§12.1).
-  "alarm.overview.placeholder": "No areas configured yet",
-  "alarm.overview.empty": "No alarm areas yet",
-  "alarm.overview.empty.description": "Create your first area with the setup wizard to start protecting rooms.",
+  "alarm.overview.placeholder": "No zones configured yet",
+  "alarm.overview.empty": "No alarm zones yet",
+  "alarm.overview.empty.description": "Create your first zone with the setup wizard to start protecting rooms.",
   "alarm.overview.armed_by": "since {time}, by {user}",
   "alarm.overview.armed_at": "since {time}",
-  "alarm.overview.master": "All areas",
+  "alarm.overview.master": "All zones",
   "alarm.overview.ready": "Ready",
   "alarm.overview.silence_all": "Silence all sirens",
   "alarm.readiness.ready": "ready",
@@ -102,10 +102,10 @@ const EN: Catalog = {
   "alarm.action.silence": "Silence sirens",
   "alarm.action.acknowledge": "Acknowledge",
   // Toasts.
-  "alarm.toast.armed": "{area} armed ({mode})",
-  "alarm.toast.arming": "{area} arming…",
+  "alarm.toast.armed": "{zone} armed ({mode})",
+  "alarm.toast.arming": "{zone} arming…",
   "alarm.toast.arm_failed": "Arming failed",
-  "alarm.toast.disarmed": "{area} disarmed",
+  "alarm.toast.disarmed": "{zone} disarmed",
   "alarm.toast.disarm_failed": "Disarm failed",
   "alarm.toast.silenced": "Sirens silenced",
   "alarm.toast.silence_failed": "Silence failed",
@@ -113,19 +113,19 @@ const EN: Catalog = {
   "alarm.toast.ack_failed": "Acknowledge failed",
   "alarm.toast.saved": "Saved",
   "alarm.toast.save_failed": "Save failed",
-  "alarm.toast.deleted": "Area deleted",
+  "alarm.toast.deleted": "Zone deleted",
   "alarm.toast.delete_failed": "Delete failed",
   "alarm.toast.test_fired": "Test fired",
   "alarm.toast.test_failed": "Test failed",
   "alarm.toast.walktest_started": "Walk test started",
   "alarm.toast.walktest_stopped": "Walk test stopped",
-  // Area create / edit / delete.
-  "alarm.area.name": "Name",
-  "alarm.area.create": "Create area",
-  "alarm.area.edit": "Edit area",
-  "alarm.area.delete": "Delete area",
-  "alarm.area.delete.confirm.title": "Delete area?",
-  "alarm.area.delete.confirm.body": "The area and its sensor/output assignments are removed. This cannot be undone.",
+  // Zone create / edit / delete.
+  "alarm.zone.name": "Name",
+  "alarm.zone.create": "Create zone",
+  "alarm.zone.edit": "Edit zone",
+  "alarm.zone.delete": "Delete zone",
+  "alarm.zone.delete.confirm.title": "Delete zone?",
+  "alarm.zone.delete.confirm.body": "The zone and its sensor/output assignments are removed. This cannot be undone.",
   // Sensor picker (§12.2).
   "alarm.sensors.placeholder": "No sensors yet",
   "alarm.sensors.title": "Sensors",
@@ -177,7 +177,7 @@ const EN: Catalog = {
     "Fires around the clock, independent of the armed state — for hazard sensors (smoke, water, gas) and panic buttons. Outputs follow the hazard/panic policies from the Policies tab.",
   "alarm.flag.allow_open_after_arming": "Allow open after arming",
   "alarm.flag.allow_open_after_arming.hint":
-    "The sensor may stay open (e.g. a tilted window) while the area arms; only a fresh activation after it cleared triggers.",
+    "The sensor may stay open (e.g. a tilted window) while the zone arms; only a fresh activation after it cleared triggers.",
   "alarm.flag.arm_after_closing": "Arm after closing",
   "alarm.flag.arm_after_closing.hint":
     "Closing this sensor during the exit delay finishes arming early, after a short settle time.",
@@ -189,7 +189,7 @@ const EN: Catalog = {
     "Treats the sensor becoming unreachable while armed as an activation. Off raises only a warning.",
   "alarm.flag.chime": "Door chime while disarmed",
   "alarm.flag.chime.hint":
-    "Plays the door-chime tone on chirp outputs when this sensor activates while the area is disarmed — never during a walk test.",
+    "Plays the door-chime tone on chirp outputs when this sensor activates while the zone is disarmed — never during a walk test.",
   "alarm.flag.panic_silent": "Silent panic (duress)",
   "alarm.flag.panic_silent.hint":
     "Activations fire the panic policy with all acoustic outputs suppressed — notifications only. For duress buttons that must not sound locally.",
@@ -220,7 +220,7 @@ const EN: Catalog = {
     "Marks this output as outdoor, so policies with \"Exclude outdoor outputs\" skip it.",
   "alarm.outputs.shared_with_ccu": "Shared with CCU programs",
   "alarm.outputs.shared_with_ccu.hint":
-    "The output is also driven by CCU programs: Loom never switches it off automatically while the area is disarmed.",
+    "The output is also driven by CCU programs: Loom never switches it off automatically while the zone is disarmed.",
   "alarm.outputs.duration": "Duration (s)",
   "alarm.outputs.duration.hint":
     "Seconds one activation runs; acoustic activations are hard-capped at 600 s. Empty uses the bounded default.",
@@ -252,7 +252,7 @@ const EN: Catalog = {
     "Tone label for the disarm squawk. Empty skips it on this output.",
   "alarm.outputs.sysvar.name": "Variable name",
   "alarm.outputs.sysvar.name.hint":
-    "Created on the CCU automatically as a value-list variable mirroring the area state (Unscharf … Alarm).",
+    "Created on the CCU automatically as a value-list variable mirroring the zone state (Unscharf … Alarm).",
   "alarm.outputs.sysvar.existing": "Use existing alarm variable",
   "alarm.outputs.sysvar.existing.hint":
     "Writes an operator-owned alarm-type variable: true while triggered, false otherwise. The variable is never created or retyped, and it accepts no inbound commands.",
@@ -262,11 +262,11 @@ const EN: Catalog = {
   "alarm.outputs.sysvar.load_failed": "Loading system variables failed",
   "alarm.outputs.sysvar.allow_disarm": "Allow disarm via variable",
   "alarm.outputs.sysvar.allow_disarm.hint":
-    "Off (default): a CCU write can only arm — it can never disarm the area. Enable only if you trust every CCU program that can write this variable.",
+    "Off (default): a CCU write can only arm — it can never disarm the zone. Enable only if you trust every CCU program that can write this variable.",
   "alarm.outputs.notification.note":
-    "Emits a notification event to the enrolled planes when the area alarms — no device involved. Configure the planes on the output card after adding.",
+    "Emits a notification event to the enrolled planes when the zone alarms — no device involved. Configure the planes on the output card after adding.",
   "alarm.outputs.notify.mqtt": "MQTT event",
-  "alarm.outputs.notify.mqtt.hint": "Publish a NOTIFICATION entry on the area's MQTT alarm event topic.",
+  "alarm.outputs.notify.mqtt.hint": "Publish a NOTIFICATION entry on the zone's MQTT alarm event topic.",
   "alarm.outputs.notify.webhook": "Webhook event",
   "alarm.outputs.notify.webhook.hint": "Forward an alarm_panel.notification event to the outbound webhook receivers.",
   // Output classes (§7).
@@ -290,7 +290,7 @@ const EN: Catalog = {
     "Short confirmation tones only: arm/disarm squawks, countdown ticks and the door chime — never the loud alarm.",
   "alarm.output_class.notification": "Notification",
   "alarm.output_class.notification.hint":
-    "Emits a deliberate notification event (MQTT, WebSocket, webhook) when the area alarms — one-shot at fire time, never cancelled by silence. Each plane can be toggled per output.",
+    "Emits a deliberate notification event (MQTT, WebSocket, webhook) when the zone alarms — one-shot at fire time, never cancelled by silence. Each plane can be toggled per output.",
   "alarm.output_class.sysvar_mirror": "Sysvar mirror",
   "alarm.output_class.sysvar_mirror.hint":
     "Maintains a CCU system variable mirroring the alarm state — either a managed value-list variable (created automatically) or an existing alarm-type variable (true while triggered).",
@@ -299,14 +299,14 @@ const EN: Catalog = {
   "alarm.journal.title": "Journal",
   "alarm.journal.subtitle": "Everything the alarm engine did or observed.",
   "alarm.journal.empty": "No journal entries",
-  "alarm.journal.filter.area": "Area",
+  "alarm.journal.filter.zone": "Zone",
   "alarm.journal.filter.class": "Class",
   "alarm.journal.filter.from": "From",
   "alarm.journal.filter.to": "To",
   "alarm.journal.filter.all": "All",
   "alarm.journal.export_csv": "Export CSV",
   "alarm.journal.col.when": "Time",
-  "alarm.journal.col.area": "Area",
+  "alarm.journal.col.zone": "Zone",
   "alarm.journal.col.class": "Class",
   "alarm.journal.col.event": "Event",
   "alarm.journal.col.actor": "By",
@@ -328,17 +328,17 @@ const EN: Catalog = {
   "alarm.walktest.stop": "Stop test",
   "alarm.walktest.active": "Test running",
   "alarm.walktest.inactive": "No test running",
-  "alarm.walktest.select_area": "Select area",
+  "alarm.walktest.select_zone": "Select zone",
   "alarm.walktest.progress": "{seen}/{total} sensors verified",
   "alarm.walktest.tested": "verified",
   "alarm.walktest.untested": "pending",
-  "alarm.walktest.empty": "No sensors in this area.",
+  "alarm.walktest.empty": "No sensors in this zone.",
   // Setup wizard (§12.3).
   "alarm.wizard.placeholder": "Setup wizard",
   "alarm.wizard.title": "Setup",
-  "alarm.wizard.subtitle": "Guided first-run setup — re-runnable per area.",
+  "alarm.wizard.subtitle": "Guided first-run setup — re-runnable per zone.",
   "alarm.wizard.launch": "Setup wizard",
-  "alarm.wizard.step.areas": "Areas",
+  "alarm.wizard.step.zones": "Zones",
   "alarm.wizard.step.sensors": "Sensors",
   "alarm.wizard.step.outputs": "Outputs",
   "alarm.wizard.step.delays": "Delays & chirps",
@@ -348,7 +348,7 @@ const EN: Catalog = {
   "alarm.wizard.back": "Back",
   "alarm.wizard.skip": "Skip",
   "alarm.wizard.finish": "Finish",
-  "alarm.wizard.codes_later": "PIN codes and remote keys are managed on the Codes tab once this area exists — there is nothing to configure here yet.",
+  "alarm.wizard.codes_later": "PIN codes and remote keys are managed on the Codes tab once this zone exists — there is nothing to configure here yet.",
   // Health chip (§12.5, S7).
   "alarm.health.title": "Alarm health",
   "alarm.health.healthy": "Alarm system OK",
@@ -357,26 +357,26 @@ const EN: Catalog = {
   // Per-tab intro lines rendered by the alarm section shell under the
   // tab bar — one orientation sentence per view.
   "alarm.intro.overview":
-    "Arm and disarm each area and handle a triggered alarm. Silence stops the sirens but keeps the incident open, disarm ends it, acknowledge only marks it as seen.",
+    "Arm and disarm each zone and handle a triggered alarm. Silence stops the sirens but keeps the incident open, disarm ends it, acknowledge only marks it as seen.",
   "alarm.intro.sensors":
-    "Choose which sensors guard each area and in which arm modes they count. The detail drawer tunes per-sensor behaviour such as entry delay and bypass; the matrix view is the fastest way to audit many sensors at once.",
+    "Choose which sensors guard each zone and in which arm modes they count. The detail drawer tunes per-sensor behaviour such as entry delay and bypass; the matrix view is the fastest way to audit many sensors at once.",
   "alarm.intro.outputs":
     "Enroll sirens, lights, chirps and notification targets as alarm consequences and tune tone, duration and mode assignment per output. Every output can be test-fired briefly; the optical-only option spares the neighbours.",
   "alarm.intro.policies":
-    "Per-area rules beyond plain arm/disarm: when a code is required, which outputs hazard and panic triggers fire around the clock, how a pre-alarm softens escalation, and what happens after a trigger phase ends.",
+    "Per-zone rules beyond plain arm/disarm: when a code is required, which outputs hazard and panic triggers fire around the clock, how a pre-alarm softens escalation, and what happens after a trigger phase ends.",
   "alarm.intro.codes":
     "PIN codes, keypad slots and remote keys that can arm, disarm or silence the alarm — independent of login accounts, e.g. for household members without access to this UI.",
   "alarm.intro.journal":
-    "The persistent log of everything the alarm engine does or observes — arming, triggers, bypasses, faults and tests. Filter by area, event class and time range, or export the current view as CSV.",
+    "The persistent log of everything the alarm engine does or observes — arming, triggers, bypasses, faults and tests. Filter by zone, event class and time range, or export the current view as CSV.",
   "alarm.intro.walktest":
-    "Tests sensors without arming the area: start a session, walk the house and trip each sensor — every activation turns its row green, and no alarm fires. The result is recorded in the journal.",
+    "Tests sensors without arming the zone: start a session, walk the house and trip each sensor — every activation turns its row green, and no alarm fires. The result is recorded in the journal.",
   "alarm.outputs.field.class": "Output class",
   "alarm.outputs.level": "Dimmer level (0–1)",
   "alarm.outputs.level.hint":
     "Dimmer level for actuator-backed outputs, 0–1. Empty keeps the device's last level.",
   "alarm.sensors.add.no_devices": "No matching device channels found.",
   "alarm.sensors.add.show_all": "Show all channels",
-  "alarm.sensors.area": "Area",
+  "alarm.sensors.zone": "Zone",
   "alarm.sensors.field.channel": "Channel address",
   "alarm.sensors.field.device": "Device",
   "alarm.sensors.field.name": "Name",
@@ -384,14 +384,14 @@ const EN: Catalog = {
   "alarm.sensors.select_all": "Select all filtered",
   "alarm.toast.walktest_start_failed": "Walk test could not be started",
   "alarm.toast.walktest_stop_failed": "Walk test could not be stopped",
-  "alarm.wizard.area.default_name": "Ground floor",
-  "alarm.wizard.area.hint": "An area is an independently armable partition — for example one per floor.",
+  "alarm.wizard.zone.default_name": "Ground floor",
+  "alarm.wizard.zone.hint": "A zone is an independently armable partition — for example one per floor.",
   "alarm.wizard.delay.entry": "Entry delay (s)",
   "alarm.wizard.delay.exit": "Exit delay (s)",
   "alarm.wizard.delay.trigger": "Alarm duration (s)",
   "alarm.wizard.delays.hint":
     "The exit delay lets you leave after arming; the entry delay gives you time to disarm after opening the door. Alarm duration bounds how long one alarm phase (and its sirens) runs — at most 600 s per cycle.",
-  "alarm.wizard.finish.hint": "The area is created disarmed. Run a walk test before relying on it.",
+  "alarm.wizard.finish.hint": "The zone is created disarmed. Run a walk test before relying on it.",
   "alarm.wizard.outputs.empty": "No eligible output channels found.",
   "alarm.wizard.outputs.empty.description":
     "Use the Outputs tab afterwards for expert-mode enrollment of any device.",
@@ -406,14 +406,14 @@ const EN: Catalog = {
   "alarm.wizard.summary.delays": "Delays",
   // Alarm codes (docs/alarm-concept.md §11).
   "alarm.codes.add": "Add code",
-  "alarm.codes.areas": "Areas",
-  "alarm.codes.areas.all": "All areas",
+  "alarm.codes.zones": "Zones",
+  "alarm.codes.zones.all": "All zones",
   "alarm.codes.delete.confirm.body": "Delete the code \"{name}\"? This cannot be undone.",
   "alarm.codes.delete.confirm.title": "Delete code?",
   "alarm.codes.disabled": "Disabled",
   "alarm.codes.duress.badge": "Duress",
   "alarm.codes.duress.warning":
-    "A duress code disarms the area exactly like a normal code — nothing changes on the panel — but silently raises a duress event to the configured notification targets instead. Nothing appears in the visible journal until the incident is resolved; the full audit trail is kept internally. Never hand out a duress code casually.",
+    "A duress code disarms the zone exactly like a normal code — nothing changes on the panel — but silently raises a duress event to the configured notification targets instead. Nothing appears in the visible journal until the incident is resolved; the full audit trail is kept internally. Never hand out a duress code casually.",
   "alarm.codes.edit": "Edit code",
   "alarm.codes.empty": "No codes yet",
   "alarm.codes.empty.description":
@@ -421,8 +421,8 @@ const EN: Catalog = {
   "alarm.codes.error.binding_json": "Binding must be valid JSON.",
   "alarm.codes.error.name_required": "Name is required.",
   "alarm.codes.error.pin_required": "A PIN is required for a new PIN code.",
-  "alarm.codes.field.areas": "Areas",
-  "alarm.codes.field.areas.help": "Select which areas this code applies to. Leave every box unchecked to apply it to all areas.",
+  "alarm.codes.field.zones": "Zones",
+  "alarm.codes.field.zones.help": "Select which zones this code applies to. Leave every box unchecked to apply it to all zones.",
   "alarm.codes.field.binding": "Hardware binding",
   "alarm.codes.field.binding.help":
     "Raw JSON describing the physical binding for this code kind — e.g. the keypad channel address or the remote-key press channel. Leave empty for no binding.",
@@ -456,13 +456,13 @@ const EN: Catalog = {
   "alarm.codes.remote.param.press_long": "Long press",
   "alarm.codes.remote.action": "Action",
   "alarm.codes.remote.action.hint": "What the key does: arm into a specific mode, disarm, silence, or panic.",
-  "alarm.codes.remote.area.hint": "Alarm area the action applies to.",
+  "alarm.codes.remote.zone.hint": "Alarm zone the action applies to.",
   "alarm.codes.remote.action.arm": "Arm",
   "alarm.codes.remote.action.disarm": "Disarm",
   "alarm.codes.remote.action.silence": "Silence",
   "alarm.codes.remote.action.panic": "Panic",
-  "alarm.codes.remote.area": "Area",
-  "alarm.codes.error.remote_incomplete": "Pick a remote button, trigger, action, and area.",
+  "alarm.codes.remote.zone": "Zone",
+  "alarm.codes.error.remote_incomplete": "Pick a remote button, trigger, action, and zone.",
   "alarm.codes.perm.arm": "Arm",
   "alarm.codes.perm.disarm": "Disarm",
   "alarm.codes.perm.silence": "Silence",
@@ -484,7 +484,7 @@ const EN: Catalog = {
   "alarm.pinpad.backspace": "Backspace",
   "alarm.pinpad.clear": "Clear",
   "alarm.pinpad.digit": "Digit {digit}",
-  "alarm.pinpad.disarm_title": "Enter code to disarm {area}",
+  "alarm.pinpad.disarm_title": "Enter code to disarm {zone}",
   "alarm.pinpad.entered": "{count} digits entered",
   "alarm.pinpad.placeholder": "Enter code",
   "alarm.pinpad.title": "Enter code",
@@ -493,12 +493,12 @@ const EN: Catalog = {
     "Operator sessions (REST, WebSocket, hmcli) always bypass these checks — the documented break-glass path — but a duress code they enter still fires a silent alarm.",
   "alarm.policies.code.require_arm": "Require code to arm",
   "alarm.policies.code.require_arm.hint":
-    "Requires a valid code before the area arms. Off by default — arming is the safe direction and stays one tap.",
+    "Requires a valid code before the zone arms. Off by default — arming is the safe direction and stays one tap.",
   "alarm.policies.code.require_disarm": "Require code to disarm",
   "alarm.policies.code.require_disarm.always": "Always",
   "alarm.policies.code.require_disarm.default": "Automatic (on when codes exist)",
   "alarm.policies.code.require_disarm.hint":
-    "Automatic requires a code as soon as this area has an enabled code. An area without codes never demands one, so a disarm can never lock you out.",
+    "Automatic requires a code as soon as this zone has an enabled code. A zone without codes never demands one, so a disarm can never lock you out.",
   "alarm.policies.code.require_disarm.never": "Never",
   "alarm.policies.code.require_silence": "Require code to silence",
   "alarm.policies.code.require_silence.hint":
@@ -518,17 +518,17 @@ const EN: Catalog = {
   "alarm.policies.posttrigger": "When the trigger phase ends",
   "alarm.policies.posttrigger.disarm": "Disarm",
   "alarm.policies.posttrigger.hint":
-    "A trigger phase is always time-limited (default 180 s, at most 600 s per cycle); sirens stop when it ends no matter what. This setting decides what the area does afterwards: stay armed in the previous mode, or disarm.",
+    "A trigger phase is always time-limited (default 180 s, at most 600 s per cycle); sirens stop when it ends no matter what. This setting decides what the zone does afterwards: stay armed in the previous mode, or disarm.",
   "alarm.policies.posttrigger.return_to_armed": "Return to armed",
-  "alarm.policies.prealarm.empty": "No modes configured for this area yet — add modes in the setup wizard first.",
+  "alarm.policies.prealarm.empty": "No modes configured for this zone yet — add modes in the setup wizard first.",
   "alarm.policies.prealarm.hint":
     "Runs a quiet pre-alarm phase before the full trigger: only chirp, notification and light outputs fire for this many seconds, then the full output policy escalates. A silence during this phase cancels the escalation. 0 disables it.",
   "alarm.policies.rearm.hint":
-    "Re-arms the area to its pre-incident mode this many quiet seconds after a post-trigger disarm; only takes effect when \"When the trigger phase ends\" is set to Disarm. The countdown resets on any sensor activity.",
+    "Re-arms the zone to its pre-incident mode this many quiet seconds after a post-trigger disarm; only takes effect when \"When the trigger phase ends\" is set to Disarm. The countdown resets on any sensor activity.",
   "alarm.policies.rearm.seconds": "Auto re-arm after (s)",
   "alarm.policies.schedules.add": "Add schedule",
   "alarm.policies.schedules.auto_arm": "Auto-arm",
-  "alarm.policies.schedules.auto_arm.hint": "When on, the area arms automatically at this time. When off, this only raises a reminder.",
+  "alarm.policies.schedules.auto_arm.hint": "When on, the zone arms automatically at this time. When off, this only raises a reminder.",
   "alarm.policies.schedules.days": "Days",
   "alarm.policies.schedules.empty": "No schedules yet",
   "alarm.policies.schedules.mode": "Mode",
@@ -546,7 +546,7 @@ const EN: Catalog = {
   "alarm.policies.section.rearm": "Post-trigger & auto re-arm",
   "alarm.policies.section.schedules": "Schedules",
   "alarm.policies.section.schedules.hint":
-    "Time-of-day arm schedules for this area, evaluated in the daemon's local time zone. With no day selected an entry fires every day. With auto-arm the area actually arms; otherwise the entry only raises a reminder when the area is not in the expected mode.",
+    "Time-of-day arm schedules for this zone, evaluated in the daemon's local time zone. With no day selected an entry fires every day. With auto-arm the zone actually arms; otherwise the entry only raises a reminder when the zone is not in the expected mode.",
   "audit.title": "Change history",
   "audit.empty": "No changes recorded yet.",
   "audit.empty.description":
@@ -1297,7 +1297,7 @@ const EN: Catalog = {
   "config.help.backup.keep_last":
     "Bounds how many scheduled backups are retained per CCU: after each successful backup the oldest beyond this count are deleted. Zero keeps all.",
   "config.help.alarm.enabled":
-    "Master switch for the alarm engine. With no areas configured yet the engine stays inert either way. Takes effect after a daemon restart.",
+    "Master switch for the alarm engine. With no zones configured yet the engine stays inert either way. Takes effect after a daemon restart.",
   "config.help.alarm.default_siren_seconds":
     "Default acoustic activation duration in seconds, used when an alarm output does not configure its own siren duration.",
   "config.help.alarm.max_acoustic_per_incident_seconds":
@@ -3038,7 +3038,7 @@ const DE: Catalog = {
   //     CCU-Alarmmeldungen (siehe "messages.*"): dies ist looms eigene
   //     Einbruchmelde-Engine ("Alarmanlage"). ---
   "alarm.title": "Alarmanlage",
-  "alarm.subtitle": "Bereiche, Sensoren, Sirenen — looms lokale Einbruchmeldeanlage.",
+  "alarm.subtitle": "Zonen, Sensoren, Sirenen — looms lokale Einbruchmeldeanlage.",
   "alarm.tab.overview": "Übersicht",
   "alarm.tab.sensors": "Sensoren",
   "alarm.tab.outputs": "Ausgänge",
@@ -3060,12 +3060,12 @@ const DE: Catalog = {
   "alarm.state.pending": "Eintrittsverzögerung …",
   "alarm.state.triggered": "Alarm",
   // Übersicht (§12.1).
-  "alarm.overview.placeholder": "Noch keine Bereiche eingerichtet",
-  "alarm.overview.empty": "Noch keine Alarmbereiche",
-  "alarm.overview.empty.description": "Lege deinen ersten Bereich mit dem Einrichtungsassistenten an, um Räume zu schützen.",
+  "alarm.overview.placeholder": "Noch keine Zonen eingerichtet",
+  "alarm.overview.empty": "Noch keine Alarmzonen",
+  "alarm.overview.empty.description": "Lege deine erste Zone mit dem Einrichtungsassistenten an, um Räume zu schützen.",
   "alarm.overview.armed_by": "seit {time}, von {user}",
   "alarm.overview.armed_at": "seit {time}",
-  "alarm.overview.master": "Alle Bereiche",
+  "alarm.overview.master": "Alle Zonen",
   "alarm.overview.ready": "Bereit",
   "alarm.overview.silence_all": "Alle Sirenen aus",
   "alarm.readiness.ready": "bereit",
@@ -3098,10 +3098,10 @@ const DE: Catalog = {
   "alarm.action.silence": "Sirenen aus",
   "alarm.action.acknowledge": "Quittieren",
   // Toasts.
-  "alarm.toast.armed": "{area} scharf ({mode})",
-  "alarm.toast.arming": "{area} wird scharf …",
+  "alarm.toast.armed": "{zone} scharf ({mode})",
+  "alarm.toast.arming": "{zone} wird scharf …",
   "alarm.toast.arm_failed": "Scharfschalten fehlgeschlagen",
-  "alarm.toast.disarmed": "{area} unscharf",
+  "alarm.toast.disarmed": "{zone} unscharf",
   "alarm.toast.disarm_failed": "Unscharf schalten fehlgeschlagen",
   "alarm.toast.silenced": "Sirenen aus",
   "alarm.toast.silence_failed": "Sirenen aus fehlgeschlagen",
@@ -3109,19 +3109,19 @@ const DE: Catalog = {
   "alarm.toast.ack_failed": "Quittieren fehlgeschlagen",
   "alarm.toast.saved": "Gespeichert",
   "alarm.toast.save_failed": "Speichern fehlgeschlagen",
-  "alarm.toast.deleted": "Bereich gelöscht",
+  "alarm.toast.deleted": "Zone gelöscht",
   "alarm.toast.delete_failed": "Löschen fehlgeschlagen",
   "alarm.toast.test_fired": "Test ausgelöst",
   "alarm.toast.test_failed": "Test fehlgeschlagen",
   "alarm.toast.walktest_started": "Begehungstest gestartet",
   "alarm.toast.walktest_stopped": "Begehungstest beendet",
-  // Bereich anlegen / bearbeiten / löschen.
-  "alarm.area.name": "Name",
-  "alarm.area.create": "Bereich anlegen",
-  "alarm.area.edit": "Bereich bearbeiten",
-  "alarm.area.delete": "Bereich löschen",
-  "alarm.area.delete.confirm.title": "Bereich löschen?",
-  "alarm.area.delete.confirm.body": "Der Bereich und seine Sensor-/Ausgangs-Zuordnungen werden entfernt. Das lässt sich nicht rückgängig machen.",
+  // Zone anlegen / bearbeiten / löschen.
+  "alarm.zone.name": "Name",
+  "alarm.zone.create": "Zone anlegen",
+  "alarm.zone.edit": "Zone bearbeiten",
+  "alarm.zone.delete": "Zone löschen",
+  "alarm.zone.delete.confirm.title": "Zone löschen?",
+  "alarm.zone.delete.confirm.body": "Die Zone und ihre Sensor-/Ausgangs-Zuordnungen werden entfernt. Das lässt sich nicht rückgängig machen.",
   // Sensor-Auswahl (§12.2).
   "alarm.sensors.placeholder": "Noch keine Sensoren",
   "alarm.sensors.title": "Sensoren",
@@ -3185,7 +3185,7 @@ const DE: Catalog = {
     "Wird der Sensor im scharfen Zustand unerreichbar, zählt das als Aktivierung. Ausgeschaltet gibt es nur eine Warnung.",
   "alarm.flag.chime": "Türgong bei unscharf",
   "alarm.flag.chime.hint":
-    "Spielt den Türgong auf Signalton-Ausgängen, wenn dieser Sensor bei unscharfem Bereich aktiviert wird — nie während eines Begehungstests.",
+    "Spielt den Türgong auf Signalton-Ausgängen, wenn dieser Sensor bei unscharfer Zone aktiviert wird — nie während eines Begehungstests.",
   "alarm.flag.panic_silent": "Stiller Panik-Alarm",
   "alarm.flag.panic_silent.hint":
     "Aktivierungen feuern die Panik-Richtlinie ohne akustische Ausgänge — nur Benachrichtigungen. Für Panik-Taster, die vor Ort lautlos bleiben müssen.",
@@ -3216,7 +3216,7 @@ const DE: Catalog = {
     "Markiert diesen Ausgang als außen, sodass Richtlinien mit „Außenausgänge ausschließen“ ihn überspringen.",
   "alarm.outputs.shared_with_ccu": "Von CCU-Programmen genutzt",
   "alarm.outputs.shared_with_ccu.hint":
-    "Der Ausgang wird auch von CCU-Programmen geschaltet: Loom schaltet ihn bei unscharfem Bereich nie automatisch ab.",
+    "Der Ausgang wird auch von CCU-Programmen geschaltet: Loom schaltet ihn bei unscharfer Zone nie automatisch ab.",
   "alarm.outputs.duration": "Dauer (s)",
   "alarm.outputs.duration.hint":
     "Sekunden, die eine Aktivierung läuft; akustische Aktivierungen sind hart auf 600 s begrenzt. Leer nutzt den begrenzten Standard.",
@@ -3248,7 +3248,7 @@ const DE: Catalog = {
     "Ton-Bezeichner für den Unscharf-Quittungston. Leer überspringt ihn auf diesem Ausgang.",
   "alarm.outputs.sysvar.name": "Variablenname",
   "alarm.outputs.sysvar.name.hint":
-    "Wird auf der CCU automatisch als Werteliste-Variable angelegt und spiegelt den Bereichszustand (Unscharf … Alarm).",
+    "Wird auf der CCU automatisch als Werteliste-Variable angelegt und spiegelt den Zonenzustand (Unscharf … Alarm).",
   "alarm.outputs.sysvar.existing": "Bestehende Alarm-Variable verwenden",
   "alarm.outputs.sysvar.existing.hint":
     "Beschreibt eine eigene Variable vom Typ Alarm: wahr bei ausgelöstem Alarm, sonst falsch. Die Variable wird nie angelegt oder umtypisiert und nimmt keine eingehenden Befehle an.",
@@ -3262,7 +3262,7 @@ const DE: Catalog = {
   "alarm.outputs.notification.note":
     "Sendet bei Alarm ein Benachrichtigungs-Ereignis an die gewählten Kanäle — ohne Gerät. Die Kanäle werden nach dem Hinzufügen auf der Karte konfiguriert.",
   "alarm.outputs.notify.mqtt": "MQTT-Ereignis",
-  "alarm.outputs.notify.mqtt.hint": "Veröffentlicht einen NOTIFICATION-Eintrag auf dem MQTT-Alarm-Ereignis-Topic des Bereichs.",
+  "alarm.outputs.notify.mqtt.hint": "Veröffentlicht einen NOTIFICATION-Eintrag auf dem MQTT-Alarm-Ereignis-Topic der Zone.",
   "alarm.outputs.notify.webhook": "Webhook-Ereignis",
   "alarm.outputs.notify.webhook.hint": "Leitet ein alarm_panel.notification-Ereignis an die ausgehenden Webhook-Empfänger weiter.",
   // Ausgangsklassen (§7).
@@ -3295,14 +3295,14 @@ const DE: Catalog = {
   "alarm.journal.title": "Journal",
   "alarm.journal.subtitle": "Alles, was die Alarm-Engine getan oder beobachtet hat.",
   "alarm.journal.empty": "Keine Journaleinträge",
-  "alarm.journal.filter.area": "Bereich",
+  "alarm.journal.filter.zone": "Zone",
   "alarm.journal.filter.class": "Kategorie",
   "alarm.journal.filter.from": "Von",
   "alarm.journal.filter.to": "Bis",
   "alarm.journal.filter.all": "Alle",
   "alarm.journal.export_csv": "CSV exportieren",
   "alarm.journal.col.when": "Zeit",
-  "alarm.journal.col.area": "Bereich",
+  "alarm.journal.col.zone": "Zone",
   "alarm.journal.col.class": "Kategorie",
   "alarm.journal.col.event": "Ereignis",
   "alarm.journal.col.actor": "Von",
@@ -3324,17 +3324,17 @@ const DE: Catalog = {
   "alarm.walktest.stop": "Test beenden",
   "alarm.walktest.active": "Test läuft",
   "alarm.walktest.inactive": "Kein Test aktiv",
-  "alarm.walktest.select_area": "Bereich wählen",
+  "alarm.walktest.select_zone": "Zone wählen",
   "alarm.walktest.progress": "{seen}/{total} Sensoren geprüft",
   "alarm.walktest.tested": "geprüft",
   "alarm.walktest.untested": "ausstehend",
-  "alarm.walktest.empty": "Keine Sensoren in diesem Bereich.",
+  "alarm.walktest.empty": "Keine Sensoren in dieser Zone.",
   // Einrichtungsassistent (§12.3).
   "alarm.wizard.placeholder": "Einrichtungsassistent",
   "alarm.wizard.title": "Einrichtung",
-  "alarm.wizard.subtitle": "Geführte Ersteinrichtung — pro Bereich wiederholbar.",
+  "alarm.wizard.subtitle": "Geführte Ersteinrichtung — pro Zone wiederholbar.",
   "alarm.wizard.launch": "Einrichtungsassistent",
-  "alarm.wizard.step.areas": "Bereiche",
+  "alarm.wizard.step.zones": "Zonen",
   "alarm.wizard.step.sensors": "Sensoren",
   "alarm.wizard.step.outputs": "Ausgänge",
   "alarm.wizard.step.delays": "Verzögerungen & Töne",
@@ -3344,7 +3344,7 @@ const DE: Catalog = {
   "alarm.wizard.back": "Zurück",
   "alarm.wizard.skip": "Überspringen",
   "alarm.wizard.finish": "Fertigstellen",
-  "alarm.wizard.codes_later": "PIN-Codes und Funkschlüssel werden im Codes-Tab verwaltet, sobald dieser Bereich existiert — hier gibt es noch nichts einzurichten.",
+  "alarm.wizard.codes_later": "PIN-Codes und Funkschlüssel werden im Codes-Tab verwaltet, sobald diese Zone existiert — hier gibt es noch nichts einzurichten.",
   // Zustands-Chip (§12.5, S7).
   "alarm.health.title": "Alarm-Zustand",
   "alarm.health.healthy": "Alarmanlage OK",
@@ -3353,26 +3353,26 @@ const DE: Catalog = {
   // Per-tab intro lines rendered by the alarm section shell under the
   // tab bar — one orientation sentence per view.
   "alarm.intro.overview":
-    "Schalte jeden Bereich scharf oder unscharf und behandle einen ausgelösten Alarm. Stummschalten stoppt die Sirenen, lässt den Vorfall aber offen; Unscharfschalten beendet ihn; Quittieren markiert ihn nur als gesehen.",
+    "Schalte jede Zone scharf oder unscharf und behandle einen ausgelösten Alarm. Stummschalten stoppt die Sirenen, lässt den Vorfall aber offen; Unscharfschalten beendet ihn; Quittieren markiert ihn nur als gesehen.",
   "alarm.intro.sensors":
-    "Wähle, welche Sensoren jeden Bereich überwachen und in welchen Scharf-Modi sie zählen. Die Detailansicht stellt das Verhalten pro Sensor ein, etwa Eintrittsverzögerung und Überbrückung; die Matrix-Ansicht ist der schnellste Weg, viele Sensoren auf einmal zu prüfen.",
+    "Wähle, welche Sensoren jede Zone überwachen und in welchen Scharf-Modi sie zählen. Die Detailansicht stellt das Verhalten pro Sensor ein, etwa Eintrittsverzögerung und Überbrückung; die Matrix-Ansicht ist der schnellste Weg, viele Sensoren auf einmal zu prüfen.",
   "alarm.intro.outputs":
     "Binde Sirenen, Lichter, Signaltöne und Benachrichtigungsziele als Alarmfolgen ein und stelle Ton, Dauer und Modus-Zuordnung pro Ausgang ein. Jeder Ausgang lässt sich kurz testen; die Option „nur optisch“ schont die Nachbarn.",
   "alarm.intro.policies":
-    "Regeln pro Bereich jenseits von Scharf/Unscharf: wann ein Code verlangt wird, welche Ausgänge Gefahren- und Panik-Auslöser rund um die Uhr feuern, wie ein Voralarm die Eskalation abmildert und was nach dem Ende einer Auslösephase passiert.",
+    "Regeln pro Zone jenseits von Scharf/Unscharf: wann ein Code verlangt wird, welche Ausgänge Gefahren- und Panik-Auslöser rund um die Uhr feuern, wie ein Voralarm die Eskalation abmildert und was nach dem Ende einer Auslösephase passiert.",
   "alarm.intro.codes":
     "PIN-Codes, Codetastatur-Slots und Funkschlüssel, die die Alarmanlage scharf-/unscharfschalten oder stummschalten können — unabhängig von Login-Konten, z. B. für Haushaltsmitglieder ohne Zugang zu dieser Oberfläche.",
   "alarm.intro.journal":
-    "Das dauerhafte Protokoll von allem, was die Alarm-Engine tut oder beobachtet — Scharfschaltungen, Auslösungen, Überbrückungen, Störungen und Tests. Filtere nach Bereich, Kategorie und Zeitraum oder exportiere die aktuelle Ansicht als CSV.",
+    "Das dauerhafte Protokoll von allem, was die Alarm-Engine tut oder beobachtet — Scharfschaltungen, Auslösungen, Überbrückungen, Störungen und Tests. Filtere nach Zone, Kategorie und Zeitraum oder exportiere die aktuelle Ansicht als CSV.",
   "alarm.intro.walktest":
-    "Testet Sensoren, ohne den Bereich scharf zu schalten: Starte eine Sitzung, gehe durchs Haus und löse jeden Sensor aus — jede Aktivierung färbt ihre Zeile grün, und es wird kein Alarm ausgelöst. Das Ergebnis landet im Journal.",
+    "Testet Sensoren, ohne die Zone scharf zu schalten: Starte eine Sitzung, gehe durchs Haus und löse jeden Sensor aus — jede Aktivierung färbt ihre Zeile grün, und es wird kein Alarm ausgelöst. Das Ergebnis landet im Journal.",
   "alarm.outputs.field.class": "Ausgabeklasse",
   "alarm.outputs.level": "Dimmerstufe (0–1)",
   "alarm.outputs.level.hint":
     "Dimmstufe für aktorbasierte Ausgänge, 0–1. Leer behält die letzte Stufe des Geräts.",
   "alarm.sensors.add.no_devices": "Keine passenden Gerätekanäle gefunden.",
   "alarm.sensors.add.show_all": "Alle Kanäle anzeigen",
-  "alarm.sensors.area": "Bereich",
+  "alarm.sensors.zone": "Zone",
   "alarm.sensors.field.channel": "Kanaladresse",
   "alarm.sensors.field.device": "Gerät",
   "alarm.sensors.field.name": "Name",
@@ -3380,14 +3380,14 @@ const DE: Catalog = {
   "alarm.sensors.select_all": "Alle gefilterten auswählen",
   "alarm.toast.walktest_start_failed": "Begehungstest konnte nicht gestartet werden",
   "alarm.toast.walktest_stop_failed": "Begehungstest konnte nicht beendet werden",
-  "alarm.wizard.area.default_name": "Erdgeschoss",
-  "alarm.wizard.area.hint": "Ein Bereich ist eine unabhängig scharfschaltbare Einheit — zum Beispiel eine pro Etage.",
+  "alarm.wizard.zone.default_name": "Erdgeschoss",
+  "alarm.wizard.zone.hint": "Eine Zone ist eine unabhängig scharfschaltbare Einheit — zum Beispiel eine pro Etage.",
   "alarm.wizard.delay.entry": "Eintrittsverzögerung (s)",
   "alarm.wizard.delay.exit": "Austrittsverzögerung (s)",
   "alarm.wizard.delay.trigger": "Alarmdauer (s)",
   "alarm.wizard.delays.hint":
     "Die Austrittsverzögerung lässt Zeit zum Verlassen nach dem Scharfschalten; die Eintrittsverzögerung gibt Zeit zum Unscharfschalten nach dem Öffnen der Tür. Die Alarmdauer begrenzt, wie lange eine Alarmphase (und ihre Sirenen) läuft — höchstens 600 s pro Zyklus.",
-  "alarm.wizard.finish.hint": "Der Bereich wird unscharf angelegt. Führe vor dem Verlassen auf die Anlage einen Begehungstest durch.",
+  "alarm.wizard.finish.hint": "Die Zone wird unscharf angelegt. Führe vor dem Verlassen auf die Anlage einen Begehungstest durch.",
   "alarm.wizard.outputs.empty": "Keine geeigneten Ausgangskanäle gefunden.",
   "alarm.wizard.outputs.empty.description":
     "Nutze anschließend den Ausgaben-Tab für die Aufnahme im Expertenmodus für jedes Gerät.",
@@ -3402,14 +3402,14 @@ const DE: Catalog = {
   "alarm.wizard.summary.delays": "Verzögerungen",
   // Alarm codes (docs/alarm-concept.md §11).
   "alarm.codes.add": "Code hinzufügen",
-  "alarm.codes.areas": "Bereiche",
-  "alarm.codes.areas.all": "Alle Bereiche",
+  "alarm.codes.zones": "Zonen",
+  "alarm.codes.zones.all": "Alle Zonen",
   "alarm.codes.delete.confirm.body": "Code \"{name}\" löschen? Das lässt sich nicht rückgängig machen.",
   "alarm.codes.delete.confirm.title": "Code löschen?",
   "alarm.codes.disabled": "Deaktiviert",
   "alarm.codes.duress.badge": "Duress",
   "alarm.codes.duress.warning":
-    "Ein Zwangs-Code (Duress) schaltet den Bereich wie ein normaler Code unscharf – am Panel ist kein Unterschied sichtbar –, löst aber im Hintergrund still ein Duress-Ereignis an die konfigurierten Benachrichtigungsziele aus. Im sichtbaren Journal erscheint bis zur Klärung nichts; das vollständige Audit-Protokoll wird intern weitergeführt. Diesen Code niemals leichtfertig weitergeben.",
+    "Ein Zwangs-Code (Duress) schaltet die Zone wie ein normaler Code unscharf – am Panel ist kein Unterschied sichtbar –, löst aber im Hintergrund still ein Duress-Ereignis an die konfigurierten Benachrichtigungsziele aus. Im sichtbaren Journal erscheint bis zur Klärung nichts; das vollständige Audit-Protokoll wird intern weitergeführt. Diesen Code niemals leichtfertig weitergeben.",
   "alarm.codes.edit": "Code bearbeiten",
   "alarm.codes.empty": "Noch keine Codes",
   "alarm.codes.empty.description":
@@ -3417,8 +3417,8 @@ const DE: Catalog = {
   "alarm.codes.error.binding_json": "Bindung muss gültiges JSON sein.",
   "alarm.codes.error.name_required": "Name ist erforderlich.",
   "alarm.codes.error.pin_required": "Für einen neuen PIN-Code ist ein PIN-Code erforderlich.",
-  "alarm.codes.field.areas": "Bereiche",
-  "alarm.codes.field.areas.help": "Wähle aus, für welche Bereiche dieser Code gilt. Lässt du alle Kästchen leer, gilt er für alle Bereiche.",
+  "alarm.codes.field.zones": "Zonen",
+  "alarm.codes.field.zones.help": "Wähle aus, für welche Zonen dieser Code gilt. Lässt du alle Kästchen leer, gilt er für alle Zonen.",
   "alarm.codes.field.binding": "Hardware-Bindung",
   "alarm.codes.field.binding.help":
     "Rohes JSON zur physischen Bindung dieser Code-Art — z. B. die Kanaladresse der Codetastatur oder der Tastenkanal des Funkschlüssels. Leer lassen für keine Bindung.",
@@ -3452,13 +3452,13 @@ const DE: Catalog = {
   "alarm.codes.remote.param.press_long": "Langer Tastendruck",
   "alarm.codes.remote.action": "Aktion",
   "alarm.codes.remote.action.hint": "Was die Taste tut: in einen Modus scharf schalten, unscharf schalten, stummschalten oder Panik.",
-  "alarm.codes.remote.area.hint": "Alarmbereich, auf den die Aktion wirkt.",
+  "alarm.codes.remote.zone.hint": "Alarmzone, auf die die Aktion wirkt.",
   "alarm.codes.remote.action.arm": "Scharf",
   "alarm.codes.remote.action.disarm": "Unscharf",
   "alarm.codes.remote.action.silence": "Stummschalten",
   "alarm.codes.remote.action.panic": "Panik",
-  "alarm.codes.remote.area": "Bereich",
-  "alarm.codes.error.remote_incomplete": "Funktaste, Auslöser, Aktion und Bereich auswählen.",
+  "alarm.codes.remote.zone": "Zone",
+  "alarm.codes.error.remote_incomplete": "Funktaste, Auslöser, Aktion und Zone auswählen.",
   "alarm.codes.perm.arm": "Scharf schalten",
   "alarm.codes.perm.disarm": "Unscharf schalten",
   "alarm.codes.perm.silence": "Sirenen aus",
@@ -3480,7 +3480,7 @@ const DE: Catalog = {
   "alarm.pinpad.backspace": "Rücktaste",
   "alarm.pinpad.clear": "Löschen",
   "alarm.pinpad.digit": "Ziffer {digit}",
-  "alarm.pinpad.disarm_title": "Code zum Unscharfschalten von {area} eingeben",
+  "alarm.pinpad.disarm_title": "Code zum Unscharfschalten von {zone} eingeben",
   "alarm.pinpad.entered": "{count} Ziffern eingegeben",
   "alarm.pinpad.placeholder": "Code eingeben",
   "alarm.pinpad.title": "Code eingeben",
@@ -3489,12 +3489,12 @@ const DE: Catalog = {
     "Operator-Sitzungen (REST, WebSocket, hmcli) umgehen diese Prüfungen immer — der dokumentierte Break-Glass-Pfad. Ein dabei eingegebener Zwangs-Code löst aber trotzdem einen stillen Alarm aus.",
   "alarm.policies.code.require_arm": "Code zum Scharfschalten erforderlich",
   "alarm.policies.code.require_arm.hint":
-    "Verlangt einen gültigen Code, bevor der Bereich scharf schaltet. Standardmäßig aus — Scharfschalten ist die sichere Richtung und bleibt ein Fingertipp.",
+    "Verlangt einen gültigen Code, bevor die Zone scharf schaltet. Standardmäßig aus — Scharfschalten ist die sichere Richtung und bleibt ein Fingertipp.",
   "alarm.policies.code.require_disarm": "Code zum Unscharfschalten erforderlich",
   "alarm.policies.code.require_disarm.always": "Immer",
   "alarm.policies.code.require_disarm.default": "Automatisch (an, sobald Codes existieren)",
   "alarm.policies.code.require_disarm.hint":
-    "Automatisch verlangt einen Code, sobald für diesen Bereich ein aktiver Code existiert. Ein Bereich ohne Codes verlangt nie einen — ein Aussperren ist damit ausgeschlossen.",
+    "Automatisch verlangt einen Code, sobald für diese Zone ein aktiver Code existiert. Eine Zone ohne Codes verlangt nie einen — ein Aussperren ist damit ausgeschlossen.",
   "alarm.policies.code.require_disarm.never": "Nie",
   "alarm.policies.code.require_silence": "Code zum Stummschalten erforderlich",
   "alarm.policies.code.require_silence.hint":
@@ -3514,17 +3514,17 @@ const DE: Catalog = {
   "alarm.policies.posttrigger": "Wenn die Auslösephase endet",
   "alarm.policies.posttrigger.disarm": "Unscharf schalten",
   "alarm.policies.posttrigger.hint":
-    "Eine Auslösephase ist immer zeitlich begrenzt (Standard 180 s, höchstens 600 s pro Zyklus); Sirenen stoppen an ihrem Ende in jedem Fall. Diese Einstellung bestimmt, was der Bereich danach tut: im vorherigen Modus scharf bleiben oder unscharf schalten.",
+    "Eine Auslösephase ist immer zeitlich begrenzt (Standard 180 s, höchstens 600 s pro Zyklus); Sirenen stoppen an ihrem Ende in jedem Fall. Diese Einstellung bestimmt, was die Zone danach tut: im vorherigen Modus scharf bleiben oder unscharf schalten.",
   "alarm.policies.posttrigger.return_to_armed": "Zurück zu scharf",
-  "alarm.policies.prealarm.empty": "Für diesen Bereich sind noch keine Modi eingerichtet — lege sie zuerst im Einrichtungsassistenten an.",
+  "alarm.policies.prealarm.empty": "Für diese Zone sind noch keine Modi eingerichtet — lege sie zuerst im Einrichtungsassistenten an.",
   "alarm.policies.prealarm.hint":
     "Startet vor der vollen Auslösung eine leise Voralarm-Phase: Nur Quittungston-, Benachrichtigungs- und Licht-Ausgänge feuern für diese Sekunden, danach eskaliert die volle Ausgangs-Richtlinie. Ein Stummschalten während dieser Phase verhindert die Eskalation. 0 deaktiviert die Phase.",
   "alarm.policies.rearm.hint":
-    "Schaltet den Bereich diese Sekunden nach einem Unscharfschalten am Ende der Auslösephase wieder in den Modus vor dem Vorfall scharf; wirkt nur, wenn \"Wenn die Auslösephase endet\" auf Unscharf schalten steht. Der Countdown setzt sich bei jeder Sensoraktivität zurück.",
+    "Schaltet die Zone diese Sekunden nach einem Unscharfschalten am Ende der Auslösephase wieder in den Modus vor dem Vorfall scharf; wirkt nur, wenn \"Wenn die Auslösephase endet\" auf Unscharf schalten steht. Der Countdown setzt sich bei jeder Sensoraktivität zurück.",
   "alarm.policies.rearm.seconds": "Automatisches Wiederscharfschalten nach (s)",
   "alarm.policies.schedules.add": "Zeitplan hinzufügen",
   "alarm.policies.schedules.auto_arm": "Automatisch scharf schalten",
-  "alarm.policies.schedules.auto_arm.hint": "Wenn aktiv, schaltet der Bereich zu dieser Zeit automatisch scharf. Wenn inaktiv, erscheint nur eine Erinnerung.",
+  "alarm.policies.schedules.auto_arm.hint": "Wenn aktiv, schaltet die Zone zu dieser Zeit automatisch scharf. Wenn inaktiv, erscheint nur eine Erinnerung.",
   "alarm.policies.schedules.days": "Tage",
   "alarm.policies.schedules.empty": "Noch keine Zeitpläne",
   "alarm.policies.schedules.mode": "Modus",
@@ -3542,7 +3542,7 @@ const DE: Catalog = {
   "alarm.policies.section.rearm": "Nachlauf & automatisches Wiederscharfschalten",
   "alarm.policies.section.schedules": "Zeitpläne",
   "alarm.policies.section.schedules.hint":
-    "Tägliche Scharfschalt-Zeitpläne für diesen Bereich, ausgewertet in der lokalen Zeitzone des Daemons. Ohne ausgewählte Tage feuert ein Eintrag jeden Tag. Mit automatischem Scharfschalten wird der Bereich wirklich scharf geschaltet; andernfalls erscheint nur eine Erinnerung, wenn der Bereich nicht im erwarteten Modus ist.",
+    "Tägliche Scharfschalt-Zeitpläne für diese Zone, ausgewertet in der lokalen Zeitzone des Daemons. Ohne ausgewählte Tage feuert ein Eintrag jeden Tag. Mit automatischem Scharfschalten wird die Zone wirklich scharf geschaltet; andernfalls erscheint nur eine Erinnerung, wenn die Zone nicht im erwarteten Modus ist.",
   "audit.title": "Änderungs-Verlauf",
   "audit.empty": "Noch keine Änderungen aufgezeichnet.",
   "audit.empty.description":
@@ -4313,7 +4313,7 @@ const DE: Catalog = {
   "config.help.backup.keep_last":
     "Begrenzt, wie viele geplante Backups pro CCU aufbewahrt werden: nach jedem erfolgreichen Backup werden die ältesten darüber hinaus gelöscht. Null behält alle.",
   "config.help.alarm.enabled":
-    "Hauptschalter für die Alarmanlage. Solange keine Bereiche konfiguriert sind, bleibt die Anlage in jedem Fall inaktiv. Wirksam nach einem Neustart des Daemons.",
+    "Hauptschalter für die Alarmanlage. Solange keine Zonen konfiguriert sind, bleibt die Anlage in jedem Fall inaktiv. Wirksam nach einem Neustart des Daemons.",
   "config.help.alarm.default_siren_seconds":
     "Standarddauer der akustischen Aktivierung in Sekunden, verwendet wenn ein Alarmausgang keine eigene Sirenendauer festlegt.",
   "config.help.alarm.max_acoustic_per_incident_seconds":

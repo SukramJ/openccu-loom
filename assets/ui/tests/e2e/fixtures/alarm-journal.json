@@ -2,7 +2,7 @@
   {
     "id": 5,
     "when": "2026-07-14T03:12:41Z",
-    "area_id": "area-eg",
+    "zone_id": "zone-eg",
     "class": "trigger",
     "event": "triggered",
     "actor": "",
@@ -13,7 +13,7 @@
   {
     "id": 4,
     "when": "2026-07-13T22:41:05Z",
-    "area_id": "area-eg",
+    "zone_id": "zone-eg",
     "class": "arm",
     "event": "armed",
     "actor": "Markus",
@@ -22,7 +22,7 @@
   {
     "id": 3,
     "when": "2026-07-13T08:02:11Z",
-    "area_id": "area-og",
+    "zone_id": "zone-og",
     "class": "disarm",
     "event": "disarmed",
     "actor": "Anna",
@@ -31,7 +31,7 @@
   {
     "id": 2,
     "when": "2026-07-12T21:15:30Z",
-    "area_id": "area-eg",
+    "zone_id": "zone-eg",
     "class": "silence",
     "event": "silenced",
     "actor": "Markus",
@@ -40,7 +40,7 @@
   {
     "id": 1,
     "when": "2026-07-12T09:00:00Z",
-    "area_id": "area-og",
+    "zone_id": "zone-og",
     "class": "fault",
     "event": "sensor_low_battery",
     "actor": "",
