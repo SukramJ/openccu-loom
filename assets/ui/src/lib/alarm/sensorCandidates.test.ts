@@ -392,6 +392,38 @@ describe("buildCandidates", () => {
     });
     expect(result).toEqual([kitchenDoor]);
   });
+
+  it("area filter narrows to devices whose central+room resolves to that Area id", () => {
+    const upstairsDoor = makeDevice({
+      address: "SEC22",
+      model: "HmIP-SWDO",
+      name: "Upstairs door",
+      central: "ccu1",
+      rooms: ["Bedroom"],
+    });
+    const gardenDoor = makeDevice({
+      address: "SEC23",
+      model: "HmIP-SWDO",
+      name: "Garden door",
+      central: "ccu1",
+      rooms: ["Shed"],
+    });
+    const areaIdOf = (central: string, room: string) =>
+      central === "ccu1" && room === "Bedroom" ? "upstairs" : undefined;
+    const result = buildCandidates([upstairsDoor, gardenDoor], { area: "upstairs", areaIdOf });
+    expect(result).toEqual([upstairsDoor]);
+  });
+
+  it("area filter without an areaIdOf callback matches nothing (fails closed)", () => {
+    const upstairsDoor = makeDevice({
+      address: "SEC24",
+      model: "HmIP-SWDO",
+      name: "Upstairs door",
+      central: "ccu1",
+      rooms: ["Bedroom"],
+    });
+    expect(buildCandidates([upstairsDoor], { area: "upstairs" })).toEqual([]);
+  });
 });
 
 function outputCandidate(overrides: Partial<AlarmOutputCandidate> = {}): AlarmOutputCandidate {
@@ -507,6 +539,38 @@ describe("filterOutputCandidates", () => {
 
   it("returns an empty list for an empty candidate pool", () => {
     expect(filterOutputCandidates([])).toEqual([]);
+  });
+
+  it("area filter narrows to candidates whose central+room resolves to that Area id", () => {
+    const upstairsSiren = outputCandidate({
+      central: "ccu1",
+      device_address: "SIR8",
+      channel_address: "SIR8:1",
+      rooms: ["Bedroom"],
+    });
+    const gardenSiren = outputCandidate({
+      central: "ccu1",
+      device_address: "SIR9",
+      channel_address: "SIR9:1",
+      rooms: ["Shed"],
+    });
+    const areaIdOf = (central: string, room: string) =>
+      central === "ccu1" && room === "Bedroom" ? "upstairs" : undefined;
+    const result = filterOutputCandidates([upstairsSiren, gardenSiren], {
+      area: "upstairs",
+      areaIdOf,
+    });
+    expect(result).toEqual([upstairsSiren]);
+  });
+
+  it("area filter without an areaIdOf callback matches nothing (fails closed)", () => {
+    const upstairsSiren = outputCandidate({
+      central: "ccu1",
+      device_address: "SIR10",
+      channel_address: "SIR10:1",
+      rooms: ["Bedroom"],
+    });
+    expect(filterOutputCandidates([upstairsSiren], { area: "upstairs" })).toEqual([]);
   });
 });
 

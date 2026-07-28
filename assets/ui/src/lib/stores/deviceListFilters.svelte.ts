@@ -14,6 +14,9 @@ type DeviceListFilters = {
   updateOnly: boolean;
   roomFilter: string;
   centralFilter: string;
+  /** Selected Area id (settings/RoomsFunctionsAdmin.svelte — an
+   *  operator-defined grouping ABOVE CCU rooms). Empty = no filter. */
+  areaFilter: string;
   sortColumn: DeviceSortColumn;
   sortAsc: boolean;
   groupByInterface: boolean;
@@ -27,6 +30,7 @@ const defaults: DeviceListFilters = {
   updateOnly: false,
   roomFilter: "",
   centralFilter: "",
+  areaFilter: "",
   sortColumn: "name",
   sortAsc: true,
   groupByInterface: true,

@@ -431,6 +431,13 @@ export type CentralLinksReport = {
 export type RoomEntry = components["schemas"]["RoomEntry"];
 export type FunctionEntry = components["schemas"]["FunctionEntry"];
 
+// Area/AreaRoomRef re-exported from generated schema. An Area is an
+// operator-defined room grouping ABOVE CCU rooms (a floor, a shed, a
+// terrace roof) — distinct from alarm zones. One area per room; rooms
+// are (central, room) pairs (AreaRoomRef).
+export type Area = components["schemas"]["Area"];
+export type AreaRoomRef = components["schemas"]["AreaRoomRef"];
+
 // UserListEntry re-exported from generated schema — shapes match.
 export type UserListEntry = components["schemas"]["UserListEntry"];
 

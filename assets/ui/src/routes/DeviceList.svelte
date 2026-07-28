@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { centralStore } from "$lib/stores/centrals.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import { subscribe } from "$lib/stores/events.svelte";
   import type { DeviceSummary, EventEnvelope } from "$lib/api/types";
   import type { DataColumn } from "$lib/components/ui/data-table";
@@ -35,6 +36,7 @@
   let updateOnly = $state(saved.updateOnly);
   let roomFilter = $state(saved.roomFilter);
   let centralFilter = $state(saved.centralFilter);
+  let areaFilter = $state(saved.areaFilter);
   // Sort + interface-grouping mirror the reference config panel's
   // device-list view: clicking a column toggles asc/desc, and devices
   // are clustered under interface headers so a multi-CCU setup stays
@@ -48,6 +50,7 @@
     saved.updateOnly = updateOnly;
     saved.roomFilter = roomFilter;
     saved.centralFilter = centralFilter;
+    saved.areaFilter = areaFilter;
     saved.sortColumn = sortColumn;
     saved.sortAsc = sortAsc;
     saved.groupByInterface = groupByInterface;
@@ -185,6 +188,11 @@
     );
   });
 
+  // Area select is hidden when no areas are defined (settings/
+  // RoomsFunctionsAdmin.svelte). areasStore.areas is already sorted by
+  // position then name.
+  const areas = $derived(areasStore.areas);
+
   // Readiness lens over the fleet: while a CCU is still in its
   // readiness-gated southbound bring-up its devices simply have not
   // landed yet, so an empty (or short) list is "still initializing",
@@ -235,6 +243,13 @@
           if (!has) return false;
         }
         if (centralFilter && d.central !== centralFilter) return false;
+        if (areaFilter) {
+          const central = d.central ?? "";
+          const inArea = (d.rooms ?? []).some(
+            (r) => areasStore.areaIdOf(central, r) === areaFilter,
+          );
+          if (!inArea) return false;
+        }
         return true;
       })
       .slice()
@@ -284,6 +299,7 @@
     deviceStore.ensureStream();
     centralStore.refresh();
     centralStore.ensureStream();
+    areasStore.ensureLoaded();
     // When a central finishes bring-up its devices become fetchable, so
     // pull a fresh list the moment one flips to ready — the operator sees
     // the initializing state resolve into real devices without a reload.
@@ -343,6 +359,18 @@
             <option value="">{t("common.all_ccus")}</option>
             {#each centrals as c (c)}
               <option value={c}>{c}</option>
+            {/each}
+          </select>
+        {/if}
+        {#if areas.length > 0}
+          <select
+            bind:value={areaFilter}
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+            title={t("devicelist.area")}
+          >
+            <option value="">{t("devicelist.all_areas")}</option>
+            {#each areas as a (a.id)}
+              <option value={a.id}>{a.name}</option>
             {/each}
           </select>
         {/if}

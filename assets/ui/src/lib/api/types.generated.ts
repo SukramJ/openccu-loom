@@ -3260,6 +3260,66 @@ export interface paths {
         patch: operations["renameFunction"];
         trace?: never;
     };
+    "/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Operator-defined room groupings (areas) with their assigned rooms */
+        get: operations["listAreas"];
+        put?: never;
+        /** Create an area (operator) */
+        post: operations["createArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/areas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Rename/reorder an area (operator) */
+        put: operations["putArea"];
+        post?: never;
+        /** Delete an area and clear its room assignments (operator) */
+        delete: operations["deleteArea"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/areas/{id}/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the full room set of an area (operator)
+         * @description Full-set replace: rooms omitted from the body are unassigned from the area. A room already assigned to ANOTHER area moves to this one (one area per room).
+         */
+        put: operations["putAreaRooms"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/programs/{id}": {
         parameters: {
             query?: never;
@@ -8072,6 +8132,23 @@ export interface components {
             name: string;
             device_count: number;
         };
+        /** @description Operator-defined room grouping above CCU rooms (a floor, a shed, a terrace roof). Distinct from alarm zones. Rooms are (central, room) pairs; one area per room. */
+        Area: {
+            /** @description Server-generated on create; ignored in the create body. */
+            id: string;
+            name: string;
+            /** @description Manual sort order (ascending), ties by name. */
+            position?: number;
+            /** @description Assigned rooms; read-only here (replace via PUT /areas/{id}/rooms). */
+            rooms?: components["schemas"]["AreaRoomRef"][];
+        };
+        /** @description One CCU room assignment of an area. */
+        AreaRoomRef: {
+            /** @description Central (CCU) name owning the room. */
+            central: string;
+            /** @description CCU room name on that central. */
+            room: string;
+        };
         /** @description Free-form, engine-owned document describing an alarm zone's arming modes and per-mode policy (entry/exit delays, output policy, post-trigger policy, central-loss policy, blocker policies — see docs/alarm-concept.md §14). The REST and WebSocket layers pass this document through unvalidated; the alarm engine is the sole owner of its schema and versioning. */
         AlarmZoneConfig: {
             [key: string]: unknown;
@@ -11471,6 +11548,124 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
+        };
+    };
+    listAreas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Area list, ordered by position then name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Area"][];
+                };
+            };
+        };
+    };
+    createArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Area"];
+            };
+        };
+        responses: {
+            /** @description Created (server-generated id) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Area"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    putArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Area"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    deleteArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putAreaRooms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaRoomRef"][];
+            };
+        };
+        responses: {
+            /** @description Replaced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     getProgram: {

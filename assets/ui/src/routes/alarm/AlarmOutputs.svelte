@@ -3,6 +3,7 @@
   import { api, friendlyError } from "$lib/api/client";
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
@@ -125,6 +126,7 @@
   let addOpen = $state(false);
   let addClass = $state<AlarmOutputClass>("acoustic_siren");
   let addExpert = $state(false);
+  let addArea = $state("");
   let addDeviceSearch = $state("");
   let addDevice = $state<DeviceSummary | null>(null);
   let addCandidate = $state<AlarmOutputCandidate | null>(null);
@@ -393,6 +395,10 @@
   const addClassCandidates = $derived(
     candidates
       .filter((c) => ((c.classes ?? []) as string[]).includes(addClass))
+      .filter((c) => {
+        if (!addArea) return true;
+        return (c.rooms ?? []).some((r) => areasStore.areaIdOf(c.central, r) === addArea);
+      })
       .filter(
         (c) =>
           !addDeviceSearch ||
@@ -410,6 +416,12 @@
         if (!addExpert) {
           const hay = `${d.model} ${d.model_label ?? ""} ${d.name ?? ""}`;
           if (!OUTPUT_RE.test(hay)) return false;
+        }
+        if (addArea) {
+          const central = d.central ?? "";
+          if (!(d.rooms ?? []).some((r) => areasStore.areaIdOf(central, r) === addArea)) {
+            return false;
+          }
         }
         if (addDeviceSearch) {
           return (
@@ -435,6 +447,7 @@
     addOpen = true;
     addClass = "acoustic_siren";
     addExpert = false;
+    addArea = "";
     addDeviceSearch = "";
     addDevice = null;
     addCandidate = null;
@@ -543,6 +556,7 @@
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
+    areasStore.ensureLoaded();
     void loadCandidates();
   });
 </script>
@@ -1038,6 +1052,16 @@
             </label>
           </div>
           <Input type="search" placeholder={t("common.search")} bind:value={addDeviceSearch} />
+          {#if areasStore.areas.length > 0}
+            <Select
+              value={addArea}
+              onValueChange={(v) => (addArea = v)}
+              options={[
+                { value: "", label: t("alarm.sensors.filter.all") },
+                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
+          {/if}
           <div class="mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--ha-divider-color)]">
             {#if addUseCandidates}
               {#if addClassCandidates.length === 0}

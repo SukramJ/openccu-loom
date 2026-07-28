@@ -1,4 +1,6 @@
 import type {
+  Area,
+  AreaRoomRef,
   AlarmZone,
   AlarmArmAccepted,
   AlarmArmRequest,
@@ -988,6 +990,40 @@ export const api = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ functions }),
+    });
+  },
+  // --- Areas (operator-defined room groupings above CCU rooms) --
+  // A floor, a shed, a terrace roof — distinct from alarm zones. One
+  // area per room; assigning a room moves it off any prior area.
+  listAreas() {
+    return request<Area[]>(`/areas`);
+  },
+  createArea(area: Area) {
+    return request<Area>(`/areas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(area),
+    });
+  },
+  putArea(id: string, area: Area) {
+    return request<void>(`/areas/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(area),
+    });
+  },
+  deleteArea(id: string) {
+    return request<void>(`/areas/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+  // Full-set replace: rooms omitted from `refs` are unassigned from the
+  // area, and a room already on ANOTHER area moves to this one.
+  putAreaRooms(id: string, refs: AreaRoomRef[]) {
+    return request<void>(`/areas/${encodeURIComponent(id)}/rooms`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(refs),
     });
   },
   // --- Inbox (pending pairings) --------------------------------

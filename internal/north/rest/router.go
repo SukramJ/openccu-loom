@@ -214,6 +214,12 @@ type Deps struct {
 	// Nil disables those routes.
 	Diagrams handlers.DiagramConfigService
 
+	// Areas backs the operator-defined area (room grouping) CRUD at
+	// /areas, incl. full-set room-assignment replace at
+	// /areas/{id}/rooms. Nil disables those routes. Distinct from the
+	// alarm engine's own "area" partitions (Alarm field above).
+	Areas handlers.AreaAdmin
+
 	// RoomFunctionAdmin backs room/function entity CRUD at /rooms and
 	// /functions (create/rename/delete). Nil disables those routes;
 	// the read-only GET /rooms + GET /functions stay available.
@@ -694,6 +700,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Put("/diagrams/{id}", handlers.UpdateDiagram(d.Diagrams, d.AuditRecorder))
 				pr.With(op).Delete("/diagrams/{id}", handlers.DeleteDiagram(d.Diagrams, d.AuditRecorder))
 			}
+			if d.Areas != nil {
+				// Read-only list is available to any authenticated caller;
+				// the write routes are operator-gated further down
+				// alongside the /rooms admin block.
+				pr.Get("/areas", handlers.ListAreas(d.Areas))
+			}
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
@@ -859,6 +871,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/functions", handlers.CreateFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Patch("/functions/{name}", handlers.RenameFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Delete("/functions/{name}", handlers.DeleteFunction(d.RoomFunctionAdmin, d.AuditRecorder))
+			}
+			// Area (room grouping) entity CRUD + room-assignment replace.
+			// Local SQLite writes, so operator-gated; the read-only GET
+			// /areas stays open above.
+			if d.Areas != nil {
+				pr.With(op).Post("/areas", handlers.CreateArea(d.Areas, d.AuditRecorder))
+				pr.With(op).Put("/areas/{id}", handlers.PutArea(d.Areas, d.AuditRecorder))
+				pr.With(op).Delete("/areas/{id}", handlers.DeleteArea(d.Areas, d.AuditRecorder))
+				pr.With(op).Put("/areas/{id}/rooms", handlers.PutAreaRooms(d.Areas, d.AuditRecorder))
 			}
 			if d.RefreshDevices != nil {
 				pr.With(op).Post("/devices/refresh", handlers.RefreshDevices(d.RefreshDevices))

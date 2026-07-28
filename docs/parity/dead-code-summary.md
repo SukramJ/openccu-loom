@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 36ce3ad3
-HEAD: 36ce3ad3
+Generated: 15dc626c
+HEAD: 15dc626c
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26843 |
-| Reachable | 4639 |
-| Whitelisted | 19364 |
-| **Unreachable** | **2840** |
+| Total Exported | 26901 |
+| Reachable | 4644 |
+| Whitelisted | 19408 |
+| **Unreachable** | **2849** |
 
 ## Top-20 Packages by Dead Code
 
@@ -193,8 +193,8 @@ HEAD: 36ce3ad3
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 93 | 28 |
-| pkg/hmapi | 0 | 125 | 16 |
+| internal/store/sqlite | 0 | 98 | 28 |
+| pkg/hmapi | 0 | 129 | 16 |
 | pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

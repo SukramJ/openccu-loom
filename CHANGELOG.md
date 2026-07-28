@@ -6,6 +6,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.49.3]
+
+### Added
+
+- **Areas: room groupings above CCU rooms.** Rooms (per central) can be
+  assigned to operator-defined areas — a floor, a shed, a terrace roof —
+  managed in the rooms/functions administration (create, rename, delete,
+  assign; one area per room, reassigning moves it). The device list,
+  overview, alarm sensor/output pickers (tabs and wizard), and the group
+  editor gain an area filter. New REST surface `GET/POST /api/v1/areas`,
+  `PUT/DELETE /api/v1/areas/{id}`, `PUT /api/v1/areas/{id}/rooms`
+  (API 3.2.0, additive); assignments persist in the daemon's database —
+  the CCU itself knows nothing of areas.
+
 ## [0.49.2]
 
 ### Changed

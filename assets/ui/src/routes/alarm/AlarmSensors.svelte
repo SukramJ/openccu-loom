@@ -3,6 +3,7 @@
   import { api, friendlyError } from "$lib/api/client";
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
   import { makeTextMatcher } from "$lib/utils";
@@ -89,6 +90,7 @@
 
   // --- filter rail -------------------------------------------------
   let roomFilter = $state("");
+  let areaFilter = $state("");
   let typeFilter = $state<"all" | AlarmSensorType>("all");
   let assignedFilter = $state<"all" | "assigned" | "unassigned">("all");
   let search = $state("");
@@ -103,6 +105,7 @@
 
   let addOpen = $state(false);
   let addShowAll = $state(false);
+  let addArea = $state("");
   let addDeviceSearch = $state("");
   let addDevice = $state<DeviceSummary | null>(null);
   let addChannel = $state("");
@@ -242,6 +245,9 @@
       if (assignedFilter === "assigned" && modeCount === 0) return false;
       if (assignedFilter === "unassigned" && modeCount > 0) return false;
       if (roomFilter && !roomsOf(s).includes(roomFilter)) return false;
+      if (areaFilter && !roomsOf(s).some((r) => areasStore.areaIdOf(s.central, r) === areaFilter)) {
+        return false;
+      }
       if (search) {
         const hit =
           nameMatch(displayName(s)) ||
@@ -326,6 +332,8 @@
     buildCandidates(deviceStore.items, {
       query: addDeviceSearch,
       showAll: addShowAll,
+      area: addArea,
+      areaIdOf: areasStore.areaIdOf,
       limit: 60,
     }),
   );
@@ -333,6 +341,7 @@
   function openAdd() {
     addOpen = true;
     addShowAll = false;
+    addArea = "";
     addDeviceSearch = "";
     addDevice = null;
     addChannel = "";
@@ -411,6 +420,7 @@
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
+    areasStore.ensureLoaded();
     api
       .listRooms()
       .then((r) => (rooms = r))
@@ -509,6 +519,19 @@
             ]}
           />
         </div>
+
+        {#if areasStore.areas.length > 0}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.filter.area")}</span>
+            <Select
+              bind:value={areaFilter}
+              options={[
+                { value: "", label: t("alarm.sensors.filter.all") },
+                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
+          </div>
+        {/if}
 
         <div class="flex flex-col gap-1.5">
           <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.filter.type")}</span>
@@ -923,6 +946,15 @@
             </label>
           </div>
           <Input type="search" placeholder={t("common.search")} bind:value={addDeviceSearch} />
+          {#if areasStore.areas.length > 0}
+            <Select
+              bind:value={addArea}
+              options={[
+                { value: "", label: t("alarm.sensors.filter.all") },
+                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
+          {/if}
           <div class="mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--ha-divider-color)]">
             {#if addCandidates.length === 0}
               <p class="p-3 text-center text-xs text-[var(--ha-secondary-text-color)]">

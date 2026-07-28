@@ -548,9 +548,16 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		// central reference lives inside each sensor/output row
 		// (CentralName column) instead of on the store surface. Scoping
 		// these methods by central would be incorrect.
-		"AlarmZoneStore:Upsert":            "reason: alarm zones are daemon-level and may span centrals; zone id is the natural key",
-		"AlarmZoneStore:Get":               "reason: alarm zones are daemon-level and may span centrals; zone id is the natural key",
-		"AlarmZoneStore:Delete":            "reason: alarm zones are daemon-level and may span centrals; zone id is the natural key",
+		"AlarmZoneStore:Upsert": "reason: alarm zones are daemon-level and may span centrals; zone id is the natural key",
+		"AlarmZoneStore:Get":    "reason: alarm zones are daemon-level and may span centrals; zone id is the natural key",
+		"AlarmZoneStore:Delete": "reason: alarm zones are daemon-level and may span centrals; zone id is the natural key",
+		// Areas (room groupings) are daemon-level like alarm zones: the
+		// area row is central-agnostic, and the central reference lives
+		// on each room assignment ((central_name, room_name) PK in
+		// room_areas). See docs/adr/0056-room-areas-and-zone-naming.md.
+		"AreaStore:Upsert":                 "reason: areas are daemon-level room groupings spanning centrals; area id is the natural key",
+		"AreaStore:Get":                    "reason: areas are daemon-level room groupings spanning centrals; area id is the natural key",
+		"AreaStore:Delete":                 "reason: areas are daemon-level room groupings spanning centrals; area id is the natural key",
 		"AlarmSensorStore:Get":             "reason: alarm sensors are keyed by daemon-level sensor/zone ids; the row carries CentralName as data",
 		"AlarmSensorStore:ListByZone":      "reason: alarm sensors are keyed by daemon-level sensor/zone ids; the row carries CentralName as data",
 		"AlarmSensorStore:Delete":          "reason: alarm sensors are keyed by daemon-level sensor/zone ids; the row carries CentralName as data",

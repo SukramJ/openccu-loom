@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"time"
@@ -116,6 +117,7 @@ type restMountDeps struct {
 	passwordSvc handlers.SelfPasswordService
 	prefSvc     handlers.UserPreferencesService
 	diagramSvc  handlers.DiagramConfigService
+	areaSvc     handlers.AreaAdmin
 	tokenSvc    handlers.TokenAdminService
 	centSvc     handlers.CentralAdminService
 	discovery   *handlers.DiscoveryDeps
@@ -245,6 +247,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		TokenPurger:             d.sqTokens,
 		Preferences:             d.prefSvc,
 		Diagrams:                d.diagramSvc,
+		Areas:                   d.areaSvc,
 		RoomFunctionAdmin:       d.roomFunctionAdmin,
 		TLSCert:                 tlsCertSvc,
 		TokenAdmin:              d.tokenSvc,
@@ -487,4 +490,18 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		slog.String("path", path),
 		slog.Bool("allow_writes", cfg.North.MCP.AllowWrites))
 	return mux
+}
+
+// appDBServices constructs the main-app-DB-backed REST services
+// (per-user preferences, diagram configs, areas). All three return nil
+// when persistence is disabled so their routes drop.
+func appDBServices(auditDB *sql.DB) (handlers.UserPreferencesService, handlers.DiagramConfigService, handlers.AreaAdmin) {
+	if auditDB == nil {
+		return nil, nil, nil
+	}
+	// *sqlitestore.AreaStore satisfies handlers.AreaAdmin directly — no
+	// adapter needed.
+	return sqlitestore.NewUserPreferencesStore(auditDB),
+		newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB)),
+		sqlitestore.NewAreaStore(auditDB)
 }

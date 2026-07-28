@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.49.3
+
+Version ride-along. No changes to the proxy itself; the feature ships in the
+paired instance (areas — room groupings with filters across the UI) — update
+the instance to 0.49.3 too.
+
 # 0.49.2
 
 Version ride-along. No changes to the proxy itself; the fixes ship in the paired

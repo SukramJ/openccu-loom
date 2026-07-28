@@ -74,6 +74,11 @@ export function guessSensorBinding(device: DeviceSummary): SensorBinding | null 
   };
 }
 
+/** Resolves which Area id owns a (central, room) pair — the shape
+ *  `areasStore.areaIdOf` implements. Passed in rather than imported so
+ *  this module stays store-free and unit-testable with a plain stub. */
+export type AreaIdOf = (central: string, room: string) => string | undefined;
+
 export type CandidateOptions = {
   query?: string;
   showAll?: boolean;
@@ -83,17 +88,30 @@ export type CandidateOptions = {
   /** Narrows to devices assigned to this CCU function/"Gewerk" (picker
    *  function filter). */
   func?: string;
+  /** Narrows to devices whose central+room resolves to this Area id
+   *  (picker area filter) — an operator-defined grouping ABOVE CCU
+   *  rooms, distinct from alarm zones. Requires `areaIdOf`. */
+  area?: string;
+  areaIdOf?: AreaIdOf;
 };
 
 /**
  * Build the add-sensor device candidate list: security filter (unless
- * showAll), optional room/function narrowing, then free-text search over
- * name/address/model/model_label/rooms/functions, capped at `limit`.
+ * showAll), optional room/function/area narrowing, then free-text search
+ * over name/address/model/model_label/rooms/functions, capped at `limit`.
  * Mirrors AlarmSensors.svelte's picker pipeline exactly.
  */
 export function buildCandidates(
   devices: DeviceSummary[],
-  { query = "", showAll = false, limit = 60, room = "", func = "" }: CandidateOptions = {},
+  {
+    query = "",
+    showAll = false,
+    limit = 60,
+    room = "",
+    func = "",
+    area = "",
+    areaIdOf,
+  }: CandidateOptions = {},
 ): DeviceSummary[] {
   const match = makeTextMatcher(query);
   return devices
@@ -101,6 +119,10 @@ export function buildCandidates(
       if (!showAll && !isSecurityDevice(d)) return false;
       if (room && !(d.rooms ?? []).includes(room)) return false;
       if (func && !(d.functions ?? []).includes(func)) return false;
+      if (area) {
+        const central = d.central ?? "";
+        if (!(d.rooms ?? []).some((r) => areaIdOf?.(central, r) === area)) return false;
+      }
       if (query) {
         return (
           match(d.name ?? "") ||
@@ -123,10 +145,14 @@ export type OutputCandidateFilterOptions = {
   /** Narrows to channels assigned to this CCU function/"Gewerk" (picker
    *  function filter). */
   func?: string;
+  /** Narrows to channels whose central+room resolves to this Area id
+   *  (picker area filter). Requires `areaIdOf`. */
+  area?: string;
+  areaIdOf?: AreaIdOf;
 };
 
 /**
- * Free-text search + room/function narrowing over the alarm output-
+ * Free-text search + room/function/area narrowing over the alarm output-
  * candidate list (docs/alarm-concept.md §12.3 step 3). Search matches the
  * channel/device name, both addresses, the raw model, and any room or
  * function assignment — the output-candidate mirror of buildCandidates'
@@ -134,12 +160,15 @@ export type OutputCandidateFilterOptions = {
  */
 export function filterOutputCandidates(
   candidates: AlarmOutputCandidate[],
-  { query = "", room = "", func = "" }: OutputCandidateFilterOptions = {},
+  { query = "", room = "", func = "", area = "", areaIdOf }: OutputCandidateFilterOptions = {},
 ): AlarmOutputCandidate[] {
   const match = makeTextMatcher(query);
   return candidates.filter((c) => {
     if (room && !(c.rooms ?? []).includes(room)) return false;
     if (func && !(c.functions ?? []).includes(func)) return false;
+    if (area) {
+      if (!(c.rooms ?? []).some((r) => areaIdOf?.(c.central, r) === area)) return false;
+    }
     if (query) {
       return (
         match(c.channel_name ?? "") ||

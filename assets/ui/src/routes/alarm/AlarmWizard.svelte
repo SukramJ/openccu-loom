@@ -3,6 +3,7 @@
   import { api, ApiError, friendlyError } from "$lib/api/client";
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import {
     alarmWizardStore,
     ALARM_WIZARD_MAX_TRIGGER_SECONDS,
@@ -101,6 +102,7 @@
   let sensorShowAll = $state(false);
   let sensorRoom = $state("");
   let sensorFunc = $state("");
+  let sensorArea = $state("");
   let sensorSort = $state<PickerSortField>("name");
   const sensorCandidatesFiltered = $derived(
     buildCandidates(deviceStore.items, {
@@ -108,6 +110,8 @@
       showAll: sensorShowAll,
       room: sensorRoom,
       func: sensorFunc,
+      area: sensorArea,
+      areaIdOf: areasStore.areaIdOf,
       limit: 60,
     }),
   );
@@ -186,6 +190,7 @@
   let outputSearch = $state("");
   let outputRoom = $state("");
   let outputFunc = $state("");
+  let outputArea = $state("");
   let outputSort = $state<PickerSortField>("name");
   const outputCandidatesEligible = $derived(
     store.outputCandidates.filter((c) => c.classes.length > 0),
@@ -195,6 +200,8 @@
       query: outputSearch,
       room: outputRoom,
       func: outputFunc,
+      area: outputArea,
+      areaIdOf: areasStore.areaIdOf,
     }),
   );
   function outputSortKey(c: AlarmOutputCandidate): PickerSortKey {
@@ -326,6 +333,7 @@
     // the device inventory ready by the time the operator reaches it.
     deviceStore.refresh();
     deviceStore.ensureStream();
+    areasStore.ensureLoaded();
   });
 </script>
 
@@ -393,6 +401,20 @@
             <option value={f}>{f}</option>
           {/each}
         </select>
+        {#if areasStore.areas.length > 0}
+          <select
+            value={sensorArea}
+            onchange={(e) => (sensorArea = e.currentTarget.value)}
+            class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+            title={t("alarm.sensors.filter.area")}
+            aria-label={t("alarm.sensors.filter.area")}
+          >
+            <option value="">{t("alarm.sensors.filter.all")}</option>
+            {#each areasStore.areas as a (a.id)}
+              <option value={a.id}>{a.name}</option>
+            {/each}
+          </select>
+        {/if}
         <select
           value={sensorSort}
           onchange={(e) => (sensorSort = e.currentTarget.value as PickerSortField)}
@@ -493,6 +515,20 @@
               <option value={f}>{f}</option>
             {/each}
           </select>
+          {#if areasStore.areas.length > 0}
+            <select
+              value={outputArea}
+              onchange={(e) => (outputArea = e.currentTarget.value)}
+              class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-2 text-sm text-[var(--ha-primary-text-color)] shadow-sm focus:border-[var(--ha-primary-color)] focus:outline-none"
+              title={t("alarm.sensors.filter.area")}
+              aria-label={t("alarm.sensors.filter.area")}
+            >
+              <option value="">{t("alarm.sensors.filter.all")}</option>
+              {#each areasStore.areas as a (a.id)}
+                <option value={a.id}>{a.name}</option>
+              {/each}
+            </select>
+          {/if}
           <select
             value={outputSort}
             onchange={(e) => (outputSort = e.currentTarget.value as PickerSortField)}

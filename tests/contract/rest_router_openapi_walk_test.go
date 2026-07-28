@@ -67,6 +67,20 @@ func (fakePreferencesService) Get(context.Context, string, string) (string, erro
 func (fakePreferencesService) Set(context.Context, string, string, string) error   { return nil }
 func (fakePreferencesService) Delete(context.Context, string, string) error        { return nil }
 
+type fakeAreaAdmin struct{}
+
+func (fakeAreaAdmin) GetAll(context.Context) ([]sqlite.AreaRow, error) { return nil, nil }
+func (fakeAreaAdmin) Get(context.Context, string) (sqlite.AreaRow, bool, error) {
+	return sqlite.AreaRow{}, false, nil
+}
+func (fakeAreaAdmin) Upsert(context.Context, sqlite.AreaRow) error                  { return nil }
+func (fakeAreaAdmin) Delete(context.Context, string) error                          { return nil }
+func (fakeAreaAdmin) ListAssignments(context.Context) ([]sqlite.RoomAreaRow, error) { return nil, nil }
+
+func (fakeAreaAdmin) ReplaceRooms(context.Context, string, []sqlite.RoomAreaRow) error {
+	return nil
+}
+
 type fakeDiagramConfigService struct{}
 
 func (fakeDiagramConfigService) List(context.Context, string) ([]handlers.DiagramConfig, error) {
@@ -581,6 +595,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},
 		Diagrams:                fakeDiagramConfigService{},
+		Areas:                   fakeAreaAdmin{},
 		Devices:                 fakeDeviceIndex{},
 		MasterProfiles:          fakeMasterProfilesService{},
 		UISchema:                fakeUISchemaService{},

@@ -62,6 +62,22 @@ vi.mock("$lib/api/client", () => ({
   },
 }));
 
+// areasStore drives the (hideable) Area filter select. Empty by default so
+// existing tests above never see an extra select; the area-filter describe
+// block below opts in per test.
+let mockAreas: { id: string; name: string }[] = [];
+let mockAreaIdOf: (central: string, room: string) => string | undefined = () => undefined;
+
+vi.mock("$lib/stores/areas.svelte", () => ({
+  areasStore: {
+    get areas() {
+      return mockAreas;
+    },
+    ensureLoaded: vi.fn(),
+    areaIdOf: (central: string, room: string) => mockAreaIdOf(central, room),
+  },
+}));
+
 vi.mock("$lib/stores/confirm.svelte", () => ({
   confirmStore: { ask: vi.fn().mockResolvedValue(false) },
 }));
@@ -105,6 +121,8 @@ beforeEach(() => {
   mockLoading = false;
   mockError = null;
   mockLastLoaded = null;
+  mockAreas = [];
+  mockAreaIdOf = () => undefined;
   // The list filter/sort state lives in a module-scoped store (it must
   // survive navigation in the app), so reset it between tests to avoid a
   // search term from one test leaking into the next.
@@ -114,6 +132,7 @@ beforeEach(() => {
     updateOnly: false,
     roomFilter: "",
     centralFilter: "",
+    areaFilter: "",
     sortColumn: "name",
     sortAsc: true,
     groupByInterface: true,
@@ -264,6 +283,61 @@ describe("DeviceList — update-only filter", () => {
     const headings = getAllByRole("heading", { level: 3 });
     expect(headings).toHaveLength(1);
     expect(headings[0].textContent).toContain("Has update");
+  });
+});
+
+describe("DeviceList — area filter", () => {
+  it("hides the area select entirely when no areas are defined", () => {
+    mockAreas = [];
+    const { queryByTitle } = render(DeviceList);
+    expect(queryByTitle("devicelist.area")).toBeNull();
+  });
+
+  it("shows the area select once areas exist, with an 'all areas' option", () => {
+    mockAreas = [{ id: "a1", name: "Upstairs" }];
+    const { getByTitle } = render(DeviceList);
+    const select = getByTitle("devicelist.area") as HTMLSelectElement;
+    const opts = Array.from(select.options).map((o) => o.value);
+    expect(opts).toEqual(["", "a1"]);
+  });
+
+  // The DeviceList component seeds its local `areaFilter` $state from the
+  // persisted `deviceListFilters` store on init (mirrors how the search/
+  // availability/room filters are exercised via that same seed elsewhere
+  // in this suite) — pre-setting it here is equivalent to the operator
+  // picking a value in the (real-browser-only) native <select>, without
+  // depending on jsdom/happy-dom's incomplete `:checked` support that
+  // Svelte 5's `bind:value` for <select> relies on.
+  it("narrows to devices whose central+room resolves to the selected area", () => {
+    mockAreas = [{ id: "upstairs", name: "Upstairs" }];
+    mockAreaIdOf = (central, room) =>
+      central === "ccu1" && room === "Bedroom" ? "upstairs" : undefined;
+    mockItems = [
+      makeDevice({ address: "D1", name: "In area", central: "ccu1", rooms: ["Bedroom"] }),
+      makeDevice({ address: "D2", name: "Out of area", central: "ccu1", rooms: ["Kitchen"] }),
+    ];
+    deviceListFilters.areaFilter = "upstairs";
+
+    const { getAllByRole } = render(DeviceList);
+    const headings = getAllByRole("heading", { level: 3 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0].textContent).toContain("In area");
+  });
+
+  it("never merges the same room name across two different centrals", () => {
+    mockAreas = [{ id: "upstairs", name: "Upstairs" }];
+    mockAreaIdOf = (central, room) =>
+      central === "ccu1" && room === "Bedroom" ? "upstairs" : undefined;
+    mockItems = [
+      makeDevice({ address: "D1", name: "CCU1 bedroom", central: "ccu1", rooms: ["Bedroom"] }),
+      makeDevice({ address: "D2", name: "CCU2 bedroom", central: "ccu2", rooms: ["Bedroom"] }),
+    ];
+    deviceListFilters.areaFilter = "upstairs";
+
+    const { getAllByRole } = render(DeviceList);
+    const headings = getAllByRole("heading", { level: 3 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0].textContent).toContain("CCU1 bedroom");
   });
 });
 

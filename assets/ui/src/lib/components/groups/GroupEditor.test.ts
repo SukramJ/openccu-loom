@@ -32,6 +32,17 @@ vi.mock("$lib/stores/toast.svelte", () => ({
   },
 }));
 
+// Whole-module mock (not just $lib/api/client) so the real areas.svelte.ts
+// never pulls in auth.svelte.ts's module-level setUnauthorizedHandler side
+// effect, which this file's minimal api-client mock does not export.
+vi.mock("$lib/stores/areas.svelte", () => ({
+  areasStore: {
+    areas: [] as { id: string; name: string }[],
+    ensureLoaded: vi.fn(),
+    areaIdOf: vi.fn(() => undefined),
+  },
+}));
+
 vi.mock("$lib/i18n", () => ({
   t: (key: string, vars?: Record<string, unknown>) =>
     vars ? `${key}:${JSON.stringify(vars)}` : key,
