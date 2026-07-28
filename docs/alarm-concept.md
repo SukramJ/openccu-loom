@@ -938,9 +938,14 @@ excellent UX and visual clarity. Design:
 
 First-run guided flow: ① name the zone → ② select sensors inline
 (security-device candidates with search + show-all toggle) → ③ select
-outputs inline (from the output-candidate list) → ④ delays per mode
+outputs inline (from the output-candidate list, with the same search box)
+→ ④ delays per mode
 (trigger time capped at the engine's 600 s ceiling) → ⑤ codes pointer
 (managed on the Codes tab once the zone exists) → ⑥ summary + finish.
+Both candidate lists (② sensors, ③ outputs) additionally offer a room
+filter, a function ("Gewerk") filter, and a name/room/model sort — each
+row shows the device's model label and its room/function assignment so
+the operator can tell candidates apart without leaving the wizard.
 Finish applies everything against the API in order (create zone →
 sensors → outputs); a partial failure keeps the created zone id so a
 retry updates instead of duplicating. Each step is skippable (skip

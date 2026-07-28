@@ -76,6 +76,10 @@ type AlarmOutputCandidate struct {
 	ChannelAddress string `json:"channel_address"`
 	ChannelNo      int    `json:"channel_no"`
 	ChannelName    string `json:"channel_name,omitempty"`
+	// Rooms / Functions are the channel's CCU room and function
+	// assignments so pickers can filter and label candidates.
+	Rooms     []string `json:"rooms,omitempty"`
+	Functions []string `json:"functions,omitempty"`
 	// Classes are the device-backed output classes this channel can
 	// carry, in canonical class order.
 	Classes []string `json:"classes"`

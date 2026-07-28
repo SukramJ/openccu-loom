@@ -2,6 +2,10 @@
 
 ## 0.49.2
 
+- **Alarm wizard lists are searchable and filterable.** The outputs step
+  has a search box now; sensor and output pickers filter by room and
+  function, sort by name/room/model, and show the device model and rooms
+  per row.
 - **Alarm "areas" are now "zones".** The armable alarm unit is called a
   zone throughout the UI, API, and MQTT topics — the term "area" is
   freed up for the upcoming room grouping. Existing alarm configuration

@@ -1,10 +1,14 @@
 import { makeTextMatcher } from "$lib/utils";
-import type { AlarmSensorType, DeviceSummary } from "$lib/api/types";
+import type { AlarmOutputCandidate, AlarmSensorType, DeviceSummary } from "$lib/api/types";
 
 // Add-sensor assist for AlarmSensors.svelte's device picker (docs/alarm-
 // concept.md §12.2 / §6.1): which devices are surfaced by default, and
 // which channel/parameter/type a picked device pre-fills. Extracted so
 // the picker's guessing logic is unit-testable independent of the view.
+// The search/filter/sort helpers below back both the wizard's sensor
+// picker (step 2) and its output-candidate picker (step 3, docs/alarm-
+// concept.md §12.3) — kept here, shape-agnostic where possible, so they
+// stay testable without a component harness.
 
 /** Minimal device shape the guessing/filtering helpers below read from. */
 type DeviceLike = Pick<DeviceSummary, "model" | "model_label" | "name">;
@@ -74,30 +78,120 @@ export type CandidateOptions = {
   query?: string;
   showAll?: boolean;
   limit?: number;
+  /** Narrows to devices assigned to this CCU room (picker room filter). */
+  room?: string;
+  /** Narrows to devices assigned to this CCU function/"Gewerk" (picker
+   *  function filter). */
+  func?: string;
 };
 
 /**
  * Build the add-sensor device candidate list: security filter (unless
- * showAll), then free-text search over name/address/model/model_label,
- * capped at `limit`. Mirrors AlarmSensors.svelte's picker pipeline exactly.
+ * showAll), optional room/function narrowing, then free-text search over
+ * name/address/model/model_label/rooms/functions, capped at `limit`.
+ * Mirrors AlarmSensors.svelte's picker pipeline exactly.
  */
 export function buildCandidates(
   devices: DeviceSummary[],
-  { query = "", showAll = false, limit = 60 }: CandidateOptions = {},
+  { query = "", showAll = false, limit = 60, room = "", func = "" }: CandidateOptions = {},
 ): DeviceSummary[] {
   const match = makeTextMatcher(query);
   return devices
     .filter((d) => {
       if (!showAll && !isSecurityDevice(d)) return false;
+      if (room && !(d.rooms ?? []).includes(room)) return false;
+      if (func && !(d.functions ?? []).includes(func)) return false;
       if (query) {
         return (
           match(d.name ?? "") ||
           match(d.address) ||
           match(d.model) ||
-          match(d.model_label ?? "")
+          match(d.model_label ?? "") ||
+          (d.rooms ?? []).some(match) ||
+          (d.functions ?? []).some(match)
         );
       }
       return true;
     })
     .slice(0, limit);
+}
+
+export type OutputCandidateFilterOptions = {
+  query?: string;
+  /** Narrows to channels assigned to this CCU room (picker room filter). */
+  room?: string;
+  /** Narrows to channels assigned to this CCU function/"Gewerk" (picker
+   *  function filter). */
+  func?: string;
+};
+
+/**
+ * Free-text search + room/function narrowing over the alarm output-
+ * candidate list (docs/alarm-concept.md §12.3 step 3). Search matches the
+ * channel/device name, both addresses, the raw model, and any room or
+ * function assignment — the output-candidate mirror of buildCandidates'
+ * device search.
+ */
+export function filterOutputCandidates(
+  candidates: AlarmOutputCandidate[],
+  { query = "", room = "", func = "" }: OutputCandidateFilterOptions = {},
+): AlarmOutputCandidate[] {
+  const match = makeTextMatcher(query);
+  return candidates.filter((c) => {
+    if (room && !(c.rooms ?? []).includes(room)) return false;
+    if (func && !(c.functions ?? []).includes(func)) return false;
+    if (query) {
+      return (
+        match(c.channel_name ?? "") ||
+        match(c.device_name ?? "") ||
+        match(c.device_address) ||
+        match(c.channel_address) ||
+        match(c.model) ||
+        (c.rooms ?? []).some(match) ||
+        (c.functions ?? []).some(match)
+      );
+    }
+    return true;
+  });
+}
+
+/**
+ * Distinct, sorted values across every item's array-valued facet (rooms or
+ * functions) — feeds the wizard's room/function filter selects for either
+ * a DeviceSummary or an AlarmOutputCandidate pool.
+ */
+export function distinctValues<T>(
+  items: T[],
+  accessor: (item: T) => string[] | undefined,
+): string[] {
+  const set = new Set<string>();
+  for (const item of items) {
+    for (const v of accessor(item) ?? []) set.add(v);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+export type PickerSortField = "name" | "room" | "model";
+
+/** The three fields a picker row can be sorted by, projected from either a
+ *  DeviceSummary or an AlarmOutputCandidate via the caller's `keyOf`. */
+export type PickerSortKey = {
+  name: string;
+  room: string;
+  model: string;
+};
+
+/**
+ * Sorts picker rows by name/room/model, locale-aware (case-insensitive,
+ * numeric-aware) and stable. Pure and shape-agnostic: callers project
+ * their row type to a PickerSortKey rather than the helper knowing about
+ * DeviceSummary or AlarmOutputCandidate directly.
+ */
+export function sortPickerRows<T>(
+  rows: T[],
+  field: PickerSortField,
+  keyOf: (row: T) => PickerSortKey,
+): T[] {
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  return [...rows].sort((a, b) => collator.compare(keyOf(a)[field], keyOf(b)[field]));
 }

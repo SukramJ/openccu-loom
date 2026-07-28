@@ -8130,6 +8130,10 @@ export interface components {
             channel_address: string;
             channel_no: number;
             channel_name?: string;
+            /** @description The channel's CCU room assignments (picker filter/label). */
+            rooms?: string[];
+            /** @description The channel's CCU function assignments (picker filter/label). */
+            functions?: string[];
             /** @description Device-backed output classes this channel can carry, in canonical class order. The switched_siren class requires device-side auto-off (ON_TIME) and is only listed when the channel supports it. */
             classes: ("acoustic_siren" | "optical_siren" | "switched_siren" | "smoke_sounder" | "alarm_light" | "chirp")[];
             /** @description Stable custom-DP kind string (widget selection). */

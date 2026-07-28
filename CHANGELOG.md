@@ -21,6 +21,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   data-preserving migration renames the tables/columns in place,
   including the ids inside stored code bindings.
 
+### Added
+
+- **The alarm setup wizard's sensor and output candidate lists are now
+  searchable, filterable, and sortable.** The outputs step gains the
+  free-text search the sensors step already had; both steps add room and
+  function ("Gewerk") filters plus a name/room/model sort, and each row
+  shows the device's model label and room/function assignments (output
+  rows resolve the model label from the live device inventory). The
+  Sensors and Outputs tabs' add-drawers gained the same enrichment. The
+  output-candidates REST DTO now carries the channel's `rooms` and
+  `functions` (API 3.1.0, additive).
+
 ### Fixed
 
 - **The same siren (or any output/sensor) can now be enrolled in more than

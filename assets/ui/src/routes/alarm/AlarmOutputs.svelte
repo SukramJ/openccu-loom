@@ -178,6 +178,18 @@
   // classes at once). Also feeds the per-output tone/pattern pickers
   // with the device's real ENUM label lists.
   let candidates = $state<AlarmOutputCandidate[]>([]);
+  // deviceByAddr resolves a candidate's model LABEL from the live device
+  // inventory — the candidate DTO only carries the raw wire `model`, not
+  // the localised label the device list already has cached.
+  const deviceByAddr = $derived.by(() => {
+    const m = new Map<string, DeviceSummary>();
+    for (const d of deviceStore.items) m.set(d.address, d);
+    return m;
+  });
+  function candidateModelLabel(c: AlarmOutputCandidate): string {
+    const d = deviceByAddr.get(c.device_address);
+    return d?.model_label || d?.model || c.model;
+  }
   const candidateByChannel = $derived(
     new Map(candidates.map((c) => [`${c.central}|${c.channel_address}`, c])),
   );
@@ -1043,7 +1055,12 @@
                     <span class="truncate text-sm text-[var(--ha-primary-text-color)]">
                       {c.device_name || c.device_address}{c.channel_name ? ` · ${c.channel_name}` : ""}
                     </span>
-                    <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{c.model} · {c.channel_address}</span>
+                    <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{candidateModelLabel(c)} · {c.channel_address}</span>
+                    {#if (c.rooms ?? []).length > 0 || (c.functions ?? []).length > 0}
+                      <span class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                        {[...(c.rooms ?? []), ...(c.functions ?? [])].join(" · ")}
+                      </span>
+                    {/if}
                   </button>
                 {/each}
               {/if}
@@ -1061,6 +1078,11 @@
                 >
                   <span class="truncate text-sm text-[var(--ha-primary-text-color)]">{d.name || d.address}</span>
                   <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{d.model_label || d.model} · {d.address}</span>
+                  {#if (d.rooms ?? []).length > 0}
+                    <span class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                      {(d.rooms ?? []).join(", ")}
+                    </span>
+                  {/if}
                 </button>
               {/each}
             {/if}

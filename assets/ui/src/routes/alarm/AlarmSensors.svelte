@@ -942,6 +942,11 @@
                   <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">
                     {d.model_label || d.model} · {d.address}
                   </span>
+                  {#if (d.rooms ?? []).length > 0}
+                    <span class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                      {(d.rooms ?? []).join(", ")}
+                    </span>
+                  {/if}
                 </button>
               {/each}
             {/if}
