@@ -93,7 +93,7 @@ func TestNegativeWriteParity(t *testing.T) {
 
 	cases := []negativeWriteCase{
 		{
-			// Mirrors matter.js packages/node/src/behaviors/thermostat/ThermostatServer.ts:911
+			// Mirrors matter.js packages/node/src/behaviors/thermostat/ThermostatServer.ts:879
 			// #assertSetpointWithinLimits — rejects values above MaxHeatSetpointLimit.
 			name: "Thermostat/OccupiedHeatingSetpoint above maxHeat → ConstraintError",
 			build: func() interface {
@@ -106,7 +106,7 @@ func TestNegativeWriteParity(t *testing.T) {
 			wantStatus: im.StatusConstraintError,
 		},
 		{
-			// Mirrors matter.js packages/node/src/behaviors/thermostat/ThermostatServer.ts:911
+			// Mirrors matter.js packages/node/src/behaviors/thermostat/ThermostatServer.ts:879
 			// #assertSetpointWithinLimits — rejects values below MinHeatSetpointLimit.
 			name: "Thermostat/OccupiedHeatingSetpoint below minHeat → ConstraintError",
 			build: func() interface {
