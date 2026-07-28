@@ -6,6 +6,11 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
   import { makeTextMatcher } from "$lib/utils";
+  import {
+    buildCandidates,
+    guessSensorBinding,
+    guessSensorParameter,
+  } from "$lib/alarm/sensorCandidates";
   import type {
     AlarmSensor,
     AlarmSensorType,
@@ -69,11 +74,6 @@
     hazard: "mdi:alert-triangle",
     panic: "mdi:bell-alert",
   };
-
-  // Which devices are surfaced by the add-sensor assist by default: model
-  // or name looks security-relevant. The "show all" toggle widens it.
-  const SECURITY_RE =
-    /swdo|sci|smo|smi|spi|sec|rc[ -]?\d|krca|wrc|wgc|motion|pir|presence|prescence|bewegung|sabot|tamper|contact|kontakt|fenster|window|door|t[üu]r|smoke|rauch|swsd|water|wasser|leak|co2|gas/i;
 
   // --- area state --------------------------------------------------
   const areas = $derived(alarmPanelStore.areasConfig);
@@ -320,50 +320,14 @@
         return {};
     }
   }
-  function guessType(d: DeviceSummary): AlarmSensorType {
-    const s = `${d.model} ${d.model_label ?? ""} ${d.name ?? ""}`.toLowerCase();
-    if (/sabot|tamper/.test(s)) return "tamper";
-    if (/smoke|rauch|swsd|water|wasser|leak|co2|gas/.test(s)) return "hazard";
-    if (/motion|pir|presence|prescence|bewegung|smi|spi/.test(s)) return "motion";
-    if (/window|rotary|handle|swdo|fenster/.test(s)) return "window";
-    if (/rc[ -]?\d|krca|wrc|remote|panic|taster/.test(s)) return "panic";
-    return "door";
-  }
-  function guessParameter(type: AlarmSensorType): string {
-    switch (type) {
-      case "motion":
-        return "MOTION";
-      case "tamper":
-        return "SABOTAGE";
-      case "hazard":
-        return "SMOKE_DETECTOR_ALARM_STATUS";
-      case "panic":
-        return "PRESS_SHORT";
-      default:
-        return "STATE";
-    }
-  }
 
   // --- add flow ----------------------------------------------------
-  const addDeviceMatch = $derived(makeTextMatcher(addDeviceSearch));
   const addCandidates = $derived(
-    deviceStore.items
-      .filter((d) => {
-        if (!addShowAll) {
-          const hay = `${d.model} ${d.model_label ?? ""} ${d.name ?? ""}`;
-          if (!SECURITY_RE.test(hay)) return false;
-        }
-        if (addDeviceSearch) {
-          return (
-            addDeviceMatch(d.name ?? "") ||
-            addDeviceMatch(d.address) ||
-            addDeviceMatch(d.model) ||
-            addDeviceMatch(d.model_label ?? "")
-          );
-        }
-        return true;
-      })
-      .slice(0, 60),
+    buildCandidates(deviceStore.items, {
+      query: addDeviceSearch,
+      showAll: addShowAll,
+      limit: 60,
+    }),
   );
 
   function openAdd() {
@@ -378,10 +342,10 @@
   }
   function pickAddDevice(d: DeviceSummary) {
     addDevice = d;
-    const type = guessType(d);
-    addType = type;
-    addChannel = `${d.address}:1`;
-    addParameter = guessParameter(type);
+    const binding = guessSensorBinding(d);
+    addType = binding?.type ?? "door";
+    addChannel = binding?.channel ?? "";
+    addParameter = binding?.parameter ?? "";
     addName = d.name ?? "";
   }
   const canAdd = $derived(
@@ -459,7 +423,11 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if areas.length === 0}
+{#if alarmPanelStore.loading && areas.length === 0}
+  <LoadingState />
+{:else if alarmPanelStore.error && areas.length === 0}
+  <ErrorState message={alarmPanelStore.error} onRetry={() => void alarmPanelStore.refresh()} />
+{:else if areas.length === 0}
   <EmptyState
     icon="mdi:shield-home"
     message={t("alarm.overview.empty")}
@@ -995,7 +963,7 @@
               value={addType}
               onValueChange={(v) => {
                 addType = v as AlarmSensorType;
-                addParameter = guessParameter(addType);
+                addParameter = guessSensorParameter(addType);
               }}
               options={SENSOR_TYPES.map((tp) => ({
                 value: tp,

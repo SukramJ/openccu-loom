@@ -537,7 +537,11 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if areas.length === 0}
+{#if alarmPanelStore.loading && areas.length === 0}
+  <LoadingState />
+{:else if alarmPanelStore.error && areas.length === 0}
+  <ErrorState message={alarmPanelStore.error} onRetry={() => void alarmPanelStore.refresh()} />
+{:else if areas.length === 0}
   <EmptyState
     icon="mdi:shield-home"
     message={t("alarm.overview.empty")}

@@ -795,6 +795,22 @@ export async function mockAlarmTriggered(page: Page): Promise<void> {
 }
 
 /**
+ * Single security-relevant device (a door/window contact) for the alarm
+ * setup wizard's step-2 sensor picker (docs/alarm-concept.md §12.3). The
+ * wizard reads the device inventory straight from GET /api/v1/devices
+ * rather than the alarm-sensors fixture, so it needs a DeviceSummary-shaped
+ * candidate whose model/name trip the security filter — the wizard's
+ * picker must surface it inline by default, with no "show all" toggle.
+ * Overrides mockAllApis' own '**\/devices*' route (registered earlier, so
+ * this one wins).
+ */
+export async function mockAlarmWizardDevices(page: Page): Promise<void> {
+  await page.route('**/api/v1/devices*', (route) =>
+    route.fulfill({ json: fixture('alarm-wizard-devices.json') }),
+  );
+}
+
+/**
  * Device address for the virtual-remote (HM-RCV-50) fixture below —
  * exported so a spec can build the `#/devices/{address}` URL itself.
  */

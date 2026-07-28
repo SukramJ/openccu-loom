@@ -696,7 +696,19 @@
       <!-- Areas -->
       <div class="flex flex-col gap-2">
         <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.areas")}</span>
-        {#if areas.length === 0}
+        {#if alarmPanelStore.loading && areas.length === 0}
+          <!-- The area list is a fetch shared with the rest of the alarm
+               section (alarmPanelStore.refresh()); while it is still in
+               flight, "applies to all areas" below would be misleading —
+               areas may exist and just haven't loaded yet. -->
+          <LoadingState class="py-2" />
+        {:else if alarmPanelStore.error && areas.length === 0}
+          <ErrorState
+            message={alarmPanelStore.error}
+            onRetry={() => void alarmPanelStore.refresh()}
+            class="py-2"
+          />
+        {:else if areas.length === 0}
           <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.areas.all")}</p>
         {:else}
           <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("alarm.codes.field.areas.help")}</p>

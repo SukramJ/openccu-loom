@@ -343,13 +343,12 @@ const EN: Catalog = {
   "alarm.wizard.step.outputs": "Outputs",
   "alarm.wizard.step.delays": "Delays & chirps",
   "alarm.wizard.step.codes": "Codes & users",
-  "alarm.wizard.step.walktest": "Walk test",
   "alarm.wizard.step.done": "Done",
   "alarm.wizard.next": "Next",
   "alarm.wizard.back": "Back",
   "alarm.wizard.skip": "Skip",
   "alarm.wizard.finish": "Finish",
-  "alarm.wizard.codes_later": "PIN codes and users arrive in a later release; skip this step for now.",
+  "alarm.wizard.codes_later": "PIN codes and remote keys are managed on the Codes tab once this area exists — there is nothing to configure here yet.",
   // Health chip (§12.5, S7).
   "alarm.health.title": "Alarm health",
   "alarm.health.healthy": "Alarm system OK",
@@ -393,10 +392,18 @@ const EN: Catalog = {
   "alarm.wizard.delays.hint":
     "The exit delay lets you leave after arming; the entry delay gives you time to disarm after opening the door. Alarm duration bounds how long one alarm phase (and its sirens) runs — at most 600 s per cycle.",
   "alarm.wizard.finish.hint": "The area is created disarmed. Run a walk test before relying on it.",
-  "alarm.wizard.outputs.cta": "Open output picker",
-  "alarm.wizard.outputs.hint": "Enroll sirens, lights, and chirp outputs afterwards in the outputs tab.",
-  "alarm.wizard.sensors.cta": "Open sensor picker",
-  "alarm.wizard.sensors.hint": "Assign window contacts, door contacts, and motion detectors in the sensor picker.",
+  "alarm.wizard.outputs.empty": "No eligible output channels found.",
+  "alarm.wizard.outputs.empty.description":
+    "Use the Outputs tab afterwards for expert-mode enrollment of any device.",
+  "alarm.wizard.outputs.hint":
+    "Pick the sirens, lights, and other outputs to enroll below — fine-tune tone, duration, and mode assignment afterwards in the outputs tab.",
+  "alarm.wizard.sensors.empty": "No matching devices found.",
+  "alarm.wizard.sensors.empty.description":
+    "Try a different search, or enable the show-all toggle above to widen the candidate list beyond security-relevant devices.",
+  "alarm.wizard.sensors.hint":
+    "Pick the door, window, and motion sensors to enroll below — search by name or address, or show every device.",
+  "alarm.wizard.summary.delay_line": "{mode} {exit}/{entry}/{trigger}s",
+  "alarm.wizard.summary.delays": "Delays",
   // Alarm codes (docs/alarm-concept.md §11).
   "alarm.codes.add": "Add code",
   "alarm.codes.areas": "Areas",
@@ -3332,13 +3339,12 @@ const DE: Catalog = {
   "alarm.wizard.step.outputs": "Ausgänge",
   "alarm.wizard.step.delays": "Verzögerungen & Töne",
   "alarm.wizard.step.codes": "Codes & Benutzer",
-  "alarm.wizard.step.walktest": "Begehungstest",
   "alarm.wizard.step.done": "Fertig",
   "alarm.wizard.next": "Weiter",
   "alarm.wizard.back": "Zurück",
   "alarm.wizard.skip": "Überspringen",
   "alarm.wizard.finish": "Fertigstellen",
-  "alarm.wizard.codes_later": "PIN-Codes und Benutzer kommen in einer späteren Version; überspringe diesen Schritt vorerst.",
+  "alarm.wizard.codes_later": "PIN-Codes und Funkschlüssel werden im Codes-Tab verwaltet, sobald dieser Bereich existiert — hier gibt es noch nichts einzurichten.",
   // Zustands-Chip (§12.5, S7).
   "alarm.health.title": "Alarm-Zustand",
   "alarm.health.healthy": "Alarmanlage OK",
@@ -3382,10 +3388,18 @@ const DE: Catalog = {
   "alarm.wizard.delays.hint":
     "Die Austrittsverzögerung lässt Zeit zum Verlassen nach dem Scharfschalten; die Eintrittsverzögerung gibt Zeit zum Unscharfschalten nach dem Öffnen der Tür. Die Alarmdauer begrenzt, wie lange eine Alarmphase (und ihre Sirenen) läuft — höchstens 600 s pro Zyklus.",
   "alarm.wizard.finish.hint": "Der Bereich wird unscharf angelegt. Führe vor dem Verlassen auf die Anlage einen Begehungstest durch.",
-  "alarm.wizard.outputs.cta": "Zum Ausgabe-Picker",
-  "alarm.wizard.outputs.hint": "Sirenen, Licht und Quittungstöne ordnest du anschließend im Ausgaben-Tab zu.",
-  "alarm.wizard.sensors.cta": "Zum Sensor-Picker",
-  "alarm.wizard.sensors.hint": "Fenster- und Türkontakte sowie Bewegungsmelder weist du im Sensor-Picker zu.",
+  "alarm.wizard.outputs.empty": "Keine geeigneten Ausgangskanäle gefunden.",
+  "alarm.wizard.outputs.empty.description":
+    "Nutze anschließend den Ausgaben-Tab für die Aufnahme im Expertenmodus für jedes Gerät.",
+  "alarm.wizard.outputs.hint":
+    "Wähle unten die Sirenen, Leuchten und weiteren Ausgänge aus, die aufgenommen werden sollen — Ton, Dauer und Modus-Zuordnung feintunst du anschließend im Ausgaben-Tab.",
+  "alarm.wizard.sensors.empty": "Keine passenden Geräte gefunden.",
+  "alarm.wizard.sensors.empty.description":
+    "Versuche eine andere Suche oder aktiviere oben den Alle-anzeigen-Schalter, um die Kandidatenliste über sicherheitsrelevante Geräte hinaus zu erweitern.",
+  "alarm.wizard.sensors.hint":
+    "Wähle unten die Tür-, Fenster- und Bewegungssensoren aus, die aufgenommen werden sollen — nach Name oder Adresse suchen oder alle Geräte anzeigen.",
+  "alarm.wizard.summary.delay_line": "{mode} {exit}/{entry}/{trigger}s",
+  "alarm.wizard.summary.delays": "Verzögerungen",
   // Alarm codes (docs/alarm-concept.md §11).
   "alarm.codes.add": "Code hinzufügen",
   "alarm.codes.areas": "Bereiche",

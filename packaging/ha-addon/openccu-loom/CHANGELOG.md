@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.49.1
+
+- **Alarm setup wizard actually works end to end.** Sensors and outputs are
+  now selected directly inside the wizard (steps 2 and 3) instead of linking
+  to tabs that need an area that does not exist yet; finishing creates the
+  area and applies the selections in one go, and re-trying after an error no
+  longer creates duplicate areas. Wizard progress survives navigating away.
+
 ## 0.49.0
 
 - **Sysvar/program markers now control which entities Home Assistant enables

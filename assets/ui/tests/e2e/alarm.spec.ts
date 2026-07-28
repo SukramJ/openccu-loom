@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mockAllApis, mockAlarmTriggered } from './helpers/mock-api';
+import { mockAllApis, mockAlarmTriggered, mockAlarmWizardDevices } from './helpers/mock-api';
 
 // Alarm section (#/alarm, docs/alarm-concept.md §12). mockAllApis now wires
 // sane defaults for every /api/v1/alarm/* route: two areas — "Erdgeschoss"
@@ -231,5 +231,155 @@ test.describe('Alarm', () => {
 
     await expect.poll(() => silenceCalls).toBe(1);
     await expect(page.getByRole('dialog')).not.toBeVisible();
+  });
+});
+
+// Setup wizard (docs/alarm-concept.md §12.3). Steps ②/③ used to be bare
+// links out into the area-less sensor/output picker tabs — a dead end,
+// since those tabs need an existing area and the area itself is only
+// created on Finish. Both steps now embed a simplified inline picker
+// instead; this suite pins the fix by asserting the candidates render and
+// are selectable directly on the wizard step, not just linked to.
+test.describe('Alarm — setup wizard', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page);
+    await mockAlarmWizardDevices(page);
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'openccu-loom.prefs.v1',
+        JSON.stringify({ theme: 'light', locale: 'en', navCollapsed: false, expertMode: false, deviceView: 'grid' }),
+      );
+    });
+  });
+
+  test('steps through area, sensors and outputs inline, then finishes by posting the area followed by the sensors and outputs bulk PUTs', async ({ page }) => {
+    let postedArea: { name?: string; config?: unknown } | null = null;
+    let putSensors: Array<Record<string, unknown>> | null = null;
+    let putOutputs: Array<Record<string, unknown>> | null = null;
+    // Records the three writes in call order — the finish() handler must
+    // create the area before either bulk PUT, and sensors before outputs.
+    const calls: string[] = [];
+
+    // The default fixture-backed POST /alarm/areas route always returns
+    // id "area-eg" regardless of the posted body, so the PUT targets below
+    // can be pinned to that literal id and still exercise the real
+    // create-then-PUT sequence finish() performs.
+    await page.route('**/api/v1/alarm/areas', (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      postedArea = route.request().postDataJSON();
+      calls.push('area');
+      return route.fulfill({
+        json: { id: 'area-eg', name: postedArea?.name, position: 1, config: postedArea?.config ?? {} },
+      });
+    });
+    await page.route('**/api/v1/alarm/areas/area-eg/sensors', (route) => {
+      if (route.request().method() !== 'PUT') return route.fallback();
+      putSensors = route.request().postDataJSON();
+      calls.push('sensors');
+      return route.fulfill({ status: 200 });
+    });
+    await page.route('**/api/v1/alarm/areas/area-eg/outputs', (route) => {
+      if (route.request().method() !== 'PUT') return route.fallback();
+      putOutputs = route.request().postDataJSON();
+      calls.push('outputs');
+      return route.fulfill({ status: 200 });
+    });
+
+    await page.goto('http://localhost:5173/app/#/alarm/wizard');
+    await page.waitForSelector('#main');
+
+    // Step 1 — area name.
+    await expect(page.getByRole('heading', { name: 'Areas', level: 2 })).toBeVisible();
+    await page.getByLabel('Name', { exact: true }).fill('Keller');
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // Step 2 — sensors: the mocked device candidate renders inline and is
+    // directly selectable, with no link out to the (area-less) picker tab.
+    await expect(page.getByRole('heading', { name: 'Sensors', level: 2 })).toBeVisible();
+    await expect(page.locator('a[href="#/alarm/picker"]')).toHaveCount(0);
+    const sensorRow = page.locator('label').filter({ hasText: 'Eingangstür' });
+    await expect(sensorRow).toBeVisible();
+    await sensorRow.getByRole('checkbox').check();
+    await expect(page.getByText('1 selected')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // Step 3 — outputs: pick the acoustic-siren candidate from the mocked
+    // enrollment candidates (alarm-output-candidates.json's first row).
+    await expect(page.getByRole('heading', { name: 'Outputs', level: 2 })).toBeVisible();
+    await expect(page.locator('a[href="#/alarm/outputs"]')).toHaveCount(0);
+    const outputRow = page.locator('label').filter({ hasText: 'Alarmierung' });
+    await expect(outputRow).toBeVisible();
+    await outputRow.getByRole('checkbox').check();
+    await expect(page.getByText('1 selected')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // Step 4 — delays: defaults are fine for this flow, just advance.
+    await expect(page.getByRole('heading', { name: 'Delays & chirps', level: 2 })).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // Step 5 — codes: informational pointer only, advance.
+    await expect(page.getByRole('heading', { name: 'Codes & users', level: 2 })).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // Step 6 — summary reflects both inline selections, then finish.
+    await expect(page.getByRole('heading', { name: 'Done', level: 2 })).toBeVisible();
+    const summary = page.locator('dl');
+    await expect(summary.locator('dt', { hasText: 'Sensors' }).locator('xpath=following-sibling::dd[1]')).toHaveText('1');
+    await expect(summary.locator('dt', { hasText: 'Outputs' }).locator('xpath=following-sibling::dd[1]')).toHaveText('1');
+    await page.getByRole('button', { name: 'Finish' }).click();
+
+    await expect.poll(() => calls).toEqual(['area', 'sensors', 'outputs']);
+
+    expect(postedArea?.name).toBe('Keller');
+
+    expect(putSensors).toHaveLength(1);
+    expect(putSensors?.[0]).toMatchObject({
+      channel_address: 'VEQ0000030:1',
+      parameter: 'STATE',
+      type: 'window',
+    });
+
+    expect(putOutputs).toHaveLength(1);
+    expect(putOutputs?.[0]).toMatchObject({
+      channel_address: 'VEQ0000010:1',
+      class: 'acoustic_siren',
+    });
+
+    await expect(page).toHaveURL(/#\/alarm$/);
+  });
+
+  test('preserves the entered area name and sensor selection across navigating away from the wizard and back', async ({ page }) => {
+    await page.goto('http://localhost:5173/app/#/alarm/wizard');
+    await page.waitForSelector('#main');
+
+    await page.getByLabel('Name', { exact: true }).fill('Keller');
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    const sensorRow = page.locator('label').filter({ hasText: 'Eingangstür' });
+    await expect(sensorRow).toBeVisible();
+    await sensorRow.getByRole('checkbox').check();
+    await expect(page.getByText('1 selected')).toBeVisible();
+
+    // Navigate away mid-wizard (e.g. to double-check the overview) and
+    // back in via the sidebar + the wizard-launch action — a full,
+    // same-document SPA navigation, not a page reload. The wizard's
+    // collected state lives in a module-singleton store precisely so this
+    // survives the component unmounting along the way.
+    await page.getByRole('link', { name: 'Alarm system' }).click();
+    await expect(page).toHaveURL(/#\/alarm$/);
+    await expect(page.getByRole('heading', { name: 'Alarm system', level: 1 })).toBeVisible();
+
+    await page.locator('a[href="#/alarm/wizard"]').first().click();
+    await expect(page).toHaveURL(/#\/alarm\/wizard$/);
+
+    // Still on the sensors step, with the previous selection intact.
+    await expect(page.getByRole('heading', { name: 'Sensors', level: 2 })).toBeVisible();
+    await expect(page.getByText('1 selected')).toBeVisible();
+    await expect(sensorRow.getByRole('checkbox')).toBeChecked();
+
+    // Back to step 1 confirms the area name itself also survived.
+    await page.getByRole('button', { name: 'Back' }).click();
+    await expect(page.getByRole('heading', { name: 'Areas', level: 2 })).toBeVisible();
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Keller');
   });
 });
