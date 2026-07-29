@@ -147,9 +147,18 @@ north-bound bridges work end-to-end against a real CCU and against the
 authoritative release history; [`docs/roadmap.md`](./docs/roadmap.md)
 covers what is next.
 
-One caveat worth stating up front: production-grade Matter attestation
-requires vendor-supplied DAC/PAI/CD bundles configured by the operator.
-The bundled CSA Test PAA chain is fine for development and for
+**Maturity: beta** — the feature set is complete and in daily productive
+use, but it has not been hardened across a wide range of installations
+yet. Expect bugs, keep a CCU backup, and note that the daemon can not
+only read your CCU but also change it (pairing, deleting, writing
+paramsets).
+
+**The Matter bridge is alpha** — considerably younger than the rest and
+the least proven part. It is off by default; switching it on is an
+explicit test decision, not something to build load-bearing automations
+on. Production-grade Matter attestation additionally requires
+vendor-supplied DAC/PAI/CD bundles configured by the operator; the
+bundled CSA Test PAA chain is fine for development and for
 Apple- / Google- / chip-tool-driven testing.
 
 ## Quickstart

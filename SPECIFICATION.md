@@ -4,8 +4,8 @@
 
 # OpenCCU-Loom — Specification
 
-**Status**: Living reference — last refresh 2026-07-11.
-**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom (shipped through v0.34.0, REST APIVersion 2.16.0).
+**Status**: Living reference — last refresh 2026-07-29.
+**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom (shipped through v0.51.0, REST APIVersion 3.4.0).
 
 ## What this document is — and what it is not
 
@@ -21,17 +21,20 @@ For implementation truth, consult the authoritative sources:
 | Concern | Source of truth |
 |---|---|
 | Domain model, package layout, internals | Go source under `internal/`, `pkg/` |
-| Architecture decisions of consequence | `docs/adr/000N-*.md` |
+| Architecture decisions of consequence | `docs/adr/00NN-*.md` |
 | REST API contract | `assets/openapi.yaml` (CI-validated, runtime-validated by daemon) |
 | WebSocket command contract | `assets/wsapi.json` |
-| MQTT topic + payload structure | ADR 0011 (`mqtt-topic-and-payload-architecture`) |
-| Configuration knobs | `example.config.yaml` (annotated, loaded by daemon) |
+| MQTT topic + payload structure | ADR 0011 (`mqtt-topic-and-payload-architecture`), extended for alarm topics by ADR 0052 |
+| Matter cluster + device-type surface | `docs/matter-parity-contract.md` (binding), `internal/north/matter/schema/` (generated) |
+| Alarm system design + safety model | `docs/alarm-concept.md`; operator view in `docs/alarm-user-guide.md` |
+| Configuration knobs | `example.config.yaml` (annotated) + `GET /api/v1/config/schema` (complete, live) |
+| Operator-facing behaviour | `docs/user-guide.md`, `docs/user/` |
 | Coding conventions, AI-assistant guide, repo norms | `CLAUDE.md` |
 | Build, packaging, release | `Makefile`, `.goreleaser.yaml`, `Dockerfile`, `CONTRIBUTING.md` |
 | Test strategy | `CLAUDE.md`, `docs/testplan.md` |
 | Release history | `CHANGELOG.md` |
 | Recent architecture audit + risk follow-ups | `docs/audit/architecture-reassessment-2026-06-16.md` |
-| Cross-stack parity status against aiohomematic | `docs/parity/by_design.md` + the cross-stack model-snapshot pipeline (`script/model_snapshot_diff.py`) |
+| Regression gate against the aiohomematic reference model | `docs/parity/by_design.md` + the cross-stack model-snapshot pipeline (`script/model_snapshot_diff.py`) |
 
 If a topic is not in the table above and not in this document, the
 code is the answer.
@@ -47,39 +50,47 @@ code is the answer.
 5. [Enumerations & Wire Identities](#5-enumerations--wire-identities)
 6. [Matter Bridge](#6-matter-bridge)
 7. [Resolved Decisions & Risk Register](#7-resolved-decisions--risk-register)
+8. [Observability](#8-observability)
 
 ---
 
 ## 1. Executive Summary
 
-`OpenCCU-Loom` is a Go implementation of the core functionality
-provided by the Python library `aiohomematic`. While `aiohomematic`
-is primarily a library powering the Home Assistant integration
-*Homematic(IP) Local*, `OpenCCU-Loom` is designed as a **standalone
-daemon** that speaks to the Homematic CCU (XML-RPC, BIN-RPC,
-JSON-RPC) and exposes Homematic devices through modern north-bound
-interfaces:
+`OpenCCU-Loom` is a **standalone daemon** that speaks to the Homematic
+CCU (XML-RPC, BIN-RPC, JSON-RPC) and exposes its devices, its
+administration surface, and a set of daemon-level services through
+modern north-bound interfaces:
 
 - **MQTT** (Home Assistant Discovery format + raw topic plane in
   parallel)
 - **REST + WebSocket** API
 - **Web-based Config UI** — Svelte 5 SPA (primary), including login,
-  OIDC, and the first-run onboarding wizard (since 0.19.0, ADR 0045).
-  A minimal server-rendered surface (`/health`, `/about`) remains only
-  as a no-JS SPA-down diagnostic anchor. Everything is served on one
-  listener (`:8119`, since 0.14.0); the SPA probes
-  `GET /api/v1/setup/status` on boot and renders the onboarding wizard
-  itself, finalizing through an atomic `POST /api/v1/setup`. Onboarding
-  works through a single port and through HA Ingress. See
+  OIDC, and the first-run onboarding wizard (ADR 0045). A minimal
+  server-rendered surface (`/health`, `/about`) remains only as a
+  no-JS SPA-down diagnostic anchor. Everything is served on one
+  listener (`:8119`); the SPA probes `GET /api/v1/setup/status` on
+  boot and renders the onboarding wizard itself, finalizing through an
+  atomic `POST /api/v1/setup`. Onboarding works through a single port
+  and through HA Ingress. See
   [ADR 0044](./docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md)
   and [ADR 0045](./docs/adr/0045-login-and-onboarding-into-spa.md).
-- **Matter Bridge**
+- **Matter Bridge** (§6)
+- **MCP server** for LLM agents (§6.4)
 
-Feature parity with `aiohomematic` on the **south-bound** side (CCU
-connectivity, all interfaces, all device profiles, paramset caching,
-custom device types, hub entities, schedules) is a hard requirement.
-The **north-bound** side intentionally deviates — there is no Home
-Assistant integration shim.
+Beyond bridging device state, the daemon **administers** the CCU
+(pairing, links, programs, system variables, groups, firmware, rooms /
+functions / areas) and hosts services the CCU itself does not provide:
+an opt-in measurement history (§4.6) and a local alarm system (§4.7).
+
+The project began as a Go port of the Python library `aiohomematic`
+and now develops independently. `aiohomematic` remains the
+**reference implementation** for CCU-side semantics — wire strings,
+paramset normalization, device-profile shape — and that agreement is
+held by a scoped model-snapshot regression gate, **not** by a parity
+mandate. Where the daemon's needs and the reference diverge, the
+daemon's needs win and the divergence is recorded in
+`docs/parity/by_design.md`. The north-bound side never had a parity
+target: there is no Home Assistant integration shim.
 
 The south-bound XML-RPC, BIN-RPC, and JSON-RPC transports are native
 Go implementations inside this repository. They are not derived from
@@ -102,40 +113,57 @@ eQ-3 HomeMatic Software License — see ADR 0003.
 
 ### 2.1 Goals
 
-1. **Full protocol parity** with aiohomematic for all CCU interfaces:
-   HmIP-RF (serves both HmIP-RF and HmIP-Wired devices), BidCos-RF,
-   BidCos-Wired, VirtualDevices, CUxD.
-2. **Full device-profile parity** at MVP cut: every
-   `DeviceProfileRegistry` entry from aiohomematic is represented.
-   Profiles are auto-generated from the Python source via
-   `script/generate_profiles.py`; the parity contract test enforces
-   the registry against the pinned aiohomematic version.
-3. **Same reliability envelope**: circuit breaker, command throttle
+1. **Complete CCU coverage** across every interface: HmIP-RF (serves
+   both HmIP-RF and HmIP-Wired devices), BidCos-RF, BidCos-Wired,
+   VirtualDevices, CUxD — all push-capable, no polling path.
+2. **Wire-compatible device semantics.** Enum strings, paramset
+   normalization, and the device-profile catalogue match the
+   `aiohomematic` reference so a device behaves identically on both
+   stacks. Profiles are generated via `script/generate_profiles.py`;
+   the registry parity test and the cross-stack model-snapshot diff
+   are regression detectors for this agreement.
+3. **Reliability envelope**: circuit breaker, command throttle
    (RF duty cycle), command retry with exponential backoff, request
    coalescing, ping/pong health tracking, connection recovery
    stages — all present and validated by contract tests.
 4. **Stable public API contract** for north-bound consumers: REST
    under `/api/v1` (described by `assets/openapi.yaml`, validated at
    request time by the daemon), MQTT topics (described in ADR 0011),
-   WebSocket commands (described in `assets/wsapi.json`).
-5. **Single static binary** for primary platforms. **No CGo
+   WebSocket commands (described in `assets/wsapi.json`). Consumers
+   negotiate on capability tokens from `GET /api/v1/info`, not on the
+   version number alone.
+5. **The CCU is administrable from the daemon**, not just readable:
+   pairing, device lifecycle, channel configuration, links, programs,
+   system variables, groups, firmware, and room / function / area
+   assignment are first-class operations on REST, WebSocket, and in
+   the SPA — an operator should not need the CCU WebUI for routine
+   work.
+6. **Daemon-level services the CCU does not provide**, each opt-in and
+   each usable without Home Assistant: measurement history (§4.6) and
+   the alarm system (§4.7).
+7. **Single static binary** for primary platforms. **No CGo
    dependencies** in the default build. SQLite via
    `modernc.org/sqlite` (pure Go).
-6. **Operable daemon**: structured logging, Prometheus metrics,
-   `/debug/pprof`, health endpoints, graceful shutdown, hot-reload
-   for non-structural settings.
-7. **Multi-CCU from day one**: a single daemon serves multiple CCUs
+8. **Operable daemon**: structured logging, Prometheus metrics,
+   OTLP tracing, `/debug/pprof`, health endpoints, graceful shutdown,
+   hot-reload for non-structural settings, and a configuration surface
+   editable at runtime (§7.1 Q16).
+9. **Multi-CCU from day one**: a single daemon serves multiple CCUs
    simultaneously, each scoped in MQTT topics, REST paths, and
    metric labels (see ADR 0002).
-8. **Well-tested**: contract tests guard protocol/capability
-   invariants, golden-file tests replay recorded CCU sessions,
-   integration tests exercise an in-process `godevccu` simulator
-   (no Python toolchain needed).
+10. **Well-tested**: contract tests guard protocol/capability
+    invariants, golden-file tests replay recorded CCU sessions,
+    integration tests exercise an in-process `godevccu` simulator
+    (no Python toolchain needed), and a Playwright suite locks the
+    SPA's operating concept including visual baselines.
 
 ### 2.2 Non-Goals
 
-- **No Home Assistant integration**. An HA user can still consume
-  the MQTT bridge (HA Discovery), but that path is indirect.
+- **No Home Assistant custom component**. HA users consume the daemon
+  through MQTT Discovery or Matter — both first-class, neither an
+  integration shim maintained inside HA. The two HA add-ons
+  (`packaging/ha-addon/`) package and proxy the daemon; they do not
+  make it an HA integration.
 - **No on-disk artifact compatibility** with aiohomematic (caches,
   sessions). OpenCCU-Loom maintains its own SQLite + filesystem state
   layout; an operator runs it alongside or instead of aiohomematic
@@ -144,13 +172,19 @@ eQ-3 HomeMatic Software License — see ADR 0003.
   independent implementations of the same wire contract.
 - **No full Matter certification** — the Matter bridge is a useful
   partial implementation, not a certified product.
-- **No cloud features** (remote access, multi-tenant, OTA).
-  OpenCCU-Loom is a LAN service.
+- **No cloud service.** OpenCCU-Loom is a LAN service: no vendor
+  backend, no multi-tenancy, no telemetry, no remote control plane.
+  Two features touch the internet and stay inside that line because
+  the operator initiates them and no third party holds state: the CCU
+  add-on's self-update pulls signed artefacts from the project's own
+  GitHub releases (ADR 0057), and the remote-ingress add-on
+  (ADR 0054) proxies a daemon the operator already runs. Remote
+  *access* remains the operator's own VPN / reverse-proxy problem.
 - **No CCU-Jack / pull-only path.** Every interface supports push
   callbacks; there is no JSON-RPC-only mode.
 - **No Homegear depth-parity** (full). The backend abstraction exists
-  and sysvars work; full programs/rooms/functions parity is a
-  post-1.0 milestone.
+  and sysvars work; full programs/rooms/functions parity is a future
+  milestone with no release commitment.
 - **No embedded static device/parameter database.** The CCU firmware
   ships static type descriptors (`firmware/rftypes/*.xml`,
   `hs485types/*.xml`) with paramset min/max/default/unit/flags, and it
@@ -260,46 +294,56 @@ world boundaries plus an **internal in-process Event Bus** for
 cross-domain communication inside the core.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         OUTSIDE WORLD                            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
-│  │  MQTT    │  │  REST /  │  │  Browser │  │       CCU        │ │
-│  │  Broker  │  │  WebSock │  │  (SPA)   │  │  (XML/BIN/JSON)  │ │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘ │
-│        ▲            ▲             ▲                   ▲         │
-└────────┼────────────┼─────────────┼───────────────────┼─────────┘
-         │            │             │                   │
-┌────────┼────────────┼─────────────┼───────────────────┼─────────┐
-│   ┌────▼────────────▼─────────────▼───┐        ┌──────▼──────┐  │
-│   │        NORTHBOUND ADAPTERS        │        │  SOUTHBOUND │  │
-│   │  (driving ports)                  │        │  ADAPTER    │  │
-│   │  • MQTT Bridge                    │        │  (driven    │  │
-│   │  • REST + WebSocket               │        │   port)     │  │
-│   │  • UI (Svelte SPA +/health,/about)│        │             │  │
-│   └───────────────┬───────────────────┘        └──────┬──────┘  │
-│                   │                                    │        │
-│                   │           DOMAIN CORE              │        │
-│                   │    (no network / no storage I/O)   │        │
-│                   │                                    │        │
-│       ┌───────────▼────────────────────────────────────▼──────┐ │
-│       │                       central                          │ │
-│       │   CentralUnit + Coordinators + Registries + Scheduler  │ │
-│       │   + State Machines + RPC Callback Servers (XML+BIN)    │ │
-│       │                          ▲▲▲                           │ │
-│       │                   internal EventBus                    │ │
-│       │                          ▼▼▼                           │ │
-│       │   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌──────────┐ │ │
-│       │   │ model   │  │ client  │  │ store   │  │  health  │ │ │
-│       │   │ domain  │  │ reliab. │  │ caches  │  │  tracker │ │ │
-│       │   └─────────┘  └─────────┘  └─────────┘  └──────────┘ │ │
-│       └───────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                          OUTSIDE WORLD                           │
+│  ┌───────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌─────────────────┐  │
+│  │ MQTT  │ │ REST / │ │Browser │ │ Matter │ │       CCU       │  │
+│  │Broker │ │WebSock │ │ (SPA)  │ │  MCP   │ │ (XML/BIN/JSON)  │  │
+│  └───────┘ └────────┘ └────────┘ └────────┘ └─────────────────┘  │
+│      ▲          ▲          ▲          ▲              ▲           │
+└──────┼──────────┼──────────┼──────────┼──────────────┼───────────┘
+       │          │          │          │              │
+┌──────┼──────────┼──────────┼──────────┼──────────────┼───────────┐
+│  ┌───▼──────────▼──────────▼──────────▼───┐  ┌───────▼────────┐  │
+│  │        NORTHBOUND ADAPTERS             │  │   SOUTHBOUND   │  │
+│  │  • MQTT Bridge    • Matter Bridge      │  │     ADAPTER    │  │
+│  │  • REST + WS      • MCP server         │  │  (driven port) │  │
+│  │  • UI (SPA + /health,/about)           │  │                │  │
+│  │  • Webhooks                            │  │                │  │
+│  └──────────────────┬─────────────────────┘  └───────┬────────┘  │
+│                     │                                │           │
+│  ┌──────────────────▼─────────────────┐              │           │
+│  │      DAEMON-LEVEL SERVICES         │              │           │
+│  │  • alarm (daemon-wide event bus)   │              │           │
+│  │  • measurement history recorder    │              │           │
+│  └──────────────────┬─────────────────┘              │           │
+│                     │         DOMAIN CORE            │           │
+│                     │  (no network / no storage I/O) │           │
+│  ┌──────────────────▼────────────────────────────────▼────────┐  │
+│  │                        central                             │  │
+│  │    CentralUnit + Coordinators + Registries + Scheduler     │  │
+│  │    + State Machines + RPC Callback Servers (XML+BIN)       │  │
+│  │                          ▲▲▲                               │  │
+│  │                   internal EventBus                        │  │
+│  │                          ▼▼▼                               │  │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌──────────┐       │  │
+│  │  │ model   │  │ client  │  │ store   │  │  health  │       │  │
+│  │  │ domain  │  │ reliab. │  │ caches  │  │  tracker │       │  │
+│  │  └─────────┘  └─────────┘  └─────────┘  └──────────┘       │  │
+│  └────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 - **Northbound adapters**: driving side. They call into the domain
   through narrow per-handler interfaces (e.g. `DeviceIndex`,
   `HubIndex`, `DataPointWriter`). No northbound adapter touches
-  SQLite stores or coordinators directly.
+  SQLite stores or coordinators directly. They are wired through a
+  common bridge registry so lifecycle, health, and enable/disable
+  behave the same for every bridge (ADR 0047).
+- **Daemon-level services**: sit between the adapters and the
+  centrals. They consume central events and produce their own state,
+  but they are not adapters — the alarm system and the history
+  recorder are the two, and both are opt-in.
 - **Southbound adapter**: driven side. The `client` package
   implements ports defined by the domain to talk to the CCU.
 - **Domain core**: pure Go. Receives `context.Context` for
@@ -412,13 +456,51 @@ for the full design.
   editable through the SPA like `persistence.values_cache` and
   `north.mqtt`. Export credentials are secrets (ADR 0027).
 
+### 4.7 Alarm system
+
+The same reasoning as §4.6: an operator without Home Assistant has no
+place to run alarm logic, and expressing it as CCU programs is fragile
+and unauditable. The daemon therefore ships an **opt-in, local-first
+alarm system** (`internal/alarm/`, default off). Design rationale and
+the full safety model live in `docs/alarm-concept.md`; the operator
+view is `docs/alarm-user-guide.md`.
+
+The architectural commitments:
+
+- **Zones are daemon-level, not per-central.** A zone may contain
+  sensors from more than one CCU, so the service owns a **dedicated
+  alarm event bus** rather than fanning north-bound subscribers across
+  every central's bus. This is the one place where a domain service
+  deliberately sits above the central boundary; it still never
+  bypasses a central to reach a device.
+- **Naming**: the armable unit is a **zone**. "Area" means a grouping
+  of CCU rooms and nothing else (ADR 0056) — the two were conflated
+  before 0.49.2 and were split deliberately.
+- **Outputs are capability-derived, not hard-coded.** A siren, a
+  system-variable mirror, or a notification target is discovered from
+  the device model's capabilities and validated softly (422 with a
+  reason), so a new device class does not require an engine change.
+- **The journal is append-only** and is the audit trail for every arm,
+  disarm, trigger, and output action.
+- **North-bound**: MQTT surfaces the panel as a Home Assistant
+  `alarm_control_panel` under daemon-level topics (ADR 0052 extends
+  ADR 0011's per-central scheme, because a zone has no single
+  central); REST/WS carry the full configuration and journal surface,
+  gated by the `alarm.v1` capability token.
+- **Safety posture**: the engine fails towards *not silently
+  disarmed*. Where a device's real-world behaviour is uncertain, the
+  assumption is written down in `docs/alarm-assumptions.md` rather
+  than encoded silently.
+
 ---
 
 ## 5. Enumerations & Wire Identities
 
 All enums live under `pkg/hmenum`. The string values are emitted
-verbatim matching aiohomematic for **wire compatibility** — this is
-non-negotiable.
+verbatim matching the CCU dialects (and thereby the `aiohomematic`
+reference) for **wire compatibility** — this is non-negotiable, and it
+is the one place where the reference implementation still binds us
+strictly.
 
 ```go
 // pkg/hmenum/interface.go
@@ -488,9 +570,14 @@ emits **one Matter endpoint per physical device**
 (**[ADR 0049](docs/adr/0049-matter-one-endpoint-per-device.md)**); the
 0.31.0–0.33.0 line hardened Matter interop (endpoint-ID persistence,
 GenericSwitch/button state machine, WindowCovering EndProductType +
-target, Thermostat SystemMode/RunningMode conformance) and refreshed
-the schema to matter.js HEAD / Matter 1.5.1. The binding parity contract
-is **[docs/matter-parity-contract.md](docs/matter-parity-contract.md)**;
+target, Thermostat SystemMode/RunningMode conformance), and the schema
+snapshot now pins **matter.js v0.17.7 / Matter 1.6.0**
+(`docs/parity/matter/matter-schema-snapshot.json` carries the exact
+source commit). Later releases hardened the secure-channel layer —
+notably MRP reception-window replay handling, which follows matter.js's
+per-variant semantics rather than one rule for all session types.
+The binding parity contract is
+**[docs/matter-parity-contract.md](docs/matter-parity-contract.md)**;
 it, not this frozen enumeration, is the current source of truth for the
 shipped cluster + device-type set. Implementation form, prioritised
 cluster subset, DP→cluster mapping, and effort estimates live in
@@ -654,11 +741,24 @@ an ADR.
 | Q14 | OpenAPI default | Validation **on** by default in 0.1.0; the daemon refuses requests that don't match `assets/openapi.yaml`. Spec is authoritative for the REST surface. |
 | Q15 | Audit durability | `audit.NewDurableSink` with bounded queue + typed `ErrAuditOverflow` is the default. Silent drops are not allowed. |
 
+Decisions settled later, each with a full ADR:
+
+| # | Question | Resolution |
+|---|---|---|
+| Q16 | Where configuration lives | Three tiers — bootstrap YAML, a live SQLite tier the SPA edits (`PUT /api/v1/config/sections/{section}`), and operator-owned env secrets. The live tier overlays the YAML, so an empty DB seeds from YAML and GitOps stays viable. Secrets are masked to `***` on read and restored before validation — the mask must never round-trip |
+| Q17 | Authorization model | Role-based across **every** north-bound surface, not per-adapter ad-hoc checks; identity resolvers are first-wins so a later resolver never overwrites an established identity (ADR 0051) |
+| Q18 | Who authenticates | Locally-held users by default; on the CCU add-on the CCU itself is the identity provider (ADR 0043), and under HA Ingress the Supervisor's identity passes through (ADR 0044) |
+| Q19 | CCU metadata delivery | A versioned `go-openccu-data` Go module, dependency-bumped like any other, replacing the in-tree embed (ADR 0053) |
+| Q20 | Alarm scope + naming | Daemon-level zones with their own event bus and daemon-level MQTT topics (ADR 0052); "area" is reserved for room groupings (ADR 0056) |
+| Q21 | Add-on update path | The CCU add-on self-updates from the project's GitHub releases where the firmware provides `/bin/install_addon`, capability-gated so no other platform grows the surface (ADR 0057) |
+| Q22 | Discovery | The daemon advertises itself over mDNS — including the configured CCUs' short serials so a client can tell instances apart (ADR 0058, a deliberate reversal of ADR 0021) — and finds CCUs over SSDP (ADR 0046) |
+| Q23 | Heating groups | Driven through the CCU's own `jpages` surface rather than a reimplementation, because no documented API exists for group mutation (ADR 0055) |
+
 ### 7.2 Risk register
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Device-profile edge cases differ between aiohomematic and OpenCCU-Loom | Medium | High | Generated parity tests block drift; golden-file replay of real-device sessions; cross-stack model snapshot diff (0 drift required at release) |
+| Device-profile edge cases differ between aiohomematic and OpenCCU-Loom | Medium | High | Generated parity tests block drift; golden-file replay of real-device sessions; cross-stack model-snapshot diff. The gate is *no growth in unexplained drift*, not zero drift — accepted divergences are enumerated in `docs/parity/by_design.md`, and a new one must land there in the same change |
 | XML-RPC callback race on startup | Medium | Medium | Shared callback server starts before any `initProxy()`; contract test |
 | SQLite corruption under power loss | Low | High | WAL mode + `synchronous=NORMAL`; `PRAGMA integrity_check` at startup; documented backup guidance |
 | Pure-Go SQLite performance regression | Low | Medium | Benchmark in dev; build-tag fallback path documented but unused |
@@ -672,6 +772,11 @@ an ADR.
 | Audit overflow under burst load | Low | Medium | `audit.NewDurableSink` returns typed `ErrAuditOverflow`; `audit.dropped` health gauge surfaces the overflow rate |
 | Spec drift between `assets/openapi.yaml` and code | Medium | Medium | Validator middleware enforces the spec at request time; coverage contract test asserts every router route exists in the spec |
 | Reliability constants drift vs aiohomematic | Medium | Medium | `pkg/hmreliability/` central registry; `TestRecordedReliabilityDefaults` snapshot pinned to upstream values |
+| CCU `jpages` surface changes under us (heating groups) | Medium | Medium | The surface is undocumented by construction (ADR 0055); wire shapes are verified against a live CCU, not against a reconstructed schema, and the write path degrades to a clear error rather than a silent no-op |
+| Matter schema drifts from matter.js HEAD | Medium | High | Regeneration is a single `make generate-matter-schema`; parity tests fail the build when a hand-coded revision constant no longer matches the generated schema. Hand-coding cluster IDs / revisions / defaults is forbidden |
+| Add-on self-update bricks an installation | Low | High | Capability-gated to firmware that ships `/bin/install_addon`; SHA256 verified against the release checksums before staging, and again by the firmware installer; the daemon restarts rather than the CCU (ADR 0057) |
+| Alarm system misses a trigger or disarms silently | Low | Very high | Engine fails towards *not silently disarmed*; append-only journal for every state change; walk test as an operator-verifiable rehearsal; device-behaviour assumptions written down in `docs/alarm-assumptions.md` instead of encoded silently |
+| A north-bound surface skips the authorization chain | Low | High | Role checks are structural (ADR 0051), mounts outside the REST router must resolve *and* require identity explicitly, and identity resolvers are first-wins so a later one cannot overwrite an established caller |
 
 ---
 
@@ -715,6 +820,14 @@ The SPA's `Diagnostics` view orchestrates all five from one panel,
 with a Diagnose-Dump-Download button, a Logging tab (override list +
 apply form), and a Capture tab (start / stop / list with download
 link).
+
+Alongside the five pillars, Prometheus collectors expose the runtime
+counters and gauges (§8.1), and an opt-in OTLP span exporter
+([ADR 0037](./docs/adr/0037-otlp-span-exporter.md)) ships the traces
+whose IDs pillar 1 already carries in every log record — so a
+correlated view is a configuration change, not an instrumentation
+project. Configuration changes are separately durable in the
+append-only audit ledger (§4.5).
 
 ### 8.1 Health parity with aiohomematic
 
@@ -774,7 +887,11 @@ Coverage producers in place:
 
 ## Glossary
 
-- **CCU** — Central Control Unit (Homematic CCU3, RaspberryMatic).
+- **Area** — an operator-defined grouping of CCU rooms (a floor, an
+  outbuilding). Lives only in the daemon; the CCU knows nothing of it.
+  Not to be confused with an alarm **zone** (ADR 0056).
+- **CCU** — Central Control Unit (Homematic CCU3, RaspberryMatic,
+  OpenCCU).
 - **CUxD** — Custom-Universal-Extension-Driver, an HM extension
   daemon that exposes additional device classes via BIN-RPC.
 - **DataPointKey** — `(interface_id, channel_address, paramset_key,
@@ -796,6 +913,9 @@ Coverage producers in place:
   `MASTER` (config), `VALUES` (runtime), `LINK` (peer-config),
   `SERVICE` (service messages), and the synthetic OpenCCU-Loom
   groups `CALCULATED`, `COMBINED`, `DUMMY`.
+- **Zone** — the armable unit of the alarm system: a set of sensors
+  and outputs armed and disarmed together, possibly spanning several
+  CCUs. Distinct from an **area** (see above).
 
 ---
 

@@ -18,7 +18,7 @@ their own pages — linked below.
 ### Docker (recommended)
 
 ```sh
-docker run -d \
+docker run -d --restart unless-stopped \
   -p 8119:8119 -p 8120:8120 -p 8129:8129 \
   -v $(pwd)/config.yaml:/app/config.yaml:ro \
   -v openccu-loom-data:/app/var \
@@ -27,6 +27,11 @@ docker run -d \
 
 Multi-arch images (amd64, arm64, armv7) are published to
 `ghcr.io/sukramj/openccu-loom`.
+
+`--restart unless-stopped` (already set in the repository's
+`docker-compose.yaml`) is what makes the Config UI's **Restart** action
+work: the daemon exits and Docker brings the container back. Without a
+restart policy, a restart from the UI leaves the daemon down.
 
 ### Binary
 
@@ -44,6 +49,45 @@ existing wins): `$OPENCCU_LOOM_CONFIG`, `./config.yaml`,
 Other subcommands: `openccu-loom version`, `openccu-loom backup`,
 `openccu-loom config`. Validate a config file ahead of time with
 `hmcli config validate ./config.yaml`.
+
+### Home Assistant add-on
+
+Add `https://github.com/SukramJ/openccu-loom` as a repository under
+**Settings → Add-ons → Add-on Store → ⋮ → Repositories**, then install
+**OpenCCU-Loom**. The daemon runs on the HA host, the Config UI appears
+as a sidebar panel (Ingress) and on `:8119`, and state persists in the
+add-on's `/data` — no `config.yaml` needed. Optional Ingress auto-login
+is described under [First-run setup](#first-run-setup) below.
+
+A second add-on, **OpenCCU-Loom Remote**
+([ADR 0054](adr/0054-remote-ingress-proxy-addon.md)), does not run a
+daemon of its own — it proxies an instance running elsewhere (Docker,
+CCU add-on) into the same sidebar panel. Layout and build details:
+[`packaging/ha-addon/README.md`](https://github.com/SukramJ/openccu-loom/blob/main/packaging/ha-addon/README.md).
+
+### CCU / RaspberryMatic add-on
+
+Runs the daemon directly on the CCU. Download
+`openccu-loom-ccu-<version>.tar.gz` from the
+[releases page](https://github.com/SukramJ/openccu-loom/releases) and
+install it under **Settings → Control panel → Additional software**.
+On RaspberryMatic / OpenCCU the add-on installs and starts in place with
+no reboot; stock CCU3 firmware restarts its WebUI as part of every
+add-on install.
+
+Supported platforms are CCU3 (armv7l) and RaspberryMatic / OpenCCU in
+all flavours (armv7l, aarch64, x86-64). CCU1 and CCU2 are not supported.
+
+Two behaviours are specific to this install: it defaults to
+CCU-delegated login (see [Authentication](admin/auth.md)), and it can
+update itself from the project's GitHub releases
+([ADR 0057](adr/0057-addon-self-update.md)) — a check button, a
+boot-delayed check and a periodic check, with the downloaded package
+verified against the release checksums. The daemon also resolves the
+callback host per central, so a co-located CCU gets `127.0.0.1`
+automatically. Reverse-proxy setup, port clashes and the data directory
+are covered in
+[`packaging/ccu-addon/README.md`](https://github.com/SukramJ/openccu-loom/blob/main/packaging/ccu-addon/README.md).
 
 ## Ports
 

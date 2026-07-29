@@ -5,6 +5,9 @@ OpenCCU-Loom can expose your Homematic devices to Matter ecosystems — Apple Ho
 !!! info "Who this page is for"
     End users who want their Homematic devices to appear in Apple Home, Google Home, or Alexa. No Go knowledge required; some familiarity with your smart-home app helps.
 
+!!! warning "Maturity: alpha"
+    The Matter bridge is the youngest and least proven part of OpenCCU-Loom — the daemon as a whole is beta, this bridge is **alpha**. It works, and it is tested against Apple Home, Google Home and `chip-tool`, but expect rough edges: pairing that needs a second attempt, devices that map to a Matter type differently than you would guess, and behaviour that varies per ecosystem. It is off by default; turning it on is an explicit test decision. Do not build automations on it that something depends on, and read [Controller ecosystem caveats](#controller-ecosystem-caveats) and [Limitations](#limitations) below before you start.
+
 ## What the Matter bridge does
 
 When enabled, OpenCCU-Loom advertises itself on your network as a single Matter **bridge**. Each selected Homematic device shows up inside that bridge as a Matter accessory of the appropriate type (a light, a lock, a sensor, and so on). You then pair the bridge once with your ecosystem, and all its accessories appear together.
