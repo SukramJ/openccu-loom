@@ -2,92 +2,155 @@
   <img src="assets/logo/wordmark.svg" alt="OpenCCU-Loom" height="64">
 </p>
 
+<p align="center">
+  <em>One daemon between your Homematic CCUs and the rest of your smart home.</em>
+</p>
+
 # OpenCCU-Loom
 
-A standalone Go daemon that talks to Homematic and HomematicIP CCUs
-(CCU2, CCU3, RaspberryMatic) over XML-RPC, BIN-RPC, and JSON-RPC, and
-bridges them to MQTT (Home Assistant Discovery + raw topic plane),
-a REST + WebSocket API, and a web-based configuration UI.
+**OpenCCU-Loom** is a standalone Go daemon that talks to Homematic and
+HomematicIP CCUs (CCU2, CCU3, RaspberryMatic, OpenCCU) over XML-RPC,
+BIN-RPC and JSON-RPC — and exposes them through MQTT, a REST +
+WebSocket API, a web Config UI, a native Matter bridge and an MCP
+server. It runs several CCUs at once, administers them (pairing,
+firmware, links, programs, system variables, groups), records
+measurement history, and ships a complete local alarm system.
 
-`OpenCCU-Loom` is a Go port of the Python library
-[`aiohomematic`](https://github.com/SukramJ/aiohomematic) that adds a
-standalone-daemon surface (MQTT, REST + WebSocket, Config UI, Matter)
-on top of CCU connectivity. The two projects coexist: `aiohomematic`
-remains the library powering the Home Assistant integration
-*Homematic(IP) Local*; `OpenCCU-Loom` is the self-contained daemon for
-users who want MQTT / REST / Web-UI / Matter access without running
-Home Assistant.
+Single static binary, no CGo, no cloud, no Home Assistant required —
+though it integrates with Home Assistant through MQTT Discovery,
+Matter, and two ready-made add-ons.
 
-## Why "OpenCCU-Loom"?
+---
 
-Two parts, both deliberate:
+## Features
 
-- **OpenCCU** is the upstream this project extends:
-  [github.com/OpenCCU/OpenCCU](https://github.com/OpenCCU/OpenCCU)
-  ([openccu.de](https://openccu.de)) — a Buildroot-based, cloud-free
-  smart-home OS for the HomematicIP CCU (CCU3 / ELV-Charly) that
-  runs on Raspberry Pi, x86/ARM, Proxmox, Docker, LXC, Kubernetes.
-  OpenCCU-Loom is an extension that adds the daemon surface OpenCCU
-  itself doesn't ship: MQTT (HA Discovery + raw plane), a REST +
-  WebSocket API, a Svelte-based Config UI, and a native-Go Matter
-  bridge. The same OpenCCU tree is also the **source** for the
-  [openccu-data](https://github.com/SukramJ/openccu-data) catalogue
-  (extracted translations, easymodes, device profiles), which
-  OpenCCU-Loom embeds at build time — so OpenCCU is both the
-  runtime host the daemon ships alongside *and* the upstream the
-  daemon's metadata is derived from.
-- **Loom** describes what the daemon actually does. A *wiring loom*
-  is the bundled, ordered cable harness that runs through any car
-  or aircraft — many individual conductors gathered into one routed
-  path. That is the daemon's role exactly: many CCU wire protocols
-  (XML-RPC, BIN-RPC, JSON-RPC, push callbacks across HmIP-RF,
-  BidCos-RF, BidCos-Wired, VirtualDevices, CUxD) come
-  in on one side; multiple north-bound protocols (MQTT, REST,
-  WebSocket, Matter) come out on the other. The mark — four
-  parallel strands held by a bundling band — depicts that
-  cross-section directly.
+### North-bound bridges
 
-Together: a **loom** for **OpenCCU** that weaves the proprietary
-wire side into the standard-protocol side.
+- **MQTT** — Home Assistant Discovery **and** a raw topic plane in
+  parallel, bidirectional control via `/set` topics, localized entity
+  names. Pure-Go MQTT 5.0 client (3.1.1 selectable).
+  → [`docs/mqtt-topic-schema.md`](./docs/mqtt-topic-schema.md)
+- **REST + WebSocket** — OpenAPI 3.1 contract, RFC 9457 `problem+json`,
+  Idempotency-Key middleware, resumable WebSocket subscriptions with
+  typed broadcasts. → [`assets/openapi.yaml`](./assets/openapi.yaml),
+  [`assets/wsapi.json`](./assets/wsapi.json)
+- **Config UI** — Svelte 5 SPA (Tailwind 4, embedded via `go:embed`) as
+  the primary surface: login, OIDC and first-run onboarding all live in
+  the SPA. Fully localized (en + de), light/dark, and a Home-Assistant-
+  native visual skin. → [`docs/user/web-ui.md`](./docs/user/web-ui.md)
+- **Matter** — native-Go bridge (no CHIP SDK): PASE/CASE, full
+  Read/Write/Invoke/Subscribe/TimedRequest, generic measurement and
+  bridge-core cluster servers, and projections for switch / light /
+  cover / climate / lock / siren / valve / button / text-display. One
+  Matter endpoint per physical device. Default off.
+  → [`docs/user/matter.md`](./docs/user/matter.md)
+- **MCP** — Model Context Protocol server so AI clients can read (and,
+  optionally, write) the device model.
+  → [ADR 0025](./docs/adr/0025-mcp-northbound-adapter.md)
+- **Webhooks** — outbound HTTP fan-out for device, hub and alarm events.
+
+### CCU connectivity
+
+- **Multi-CCU from day one** — one daemon, many CCUs, every store,
+  coordinator and topic scoped by central. No "the one CCU" anywhere.
+  → [`docs/user/multi-ccu.md`](./docs/user/multi-ccu.md)
+- **Push everywhere, no polling** — XML-RPC + JSON-RPC for HmIP-RF,
+  BidCos-RF, BidCos-Wired, HmIP-Wired and VirtualDevices; **native
+  BIN-RPC** for CUxD, including our own BIN-RPC callback server.
+- **Hot-plug** — newly paired devices appear without a restart;
+  readiness-gated bring-up waits for a co-booting CCU instead of
+  serving half a device tree.
+- **Reliability layer** — circuit breaker, retry, throttle, request
+  coalescer and ping/pong per interface, with recorded default values
+  pinned by contract tests.
+- **Device model** — generated device profiles plus custom data points
+  (light, cover, climate, lock, siren, …), calculated and combined data
+  points, week profiles / schedules, and hub entities (system
+  variables, programs, service messages).
+
+### CCU administration
+
+Everything below is driven from the Config UI *and* the REST/WS API —
+no detour through the CCU WebUI:
+
+- **Devices** — pairing inbox with first-time configuration, install
+  mode, HmIP teach-in via SGTIN + key (no internet needed), wired-bus
+  search, guided device replace, delete with factory-reset and
+  dependency check, per-device communication test, rename device and
+  channel, restore stored configuration.
+- **Channels** — MASTER paramset editor with session-based editing,
+  undo/redo and presets, "determine" for determinable values, AES
+  secured transmission, team assignment, and per-channel visibility /
+  operation lock.
+- **Links** — global direct-links overview, create / rename / delete /
+  test, plus central links (press-event forwarding) with live active
+  state.
+- **Groups** — Homematic heating groups: list, create, edit, delete,
+  member picker at scale.
+- **Programs & system variables** — run (optionally only when the
+  condition holds), delete, rename, create alarm and logic variables,
+  edit value lists, assign channels, and see where a variable is used
+  before deleting it.
+- **Rooms, functions & areas** — assign per channel, and group CCU
+  rooms into operator-defined areas (floors, outbuildings) that filter
+  every device list and picker.
+- **Fleet health** — firmware updates with duty-cycle warning, signal
+  quality, per-radio-interface duty cycle and carrier sense,
+  diagnostics artefacts, service-message acknowledge/suppress, backups,
+  CCU reboot, and a cache clear + re-pull.
+
+### Alarm system
+
+A complete, local-first alarm system in the daemon — no cloud, no CCU
+program spaghetti: zones with arm/disarm and delays, sensors with hold
+time and cross-zoning, capability-derived outputs (sirens with tone /
+pattern / sound file, sysvar mirrors, notifications), guided keyfob
+bindings (e.g. HmIP-KRCA), PIN codes, journal, walk test and a
+re-runnable setup wizard. Surfaces as a Home Assistant
+`alarm_control_panel` over MQTT.
+→ [`docs/alarm-user-guide.md`](./docs/alarm-user-guide.md)
+
+### Data & insight
+
+- **Measurement history** — opt-in recorder with per-datapoint toggle,
+  persisted to SQLite, rendered as in-SPA charts.
+- **Diagrams & energy** — named multi-series diagrams with a guided
+  series editor, plus a dedicated energy view.
+- **Audit log** — every configuration change appended and queryable.
+- **Metrics & tracing** — Prometheus collectors and an OTLP span
+  exporter.
+
+### Operations & security
+
+- **Authentication** — HTTP Basic, Bearer tokens, session cookies with
+  CSRF, OpenID Connect (PKCE, JWKS-verified RS256, role mapping),
+  CCU-delegated login ([ADR 0043](./docs/adr/0043-ccu-authentication-provider.md))
+  and Home Assistant Ingress passthrough
+  ([ADR 0044](./docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md)).
+  Role-based authorization across every north-bound surface
+  ([ADR 0051](./docs/adr/0051-northbound-authorization-model.md)).
+- **Runtime configuration** — almost every knob is editable in the SPA
+  and takes effect without hand-editing YAML (see below).
+- **Discovery** — the daemon announces itself via mDNS and finds CCUs
+  on the network via SSDP.
+- **Packaging** — single static binary (`CGO_ENABLED=0`) for Linux
+  amd64 / arm64 / armv7, a multi-arch Docker image, two Home Assistant
+  add-ons (daemon + remote ingress proxy), and a CCU/RaspberryMatic
+  add-on that **updates itself**
+  ([ADR 0057](./docs/adr/0057-addon-self-update.md)).
 
 ## Status
 
-**0.34.0** (latest release tag **v0.34.0**, REST `APIVersion` 2.16.0).
-All four north-bound bridges work end-to-end against a real CCU and the
-`godevccu` simulator. See [`CHANGELOG.md`](./CHANGELOG.md) for the full
-per-release history; recent highlights include CCU-delegated
-authentication (ADR 0043) and single-port onboarding + opt-in HA Ingress
-auth passthrough (ADR 0044), the move of login / OIDC / onboarding into
-the SPA (ADR 0045), a persisted measurement-history recorder with
-in-SPA charts, Matter one-endpoint-per-device (ADR 0049) plus a round of
-Matter interop hardening (endpoint-ID persistence, GenericSwitch/button
-state machine, WindowCovering + Thermostat conformance, schema refreshed
-to matter.js HEAD / Matter 1.5.1), and a SPA/UX overhaul (teal rebrand +
-theme picker).
+**0.51.0** (latest tag `v0.51.0`, REST `APIVersion` 3.4.0). All
+north-bound bridges work end-to-end against a real CCU and against the
+`godevccu` simulator. [`CHANGELOG.md`](./CHANGELOG.md) is the
+authoritative release history; [`docs/roadmap.md`](./docs/roadmap.md)
+covers what is next.
 
-- MQTT (HA Discovery + raw plane), REST + WebSocket, a Svelte 5 SPA, and
-  a native-Go Matter bridge with PASE/CASE, IM
-  Read/Write/Invoke/Subscribe/TimedRequest, 12 generic measurement
-  cluster servers, 12 bridge-core clusters, and Custom-DP projections
-  for switch / light / cover / climate / lock / siren / valve /
-  generic-switch (button) / text-display, one Matter endpoint per
-  physical device (ADR 0049).
-- Production-grade Matter attestation requires vendor-supplied
-  DAC/PAI/CD bundles via config; the bundled CSA Test PAA chain
-  works for development and Apple-/Google-/chip-tool-driven testing.
-- Reliability layer (circuit breaker, retry, throttle, request
-  coalescer, ping/pong) is parity-tested against the upstream
-  reference values.
-
-Canonical references:
-
-- [`SPECIFICATION.md`](./SPECIFICATION.md) — complete specification
-- [`CHANGELOG.md`](./CHANGELOG.md) — release history
-- [`docs/user-guide.md`](./docs/user-guide.md) — operator install + config walkthrough
-- [`docs/SECURITY.md`](./docs/SECURITY.md) — threat model + audit checklist
-- [`docs/caching.md`](./docs/caching.md) — every cache layer + boot-time radio cost
-- [`docs/adr/`](./docs/adr/) — architecture decisions (Matter bridge in [ADR 0012](./docs/adr/0012-matter-pure-go-implementation.md), commissioning bring-up in [ADR 0013](./docs/adr/0013-matter-commissioning-bring-up.md))
-- [`assets/openapi.yaml`](./assets/openapi.yaml) — REST API contract
+One caveat worth stating up front: production-grade Matter attestation
+requires vendor-supplied DAC/PAI/CD bundles configured by the operator.
+The bundled CSA Test PAA chain is fine for development and for
+Apple- / Google- / chip-tool-driven testing.
 
 ## Quickstart
 
@@ -101,10 +164,9 @@ docker run -d --restart unless-stopped \
   ghcr.io/sukramj/openccu-loom:latest run --config /app/config.yaml
 ```
 
-> `--restart unless-stopped` (already set in `docker-compose.yaml`) lets the
-> Config UI's **Restart** action work: the daemon exits on restart and Docker
-> brings the container back. Without a restart policy the container would stay
-> stopped. (The Home Assistant add-on handles this in-container via s6-overlay.)
+> `--restart unless-stopped` (already set in `docker-compose.yaml`) is
+> what makes the Config UI's **Restart** action work: the daemon exits,
+> Docker brings the container back.
 
 ### Binary
 
@@ -113,297 +175,192 @@ make build
 ./bin/openccu-loom run --config config.yaml
 ```
 
-### Home Assistant add-on
+### Home Assistant add-ons
 
 Add `https://github.com/SukramJ/openccu-loom` as a repository under
 *Settings → Add-ons → Add-on Store → ⋮ → Repositories*, then install
-**OpenCCU-Loom**. The Config UI appears as a sidebar panel (Ingress) and
-on `:8119`; state persists in the add-on's `/data`. See
-[`packaging/ha-addon/README.md`](packaging/ha-addon/README.md). For native
-CCU3 / RaspberryMatic installs, see
-[`packaging/ccu-addon/README.md`](packaging/ccu-addon/README.md).
+**OpenCCU-Loom**. The Config UI appears as a sidebar panel (Ingress)
+and on `:8119`; state persists in the add-on's `/data`. A second add-on,
+**OpenCCU-Loom Remote** ([ADR 0054](./docs/adr/0054-remote-ingress-proxy-addon.md)),
+proxies a daemon running elsewhere into the same sidebar.
+→ [`packaging/ha-addon/README.md`](packaging/ha-addon/README.md)
 
-First-run setup:
+### CCU / RaspberryMatic add-on
 
-1. Start the daemon without a user pre-configured.
-2. Open `http://localhost:8119/setup` and create the first admin.
-3. Sign in at `/login` — OIDC is supported when configured.
+Runs the daemon directly on the CCU, defaults to CCU-delegated login,
+and can update itself from the project's GitHub releases.
+→ [`packaging/ccu-addon/README.md`](packaging/ccu-addon/README.md)
+
+### First run
+
+1. Start the daemon with no user configured.
+2. Open `http://localhost:8119/` — the SPA renders the onboarding
+   wizard and creates the first admin.
+3. Add your CCUs, then enable the bridges you want.
+
+The full walkthrough is [`docs/getting-started.md`](./docs/getting-started.md)
+and [`docs/user-guide.md`](./docs/user-guide.md).
 
 ## Configuration model
 
-OpenCCU-Loom splits its configuration into three tiers so the
-SPA can drive almost everything at runtime without forcing
-operators to hand-edit YAML for every change.
+Configuration lives in three tiers so the SPA can drive almost
+everything at runtime:
 
 | Tier | Lives in | What goes there | Edit via |
 |------|----------|-----------------|----------|
 | **Bootstrap** | `config.yaml` | `data_dir`, `north.rest.listen`, `logging.{level,format}`, `bootstrap.allow_first_run_setup`, `env_file` | Edit the YAML + restart |
-| **Live** | SQLite (`<data_dir>/openccu-loom.db`) | Everything else — CCUs, MQTT, Matter, mDNS, CORS, OIDC, rate-limit, reliability tunables, users, API tokens | SPA Settings tab, or REST `PUT /api/v1/config/sections/{section}` |
-| **Secrets** | environment (process or `.env` file) | CCU passwords, MQTT password, OIDC client secret | Operator-owned; daemon never writes them back |
+| **Live** | SQLite (`<data_dir>/openccu-loom.db`) | Everything else — CCUs, MQTT, Matter, mDNS, CORS, OIDC, rate limits, reliability tunables, users, API tokens | SPA settings, or `PUT /api/v1/config/sections/{section}` |
+| **Secrets** | Environment (process or `.env` file) | CCU passwords, MQTT password, OIDC client secret | Operator-owned; the daemon never writes them back |
 
-The runtime daemon overlays the live tier on top of whatever the
-YAML provides, so:
+The daemon overlays the live tier on top of the YAML: an empty database
+starts from the YAML (that's the seed), SPA edits win from then on, and
+`DELETE /api/v1/config/sections/{section}` reverts a section to its YAML
+fallback — so GitOps + restart stays a valid workflow.
+[`example.config.yaml`](./example.config.yaml) is intentionally short;
+`GET /api/v1/config/schema` returns the complete field schema with each
+field's classification (basic / expert / secret) — the same endpoint the
+SPA builds its editors from.
 
-* an empty database starts from the YAML — that's the seed.
-* edits in the SPA win on the next restart.
-* deleting a section row in the database via
-  `DELETE /api/v1/config/sections/{section}` reverts to the YAML
-  fallback.
+Passwords never have to touch `config.yaml`. Type them into the SPA
+(stored encrypted at rest, redacted from backups unless
+`--include-secrets` is passed), or keep them in your own secret store
+and reference the variable name — `centrals[].password_env` per CCU,
+`OPENCCU_LOOM_MQTT_PASSWORD`, `OPENCCU_LOOM_OIDC_CLIENT_SECRET`.
+Docker `env_file:` and Kubernetes `envFrom:` work the same way; details
+and the plaintext escape hatch for test rigs are in
+[`docs/user-guide.md`](./docs/user-guide.md) and
+[`docs/SECURITY.md`](./docs/SECURITY.md).
 
-The shipped `example.config.yaml` is intentionally short — see
-[`example.config.yaml`](./example.config.yaml). Everything in the
-"live" tier can still be set declaratively in YAML if you prefer
-GitOps + restart over live-edit; the SPA is just an additional
-surface, not a replacement.
+## Why "OpenCCU-Loom"?
 
-For the complete field schema (every available knob with its
-classification basic / expert / secret), call
-`GET /api/v1/config/schema` once the daemon is up; the SPA reads
-the same endpoint to build its editors.
+**OpenCCU** ([openccu.de](https://openccu.de)) is the cloud-free,
+Buildroot-based smart-home OS for the HomematicIP CCU that this project
+extends — and, via [openccu-data](https://github.com/SukramJ/openccu-data),
+the upstream the daemon's embedded metadata is derived from.
 
-## Secrets
+A **loom** is the bundled cable harness running through a car or an
+aircraft: many conductors, one routed path. That is the daemon's job —
+many CCU wire protocols come in on one side, the standard north-bound
+protocols come out on the other. The mark shows that cross-section.
 
-OpenCCU-Loom never persists CCU / MQTT / OIDC passwords to YAML
-unless you put them there yourself. The recommended path is:
+## Relationship to `aiohomematic`
 
-* type the password directly into the SPA's CCU dialog → stored
-  encrypted-at-rest by the OS (SQLite file is mode 0600), redacted
-  from backup tarballs unless `--include-secrets` is passed; or
-* keep the password in your shell / systemd / Docker / Kubernetes
-  secret store and reference it via `password_env: MY_VAR_NAME` in
-  the SPA's CCU dialog (expert mode).
-
-The supported env hooks are:
-
-| Secret | Resolution |
-|---|---|
-| CCU password (per-CCU) | `centrals[].password_env` in the SPA / DB. Daemon reads `os.Getenv(<that-name>)` when it dials the CCU. |
-| MQTT broker password | `OPENCCU_LOOM_MQTT_PASSWORD` |
-| OIDC client secret | `OPENCCU_LOOM_OIDC_CLIENT_SECRET` |
-
-### Setting them locally
-
-```sh
-export CCU_HOME_PASSWORD='your-ccu-password'
-export OPENCCU_LOOM_MQTT_PASSWORD='your-mqtt-password'
-./bin/openccu-loom run --config config.yaml
-```
-
-Then in the SPA's CCU dialog, set **Password env-var** to
-`CCU_HOME_PASSWORD`. The daemon resolves it on every CCU dial; the
-password never lands in `config.yaml`, the SQLite database, or a
-backup tarball.
-
-### systemd
-
-`EnvironmentFile=` is the cleanest way to pin secrets to a
-service unit without exposing them on the command line:
-
-```ini
-# /etc/systemd/system/openccu-loom.service
-[Service]
-EnvironmentFile=/etc/openccu-loom/secrets.env
-ExecStart=/usr/local/bin/openccu-loom run --config /etc/openccu-loom/config.yaml
-```
-
-```sh
-# /etc/openccu-loom/secrets.env  (chmod 0600, owner root)
-CCU_HOME_PASSWORD=your-ccu-password
-OPENCCU_LOOM_MQTT_PASSWORD=your-mqtt-password
-OPENCCU_LOOM_OIDC_CLIENT_SECRET=your-oidc-secret
-```
-
-### Docker / Compose
-
-```yaml
-services:
-  openccu-loom:
-    image: ghcr.io/sukramj/openccu-loom:latest
-    env_file:
-      - secrets.env
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - openccu-loom-data:/app/var
-    command: run --config /app/config.yaml
-```
-
-Mount the `secrets.env` file outside the image, never bake it in.
-For Kubernetes use a `Secret` with `envFrom:` — same shape.
-
-### Operator-facing escape hatch (test rigs only)
-
-If you cannot use env variables (one-off dev installs), set
-`security.allow_plaintext_secrets: true` via the Settings section
-in the SPA. With the toggle on, the per-CCU dialog accepts a
-plaintext fallback in addition to `password_env`. The plaintext
-value is then stored in the SQLite `centrals` table; do not enable
-this on a production host.
-
-## Features
-
-- **Full south-bound parity** with `aiohomematic` on the wire — every
-  CCU interface, every device profile, every reliability invariant
-  (circuit breaker, retry, throttle, request coalescer, ping/pong).
-- **MQTT bridge** with Home Assistant Discovery **and** a raw topic
-  plane; bidirectional control via `/set` topic subscriptions. Pure-Go
-  MQTT 5.0 client (3.1.1 selectable), no `paho` dependency.
-- **REST + WebSocket API** — see the full catalogue in
-  [`assets/openapi.yaml`](./assets/openapi.yaml) (REST) and
-  [`assets/wsapi.json`](./assets/wsapi.json) (WebSocket commands +
-  broadcasts); OpenAPI 3.1 contract, RFC 9457 problem+json,
-  Idempotency-Key middleware.
-- **Configuration UI** — Svelte 5 SPA (Tailwind 4 + Vite, embedded
-  via `go:embed`) as the interactive surface. Login, OIDC, and the
-  first-run onboarding wizard all run in the SPA (ADR 0045); a minimal
-  server-rendered surface (`/health`, `/about`) remains only as a no-JS
-  SPA-down diagnostic anchor. Locale-aware i18n (en + de).
-- **Multi-CCU**: one daemon, many CCUs, all scoped cleanly.
-- **Authentication**: HTTP Basic, Bearer tokens, session cookies with
-  CSRF, OpenID Connect (PKCE + JWKS-verified RS256 signatures),
-  CCU-delegated login (ADR 0043), and HA Ingress passthrough (ADR 0044).
-- **Static single binary** (`CGO_ENABLED=0`) for Linux
-  amd64 / arm64 / armv7. Docker image published to
-  `ghcr.io/sukramj/openccu-loom`.
-
-## Differences from `aiohomematic`
-
-The two projects are designed for different consumers and therefore
-diverge on the north-bound side. Wire-level behaviour and the device
-profile catalogue are kept in lockstep.
+OpenCCU-Loom began as a Go port of
+[`aiohomematic`](https://github.com/SukramJ/aiohomematic) and now
+develops independently. `aiohomematic` remains the Python library
+powering the Home Assistant integration *Homematic(IP) Local* — and the
+reference implementation for CCU-side semantics, cross-checked by a
+scoped model-snapshot regression gate. It is a reference, not a
+dependency, and no longer a parity target.
 
 | Area | aiohomematic | OpenCCU-Loom |
 |---|---|---|
 | Language | Python 3.14 (asyncio) | Go 1.26+ |
-| License | MIT | MIT |
-| Primary consumer | Home Assistant integration | Standalone daemon (MQTT / REST / UI / Matter) |
+| Primary consumer | Home Assistant integration | Standalone daemon (MQTT / REST / UI / Matter / MCP) |
 | CUxD transport | JSON-RPC via CCU facade + MQTT workaround | **Native BIN-RPC** + BIN-RPC callback server |
 | Multi-CCU | one `CentralUnit` per process | **many** `CentralUnit`s per process |
-| Config | programmatic (Pydantic) | YAML (with defaults) |
-| Persistence | JSON files | SQLite WAL + filesystem under `data_dir/` |
-| UI | none (HA provides one) | built-in Svelte 5 SPA (minimal `/health` + `/about` no-JS diagnostic surface) |
-| Decorators (`@state_property`, `@inspector`) | Python runtime | Go struct tags; `@inspector` wrapping handled inline at call sites |
-| Device profiles | hand-written Python | generated from the `aiohomematic` registry, plus hand-written Go wrappers |
+| Configuration | programmatic (Pydantic) | YAML seed + live SQLite tier, edited in the SPA |
+| Persistence | JSON files | SQLite (WAL) + filesystem under `data_dir/` |
+| UI / CCU administration | none (HA provides the UI) | built-in Svelte 5 SPA, administration first-class |
 
-## Quality Assurance — Strukturelle Säulen
-
-OpenCCU-Loom hat vier strukturelle Säulen, die Architektur-Drift
-verhindern:
-
-| Säule | Tool | Was wird detektiert |
-|---|---|---|
-| 1. Reachability | `make reachability` | Dead-Code (exported ohne Production-Caller) |
-| 2. Pin-Tests | `tests/contract/wiring_pins/` | Wiring-Regressionen |
-| 3. Wire-Snapshots | `make wire-snapshots` | Custom-DP-Wire-Encoding-Drifts |
-| 4. E2E-Smoke | `make e2e` | Feature-Drifts zur Laufzeit |
-
-Details: [`docs/parity/structural-approach.md`](docs/parity/structural-approach.md)
+On the Matter side the gold standard is
+[matter.js](https://github.com/project-chip/matter.js) HEAD: cluster
+IDs, revisions, constraints and wire shape are mirrored from it and
+locked by parity tests.
 
 ## Building
 
 ```sh
-make build        # produces ./bin/openccu-loom
+make build        # ./bin/openccu-loom
 make test         # unit + contract tests
-make integration  # godevccu + Mosquitto integration tests (Mosquitto needs Docker)
-make bench        # benchmarks
-make lint         # golangci-lint (null findings required)
-make docker       # multi-arch Docker image via buildx
+make integration  # godevccu + Mosquitto (Mosquitto needs Docker)
+make lint         # golangci-lint (zero findings required)
+make docker       # multi-arch image via buildx
 ```
 
-Prerequisites: Go 1.26+, `golangci-lint`, `gofumpt`, `goreleaser`,
+Prerequisites: Go 1.26+, `golangci-lint` v2, `gofumpt`, `goreleaser`,
 Docker (+ buildx) for the Mosquitto-backed integration tests.
 Integration runs use [`godevccu`](https://github.com/SukramJ/godevccu),
-a pure-Go HomeMatic CCU simulator embedded as a regular module
-dependency — no Python toolchain required.
-
-## License
-
-The OpenCCU-Loom **source code** is licensed under the
-[MIT License](./LICENSE) — aligned with the rest of the aiohomematic
-ecosystem (aiohomematic, aiohomematic-config, openccu-data).
-
-The **binary distribution** additionally ships CCU metadata archives
-sourced from [openccu-data](https://github.com/SukramJ/openccu-data)
-via the versioned
-[go-openccu-data](https://github.com/SukramJ/go-openccu-data) module.
-Those archives are governed by the **eQ-3 HomeMatic Software
-License** — free for private and non-commercial use; commercial
-redistribution requires written permission from eQ-3 AG. See
-[the go-openccu-data module's `NOTICE.md`](https://github.com/SukramJ/go-openccu-data/blob/main/NOTICE.md)
-for the full terms,
-[`docs/adr/0003-embed-occu-extracts.md`](./docs/adr/0003-embed-occu-extracts.md)
-for the embed rationale and
-[`docs/adr/0053-go-openccu-data-module.md`](./docs/adr/0053-go-openccu-data-module.md)
-for the module consumption.
-
-Operators with commercial use-cases can swap the embedded archives
-out via `cfg.CCUData.{translations_path,easymode_path}` for
-self-licensed equivalents — the daemon degrades gracefully.
-
-Third-party prior art (the reference projects this port is built on and the
-Go module dependencies, with their licenses and verbatim copyright notices)
-is recorded in [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md). Full
-license texts live under [`licenses/`](./licenses/).
+a pure-Go CCU simulator consumed as a regular module dependency — no
+Python toolchain required. Four structural pillars guard against
+architecture drift — reachability (`make reachability`), wiring pin
+tests, wire snapshots (`make wire-snapshots`) and E2E smoke
+(`make e2e`); see
+[`docs/parity/structural-approach.md`](docs/parity/structural-approach.md).
 
 ## Documentation
 
+- [`docs/getting-started.md`](./docs/getting-started.md) — install and
+  first CCU in a few minutes.
+- [`docs/user-guide.md`](./docs/user-guide.md) — the operator manual;
+  [`docs/user/`](./docs/user/) covers concepts, the web UI, multi-CCU
+  and Matter.
 - [`SPECIFICATION.md`](./SPECIFICATION.md) — design intent, hard
-  constraints, resolved decisions.
-- [`CLAUDE.md`](./CLAUDE.md) — entry point for AI assistants and
-  fresh contributors.
-- [`docs/adr/`](./docs/adr/) — architecture decisions.
-- [`docs/external-clients/`](./docs/external-clients/) — wire
-  contract for Python / TypeScript / Rust clients. Start with the
-  [topic hierarchy](./docs/external-clients/topic-hierarchy.md) for
-  the WebSocket surface and the
-  [asks backlog](./docs/external-clients/asks.md) for the
-  closure-index. The contract architecture itself is locked in
-  [ADR 0020](./docs/adr/0020-external-client-wire-contract.md),
-  [ADR 0021](./docs/adr/0021-mdns-self-advertisement.md) (mDNS
-  auto-discovery), and
-  [ADR 0022](./docs/adr/0022-ws-resume-and-kind.md) (WS resume +
-  envelope kind).
+  constraints, resolved decisions; [`docs/adr/`](./docs/adr/) — the
+  architecture decisions behind them, e.g. Matter
+  ([0012](./docs/adr/0012-matter-pure-go-implementation.md)), MQTT topics
+  ([0011](./docs/adr/0011-mqtt-topic-and-payload-architecture.md)) and
+  multi-CCU ([0002](./docs/adr/0002-multi-ccu-first-class.md)).
+- [`docs/SECURITY.md`](./docs/SECURITY.md) — threat model and audit
+  checklist; [`docs/caching.md`](./docs/caching.md) — every cache layer
+  and its boot-time radio cost.
+- [`docs/external-clients/`](./docs/external-clients/) — the wire
+  contract for Python / TypeScript / Rust clients; start at the
+  [topic hierarchy](./docs/external-clients/topic-hierarchy.md).
+- [`CLAUDE.md`](./CLAUDE.md) — entry point for fresh contributors and
+  AI assistants.
 
 ## Contributing
 
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers local setup, PR
-expectations, and the release workflow. Before opening a PR, please
-open an issue so we agree on scope, especially when the change touches
-the wire layer or the device profile catalogue.
-[`AI_POLICY.md`](./AI_POLICY.md) sets the rules for AI-assisted
-contributions: AI as a tool is welcome, autonomous agent submissions
-are not.
+expectations and the release workflow. Please open an issue first so we
+agree on scope — especially for changes to the wire layer or the device
+profile catalogue. [`AI_POLICY.md`](./AI_POLICY.md) sets the rules for
+AI-assisted contributions: AI as a tool is welcome, autonomous agent
+submissions are not. Parts of OpenCCU-Loom are developed with agentic AI
+assistance, primarily [Claude Code](https://www.anthropic.com/claude-code)
+— but every change is reviewed by a human maintainer and has to pass the
+full test, contract and parity suites before it lands.
 
-## Development
+## License
 
-Parts of OpenCCU-Loom are developed with agentic AI assistance,
-primarily [Claude Code](https://www.anthropic.com/claude-code).
-Submitted issues are also triaged and analysed with agentic help.
-Every change is still reviewed by a human maintainer and has to pass
-the full test, contract, and parity suites before it lands — the AI
-accelerates the work, it doesn't replace the review gate.
+The **source code** is [MIT](./LICENSE), aligned with the rest of the
+aiohomematic ecosystem.
+
+The **binary distribution** additionally ships CCU metadata archives
+sourced from [openccu-data](https://github.com/SukramJ/openccu-data) via
+the versioned [go-openccu-data](https://github.com/SukramJ/go-openccu-data)
+module ([ADR 0053](./docs/adr/0053-go-openccu-data-module.md)). Those
+archives are governed by the **eQ-3 HomeMatic Software License** — free
+for private and non-commercial use; commercial redistribution requires
+written permission from eQ-3 AG. See
+[the module's `NOTICE.md`](https://github.com/SukramJ/go-openccu-data/blob/main/NOTICE.md)
+and [ADR 0003](./docs/adr/0003-embed-occu-extracts.md). Operators with
+commercial use-cases can point `cfg.CCUData.{translations_path,easymode_path}`
+at self-licensed equivalents — the daemon degrades gracefully.
+
+Third-party prior art and module dependencies with their licenses and
+verbatim copyright notices are recorded in
+[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md); full license texts
+live under [`licenses/`](./licenses/).
 
 ## Acknowledgements
 
-OpenCCU-Loom stands on the prior art of several other projects. The full
-list with licenses and verbatim copyright notices is in
-[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md); the narrative credits
-are in [`docs/attribution.md`](./docs/attribution.md). With particular thanks:
+Narrative credits are in [`docs/attribution.md`](./docs/attribution.md).
+With particular thanks:
 
 - [aiohomematic](https://github.com/SukramJ/aiohomematic) (MIT) — the
-  reference implementation this Go port follows for wire behaviour and the
-  device profile catalogue. Authored by **SukramJ** and **Daniel Perna**.
-- [aiohomematic-config](https://github.com/SukramJ/aiohomematic-config) (MIT)
-  — the form-schema, grouping and label logic ported into the Config UI.
-- [pydevccu](https://github.com/danielperna84/pydevccu) (MIT, Daniel Perna &
-  SukramJ) — the CCU simulator that
-  [godevccu](https://github.com/SukramJ/godevccu) (and thus the integration
-  test suite) is a Go port of.
-- [matter.js](https://github.com/project-chip/matter.js) (Apache-2.0) — the
-  gold standard for the entire Matter bridge; cluster schema, defaults and
-  wire shape are mirrored from it.
+  reference implementation for wire behaviour and the device profile
+  catalogue, by **SukramJ** and **Daniel Perna**; plus
+  [aiohomematic-config](https://github.com/SukramJ/aiohomematic-config)
+  (MIT) for the form-schema, grouping and label logic in the Config UI.
+- [pydevccu](https://github.com/danielperna84/pydevccu) (MIT, Daniel
+  Perna & SukramJ) — the CCU simulator that
+  [godevccu](https://github.com/SukramJ/godevccu) is a Go port of.
+- [matter.js](https://github.com/project-chip/matter.js) (Apache-2.0) —
+  the gold standard for the entire Matter bridge.
 - [homematicip-local-frontend](https://github.com/SukramJ/homematicip-local-frontend)
   (MIT) and the [Home Assistant frontend](https://github.com/home-assistant/frontend)
-  (Apache-2.0) — the UI interaction and control-primitive references for the
-  Svelte SPA.
-- The Homematic / HomematicIP community and eQ-3 for the devices and protocol
-  knowledge that make any of this possible.
+  (Apache-2.0) — UI interaction and control-primitive references.
+- The Homematic / HomematicIP community and eQ-3, for the devices and
+  the protocol knowledge that make any of this possible.
