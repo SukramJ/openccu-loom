@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.50.1
+
+- **CCU add-on: self-update actually appears now.** Released add-on
+  packages misidentified as standalone builds, hiding the new update
+  card and the HA update entity. Install 0.50.1 once via the CCU WebUI;
+  from then on updates run through the built-in mechanism.
+
 ## 0.50.0
 
 - **The CCU add-on updates itself** (OpenCCU/RaspberryMatic): check and

@@ -5,21 +5,26 @@ package build
 
 import "testing"
 
-func TestIsAddon_DefaultFalse(t *testing.T) {
+// TestIsAddonInstallPath pins the runtime add-on detection rule: only
+// executables under the add-on install prefix count. The rule keeps
+// released tarballs honest — they package prebuilt standalone binaries
+// that never carry the build-time stamp.
+func TestIsAddonInstallPath(t *testing.T) {
 	t.Parallel()
-	orig := AddonBuild
-	t.Cleanup(func() { AddonBuild = orig })
-	AddonBuild = "false"
-	if IsAddon() {
-		t.Error("IsAddon() = true with AddonBuild=\"false\", want false")
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/usr/local/addons/openccu-loom/openccu-loom.arm64", true},
+		{"/usr/local/addons/openccu-loom/bin/openccu-loom", true},
+		{"/usr/local/addons/openccu-loomX/openccu-loom", false},
+		{"/usr/local/addons/other/openccu-loom", false},
+		{"/usr/bin/openccu-loom", false},
+		{"", false},
 	}
-}
-
-func TestIsAddon_TrueWhenStamped(t *testing.T) {
-	orig := AddonBuild
-	t.Cleanup(func() { AddonBuild = orig })
-	AddonBuild = "true"
-	if !IsAddon() {
-		t.Error("IsAddon() = false with AddonBuild=\"true\", want true")
+	for _, tc := range cases {
+		if got := isAddonInstallPath(tc.path); got != tc.want {
+			t.Errorf("isAddonInstallPath(%q) = %v, want %v", tc.path, got, tc.want)
+		}
 	}
 }

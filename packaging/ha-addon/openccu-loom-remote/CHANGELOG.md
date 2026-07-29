@@ -4,6 +4,12 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.50.1
+
+Version ride-along. No changes to the proxy itself; the fix ships in the paired
+instance (CCU add-on runtime detection for the self-update mechanism) — update
+the instance to 0.50.1 too.
+
 # 0.50.0
 
 Version ride-along. No changes to the proxy itself; the feature ships in the

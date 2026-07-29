@@ -7,11 +7,18 @@
 // and .goreleaser.yaml for the wiring.
 package build
 
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+)
+
 // Build metadata, populated by the linker via -ldflags. See the Makefile
 // and .goreleaser.yaml for the wiring; unset at `go run` time.
 var (
 	// Version is the SemVer tag or `git describe` output.
-	Version = "0.50.0"
+	Version = "0.50.1"
 	// Commit is the short git SHA the binary was built from.
 	Commit = "none"
 	// BuildDate is the UTC RFC3339 timestamp of the build.
@@ -24,5 +31,39 @@ var (
 	AddonBuild = "false"
 )
 
-// IsAddon reports whether this binary was built as the CCU add-on.
-func IsAddon() bool { return AddonBuild == "true" }
+// addonInstallPrefix is where the CCU add-on's update_script installs
+// the daemon on the CCU (see packaging/ccu-addon/ccu/update_script).
+const addonInstallPrefix = "/usr/local/addons/openccu-loom/"
+
+// IsAddon reports whether this daemon runs as the CCU add-on: either
+// the build-time stamp is set, or the running executable lives under
+// the add-on install prefix. The runtime check matters because the
+// release pipeline packages the prebuilt standalone binaries into the
+// add-on tarball (script/build_ccu_addon.sh reuses them and cannot
+// re-stamp a compiled binary) — without it every released add-on
+// install reported itself standalone, which suppressed the
+// CCU-delegated auth default (ADR 0043) and the self-update
+// capability (ADR 0057).
+func IsAddon() bool { return AddonBuild == "true" || runsFromAddonDir() }
+
+// runsFromAddonDir resolves the running executable once and reports
+// whether it lives under the add-on install prefix.
+func runsFromAddonDir() bool { return addonDirCheck() }
+
+var addonDirCheck = sync.OnceValue(func() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
+		exe = resolved
+	}
+	return isAddonInstallPath(exe)
+})
+
+// isAddonInstallPath reports whether path lies under the add-on
+// install prefix. Split out so the rule is testable without swapping
+// process state.
+func isAddonInstallPath(path string) bool {
+	return strings.HasPrefix(path, addonInstallPrefix)
+}

@@ -63,6 +63,9 @@ write_sha256() {
 build_bin() {
   local goarch="$1" goarm="$2" out="$3" prebuilt="${4:-}"
   if [ -n "${prebuilt}" ] && [ -n "${!prebuilt:-}" ]; then
+    # Reused binaries lack the AddonBuild ldflags stamp — build.IsAddon()
+    # also detects the add-on at runtime from the install path, which is
+    # what keeps release-packaged tarballs (this path) behaving as add-on.
     echo "  reuse ${!prebuilt} -> $(basename "$out")"
     cp "${!prebuilt}" "$out"
     return
