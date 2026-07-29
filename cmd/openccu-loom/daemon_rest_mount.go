@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -67,8 +68,14 @@ type restMountDeps struct {
 	devicesAdapter       *adapter.DevicesAdapter
 	deviceAdminDomain    *adapter.DeviceAdminDomain
 	ccuMaintenanceDomain *adapter.CCUMaintenanceDomain
-	groupsDomain         *adapter.GroupsDomain
-	deviceReloader       *adapter.DeviceReloaderAdapter
+	// addonUpdater backs the CCU add-on self-update surface (ADR 0057).
+	// Nil when the platform capability check failed (see wireAddonUpdate)
+	// — the REST GET then reports supported:false and the check/install
+	// verbs answer 404, mirroring the SystemCCU-style always-mounted
+	// handler pattern rather than an unmounted-route 404.
+	addonUpdater   *addonupdate.Updater
+	groupsDomain   *adapter.GroupsDomain
+	deviceReloader *adapter.DeviceReloaderAdapter
 	// firmwareRefresher backs POST /devices/firmware/refresh (the same
 	// FirmwareDomain the WS `firmware.refresh` command uses).
 	firmwareRefresher *adapter.FirmwareDomain
@@ -279,6 +286,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		SystemCCU:        newSystemCCUAdapter(d.reg, centralResolve),
 		CCUReboot:        d.ccuMaintenanceDomain,
 		FirmwareDownload: d.ccuMaintenanceDomain,
+		AddonUpdate:      addonUpdateServiceFrom(d.addonUpdater),
 		Groups:           newGroupsAdapter(d.groupsDomain),
 		GroupsWriter:     newGroupsAdapter(d.groupsDomain),
 		RateLimit:        buildRateLimitConfig(cfg),
@@ -297,6 +305,10 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			// History is enabled when the recorder store was wired (the
 			// same opt-in flag that mounts /history and /history/recording).
 			history: d.historyStore != nil,
+			// addonSelfUpdate mirrors wireAddonUpdate's capability gate
+			// (add-on build + firmware installer present) — d.addonUpdater
+			// is only non-nil when that check passed.
+			addonSelfUpdate: d.addonUpdater != nil,
 		},
 		CORS:       buildCORS(cfg),
 		Idempotent: true,
@@ -401,10 +413,24 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	northBridges.Register(rest.NewService(restServer, logger))
 
 	if cfg.North.Discovery.MDNS.IsEnabled() {
-		if adv, err := startMDNSAdvertiser(ctx, cfg, len(d.reg.Names()), logger); err != nil {
+		if adv, err := startMDNSAdvertiser(ctx, cfg, d.reg, logger); err != nil {
 			logger.Warn("discovery.mdns.start_failed", slog.String("err", err.Error()))
 		} else if adv != nil {
+			// Re-announce the TXT bundle when serials resolve or the
+			// central set changes (ADR 0058) — the hub-ready pipeline
+			// invokes this slot.
+			refresh := func() {
+				if err := adv.UpdateTXT(mdnsTXT(cfg, len(d.reg.Names()), mdnsCCUSerials(d.reg))); err != nil {
+					logger.Debug("discovery.mdns.txt_refresh_failed", slog.String("err", err.Error()))
+				}
+			}
+			if d.reload != nil {
+				d.reload.mdnsTXTRefresh.Store(&refresh)
+			}
 			teardown = func() {
+				if d.reload != nil {
+					d.reload.mdnsTXTRefresh.Store(nil)
+				}
 				if err := adv.Stop(); err != nil {
 					logger.Warn("discovery.mdns.stop_failed", slog.String("err", err.Error()))
 				}
@@ -446,6 +472,19 @@ func alarmPanelFrom(s *alarm.Service) handlers.AlarmPanel {
 		return nil
 	}
 	return s
+}
+
+// addonUpdateServiceFrom converts *addonupdate.Updater into
+// handlers.AddonUpdateService, mapping a nil pointer to a genuinely
+// nil interface. Without this a nil *Updater assigned directly to the
+// interface field would produce a non-nil interface wrapping a nil
+// pointer — GetAddonUpdate's `if svc == nil` guard would then miss it
+// and Status() would panic on the nil receiver.
+func addonUpdateServiceFrom(u *addonupdate.Updater) handlers.AddonUpdateService {
+	if u == nil {
+		return nil
+	}
+	return u
 }
 
 // alarmCodeAdminFrom converts the alarm service into the /alarm/codes CRUD

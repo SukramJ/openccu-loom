@@ -1301,6 +1301,32 @@ func (b *Bridge) PublishHubUpdate(ctx context.Context, centralName, installedVer
 	return b.client.Publish(ctx, b.topics.HubUpdate(centralName), body, b.cfg.QoS.State, true)
 }
 
+// PublishAddonUpdateState publishes the CCU add-on self-updater's
+// status (ADR 0057) to the retained, daemon-level (no <central>
+// segment) topic `<base>/system/addon_update/state`, in the same
+// `installed_version` / `latest_version` / `in_progress` shape
+// [Bridge.PublishHubUpdate] uses so both ride the same HA `update`
+// entity contract. Returns nil when RawEnabled is false.
+func (b *Bridge) PublishAddonUpdateState(ctx context.Context, installedVersion, latestVersion string, inProgress bool) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
+	payload := struct {
+		InstalledVersion string `json:"installed_version"`
+		LatestVersion    string `json:"latest_version"`
+		InProgress       bool   `json:"in_progress"`
+	}{
+		InstalledVersion: installedVersion,
+		LatestVersion:    latestVersion,
+		InProgress:       inProgress,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return b.client.Publish(ctx, b.topics.AddonUpdateState(), body, b.cfg.QoS.State, true)
+}
+
 // PublishChannelEventDiscovery publishes the HA Discovery payload for
 // a press-button channel without going through a synthetic
 // value-change event. Boot-time entry point: PublishInitialSnapshot

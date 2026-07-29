@@ -60,6 +60,10 @@ type southboundWiringDeps struct {
 	// still unresolved during the async bring-up — are published once the serial
 	// lands. Nil when MQTT is not configured.
 	hubMQTT *adapter.HubMQTTPublisher
+	// postHubReady runs after each debounced hub-discovery re-Start
+	// (serial resolved / live adopt). Nil-safe; currently refreshes the
+	// daemon-discovery mDNS TXT record (ADR 0058).
+	postHubReady func()
 }
 
 // southboundWiring is the result of the southbound wiring phase. It
@@ -361,7 +365,12 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 			}
 		}
 		hubReadyClosers, hubReadyTrigger := wireHubDiscoveryOnReady(
-			ctx, readyBuses, func(rctx context.Context) { d.hubMQTT.Start(rctx) },
+			ctx, readyBuses, func(rctx context.Context) {
+				d.hubMQTT.Start(rctx)
+				if d.postHubReady != nil {
+					d.postHubReady()
+				}
+			},
 			hubDiscoveryReadyDebounce, logger,
 		)
 		teardowns = append(teardowns, hubReadyClosers...)

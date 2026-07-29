@@ -1472,6 +1472,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/addon-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Self-update status of the daemon's own CCU add-on package.
+         *     Only meaningful on platforms with the firmware-side installer
+         *     (`/bin/install_addon`, i.e. OpenCCU / RaspberryMatic); elsewhere
+         *     `supported` is false and the check/install verbs answer 404.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AddonUpdateStatus"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/addon-update/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Trigger an immediate update check against the release feed. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Check started; observe via GET or the WS broadcast. */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/addon-update/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Download, verify (SHA256 against the release checksums), stage
+         *     and install the latest add-on package via the firmware's
+         *     install_addon. The daemon restarts as part of the install.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Install started; the daemon will restart. */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                404: components["responses"]["NotFound"];
+                /** @description No update available, or an install is already running. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["Problem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/update": {
         parameters: {
             query?: never;
@@ -8131,6 +8255,29 @@ export interface components {
         RoomEntry: {
             name: string;
             device_count: number;
+        };
+        /** @description Self-update status of the daemon's CCU add-on package. supported is false when the platform lacks the firmware installer; every other field is then zero-valued. */
+        AddonUpdateStatus: {
+            /** @description Platform can self-install (add-on build + firmware installer present). */
+            supported: boolean;
+            current_version: string;
+            /** @description Newest published release; empty before the first successful check. */
+            latest_version?: string;
+            update_available?: boolean;
+            /** @description Release-notes page of the latest version. */
+            release_url?: string;
+            /**
+             * Format: date-time
+             * @description Time of the last successful check; absent before the first.
+             */
+            last_check?: string;
+            /**
+             * @description Lifecycle of the updater. `installing` is terminal from the caller's perspective — the daemon restarts on success.
+             * @enum {string}
+             */
+            state: "idle" | "checking" | "downloading" | "installing" | "failed";
+            /** @description Failure detail while state is `failed`. */
+            error?: string;
         };
         /** @description Operator-defined room grouping above CCU rooms (a floor, a shed, a terrace roof). Distinct from alarm zones. Rooms are (central, room) pairs; one area per room. */
         Area: {

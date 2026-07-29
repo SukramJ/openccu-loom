@@ -27,6 +27,14 @@ type reloadDeps struct {
 	curCfg  atomic.Pointer[config.Config]
 	reseed  atomic.Pointer[mqttReseedHook]
 
+	// mdnsTXTRefresh re-announces the daemon-discovery mDNS TXT bundle
+	// (ADR 0058: the ccus serial list and the centrals count resolve
+	// and change at runtime). Stored by the REST mount once the
+	// advertiser is running; invoked from the hub-ready pipeline, which
+	// fires on serial resolution and live adopt. Atomic because the
+	// southbound wiring subscribes before the advertiser exists.
+	mdnsTXTRefresh atomic.Pointer[func()]
+
 	// onNorthBridges is a test-only observation hook invoked once during
 	// boot, after every north-bound surface has been registered on the
 	// registry and before the late StartAll. It lets a wiring test assert

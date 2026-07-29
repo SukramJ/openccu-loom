@@ -77,9 +77,13 @@ func (s Service) resolvedInstanceName() string {
 
 // Advertiser is the runtime surface the daemon holds onto. Start
 // publishes the record; Stop tears it down and sends a "goodbye"
-// packet via the underlying library when supported.
+// packet via the underlying library when supported. UpdateTXT
+// re-announces the TXT bundle at runtime — CCU serials resolve during
+// the readiness-gated bring-up and change on live adopt/remove, so
+// the record published at boot cannot stay static.
 type Advertiser interface {
 	Start(ctx context.Context) error
+	UpdateTXT(txt []string) error
 	Stop() error
 }
 
@@ -87,6 +91,10 @@ type Advertiser interface {
 // already running. Callers should treat the prior Start as
 // authoritative and not retry.
 var ErrAlreadyStarted = errors.New("mdns: advertiser already started")
+
+// ErrNotStarted is returned by UpdateTXT when the advertiser has not
+// been started (or was stopped) — there is no live record to update.
+var ErrNotStarted = errors.New("mdns: advertiser not started")
 
 // Noop is an Advertiser that records the input service in memory
 // without touching the network. Used by tests and by daemon paths
@@ -113,6 +121,26 @@ func (n *Noop) Start(_ context.Context) error {
 	}
 	n.started = true
 	return nil
+}
+
+// UpdateTXT records the new TXT bundle. Returns [ErrNotStarted] when
+// the advertiser is not running so callers exercise the same contract
+// as the Multicast implementation.
+func (n *Noop) UpdateTXT(txt []string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if !n.started {
+		return ErrNotStarted
+	}
+	n.svc.TXT = append([]string(nil), txt...)
+	return nil
+}
+
+// TXT returns the recorded TXT bundle. Test helper.
+func (n *Noop) TXT() []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]string(nil), n.svc.TXT...)
 }
 
 // Stop marks the advertiser as no longer running. Idempotent.
@@ -214,6 +242,18 @@ func (m *Multicast) proxyHost() string {
 		}
 	}
 	return m.svc.resolvedInstanceName()
+}
+
+// UpdateTXT re-announces the TXT bundle on the live record.
+func (m *Multicast) UpdateTXT(txt []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.server == nil {
+		return ErrNotStarted
+	}
+	m.svc.TXT = append([]string(nil), txt...)
+	m.server.SetText(m.svc.TXT)
+	return nil
 }
 
 // Stop tears down the published record. Idempotent.

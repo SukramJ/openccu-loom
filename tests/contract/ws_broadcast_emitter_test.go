@@ -258,6 +258,19 @@ var wsBroadcastEmitters = map[string]wsBroadcastEmitter{
 		Tokens:    []string{`MatterTopicEndpointAssembled = "matter.endpoint_assembled"`, "Topic:   handlers.MatterTopicEndpointAssembled", "SetOnReassembled(func(count int)"},
 		WireValue: handlers.MatterTopicEndpointAssembled,
 	},
+	"addon_update.state_changed": {
+		Files: []string{
+			"internal/north/rest/ws/addon_update_events.go",
+			"cmd/openccu-loom/addon_update_wiring.go",
+		},
+		Tokens: []string{
+			`broadcastAddonUpdateStateChanged = "addon_update.state_changed"`,
+			"func (h *Hub) PublishAddonUpdateStateChanged",
+			"h.Publish(Event{",
+			"hub.PublishAddonUpdateStateChanged(",
+		},
+		WireValue: "addon_update.state_changed",
+	},
 }
 
 // normalizeWSTokens collapses runs of whitespace to single spaces so a

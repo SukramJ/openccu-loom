@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.2.0
+  version: 3.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -42,6 +42,8 @@ tags:
     description: API token management v2 (fingerprint-keyed)
   - name: central-admin
     description: Central (CCU) CRUD — DB-backed multi-CCU registry
+  - name: system
+    description: Daemon-level system operations (add-on self-update)
 
 paths:
   /info:
@@ -1465,6 +1467,55 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/addon-update:
+    get:
+      tags: [system]
+      description: |
+        Self-update status of the daemon's own CCU add-on package.
+        Only meaningful on platforms with the firmware-side installer
+        (`/bin/install_addon`, i.e. OpenCCU / RaspberryMatic); elsewhere
+        `supported` is false and the check/install verbs answer 404.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddonUpdateStatus" }
+
+  /system/addon-update/check:
+    post:
+      tags: [system]
+      description: Trigger an immediate update check against the release feed.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "202":
+          description: Check started; observe via GET or the WS broadcast.
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /system/addon-update/install:
+    post:
+      tags: [system]
+      description: |
+        Download, verify (SHA256 against the release checksums), stage
+        and install the latest add-on package via the firmware's
+        install_addon. The daemon restarts as part of the install.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "202":
+          description: Install started; the daemon will restart.
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: No update available, or an install is already running.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
 
   /system/update:
     get:
@@ -10589,6 +10640,39 @@ components:
       properties:
         name: { type: string }
         device_count: { type: integer }
+
+    AddonUpdateStatus:
+      type: object
+      required: [supported, current_version, state]
+      description: >-
+        Self-update status of the daemon's CCU add-on package. supported
+        is false when the platform lacks the firmware installer; every
+        other field is then zero-valued.
+      properties:
+        supported:
+          type: boolean
+          description: Platform can self-install (add-on build + firmware installer present).
+        current_version: { type: string }
+        latest_version:
+          type: string
+          description: Newest published release; empty before the first successful check.
+        update_available: { type: boolean }
+        release_url:
+          type: string
+          description: Release-notes page of the latest version.
+        last_check:
+          type: string
+          format: date-time
+          description: Time of the last successful check; absent before the first.
+        state:
+          type: string
+          enum: [idle, checking, downloading, installing, failed]
+          description: >-
+            Lifecycle of the updater. `installing` is terminal from the
+            caller's perspective — the daemon restarts on success.
+        error:
+          type: string
+          description: Failure detail while state is `failed`.
 
     Area:
       type: object

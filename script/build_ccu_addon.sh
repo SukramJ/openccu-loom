@@ -36,6 +36,29 @@ OUT="${OUT:-$ROOT/dist}"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
+# write_sha256 <path> — writes "<path>.sha256" next to path in the
+# `sha256sum`-format line "<hash>  <basename>" (two spaces; the
+# filename is the bare basename, not the full staged path, since
+# `sha256sum -c` resolves it relative to its own working directory —
+# i.e. wherever the tarball was unpacked to). ADR 0057 decision 2: the
+# daemon's own downloader already verifies the whole tarball against
+# the GitHub release's checksums.txt before staging it; these
+# per-file sidecars are the firmware installer's OWN second check
+# after unpacking, so a corrupted or truncated extraction is caught
+# even if the outer tarball hash matched.
+write_sha256() {
+  local path="$1"
+  local dir base hash
+  dir="$(dirname "$path")"
+  base="$(basename "$path")"
+  if command -v sha256sum >/dev/null 2>&1; then
+    hash="$(sha256sum "$path" | awk '{print $1}')"
+  else
+    hash="$(shasum -a 256 "$path" | awk '{print $1}')"
+  fi
+  printf '%s  %s\n' "$hash" "$base" > "$dir/$base.sha256"
+}
+
 # build_bin <goarch> <goarm> <out-path> <prebuilt-env-var>
 build_bin() {
   local goarch="$1" goarm="$2" out="$3" prebuilt="${4:-}"
@@ -67,6 +90,12 @@ chmod 755 "$STAGE/update_script" "$STAGE/rc.d/"* "$STAGE/www/"*.cgi
 chmod 755 "$STAGE/addon/openccu-loom.amd64" \
           "$STAGE/addon/openccu-loom.arm64" \
           "$STAGE/addon/openccu-loom.armv7"
+
+# Embed a *.sha256 sidecar for every staged binary + asset (ADR 0057).
+write_sha256 "$STAGE/addon/openccu-loom.amd64"
+write_sha256 "$STAGE/addon/openccu-loom.arm64"
+write_sha256 "$STAGE/addon/openccu-loom.armv7"
+write_sha256 "$STAGE/addon/assets/openapi.yaml"
 
 mkdir -p "$OUT"
 TARBALL="$OUT/openccu-loom-ccu-${VERSION}.tar.gz"
