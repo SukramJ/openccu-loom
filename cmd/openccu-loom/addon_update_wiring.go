@@ -113,3 +113,13 @@ func newAddonUpdateMQTTSink(u *addonupdate.Updater) *addonUpdateMQTTSink {
 func (s *addonUpdateMQTTSink) TriggerInstall(ctx context.Context) error {
 	return s.u.InstallAsync(ctx)
 }
+
+// wsAddonUpdaterFrom narrows the updater onto the WS command contract.
+// A nil updater (platform unsupported) yields a nil interface so the
+// commands stay unregistered.
+func wsAddonUpdaterFrom(u *addonupdate.Updater) ws.AddonUpdater {
+	if u == nil {
+		return nil
+	}
+	return u
+}

@@ -174,6 +174,7 @@ func TestWriteCommandRolesAreRegistered(t *testing.T) {
 		FirmwareRefresher:    &stubFirmwareRefresher{},
 		IncidentClearer:      &stubIncidentClearer{},
 		IncidentLister:       &stubIncidentLister{},
+		AddonUpdater:         &fakeAddonUpdater{},
 		UISchema:             &stubUISchema{},
 		ParamsetReader:       paramsets,
 		CentralLinks:         &fakeCentralLinks{},

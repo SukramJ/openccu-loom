@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
@@ -1106,4 +1107,71 @@ func TestExtendedParamsetPut_EditLockEnforced(t *testing.T) {
 	if len(pw.calls) != 2 {
 		t.Fatalf("VALUES write: expected 2 total writes, got %d", len(pw.calls))
 	}
+}
+
+// fakeAddonUpdater records the addon_update verb calls and returns the
+// configured errors.
+type fakeAddonUpdater struct {
+	checkErr   error
+	installErr error
+	checks     int
+	installs   int
+}
+
+func (f *fakeAddonUpdater) Check(context.Context) error        { f.checks++; return f.checkErr }
+func (f *fakeAddonUpdater) InstallAsync(context.Context) error { f.installs++; return f.installErr }
+
+// TestAddonUpdateCommands pins the WS verb contract: both verbs are
+// fire-and-forget successes routed to the updater, updater errors
+// surface as command errors, and a nil updater leaves the commands
+// unregistered (platform without self-update capability).
+func TestAddonUpdateCommands(t *testing.T) {
+	t.Parallel()
+
+	t.Run("check and install route to the updater", func(t *testing.T) {
+		t.Parallel()
+		fake := &fakeAddonUpdater{}
+		router := NewRouter()
+		RegisterExtendedCommands(router, ExtendedCommandsConfig{AddonUpdater: fake})
+		ctx := auth.ContextWithIdentity(context.Background(), auth.Identity{Subject: "op", Role: auth.RoleOperator})
+		for _, name := range []string{"addon_update.check", "addon_update.install"} {
+			if !router.Has(name) {
+				t.Fatalf("%s not registered", name)
+			}
+			res := router.Dispatch(ctx, name, nil)
+			if res.Error != nil {
+				t.Fatalf("%s: %v", name, res.Error)
+			}
+			m, _ := res.Data.(map[string]any)
+			if m["success"] != true {
+				t.Errorf("%s response = %v, want success", name, res.Data)
+			}
+		}
+		if fake.checks != 1 || fake.installs != 1 {
+			t.Errorf("calls = %d/%d, want 1/1", fake.checks, fake.installs)
+		}
+	})
+
+	t.Run("updater errors surface", func(t *testing.T) {
+		t.Parallel()
+		fake := &fakeAddonUpdater{installErr: errors.New("busy")}
+		router := NewRouter()
+		RegisterExtendedCommands(router, ExtendedCommandsConfig{AddonUpdater: fake})
+		ctx := auth.ContextWithIdentity(context.Background(), auth.Identity{Subject: "op", Role: auth.RoleOperator})
+		if res := router.Dispatch(ctx, "addon_update.install", nil); res.Error == nil {
+			t.Fatal("expected the updater error to surface")
+		}
+	})
+
+	t.Run("nil updater leaves commands unregistered", func(t *testing.T) {
+		t.Parallel()
+		router := NewRouter()
+		RegisterExtendedCommands(router, ExtendedCommandsConfig{})
+		if router.Has("addon_update.check") {
+			t.Error("addon_update.check must stay unregistered without an updater")
+		}
+		if router.Has("addon_update.install") {
+			t.Error("addon_update.install must stay unregistered without an updater")
+		}
+	})
 }

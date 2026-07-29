@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.51.0
+
+- **Add-on updates are scriptable over WebSocket** (`addon_update.check`
+  / `addon_update.install`) alongside REST and the Home Assistant
+  update entity.
+
 ## 0.50.1
 
 - **CCU add-on: self-update actually appears now.** Released add-on

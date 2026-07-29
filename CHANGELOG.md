@@ -6,6 +6,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.51.0]
+
+### Added
+
+- **WS verbs for the add-on self-updater.** `addon_update.check` and
+  `addon_update.install` (operator role) join the existing
+  `addon_update.state_changed` broadcast, so WebSocket clients can
+  drive the self-update without a REST round trip (API 3.4.0,
+  additive). Both are fire-and-forget: progress and outcome arrive on
+  the broadcast; on platforms without the self-update capability the
+  commands stay unregistered.
+
 ## [0.50.1]
 
 ### Fixed

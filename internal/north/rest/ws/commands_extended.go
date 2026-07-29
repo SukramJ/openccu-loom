@@ -191,6 +191,16 @@ type ChangeHistoryClearer interface {
 	ClearChangeHistory(ctx context.Context) error
 }
 
+// AddonUpdater is the write contract for `addon_update.check` and
+// `addon_update.install` (ADR 0057). Both verbs are fire-and-forget:
+// progress and outcome arrive on the addon_update.state_changed
+// broadcast. Nil (platform unsupported) leaves the commands
+// unregistered — clients see the standard unknown-command error.
+type AddonUpdater interface {
+	Check(ctx context.Context) error
+	InstallAsync(ctx context.Context) error
+}
+
 // IncidentClearer is the write contract for `incidents.clear`.
 // Clears all entries from the incident store. Mirrors Python
 // `ws_clear_incidents` (websocket_api.py:1863).
@@ -246,6 +256,8 @@ type ExtendedCommandsConfig struct {
 	DeviceStatistics DeviceStatisticsQuery
 	// FirmwareRefresher backs `firmware.refresh`.
 	FirmwareRefresher FirmwareRefresher
+	// AddonUpdater backs `addon_update.check` / `addon_update.install`.
+	AddonUpdater AddonUpdater
 	// IncidentClearer backs `incidents.clear`.
 	IncidentClearer IncidentClearer
 	// IncidentLister backs `incidents.list` and its alias `incidents.get`.
@@ -342,6 +354,12 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 	if cfg.FirmwareRefresher != nil {
 		// firmware.refresh — force-refresh firmware cache from CCU.
 		router.Register("firmware.refresh", firmwareRefreshHandler(cfg.FirmwareRefresher))
+	}
+	if cfg.AddonUpdater != nil {
+		// addon_update.check / .install — CCU add-on self-update verbs
+		// (ADR 0057); results stream via addon_update.state_changed.
+		router.Register("addon_update.check", addonUpdateCheckHandler(cfg.AddonUpdater))
+		router.Register("addon_update.install", addonUpdateInstallHandler(cfg.AddonUpdater))
 	}
 	if cfg.IncidentClearer != nil {
 		// incidents.clear — clear the incident store.
@@ -1036,6 +1054,29 @@ func changeHistoryClearHandler(c ChangeHistoryClearer) CommandHandler {
 	return func(ctx context.Context, _ json.RawMessage) (any, error) {
 		if err := c.ClearChangeHistory(ctx); err != nil {
 			return nil, fmt.Errorf("change_history.clear: %w", err)
+		}
+		return map[string]any{"success": true}, nil
+	}
+}
+
+// addonUpdateCheckHandler implements `addon_update.check`: kick a
+// release check; state transitions arrive on the broadcast.
+func addonUpdateCheckHandler(u AddonUpdater) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		if err := u.Check(ctx); err != nil {
+			return nil, fmt.Errorf("addon_update.check: %w", err)
+		}
+		return map[string]any{"success": true}, nil
+	}
+}
+
+// addonUpdateInstallHandler implements `addon_update.install`: start
+// the verified download + firmware install. Fire-and-forget — the
+// daemon restarts on success; failures surface on the broadcast.
+func addonUpdateInstallHandler(u AddonUpdater) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		if err := u.InstallAsync(ctx); err != nil {
+			return nil, fmt.Errorf("addon_update.install: %w", err)
 		}
 		return map[string]any{"success": true}, nil
 	}

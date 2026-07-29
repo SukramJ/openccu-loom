@@ -84,6 +84,8 @@ var writeCommandRoles = map[string]auth.Role{
 	"firmware.refresh":                    auth.RoleOperator,
 	"firmware.update":                     auth.RoleOperator,
 	"inbox.accept":                        auth.RoleOperator,
+	"addon_update.check":                  auth.RoleOperator,
+	"addon_update.install":                auth.RoleOperator,
 	"incidents.clear":                     auth.RoleOperator,
 	"install_mode.disable":                auth.RoleOperator,
 	"install_mode.enable":                 auth.RoleOperator,
