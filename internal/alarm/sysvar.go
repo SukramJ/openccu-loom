@@ -40,10 +40,10 @@ var sysvarIndexByMode = map[hmenum.AlarmMode]int{
 
 const sysvarAlarmIndex = 6
 
-// sysvarMirror maintains the optional CCU sysvar mirror per area:
+// sysvarMirror maintains the optional CCU sysvar mirror per zone:
 // outbound state export on every transition, and inbound intents that
 // are arm-only by default — a sysvar write can never disarm or
-// silence a code-protected area (§13.5; the CCU auth model is far
+// silence a code-protected zone (§13.5; the CCU auth model is far
 // weaker than loom's).
 type sysvarMirror struct {
 	svc *Service
@@ -57,11 +57,11 @@ func newSysvarMirror(svc *Service) *sysvarMirror {
 	return &sysvarMirror{svc: svc, ensured: map[string]bool{}, lastWritten: map[string]int{}}
 }
 
-// mirrorTargets returns the sysvar-mirror outputs of an area.
-func (m *sysvarMirror) mirrorTargets(areaID string) []mirrorTarget {
-	rows, err := m.svc.stores.Outputs.ListByArea(context.Background(), areaID)
+// mirrorTargets returns the sysvar-mirror outputs of an zone.
+func (m *sysvarMirror) mirrorTargets(zoneID string) []mirrorTarget {
+	rows, err := m.svc.stores.Outputs.ListByZone(context.Background(), zoneID)
 	if err != nil {
-		m.svc.log.Error("alarm sysvar mirror: load outputs", "area", areaID, "error", err)
+		m.svc.log.Error("alarm sysvar mirror: load outputs", "zone", zoneID, "error", err)
 		return nil
 	}
 	var out []mirrorTarget
@@ -77,7 +77,7 @@ func (m *sysvarMirror) mirrorTargets(areaID string) []mirrorTarget {
 		out = append(out, mirrorTarget{
 			central:     row.CentralName,
 			name:        cfg.SysvarName,
-			areaID:      areaID,
+			zoneID:      zoneID,
 			allowDisarm: cfg.SysvarAllowDisarm,
 			existing:    cfg.SysvarExisting,
 		})
@@ -88,7 +88,7 @@ func (m *sysvarMirror) mirrorTargets(areaID string) []mirrorTarget {
 type mirrorTarget struct {
 	central     string
 	name        string
-	areaID      string
+	zoneID      string
 	allowDisarm bool
 	// existing marks a pre-existing ALARM-type (bool) variable owned
 	// by the operator: the mirror writes true while triggered and
@@ -104,17 +104,17 @@ type mirrorConfig struct {
 	SysvarExisting    bool   `json:"sysvar_existing"`
 }
 
-// onStateChanged exports the area state to every mirror sysvar. It
+// onStateChanged exports the zone state to every mirror sysvar. It
 // runs from the event sink — detached from any caller context by
 // design.
 //
 //nolint:contextcheck // sink callbacks have no caller ctx; exports run on the service lifetime
 func (m *sysvarMirror) onStateChanged(e hmevent.AlarmStateChangedEvent) {
 	idx := sysvarIndexByMode[e.Mode]
-	if e.To == hmenum.AlarmAreaStateTriggered {
+	if e.To == hmenum.AlarmZoneStateTriggered {
 		idx = sysvarAlarmIndex
 	}
-	for _, t := range m.mirrorTargets(e.AreaID) {
+	for _, t := range m.mirrorTargets(e.ZoneID) {
 		m.export(t, idx)
 	}
 }
@@ -159,25 +159,25 @@ func (m *sysvarMirror) export(t mirrorTarget, idx int) {
 
 // onInbound turns third-party sysvar writes into intents. Arm intents
 // (a higher protection level) are honored; disarm intents are refused
-// unless the area's mirror explicitly opts in — the refusal is
+// unless the zone's mirror explicitly opts in — the refusal is
 // journaled, never silent.
 func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEvent) {
 	idx, ok := sysvarValueIndex(e.NewValue)
 	if !ok {
 		return
 	}
-	// Match the sysvar to a mirror target across areas. Two areas
+	// Match the sysvar to a mirror target across zones. Two zones
 	// mirroring the same sysvar name would make an inbound intent
 	// ambiguous (and stomp each other's echo guard) — refuse loudly
 	// instead of guessing.
 	type match struct {
 		target mirrorTarget
-		snap   engine.AreaSnapshot
+		snap   engine.ZoneSnapshot
 	}
 	var matches []match
-	areas := m.svc.engine.Areas()
-	for i := range areas {
-		snap := areas[i]
+	zones := m.svc.engine.Zones()
+	for i := range zones {
+		snap := zones[i]
 		for _, t := range m.mirrorTargets(snap.ID) {
 			if t.existing {
 				// A bool triggered flag carries no mode — never an
@@ -196,7 +196,7 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 		if _, err := m.svc.journal.Append(context.Background(), engine.JournalEntry{
 			Class: hmenum.AlarmJournalClassFault, Event: "sysvar_intent_ambiguous",
 			Source:  "sysvar",
-			Details: map[string]any{"sysvar": e.Name, "areas": len(matches)},
+			Details: map[string]any{"sysvar": e.Name, "zones": len(matches)},
 		}); err != nil {
 			m.svc.log.Error("alarm sysvar journal append failed", "error", err)
 		}
@@ -215,24 +215,24 @@ func (m *sysvarMirror) onInbound(centralName string, e hmevent.SysvarChangedEven
 }
 
 // applyIntent executes one inbound sysvar intent against the engine.
-func (m *sysvarMirror) applyIntent(t mirrorTarget, snap engine.AreaSnapshot, idx int) {
+func (m *sysvarMirror) applyIntent(t mirrorTarget, snap engine.ZoneSnapshot, idx int) {
 	ctx := context.Background()
 	if idx == 0 {
 		if !t.allowDisarm {
 			// Pinned by contract test: a sysvar write cannot disarm a
-			// protected area by default.
+			// protected zone by default.
 			if _, err := m.svc.journal.Append(ctx, engine.JournalEntry{
-				AreaID: t.areaID, Class: hmenum.AlarmJournalClassFault,
+				ZoneID: t.zoneID, Class: hmenum.AlarmJournalClassFault,
 				Event: "sysvar_disarm_refused", Source: "sysvar",
 			}); err != nil {
 				m.svc.log.Error("alarm sysvar journal append failed", "error", err)
 			}
 			// Re-export the real state so the sysvar cannot lie.
-			m.onStateChanged(hmevent.AlarmStateChangedEvent{AreaID: t.areaID, To: snap.State, Mode: snap.Mode})
+			m.onStateChanged(hmevent.AlarmStateChangedEvent{ZoneID: t.zoneID, To: snap.State, Mode: snap.Mode})
 			return
 		}
-		if err := m.svc.engine.Disarm(ctx, t.areaID, "", "sysvar"); err != nil {
-			m.svc.log.Warn("alarm sysvar disarm failed", "area", t.areaID, "error", err)
+		if err := m.svc.engine.Disarm(ctx, t.zoneID, "", "sysvar"); err != nil {
+			m.svc.log.Warn("alarm sysvar disarm failed", "zone", t.zoneID, "error", err)
 		}
 		return
 	}
@@ -243,9 +243,9 @@ func (m *sysvarMirror) applyIntent(t mirrorTarget, snap engine.AreaSnapshot, idx
 	if mode == "" {
 		return
 	}
-	if _, err := m.svc.engine.Arm(ctx, t.areaID, engine.ArmRequest{Mode: mode, Source: "sysvar"}); err != nil {
+	if _, err := m.svc.engine.Arm(ctx, t.zoneID, engine.ArmRequest{Mode: mode, Source: "sysvar"}); err != nil {
 		if _, jerr := m.svc.journal.Append(ctx, engine.JournalEntry{
-			AreaID: t.areaID, Class: hmenum.AlarmJournalClassFault,
+			ZoneID: t.zoneID, Class: hmenum.AlarmJournalClassFault,
 			Event: "sysvar_arm_failed", Source: "sysvar",
 			Details: map[string]any{"mode": string(mode), "error": err.Error()},
 		}); jerr != nil {

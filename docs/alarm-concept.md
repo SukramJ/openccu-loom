@@ -64,7 +64,7 @@ Today users must choose between:
   cloud, no external dependency. Works with every CCU variant loom supports.
 - **G2 — Perimeter & full protection** (Hüllschutz / Vollschutz) as first-class
   arm modes, extensible to night/vacation/custom modes.
-- **G3 — Loud and silent alarming**, selectable per area and per mode.
+- **G3 — Loud and silent alarming**, selectable per zone and per mode.
 - **G4 — Best-in-class sensor/actor selection UX**: type-aware auto-proposals,
   live state, a mode-assignment matrix, room grouping — better than both the
   HmIP app (no per-sensor flags) and Alarmo (no device awareness).
@@ -73,7 +73,7 @@ Today users must choose between:
   restart, degraded-mode behaviour that is predictable and documented.
 - **G6 — Integration-friendly**: HA MQTT discovery (`alarm_control_panel`),
   REST/WS parity, webhook events, audit trail.
-- **G7 — Multi-CCU**: areas may span centrals; every reference is
+- **G7 — Multi-CCU**: zones may span centrals; every reference is
   `central_name`-scoped (ADR 0002).
 
 ### Non-goals (for the first iteration)
@@ -129,11 +129,11 @@ screaming and nothing can stop it."*
   including restore-driven ones — and never cancels notification outputs.
 - **S4 — Reconciliation adopts before it stops.** On daemon start and on
   every central reconnect, the engine reads the active-state of all known
-  sirens and reconciles **state-aware**: a sounding siren whose area is
+  sirens and reconciles **state-aware**: a sounding siren whose zone is
   armed (or that is targeted by an always-hot link tier or hazard policy)
   is **adopted** as a triggered incident — journaled, notified, kept
   sounding within S1 bounds — because it is evidence of a trigger during
-  the blind window, not an error. Only a siren whose owning area is
+  the blind window, not an error. Only a siren whose owning zone is
   disarmed, with no always-hot link and no declared third-party owner
   (per-siren "shared with CCU programs" flag), is stopped immediately.
 - **S5 — Stop beats everything.** Stop/silence commands use
@@ -150,7 +150,7 @@ screaming and nothing can stop it."*
   strongly-authenticated surface in every failure mode, and the document
   names which (§10.3, §11): operator-session SPA/REST and host-local
   `hmcli` survive code-store failure and PIN-source lockouts. For Tier B
-  areas (§9.2), *engine disarm* and *physical disarm* are distinguished:
+  zones (§9.2), *engine disarm* and *physical disarm* are distinguished:
   when the ARMSTATE mirror write cannot be confirmed, disarm returns a
   partial-success with a loud, persistent "hardware still armed" warning
   instead of pretending completion. A broken configuration must never
@@ -229,9 +229,9 @@ Further characteristics worth mirroring or consciously rejecting:
 
 The strongest DIY prior art and the UX reference for sensor configuration:
 
-- **Areas × modes**: each area is its own panel entity with per-mode exit /
+- **Zones × modes**: each zone is its own panel entity with per-mode exit /
   entry / trigger delays; five modes (`armed_away/home/night/vacation/
-  custom_bypass`); optional master panel spanning areas (all-or-nothing
+  custom_bypass`); optional master panel spanning zones (all-or-nothing
   arming semantics surprised users — loom lets a master arm report partial
   failure instead).
 - **Sensor types as presets**: door / window / motion / tamper /
@@ -259,7 +259,7 @@ The strongest DIY prior art and the UX reference for sensor configuration:
 
 - The classic WebUI offers the "Alarmzone 1" ALARM sysvar and alarm-message
   acknowledgement — a primitive but battle-tested pattern. Loom can
-  optionally **mirror its area state into CCU sysvars** so existing CCU
+  optionally **mirror its zone state into CCU sysvars** so existing CCU
   programs and other CCU consumers interoperate (§13.5).
 - **HmIP-ASIR / ASIR-O / ASIR-2** (already modelled by loom's siren custom
   data point): one writable channel (`:3`,
@@ -313,13 +313,13 @@ with per-user ordering; geofencing as *reminders*, not silent auto-arm.
 
 | Term | Meaning |
 |---|---|
-| **Area** | An independently armable partition ("Erdgeschoss", "Garage") with its own state machine, sensor set, outputs, and delays. Minimum one; areas may span multiple centrals. |
-| **Arm mode** | A named protection level of an area. Built-in: `perimeter` (Hüllschutz), `full` (Vollschutz). Optional: `night`, `vacation`, `custom`. Each mode selects a sensor subset and its own delays/output policy. |
+| **Zone** | An independently armable partition ("Erdgeschoss", "Garage") with its own state machine, sensor set, outputs, and delays. Minimum one; zones may span multiple centrals. |
+| **Arm mode** | A named protection level of a zone. Built-in: `perimeter` (Hüllschutz), `full` (Vollschutz). Optional: `night`, `vacation`, `custom`. Each mode selects a sensor subset and its own delays/output policy. |
 | **Sensor** | A binary trigger source bound to a data point (`central_name` + `DataPointKey`), e.g. a window contact's `STATE`, a motion detector's `MOTION`, a sabotage flag. Carries a type, a mode matrix, and behaviour flags. |
 | **Output** | An alarm consequence: siren (acoustic/optical), light actuator, chirp emitter, notification target (MQTT/webhook/WS), CCU sysvar mirror. Grouped into *output policies* per mode (loud/silent/…). |
-| **Incident** | One trigger episode of an area: cause, timestamps, output activations, silenced flag, re-trigger counter, acoustic-seconds ledger. The unit that silence/acknowledge act on. |
+| **Incident** | One trigger episode of a zone: cause, timestamps, output activations, silenced flag, re-trigger counter, acoustic-seconds ledger. The unit that silence/acknowledge act on. |
 | **Journal** | The persistent, filterable event log of everything the alarm engine does or observes. |
-| **Master panel** | Optional synthetic panel aggregating all areas (mirrors Alarmo/HA semantics). |
+| **Master panel** | Optional synthetic panel aggregating all zones (mirrors Alarmo/HA semantics). |
 
 Mode-naming mapping (UI is localized, wire names are stable):
 
@@ -350,7 +350,7 @@ alarm engine.
 
 ## 5. Arm-state machine
 
-One instance per area. States follow the HA `alarm_control_panel`
+One instance per zone. States follow the HA `alarm_control_panel`
 vocabulary so every integration maps 1:1:
 
 ```
@@ -480,7 +480,7 @@ Sensor health continuously feeds the **ready-to-arm** computation per mode:
 - stale cyclic report (no update for > device-specific interval) →
   warning ("supervision", Ajax-style),
 - central disconnected (`ConnectivityChangedEvent`) → all its sensors
-  degrade; policy per area (§10.3).
+  degrade; policy per zone (§10.3).
 
 Ready-to-arm state per mode is pushed to the UI and MQTT so dashboards can
 show *why* an arm would fail before the user tries.
@@ -542,6 +542,13 @@ Test mode: every output offers a **test fire** (short duration, reduced
 pattern — optical-only option for neighbours' sake) from the UI, mirroring
 the HmIP "Test-Alarm" button.
 
+Sharing: the same device channel may be enrolled as an output in more
+than one zone. The output manager arbitrates stops per channel: a stop
+from one zone is deferred while any other zone still demands the
+channel, so a shared siren keeps sounding until the **last** alarming
+zone silences it. Demand tracking is in-memory — after a daemon restart
+every stop proceeds (the safe direction, device off).
+
 ---
 
 ## 8. Siren safety: "a siren can always be silenced"
@@ -588,7 +595,7 @@ least convenient:
 
 1. **SPA**: full-screen triggered view with a giant `SILENCE` button
    (no PIN, no confirm — S3). Also on the dashboard tile.
-2. **REST/WS/MQTT**: `silence` command on the area (and a global
+2. **REST/WS/MQTT**: `silence` command on the zone (and a global
    `silence-all`), usable from any automation, wall tablet, or script.
 3. **`hmcli`**: `hmcli alarm silence --all` for shell/SSH emergencies —
    and the documented break-glass path (§11).
@@ -663,7 +670,7 @@ hardware families genuinely differ.
 
 ### 9.2 The concept
 
-Three operating tiers, selectable per area (and mixable):
+Three operating tiers, selectable per zone (and mixable):
 
 - **Tier A — Central logic (default, "ohne Direktverknüpfung").** The
   engine is the single decision point. Full feature set (modes, delays,
@@ -674,7 +681,7 @@ Three operating tiers, selectable per area (and mixable):
   Direktverknüpfung").** For HM-Sec-Sir-WM-class sirens the engine
   *provisions static sensor→siren direct links once* — always with a
   **bounded on-time written into the LINK profile and verified by
-  read-back** (S1) — and then merely mirrors the area's arm state into
+  read-back** (S1) — and then merely mirrors the zone's arm state into
   the siren's `ARMSTATE` (`EXTSENS_ARMED` ≈ perimeter, `ALLSENS_ARMED` ≈
   full, `DISARMED`). Result: triggering keeps working with the daemon
   **and** the CCU dead; the engine adds journaling, delays and
@@ -716,14 +723,14 @@ a forum thread.
 | Daemon crash/restart | State restored from SQLite (§10.2); engine-sent sirens bounded per S1, link-fired sirens bounded by their provisioned LINK on-time; reconciliation adopts-or-stops (S4). systemd/container restart policy recommended in docs; the restart-loop breaker (§10.2) prevents restore-driven re-fire loops. |
 | CCU reboot | Readiness-gated reconnect (existing `ccu_readiness` machinery); on reconnect: reconcile siren states (adopt-before-stop, S4), re-evaluate sensor states (a window opened during the gap is detected by value refresh), journal the blind window. |
 | Single sensor lost while armed | Per-sensor `trigger_when_unavailable` or warn; health badge; journal. |
-| Whole central lost while armed | Area policy: `alert` (default — loud notification, stay armed with degraded coverage shown) or `trigger` (paranoid) — never silent. Tier B areas additionally surface the physical-disarm limitation (§9.2). |
+| Whole central lost while armed | Zone policy: `alert` (default — loud notification, stay armed with degraded coverage shown) or `trigger` (paranoid) — never silent. Tier B zones additionally surface the physical-disarm limitation (§9.2). |
 | MQTT broker down | Alarm logic unaffected (engine is domain-core, not MQTT-dependent); events buffered per existing MQTT reconnect semantics; WS/REST unaffected. |
 | Clock jumps (NTP, RTC-less hosts) | Timers persist a redundant tuple (§5); restores that detect an implausible clock never auto-escalate (§10.2). |
 | Radio duty-cycle exhaustion | Stop > trigger > chirp arbitration inside the engine's queue (S5); chirps degrade first; DUTY_CYCLE surfaces as health warning while armed. |
 
 ### 10.2 State persistence & restart semantics
 
-Persisted continuously (SQLite): area state, active mode, bypass list,
+Persisted continuously (SQLite): zone state, active mode, bypass list,
 the active **incident** (trigger cause/time, **silenced flag, re-trigger
 cycle counter, cumulative acoustic-seconds ledger, trigger-time
 deadline**), timer tuples (wall deadline + remaining duration +
@@ -772,7 +779,7 @@ Restore policy on boot (given a plausible clock):
 - Disarm/silence work in every state, from every surface (S3/S6), and are
   role-gated but never state-gated. Degradation tiers for code-store
   failure and lockouts are specified in §11.
-- **Maintenance mode** per area: suspends evaluation without deleting
+- **Maintenance mode** per zone: suspends evaluation without deleting
   configuration (Ajax-style deactivation) — for renovations, battery swap
   sessions, sensor repairs. Journaled, visually loud in the UI.
 - Every automation input (schedules, presence hints, MQTT commands) can be
@@ -788,9 +795,9 @@ Restore policy on boot (given a plausible clock):
   stored as salted argon2id hashes; never logged, never round-tripped
   (masked like `cfg:"secret"` values).
 - Per code: display name, PIN, permissions (`arm`, `disarm`,
-  `silence-without-code` override), area restriction, optional validity
+  `silence-without-code` override), zone restriction, optional validity
   window (guest codes), enabled flag.
-- **Policy toggles** per area: code required for arming (default off),
+- **Policy toggles** per zone: code required for arming (default off),
   code required for disarming (default on when codes exist), code required
   for silence (default **off** — S3; configurable per surface, §16).
 - **Duress code** (optional, off by default): disarms normally in the UI
@@ -807,7 +814,7 @@ Restore policy on boot (given a plausible clock):
   as ordinary VALUES data points, read straight from the live model;
   virtual remote channels are excluded. The codes editor's guided
   builder assembles the binding document from a key picker plus
-  trigger/action/area selects; raw JSON remains the expert fallback and
+  trigger/action/zone selects; raw JSON remains the expert fallback and
   the only path for virtual remote channels. Security keyfobs
   (HmIP-KRCA and peers) sort first in the picker with an "alarm keyfob"
   badge.
@@ -843,7 +850,7 @@ and dark-mode tokens.
 
 ### 12.1 Overview (the panel)
 
-One card per area + optional master card:
+One card per zone + optional master card:
 
 ```
 ┌─ Erdgeschoss ────────────────────────────────────────────┐
@@ -929,10 +936,23 @@ excellent UX and visual clarity. Design:
 
 ### 12.3 Setup wizard
 
-First-run guided flow: ① create areas → ② review auto-proposed sensors
-(room by room) → ③ pick outputs & loud/silent per mode → ④ delays + chirps
-→ ⑤ codes/users → ⑥ walk test → done. Each step is skippable; the wizard
-is re-runnable per area.
+First-run guided flow: ① name the zone → ② select sensors inline
+(security-device candidates with search + show-all toggle) → ③ select
+outputs inline (from the output-candidate list, with the same search box)
+→ ④ delays per mode
+(trigger time capped at the engine's 600 s ceiling) → ⑤ codes pointer
+(managed on the Codes tab once the zone exists) → ⑥ summary + finish.
+Both candidate lists (② sensors, ③ outputs) additionally offer a room
+filter, a function ("Gewerk") filter, and a name/room/model sort — each
+row shows the device's model label and its room/function assignment so
+the operator can tell candidates apart without leaving the wizard.
+Finish applies everything against the API in order (create zone →
+sensors → outputs); a partial failure keeps the created zone id so a
+retry updates instead of duplicating. Each step is skippable (skip
+clears that step's collected data); wizard progress lives in a store
+and survives navigating away and back. Chirp fine-tuning, per-mode
+loud/silent grouping, and the walk test stay on their dedicated tabs
+after finish.
 
 ### 12.4 Walk test
 
@@ -943,7 +963,7 @@ stand out. Ends with a journal report.
 
 ### 12.5 Journal & health
 
-- Filterable journal (per area, event class: arm/disarm/trigger/bypass/
+- Filterable journal (per zone, event class: arm/disarm/trigger/bypass/
   fault/test, time range, user) with CSV export.
 - **Alarm-health panel**: sirens reachable, last successful siren test,
   sensor supervision status, duty-cycle headroom, pending warnings, silence
@@ -956,24 +976,24 @@ stand out. Ends with a journal report.
 
 ### 13.1 REST (`assets/openapi.yaml`, APIVersion bump)
 
-CRUD + control, all `central_name`-agnostic (areas are daemon-level).
+CRUD + control, all `central_name`-agnostic (zones are daemon-level).
 The namespace is `/api/v1/alarm/…` — distinct from the existing CCU
 alarm-message surface (`/api/v1/alarm-messages`), see the naming note in
 §4:
 
 ```
-GET/POST/PUT/DELETE  /api/v1/alarm/areas[/{id}]
-GET/PUT              /api/v1/alarm/areas/{id}/sensors
-GET/PUT              /api/v1/alarm/areas/{id}/outputs
+GET/POST/PUT/DELETE  /api/v1/alarm/zones[/{id}]
+GET/PUT              /api/v1/alarm/zones/{id}/sensors
+GET/PUT              /api/v1/alarm/zones/{id}/outputs
 GET                  /api/v1/alarm/output-candidates      (channels per device-backed class; APIVersion 2.25.0)
 GET                  /api/v1/alarm/remote-key-candidates  (physical remote/wall-button key channels; APIVersion 2.25.0)
-POST                 /api/v1/alarm/areas/{id}/arm        {mode, code?, force?, skip_delay?, bypass?[]}
-POST                 /api/v1/alarm/areas/{id}/disarm     {code?}
-POST                 /api/v1/alarm/areas/{id}/silence
+POST                 /api/v1/alarm/zones/{id}/arm        {mode, code?, force?, skip_delay?, bypass?[]}
+POST                 /api/v1/alarm/zones/{id}/disarm     {code?}
+POST                 /api/v1/alarm/zones/{id}/silence
 POST                 /api/v1/alarm/silence-all
-GET                  /api/v1/alarm/areas/{id}/readiness   (per-mode, with blocker list)
-GET                  /api/v1/alarm/journal?area=&class=&from=&to=
-POST                 /api/v1/alarm/areas/{id}/walktest/…  (start/stop/status)
+GET                  /api/v1/alarm/zones/{id}/readiness   (per-mode, with blocker list)
+GET                  /api/v1/alarm/journal?zone=&class=&from=&to=
+POST                 /api/v1/alarm/zones/{id}/walktest/…  (start/stop/status)
 GET/POST/PUT/DELETE  /api/v1/alarm/codes[/{id}]
 POST                 /api/v1/alarm/outputs/{id}/test
 ```
@@ -989,21 +1009,21 @@ broadcasts: `alarm.state_changed`, `alarm.countdown` (tick),
 
 ### 13.3 MQTT (HA discovery + raw plane)
 
-- New discovery component **`alarm_control_panel`** per area (+ master):
+- New discovery component **`alarm_control_panel`** per zone (+ master):
   state topic with HA state vocabulary, command topic
   (`ARM_HOME`/`ARM_AWAY`/`ARM_NIGHT`/`ARM_VACATION`/`ARM_CUSTOM_BYPASS`/
   `DISARM` + JSON form with `code`), `code_arm_required`/
-  `code_disarm_required` reflecting area policy. Discovery names come from
+  `code_disarm_required` reflecting zone policy. Discovery names come from
   the i18n catalogues like every other discovery entity.
 - Event topic (JSON, Alarmo-compatible spirit): `TRIGGER`,
   `FAILED_TO_ARM` (+ blocking sensors), `INVALID_CODE`, `SILENCED`,
-  `DURESS`, with `area`, `changed_by`, `open_sensors`, `delay` fields.
+  `DURESS`, with `zone`, `changed_by`, `open_sensors`, `delay` fields.
   `NOTIFICATION` (shipped 0.43.1, APIVersion 2.26.0) extends this
   vocabulary: one entry per enrolled notification output at fire time,
   carrying an `output` field (the output's name, or its id when
   unnamed) — see `docs/mqtt-topic-schema.md`.
-- Raw command plane: `<base>/alarm/<area>/set`. Note this is a
-  **deliberate extension** of the topic schema: areas are daemon-level,
+- Raw command plane: `<base>/alarm/<zone>/set`. Note this is a
+  **deliberate extension** of the topic schema: zones are daemon-level,
   so the topic omits the `<central>` segment that every existing command
   topic carries — precedented only by the read-only `<base>/bridge/*`
   topics. `docs/mqtt-topic-schema.md` (and ADR 0011) get an amendment
@@ -1020,7 +1040,7 @@ detail payload, gated per output by its own `notify_webhook` toggle.
 
 ### 13.5 CCU sysvar mirror (optional)
 
-Per area, the engine can maintain a CCU system variable so existing CCU
+Per zone, the engine can maintain a CCU system variable so existing CCU
 programs, other CCU frontends, and legacy logic interoperate. Shipped
 0.43.1: the output's add dialog no longer asks for a device — it asks
 for the central and the variable target, which comes in two kinds:
@@ -1032,7 +1052,7 @@ for the central and the variable target, which comes in two kinds:
   which left the enrollment a silent no-op).
 - **Existing operator-owned ALARM-type variable** — a pre-existing
   bool sysvar the operator already created. The mirror writes `true`
-  while the area is `triggered` and `false` otherwise, and never
+  while the zone is `triggered` and `false` otherwise, and never
   creates or retypes the variable. Because a bool carries no mode, this
   target accepts **no inbound intents** at all — `sysvar_allow_disarm`
   does not apply to it, only to the managed value-list variant.
@@ -1047,13 +1067,13 @@ PIN and the CCU's auth model is far weaker than loom's:
   mirror is enabled.
 - **Inbound (intents)** — applies only to the managed value-list
   variant (the existing-variable target takes no inbound intents at
-  all, above); per-area policy, default **arm-only**: a third-party
+  all, above); per-zone policy, default **arm-only**: a third-party
   sysvar write may arm (escalate) but never disarm or
-  silence. Disarm-via-sysvar can only be enabled for areas whose
+  silence. Disarm-via-sysvar can only be enabled for zones whose
   operator has explicitly disabled the disarm-code requirement *and*
   acknowledged a warning that anything able to write a ReGa sysvar
   (CCU WebUI, CCU programs, LAN XML-RPC clients) could then disarm the
-  alarm. "A sysvar write cannot disarm a code-protected area" is pinned
+  alarm. "A sysvar write cannot disarm a code-protected zone" is pinned
   by a contract test (§17).
 
 ---
@@ -1064,7 +1084,7 @@ Hexagonal placement — the engine is domain core, adapters stay thin:
 
 ```
 internal/alarm/
-├── engine/        — per-area state machines, readiness, incidents,
+├── engine/        — per-zone state machines, readiness, incidents,
 │                    timers (clock.Clock)
 ├── outputs/       — output drivers (siren, light, chirp, sysvar, notify)
 ├── codes/         — domain facade: hashing, rate limiting, lockout
@@ -1079,13 +1099,13 @@ internal/alarm/
 - **Outputs** reuse the siren CDP, generic switch DPs, and the existing
   command path (collector, priorities, circuit breaker) — no new transport
   code.
-- **Persistence**: new goose migration (`alarm_areas`, `alarm_sensors`,
+- **Persistence**: new goose migration (`alarm_zones`, `alarm_sensors`,
   `alarm_outputs`, `alarm_codes`, `alarm_state`, `alarm_incidents`,
   `alarm_journal`). Per repo convention the SQL access structs live under
   `internal/store/sqlite/` (following the incident-store pattern);
   `internal/alarm/{codes,journal}` are domain-level facades over those
   stores — the same split `configstore` uses over `config_sections`.
-- **Configuration split**: relational alarm data (areas/sensors/outputs/
+- **Configuration split**: relational alarm data (zones/sensors/outputs/
   codes) is first-class domain data managed via REST/UI — *not* config-file
   material. Global engine settings (enabled, defaults, journal retention,
   MQTT exposure) form a new config section; every `cfg:` leaf ships
@@ -1109,7 +1129,7 @@ internal/alarm/
 
 | # | Feature | Phase | Notes |
 |---|---|---|---|
-| 1 | Areas with perimeter/full modes, exit/entry delays, ready-to-arm, force/bypass | **MVP** | core |
+| 1 | Zones with perimeter/full modes, exit/entry delays, ready-to-arm, force/bypass | **MVP** | core |
 | 2 | Loud/silent output policies, indoor/outdoor split, alarm light, plug-in sirens via `ON_TIME`-bounded switch actuators | **MVP** | §7 |
 | 3 | Siren safety invariants S1–S7, incident ledger, reconciliation | **MVP** | non-negotiable |
 | 4 | Sensor picker UI + presets + matrix + live badges | **MVP** | §12.2 |
@@ -1151,7 +1171,7 @@ internal/alarm/
 - **Threat: compromised MQTT broker / rogue publisher.** Honest
   assessment: since `silence` is deliberately ungated (S3), an automated
   adversary on the command plane *can* suppress loud alarming by looping
-  silence — what it cannot do is disarm a code-protected area, recall
+  silence — what it cannot do is disarm a code-protected zone, recall
   events already published, or touch notification/journal delivery
   (silence never cancels those). Mitigations: **silence-storm detection**
   (N silences within one incident → journal escalation + health alert +
@@ -1177,10 +1197,10 @@ internal/alarm/
     rejects any unbounded path;
   - no engine-issued acoustic activation after silence within the same
     incident — including across a simulated restart (S3 persistence);
-  - reconciliation adopts a sounding siren of an armed area instead of
+  - reconciliation adopts a sounding siren of an armed zone instead of
     stopping it (S4 adopt-before-stop), and stops one of a disarmed,
     link-free, unshared siren;
-  - a sysvar write cannot disarm a code-protected area (§13.5);
+  - a sysvar write cannot disarm a code-protected zone (§13.5);
   - silence/disarm command paths never require confirmation state (S3/S6);
   - alarm MQTT discovery payloads validate against the HA
     `alarm_control_panel` schema;
@@ -1219,9 +1239,9 @@ internal/alarm/
 4. WKP integration depth: is `CODE_ID` reliably delivered via XML-RPC
    events on all firmware, and how should on-device PIN slots relate to
    engine codes (mirror vs independent)?
-5. Should the master panel arm areas best-effort (partial success with
+5. Should the master panel arm zones best-effort (partial success with
    report) or all-or-nothing (Alarmo)? Current lean: best-effort with
-   explicit per-area result — matches G5.
+   explicit per-zone result — matches G5.
 6. Journal vs incident store: reuse `internal/store/sqlite/incidents.go`
    with a new incident class, or a dedicated `alarm_journal` table?
    Current lean: dedicated table (different query patterns, retention, and
@@ -1285,8 +1305,8 @@ is assumed.
 
 ### 19.3 Suggested MVP slicing (one reviewable PR each)
 
-1. **Store + engine core** — goose migration, area/sensor/output/
-   incident stores, per-area state machine on `clock.Clock`, the full
+1. **Store + engine core** — goose migration, zone/sensor/output/
+   incident stores, per-zone state machine on `clock.Clock`, the full
    §10.2 restore table as unit tests. No north surface yet.
 2. **Output drivers + siren safety** — siren/switch/smoke drivers, the
    S1/S2/S4/S5 behaviours, and the §17 contract tests. Gate: every

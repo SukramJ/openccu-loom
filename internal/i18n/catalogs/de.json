@@ -143,6 +143,7 @@
   "discovery.connection_latency": "Verbindungslatenz",
   "discovery.last_event_age": "Alter letztes Ereignis",
   "discovery.system_update": "Systemaktualisierung",
+  "discovery.addon_update": "Add-on-Aktualisierung",
   "discovery.install_mode_duration": "Anlernmodus {iface} Dauer",
   "discovery.install_mode_activate": "Anlernmodus {iface} aktivieren",
   "discovery.connectivity": "Konnektivität {iface}",

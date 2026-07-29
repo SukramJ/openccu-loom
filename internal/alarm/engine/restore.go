@@ -14,8 +14,8 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// Start loads the configured areas and sensors, bumps the boot
-// counter, and restores every persisted area state per the restart
+// Start loads the configured zones and sensors, bumps the boot
+// counter, and restores every persisted zone state per the restart
 // table of docs/alarm-concept.md §10.2. It is not idempotent — call
 // once per engine lifetime.
 func (e *Engine) Start(ctx context.Context) error {
@@ -41,18 +41,18 @@ func (e *Engine) Start(ctx context.Context) error {
 	if err := e.loadConfig(ctx); err != nil {
 		return err
 	}
-	for _, id := range e.sortedAreaIDs() {
-		a := e.areas[id]
+	for _, id := range e.sortedZoneIDs() {
+		a := e.zones[id]
 		row, ok, err := e.stateStore.Get(ctx, id)
 		if err != nil {
 			// A partial start must not leave live countdowns behind:
-			// earlier areas may already have scheduled timers that
+			// earlier zones may already have scheduled timers that
 			// would fire on an engine nobody owns.
 			e.teardownLocked()
 			return fmt.Errorf("engine: load persisted state for %q: %w", id, err)
 		}
 		if ok {
-			e.restoreArea(ctx, a, row)
+			e.restoreZone(ctx, a, row)
 		} else {
 			e.persist(ctx, a)
 		}
@@ -63,50 +63,50 @@ func (e *Engine) Start(ctx context.Context) error {
 }
 
 // teardownLocked cancels every scheduled timer and drops the runtime
-// areas after a failed Start. The caller holds the lock.
+// zones after a failed Start. The caller holds the lock.
 func (e *Engine) teardownLocked() {
-	for _, a := range e.areas {
+	for _, a := range e.zones {
 		a.cancelTimers()
 	}
-	e.areas = map[string]*area{}
+	e.zones = map[string]*zone{}
 	e.sensorIndex = map[string]string{}
 }
 
-// loadConfig builds the runtime areas from the stores. The caller
+// loadConfig builds the runtime zones from the stores. The caller
 // holds the lock.
 func (e *Engine) loadConfig(ctx context.Context) error {
-	areaRows, err := e.areasStore.GetAll(ctx)
+	zoneRows, err := e.zonesStore.GetAll(ctx)
 	if err != nil {
-		return fmt.Errorf("engine: load areas: %w", err)
+		return fmt.Errorf("engine: load zones: %w", err)
 	}
 	sensorRows, err := e.sensorsStore.GetAll(ctx)
 	if err != nil {
 		return fmt.Errorf("engine: load sensors: %w", err)
 	}
-	e.areas = map[string]*area{}
+	e.zones = map[string]*zone{}
 	e.sensorIndex = map[string]string{}
-	for i := range areaRows {
-		row := &areaRows[i]
-		cfg, err := ParseAreaConfig(row.ConfigJSON)
+	for i := range zoneRows {
+		row := &zoneRows[i]
+		cfg, err := ParseZoneConfig(row.ConfigJSON)
 		if err != nil {
-			// One poisoned row must not brick every other area: skip
-			// it loudly (S7) — the area simply does not exist until
+			// One poisoned row must not brick every other zone: skip
+			// it loudly (S7) — the zone simply does not exist until
 			// its configuration is repaired.
-			e.log.Error("alarm area config unparseable — area skipped", "area", row.ID, "error", err)
+			e.log.Error("alarm zone config unparseable — zone skipped", "zone", row.ID, "error", err)
 			if _, jerr := e.journal.Append(ctx, JournalEntry{
-				AreaID: row.ID, Class: hmenum.AlarmJournalClassFault,
-				Event: "area_config_unparseable", Details: map[string]any{"error": err.Error()},
+				ZoneID: row.ID, Class: hmenum.AlarmJournalClassFault,
+				Event: "zone_config_unparseable", Details: map[string]any{"error": err.Error()},
 			}); jerr != nil {
 				e.log.Error("alarm journal append failed", "error", jerr)
 			}
 			continue
 		}
-		e.areas[row.ID] = &area{
+		e.zones[row.ID] = &zone{
 			id:        row.ID,
 			name:      row.Name,
 			cfg:       cfg,
 			sensors:   map[string]*sensorState{},
-			state:     hmenum.AlarmAreaStateDisarmed,
+			state:     hmenum.AlarmZoneStateDisarmed,
 			mode:      hmenum.AlarmModeDisarmed,
 			bypassed:  map[string]bool{},
 			openAtArm: map[string]bool{},
@@ -114,18 +114,18 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 	}
 	for i := range sensorRows {
 		row := &sensorRows[i]
-		a, ok := e.areas[row.AreaID]
+		a, ok := e.zones[row.ZoneID]
 		if !ok {
-			// A sensor of a deleted area is a configuration leftover;
+			// A sensor of a deleted zone is a configuration leftover;
 			// visible in logs, not fatal.
-			e.log.Warn("alarm sensor references unknown area", "sensor", row.ID, "area", row.AreaID)
+			e.log.Warn("alarm sensor references unknown zone", "sensor", row.ID, "zone", row.ZoneID)
 			continue
 		}
 		cfg, err := ParseSensorConfig(row.ConfigJSON)
 		if err != nil {
 			e.log.Error("alarm sensor config unparseable — sensor skipped", "sensor", row.ID, "error", err)
 			if _, jerr := e.journal.Append(ctx, JournalEntry{
-				AreaID: row.AreaID, Class: hmenum.AlarmJournalClassFault,
+				ZoneID: row.ZoneID, Class: hmenum.AlarmJournalClassFault,
 				Event: "sensor_config_unparseable", Details: map[string]any{"sensor_id": row.ID, "error": err.Error()},
 			}); jerr != nil {
 				e.log.Error("alarm journal append failed", "error", jerr)
@@ -133,14 +133,14 @@ func (e *Engine) loadConfig(ctx context.Context) error {
 			continue
 		}
 		a.sensors[row.ID] = &sensorState{row: *row, cfg: cfg, available: true}
-		e.sensorIndex[row.ID] = row.AreaID
+		e.sensorIndex[row.ID] = row.ZoneID
 	}
 	return nil
 }
 
-// restoreArea applies the §10.2 restore table to one persisted row.
+// restoreZone applies the §10.2 restore table to one persisted row.
 // The caller holds the lock.
-func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.AlarmStateRow) {
+func (e *Engine) restoreZone(ctx context.Context, a *zone, row sqlitestore.AlarmStateRow) {
 	now := e.clk.Now()
 	nowMS := unixMS(now)
 	plausible := clockPlausible(nowMS, row.UpdatedAtMS)
@@ -176,10 +176,10 @@ func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.Alarm
 	// when the row says triggered, close it otherwise — orphans must
 	// not accumulate.
 	if a.incident == nil {
-		if orphan, ok, err := e.incidents.GetOpenByArea(ctx, a.id); err != nil {
+		if orphan, ok, err := e.incidents.GetOpenByZone(ctx, a.id); err != nil {
 			e.journalFault(ctx, a, "incident_load_failed", err, 0)
 		} else if ok {
-			if row.State == hmenum.AlarmAreaStateTriggered {
+			if row.State == hmenum.AlarmZoneStateTriggered {
 				a.incident = &orphan
 				e.journalEntry(ctx, a, JournalEntry{
 					Class: hmenum.AlarmJournalClassFault, Event: "orphan_incident_adopted",
@@ -211,8 +211,8 @@ func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.Alarm
 	timers := decodeTimers(row.TimersJSON)
 
 	switch row.State {
-	case hmenum.AlarmAreaStateDisarmed, "":
-		a.state = hmenum.AlarmAreaStateDisarmed
+	case hmenum.AlarmZoneStateDisarmed, "":
+		a.state = hmenum.AlarmZoneStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
 		a.preTriggerState = ""
 		a.preTriggerMode = ""
@@ -220,25 +220,25 @@ func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.Alarm
 		e.restoreAutoRearm(ctx, a, timers, plausible, now)
 		e.persist(ctx, a)
 
-	case hmenum.AlarmAreaStateArmed:
-		a.state = hmenum.AlarmAreaStateArmed
+	case hmenum.AlarmZoneStateArmed:
+		a.state = hmenum.AlarmZoneStateArmed
 		e.persist(ctx, a)
 		e.reEvaluateAfterRestore(ctx, a)
 
-	case hmenum.AlarmAreaStateArming:
+	case hmenum.AlarmZoneStateArming:
 		e.restoreArming(ctx, a, timers, plausible, now)
 
-	case hmenum.AlarmAreaStatePending:
+	case hmenum.AlarmZoneStatePending:
 		e.restorePending(ctx, a, timers, plausible, now)
 
-	case hmenum.AlarmAreaStateTriggered:
+	case hmenum.AlarmZoneStateTriggered:
 		e.restoreTriggered(ctx, a, timers, plausible, now)
 
 	default:
 		// Unknown persisted state (downgrade?): fail safe to armed
 		// visibility rather than silently disarming.
 		e.journalFault(ctx, a, "unknown_persisted_state", nil, 0)
-		a.state = hmenum.AlarmAreaStateDisarmed
+		a.state = hmenum.AlarmZoneStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
 		e.persist(ctx, a)
 	}
@@ -248,8 +248,8 @@ func (e *Engine) restoreArea(ctx context.Context, a *area, row sqlitestore.Alarm
 // an implausible clock the arm is never auto-completed off wall math;
 // the countdown resumes with the persisted remaining duration, which
 // is relative and therefore trustworthy.
-func (e *Engine) restoreArming(ctx context.Context, a *area, timers []persistedTimer, plausible bool, now time.Time) {
-	a.state = hmenum.AlarmAreaStateArming
+func (e *Engine) restoreArming(ctx context.Context, a *zone, timers []persistedTimer, plausible bool, now time.Time) {
+	a.state = hmenum.AlarmZoneStateArming
 	t := findTimer(timers, timerKindExit)
 	mcfg := a.cfg.Modes[a.mode]
 	fullExit := time.Duration(mcfg.ExitDelaySeconds) * time.Second
@@ -295,13 +295,13 @@ func (e *Engine) restoreArming(ctx context.Context, a *area, timers []persistedT
 			}
 		}
 		if len(blocking) == 0 {
-			e.completeArm(ctx, a, hmenum.AlarmAreaStateArming, "engine:restore", "engine")
+			e.completeArm(ctx, a, hmenum.AlarmZoneStateArming, "engine:restore", "engine")
 			e.reEvaluateAfterRestore(ctx, a)
 			return
 		}
 		from := a.state
 		a.cancelTimers()
-		a.state = hmenum.AlarmAreaStateDisarmed
+		a.state = hmenum.AlarmZoneStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
 		a.bypassed = map[string]bool{}
 		e.persist(ctx, a)
@@ -326,11 +326,11 @@ func (e *Engine) restoreArming(ctx context.Context, a *area, timers []persistedT
 // restorePending resumes or escalates an interrupted entry delay. An
 // elapsed deadline escalates to triggered — better a late alarm than
 // a silently swallowed one. Under an implausible clock the engine
-// never auto-escalates: the area restores to armed with a journal
+// never auto-escalates: the zone restores to armed with a journal
 // warning (the conservative pre-timer state).
-func (e *Engine) restorePending(ctx context.Context, a *area, timers []persistedTimer, plausible bool, now time.Time) {
+func (e *Engine) restorePending(ctx context.Context, a *zone, timers []persistedTimer, plausible bool, now time.Time) {
 	if !plausible {
-		a.state = hmenum.AlarmAreaStateArmed
+		a.state = hmenum.AlarmZoneStateArmed
 		a.pendingCause = ""
 		e.persist(ctx, a)
 		e.journalEntry(ctx, a, JournalEntry{
@@ -345,14 +345,14 @@ func (e *Engine) restorePending(ctx context.Context, a *area, timers []persisted
 		if s, ok := a.sensors[a.pendingCause]; ok {
 			cause.SensorName = s.row.Name
 		}
-		a.state = hmenum.AlarmAreaStateArmed // trigger() records the transition from an armed-side state
+		a.state = hmenum.AlarmZoneStateArmed // trigger() records the transition from an armed-side state
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassTrigger, Event: "pending_elapsed_while_down",
 		})
 		e.trigger(ctx, a, cause, FireOptions{Restored: true})
 		return
 	}
-	a.state = hmenum.AlarmAreaStatePending
+	a.state = hmenum.AlarmZoneStatePending
 	e.scheduleStateTimer(a, timerKindEntry, time.UnixMilli(t.DeadlineMS).Sub(now))
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
@@ -366,8 +366,8 @@ func (e *Engine) restorePending(ctx context.Context, a *area, timers []persisted
 // elapsed while down, and keep a silenced incident silent (S3
 // persistence). Under an implausible clock the engine stays triggered
 // but never re-fires off untrusted wall math.
-func (e *Engine) restoreTriggered(ctx context.Context, a *area, timers []persistedTimer, plausible bool, now time.Time) {
-	a.state = hmenum.AlarmAreaStateTriggered
+func (e *Engine) restoreTriggered(ctx context.Context, a *zone, timers []persistedTimer, plausible bool, now time.Time) {
+	a.state = hmenum.AlarmZoneStateTriggered
 	inc := a.incident
 	if inc == nil {
 		// The incident row is gone (corruption): the triggered state
@@ -481,7 +481,7 @@ func (e *Engine) restoreTriggered(ctx context.Context, a *area, timers []persist
 
 // finishTriggeredOnRestore executes the post-trigger policy during a
 // restore without firing outputs.
-func (e *Engine) finishTriggeredOnRestore(ctx context.Context, a *area, closeReason string) {
+func (e *Engine) finishTriggeredOnRestore(ctx context.Context, a *zone, closeReason string) {
 	from := a.state
 	incID := int64(0)
 	if a.incident != nil {
@@ -492,7 +492,7 @@ func (e *Engine) finishTriggeredOnRestore(ctx context.Context, a *area, closeRea
 	}
 	e.closeIncident(ctx, a, closeReason)
 	if a.cfg.PostTrigger == hmenum.AlarmPostTriggerDisarm {
-		a.state = hmenum.AlarmAreaStateDisarmed
+		a.state = hmenum.AlarmZoneStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
 		a.bypassed = map[string]bool{}
 		a.openAtArm = map[string]bool{}
@@ -505,11 +505,11 @@ func (e *Engine) finishTriggeredOnRestore(ctx context.Context, a *area, closeRea
 }
 
 // restoreAutoRearm resumes an interrupted auto-rearm quiet period on a
-// disarmed area: reschedule the remaining wait, or attempt the rearm
+// disarmed zone: reschedule the remaining wait, or attempt the rearm
 // when the quiet period elapsed while the daemon was down. Under an
 // implausible clock it never fires off wall math and resumes the
 // persisted remaining duration. The caller holds the lock.
-func (e *Engine) restoreAutoRearm(ctx context.Context, a *area, timers []persistedTimer, plausible bool, now time.Time) {
+func (e *Engine) restoreAutoRearm(ctx context.Context, a *zone, timers []persistedTimer, plausible bool, now time.Time) {
 	if !a.autoRearmMode.Armed() {
 		a.autoRearmMode = ""
 		return
@@ -547,7 +547,7 @@ func (e *Engine) restoreAutoRearm(ctx context.Context, a *area, timers []persist
 // refreshSensorValues pulls fresh activation values into the sensor
 // states without routing activations. Restore paths that make
 // decisions off sensor state (readiness re-checks) call this first.
-func (e *Engine) refreshSensorValues(ctx context.Context, a *area) {
+func (e *Engine) refreshSensorValues(ctx context.Context, a *zone) {
 	if e.reader == nil {
 		return
 	}
@@ -564,8 +564,8 @@ func (e *Engine) refreshSensorValues(ctx context.Context, a *area) {
 // was down becomes a trigger or a pending, per the sensor's flags
 // (§10.2). Without a SensorReader the engine keeps the persisted view
 // and relies on live events.
-func (e *Engine) reEvaluateAfterRestore(ctx context.Context, a *area) {
-	if e.reader == nil || a.state != hmenum.AlarmAreaStateArmed {
+func (e *Engine) reEvaluateAfterRestore(ctx context.Context, a *zone) {
+	if e.reader == nil || a.state != hmenum.AlarmZoneStateArmed {
 		return
 	}
 	for _, id := range sortedSensorIDs(a) {
@@ -586,7 +586,7 @@ func (e *Engine) reEvaluateAfterRestore(ctx context.Context, a *area) {
 		if !s.cfg.InMode(a.mode) || a.bypassed[id] || a.openAtArm[id] {
 			continue
 		}
-		if a.state != hmenum.AlarmAreaStateArmed {
+		if a.state != hmenum.AlarmZoneStateArmed {
 			// A previous iteration already escalated; further open
 			// sensors are journaled by the live path semantics.
 			continue
@@ -611,8 +611,8 @@ func findTimer(timers []persistedTimer, kind string) *persistedTimer {
 	return nil
 }
 
-// sortedSensorIDs returns the area's sensor IDs in stable order.
-func sortedSensorIDs(a *area) []string {
+// sortedSensorIDs returns the zone's sensor IDs in stable order.
+func sortedSensorIDs(a *zone) []string {
 	ids := make([]string, 0, len(a.sensors))
 	for id := range a.sensors {
 		ids = append(ids, id)

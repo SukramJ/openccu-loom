@@ -12,7 +12,7 @@ import (
 )
 
 // TestBuildAlarmPanelDiscovery_CodePolicyFlipsREMOTECODE covers the
-// docs/alarm-concept.md §11 discovery flip: whenever an area's code
+// docs/alarm-concept.md §11 discovery flip: whenever an zone's code
 // policy requires a code for arm and/or disarm, the panel must
 // advertise code:"REMOTE_CODE" plus the command_template that folds
 // the entered code into the raw command JSON — otherwise HA never
@@ -69,7 +69,7 @@ func TestBuildAlarmPanelDiscovery_CodePolicyFlipsREMOTECODE(t *testing.T) {
 
 // TestBuildAlarmPanelDiscovery_MasterPanelHonorsCodePolicyToo asserts
 // the flip is not special-cased away for the aggregate master panel —
-// it reads the same two booleans as any area panel.
+// it reads the same two booleans as any zone panel.
 func TestBuildAlarmPanelDiscovery_MasterPanelHonorsCodePolicyToo(t *testing.T) {
 	t.Parallel()
 	item := BuildAlarmPanelDiscovery("gh", "ignored", "Alarm system",
@@ -93,9 +93,9 @@ func TestBuildAlarmPanelDiscovery_MasterPanelHonorsCodePolicyToo(t *testing.T) {
 func boolPtr(b bool) *bool { return &b }
 
 // TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement covers the
-// review-fix regression in [AlarmMQTTPublisher.areaCodePolicy]: the
-// discovery flags advertised for an area must reflect BOTH halves of
-// the effective requirement — the area's engine.CodePolicy AND
+// review-fix regression in [AlarmMQTTPublisher.zoneCodePolicy]: the
+// discovery flags advertised for an zone must reflect BOTH halves of
+// the effective requirement — the zone's engine.CodePolicy AND
 // whether an applicable enabled pin code actually exists
 // (internal/alarm/codes.Facade.HasPINCodes) — never the policy alone.
 // Advertising the policy half without an existing code would leave HA
@@ -109,7 +109,7 @@ func TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement(t *testing.T) {
 	type seedCode struct {
 		id      string
 		enabled bool
-		areas   []string
+		zones   []string
 	}
 	cases := []struct {
 		name          string
@@ -160,7 +160,7 @@ func TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement(t *testing.T) {
 		{
 			name:          "pin_scoped_to_a_different_area_does_not_count",
 			requireDisarm: nil,
-			codes:         []seedCode{{id: "c1", enabled: true, areas: []string{"og"}}},
+			codes:         []seedCode{{id: "c1", enabled: true, zones: []string{"og"}}},
 			wantDisarmReq: false,
 		},
 	}
@@ -171,12 +171,12 @@ func TestAlarmMQTTPublisher_AreaCodePolicyEffectiveRequirement(t *testing.T) {
 			f := newAlarmPublisherFixture(t)
 			cfg := zeroDelayFullMode()
 			cfg.CodePolicy = engine.CodePolicy{RequireArm: tc.requireArm, RequireDisarm: tc.requireDisarm}
-			f.seedArea("eg", "Erdgeschoss", cfg)
+			f.seedZone("eg", "Erdgeschoss", cfg)
 			for _, c := range tc.codes {
-				f.seedPINCode(c.id, "PIN "+c.id, "1234", c.enabled, c.areas)
+				f.seedPINCode(c.id, "PIN "+c.id, "1234", c.enabled, c.zones)
 			}
 
-			armReq, disarmReq := f.pub.areaCodePolicy(context.Background(), "eg")
+			armReq, disarmReq := f.pub.zoneCodePolicy(context.Background(), "eg")
 			if armReq != tc.wantArmReq {
 				t.Errorf("armReq = %v, want %v", armReq, tc.wantArmReq)
 			}

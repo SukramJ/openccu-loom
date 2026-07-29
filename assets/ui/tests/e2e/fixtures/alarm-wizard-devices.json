@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "address": "VEQ0000030",
+      "central": "ccu1",
+      "interface": "HmIP-RF",
+      "interface_id": "ccu1-HmIP-RF",
+      "model": "HmIP-SWDO-I",
+      "model_label": "Door/Window Contact",
+      "name": "Eingangstür",
+      "available": true,
+      "channels_count": 2,
+      "updatable": false,
+      "update_available": false,
+      "master_pushes_config_pending": true,
+      "has_sub_devices": false
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "per_page": 200
+}

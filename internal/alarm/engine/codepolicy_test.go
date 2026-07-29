@@ -24,7 +24,7 @@ import (
 
 // codeValidateCall records one CodeValidator.Validate invocation.
 type codeValidateCall struct {
-	areaID, verb, code, source string
+	zoneID, verb, code, source string
 }
 
 // codeResult is the scripted outcome for one code string.
@@ -48,10 +48,10 @@ func newFakeCodeValidator(results map[string]codeResult) *fakeCodeValidator {
 	return &fakeCodeValidator{results: results}
 }
 
-func (f *fakeCodeValidator) Validate(_ context.Context, areaID, verb, code, source string) (identity string, duress bool, err error) {
+func (f *fakeCodeValidator) Validate(_ context.Context, zoneID, verb, code, source string) (identity string, duress bool, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, codeValidateCall{areaID, verb, code, source})
+	f.calls = append(f.calls, codeValidateCall{zoneID, verb, code, source})
 	r, ok := f.results[code]
 	if !ok {
 		return "", false, engine.ErrInvalidCode
@@ -71,7 +71,7 @@ func (f *fakeCodeValidator) callCount() int {
 func (h *harness) startWithValidator(v engine.CodeValidator) {
 	h.t.Helper()
 	eng, err := engine.New(engine.Deps{
-		Clock: h.clk, Scheduler: h.sched, Areas: h.areas, Sensors: h.sensors,
+		Clock: h.clk, Scheduler: h.sched, Zones: h.zones, Sensors: h.sensors,
 		State: h.states, Incidents: h.incidents, Runtime: h.runtime,
 		Outputs: h.outputs, Sink: h.sink, Journal: h.journal, SensorReader: h.reader,
 		Validator: v,
@@ -85,10 +85,10 @@ func (h *harness) startWithValidator(v engine.CodeValidator) {
 	}
 }
 
-// codePolicyAreaConfig builds the standard two-mode test area with an
+// codePolicyZoneConfig builds the standard two-mode test zone with an
 // explicit CodePolicy.
-func codePolicyAreaConfig(reqArm bool, reqDisarm *bool, reqSilence map[string]bool) engine.AreaConfig {
-	cfg := defaultAreaConfig()
+func codePolicyZoneConfig(reqArm bool, reqDisarm *bool, reqSilence map[string]bool) engine.ZoneConfig {
+	cfg := defaultZoneConfig()
 	cfg.CodePolicy = engine.CodePolicy{RequireArm: reqArm, RequireDisarm: reqDisarm, RequireSilence: reqSilence}
 	return cfg
 }
@@ -111,7 +111,7 @@ func mustJournalEntry(t *testing.T, j *fakeJournal, event string) engine.Journal
 
 func TestCodePolicy_DisarmDefaultRequiresACodeWhenOneExists(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea() // zero-value CodePolicy: RequireDisarm defaults "true when codes exist"
+	h.seedStandardZone() // zero-value CodePolicy: RequireDisarm defaults "true when codes exist"
 	v := newFakeCodeValidator(map[string]codeResult{"1234": {identity: "Alice"}})
 	h.startWithValidator(v)
 	h.armFull()
@@ -119,17 +119,17 @@ func TestCodePolicy_DisarmDefaultRequiresACodeWhenOneExists(t *testing.T) {
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", ""); !errors.Is(err, engine.ErrInvalidCode) {
 		t.Fatalf("err = %v, want ErrInvalidCode", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", "1234"); err != nil {
 		t.Fatalf("disarm with a valid code: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 }
 
 func TestCodePolicy_DisarmPermittedWithEmptyCodeWhenNoCodesConfigured(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea() // RequireDisarm defaults true, but no codes exist
+	h.seedStandardZone() // RequireDisarm defaults true, but no codes exist
 	// The validator resolves the "codes exist" half of the effective
 	// disarm rule (§11): an empty code is permitted when there is
 	// nothing to check it against.
@@ -140,7 +140,7 @@ func TestCodePolicy_DisarmPermittedWithEmptyCodeWhenNoCodesConfigured(t *testing
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", ""); err != nil {
 		t.Fatalf("disarm with an empty code and no configured codes: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 }
 
 func TestCodePolicy_ArmOnlyRequiresACodeWhenConfigured(t *testing.T) {
@@ -148,7 +148,7 @@ func TestCodePolicy_ArmOnlyRequiresACodeWhenConfigured(t *testing.T) {
 
 	t.Run("RequireArm off: code-free arm succeeds", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(false, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, boolPtr(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -159,7 +159,7 @@ func TestCodePolicy_ArmOnlyRequiresACodeWhenConfigured(t *testing.T) {
 
 	t.Run("RequireArm on: code-free arm is refused, a valid code succeeds", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -174,7 +174,7 @@ func TestCodePolicy_ArmOnlyRequiresACodeWhenConfigured(t *testing.T) {
 
 func TestCodePolicy_SilenceIsPerSourcePolicy(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(false, boolPtr(false), map[string]bool{"mqtt": true}))
+	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(false, boolPtr(false), map[string]bool{"mqtt": true}))
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	v := newFakeCodeValidator(map[string]codeResult{"1234": {identity: "Alice"}})
 	h.startWithValidator(v)
@@ -193,7 +193,7 @@ func TestCodePolicy_SilenceIsPerSourcePolicy(t *testing.T) {
 
 func TestCodePolicy_OperatorSourceBypassesTheRequirementWithoutConsultingTheValidator(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(true), map[string]bool{"rest-operator": true}))
+	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(true), map[string]bool{"rest-operator": true}))
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	v := newFakeCodeValidator(nil)
 	h.startWithValidator(v)
@@ -204,7 +204,7 @@ func TestCodePolicy_OperatorSourceBypassesTheRequirementWithoutConsultingTheVali
 		t.Fatalf("operator arm without a code: %v", err)
 	}
 	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	v.mu.Lock()
 	v.calls = nil // reset call log: this test only asserts the disarm bypass below
 	v.mu.Unlock()
@@ -219,7 +219,7 @@ func TestCodePolicy_OperatorSourceBypassesTheRequirementWithoutConsultingTheVali
 
 func TestCodePolicy_OperatorSourceWithAWrongCodeStillBypasses(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	v := newFakeCodeValidator(map[string]codeResult{"1234": {identity: "Alice"}})
 	h.startWithValidator(v)
 	h.armFull()
@@ -227,7 +227,7 @@ func TestCodePolicy_OperatorSourceWithAWrongCodeStillBypasses(t *testing.T) {
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "rest-operator", "wrong"); err != nil {
 		t.Fatalf("operator disarm with a wrong code must still succeed: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if n := v.callCount(); n != 1 {
 		t.Fatalf("validator calls = %d, want 1 (a supplied code is still checked, only its failure is swallowed)", n)
 	}
@@ -235,7 +235,7 @@ func TestCodePolicy_OperatorSourceWithAWrongCodeStillBypasses(t *testing.T) {
 
 func TestCodePolicy_ErrInvalidCodeOnANonOperatorSource(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	v := newFakeCodeValidator(map[string]codeResult{"1234": {identity: "Alice"}})
 	h.startWithValidator(v)
 	h.armFull()
@@ -244,12 +244,12 @@ func TestCodePolicy_ErrInvalidCodeOnANonOperatorSource(t *testing.T) {
 	if !errors.Is(err, engine.ErrInvalidCode) {
 		t.Fatalf("err = %v, want ErrInvalidCode", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 }
 
 func TestCodePolicy_DuressCodeActsNormallyAndFiresASilentEvent(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	v := newFakeCodeValidator(map[string]codeResult{"9999": {identity: "Bob", duress: true}})
 	h.startWithValidator(v)
 	h.armFull()
@@ -257,7 +257,7 @@ func TestCodePolicy_DuressCodeActsNormallyAndFiresASilentEvent(t *testing.T) {
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "keypad", "9999"); err != nil {
 		t.Fatalf("duress disarm: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
 	// Visible journal: only the ordinary disarmed entry, attributed to
 	// the duress code's identity — no visible trace of duress.
@@ -277,8 +277,8 @@ func TestCodePolicy_DuressCodeActsNormallyAndFiresASilentEvent(t *testing.T) {
 	for _, ev := range h.sink.events {
 		if de, ok := ev.(hmevent.AlarmDuressEvent); ok {
 			found = true
-			if de.By != "Bob" || de.Verb != "disarm" || de.AreaID != "eg" {
-				t.Fatalf("duress event = %+v, want By=Bob Verb=disarm AreaID=eg", de)
+			if de.By != "Bob" || de.Verb != "disarm" || de.ZoneID != "eg" {
+				t.Fatalf("duress event = %+v, want By=Bob Verb=disarm ZoneID=eg", de)
 			}
 		}
 	}
@@ -290,7 +290,7 @@ func TestCodePolicy_DuressCodeActsNormallyAndFiresASilentEvent(t *testing.T) {
 
 func TestCodePolicy_OperatorSourceDuressCodeStillFiresDuress(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	v := newFakeCodeValidator(map[string]codeResult{"9999": {identity: "Bob", duress: true}})
 	h.startWithValidator(v)
 	h.armFull()
@@ -305,7 +305,7 @@ func TestCodePolicy_OperatorSourceDuressCodeStillFiresDuress(t *testing.T) {
 
 func TestCodePolicy_KeypadAndRemoteSourcesBypassDisarmCodeRequirement(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea() // zero-value CodePolicy: RequireDisarm defaults "true when codes exist"
+	h.seedStandardZone() // zero-value CodePolicy: RequireDisarm defaults "true when codes exist"
 	v := newFakeCodeValidator(nil)
 	h.startWithValidator(v)
 
@@ -313,7 +313,7 @@ func TestCodePolicy_KeypadAndRemoteSourcesBypassDisarmCodeRequirement(t *testing
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "keypad", ""); err != nil {
 		t.Fatalf("keypad disarm without a code: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if n := v.callCount(); n != 0 {
 		t.Fatalf("validator calls = %d, want 0 (keypad is pre-authenticated)", n)
 	}
@@ -322,7 +322,7 @@ func TestCodePolicy_KeypadAndRemoteSourcesBypassDisarmCodeRequirement(t *testing
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "remote", ""); err != nil {
 		t.Fatalf("remote disarm without a code: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if n := v.callCount(); n != 0 {
 		t.Fatalf("validator calls = %d, want 0 (remote is pre-authenticated)", n)
 	}
@@ -333,7 +333,7 @@ func TestCodePolicy_KeypadAndRemoteSourcesBypassDisarmCodeRequirement(t *testing
 	if err := h.eng.DisarmWithCode(h.ctx, "eg", "", "mqtt", ""); !errors.Is(err, engine.ErrInvalidCode) {
 		t.Fatalf("mqtt disarm without a code: err = %v, want ErrInvalidCode", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if n := v.callCount(); n != 1 {
 		t.Fatalf("validator calls = %d, want 1 (mqtt is not pre-authenticated)", n)
 	}
@@ -344,7 +344,7 @@ func TestCodePolicy_KeypadSourceBypassesArmCodeRequirement(t *testing.T) {
 
 	t.Run("keypad arm without a code succeeds without consulting the validator", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -358,7 +358,7 @@ func TestCodePolicy_KeypadSourceBypassesArmCodeRequirement(t *testing.T) {
 
 	t.Run("mqtt arm without a code is refused", func(t *testing.T) {
 		h := newHarness(t)
-		h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(false), nil))
+		h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(false), nil))
 		h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 		h.startWithValidator(v)
 
@@ -370,7 +370,7 @@ func TestCodePolicy_KeypadSourceBypassesArmCodeRequirement(t *testing.T) {
 
 func TestCodePolicy_NilValidatorDisablesEveryPolicy(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", codePolicyAreaConfig(true, boolPtr(true), map[string]bool{"mqtt": true}))
+	h.seedZone("eg", "Erdgeschoss", codePolicyZoneConfig(true, boolPtr(true), map[string]bool{"mqtt": true}))
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	h.start() // no Validator wired
 

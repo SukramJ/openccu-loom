@@ -18,6 +18,9 @@ export type OverviewFilters = {
   central: string;
   room: string;
   function: string;
+  /** Selected Area id (settings/RoomsFunctionsAdmin.svelte — an
+   *  operator-defined grouping ABOVE CCU rooms). Empty = no filter. */
+  area: string;
   search: string;
 };
 
@@ -25,8 +28,14 @@ export const defaultOverviewFilters: OverviewFilters = {
   central: "",
   room: "",
   function: "",
+  area: "",
   search: "",
 };
+
+/** Resolves which Area id owns a (central, room) pair — the shape
+ *  `areasStore.areaIdOf` implements. Passed in rather than imported so
+ *  this module stays store-free and unit-testable with a plain stub. */
+export type AreaIdOf = (central: string, room: string) => string | undefined;
 
 export type DeviceOverviewGroup = {
   /** Stable identity across renders — `${central}::${groupValue}`. */
@@ -79,17 +88,24 @@ export function distinctFunctions(devices: DeviceSummary[], central?: string): s
   return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
-/** Applies the central/room/function/search filters. A device passes
+/** Applies the central/room/function/area/search filters. A device passes
  *  the room/function filter when the (array) rooms/functions field
- *  contains that value. */
+ *  contains that value; it passes the area filter when ANY of its rooms
+ *  is assigned to that area on its owning central (`areaIdOf`). */
 export function filterDevices(
   devices: DeviceSummary[],
   filters: OverviewFilters,
+  areaIdOf?: AreaIdOf,
 ): DeviceSummary[] {
   return devices.filter((d) => {
     if (filters.central && d.central !== filters.central) return false;
     if (filters.room && !(d.rooms ?? []).includes(filters.room)) return false;
     if (filters.function && !(d.functions ?? []).includes(filters.function)) return false;
+    if (filters.area) {
+      const central = d.central ?? "";
+      const inArea = (d.rooms ?? []).some((r) => areaIdOf?.(central, r) === filters.area);
+      if (!inArea) return false;
+    }
     if (filters.search && !textMatches(d, filters.search)) return false;
     return true;
   });
@@ -155,6 +171,7 @@ export function buildOverviewGroups(
   devices: DeviceSummary[],
   mode: OverviewGroupMode,
   filters: OverviewFilters,
+  areaIdOf?: AreaIdOf,
 ): DeviceOverviewGroup[] {
-  return groupDevices(filterDevices(devices, filters), mode);
+  return groupDevices(filterDevices(devices, filters, areaIdOf), mode);
 }

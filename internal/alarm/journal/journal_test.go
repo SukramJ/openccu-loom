@@ -49,7 +49,7 @@ func TestAppend_StampsPersistsAndPublishes(t *testing.T) {
 	j := journal.New(store, clk, func(e hmevent.Event) { published = append(published, e) }, nil)
 
 	id, err := j.Append(context.Background(), engine.JournalEntry{
-		AreaID: "eg", Class: hmenum.AlarmJournalClassArm, Event: "armed", Actor: "tester",
+		ZoneID: "eg", Class: hmenum.AlarmJournalClassArm, Event: "armed", Actor: "tester",
 		Details: map[string]any{"mode": "full"},
 	})
 	if err != nil {
@@ -77,8 +77,8 @@ func TestAppend_StampsPersistsAndPublishes(t *testing.T) {
 	if !ok {
 		t.Fatalf("published event type = %T, want AlarmJournalAppendedEvent", published[0])
 	}
-	if ev.EntryID != id || ev.AreaID != "eg" || ev.Event != "armed" {
-		t.Fatalf("published event = %+v, want EntryID=%d AreaID=eg Event=armed", ev, id)
+	if ev.EntryID != id || ev.ZoneID != "eg" || ev.Event != "armed" {
+		t.Fatalf("published event = %+v, want EntryID=%d ZoneID=eg Event=armed", ev, id)
 	}
 }
 
@@ -89,7 +89,7 @@ func TestAppend_HiddenEntryPersistsButIsNotPublished(t *testing.T) {
 	j := journal.New(store, clk, func(e hmevent.Event) { published = append(published, e) }, nil)
 
 	if _, err := j.Append(context.Background(), engine.JournalEntry{
-		AreaID: "eg", Class: hmenum.AlarmJournalClassTrigger, Event: "duress", Hidden: true,
+		ZoneID: "eg", Class: hmenum.AlarmJournalClassTrigger, Event: "duress", Hidden: true,
 	}); err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestAppend_StoreErrorPropagatesWithoutPublishing(t *testing.T) {
 	var published []hmevent.Event
 	j := journal.New(store, clk, func(e hmevent.Event) { published = append(published, e) }, nil)
 
-	if _, err := j.Append(context.Background(), engine.JournalEntry{AreaID: "eg", Event: "armed"}); err == nil {
+	if _, err := j.Append(context.Background(), engine.JournalEntry{ZoneID: "eg", Event: "armed"}); err == nil {
 		t.Fatal("expected an error from a failing store")
 	}
 	if len(published) != 0 {

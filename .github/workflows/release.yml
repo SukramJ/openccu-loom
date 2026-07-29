@@ -109,7 +109,15 @@ jobs:
           script/build_ccu_addon.sh "${GITHUB_REF_NAME#v}"
       - name: attach CCU add-on to the release
         if: ${{ vars.BUILD_CCU_ADDON != 'false' && env.BUILD_CCU_ADDON == 'true' }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/openccu-loom-ccu-*.tar.gz --clobber
+        # The .sha256 sidecar is what the self-updater verifies against
+        # (ADR 0057) — the goreleaser checksums.txt is finalized before
+        # this step and cannot cover the tarball.
+        run: |
+          set -euo pipefail
+          for f in dist/openccu-loom-ccu-*.tar.gz; do
+            (cd "$(dirname "$f")" && sha256sum "$(basename "$f")" > "$(basename "$f").sha256")
+          done
+          gh release upload "${GITHUB_REF_NAME}" dist/openccu-loom-ccu-*.tar.gz dist/openccu-loom-ccu-*.tar.gz.sha256 --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Home Assistant add-on: build one image per arch from the HA base image,

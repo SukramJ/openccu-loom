@@ -269,16 +269,16 @@ func (a scheduleWeekProfileSink) SetActiveProfile(
 const alarmSourceMQTT = "mqtt"
 
 // alarmMQTTSink adapts the daemon-level alarm engine onto the
-// [mqtt.AlarmSink] contract. Areas are daemon-level, so the sink drives
+// [mqtt.AlarmSink] contract. Zones are daemon-level, so the sink drives
 // the engine directly without central scoping. The master verbs fan out
-// best-effort over every area; a per-area arm failure is collected and
+// best-effort over every zone; a per-zone arm failure is collected and
 // also surfaced as a FAILED_TO_ARM event through onArmFailure, wired to
 // the MQTT alarm publisher once it exists (see wireSystemStatusSubscribers).
 type alarmMQTTSink struct {
 	svc *alarm.Service
 
 	mu           sync.RWMutex
-	onArmFailure func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string)
+	onArmFailure func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string)
 }
 
 // Compile-time proof the sink satisfies the command-subscriber contract.
@@ -294,42 +294,42 @@ func newAlarmMQTTSink(svc *alarm.Service) *alarmMQTTSink {
 }
 
 // setArmFailureHook installs the FAILED_TO_ARM publisher. A nil hook
-// disables the per-area failure event.
-func (s *alarmMQTTSink) setArmFailureHook(fn func(areaID, areaName string, mode hmenum.AlarmMode, blockers []string)) {
+// disables the per-zone failure event.
+func (s *alarmMQTTSink) setArmFailureHook(fn func(zoneID, zoneName string, mode hmenum.AlarmMode, blockers []string)) {
 	s.mu.Lock()
 	s.onArmFailure = fn
 	s.mu.Unlock()
 }
 
-func (s *alarmMQTTSink) Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error {
-	_, err := s.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{Mode: mode, Code: code, Source: alarmSourceMQTT})
+func (s *alarmMQTTSink) Arm(ctx context.Context, zoneID string, mode hmenum.AlarmMode, code string) error {
+	_, err := s.svc.Engine().Arm(ctx, zoneID, engine.ArmRequest{Mode: mode, Code: code, Source: alarmSourceMQTT})
 	return err
 }
 
-func (s *alarmMQTTSink) Disarm(ctx context.Context, areaID, code string) error {
-	return s.svc.Engine().DisarmWithCode(ctx, areaID, "", alarmSourceMQTT, code)
+func (s *alarmMQTTSink) Disarm(ctx context.Context, zoneID, code string) error {
+	return s.svc.Engine().DisarmWithCode(ctx, zoneID, "", alarmSourceMQTT, code)
 }
 
-func (s *alarmMQTTSink) Silence(ctx context.Context, areaID, code string) error {
-	return s.svc.Engine().SilenceWithCode(ctx, areaID, "", alarmSourceMQTT, code)
+func (s *alarmMQTTSink) Silence(ctx context.Context, zoneID, code string) error {
+	return s.svc.Engine().SilenceWithCode(ctx, zoneID, "", alarmSourceMQTT, code)
 }
 
-// Panic fires the engine's loud panic path (silent=false) for the area —
+// Panic fires the engine's loud panic path (silent=false) for the zone —
 // the HA TRIGGER command routes here (docs/alarm-concept.md §7).
-func (s *alarmMQTTSink) Panic(ctx context.Context, areaID string) error {
-	return s.svc.Engine().PanicTrigger(ctx, areaID, false, "", alarmSourceMQTT)
+func (s *alarmMQTTSink) Panic(ctx context.Context, zoneID string) error {
+	return s.svc.Engine().PanicTrigger(ctx, zoneID, false, "", alarmSourceMQTT)
 }
 
-// MasterArm arms every area best-effort. An area that does not configure
+// MasterArm arms every zone best-effort. An zone that does not configure
 // the requested mode is skipped silently (not a failure); any other arm
 // error is collected and surfaces a FAILED_TO_ARM event with the blocking
 // sensors.
 func (s *alarmMQTTSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) error {
 	eng := s.svc.Engine()
 	var errs []error
-	areas := eng.Areas()
-	for i := range areas {
-		a := &areas[i]
+	zones := eng.Zones()
+	for i := range zones {
+		a := &zones[i]
 		if _, err := eng.Arm(ctx, a.ID, engine.ArmRequest{Mode: mode, Source: alarmSourceMQTT}); err != nil {
 			if errors.Is(err, engine.ErrUnknownMode) {
 				continue
@@ -341,13 +341,13 @@ func (s *alarmMQTTSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) er
 	return errors.Join(errs...)
 }
 
-// MasterDisarm disarms every area best-effort.
+// MasterDisarm disarms every zone best-effort.
 func (s *alarmMQTTSink) MasterDisarm(ctx context.Context) error {
 	eng := s.svc.Engine()
 	var errs []error
-	areas := eng.Areas()
-	for i := range areas {
-		a := &areas[i]
+	zones := eng.Zones()
+	for i := range zones {
+		a := &zones[i]
 		if err := eng.Disarm(ctx, a.ID, "", alarmSourceMQTT); err != nil {
 			errs = append(errs, err)
 		}
@@ -357,7 +357,7 @@ func (s *alarmMQTTSink) MasterDisarm(ctx context.Context) error {
 
 // emitArmFailure publishes a FAILED_TO_ARM event, extracting the blocking
 // sensors from a not-ready refusal.
-func (s *alarmMQTTSink) emitArmFailure(areaID, areaName string, mode hmenum.AlarmMode, cause error) {
+func (s *alarmMQTTSink) emitArmFailure(zoneID, zoneName string, mode hmenum.AlarmMode, cause error) {
 	s.mu.RLock()
 	hook := s.onArmFailure
 	s.mu.RUnlock()
@@ -369,7 +369,7 @@ func (s *alarmMQTTSink) emitArmFailure(areaID, areaName string, mode hmenum.Alar
 	if errors.As(cause, &nre) {
 		blockers = nre.Blockers
 	}
-	hook(areaID, areaName, mode, blockers)
+	hook(zoneID, zoneName, mode, blockers)
 }
 
 // buildOIDCRest discovers the IdP and constructs the REST OIDC deps backing
@@ -533,6 +533,7 @@ type runtimeCapabilityDetector struct {
 	mcpWrite          bool
 	alarm             bool
 	history           bool
+	addonSelfUpdate   bool
 }
 
 func (r runtimeCapabilityDetector) HasMQTTDiscovery() bool     { return r.mqtt }
@@ -544,6 +545,7 @@ func (r runtimeCapabilityDetector) HasMCP() bool               { return r.mcp }
 func (r runtimeCapabilityDetector) HasMCPWrite() bool          { return r.mcp && r.mcpWrite }
 func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm }
 func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
+func (r runtimeCapabilityDetector) HasAddonSelfUpdate() bool   { return r.addonSelfUpdate }
 
 // detectSupervisedRestart reports whether the daemon is running
 // under a supervisor that will restart it after a clean shutdown.

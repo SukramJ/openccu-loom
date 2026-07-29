@@ -331,7 +331,7 @@ func (a *AlarmCodeStoreAdmin) DeleteCode(ctx context.Context, id string) (bool, 
 // alarmCodeRowFromReq maps a create/update request onto a stored row. The
 // PIN is hashed via the codes helper for the pin kind; a non-pin kind
 // carries no hash, and a pin update with an empty PIN keeps existingHash.
-// perms/areas/binding are stored as the whole JSON documents the codes
+// perms/zones/binding are stored as the whole JSON documents the codes
 // facade reads back.
 func alarmCodeRowFromReq(id string, req hmapi.AlarmCodeRequest, existingHash string, createdMS, updatedMS int64) (sqlitestore.AlarmCodeRow, error) {
 	if err := validateAlarmCodeWrite(req, existingHash); err != nil {
@@ -352,13 +352,13 @@ func alarmCodeRowFromReq(id string, req hmapi.AlarmCodeRequest, existingHash str
 	if err != nil {
 		return sqlitestore.AlarmCodeRow{}, err
 	}
-	areasJSON := ""
-	if len(req.Areas) > 0 {
-		b, err := json.Marshal(req.Areas)
+	zonesJSON := ""
+	if len(req.Zones) > 0 {
+		b, err := json.Marshal(req.Zones)
 		if err != nil {
 			return sqlitestore.AlarmCodeRow{}, err
 		}
-		areasJSON = string(b)
+		zonesJSON = string(b)
 	}
 	bindingJSON := ""
 	if len(req.Binding) > 0 {
@@ -371,7 +371,7 @@ func alarmCodeRowFromReq(id string, req hmapi.AlarmCodeRequest, existingHash str
 		Hash:         hash,
 		Duress:       req.Duress,
 		PermsJSON:    string(permsJSON),
-		AreasJSON:    areasJSON,
+		ZonesJSON:    zonesJSON,
 		BindingJSON:  bindingJSON,
 		ValidFromMS:  req.ValidFromMS,
 		ValidUntilMS: req.ValidUntilMS,
@@ -417,8 +417,8 @@ func validateAlarmCodeWrite(req hmapi.AlarmCodeRequest, existingHash string) err
 		if b.Slot < 1 || b.Slot > 8 {
 			return fmt.Errorf("keypad_slot binding slot must be 1..8: %w", ErrInvalidAlarmCode)
 		}
-		if b.AreaID == "" {
-			return fmt.Errorf("keypad_slot binding requires area_id: %w", ErrInvalidAlarmCode)
+		if b.ZoneID == "" {
+			return fmt.Errorf("keypad_slot binding requires zone_id: %w", ErrInvalidAlarmCode)
 		}
 	case string(codes.KindRemoteKey):
 		b, err := decodeStrictBinding(req.Binding)
@@ -428,8 +428,8 @@ func validateAlarmCodeWrite(req hmapi.AlarmCodeRequest, existingHash string) err
 		if b.ChannelAddress == "" {
 			return fmt.Errorf("remote_key binding requires channel_address: %w", ErrInvalidAlarmCode)
 		}
-		if b.AreaID == "" {
-			return fmt.Errorf("remote_key binding requires area_id: %w", ErrInvalidAlarmCode)
+		if b.ZoneID == "" {
+			return fmt.Errorf("remote_key binding requires zone_id: %w", ErrInvalidAlarmCode)
 		}
 		if _, ok := validRemoteKeyParameters[b.Parameter]; !ok {
 			return fmt.Errorf("remote_key binding parameter must be PRESS_SHORT or PRESS_LONG: %w", ErrInvalidAlarmCode)
@@ -489,8 +489,8 @@ func alarmCodeFromRow(row sqlitestore.AlarmCodeRow) hmapi.AlarmCode {
 	if row.PermsJSON != "" {
 		_ = json.Unmarshal([]byte(row.PermsJSON), &out.Perms)
 	}
-	if row.AreasJSON != "" && row.AreasJSON != "[]" {
-		_ = json.Unmarshal([]byte(row.AreasJSON), &out.Areas)
+	if row.ZonesJSON != "" && row.ZonesJSON != "[]" {
+		_ = json.Unmarshal([]byte(row.ZonesJSON), &out.Zones)
 	}
 	if row.BindingJSON != "" {
 		out.Binding = json.RawMessage(row.BindingJSON)

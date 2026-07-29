@@ -50,6 +50,25 @@ func (b *TopicBuilder) BridgeHealth() string {
 	return b.Base + "/bridge/health"
 }
 
+// AddonUpdateState is the retained state topic for the daemon-level
+// CCU add-on self-update entity (ADR 0057). Unlike every per-central
+// hub topic this carries no <central> segment: the self-updater is a
+// property of the daemon process itself, not of any one CCU.
+//
+//	<base>/system/addon_update/state
+func (b *TopicBuilder) AddonUpdateState() string {
+	return b.Base + "/system/addon_update/state"
+}
+
+// AddonUpdateCommand is the subscribed command topic pairing
+// [TopicBuilder.AddonUpdateState] — HA's `update` entity publishes its
+// install command here.
+//
+//	<base>/system/addon_update/set
+func (b *TopicBuilder) AddonUpdateCommand() string {
+	return b.Base + "/system/addon_update/set"
+}
+
 // DiscoveryConfig is the HA Discovery retained config topic.
 // Delegates to [naming.DiscoveryConfigTopic] — the model layer owns
 // the format string.

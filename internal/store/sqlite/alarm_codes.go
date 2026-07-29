@@ -13,7 +13,7 @@ import (
 // AlarmCodeRow is one alarm-system user code or hardware-identity
 // binding (docs/alarm-concept.md §11, migration 028). Kind is one of
 // "pin" (argon2id-hashed in Hash), "keypad_slot" or "remote_key" (Hash
-// empty; the binding lives in BindingJSON). PermsJSON, AreasJSON and
+// empty; the binding lives in BindingJSON). PermsJSON, ZonesJSON and
 // BindingJSON are always loaded and saved as a whole and never queried
 // relationally; the domain facade in internal/alarm/codes owns their
 // shape.
@@ -24,7 +24,7 @@ type AlarmCodeRow struct {
 	Hash         string
 	Duress       bool
 	PermsJSON    string
-	AreasJSON    string
+	ZonesJSON    string
 	BindingJSON  string
 	ValidFromMS  int64
 	ValidUntilMS int64
@@ -46,7 +46,7 @@ func NewAlarmCodeStore(db *sql.DB) *AlarmCodeStore { return &AlarmCodeStore{db: 
 // created_at_ms untouched.
 func (s *AlarmCodeStore) Upsert(ctx context.Context, row AlarmCodeRow) error {
 	const q = `
-INSERT INTO alarm_codes (id, name, kind, hash, duress, perms_json, areas_json, binding_json,
+INSERT INTO alarm_codes (id, name, kind, hash, duress, perms_json, zones_json, binding_json,
     valid_from_ms, valid_until_ms, enabled, created_at_ms, updated_at_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
@@ -55,7 +55,7 @@ ON CONFLICT(id) DO UPDATE SET
     hash = excluded.hash,
     duress = excluded.duress,
     perms_json = excluded.perms_json,
-    areas_json = excluded.areas_json,
+    zones_json = excluded.zones_json,
     binding_json = excluded.binding_json,
     valid_from_ms = excluded.valid_from_ms,
     valid_until_ms = excluded.valid_until_ms,
@@ -63,7 +63,7 @@ ON CONFLICT(id) DO UPDATE SET
     updated_at_ms = excluded.updated_at_ms`
 	_, err := s.db.ExecContext(
 		ctx, q,
-		row.ID, row.Name, row.Kind, row.Hash, boolToInt(row.Duress), row.PermsJSON, row.AreasJSON, row.BindingJSON,
+		row.ID, row.Name, row.Kind, row.Hash, boolToInt(row.Duress), row.PermsJSON, row.ZonesJSON, row.BindingJSON,
 		row.ValidFromMS, row.ValidUntilMS, boolToInt(row.Enabled), row.CreatedAtMS, row.UpdatedAtMS,
 	)
 	if err != nil {
@@ -112,7 +112,7 @@ func (s *AlarmCodeStore) Delete(ctx context.Context, id string) error {
 }
 
 const alarmCodeSelect = `
-SELECT id, name, kind, hash, duress, perms_json, areas_json, binding_json,
+SELECT id, name, kind, hash, duress, perms_json, zones_json, binding_json,
     valid_from_ms, valid_until_ms, enabled, created_at_ms, updated_at_ms
 FROM alarm_codes`
 
@@ -120,7 +120,7 @@ func scanAlarmCodeRow(sc scannable) (AlarmCodeRow, error) {
 	var row AlarmCodeRow
 	var duress, enabled int
 	if err := sc.Scan(
-		&row.ID, &row.Name, &row.Kind, &row.Hash, &duress, &row.PermsJSON, &row.AreasJSON, &row.BindingJSON,
+		&row.ID, &row.Name, &row.Kind, &row.Hash, &duress, &row.PermsJSON, &row.ZonesJSON, &row.BindingJSON,
 		&row.ValidFromMS, &row.ValidUntilMS, &enabled, &row.CreatedAtMS, &row.UpdatedAtMS,
 	); err != nil {
 		return AlarmCodeRow{}, err

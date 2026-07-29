@@ -18,13 +18,13 @@ import (
 
 func TestTrigger_InstantSensorOpensIncidentAndFiresOnce(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if n := h.outputs.fireCount(); n != 1 {
 		t.Fatalf("FireCycle count = %d, want 1", n)
 	}
@@ -48,12 +48,12 @@ func TestTrigger_InstantSensorOpensIncidentAndFiresOnce(t *testing.T) {
 
 func TestTrigger_EntryDelaySensorGoesPendingThenTriggers(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmAreaStatePending)
+	h.wantState("eg", hmenum.AlarmZoneStatePending)
 	if !h.journal.has("pending_started") {
 		t.Fatalf("missing pending_started journal entry; got %v", h.journal.events())
 	}
@@ -62,7 +62,7 @@ func TestTrigger_EntryDelaySensorGoesPendingThenTriggers(t *testing.T) {
 	}
 
 	h.advance(15 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if !h.journal.has("triggered") {
 		t.Fatalf("missing triggered journal entry; got %v", h.journal.events())
 	}
@@ -70,17 +70,17 @@ func TestTrigger_EntryDelaySensorGoesPendingThenTriggers(t *testing.T) {
 
 func TestTrigger_DisarmDuringPendingNeverOpensIncident(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmAreaStatePending)
+	h.wantState("eg", hmenum.AlarmZoneStatePending)
 
 	if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
 		t.Fatalf("disarm: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
 	h.advance(2 * time.Hour)
 	if n := h.outputs.fireCount(); n != 0 {
@@ -93,30 +93,30 @@ func TestTrigger_DisarmDuringPendingNeverOpensIncident(t *testing.T) {
 
 func TestTrigger_InstantSensorEscalatesPendingImmediately(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmAreaStatePending)
+	h.wantState("eg", hmenum.AlarmZoneStatePending)
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 }
 
 func TestTrigger_ModeScopedSensorIgnoredOutsideItsMode(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModePerimeter, By: "tester"}); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
 	// motion only participates in full; perimeter must ignore it.
 	h.eng.HandleSensorEvent(h.ctx, "motion", true)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if n := h.outputs.fireCount(); n != 0 {
 		t.Fatalf("FireCycle count = %d, want 0", n)
 	}
@@ -124,7 +124,7 @@ func TestTrigger_ModeScopedSensorIgnoredOutsideItsMode(t *testing.T) {
 
 func TestTrigger_BypassedSensorNeverTriggersUntilDisarm(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
@@ -132,12 +132,12 @@ func TestTrigger_BypassedSensorNeverTriggersUntilDisarm(t *testing.T) {
 		t.Fatalf("force arm: %v", err)
 	}
 	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 
 	h.eng.HandleSensorEvent(h.ctx, "window", false)
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if n := h.outputs.fireCount(); n != 0 {
 		t.Fatalf("FireCycle count = %d, want 0 (bypass holds until disarm)", n)
 	}
@@ -145,11 +145,11 @@ func TestTrigger_BypassedSensorNeverTriggersUntilDisarm(t *testing.T) {
 
 func TestTrigger_RetriggerCyclesBoundedByMaxThenReturnsToArmed(t *testing.T) {
 	h := newHarness(t)
-	cfg := defaultAreaConfig()
+	cfg := defaultZoneConfig()
 	full := cfg.Modes[hmenum.AlarmModeFull]
 	full.MaxRetriggerCycles = 2
 	cfg.Modes[hmenum.AlarmModeFull] = full
-	h.seedArea("eg", "Erdgeschoss", cfg)
+	h.seedZone("eg", "Erdgeschoss", cfg)
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -157,7 +157,7 @@ func TestTrigger_RetriggerCyclesBoundedByMaxThenReturnsToArmed(t *testing.T) {
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if n := h.outputs.fireCount(); n != 1 {
 		t.Fatalf("FireCycle count after initial trigger = %d, want 1", n)
 	}
@@ -182,7 +182,7 @@ func TestTrigger_RetriggerCyclesBoundedByMaxThenReturnsToArmed(t *testing.T) {
 	}
 
 	h.advance(60 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if n := h.outputs.fireCount(); n != 3 {
 		t.Fatalf("FireCycle count after post-trigger = %d, want 3 (no further fire)", n)
 	}
@@ -196,9 +196,9 @@ func TestTrigger_RetriggerCyclesBoundedByMaxThenReturnsToArmed(t *testing.T) {
 
 func TestTrigger_PostTriggerDisarmPolicyDisarmsAfterWindow(t *testing.T) {
 	h := newHarness(t)
-	cfg := defaultAreaConfig()
+	cfg := defaultZoneConfig()
 	cfg.PostTrigger = hmenum.AlarmPostTriggerDisarm
-	h.seedArea("eg", "Erdgeschoss", cfg)
+	h.seedZone("eg", "Erdgeschoss", cfg)
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -206,10 +206,10 @@ func TestTrigger_PostTriggerDisarmPolicyDisarmsAfterWindow(t *testing.T) {
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	h.advance(60 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if !h.journal.has("disarmed_post_trigger") {
 		t.Fatalf("missing disarmed_post_trigger journal entry; got %v", h.journal.events())
 	}
@@ -218,7 +218,7 @@ func TestTrigger_PostTriggerDisarmPolicyDisarmsAfterWindow(t *testing.T) {
 func TestTrigger_EntryDelayOverrideReplacesModeDefault(t *testing.T) {
 	h := newHarness(t)
 	override := 5
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes:                     []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		UseEntryDelay:             true,
@@ -228,12 +228,12 @@ func TestTrigger_EntryDelayOverrideReplacesModeDefault(t *testing.T) {
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmAreaStatePending)
+	h.wantState("eg", hmenum.AlarmZoneStatePending)
 
 	// The mode's own entry delay is 15 s; the sensor override is 5 s.
 	h.advance(4 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStatePending)
+	h.wantState("eg", hmenum.AlarmZoneStatePending)
 
 	h.advance(1 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 }

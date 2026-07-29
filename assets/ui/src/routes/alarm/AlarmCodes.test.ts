@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent, within, waitFor } from "@testing-library/svelte";
-import type { AlarmArea, AlarmCode } from "$lib/api/types";
+import type { AlarmZone, AlarmCode } from "$lib/api/types";
 
-let mockAreasConfig: AlarmArea[] = [];
+let mockZonesConfig: AlarmZone[] = [];
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
-    get areasConfig() {
-      return mockAreasConfig;
+    get zonesConfig() {
+      return mockZonesConfig;
     },
   },
 }));
@@ -58,7 +58,7 @@ function code(overrides: Partial<AlarmCode> = {}): AlarmCode {
     name: "Alice",
     kind: "pin",
     perms: { arm: false, disarm: true, silence: false },
-    areas: [],
+    zones: [],
     enabled: true,
     ...overrides,
   } as AlarmCode;
@@ -66,7 +66,7 @@ function code(overrides: Partial<AlarmCode> = {}): AlarmCode {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAreasConfig = [{ id: "area-1", name: "Ground floor" }];
+  mockZonesConfig = [{ id: "zone-1", name: "Ground floor" }];
   mockListAlarmCodes.mockResolvedValue([]);
   mockCreateAlarmCode.mockResolvedValue(code());
   mockPutAlarmCode.mockResolvedValue(undefined);

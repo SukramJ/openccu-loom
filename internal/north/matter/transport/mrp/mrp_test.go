@@ -114,19 +114,22 @@ func TestWindowAcceptsBackInWindow(t *testing.T) {
 	}
 }
 
-// TestWindowRejectsStale rejects counters older than 32 slots back.
-func TestWindowRejectsStale(t *testing.T) {
-	w := NewWindow()
+// TestNoRolloverWindowRejectsStale rejects counters older than 32 slots
+// back. Secure variant only — the unsecured window reads the same
+// distance as a restarted peer counter and rolls forward instead, see
+// TestRolloverWindowRollsBackOnPeerRestart.
+func TestNoRolloverWindowRejectsStale(t *testing.T) {
+	w := NewWindowNoRollover()
 	w.Accept(100)
 	if w.Accept(50) {
 		t.Fatal("stale 50 accepted (>= windowSize behind 100)")
 	}
 }
 
-// TestWindowResetsOnBigJump simulates a session re-key where the
-// counter trajectory restarts at a much larger value.
-func TestWindowResetsOnBigJump(t *testing.T) {
-	w := NewWindow()
+// TestNoRolloverWindowResetsOnBigJump simulates a session re-key where
+// the counter trajectory restarts at a much larger value.
+func TestNoRolloverWindowResetsOnBigJump(t *testing.T) {
+	w := NewWindowNoRollover()
 	w.Accept(10)
 	if !w.Accept(1000) {
 		t.Fatal("big jump rejected")

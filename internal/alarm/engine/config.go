@@ -30,20 +30,20 @@ const (
 	armAfterClosingDebounce = 5 * time.Second
 )
 
-// AreaConfig is the per-area configuration document stored in
-// alarm_areas.config_json. It is edited and persisted as a whole.
-type AreaConfig struct {
-	// Modes configures the armable protection levels of the area.
+// ZoneConfig is the per-zone configuration document stored in
+// alarm_zones.config_json. It is edited and persisted as a whole.
+type ZoneConfig struct {
+	// Modes configures the armable protection levels of the zone.
 	// Only modes present here can be armed.
 	Modes map[hmenum.AlarmMode]ModeConfig `json:"modes"`
 	// PostTrigger decides what happens when the trigger time elapses.
 	PostTrigger hmenum.AlarmPostTriggerPolicy `json:"post_trigger,omitempty"`
-	// AutoRearmSeconds re-arms the area to its pre-incident mode this
+	// AutoRearmSeconds re-arms the zone to its pre-incident mode this
 	// many quiet seconds after a post-trigger disarm (docs/alarm-concept.md
 	// §15 row 22). 0 disables; only meaningful with PostTrigger==disarm.
 	// The countdown resets on any member-sensor activity.
 	AutoRearmSeconds int `json:"auto_rearm_s,omitempty"`
-	// CentralLoss decides how the armed area reacts when a whole
+	// CentralLoss decides how the armed zone reacts when a whole
 	// central is lost.
 	CentralLoss hmenum.AlarmCentralLossPolicy `json:"central_loss,omitempty"`
 	// Blockers maps sensor-health classes onto arming policies.
@@ -58,13 +58,13 @@ type AreaConfig struct {
 	// value is loud; a silent panic (per-sensor PanicSilent or an
 	// explicit silent PanicTrigger) forces Silent for that activation.
 	PanicOutputs OutputPolicy `json:"panic_outputs,omitempty"`
-	// Schedules lists daily arm schedules and reminders for the area
+	// Schedules lists daily arm schedules and reminders for the zone
 	// (docs/alarm-concept.md §15 row 19). The schedule service computes
 	// each entry's next fire time and recomputes every chain on Reload.
 	Schedules []AlarmSchedule `json:"schedules,omitempty"`
 }
 
-// AlarmSchedule is one per-area arm schedule / reminder entry
+// AlarmSchedule is one per-zone arm schedule / reminder entry
 // (docs/alarm-concept.md §15 row 19).
 type AlarmSchedule struct {
 	// Time is the fire time of day, 24h "HH:MM", evaluated in the
@@ -74,17 +74,17 @@ type AlarmSchedule struct {
 	// time.Weekday numbering (0=Sunday .. 6=Saturday). Empty fires
 	// every day.
 	Days []int `json:"days,omitempty"`
-	// Mode is the protection mode the schedule expects the area to be
+	// Mode is the protection mode the schedule expects the zone to be
 	// in when it fires.
 	Mode hmenum.AlarmMode `json:"mode"`
-	// AutoArm arms the area into Mode when the schedule fires and the
-	// area is not already in it; false raises a reminder instead of
+	// AutoArm arms the zone into Mode when the schedule fires and the
+	// zone is not already in it; false raises a reminder instead of
 	// arming (docs/alarm-concept.md §15 row 19).
 	AutoArm bool `json:"auto_arm,omitempty"`
 }
 
 // CodePolicy decides per verb whether an alarm code is required to act
-// on an area (docs/alarm-concept.md §11). The engine consults a
+// on an zone (docs/alarm-concept.md §11). The engine consults a
 // CodeValidator to resolve the code; a nil validator makes every policy
 // inert (codes disabled). Strongly-authenticated operator sources
 // (rest-operator, ws-operator, hmcli) bypass the requirement but still
@@ -93,9 +93,9 @@ type CodePolicy struct {
 	// RequireArm gates arming on a valid code (default off).
 	RequireArm bool `json:"require_arm,omitempty"`
 	// RequireDisarm gates disarming on a valid code. A nil pointer is
-	// the default: require a disarm code when the area has an enabled
+	// the default: require a disarm code when the zone has an enabled
 	// code (the CodeValidator resolves the "codes exist" half — an
-	// empty code against an area with no codes is permitted, so the
+	// empty code against an zone with no codes is permitted, so the
 	// requirement can never lock everyone out).
 	RequireDisarm *bool `json:"require_disarm,omitempty"`
 	// RequireSilence gates silence per source surface (default off per
@@ -121,7 +121,7 @@ func (p CodePolicy) requires(verb, source string) bool {
 	}
 }
 
-// ModeConfig configures one protection level of an area.
+// ModeConfig configures one protection level of an zone.
 type ModeConfig struct {
 	// ExitDelaySeconds is the arming countdown; 0 arms immediately.
 	ExitDelaySeconds int `json:"exit_delay_s,omitempty"`
@@ -223,7 +223,7 @@ type SensorConfig struct {
 	// TriggerWhenUnavailable treats vanishing while armed as an
 	// activation (default: warn only).
 	TriggerWhenUnavailable bool `json:"trigger_when_unavailable,omitempty"`
-	// Chime plays the door-chime tone on activation while the area is
+	// Chime plays the door-chime tone on activation while the zone is
 	// disarmed (docs/alarm-concept.md §15 row 23); never during a walk
 	// test.
 	Chime bool `json:"chime,omitempty"`
@@ -254,14 +254,14 @@ func (c SensorConfig) InMode(mode hmenum.AlarmMode) bool {
 	return false
 }
 
-// ParseAreaConfig decodes an alarm_areas.config_json document.
-func ParseAreaConfig(raw string) (AreaConfig, error) {
-	var cfg AreaConfig
+// ParseZoneConfig decodes an alarm_zones.config_json document.
+func ParseZoneConfig(raw string) (ZoneConfig, error) {
+	var cfg ZoneConfig
 	if raw == "" {
 		raw = "{}"
 	}
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return AreaConfig{}, fmt.Errorf("engine: parse area config: %w", err)
+		return ZoneConfig{}, fmt.Errorf("engine: parse zone config: %w", err)
 	}
 	if cfg.Modes == nil {
 		cfg.Modes = map[hmenum.AlarmMode]ModeConfig{}

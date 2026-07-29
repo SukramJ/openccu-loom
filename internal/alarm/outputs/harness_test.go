@@ -61,7 +61,7 @@ type notifyCall struct {
 }
 
 // newHarness builds an empty harness: no rows, no devices, no
-// Manager yet. Call seedOutputs (directly or via seedStandardArea)
+// Manager yet. Call seedOutputs (directly or via seedStandardZone)
 // to populate it, which also constructs the Manager on first use.
 func newHarness(t *testing.T) *harness {
 	t.Helper()
@@ -150,7 +150,7 @@ func (h *harness) seedOutputs(rows ...sqlitestore.AlarmOutputRow) {
 	}
 }
 
-// outputRow builds one alarm_outputs row under area "eg", resolving
+// outputRow builds one alarm_outputs row under zone "eg", resolving
 // under testCentral and channel "<id>:1".
 func outputRow(id string, class hmenum.AlarmOutputClass, cfg OutputConfig) sqlitestore.AlarmOutputRow {
 	b, err := json.Marshal(cfg)
@@ -160,7 +160,7 @@ func outputRow(id string, class hmenum.AlarmOutputClass, cfg OutputConfig) sqlit
 	}
 	return sqlitestore.AlarmOutputRow{
 		ID:             id,
-		AreaID:         "eg",
+		ZoneID:         "eg",
 		Class:          class,
 		CentralName:    testCentral,
 		ChannelAddress: id + ":1",
@@ -169,10 +169,10 @@ func outputRow(id string, class hmenum.AlarmOutputClass, cfg OutputConfig) sqlit
 	}
 }
 
-// seedStandardArea seeds the suite's standard fixture: area "eg" with
+// seedStandardZone seeds the suite's standard fixture: zone "eg" with
 // one output per class plus an outdoor siren and a mode-restricted
 // light, as described in the output-driver test brief.
-func (h *harness) seedStandardArea() {
+func (h *harness) seedStandardZone() {
 	h.t.Helper()
 	h.seedOutputs(
 		outputRow("sirA", hmenum.AlarmOutputClassAcousticSiren, OutputConfig{DurationSeconds: 120, AcousticTone: "FREQ_HIGH"}),
@@ -287,9 +287,9 @@ func (h *harness) sound(id string) *fakeSoundDevice {
 	return fd
 }
 
-// newIncident builds a minimal incident for area "eg".
+// newIncident builds a minimal incident for zone "eg".
 func newIncident(id int64, mode hmenum.AlarmMode) sqlitestore.AlarmIncident {
-	return sqlitestore.AlarmIncident{ID: id, AreaID: "eg", Mode: mode}
+	return sqlitestore.AlarmIncident{ID: id, ZoneID: "eg", Mode: mode}
 }
 
 // ptrFloat64 returns a pointer to v (dimmer-level / volume fields are

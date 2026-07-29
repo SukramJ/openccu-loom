@@ -20,56 +20,56 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// ListAlarmAreas renders every configured alarm area.
-func ListAlarmAreas(p AlarmPanel) http.HandlerFunc {
+// ListAlarmZones renders every configured alarm zone.
+func ListAlarmZones(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rows, err := p.Stores().Areas.GetAll(r.Context())
+		rows, err := p.Stores().Zones.GetAll(r.Context())
 		if err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm areas failed", err)
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm zones failed", err)
 			return
 		}
-		out := make([]hmapi.AlarmArea, 0, len(rows))
+		out := make([]hmapi.AlarmZone, 0, len(rows))
 		for i := range rows {
-			out = append(out, apiArea(rows[i]))
+			out = append(out, apiZone(rows[i]))
 		}
 		JSON(w, http.StatusOK, out)
 	}
 }
 
-// GetAlarmArea renders a single alarm area by id.
-func GetAlarmArea(p AlarmPanel) http.HandlerFunc {
+// GetAlarmZone renders a single alarm zone by id.
+func GetAlarmZone(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		row, ok, err := p.Stores().Areas.Get(r.Context(), id)
+		row, ok, err := p.Stores().Zones.Get(r.Context(), id)
 		if err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm area failed", err)
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm zone failed", err)
 			return
 		}
 		if !ok {
 			writeAlarmNotFound(w, r)
 			return
 		}
-		JSON(w, http.StatusOK, apiArea(row))
+		JSON(w, http.StatusOK, apiZone(row))
 	}
 }
 
-// CreateAlarmArea persists a new alarm area with a server-generated id.
-func CreateAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+// CreateAlarmZone persists a new alarm zone with a server-generated id.
+func CreateAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var in hmapi.AlarmArea
+		var in hmapi.AlarmZone
 		if err := DecodeJSON(r, &in); err != nil {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
 			return
 		}
 		cfgJSON := string(in.Config)
-		if _, err := engine.ParseAreaConfig(cfgJSON); err != nil {
+		if _, err := engine.ParseZoneConfig(cfgJSON); err != nil {
 			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "Invalid area configuration", err.Error()))
+				problem.New(problem.TypeValidation, r, "Invalid zone configuration", err.Error()))
 			return
 		}
 		now := time.Now().UnixMilli()
-		row := sqlitestore.AlarmAreaRow{
+		row := sqlitestore.AlarmZoneRow{
 			ID:          uuid.NewString(),
 			Name:        in.Name,
 			Position:    in.Position,
@@ -77,45 +77,45 @@ func CreateAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			CreatedAtMS: now,
 			UpdatedAtMS: now,
 		}
-		if err := p.Stores().Areas.Upsert(r.Context(), row); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Create alarm area failed", err)
+		if err := p.Stores().Zones.Upsert(r.Context(), row); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Create alarm zone failed", err)
 			return
 		}
 		if err := p.Reload(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Alarm reload failed", err)
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "area_create="+row.ID)
-		JSON(w, http.StatusCreated, apiArea(row))
+		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "zone_create="+row.ID)
+		JSON(w, http.StatusCreated, apiZone(row))
 	}
 }
 
-// PutAlarmArea replaces an existing alarm area.
-func PutAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+// PutAlarmZone replaces an existing alarm zone.
+func PutAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		existing, ok, err := p.Stores().Areas.Get(r.Context(), id)
+		existing, ok, err := p.Stores().Zones.Get(r.Context(), id)
 		if err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm area failed", err)
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm zone failed", err)
 			return
 		}
 		if !ok {
 			writeAlarmNotFound(w, r)
 			return
 		}
-		var in hmapi.AlarmArea
+		var in hmapi.AlarmZone
 		if err := DecodeJSON(r, &in); err != nil {
 			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid request body", err.Error()))
 			return
 		}
 		cfgJSON := string(in.Config)
-		if _, err := engine.ParseAreaConfig(cfgJSON); err != nil {
+		if _, err := engine.ParseZoneConfig(cfgJSON); err != nil {
 			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "Invalid area configuration", err.Error()))
+				problem.New(problem.TypeValidation, r, "Invalid zone configuration", err.Error()))
 			return
 		}
-		row := sqlitestore.AlarmAreaRow{
+		row := sqlitestore.AlarmZoneRow{
 			ID:          id,
 			Name:        in.Name,
 			Position:    in.Position,
@@ -123,72 +123,72 @@ func PutAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			CreatedAtMS: existing.CreatedAtMS,
 			UpdatedAtMS: time.Now().UnixMilli(),
 		}
-		if err := p.Stores().Areas.Upsert(r.Context(), row); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Update alarm area failed", err)
+		if err := p.Stores().Zones.Upsert(r.Context(), row); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Update alarm zone failed", err)
 			return
 		}
 		if err := p.Reload(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Alarm reload failed", err)
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "area_update="+id)
+		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "zone_update="+id)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-// DeleteAlarmArea removes an alarm area (and its enrolled sensors and
-// outputs). It refuses with 409 while the area is not disarmed.
-func DeleteAlarmArea(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+// DeleteAlarmZone removes an alarm zone (and its enrolled sensors and
+// outputs). It refuses with 409 while the zone is not disarmed.
+func DeleteAlarmZone(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		_, ok, err := p.Stores().Areas.Get(r.Context(), id)
+		_, ok, err := p.Stores().Zones.Get(r.Context(), id)
 		if err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm area failed", err)
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm zone failed", err)
 			return
 		}
 		if !ok {
 			writeAlarmNotFound(w, r)
 			return
 		}
-		if snap, live := p.Engine().Area(id); live && snap.State != hmenum.AlarmAreaStateDisarmed {
+		if snap, live := p.Engine().Zone(id); live && snap.State != hmenum.AlarmZoneStateDisarmed {
 			problem.Write(w, http.StatusConflict,
-				problem.New(problem.TypeConflict, r, "Area must be disarmed before deletion",
+				problem.New(problem.TypeConflict, r, "Zone must be disarmed before deletion",
 					"current state: "+string(snap.State)))
 			return
 		}
-		if _, err := p.Stores().Sensors.DeleteByArea(r.Context(), id); err != nil {
+		if _, err := p.Stores().Sensors.DeleteByZone(r.Context(), id); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Delete alarm sensors failed", err)
 			return
 		}
-		if _, err := p.Stores().Outputs.DeleteByArea(r.Context(), id); err != nil {
+		if _, err := p.Stores().Outputs.DeleteByZone(r.Context(), id); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Delete alarm outputs failed", err)
 			return
 		}
-		if err := p.Stores().Areas.Delete(r.Context(), id); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Delete alarm area failed", err)
+		if err := p.Stores().Zones.Delete(r.Context(), id); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Delete alarm zone failed", err)
 			return
 		}
 		if err := p.Reload(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Alarm reload failed", err)
 			return
 		}
-		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "area_delete="+id)
+		recordAlarm(rec, r, audit.ActionAlarmConfigChange, "zone_delete="+id)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-// ListAlarmAreaSensors renders the sensors enrolled in an alarm area.
-func ListAlarmAreaSensors(p AlarmPanel) http.HandlerFunc {
+// ListAlarmZoneSensors renders the sensors enrolled in an alarm zone.
+func ListAlarmZoneSensors(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		if ok, err := alarmAreaExists(p, r, id); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm area failed", err)
+		if ok, err := alarmZoneExists(p, r, id); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm zone failed", err)
 			return
 		} else if !ok {
 			writeAlarmNotFound(w, r)
 			return
 		}
-		rows, err := p.Stores().Sensors.ListByArea(r.Context(), id)
+		rows, err := p.Stores().Sensors.ListByZone(r.Context(), id)
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm sensors failed", err)
 			return
@@ -201,12 +201,12 @@ func ListAlarmAreaSensors(p AlarmPanel) http.HandlerFunc {
 	}
 }
 
-// PutAlarmAreaSensors replaces the full sensor set of an alarm area.
-func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+// PutAlarmZoneSensors replaces the full sensor set of an alarm zone.
+func PutAlarmZoneSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		if ok, err := alarmAreaExists(p, r, id); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm area failed", err)
+		if ok, err := alarmZoneExists(p, r, id); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm zone failed", err)
 			return
 		} else if !ok {
 			writeAlarmNotFound(w, r)
@@ -232,17 +232,26 @@ func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
+		all, err := p.Stores().Sensors.GetAll(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm sensors failed", err)
+			return
+		}
+		foreignIDs := make(map[string]struct{}, len(all))
+		for i := range all {
+			if all[i].ZoneID != id {
+				foreignIDs[all[i].ID] = struct{}{}
+			}
+		}
+		seen := make(map[string]struct{}, len(in))
 		now := time.Now().UnixMilli()
 		rows := make([]sqlitestore.AlarmSensorRow, 0, len(in))
 		for i := range in {
 			s := &in[i]
-			sid := s.ID
-			if sid == "" {
-				sid = uuid.NewString()
-			}
+			sid := resolveRowID(foreignIDs, seen, s.ID)
 			rows = append(rows, sqlitestore.AlarmSensorRow{
 				ID:             sid,
-				AreaID:         id,
+				ZoneID:         id,
 				CentralName:    s.Central,
 				InterfaceID:    s.InterfaceID,
 				ChannelAddress: s.ChannelAddress,
@@ -256,7 +265,7 @@ func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 		}
 		// One transaction: a mid-write failure must never persist a
 		// truncated sensor set the next reload would silently adopt.
-		if err := p.Stores().Sensors.ReplaceByArea(r.Context(), id, rows); err != nil {
+		if err := p.Stores().Sensors.ReplaceByZone(r.Context(), id, rows); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm sensors failed", err)
 			return
 		}
@@ -269,18 +278,18 @@ func PutAlarmAreaSensors(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
-// ListAlarmAreaOutputs renders the outputs enrolled in an alarm area.
-func ListAlarmAreaOutputs(p AlarmPanel) http.HandlerFunc {
+// ListAlarmZoneOutputs renders the outputs enrolled in an alarm zone.
+func ListAlarmZoneOutputs(p AlarmPanel) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		if ok, err := alarmAreaExists(p, r, id); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm area failed", err)
+		if ok, err := alarmZoneExists(p, r, id); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm zone failed", err)
 			return
 		} else if !ok {
 			writeAlarmNotFound(w, r)
 			return
 		}
-		rows, err := p.Stores().Outputs.ListByArea(r.Context(), id)
+		rows, err := p.Stores().Outputs.ListByZone(r.Context(), id)
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm outputs failed", err)
 			return
@@ -293,12 +302,12 @@ func ListAlarmAreaOutputs(p AlarmPanel) http.HandlerFunc {
 	}
 }
 
-// PutAlarmAreaOutputs replaces the full output set of an alarm area.
-func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
+// PutAlarmZoneOutputs replaces the full output set of an alarm zone.
+func PutAlarmZoneOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		if ok, err := alarmAreaExists(p, r, id); err != nil {
-			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm area failed", err)
+		if ok, err := alarmZoneExists(p, r, id); err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Get alarm zone failed", err)
 			return
 		} else if !ok {
 			writeAlarmNotFound(w, r)
@@ -343,17 +352,26 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 				return
 			}
 		}
+		all, err := p.Stores().Outputs.GetAll(r.Context())
+		if err != nil {
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "List alarm outputs failed", err)
+			return
+		}
+		foreignIDs := make(map[string]struct{}, len(all))
+		for i := range all {
+			if all[i].ZoneID != id {
+				foreignIDs[all[i].ID] = struct{}{}
+			}
+		}
+		seen := make(map[string]struct{}, len(in))
 		now := time.Now().UnixMilli()
 		rows := make([]sqlitestore.AlarmOutputRow, 0, len(in))
 		for i := range in {
 			o := &in[i]
-			oid := o.ID
-			if oid == "" {
-				oid = uuid.NewString()
-			}
+			oid := resolveRowID(foreignIDs, seen, o.ID)
 			rows = append(rows, sqlitestore.AlarmOutputRow{
 				ID:             oid,
-				AreaID:         id,
+				ZoneID:         id,
 				Class:          hmenum.AlarmOutputClass(o.Class),
 				CentralName:    o.Central,
 				ChannelAddress: o.ChannelAddress,
@@ -364,7 +382,7 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 			})
 		}
 		// One transaction — no partial output sets (mirrors sensors).
-		if err := p.Stores().Outputs.ReplaceByArea(r.Context(), id, rows); err != nil {
+		if err := p.Stores().Outputs.ReplaceByZone(r.Context(), id, rows); err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Replace alarm outputs failed", err)
 			return
 		}
@@ -377,15 +395,37 @@ func PutAlarmAreaOutputs(p AlarmPanel, rec audit.Recorder) http.HandlerFunc {
 	}
 }
 
-// alarmAreaExists reports whether an area id is persisted.
-func alarmAreaExists(p AlarmPanel, r *http.Request, id string) (bool, error) {
-	_, ok, err := p.Stores().Areas.Get(r.Context(), id)
+// resolveRowID returns the row id to persist for one incoming
+// sensor/output replace row. A client-supplied id round-trips (rows of
+// this zone keep their identity, and a client may choose fresh ids)
+// UNLESS it already belongs to ANOTHER zone's row or repeats within
+// the payload — those get a fresh UUID instead of failing the whole
+// replace on the PRIMARY KEY. Clients have derived ids from the
+// channel key, so enrolling the same channel in a second zone collided
+// with the first zone's row and 500ed opaquely.
+func resolveRowID(foreignIDs, seen map[string]struct{}, id string) string {
+	if id != "" {
+		_, foreign := foreignIDs[id]
+		_, dup := seen[id]
+		if !foreign && !dup {
+			seen[id] = struct{}{}
+			return id
+		}
+	}
+	fresh := uuid.NewString()
+	seen[fresh] = struct{}{}
+	return fresh
+}
+
+// alarmZoneExists reports whether an zone id is persisted.
+func alarmZoneExists(p AlarmPanel, r *http.Request, id string) (bool, error) {
+	_, ok, err := p.Stores().Zones.Get(r.Context(), id)
 	return ok, err
 }
 
-// apiArea maps a stored area row onto the wire DTO.
-func apiArea(row sqlitestore.AlarmAreaRow) hmapi.AlarmArea {
-	a := hmapi.AlarmArea{ID: row.ID, Name: row.Name, Position: row.Position}
+// apiZone maps a stored zone row onto the wire DTO.
+func apiZone(row sqlitestore.AlarmZoneRow) hmapi.AlarmZone {
+	a := hmapi.AlarmZone{ID: row.ID, Name: row.Name, Position: row.Position}
 	if row.ConfigJSON != "" {
 		a.Config = json.RawMessage(row.ConfigJSON)
 	}

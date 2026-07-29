@@ -1,15 +1,24 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
-import type { AlarmArea, AlarmSensor, DeviceSummary } from "$lib/api/types";
+import type { AlarmZone, AlarmSensor, DeviceSummary } from "$lib/api/types";
 
-let mockAreasConfig: AlarmArea[] = [];
+let mockZonesConfig: AlarmZone[] = [];
+let mockZonesLoading = false;
+let mockZonesError: string | null = null;
+const mockZonesRefresh = vi.fn().mockResolvedValue(undefined);
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
-    get areasConfig() {
-      return mockAreasConfig;
+    get zonesConfig() {
+      return mockZonesConfig;
     },
-    refresh: vi.fn().mockResolvedValue(undefined),
+    get loading() {
+      return mockZonesLoading;
+    },
+    get error() {
+      return mockZonesError;
+    },
+    refresh: (...args: unknown[]) => mockZonesRefresh(...args),
   },
 }));
 
@@ -24,12 +33,26 @@ vi.mock("$lib/stores/devices.svelte", () => ({
   },
 }));
 
-const mockListAlarmAreaSensors = vi.fn();
-const mockPutAlarmAreaSensors = vi.fn();
+// Whole-module mock (not just $lib/api/client) so the real areas.svelte.ts
+// never pulls in auth.svelte.ts's module-level setUnauthorizedHandler side
+// effect, which this file's minimal api-client mock does not export.
+let mockAreas: { id: string; name: string }[] = [];
+vi.mock("$lib/stores/areas.svelte", () => ({
+  areasStore: {
+    get areas() {
+      return mockAreas;
+    },
+    ensureLoaded: vi.fn(),
+    areaIdOf: vi.fn(() => undefined),
+  },
+}));
+
+const mockListAlarmZoneSensors = vi.fn();
+const mockPutAlarmZoneSensors = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
-    listAlarmAreaSensors: (...args: unknown[]) => mockListAlarmAreaSensors(...args),
-    putAlarmAreaSensors: (...args: unknown[]) => mockPutAlarmAreaSensors(...args),
+    listAlarmZoneSensors: (...args: unknown[]) => mockListAlarmZoneSensors(...args),
+    putAlarmZoneSensors: (...args: unknown[]) => mockPutAlarmZoneSensors(...args),
     listRooms: vi.fn().mockResolvedValue([]),
   },
   friendlyError: (err: unknown) => (err instanceof Error ? err.message : "error"),
@@ -61,19 +84,73 @@ function sensor(overrides: Partial<AlarmSensor> = {}): AlarmSensor {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAreasConfig = [{ id: "area-1", name: "Ground floor" }];
+  mockZonesConfig = [{ id: "zone-1", name: "Ground floor" }];
+  mockZonesLoading = false;
+  mockZonesError = null;
   mockDevices = [];
-  mockListAlarmAreaSensors.mockResolvedValue([sensor()]);
-  mockPutAlarmAreaSensors.mockResolvedValue(undefined);
+  mockAreas = [];
+  mockListAlarmZoneSensors.mockResolvedValue([sensor()]);
+  mockPutAlarmZoneSensors.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   cleanup();
 });
 
+describe("AlarmSensors — zones-loading gate", () => {
+  it("shows the shared loading state while the first zones load is in flight", () => {
+    mockZonesLoading = true;
+    mockZonesConfig = [];
+    const { getByRole, queryByText } = render(AlarmSensors);
+
+    expect(getByRole("status")).toBeTruthy();
+    // The gate short-circuits before the toolbar/zone-selector ever mounts.
+    expect(queryByText("alarm.sensors.zone")).toBeNull();
+  });
+
+  it("shows the shared error state on a failed zones refresh, and retry re-triggers the store refresh", async () => {
+    mockZonesLoading = false;
+    mockZonesError = "network unreachable";
+    mockZonesConfig = [];
+    const { getByRole, container } = render(AlarmSensors);
+
+    expect(container.textContent).toContain("network unreachable");
+
+    await fireEvent.click(getByRole("button", { name: "common.reload" }));
+    expect(mockZonesRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("shows the empty state with a wizard link on a successful load with no zones", () => {
+    mockZonesLoading = false;
+    mockZonesError = null;
+    mockZonesConfig = [];
+    const { getByText, getByRole } = render(AlarmSensors);
+
+    expect(getByText("alarm.overview.empty")).toBeTruthy();
+    const link = getByRole("link", { name: /alarm.wizard.launch/ });
+    expect(link).toHaveAttribute("href", "#/alarm/wizard");
+  });
+
+  it("renders the sensor picker UI once zones are present", async () => {
+    mockZonesLoading = false;
+    mockZonesError = null;
+    mockZonesConfig = [{ id: "zone-1", name: "Ground floor" }];
+    const { findByText, getByRole } = render(AlarmSensors);
+
+    // The toolbar (zone selector + add button) is part of the picker, not
+    // the gate, so its presence marks a successful pass through the gate.
+    // The zone <Select> sits inside a <label>, which takes over the
+    // trigger's accessible name — so the label key, not the selected zone
+    // name, is what a screen reader (and this query) sees.
+    expect(await findByText("alarm.sensors.zone")).toBeTruthy();
+    expect(getByRole("button", { name: "alarm.sensors.zone" })).toBeTruthy();
+    expect(getByRole("button", { name: /alarm.sensors.add/ })).toBeTruthy();
+  });
+});
+
 describe("AlarmSensors — card grid + matrix toggle", () => {
   it("renders one card per enrolled sensor", async () => {
-    mockListAlarmAreaSensors.mockResolvedValueOnce([
+    mockListAlarmZoneSensors.mockResolvedValueOnce([
       sensor({ id: "s1", name: "Front door" }),
       sensor({ id: "s2", name: "Hallway motion", type: "motion" }),
     ]);
@@ -84,7 +161,7 @@ describe("AlarmSensors — card grid + matrix toggle", () => {
   });
 
   it("switches to the dense matrix table when the matrix toggle is clicked", async () => {
-    mockListAlarmAreaSensors.mockResolvedValueOnce([sensor()]);
+    mockListAlarmZoneSensors.mockResolvedValueOnce([sensor()]);
     const { findByText, getByTitle, getByRole } = render(AlarmSensors);
     await findByText("Front door");
 
@@ -99,7 +176,7 @@ describe("AlarmSensors — card grid + matrix toggle", () => {
 
 describe("AlarmSensors — detail drawer", () => {
   it("opens the slide-over when a sensor name is clicked", async () => {
-    mockListAlarmAreaSensors.mockResolvedValueOnce([sensor({ name: "Front door" })]);
+    mockListAlarmZoneSensors.mockResolvedValueOnce([sensor({ name: "Front door" })]);
     const { findByText, getByRole } = render(AlarmSensors);
 
     const nameButton = await findByText("Front door");

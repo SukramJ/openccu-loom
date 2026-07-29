@@ -29,7 +29,7 @@ func outputTestRequest(t *testing.T, outputID string, body *hmapi.AlarmOutputTes
 func TestTestAlarmOutput_AcousticSiren_Returns204(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedOutput("sirenA", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
 	rec := &captureRecorder{}
 
@@ -49,7 +49,7 @@ func TestTestAlarmOutput_AcousticSiren_Returns204(t *testing.T) {
 func TestTestAlarmOutput_OpticalOnlyRequestBody_Accepted(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedOutput("sirenA", "eg", hmenum.AlarmOutputClassAcousticSiren, alarmOutputConfigFixture())
 
 	w := httptest.NewRecorder()
@@ -66,7 +66,7 @@ func TestTestAlarmOutput_OpticalOnlyRequestBody_Accepted(t *testing.T) {
 func TestTestAlarmOutput_SwitchedSirenActuator_Returns204(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedOutput("plug", "eg", hmenum.AlarmOutputClassSwitchedSiren, alarmOutputConfigFixture())
 
 	w := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestTestAlarmOutput_SwitchedSirenActuator_Returns204(t *testing.T) {
 func TestTestAlarmOutput_SmokeSounder_Returns409(t *testing.T) {
 	t.Parallel()
 	fx := newAlarmPanelFixture(t)
-	fx.seedArea("eg", "Erdgeschoss", fullModeAreaConfig(0, 0, 60))
+	fx.seedZone("eg", "Erdgeschoss", fullModeZoneConfig(0, 0, 60))
 	fx.seedOutput("smoke", "eg", hmenum.AlarmOutputClassSmokeSounder, alarmOutputConfigFixture())
 
 	w := httptest.NewRecorder()

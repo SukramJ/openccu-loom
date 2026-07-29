@@ -3,6 +3,7 @@
   import { api, friendlyError } from "$lib/api/client";
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
@@ -27,7 +28,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Output picker (docs/alarm-concept.md §7 / §12.2). Manages the enrolled
-  // output set of one alarm area as class cards. Each card carries the
+  // output set of one alarm zone as class cards. Each card carries the
   // class Badge, per-mode assignment chips, loud/silent policy, outdoor +
   // shared-with-CCU switches, and the duration/tone/pattern/level fields
   // its class supports. Smoke-sounder and switched-siren classes render
@@ -107,9 +108,9 @@
   const OUTPUT_RE =
     /asir|sir|swsd|ps[m]?\b|psm|switch|schalt|dimmer|dim|light|licht|lamp|relay|relais|bsm|fsm|dr\b|mp3/i;
 
-  // --- area state --------------------------------------------------
-  const areas = $derived(alarmPanelStore.areasConfig);
-  let areaId = $state("");
+  // --- zone state --------------------------------------------------
+  const zones = $derived(alarmPanelStore.zonesConfig);
+  let zoneId = $state("");
 
   let outputs = $state<AlarmOutput[]>([]);
   let loading = $state(false);
@@ -125,6 +126,7 @@
   let addOpen = $state(false);
   let addClass = $state<AlarmOutputClass>("acoustic_siren");
   let addExpert = $state(false);
+  let addArea = $state("");
   let addDeviceSearch = $state("");
   let addDevice = $state<DeviceSummary | null>(null);
   let addCandidate = $state<AlarmOutputCandidate | null>(null);
@@ -178,6 +180,18 @@
   // classes at once). Also feeds the per-output tone/pattern pickers
   // with the device's real ENUM label lists.
   let candidates = $state<AlarmOutputCandidate[]>([]);
+  // deviceByAddr resolves a candidate's model LABEL from the live device
+  // inventory — the candidate DTO only carries the raw wire `model`, not
+  // the localised label the device list already has cached.
+  const deviceByAddr = $derived.by(() => {
+    const m = new Map<string, DeviceSummary>();
+    for (const d of deviceStore.items) m.set(d.address, d);
+    return m;
+  });
+  function candidateModelLabel(c: AlarmOutputCandidate): string {
+    const d = deviceByAddr.get(c.device_address);
+    return d?.model_label || d?.model || c.model;
+  }
   const candidateByChannel = $derived(
     new Map(candidates.map((c) => [`${c.central}|${c.channel_address}`, c])),
   );
@@ -316,14 +330,14 @@
 
   // --- data loading ------------------------------------------------
   async function loadOutputs() {
-    if (!areaId) {
+    if (!zoneId) {
       outputs = [];
       return;
     }
     loading = true;
     loadError = null;
     try {
-      outputs = await api.listAlarmAreaOutputs(areaId);
+      outputs = await api.listAlarmZoneOutputs(zoneId);
       dirty = false;
     } catch (err) {
       loadError = friendlyError(err, t);
@@ -333,10 +347,10 @@
   }
 
   async function save() {
-    if (!areaId) return;
+    if (!zoneId) return;
     saving = true;
     try {
-      await api.putAlarmAreaOutputs(areaId, outputs);
+      await api.putAlarmZoneOutputs(zoneId, outputs);
       toastStore.success(t("alarm.toast.saved"));
       dirty = false;
       await alarmPanelStore.refresh();
@@ -381,6 +395,10 @@
   const addClassCandidates = $derived(
     candidates
       .filter((c) => ((c.classes ?? []) as string[]).includes(addClass))
+      .filter((c) => {
+        if (!addArea) return true;
+        return (c.rooms ?? []).some((r) => areasStore.areaIdOf(c.central, r) === addArea);
+      })
       .filter(
         (c) =>
           !addDeviceSearch ||
@@ -398,6 +416,12 @@
         if (!addExpert) {
           const hay = `${d.model} ${d.model_label ?? ""} ${d.name ?? ""}`;
           if (!OUTPUT_RE.test(hay)) return false;
+        }
+        if (addArea) {
+          const central = d.central ?? "";
+          if (!(d.rooms ?? []).some((r) => areasStore.areaIdOf(central, r) === addArea)) {
+            return false;
+          }
         }
         if (addDeviceSearch) {
           return (
@@ -423,6 +447,7 @@
     addOpen = true;
     addClass = "acoustic_siren";
     addExpert = false;
+    addArea = "";
     addDeviceSearch = "";
     addDevice = null;
     addCandidate = null;
@@ -512,18 +537,18 @@
     if (e.key === "Escape" && addOpen) addOpen = false;
   }
 
-  const areaOptions = $derived(areas.map((a) => ({ value: a.id, label: a.name })));
+  const zoneOptions = $derived(zones.map((a) => ({ value: a.id, label: a.name })));
 
   $effect(() => {
-    if (areas.length > 0 && !areas.some((a) => a.id === areaId)) {
-      areaId = areas[0].id;
+    if (zones.length > 0 && !zones.some((a) => a.id === zoneId)) {
+      zoneId = zones[0].id;
     }
   });
 
   let loadedFor = $state("");
   $effect(() => {
-    if (areaId && areaId !== loadedFor) {
-      loadedFor = areaId;
+    if (zoneId && zoneId !== loadedFor) {
+      loadedFor = zoneId;
       void loadOutputs();
     }
   });
@@ -531,13 +556,18 @@
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
+    areasStore.ensureLoaded();
     void loadCandidates();
   });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if areas.length === 0}
+{#if alarmPanelStore.loading && zones.length === 0}
+  <LoadingState />
+{:else if alarmPanelStore.error && zones.length === 0}
+  <ErrorState message={alarmPanelStore.error} onRetry={() => void alarmPanelStore.refresh()} />
+{:else if zones.length === 0}
   <EmptyState
     icon="mdi:shield-home"
     message={t("alarm.overview.empty")}
@@ -550,12 +580,12 @@
     {/snippet}
   </EmptyState>
 {:else}
-  <!-- Toolbar: area selector + add -->
+  <!-- Toolbar: zone selector + add -->
   <div class="mb-4 flex flex-wrap items-center gap-3">
     <label class="flex items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]">
-      <span>{t("alarm.sensors.area")}</span>
+      <span>{t("alarm.sensors.zone")}</span>
       <div class="min-w-48">
-        <Select options={areaOptions} bind:value={areaId} />
+        <Select options={zoneOptions} bind:value={zoneId} />
       </div>
     </label>
     <Button size="sm" class="ml-auto" onclick={openAdd}>
@@ -1022,6 +1052,16 @@
             </label>
           </div>
           <Input type="search" placeholder={t("common.search")} bind:value={addDeviceSearch} />
+          {#if areasStore.areas.length > 0}
+            <Select
+              value={addArea}
+              onValueChange={(v) => (addArea = v)}
+              options={[
+                { value: "", label: t("alarm.sensors.filter.all") },
+                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
+          {/if}
           <div class="mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--ha-divider-color)]">
             {#if addUseCandidates}
               {#if addClassCandidates.length === 0}
@@ -1039,7 +1079,12 @@
                     <span class="truncate text-sm text-[var(--ha-primary-text-color)]">
                       {c.device_name || c.device_address}{c.channel_name ? ` · ${c.channel_name}` : ""}
                     </span>
-                    <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{c.model} · {c.channel_address}</span>
+                    <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{candidateModelLabel(c)} · {c.channel_address}</span>
+                    {#if (c.rooms ?? []).length > 0 || (c.functions ?? []).length > 0}
+                      <span class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                        {[...(c.rooms ?? []), ...(c.functions ?? [])].join(" · ")}
+                      </span>
+                    {/if}
                   </button>
                 {/each}
               {/if}
@@ -1057,6 +1102,11 @@
                 >
                   <span class="truncate text-sm text-[var(--ha-primary-text-color)]">{d.name || d.address}</span>
                   <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">{d.model_label || d.model} · {d.address}</span>
+                  {#if (d.rooms ?? []).length > 0}
+                    <span class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                      {(d.rooms ?? []).join(", ")}
+                    </span>
+                  {/if}
                 </button>
               {/each}
             {/if}

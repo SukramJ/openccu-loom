@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 56004e91
-HEAD: 56004e91
+Generated: 080ea834
+HEAD: 080ea834
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 26838 |
-| Reachable | 4639 |
-| Whitelisted | 19361 |
-| **Unreachable** | **2838** |
+| Total Exported | 27044 |
+| Reachable | 4686 |
+| Whitelisted | 19469 |
+| **Unreachable** | **2889** |
 
 ## Top-20 Packages by Dead Code
 
@@ -33,7 +33,7 @@ HEAD: 56004e91
 | internal/model/event | 2 | 5 | 0 |
 | internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
-| internal/north/discovery/mdns | 2 | 6 | 2 |
+| internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
 
@@ -81,8 +81,8 @@ HEAD: 56004e91
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
-| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 101 |
-| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 101 |
+| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
+| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 109 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
@@ -113,9 +113,10 @@ HEAD: 56004e91
 | internal/model/event | 2 | 5 | 0 |
 | internal/model/hub | 2 | 59 | 42 |
 | internal/model/optimistic | 2 | 6 | 0 |
-| internal/north/discovery/mdns | 2 | 6 | 2 |
+| internal/north/discovery/mdns | 2 | 6 | 4 |
 | internal/routingkey | 2 | 0 | 2 |
 | cmd/openccu-loom | 0 | 2 | 0 |
+| internal/addonupdate | 0 | 18 | 18 |
 | internal/alarm | 0 | 23 | 0 |
 | internal/alarm/codes | 0 | 13 | 0 |
 | internal/alarm/engine | 0 | 25 | 6 |
@@ -181,7 +182,7 @@ HEAD: 56004e91
 | internal/north/matter/transport/mrp | 0 | 10 | 4 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
 | internal/north/mcp | 0 | 8 | 0 |
-| internal/north/mqtt | 0 | 79 | 4 |
+| internal/north/mqtt | 0 | 83 | 4 |
 | internal/north/rest | 0 | 4 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/north/ui | 0 | 1 | 0 |
@@ -193,8 +194,8 @@ HEAD: 56004e91
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 93 | 28 |
-| pkg/hmapi | 0 | 125 | 16 |
+| internal/store/sqlite | 0 | 98 | 28 |
+| pkg/hmapi | 0 | 129 | 16 |
 | pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
 | pkg/hmui | 0 | 2 | 0 |

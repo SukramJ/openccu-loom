@@ -12,10 +12,10 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// AreaStore loads the configured alarm areas. Satisfied by
-// *sqlitestore.AlarmAreaStore.
-type AreaStore interface {
-	GetAll(ctx context.Context) ([]sqlitestore.AlarmAreaRow, error)
+// ZoneStore loads the configured alarm zones. Satisfied by
+// *sqlitestore.AlarmZoneStore.
+type ZoneStore interface {
+	GetAll(ctx context.Context) ([]sqlitestore.AlarmZoneRow, error)
 }
 
 // SensorStore loads the enrolled sensors. Satisfied by
@@ -24,12 +24,12 @@ type SensorStore interface {
 	GetAll(ctx context.Context) ([]sqlitestore.AlarmSensorRow, error)
 }
 
-// StateStore persists the per-area arm state. Satisfied by
+// StateStore persists the per-zone arm state. Satisfied by
 // *sqlitestore.AlarmStateStore.
 type StateStore interface {
 	Upsert(ctx context.Context, row sqlitestore.AlarmStateRow) error
-	Get(ctx context.Context, areaID string) (sqlitestore.AlarmStateRow, bool, error)
-	Delete(ctx context.Context, areaID string) error
+	Get(ctx context.Context, zoneID string) (sqlitestore.AlarmStateRow, bool, error)
+	Delete(ctx context.Context, zoneID string) error
 }
 
 // IncidentStore persists trigger episodes and their safety counters.
@@ -37,7 +37,7 @@ type StateStore interface {
 type IncidentStore interface {
 	Create(ctx context.Context, inc sqlitestore.AlarmIncident) (int64, error)
 	Get(ctx context.Context, id int64) (sqlitestore.AlarmIncident, bool, error)
-	GetOpenByArea(ctx context.Context, areaID string) (sqlitestore.AlarmIncident, bool, error)
+	GetOpenByZone(ctx context.Context, zoneID string) (sqlitestore.AlarmIncident, bool, error)
 	MarkSilenced(ctx context.Context, id, atMS int64, by string) error
 	IncrementRetriggerCycles(ctx context.Context, id int64) error
 	IncrementRestoreRefires(ctx context.Context, id int64) error
@@ -115,12 +115,12 @@ type ChirpRequest struct {
 // driver's own goroutines. Chirp is best-effort feedback: the driver
 // may thin or drop requests (S5) and the engine only logs errors.
 type OutputPort interface {
-	FireCycle(ctx context.Context, areaID string, incident sqlitestore.AlarmIncident, opts FireOptions) error
-	StopAll(ctx context.Context, areaID string, incidentID int64) error
-	Chirp(ctx context.Context, areaID string, req ChirpRequest) error
+	FireCycle(ctx context.Context, zoneID string, incident sqlitestore.AlarmIncident, opts FireOptions) error
+	StopAll(ctx context.Context, zoneID string, incidentID int64) error
+	Chirp(ctx context.Context, zoneID string, req ChirpRequest) error
 }
 
-// CodeValidator authenticates an alarm code for one verb on one area
+// CodeValidator authenticates an alarm code for one verb on one zone
 // (docs/alarm-concept.md §11). It is satisfied by the codes facade,
 // which owns the code store; the engine only knows this port.
 //
@@ -129,13 +129,13 @@ type OutputPort interface {
 //     duress code, with a nil error. The verb then proceeds normally
 //     (a duress code is not blocked — it fires a silent alarm instead).
 //   - A supplied code that does not authenticate returns ErrInvalidCode.
-//   - An empty code against an area that has no applicable enabled code
+//   - An empty code against an zone that has no applicable enabled code
 //     returns a nil error with an empty identity: the requirement is
-//     inert, so a code policy can never lock an area out when no codes
+//     inert, so a code policy can never lock an zone out when no codes
 //     exist. This resolves the "codes exist" half of the effective
 //     disarm rule the engine cannot see through this port.
 type CodeValidator interface {
-	Validate(ctx context.Context, areaID, verb, code, source string) (identity string, duress bool, err error)
+	Validate(ctx context.Context, zoneID, verb, code, source string) (identity string, duress bool, err error)
 }
 
 // EventSink receives the engine's domain events for bus publishing.
@@ -145,7 +145,7 @@ type EventSink interface {
 
 // JournalEntry is one alarm-journal record as the engine emits it.
 type JournalEntry struct {
-	AreaID     string
+	ZoneID     string
 	Class      hmenum.AlarmJournalClass
 	Event      string
 	Actor      string

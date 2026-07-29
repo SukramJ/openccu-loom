@@ -21,12 +21,12 @@ import (
 
 // Sentinel errors returned by the engine's verbs.
 var (
-	// ErrUnknownArea reports an area ID the engine does not manage.
-	ErrUnknownArea = errors.New("engine: unknown area")
-	// ErrUnknownMode reports a mode the area does not configure.
-	ErrUnknownMode = errors.New("engine: mode not configured for area")
+	// ErrUnknownZone reports an zone ID the engine does not manage.
+	ErrUnknownZone = errors.New("engine: unknown zone")
+	// ErrUnknownMode reports a mode the zone does not configure.
+	ErrUnknownMode = errors.New("engine: mode not configured for zone")
 	// ErrInvalidState reports a verb not allowed in the current
-	// state (e.g. arming a triggered area). Disarm and silence never
+	// state (e.g. arming a triggered zone). Disarm and silence never
 	// return it — they are never state-gated.
 	ErrInvalidState = errors.New("engine: action not allowed in current state")
 	// ErrNoIncident reports an acknowledge without an open incident.
@@ -135,7 +135,7 @@ type incidentCause struct {
 type Deps struct {
 	Clock        clock.Clock
 	Scheduler    TimerScheduler
-	Areas        AreaStore
+	Zones        ZoneStore
 	Sensors      SensorStore
 	State        StateStore
 	Incidents    IncidentStore
@@ -153,14 +153,14 @@ type Deps struct {
 	RestartLoopBreakerK int
 }
 
-// Engine hosts one arm-state machine per alarm area. All mutating
+// Engine hosts one arm-state machine per alarm zone. All mutating
 // entry points (verbs, sensor events, timer fires) serialize on one
 // mutex; persistence is write-through under that lock so the stored
 // state never runs ahead of or behind the in-memory state.
 type Engine struct {
 	clk          clock.Clock
 	sched        TimerScheduler
-	areasStore   AreaStore
+	zonesStore   ZoneStore
 	sensorsStore SensorStore
 	stateStore   StateStore
 	incidents    IncidentStore
@@ -176,8 +176,8 @@ type Engine struct {
 	mu          sync.Mutex
 	started     bool
 	bootCount   int64
-	areas       map[string]*area
-	sensorIndex map[string]string // sensor ID → area ID
+	zones       map[string]*zone
+	sensorIndex map[string]string // sensor ID → zone ID
 
 	// lifeCtx bounds timer-driven work. Timer fires outlive the
 	// request that scheduled them, so they deliberately detach from
@@ -189,7 +189,7 @@ type Engine struct {
 // New constructs an engine. Call Start to load configuration and
 // restore persisted state.
 func New(deps Deps) (*Engine, error) {
-	if deps.Areas == nil || deps.Sensors == nil || deps.State == nil || deps.Incidents == nil || deps.Runtime == nil {
+	if deps.Zones == nil || deps.Sensors == nil || deps.State == nil || deps.Incidents == nil || deps.Runtime == nil {
 		return nil, errors.New("engine: missing required store dependency")
 	}
 	clk := deps.Clock
@@ -223,7 +223,7 @@ func New(deps Deps) (*Engine, error) {
 	return &Engine{
 		clk:          clk,
 		sched:        sched,
-		areasStore:   deps.Areas,
+		zonesStore:   deps.Zones,
 		sensorsStore: deps.Sensors,
 		stateStore:   deps.State,
 		incidents:    deps.Incidents,
@@ -235,7 +235,7 @@ func New(deps Deps) (*Engine, error) {
 		validator:    deps.Validator,
 		log:          logger,
 		loopBreakerK: k,
-		areas:        map[string]*area{},
+		zones:        map[string]*zone{},
 		sensorIndex:  map[string]string{},
 		lifeCtx:      context.Background(),
 	}, nil
@@ -250,32 +250,32 @@ func (e *Engine) Stop(ctx context.Context) {
 		return
 	}
 	e.started = false
-	for _, a := range e.areas {
+	for _, a := range e.zones {
 		e.persist(ctx, a)
 		a.cancelTimers()
 	}
 }
 
-// Areas returns snapshots of every managed area, ordered by ID.
-func (e *Engine) Areas() []AreaSnapshot {
+// Zones returns snapshots of every managed zone, ordered by ID.
+func (e *Engine) Zones() []ZoneSnapshot {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	now := e.clk.Now()
-	out := make([]AreaSnapshot, 0, len(e.areas))
-	for _, a := range e.areas {
+	out := make([]ZoneSnapshot, 0, len(e.zones))
+	for _, a := range e.zones {
 		out = append(out, a.snapshot(now))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
 
-// Area returns the snapshot of one area.
-func (e *Engine) Area(id string) (AreaSnapshot, bool) {
+// Zone returns the snapshot of one zone.
+func (e *Engine) Zone(id string) (ZoneSnapshot, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[id]
+	a, ok := e.zones[id]
 	if !ok {
-		return AreaSnapshot{}, false
+		return ZoneSnapshot{}, false
 	}
 	return a.snapshot(e.clk.Now()), true
 }
@@ -291,7 +291,7 @@ type ArmRequest struct {
 	Bypass []string
 	// SkipDelay arms without the exit delay.
 	SkipDelay bool
-	// Code is the alarm code supplied with the arm, when the area's
+	// Code is the alarm code supplied with the arm, when the zone's
 	// CodePolicy requires one (or to surface a duress code). Empty when
 	// none was supplied.
 	Code   string
@@ -301,15 +301,15 @@ type ArmRequest struct {
 
 // ArmResult reports the outcome of an accepted arm.
 type ArmResult struct {
-	State     hmenum.AlarmAreaState
+	State     hmenum.AlarmZoneState
 	Bypassed  []string
 	ExitDelay time.Duration
 }
 
-// Arm starts arming areaID into req.Mode. It fails with
+// Arm starts arming zoneID into req.Mode. It fails with
 // *NotReadyError when blockers remain and Force is not set; pending
-// and triggered areas must be disarmed first.
-func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmResult, error) {
+// and triggered zones must be disarmed first.
+func (e *Engine) Arm(ctx context.Context, zoneID string, req ArmRequest) (ArmResult, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	// Arm is refused on an engine that is not running; silence and
@@ -317,9 +317,9 @@ func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmRes
 	if !e.started {
 		return ArmResult{}, ErrInvalidState
 	}
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return ArmResult{}, ErrUnknownArea
+		return ArmResult{}, ErrUnknownZone
 	}
 	if !req.Mode.Armed() {
 		return ArmResult{}, ErrUnknownMode
@@ -328,7 +328,7 @@ func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmRes
 	if !ok {
 		return ArmResult{}, ErrUnknownMode
 	}
-	if a.state == hmenum.AlarmAreaStatePending || a.state == hmenum.AlarmAreaStateTriggered {
+	if a.state == hmenum.AlarmZoneStatePending || a.state == hmenum.AlarmZoneStateTriggered {
 		return ArmResult{}, ErrInvalidState
 	}
 
@@ -349,7 +349,7 @@ func (e *Engine) Arm(ctx context.Context, areaID string, req ArmRequest) (ArmRes
 // transition; the caller holds the lock and has validated the mode and
 // any code. It is shared by the public Arm verb and the auto-rearm
 // timer, and honors Force / Bypass exactly as Arm documents.
-func (e *Engine) beginArm(ctx context.Context, a *area, req ArmRequest, mcfg ModeConfig) (ArmResult, error) {
+func (e *Engine) beginArm(ctx context.Context, a *zone, req ArmRequest, mcfg ModeConfig) (ArmResult, error) {
 	// A fresh arm supersedes any pending auto-rearm.
 	a.cancelAutoRearm()
 
@@ -402,7 +402,7 @@ func (e *Engine) beginArm(ctx context.Context, a *area, req ArmRequest, mcfg Mod
 	sort.Strings(res.Bypassed)
 
 	if exit > 0 {
-		a.state = hmenum.AlarmAreaStateArming
+		a.state = hmenum.AlarmZoneStateArming
 		e.scheduleStateTimer(a, timerKindExit, exit)
 		e.startTicks(a, timerKindExit)
 		e.persist(ctx, a)
@@ -421,9 +421,9 @@ func (e *Engine) beginArm(ctx context.Context, a *area, req ArmRequest, mcfg Mod
 
 // completeArm finishes the transition into armed: it captures the
 // open-at-arm baseline and persists. The caller holds the lock.
-func (e *Engine) completeArm(ctx context.Context, a *area, from hmenum.AlarmAreaState, by, source string) {
+func (e *Engine) completeArm(ctx context.Context, a *zone, from hmenum.AlarmZoneState, by, source string) {
 	a.cancelTimers()
-	a.state = hmenum.AlarmAreaStateArmed
+	a.state = hmenum.AlarmZoneStateArmed
 	e.recaptureOpenBaseline(a)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
@@ -439,7 +439,7 @@ func (e *Engine) completeArm(ctx context.Context, a *area, from hmenum.AlarmArea
 // recaptureOpenBaseline records the member sensors that are active for
 // the current mode as the open-at-arm baseline, so a door still standing
 // open does not instantly (re-)trigger. The caller holds the lock.
-func (e *Engine) recaptureOpenBaseline(a *area) {
+func (e *Engine) recaptureOpenBaseline(a *zone) {
 	a.openAtArm = map[string]bool{}
 	for id, s := range a.sensors {
 		if s.cfg.InMode(a.mode) && !a.bypassed[id] && s.activeKnown && s.active {
@@ -448,14 +448,14 @@ func (e *Engine) recaptureOpenBaseline(a *area) {
 	}
 }
 
-// authorize applies the area's CodePolicy to one verb. It returns the
+// authorize applies the zone's CodePolicy to one verb. It returns the
 // resolved code identity (for changed-by attribution), whether the code
 // is a duress code, and a refusal error (ErrInvalidCode) when a required
 // code is missing or wrong. A nil CodeValidator disables codes entirely.
 // Pre-authenticated sources (operator sessions, hardware keypad/remote
 // bindings) bypass the requirement; operator sources still get duress
 // detection on a supplied code. The caller holds the lock.
-func (e *Engine) authorize(ctx context.Context, a *area, verb, code, source string) (identity string, duress bool, refuse error) {
+func (e *Engine) authorize(ctx context.Context, a *zone, verb, code, source string) (identity string, duress bool, refuse error) {
 	if e.validator == nil {
 		return "", false, nil
 	}
@@ -484,7 +484,7 @@ func (e *Engine) authorize(ctx context.Context, a *area, verb, code, source stri
 // a dedicated AlarmDuressEvent on the bus for the MQTT/webhook
 // consumers. The verb itself proceeds normally. The caller holds the
 // lock.
-func (e *Engine) fireDuress(ctx context.Context, a *area, verb, by, source string) {
+func (e *Engine) fireDuress(ctx context.Context, a *zone, verb, by, source string) {
 	incID := int64(0)
 	if a.incident != nil {
 		incID = a.incident.ID
@@ -495,7 +495,7 @@ func (e *Engine) fireDuress(ctx context.Context, a *area, verb, by, source strin
 	})
 	e.sink.Publish(hmevent.AlarmDuressEvent{
 		Base:   hmevent.NewBaseAt(e.clk.Now()),
-		AreaID: a.id, AreaName: a.name,
+		ZoneID: a.id, ZoneName: a.name,
 		Verb: verb, By: by, Source: source, IncidentID: incID,
 	})
 }
@@ -513,27 +513,27 @@ func duressJournalClass(verb string) hmenum.AlarmJournalClass {
 	}
 }
 
-// Disarm ends any alarm and returns the area to disarmed. It is never
+// Disarm ends any alarm and returns the zone to disarmed. It is never
 // state-gated (S6) and implies silence: the open incident is marked
 // silenced and closed, and all outputs stop. It is a code-free wrapper
 // over DisarmWithCode for the many call sites that never carry a code.
-func (e *Engine) Disarm(ctx context.Context, areaID, by, source string) error {
-	return e.DisarmWithCode(ctx, areaID, by, source, "")
+func (e *Engine) Disarm(ctx context.Context, zoneID, by, source string) error {
+	return e.DisarmWithCode(ctx, zoneID, by, source, "")
 }
 
-// DisarmWithCode is Disarm with an alarm code, honoring the area's
-// CodePolicy (docs/alarm-concept.md §11). An already-disarmed area
-// short-circuits before the code check: disarming a disarmed area is an
+// DisarmWithCode is Disarm with an alarm code, honoring the zone's
+// CodePolicy (docs/alarm-concept.md §11). An already-disarmed zone
+// short-circuits before the code check: disarming a disarmed zone is an
 // idempotent no-op and needs no security decision.
-func (e *Engine) DisarmWithCode(ctx context.Context, areaID, by, source, code string) error {
+func (e *Engine) DisarmWithCode(ctx context.Context, zoneID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return ErrUnknownArea
+		return ErrUnknownZone
 	}
-	if a.state == hmenum.AlarmAreaStateDisarmed {
-		// An explicit disarm of an already-disarmed area is a no-op, but
+	if a.state == hmenum.AlarmZoneStateDisarmed {
+		// An explicit disarm of an already-disarmed zone is a no-op, but
 		// it cancels any pending auto-rearm — the operator wants it to
 		// stay off.
 		if a.autoRearmCancel != nil {
@@ -565,25 +565,25 @@ func (e *Engine) DisarmWithCode(ctx context.Context, areaID, by, source, code st
 	return nil
 }
 
-// Silence stops all sounding outputs of the area's current incident
+// Silence stops all sounding outputs of the zone's current incident
 // and persists the silenced flag so no engine path — including a
 // restore — re-fires acoustic outputs for it (S3). State is
 // unaffected; notification outputs are never cancelled. Silence never
 // fails on state and is deliberately not gated. It is a code-free
 // wrapper over SilenceWithCode.
-func (e *Engine) Silence(ctx context.Context, areaID, by, source string) error {
-	return e.SilenceWithCode(ctx, areaID, by, source, "")
+func (e *Engine) Silence(ctx context.Context, zoneID, by, source string) error {
+	return e.SilenceWithCode(ctx, zoneID, by, source, "")
 }
 
 // SilenceWithCode is Silence with an alarm code. Silence defaults to
 // code-free (S3); a per-source RequireSilence policy or a supplied code
 // engages the CodeValidator (docs/alarm-concept.md §11).
-func (e *Engine) SilenceWithCode(ctx context.Context, areaID, by, source, code string) error {
+func (e *Engine) SilenceWithCode(ctx context.Context, zoneID, by, source, code string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return ErrUnknownArea
+		return ErrUnknownZone
 	}
 	identity, duress, cerr := e.authorize(ctx, a, codeVerbSilence, code, source)
 	if cerr != nil {
@@ -599,19 +599,19 @@ func (e *Engine) SilenceWithCode(ctx context.Context, areaID, by, source, code s
 	return nil
 }
 
-// SilenceAll silences every area (the global silence surface).
+// SilenceAll silences every zone (the global silence surface).
 func (e *Engine) SilenceAll(ctx context.Context, by, source string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	for _, id := range e.sortedAreaIDs() {
-		e.silenceLocked(ctx, e.areas[id], by, source)
+	for _, id := range e.sortedZoneIDs() {
+		e.silenceLocked(ctx, e.zones[id], by, source)
 	}
 }
 
-// silenceLocked applies the silence verb to one area. Even without an
+// silenceLocked applies the silence verb to one zone. Even without an
 // open incident it issues a StopAll — stopping more than necessary is
 // always the safe direction. The caller holds the lock.
-func (e *Engine) silenceLocked(ctx context.Context, a *area, by, source string) {
+func (e *Engine) silenceLocked(ctx context.Context, a *zone, by, source string) {
 	if a.incident != nil {
 		e.silenceIncident(ctx, a, by, source)
 		// The state row carries the redundant silence marker, so this
@@ -635,7 +635,7 @@ func (e *Engine) silenceLocked(ctx context.Context, a *area, by, source string) 
 // silenceIncident marks the open incident silenced (in memory first —
 // that can never be lost to an I/O failure), persists the flag, and
 // stops outputs. The caller holds the lock.
-func (e *Engine) silenceIncident(ctx context.Context, a *area, by, source string) {
+func (e *Engine) silenceIncident(ctx context.Context, a *zone, by, source string) {
 	inc := a.incident
 	if inc == nil || inc.Silenced {
 		if inc != nil {
@@ -667,14 +667,14 @@ func (e *Engine) silenceIncident(ctx context.Context, a *area, by, source string
 	}
 }
 
-// Acknowledge marks the area's open incident as seen. Journal-only —
+// Acknowledge marks the zone's open incident as seen. Journal-only —
 // no state effect.
-func (e *Engine) Acknowledge(ctx context.Context, areaID, by, source string) error {
+func (e *Engine) Acknowledge(ctx context.Context, zoneID, by, source string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return ErrUnknownArea
+		return ErrUnknownZone
 	}
 	if a.incident == nil {
 		return ErrNoIncident
@@ -705,21 +705,21 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 	defer e.refreshReadiness(a)
 
 	if s.row.SensorType == hmenum.AlarmSensorTypeTamper && active &&
-		a.state == hmenum.AlarmAreaStateDisarmed {
+		a.state == hmenum.AlarmZoneStateDisarmed {
 		e.journalFault(ctx, a, "tamper_while_disarmed", nil, 0)
 	}
 
 	// Always-on hazard/panic sensors bypass the arm-state machine: a
 	// fresh activation fires the class output policy 24/7, independent
-	// of area state. Placed before the walk-test consumer so a real
+	// of zone state. Placed before the walk-test consumer so a real
 	// hazard during a walk test is never suppressed.
 	if s.cfg.AlwaysOn && active && !wasActive {
 		e.alwaysOnFromSensor(ctx, a, s)
 		return
 	}
 
-	// A running walk test consumes activations of the disarmed area.
-	if e.walkTestObserve(ctx, a, sensorID, active) && a.state == hmenum.AlarmAreaStateDisarmed {
+	// A running walk test consumes activations of the disarmed zone.
+	if e.walkTestObserve(ctx, a, sensorID, active) && a.state == hmenum.AlarmZoneStateDisarmed {
 		return
 	}
 
@@ -732,7 +732,7 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 			e.persist(ctx, a)
 		}
 		// Closing during the exit delay may complete the arm early.
-		if a.state == hmenum.AlarmAreaStateArming && s.cfg.ArmAfterClosing && s.cfg.InMode(a.mode) {
+		if a.state == hmenum.AlarmZoneStateArming && s.cfg.ArmAfterClosing && s.cfg.InMode(a.mode) {
 			e.scheduleArmCloseDebounce(a, sensorID)
 		}
 		return
@@ -744,7 +744,7 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 	// auto-rearm (the quiet period restarts) and — if the sensor is a
 	// chime source — sounds the door chime. Neither happens during a
 	// walk test: the consumer above already returned.
-	if a.state == hmenum.AlarmAreaStateDisarmed {
+	if a.state == hmenum.AlarmZoneStateDisarmed {
 		if a.autoRearmCancel != nil && s.cfg.InMode(a.autoRearmMode) {
 			e.deferAutoRearm(ctx, a, sensorID)
 		}
@@ -762,19 +762,19 @@ func (e *Engine) HandleSensorEvent(ctx context.Context, sensorID string, active 
 // through the arm-state machine. The caller holds the lock and has
 // already filtered walk tests, always-on sensors, bypasses, and
 // mode membership.
-func (e *Engine) dispatchSensorActivation(ctx context.Context, a *area, s *sensorState, sensorID string) {
+func (e *Engine) dispatchSensorActivation(ctx context.Context, a *zone, s *sensorState, sensorID string) {
 	cause := incidentCause{Kind: causeKindSensor, SensorID: sensorID, SensorName: s.row.Name}
 
 	switch a.state {
-	case hmenum.AlarmAreaStateArming:
+	case hmenum.AlarmZoneStateArming:
 		// Instant sensors trigger during the exit delay; sensors
 		// flagged use_exit_delay may be active while leaving.
 		if !s.cfg.UseExitDelay {
 			e.trigger(ctx, a, cause, FireOptions{})
 		}
-	case hmenum.AlarmAreaStateArmed:
+	case hmenum.AlarmZoneStateArmed:
 		e.routeActivation(ctx, a, s, cause)
-	case hmenum.AlarmAreaStatePending:
+	case hmenum.AlarmZoneStatePending:
 		// An instant sensor escalates immediately; delayed sensors
 		// are journaled but do not extend the countdown.
 		if !s.cfg.UseEntryDelay {
@@ -785,7 +785,7 @@ func (e *Engine) dispatchSensorActivation(ctx context.Context, a *area, s *senso
 				Details: map[string]any{"sensor_id": sensorID},
 			})
 		}
-	case hmenum.AlarmAreaStateTriggered:
+	case hmenum.AlarmZoneStateTriggered:
 		// Journaled for verification value; no new output cycles
 		// beyond the incident's re-trigger policy.
 		incID := int64(0)
@@ -796,18 +796,18 @@ func (e *Engine) dispatchSensorActivation(ctx context.Context, a *area, s *senso
 			Class: hmenum.AlarmJournalClassTrigger, Event: "sensor_activity",
 			IncidentID: incID, Details: map[string]any{"sensor_id": sensorID},
 		})
-	case hmenum.AlarmAreaStateDisarmed:
+	case hmenum.AlarmZoneStateDisarmed:
 	}
 }
 
 // routeActivation routes an armed-state activation into pending or an
 // instant trigger, per the sensor's flags. The caller holds the lock.
-func (e *Engine) routeActivation(ctx context.Context, a *area, s *sensorState, cause incidentCause) {
+func (e *Engine) routeActivation(ctx context.Context, a *zone, s *sensorState, cause incidentCause) {
 	mcfg := a.cfg.Modes[a.mode]
 	if s.cfg.UseEntryDelay {
 		if d := mcfg.entryDelay(s.cfg); d > 0 {
 			from := a.state
-			a.state = hmenum.AlarmAreaStatePending
+			a.state = hmenum.AlarmZoneStatePending
 			a.pendingCause = cause.SensorID
 			e.scheduleStateTimer(a, timerKindEntry, d)
 			e.startTicks(a, timerKindEntry)
@@ -850,7 +850,7 @@ func (e *Engine) SetSensorAvailability(ctx context.Context, sensorID string, ava
 	// The activation route (pending/instant) only applies from armed:
 	// during arming or pending it would replace the running countdown
 	// (§5 documents no such edge), so those states warn instead.
-	if s.cfg.TriggerWhenUnavailable && a.state == hmenum.AlarmAreaStateArmed {
+	if s.cfg.TriggerWhenUnavailable && a.state == hmenum.AlarmZoneStateArmed {
 		e.routeActivation(ctx, a, s, incidentCause{
 			Kind: causeKindUnavailable, SensorID: sensorID, SensorName: s.row.Name,
 		})
@@ -881,7 +881,7 @@ func (e *Engine) SetSensorHealth(ctx context.Context, sensorID string, h SensorH
 }
 
 // HandleCentralConnectivity degrades or restores every sensor of a
-// central. An armed area with member sensors on a lost central reacts
+// central. An armed zone with member sensors on a lost central reacts
 // per its central-loss policy — loudly, never silently.
 func (e *Engine) HandleCentralConnectivity(ctx context.Context, centralName string, connected bool) {
 	e.mu.Lock()
@@ -889,8 +889,8 @@ func (e *Engine) HandleCentralConnectivity(ctx context.Context, centralName stri
 	if !e.started {
 		return
 	}
-	for _, id := range e.sortedAreaIDs() {
-		a := e.areas[id]
+	for _, id := range e.sortedZoneIDs() {
+		a := e.zones[id]
 		affected := false
 		var firstAffected *sensorState
 		for _, s := range a.sensors {
@@ -927,14 +927,14 @@ func (e *Engine) HandleCentralConnectivity(ctx context.Context, centralName stri
 	}
 }
 
-// trigger opens (or reuses) the area's incident and enters triggered.
+// trigger opens (or reuses) the zone's incident and enters triggered.
 // Ordering is safety-first: the incident with its counters is
 // persisted before outputs fire, so a crash can only over-count.
 // A persist failure must not mute the alarm — the engine then runs an
 // unpersisted incident and journals the degradation (S7).
 // The caller holds the lock.
-func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts FireOptions) {
-	if a.state == hmenum.AlarmAreaStateTriggered {
+func (e *Engine) trigger(ctx context.Context, a *zone, cause incidentCause, opts FireOptions) {
+	if a.state == hmenum.AlarmZoneStateTriggered {
 		return
 	}
 	from := a.state
@@ -950,7 +950,7 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 			causeJSON = []byte("{}")
 		}
 		inc := sqlitestore.AlarmIncident{
-			AreaID:            a.id,
+			ZoneID:            a.id,
 			Mode:              a.mode,
 			CauseJSON:         string(causeJSON),
 			StartedAtMS:       unixMS(now),
@@ -973,7 +973,7 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 	// the pre-alarm phase here.
 	preAlarm := newIncident && !opts.Restored && mcfg.PreAlarmSeconds > 0
 
-	a.state = hmenum.AlarmAreaStateTriggered
+	a.state = hmenum.AlarmZoneStateTriggered
 	a.pendingCause = ""
 	a.preAlarm = preAlarm
 
@@ -1001,7 +1001,7 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 	})
 	e.sink.Publish(hmevent.AlarmTriggeredEvent{
 		Base:   hmevent.NewBaseAt(now),
-		AreaID: a.id, AreaName: a.name,
+		ZoneID: a.id, ZoneName: a.name,
 		IncidentID: a.incident.ID,
 		SensorID:   cause.SensorID, SensorName: cause.SensorName,
 		Cause: cause.Kind, Mode: a.mode,
@@ -1013,7 +1013,7 @@ func (e *Engine) trigger(ctx context.Context, a *area, cause incidentCause, opts
 // finishes the incident when it was silenced during the pre-alarm phase
 // (a silence during pre-alarm cancels the full escalation). The caller
 // holds the lock.
-func (e *Engine) onPreAlarmElapsed(ctx context.Context, a *area) {
+func (e *Engine) onPreAlarmElapsed(ctx context.Context, a *zone) {
 	a.preAlarm = false
 	inc := a.incident
 	if inc != nil && inc.Silenced {
@@ -1052,7 +1052,7 @@ func (e *Engine) onPreAlarmElapsed(ctx context.Context, a *area) {
 // the next bounded re-trigger cycle starts (accounted before firing;
 // an accounting failure skips the cycle — the safe direction), or the
 // post-trigger policy executes. The caller holds the lock.
-func (e *Engine) onTriggerElapsed(ctx context.Context, a *area) {
+func (e *Engine) onTriggerElapsed(ctx context.Context, a *zone) {
 	// Always-on (hazard/panic) incidents do not re-trigger; they return
 	// to the state they interrupted.
 	if a.preTriggerState != "" {
@@ -1097,7 +1097,7 @@ func (e *Engine) onTriggerElapsed(ctx context.Context, a *area) {
 // finishTriggered leaves the triggered state via the post-trigger
 // policy. Outputs are stopped (the alarm-light lifecycle ends with
 // the episode) and the incident closes. The caller holds the lock.
-func (e *Engine) finishTriggered(ctx context.Context, a *area, journalEvent string) {
+func (e *Engine) finishTriggered(ctx context.Context, a *zone, journalEvent string) {
 	from := a.state
 	incID := int64(0)
 	if a.incident != nil {
@@ -1113,7 +1113,7 @@ func (e *Engine) finishTriggered(ctx context.Context, a *area, journalEvent stri
 	if a.cfg.PostTrigger == hmenum.AlarmPostTriggerDisarm {
 		rearmMode := a.mode
 		a.cancelTimers()
-		a.state = hmenum.AlarmAreaStateDisarmed
+		a.state = hmenum.AlarmZoneStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
 		a.bypassed = map[string]bool{}
 		a.openAtArm = map[string]bool{}
@@ -1135,9 +1135,9 @@ func (e *Engine) finishTriggered(ctx context.Context, a *area, journalEvent stri
 }
 
 // closeIncident closes the open incident (idempotent) and detaches it
-// from the area, including the redundant silence marker. The caller
+// from the zone, including the redundant silence marker. The caller
 // holds the lock.
-func (e *Engine) closeIncident(ctx context.Context, a *area, reason string) {
+func (e *Engine) closeIncident(ctx context.Context, a *zone, reason string) {
 	inc := a.incident
 	if inc == nil {
 		return
@@ -1151,9 +1151,9 @@ func (e *Engine) closeIncident(ctx context.Context, a *area, reason string) {
 	a.silencedIncidentID = 0
 }
 
-// scheduleStateTimer replaces the area's state timer. The caller
+// scheduleStateTimer replaces the zone's state timer. The caller
 // holds the lock.
-func (e *Engine) scheduleStateTimer(a *area, kind string, d time.Duration) {
+func (e *Engine) scheduleStateTimer(a *zone, kind string, d time.Duration) {
 	if a.timerCancel != nil {
 		a.timerCancel()
 	}
@@ -1162,9 +1162,9 @@ func (e *Engine) scheduleStateTimer(a *area, kind string, d time.Duration) {
 	a.timerKind = kind
 	a.timerDeadline = e.clk.Now().Add(d)
 	a.timerRemaining = d
-	areaID := a.id
+	zoneID := a.id
 	a.timerCancel = e.sched.Schedule(d, func() {
-		e.onStateTimerFired(areaID, seq)
+		e.onStateTimerFired(zoneID, seq)
 	})
 }
 
@@ -1174,10 +1174,10 @@ func (e *Engine) scheduleStateTimer(a *area, kind string, d time.Duration) {
 // scheduled it.
 //
 //nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
-func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
+func (e *Engine) onStateTimerFired(zoneID string, seq uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok || a.timerSeq != seq {
 		return
 	}
@@ -1187,11 +1187,11 @@ func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
 	ctx := e.lifeCtx
 	switch kind {
 	case timerKindExit:
-		if a.state == hmenum.AlarmAreaStateArming {
+		if a.state == hmenum.AlarmZoneStateArming {
 			e.completeArm(ctx, a, a.state, "engine", "engine")
 		}
 	case timerKindEntry:
-		if a.state == hmenum.AlarmAreaStatePending {
+		if a.state == hmenum.AlarmZoneStatePending {
 			cause := incidentCause{Kind: causeKindPendingElapsed, SensorID: a.pendingCause}
 			if s, ok := a.sensors[a.pendingCause]; ok {
 				cause.SensorName = s.row.Name
@@ -1199,11 +1199,11 @@ func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
 			e.trigger(ctx, a, cause, FireOptions{})
 		}
 	case timerKindPreAlarm:
-		if a.state == hmenum.AlarmAreaStateTriggered && a.preAlarm {
+		if a.state == hmenum.AlarmZoneStateTriggered && a.preAlarm {
 			e.onPreAlarmElapsed(ctx, a)
 		}
 	case timerKindTrigger:
-		if a.state == hmenum.AlarmAreaStateTriggered {
+		if a.state == hmenum.AlarmZoneStateTriggered {
 			e.onTriggerElapsed(ctx, a)
 		}
 	}
@@ -1215,16 +1215,16 @@ func (e *Engine) onStateTimerFired(areaID string, seq uint64) {
 // context like every timer fire.
 //
 //nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
-func (e *Engine) scheduleArmCloseDebounce(a *area, sensorID string) {
+func (e *Engine) scheduleArmCloseDebounce(a *zone, sensorID string) {
 	a.cancelDebounce()
 	a.debounceSeq++
 	seq := a.debounceSeq
-	areaID := a.id
+	zoneID := a.id
 	a.debounceCancel = e.sched.Schedule(armAfterClosingDebounce, func() {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		aa, ok := e.areas[areaID]
-		if !ok || aa.debounceSeq != seq || aa.state != hmenum.AlarmAreaStateArming {
+		aa, ok := e.zones[zoneID]
+		if !ok || aa.debounceSeq != seq || aa.state != hmenum.AlarmZoneStateArming {
 			return
 		}
 		s, ok := aa.sensors[sensorID]
@@ -1242,9 +1242,9 @@ func (e *Engine) scheduleArmCloseDebounce(a *area, sensorID string) {
 
 // chirp forwards a chirp request to the driver layer; errors are
 // logged only — feedback tones are best-effort by design (S5).
-func (e *Engine) chirp(ctx context.Context, a *area, req ChirpRequest) {
+func (e *Engine) chirp(ctx context.Context, a *zone, req ChirpRequest) {
 	if err := e.outputs.Chirp(ctx, a.id, req); err != nil {
-		e.log.Debug("alarm chirp failed", "area", a.id, "kind", string(req.Kind), "error", err)
+		e.log.Debug("alarm chirp failed", "zone", a.id, "kind", string(req.Kind), "error", err)
 	}
 }
 
@@ -1255,7 +1255,7 @@ func (e *Engine) chirp(ctx context.Context, a *area, req ChirpRequest) {
 // state timer and dies with it. The caller holds the lock.
 //
 //nolint:contextcheck // tick fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
-func (e *Engine) startTicks(a *area, timerKind string) {
+func (e *Engine) startTicks(a *zone, timerKind string) {
 	a.cancelTicks()
 	total := a.timerRemaining
 	if total <= 0 {
@@ -1263,13 +1263,13 @@ func (e *Engine) startTicks(a *area, timerKind string) {
 	}
 	a.tickSeq++
 	seq := a.tickSeq
-	areaID := a.id
+	zoneID := a.id
 	var schedule func()
 	schedule = func() {
 		a.tickCancel = e.sched.Schedule(time.Second, func() {
 			e.mu.Lock()
 			defer e.mu.Unlock()
-			aa, ok := e.areas[areaID]
+			aa, ok := e.zones[zoneID]
 			if !ok || aa.tickSeq != seq || aa.timerKind != timerKind || aa.timerCancel == nil {
 				return
 			}
@@ -1279,7 +1279,7 @@ func (e *Engine) startTicks(a *area, timerKind string) {
 			}
 			e.sink.Publish(hmevent.AlarmCountdownEvent{
 				Base:   hmevent.NewBaseAt(e.clk.Now()),
-				AreaID: areaID, Kind: timerKind,
+				ZoneID: zoneID, Kind: timerKind,
 				RemainingMS: remaining.Milliseconds(), TotalMS: total.Milliseconds(),
 			})
 			if aa.cfg.Modes[aa.mode].Outputs.CountdownTicks {
@@ -1298,17 +1298,17 @@ func (e *Engine) startTicks(a *area, timerKind string) {
 // AdoptSounding turns an already-sounding siren discovered by
 // reconciliation into a triggered incident (S4 adopt-before-stop): it
 // is evidence of a trigger during the blind window, not an error. The
-// area enters triggered without an engine-side output cycle — the
+// zone enters triggered without an engine-side output cycle — the
 // hardware is already sounding; the driver layer arms the bounded
 // stop watchdog instead.
-func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []string) (adopted bool, err error) {
+func (e *Engine) AdoptSounding(ctx context.Context, zoneID string, outputIDs []string) (adopted bool, err error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return false, ErrUnknownArea
+		return false, ErrUnknownZone
 	}
-	if a.state == hmenum.AlarmAreaStateTriggered && a.incident != nil {
+	if a.state == hmenum.AlarmZoneStateTriggered && a.incident != nil {
 		// Already alarming: the sounding outputs belong to the open
 		// incident; nothing to adopt (and nothing to re-account).
 		return false, nil
@@ -1324,7 +1324,7 @@ func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []s
 			causeJSON = []byte("{}")
 		}
 		inc := sqlitestore.AlarmIncident{
-			AreaID:            a.id,
+			ZoneID:            a.id,
 			Mode:              a.mode,
 			CauseJSON:         string(causeJSON),
 			StartedAtMS:       unixMS(now),
@@ -1338,7 +1338,7 @@ func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []s
 		}
 		a.incident = &inc
 	}
-	a.state = hmenum.AlarmAreaStateTriggered
+	a.state = hmenum.AlarmZoneStateTriggered
 	e.scheduleStateTimer(a, timerKindTrigger, dur)
 	e.persist(ctx, a)
 	e.journalEntry(ctx, a, JournalEntry{
@@ -1348,7 +1348,7 @@ func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []s
 	})
 	e.sink.Publish(hmevent.AlarmTriggeredEvent{
 		Base:   hmevent.NewBaseAt(now),
-		AreaID: a.id, AreaName: a.name,
+		ZoneID: a.id, ZoneName: a.name,
 		IncidentID: a.incident.ID,
 		Cause:      causeKindAdopted, Mode: a.mode,
 	})
@@ -1356,20 +1356,20 @@ func (e *Engine) AdoptSounding(ctx context.Context, areaID string, outputIDs []s
 	return true, nil
 }
 
-// ReevaluateSensors refreshes every armed area's sensor values from
+// ReevaluateSensors refreshes every armed zone's sensor values from
 // the SensorReader and routes activations that happened during a
 // blind window (docs/alarm-concept.md §10.1, CCU-reconnect row) —
 // the same comparison against the open-at-arm baseline a restore
-// runs. Safe to call repeatedly; disarmed areas are untouched.
+// runs. Safe to call repeatedly; disarmed zones are untouched.
 func (e *Engine) ReevaluateSensors(ctx context.Context) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.started {
 		return
 	}
-	for _, id := range e.sortedAreaIDs() {
-		a := e.areas[id]
-		if a.state != hmenum.AlarmAreaStateArmed {
+	for _, id := range e.sortedZoneIDs() {
+		a := e.zones[id]
+		if a.state != hmenum.AlarmZoneStateArmed {
 			continue
 		}
 		e.reEvaluateAfterRestore(ctx, a)
@@ -1377,19 +1377,19 @@ func (e *Engine) ReevaluateSensors(ctx context.Context) {
 	}
 }
 
-// PanicTrigger fires a panic incident on areaID independent of its arm
+// PanicTrigger fires a panic incident on zoneID independent of its arm
 // state (docs/alarm-concept.md §7). silent suppresses acoustic outputs
 // (silent panic / duress panic). by/source attribute the trigger. It is
 // the verb behind keypad/remote panic keys and the MQTT TRIGGER payload.
-func (e *Engine) PanicTrigger(ctx context.Context, areaID string, silent bool, by, source string) error {
+func (e *Engine) PanicTrigger(ctx context.Context, zoneID string, silent bool, by, source string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.started {
 		return ErrInvalidState
 	}
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
-		return ErrUnknownArea
+		return ErrUnknownZone
 	}
 	policy := a.cfg.PanicOutputs
 	if silent {
@@ -1402,7 +1402,7 @@ func (e *Engine) PanicTrigger(ctx context.Context, areaID string, silent bool, b
 
 // alwaysOnFromSensor routes an always-on hazard/panic sensor activation
 // to the class output policy. The caller holds the lock.
-func (e *Engine) alwaysOnFromSensor(ctx context.Context, a *area, s *sensorState) {
+func (e *Engine) alwaysOnFromSensor(ctx context.Context, a *zone, s *sensorState) {
 	causeKind := causeKindHazard
 	policy := a.cfg.HazardOutputs
 	if s.row.SensorType == hmenum.AlarmSensorTypePanic {
@@ -1419,13 +1419,13 @@ func (e *Engine) alwaysOnFromSensor(ctx context.Context, a *area, s *sensorState
 // alwaysOnFire drives an always-on (hazard/panic) incident. It bypasses
 // the arm-state machine but still drives the panel to triggered so the
 // alarm is visible everywhere; the state it interrupts is recorded in
-// preTriggerState and restored on post-trigger. When the area is already
+// preTriggerState and restored on post-trigger. When the zone is already
 // triggered it only layers the class output cycle onto the running
 // incident, leaving that incident's state/timer/return untouched. The
 // caller holds the lock.
-func (e *Engine) alwaysOnFire(ctx context.Context, a *area, causeKind string, policy OutputPolicy, cause incidentCause, by, source string) {
+func (e *Engine) alwaysOnFire(ctx context.Context, a *zone, causeKind string, policy OutputPolicy, cause incidentCause, by, source string) {
 	now := e.clk.Now()
-	if a.state == hmenum.AlarmAreaStateTriggered {
+	if a.state == hmenum.AlarmZoneStateTriggered {
 		// An incident is already running: add the class outputs (unless
 		// silenced) and journal, but do not disturb the running incident.
 		if a.incident != nil && !a.incident.Silenced {
@@ -1456,7 +1456,7 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *area, causeKind string, po
 			causeJSON = []byte("{}")
 		}
 		inc := sqlitestore.AlarmIncident{
-			AreaID:            a.id,
+			ZoneID:            a.id,
 			Mode:              a.mode,
 			CauseJSON:         string(causeJSON),
 			StartedAtMS:       unixMS(now),
@@ -1471,7 +1471,7 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *area, causeKind string, po
 		a.incident = &inc
 	}
 
-	a.state = hmenum.AlarmAreaStateTriggered
+	a.state = hmenum.AlarmZoneStateTriggered
 	e.scheduleStateTimer(a, timerKindTrigger, dur)
 	e.persist(ctx, a)
 	if err := e.outputs.FireCycle(ctx, a.id, *a.incident, FireOptions{Policy: policy}); err != nil {
@@ -1484,7 +1484,7 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *area, causeKind string, po
 	})
 	e.sink.Publish(hmevent.AlarmTriggeredEvent{
 		Base:   hmevent.NewBaseAt(now),
-		AreaID: a.id, AreaName: a.name,
+		ZoneID: a.id, ZoneName: a.name,
 		IncidentID: a.incident.ID,
 		SensorID:   cause.SensorID, SensorName: cause.SensorName,
 		Cause: causeKind, Mode: a.mode,
@@ -1492,11 +1492,11 @@ func (e *Engine) alwaysOnFire(ctx context.Context, a *area, causeKind string, po
 	e.publishState(a, from, by, source)
 }
 
-// finishAlwaysOn ends an always-on incident and returns the area to the
+// finishAlwaysOn ends an always-on incident and returns the zone to the
 // state it interrupted (armed if it was armed-side, disarmed otherwise —
 // so a hazard during a disarmed period drops back to disarmed, and one
 // while armed resumes protection). The caller holds the lock.
-func (e *Engine) finishAlwaysOn(ctx context.Context, a *area, journalEvent, actor string) {
+func (e *Engine) finishAlwaysOn(ctx context.Context, a *zone, journalEvent, actor string) {
 	from := a.state
 	target := a.preTriggerMode
 	incID := int64(0)
@@ -1514,11 +1514,11 @@ func (e *Engine) finishAlwaysOn(ctx context.Context, a *area, journalEvent, acto
 		Class: hmenum.AlarmJournalClassTrigger, Event: journalEvent, IncidentID: incID,
 	})
 	if target.Armed() {
-		a.state = hmenum.AlarmAreaStateArmed
+		a.state = hmenum.AlarmZoneStateArmed
 		a.mode = target
 		e.recaptureOpenBaseline(a)
 	} else {
-		a.state = hmenum.AlarmAreaStateDisarmed
+		a.state = hmenum.AlarmZoneStateDisarmed
 		a.mode = hmenum.AlarmModeDisarmed
 		a.bypassed = map[string]bool{}
 		a.openAtArm = map[string]bool{}
@@ -1531,7 +1531,7 @@ func (e *Engine) finishAlwaysOn(ctx context.Context, a *area, journalEvent, acto
 // persisted always-on incident from its cause kind (its per-activation
 // silent override is not persisted, so a restored panic uses the
 // configured PanicOutputs policy).
-func alwaysOnPolicyForIncident(a *area, inc *sqlitestore.AlarmIncident) OutputPolicy {
+func alwaysOnPolicyForIncident(a *zone, inc *sqlitestore.AlarmIncident) OutputPolicy {
 	var c incidentCause
 	if inc != nil {
 		_ = json.Unmarshal([]byte(inc.CauseJSON), &c)
@@ -1542,11 +1542,11 @@ func alwaysOnPolicyForIncident(a *area, inc *sqlitestore.AlarmIncident) OutputPo
 	return a.cfg.HazardOutputs
 }
 
-// scheduleAutoRearmIfConfigured arms the auto-rearm timer when the area
+// scheduleAutoRearmIfConfigured arms the auto-rearm timer when the zone
 // configures it and the pre-incident mode is armable. It sets the timer
 // fields (so a following persist captures the tuple) and journals. The
 // caller holds the lock.
-func (e *Engine) scheduleAutoRearmIfConfigured(ctx context.Context, a *area, rearmMode hmenum.AlarmMode, actor string) {
+func (e *Engine) scheduleAutoRearmIfConfigured(ctx context.Context, a *zone, rearmMode hmenum.AlarmMode, actor string) {
 	if a.cfg.AutoRearmSeconds <= 0 || !rearmMode.Armed() {
 		return
 	}
@@ -1561,25 +1561,25 @@ func (e *Engine) scheduleAutoRearmIfConfigured(ctx context.Context, a *area, rea
 	})
 }
 
-// scheduleAutoRearm replaces the area's auto-rearm timer. The caller
+// scheduleAutoRearm replaces the zone's auto-rearm timer. The caller
 // holds the lock. The callback runs on the engine lifetime context.
 //
 //nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
-func (e *Engine) scheduleAutoRearm(a *area, mode hmenum.AlarmMode, d time.Duration) {
+func (e *Engine) scheduleAutoRearm(a *zone, mode hmenum.AlarmMode, d time.Duration) {
 	a.cancelAutoRearm()
 	a.autoRearmMode = mode
 	a.autoRearmSeq++
 	seq := a.autoRearmSeq
 	a.autoRearmDeadline = e.clk.Now().Add(d)
-	areaID := a.id
+	zoneID := a.id
 	a.autoRearmCancel = e.sched.Schedule(d, func() {
-		e.onAutoRearmFired(areaID, seq)
+		e.onAutoRearmFired(zoneID, seq)
 	})
 }
 
 // deferAutoRearm restarts the auto-rearm quiet period after member
 // activity. The caller holds the lock.
-func (e *Engine) deferAutoRearm(ctx context.Context, a *area, sensorID string) {
+func (e *Engine) deferAutoRearm(ctx context.Context, a *zone, sensorID string) {
 	mode := a.autoRearmMode
 	e.scheduleAutoRearm(a, mode, time.Duration(a.cfg.AutoRearmSeconds)*time.Second)
 	e.persist(ctx, a)
@@ -1593,10 +1593,10 @@ func (e *Engine) deferAutoRearm(ctx context.Context, a *area, sensorID string) {
 // stale fires. It runs on the engine lifetime context.
 //
 //nolint:contextcheck // timer fires deliberately detach from the scheduling caller's ctx (see lifeCtx)
-func (e *Engine) onAutoRearmFired(areaID string, seq uint64) {
+func (e *Engine) onAutoRearmFired(zoneID string, seq uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok || a.autoRearmSeq != seq || a.autoRearmCancel == nil {
 		return
 	}
@@ -1606,12 +1606,12 @@ func (e *Engine) onAutoRearmFired(areaID string, seq uint64) {
 
 // onAutoRearmElapsed attempts the quiet-period rearm. It arms with
 // force=false: any remaining blocker journals a fail-visible
-// failed-to-arm fault and leaves the area disarmed (docs/alarm-concept.md
+// failed-to-arm fault and leaves the zone disarmed (docs/alarm-concept.md
 // §15 row 22). The caller holds the lock.
-func (e *Engine) onAutoRearmElapsed(ctx context.Context, a *area) {
+func (e *Engine) onAutoRearmElapsed(ctx context.Context, a *zone) {
 	mode := a.autoRearmMode
 	a.autoRearmMode = ""
-	if a.state != hmenum.AlarmAreaStateDisarmed || !mode.Armed() {
+	if a.state != hmenum.AlarmZoneStateDisarmed || !mode.Armed() {
 		e.persist(ctx, a)
 		return
 	}
@@ -1642,11 +1642,11 @@ func (e *Engine) onAutoRearmElapsed(ctx context.Context, a *area) {
 	})
 }
 
-// persist writes the area's full state row. A failure is journaled
+// persist writes the zone's full state row. A failure is journaled
 // and logged, never silently swallowed, and does not abort the
 // transition — the machine keeps operating from memory (S7).
 // The caller holds the lock.
-func (e *Engine) persist(ctx context.Context, a *area) {
+func (e *Engine) persist(ctx context.Context, a *zone) {
 	now := e.clk.Now()
 	var timers []persistedTimer
 	if a.timerCancel != nil {
@@ -1680,7 +1680,7 @@ func (e *Engine) persist(ctx context.Context, a *area) {
 		incID = a.incident.ID
 	}
 	row := sqlitestore.AlarmStateRow{
-		AreaID:      a.id,
+		ZoneID:      a.id,
 		State:       a.state,
 		Mode:        a.mode,
 		BypassJSON:  a.encodeBypass(),
@@ -1690,7 +1690,7 @@ func (e *Engine) persist(ctx context.Context, a *area) {
 		UpdatedAtMS: unixMS(now),
 	}
 	if err := e.stateStore.Upsert(ctx, row); err != nil {
-		e.log.Error("alarm state persist failed", "area", a.id, "error", err)
+		e.log.Error("alarm state persist failed", "zone", a.id, "error", err)
 		e.journalEntry(ctx, a, JournalEntry{
 			Class: hmenum.AlarmJournalClassFault, Event: "state_persist_failed",
 			Details: map[string]any{"error": err.Error()},
@@ -1700,14 +1700,14 @@ func (e *Engine) persist(ctx context.Context, a *area) {
 
 // publishState emits the state-changed event. The caller holds the
 // lock and has already updated a.state.
-func (e *Engine) publishState(a *area, from hmenum.AlarmAreaState, by, source string) {
+func (e *Engine) publishState(a *zone, from hmenum.AlarmZoneState, by, source string) {
 	incID := int64(0)
 	if a.incident != nil {
 		incID = a.incident.ID
 	}
 	e.sink.Publish(hmevent.AlarmStateChangedEvent{
 		Base:   hmevent.NewBaseAt(e.clk.Now()),
-		AreaID: a.id, AreaName: a.name,
+		ZoneID: a.id, ZoneName: a.name,
 		From: from, To: a.state, Mode: a.mode,
 		ChangedBy: by, Source: source, IncidentID: incID,
 	})
@@ -1715,15 +1715,15 @@ func (e *Engine) publishState(a *area, from hmenum.AlarmAreaState, by, source st
 
 // journalEntry appends to the journal; failures are logged only — a
 // journal outage must never block an alarm action.
-func (e *Engine) journalEntry(ctx context.Context, a *area, entry JournalEntry) {
-	entry.AreaID = a.id
+func (e *Engine) journalEntry(ctx context.Context, a *zone, entry JournalEntry) {
+	entry.ZoneID = a.id
 	if _, err := e.journal.Append(ctx, entry); err != nil {
-		e.log.Error("alarm journal append failed", "area", a.id, "event", entry.Event, "error", err)
+		e.log.Error("alarm journal append failed", "zone", a.id, "event", entry.Event, "error", err)
 	}
 }
 
 // journalFault appends a fault-class entry (fail-visible, S7).
-func (e *Engine) journalFault(ctx context.Context, a *area, event string, cause error, incidentID int64) {
+func (e *Engine) journalFault(ctx context.Context, a *zone, event string, cause error, incidentID int64) {
 	details := map[string]any{}
 	if cause != nil {
 		details["error"] = cause.Error()
@@ -1734,14 +1734,14 @@ func (e *Engine) journalFault(ctx context.Context, a *area, event string, cause 
 	})
 }
 
-// lookupSensor resolves a sensor ID to its area and state. The caller
+// lookupSensor resolves a sensor ID to its zone and state. The caller
 // holds the lock.
-func (e *Engine) lookupSensor(sensorID string) (*area, *sensorState) {
-	areaID, ok := e.sensorIndex[sensorID]
+func (e *Engine) lookupSensor(sensorID string) (*zone, *sensorState) {
+	zoneID, ok := e.sensorIndex[sensorID]
 	if !ok {
 		return nil, nil
 	}
-	a, ok := e.areas[areaID]
+	a, ok := e.zones[zoneID]
 	if !ok {
 		return nil, nil
 	}
@@ -1754,20 +1754,20 @@ func (e *Engine) lookupSensor(sensorID string) (*area, *sensorState) {
 
 // isArmedState reports whether st is an armed-side state (armed,
 // arming, or pending).
-func (e *Engine) isArmedState(st hmenum.AlarmAreaState) bool {
+func (e *Engine) isArmedState(st hmenum.AlarmZoneState) bool {
 	switch st {
-	case hmenum.AlarmAreaStateArmed, hmenum.AlarmAreaStateArming, hmenum.AlarmAreaStatePending:
+	case hmenum.AlarmZoneStateArmed, hmenum.AlarmZoneStateArming, hmenum.AlarmZoneStatePending:
 		return true
 	default:
 		return false
 	}
 }
 
-// sortedAreaIDs returns the managed area IDs in stable order. The
+// sortedZoneIDs returns the managed zone IDs in stable order. The
 // caller holds the lock.
-func (e *Engine) sortedAreaIDs() []string {
-	ids := make([]string, 0, len(e.areas))
-	for id := range e.areas {
+func (e *Engine) sortedZoneIDs() []string {
+	ids := make([]string, 0, len(e.zones))
+	for id := range e.zones {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)

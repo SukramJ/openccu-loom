@@ -1,19 +1,19 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
-import type { AlarmAreaStatus, AlarmWalkTestStatus } from "$lib/api/types";
+import type { AlarmZoneStatus, AlarmWalkTestStatus } from "$lib/api/types";
 
-let mockAreasConfig: { id: string; name: string }[] = [];
-let mockAreas: AlarmAreaStatus[] = [];
+let mockZonesConfig: { id: string; name: string }[] = [];
+let mockZones: AlarmZoneStatus[] = [];
 let mockWalktest: Record<string, { seen: number; total: number }> = {};
 
 vi.mock("$lib/stores/alarmPanel.svelte", () => ({
   alarmPanelStore: {
-    get areasConfig() {
-      return mockAreasConfig;
+    get zonesConfig() {
+      return mockZonesConfig;
     },
-    get areas() {
-      return mockAreas;
+    get zones() {
+      return mockZones;
     },
     get walktest() {
       return mockWalktest;
@@ -60,8 +60,8 @@ function status(overrides: Partial<AlarmWalkTestStatus> = {}): AlarmWalkTestStat
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAreasConfig = [{ id: "area-1", name: "Ground floor" }];
-  mockAreas = [];
+  mockZonesConfig = [{ id: "zone-1", name: "Ground floor" }];
+  mockZones = [];
   mockWalktest = {};
 });
 
@@ -95,7 +95,7 @@ describe("AlarmWalkTest — checklist", () => {
 
   it("shows the live seen/total progress from the store's walktest counter", async () => {
     mockGetStatus.mockResolvedValue(status());
-    mockWalktest = { "area-1": { seen: 1, total: 2 } };
+    mockWalktest = { "zone-1": { seen: 1, total: 2 } };
     const { container, findByText } = render(AlarmWalkTest);
 
     await findByText("Front door");

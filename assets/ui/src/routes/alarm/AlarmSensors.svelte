@@ -3,9 +3,15 @@
   import { api, friendlyError } from "$lib/api/client";
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
   import { makeTextMatcher } from "$lib/utils";
+  import {
+    buildCandidates,
+    guessSensorBinding,
+    guessSensorParameter,
+  } from "$lib/alarm/sensorCandidates";
   import type {
     AlarmSensor,
     AlarmSensorType,
@@ -25,7 +31,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Sensor picker (docs/alarm-concept.md §12.2). Manages the ENROLLED
-  // sensor set of one alarm area: an area selector, a left filter rail,
+  // sensor set of one alarm zone: a zone selector, a left filter rail,
   // a card grid (or dense matrix table) with per-card mode-matrix chips,
   // a detail slide-over for the full flag set, an add-sensor flow with
   // device-picker assist + type presets (§6.1), and a bulk bar. Edits
@@ -49,7 +55,7 @@
   // rendered separately as their own value fields in the drawer. `chime`
   // is the door-chime-while-disarmed flag (§15 row 23,
   // internal/alarm/engine/config.go SensorConfig.Chime) — plays a chirp
-  // when the sensor activates while its area is disarmed.
+  // when the sensor activates while its zone is disarmed.
   const BOOL_FLAGS = [
     "use_exit_delay",
     "use_entry_delay",
@@ -70,14 +76,9 @@
     panic: "mdi:bell-alert",
   };
 
-  // Which devices are surfaced by the add-sensor assist by default: model
-  // or name looks security-relevant. The "show all" toggle widens it.
-  const SECURITY_RE =
-    /swdo|sci|smo|smi|spi|sec|rc[ -]?\d|krca|wrc|wgc|motion|pir|presence|prescence|bewegung|sabot|tamper|contact|kontakt|fenster|window|door|t[üu]r|smoke|rauch|swsd|water|wasser|leak|co2|gas/i;
-
-  // --- area state --------------------------------------------------
-  const areas = $derived(alarmPanelStore.areasConfig);
-  let areaId = $state("");
+  // --- zone state --------------------------------------------------
+  const zones = $derived(alarmPanelStore.zonesConfig);
+  let zoneId = $state("");
 
   let sensors = $state<AlarmSensor[]>([]);
   let loading = $state(false);
@@ -89,6 +90,7 @@
 
   // --- filter rail -------------------------------------------------
   let roomFilter = $state("");
+  let areaFilter = $state("");
   let typeFilter = $state<"all" | AlarmSensorType>("all");
   let assignedFilter = $state<"all" | "assigned" | "unassigned">("all");
   let search = $state("");
@@ -103,6 +105,7 @@
 
   let addOpen = $state(false);
   let addShowAll = $state(false);
+  let addArea = $state("");
   let addDeviceSearch = $state("");
   let addDevice = $state<DeviceSummary | null>(null);
   let addChannel = $state("");
@@ -172,14 +175,14 @@
 
   // --- data loading ------------------------------------------------
   async function loadSensors() {
-    if (!areaId) {
+    if (!zoneId) {
       sensors = [];
       return;
     }
     loading = true;
     loadError = null;
     try {
-      sensors = await api.listAlarmAreaSensors(areaId);
+      sensors = await api.listAlarmZoneSensors(zoneId);
       dirty = false;
       selected = new Set();
     } catch (err) {
@@ -190,10 +193,10 @@
   }
 
   async function save() {
-    if (!areaId) return;
+    if (!zoneId) return;
     saving = true;
     try {
-      await api.putAlarmAreaSensors(areaId, sensors);
+      await api.putAlarmZoneSensors(zoneId, sensors);
       toastStore.success(t("alarm.toast.saved"));
       dirty = false;
       // Sensor membership feeds per-mode readiness, so refresh the shared
@@ -242,6 +245,9 @@
       if (assignedFilter === "assigned" && modeCount === 0) return false;
       if (assignedFilter === "unassigned" && modeCount > 0) return false;
       if (roomFilter && !roomsOf(s).includes(roomFilter)) return false;
+      if (areaFilter && !roomsOf(s).some((r) => areasStore.areaIdOf(s.central, r) === areaFilter)) {
+        return false;
+      }
       if (search) {
         const hit =
           nameMatch(displayName(s)) ||
@@ -281,7 +287,7 @@
   }
   function bulkRemove() {
     // Local edit only — reversible via the Discard action until Save, so
-    // no confirm dialog is warranted here (unlike a live area delete).
+    // no confirm dialog is warranted here (unlike a live zone delete).
     sensors = sensors.filter((s) => !selected.has(s.id));
     selected = new Set();
     markDirty();
@@ -320,55 +326,22 @@
         return {};
     }
   }
-  function guessType(d: DeviceSummary): AlarmSensorType {
-    const s = `${d.model} ${d.model_label ?? ""} ${d.name ?? ""}`.toLowerCase();
-    if (/sabot|tamper/.test(s)) return "tamper";
-    if (/smoke|rauch|swsd|water|wasser|leak|co2|gas/.test(s)) return "hazard";
-    if (/motion|pir|presence|prescence|bewegung|smi|spi/.test(s)) return "motion";
-    if (/window|rotary|handle|swdo|fenster/.test(s)) return "window";
-    if (/rc[ -]?\d|krca|wrc|remote|panic|taster/.test(s)) return "panic";
-    return "door";
-  }
-  function guessParameter(type: AlarmSensorType): string {
-    switch (type) {
-      case "motion":
-        return "MOTION";
-      case "tamper":
-        return "SABOTAGE";
-      case "hazard":
-        return "SMOKE_DETECTOR_ALARM_STATUS";
-      case "panic":
-        return "PRESS_SHORT";
-      default:
-        return "STATE";
-    }
-  }
 
   // --- add flow ----------------------------------------------------
-  const addDeviceMatch = $derived(makeTextMatcher(addDeviceSearch));
   const addCandidates = $derived(
-    deviceStore.items
-      .filter((d) => {
-        if (!addShowAll) {
-          const hay = `${d.model} ${d.model_label ?? ""} ${d.name ?? ""}`;
-          if (!SECURITY_RE.test(hay)) return false;
-        }
-        if (addDeviceSearch) {
-          return (
-            addDeviceMatch(d.name ?? "") ||
-            addDeviceMatch(d.address) ||
-            addDeviceMatch(d.model) ||
-            addDeviceMatch(d.model_label ?? "")
-          );
-        }
-        return true;
-      })
-      .slice(0, 60),
+    buildCandidates(deviceStore.items, {
+      query: addDeviceSearch,
+      showAll: addShowAll,
+      area: addArea,
+      areaIdOf: areasStore.areaIdOf,
+      limit: 60,
+    }),
   );
 
   function openAdd() {
     addOpen = true;
     addShowAll = false;
+    addArea = "";
     addDeviceSearch = "";
     addDevice = null;
     addChannel = "";
@@ -378,10 +351,10 @@
   }
   function pickAddDevice(d: DeviceSummary) {
     addDevice = d;
-    const type = guessType(d);
-    addType = type;
-    addChannel = `${d.address}:1`;
-    addParameter = guessParameter(type);
+    const binding = guessSensorBinding(d);
+    addType = binding?.type ?? "door";
+    addChannel = binding?.channel ?? "";
+    addParameter = binding?.parameter ?? "";
     addName = d.name ?? "";
   }
   const canAdd = $derived(
@@ -423,23 +396,23 @@
     else if (drawerId) drawerId = null;
   }
 
-  const areaOptions = $derived(
-    areas.map((a) => ({ value: a.id, label: a.name })),
+  const zoneOptions = $derived(
+    zones.map((a) => ({ value: a.id, label: a.name })),
   );
 
   $effect(() => {
-    // Default to (and re-pin on) the first area; reloads its sensor set
-    // whenever the selected area changes.
-    if (areas.length > 0 && !areas.some((a) => a.id === areaId)) {
-      areaId = areas[0].id;
+    // Default to (and re-pin on) the first zone; reloads its sensor set
+    // whenever the selected zone changes.
+    if (zones.length > 0 && !zones.some((a) => a.id === zoneId)) {
+      zoneId = zones[0].id;
     }
   });
 
-  // Reload sensors whenever the pinned area id changes.
+  // Reload sensors whenever the pinned zone id changes.
   let loadedFor = $state("");
   $effect(() => {
-    if (areaId && areaId !== loadedFor) {
-      loadedFor = areaId;
+    if (zoneId && zoneId !== loadedFor) {
+      loadedFor = zoneId;
       void loadSensors();
     }
   });
@@ -447,6 +420,7 @@
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
+    areasStore.ensureLoaded();
     api
       .listRooms()
       .then((r) => (rooms = r))
@@ -459,7 +433,11 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-{#if areas.length === 0}
+{#if alarmPanelStore.loading && zones.length === 0}
+  <LoadingState />
+{:else if alarmPanelStore.error && zones.length === 0}
+  <ErrorState message={alarmPanelStore.error} onRetry={() => void alarmPanelStore.refresh()} />
+{:else if zones.length === 0}
   <EmptyState
     icon="mdi:shield-home"
     message={t("alarm.overview.empty")}
@@ -472,12 +450,12 @@
     {/snippet}
   </EmptyState>
 {:else}
-  <!-- Toolbar: area selector + add + view toggle -->
+  <!-- Toolbar: zone selector + add + view toggle -->
   <div class="mb-4 flex flex-wrap items-center gap-3">
     <label class="flex items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]">
-      <span>{t("alarm.sensors.area")}</span>
+      <span>{t("alarm.sensors.zone")}</span>
       <div class="min-w-48">
-        <Select options={areaOptions} bind:value={areaId} />
+        <Select options={zoneOptions} bind:value={zoneId} />
       </div>
     </label>
 
@@ -541,6 +519,19 @@
             ]}
           />
         </div>
+
+        {#if areasStore.areas.length > 0}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.filter.area")}</span>
+            <Select
+              bind:value={areaFilter}
+              options={[
+                { value: "", label: t("alarm.sensors.filter.all") },
+                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
+          </div>
+        {/if}
 
         <div class="flex flex-col gap-1.5">
           <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">{t("alarm.sensors.filter.type")}</span>
@@ -955,6 +946,15 @@
             </label>
           </div>
           <Input type="search" placeholder={t("common.search")} bind:value={addDeviceSearch} />
+          {#if areasStore.areas.length > 0}
+            <Select
+              bind:value={addArea}
+              options={[
+                { value: "", label: t("alarm.sensors.filter.all") },
+                ...areasStore.areas.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
+          {/if}
           <div class="mt-1 max-h-48 overflow-y-auto rounded-md border border-[var(--ha-divider-color)]">
             {#if addCandidates.length === 0}
               <p class="p-3 text-center text-xs text-[var(--ha-secondary-text-color)]">
@@ -974,6 +974,11 @@
                   <span class="truncate font-mono text-xs text-[var(--ha-secondary-text-color)]">
                     {d.model_label || d.model} · {d.address}
                   </span>
+                  {#if (d.rooms ?? []).length > 0}
+                    <span class="truncate text-xs text-[var(--ha-secondary-text-color)]">
+                      {(d.rooms ?? []).join(", ")}
+                    </span>
+                  {/if}
                 </button>
               {/each}
             {/if}
@@ -995,7 +1000,7 @@
               value={addType}
               onValueChange={(v) => {
                 addType = v as AlarmSensorType;
-                addParameter = guessParameter(addType);
+                addParameter = guessSensorParameter(addType);
               }}
               options={SENSOR_TYPES.map((tp) => ({
                 value: tp,

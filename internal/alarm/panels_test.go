@@ -34,7 +34,7 @@ import (
 var panelsTestStart = time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
 
 // panelsHarness bundles a real SQLite-backed alarm.Service for driving
-// seedPanels / refreshPanelCodePolicies against real area configs and
+// seedPanels / refreshPanelCodePolicies against real zone configs and
 // real PIN-code rows through the codes facade.
 type panelsHarness struct {
 	t   *testing.T
@@ -68,23 +68,23 @@ func newPanelsHarness(t *testing.T) *panelsHarness {
 	return &panelsHarness{t: t, ctx: context.Background(), clk: clk, svc: svc}
 }
 
-// seedArea persists an area row carrying an explicit CodePolicy so the
+// seedZone persists an zone row carrying an explicit CodePolicy so the
 // code-policy tests can control both halves of EffectiveCodePolicy.
-func (h *panelsHarness) seedArea(id, name string, policy engine.CodePolicy) {
+func (h *panelsHarness) seedZone(id, name string, policy engine.CodePolicy) {
 	h.t.Helper()
-	cfg := engine.AreaConfig{
+	cfg := engine.ZoneConfig{
 		Modes:      map[hmenum.AlarmMode]engine.ModeConfig{hmenum.AlarmModeFull: {}},
 		CodePolicy: policy,
 	}
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		h.t.Fatalf("marshal area config: %v", err)
+		h.t.Fatalf("marshal zone config: %v", err)
 	}
 	now := h.clk.Now().UnixMilli()
-	if err := h.svc.Stores().Areas.Upsert(h.ctx, sqlitestore.AlarmAreaRow{
+	if err := h.svc.Stores().Zones.Upsert(h.ctx, sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
-		h.t.Fatalf("seed area %s: %v", id, err)
+		h.t.Fatalf("seed zone %s: %v", id, err)
 	}
 }
 
@@ -93,28 +93,28 @@ func (h *panelsHarness) seedArea(id, name string, policy engine.CodePolicy) {
 // internal/north/mqtt/alarm_publisher_test.go's fixture (there is no
 // facade "create" path in this package). Every verb permission is
 // granted: the code-policy tests care only about whether an applicable
-// enabled pin code exists, never which verb it authorizes. A nil areas
-// list applies to every area, matching the store's own "[]" catch-all
+// enabled pin code exists, never which verb it authorizes. A nil zones
+// list applies to every zone, matching the store's own "[]" catch-all
 // convention.
-func (h *panelsHarness) seedPINCode(id, name, pin string, enabled bool, areas []string) {
+func (h *panelsHarness) seedPINCode(id, name, pin string, enabled bool, zones []string) {
 	h.t.Helper()
 	hash, err := codes.HashPIN(pin)
 	if err != nil {
 		h.t.Fatalf("HashPIN: %v", err)
 	}
-	areasJSON := "[]"
-	if len(areas) > 0 {
-		b, err := json.Marshal(areas)
+	zonesJSON := "[]"
+	if len(zones) > 0 {
+		b, err := json.Marshal(zones)
 		if err != nil {
-			h.t.Fatalf("marshal areas: %v", err)
+			h.t.Fatalf("marshal zones: %v", err)
 		}
-		areasJSON = string(b)
+		zonesJSON = string(b)
 	}
 	now := h.clk.Now().UnixMilli()
 	row := sqlitestore.AlarmCodeRow{
 		ID: id, Name: name, Kind: string(codes.KindPIN), Hash: hash,
 		PermsJSON: `{"arm":true,"disarm":true,"silence":true}`,
-		AreasJSON: areasJSON, BindingJSON: "{}",
+		ZonesJSON: zonesJSON, BindingJSON: "{}",
 		Enabled: enabled, CreatedAtMS: now, UpdatedAtMS: now,
 	}
 	if err := h.svc.Stores().Codes.Upsert(h.ctx, row); err != nil {
@@ -122,7 +122,7 @@ func (h *panelsHarness) seedPINCode(id, name, pin string, enabled bool, areas []
 	}
 }
 
-// deletePINCode removes a pin-code row outright, flipping any area it
+// deletePINCode removes a pin-code row outright, flipping any zone it
 // applied to back to "no applicable code exists".
 func (h *panelsHarness) deletePINCode(id string) {
 	h.t.Helper()
@@ -141,16 +141,16 @@ func (h *panelsHarness) start() {
 	h.t.Cleanup(func() { _ = h.svc.Stop(context.Background()) })
 }
 
-// panel returns the current projection for areaID, failing the test if
+// panel returns the current projection for zoneID, failing the test if
 // no such panel is registered.
-func (h *panelsHarness) panel(areaID string) alarmpanel.Panel {
+func (h *panelsHarness) panel(zoneID string) alarmpanel.Panel {
 	h.t.Helper()
 	for _, p := range h.svc.Panels() {
-		if p.AreaID == areaID {
+		if p.ZoneID == zoneID {
 			return p
 		}
 	}
-	h.t.Fatalf("no panel for area %q; got %+v", areaID, h.svc.Panels())
+	h.t.Fatalf("no panel for zone %q; got %+v", zoneID, h.svc.Panels())
 	return alarmpanel.Panel{}
 }
 
@@ -158,11 +158,11 @@ func (h *panelsHarness) panel(areaID string) alarmpanel.Panel {
 // explicitly away from its nil ("required once a code exists") default.
 func boolPtr(b bool) *bool { return &b }
 
-// --- seedPanels: per-area code-policy derivation ---
+// --- seedPanels: per-zone code-policy derivation ---
 
 // TestSeedPanels_CodePolicyFlagsFollowPINCodeExistence verifies
-// seedPanels derives an area panel's CodeArmRequired/CodeDisarmRequired
-// flags from both halves of EffectiveCodePolicy: the area's CodePolicy
+// seedPanels derives an zone panel's CodeArmRequired/CodeDisarmRequired
+// flags from both halves of EffectiveCodePolicy: the zone's CodePolicy
 // AND whether an applicable enabled PIN code currently exists. A policy
 // requiring a code with no PIN code enrolled advertises no requirement
 // at all (docs/alarm-concept.md §11/§13.3), so a client never prompts
@@ -170,7 +170,7 @@ func boolPtr(b bool) *bool { return &b }
 func TestSeedPanels_CodePolicyFlagsFollowPINCodeExistence(t *testing.T) {
 	t.Parallel()
 	h := newPanelsHarness(t)
-	h.seedArea("eg", "Erdgeschoss", engine.CodePolicy{RequireArm: true})
+	h.seedZone("eg", "Erdgeschoss", engine.CodePolicy{RequireArm: true})
 	h.start()
 
 	p := h.panel("eg")
@@ -190,35 +190,35 @@ func TestSeedPanels_CodePolicyFlagsFollowPINCodeExistence(t *testing.T) {
 	}
 }
 
-// --- master aggregate: any-area-requires union ---
+// --- master aggregate: any-zone-requires union ---
 
-// TestSeedPanels_MasterPanelUnionsCodePolicyAcrossAreas verifies the
-// aggregate master panel (present with >= 2 areas, last in Panels())
-// carries the OR of every area's effective code-policy flags, while an
-// area with no applicable requirement of its own keeps both its own
+// TestSeedPanels_MasterPanelUnionsCodePolicyAcrossZones verifies the
+// aggregate master panel (present with >= 2 zones, last in Panels())
+// carries the OR of every zone's effective code-policy flags, while an
+// zone with no applicable requirement of its own keeps both its own
 // flags false (masterLocked in panels.go).
-func TestSeedPanels_MasterPanelUnionsCodePolicyAcrossAreas(t *testing.T) {
+func TestSeedPanels_MasterPanelUnionsCodePolicyAcrossZones(t *testing.T) {
 	t.Parallel()
 	h := newPanelsHarness(t)
-	// "eg" requires both verbs and has an applicable, area-scoped PIN
+	// "eg" requires both verbs and has an applicable, zone-scoped PIN
 	// code, so its effective policy resolves to true/true.
-	h.seedArea("eg", "Erdgeschoss", engine.CodePolicy{RequireArm: true})
+	h.seedZone("eg", "Erdgeschoss", engine.CodePolicy{RequireArm: true})
 	// "og" opts out of the disarm default explicitly, so it carries no
 	// requirement regardless of any PIN code that exists elsewhere.
-	h.seedArea("og", "Obergeschoss", engine.CodePolicy{RequireDisarm: boolPtr(false)})
+	h.seedZone("og", "Obergeschoss", engine.CodePolicy{RequireDisarm: boolPtr(false)})
 	h.seedPINCode("c1", "Markus", "1234", true, []string{"eg"})
 	h.start()
 
 	panels := h.svc.Panels()
 	if len(panels) != 3 {
-		t.Fatalf("panels = %+v, want 3 (2 areas + master)", panels)
+		t.Fatalf("panels = %+v, want 3 (2 zones + master)", panels)
 	}
 	master := panels[len(panels)-1]
 	if !master.Master {
 		t.Fatalf("last panel = %+v, want the master aggregate", master)
 	}
 	if !master.CodeArmRequired || !master.CodeDisarmRequired {
-		t.Errorf("master code policy = %+v, want both true (any-area union)", master)
+		t.Errorf("master code policy = %+v, want both true (any-zone union)", master)
 	}
 
 	eg := h.panel("eg")
@@ -235,7 +235,7 @@ func TestSeedPanels_MasterPanelUnionsCodePolicyAcrossAreas(t *testing.T) {
 
 // TestNotifyCodesChanged_RepublishesOnlyFlippedPanels verifies that
 // removing the only applicable PIN code and calling NotifyCodesChanged
-// re-derives the area's effective code policy, publishes exactly one
+// re-derives the zone's effective code policy, publishes exactly one
 // AlarmPanelChangedEvent carrying the flipped (now-false) flags, and
 // updates the live Panels() snapshot — but a second call with nothing
 // left to flip republishes nothing, so an unrelated code-store write
@@ -243,7 +243,7 @@ func TestSeedPanels_MasterPanelUnionsCodePolicyAcrossAreas(t *testing.T) {
 func TestNotifyCodesChanged_RepublishesOnlyFlippedPanels(t *testing.T) {
 	t.Parallel()
 	h := newPanelsHarness(t)
-	h.seedArea("eg", "Erdgeschoss", engine.CodePolicy{RequireArm: true})
+	h.seedZone("eg", "Erdgeschoss", engine.CodePolicy{RequireArm: true})
 	h.seedPINCode("c1", "Markus", "1234", true, nil)
 	h.start()
 
@@ -262,7 +262,7 @@ func TestNotifyCodesChanged_RepublishesOnlyFlippedPanels(t *testing.T) {
 
 	var found bool
 	for _, e := range received {
-		if e.AreaID != "eg" {
+		if e.ZoneID != "eg" {
 			continue
 		}
 		found = true
@@ -271,7 +271,7 @@ func TestNotifyCodesChanged_RepublishesOnlyFlippedPanels(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("no alarm.panel_changed event observed for area eg; got %+v", received)
+		t.Fatalf("no alarm.panel_changed event observed for zone eg; got %+v", received)
 	}
 	if p := h.panel("eg"); p.CodeArmRequired || p.CodeDisarmRequired {
 		t.Errorf("panel snapshot after refresh = %+v, want both false", p)

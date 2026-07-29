@@ -46,16 +46,16 @@ func (s *sensorState) cancelHold() {
 	s.holdSeq++
 }
 
-// area is the in-memory runtime state of one alarm area: its parsed
+// zone is the in-memory runtime state of one alarm zone: its parsed
 // configuration, its member sensors, and the state-machine position
 // including the single active state timer.
-type area struct {
+type zone struct {
 	id      string
 	name    string
-	cfg     AreaConfig
+	cfg     ZoneConfig
 	sensors map[string]*sensorState
 
-	state    hmenum.AlarmAreaState
+	state    hmenum.AlarmZoneState
 	mode     hmenum.AlarmMode
 	bypassed map[string]bool
 	incident *sqlitestore.AlarmIncident
@@ -65,7 +65,7 @@ type area struct {
 	// armed" from "opened while the daemon was down"; live closings
 	// remove entries.
 	openAtArm map[string]bool
-	// pendingCause is the sensor that routed the area into pending.
+	// pendingCause is the sensor that routed the zone into pending.
 	pendingCause string
 	// silencedIncidentID mirrors the silenced flag of the open
 	// incident into the state row (context_json): a second,
@@ -86,7 +86,7 @@ type area struct {
 	// the panel to triggered (visible everywhere) but return to the
 	// prior state on post-trigger, not into armed. An empty
 	// preTriggerState marks a normal intrusion incident.
-	preTriggerState hmenum.AlarmAreaState
+	preTriggerState hmenum.AlarmZoneState
 	preTriggerMode  hmenum.AlarmMode
 	// preAlarm reports that the open incident is still in its pre-alarm
 	// phase (only pre-alarm output classes have fired). It survives a
@@ -99,7 +99,7 @@ type area struct {
 
 	// auto-rearm timer: runs while disarmed after a post-trigger
 	// disarm, re-arming to autoRearmMode after a quiet period. It is a
-	// separate timer from the state timer (the area is disarmed, which
+	// separate timer from the state timer (the zone is disarmed, which
 	// has no state countdown) and survives a restart via timers_json +
 	// context_json.
 	autoRearmCancel   func()
@@ -125,17 +125,17 @@ type area struct {
 	walk *walkSession
 }
 
-// areaContext is the persisted runtime-context document stored in
+// zoneContext is the persisted runtime-context document stored in
 // alarm_state.context_json. Keep the field names stable.
-type areaContext struct {
+type zoneContext struct {
 	OpenAtArm    []string `json:"open_at_arm,omitempty"`
 	PendingCause string   `json:"pending_cause,omitempty"`
 	// SilencedIncidentID is the redundant silence marker (S3): the
-	// open incident this area has silenced, 0 when none.
+	// open incident this zone has silenced, 0 when none.
 	SilencedIncidentID int64 `json:"silenced_incident_id,omitempty"`
 	// PreTriggerState / PreTriggerMode persist the state an always-on
 	// incident interrupted, so a restore returns to the prior state.
-	PreTriggerState hmenum.AlarmAreaState `json:"pre_trigger_state,omitempty"`
+	PreTriggerState hmenum.AlarmZoneState `json:"pre_trigger_state,omitempty"`
 	PreTriggerMode  hmenum.AlarmMode      `json:"pre_trigger_mode,omitempty"`
 	// PreAlarm persists that the open incident is in its pre-alarm
 	// phase.
@@ -146,7 +146,7 @@ type areaContext struct {
 
 // cancelTimers stops the state timer, the debounce timer, and the
 // countdown tick chain.
-func (a *area) cancelTimers() {
+func (a *zone) cancelTimers() {
 	if a.timerCancel != nil {
 		a.timerCancel()
 		a.timerCancel = nil
@@ -158,7 +158,7 @@ func (a *area) cancelTimers() {
 }
 
 // cancelTicks stops only the countdown tick chain.
-func (a *area) cancelTicks() {
+func (a *zone) cancelTicks() {
 	if a.tickCancel != nil {
 		a.tickCancel()
 		a.tickCancel = nil
@@ -167,7 +167,7 @@ func (a *area) cancelTicks() {
 }
 
 // cancelDebounce stops only the arm-after-closing debounce timer.
-func (a *area) cancelDebounce() {
+func (a *zone) cancelDebounce() {
 	if a.debounceCancel != nil {
 		a.debounceCancel()
 		a.debounceCancel = nil
@@ -179,7 +179,7 @@ func (a *area) cancelDebounce() {
 // target mode. It is kept separate from cancelTimers so a post-trigger
 // disarm can schedule the auto-rearm right after cancelling the state
 // timers.
-func (a *area) cancelAutoRearm() {
+func (a *zone) cancelAutoRearm() {
 	if a.autoRearmCancel != nil {
 		a.autoRearmCancel()
 		a.autoRearmCancel = nil
@@ -189,7 +189,7 @@ func (a *area) cancelAutoRearm() {
 }
 
 // encodeBypass serializes the bypass set for alarm_state.bypass_json.
-func (a *area) encodeBypass() string {
+func (a *zone) encodeBypass() string {
 	ids := make([]string, 0, len(a.bypassed))
 	for id := range a.bypassed {
 		ids = append(ids, id)
@@ -222,8 +222,8 @@ func decodeBypass(raw string) map[string]bool {
 
 // encodeContext serializes the runtime context for
 // alarm_state.context_json.
-func (a *area) encodeContext() string {
-	doc := areaContext{
+func (a *zone) encodeContext() string {
+	doc := zoneContext{
 		PendingCause:       a.pendingCause,
 		SilencedIncidentID: a.silencedIncidentID,
 		PreTriggerState:    a.preTriggerState,
@@ -237,7 +237,7 @@ func (a *area) encodeContext() string {
 	sort.Strings(doc.OpenAtArm)
 	b, err := json.Marshal(doc)
 	if err != nil {
-		// invariant: areaContext always marshals.
+		// invariant: zoneContext always marshals.
 		return "{}"
 	}
 	return string(b)
@@ -245,8 +245,8 @@ func (a *area) encodeContext() string {
 
 // decodeContext parses alarm_state.context_json; corrupt content
 // degrades to an empty context.
-func decodeContext(raw string) areaContext {
-	var doc areaContext
+func decodeContext(raw string) zoneContext {
+	var doc zoneContext
 	if raw == "" {
 		return doc
 	}
@@ -254,12 +254,12 @@ func decodeContext(raw string) areaContext {
 	return doc
 }
 
-// AreaSnapshot is a read-only view of one area's runtime state for
+// ZoneSnapshot is a read-only view of one zone's runtime state for
 // surfaces and tests.
-type AreaSnapshot struct {
+type ZoneSnapshot struct {
 	ID               string
 	Name             string
-	State            hmenum.AlarmAreaState
+	State            hmenum.AlarmZoneState
 	Mode             hmenum.AlarmMode
 	Bypassed         []string
 	IncidentID       int64
@@ -271,9 +271,9 @@ type AreaSnapshot struct {
 	TimerRemaining time.Duration
 }
 
-// snapshot builds an AreaSnapshot; the caller holds the engine lock.
-func (a *area) snapshot(now time.Time) AreaSnapshot {
-	snap := AreaSnapshot{
+// snapshot builds an ZoneSnapshot; the caller holds the engine lock.
+func (a *zone) snapshot(now time.Time) ZoneSnapshot {
+	snap := ZoneSnapshot{
 		ID:    a.id,
 		Name:  a.name,
 		State: a.state,

@@ -1026,6 +1026,14 @@
       "name": "system.user_permissions"
     },
     {
+      "category": "system",
+      "description": "Server-pushed: the add-on self-updater changed state (check finished, download/install progressing, failure). Only emitted on platforms where self-update is supported.",
+      "kind": "broadcast",
+      "name": "addon_update.state_changed",
+      "topic": "system.addon_update",
+      "payload": "AddonUpdateStatus"
+    },
+    {
       "category": "sysvars",
       "description": "Force re-pull the CCU system-variable catalogue into the hub model. Optional central_name scopes the refresh to one CCU. Mirrors Python fetch_system_variables.",
       "name": "sysvars.fetch",
@@ -1131,10 +1139,10 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Arm an alarm area. May return synchronously as `armed`, or `arming` while counting down the mode's exit delay.",
+      "description": "Arm an alarm zone. May return synchronously as `armed`, or `arming` while counting down the mode's exit delay.",
       "name": "alarm_panel.arm",
       "args": {
-        "area_id": "string",
+        "zone_id": "string",
         "mode": "string",
         "force": "boolean?",
         "skip_delay": "boolean?",
@@ -1149,47 +1157,47 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Disarm an alarm area.",
+      "description": "Disarm an alarm zone.",
       "name": "alarm_panel.disarm",
       "args": {
-        "area_id": "string",
+        "zone_id": "string",
         "code": "string?"
       }
     },
     {
       "category": "alarm_panel",
-      "description": "Silence the active incident on an alarm area without disarming.",
+      "description": "Silence the active incident on an alarm zone without disarming.",
       "name": "alarm_panel.silence",
       "args": {
-        "area_id": "string",
+        "zone_id": "string",
         "code": "string?"
       }
     },
     {
       "category": "alarm_panel",
-      "description": "Silence the active incident on every alarm area at once.",
+      "description": "Silence the active incident on every alarm zone at once.",
       "name": "alarm_panel.silence_all"
     },
     {
       "category": "alarm_panel",
-      "description": "Acknowledge (clear) a finished incident on an alarm area.",
+      "description": "Acknowledge (clear) a finished incident on an alarm zone.",
       "name": "alarm_panel.acknowledge",
       "args": {
-        "area_id": "string",
+        "zone_id": "string",
         "code": "string?"
       }
     },
     {
       "category": "alarm_panel",
-      "description": "Return the live status of every alarm area: state, mode, bypassed sensors, active incident, running countdown, per-mode readiness, and walk-test-active flag.",
+      "description": "Return the live status of every alarm zone: state, mode, bypassed sensors, active incident, running countdown, per-mode readiness, and walk-test-active flag.",
       "name": "alarm_panel.state"
     },
     {
       "category": "alarm_panel",
-      "description": "Return the per-mode arm-readiness of an alarm area.",
+      "description": "Return the per-mode arm-readiness of an alarm zone.",
       "name": "alarm_panel.readiness",
       "args": {
-        "area_id": "string"
+        "zone_id": "string"
       }
     },
     {
@@ -1197,7 +1205,7 @@
       "description": "Query the alarm engine's event journal, newest first.",
       "name": "alarm_panel.journal",
       "args": {
-        "area_id": "string?",
+        "zone_id": "string?",
         "class": "string?",
         "from": "string?",
         "to": "string?",
@@ -1206,10 +1214,10 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Return the live status of a walk-test session on an alarm area.",
+      "description": "Return the live status of a walk-test session on an alarm zone.",
       "name": "alarm_panel.walktest_status",
       "args": {
-        "area_id": "string"
+        "zone_id": "string"
       }
     },
     {
@@ -1238,7 +1246,7 @@
         "kind": "string",
         "duress": "boolean?",
         "perms": "object",
-        "areas": "array?",
+        "zones": "array?",
         "binding": "object?",
         "valid_from_ms": "integer?",
         "valid_until_ms": "integer?",
@@ -1261,7 +1269,7 @@
         "kind": "string",
         "duress": "boolean?",
         "perms": "object",
-        "areas": "array?",
+        "zones": "array?",
         "binding": "object?",
         "valid_from_ms": "integer?",
         "valid_until_ms": "integer?",
@@ -1284,7 +1292,7 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Server-pushed: an alarm area's arm-state-machine transitioned (docs/alarm-concept.md §5).",
+      "description": "Server-pushed: an alarm zone's arm-state-machine transitioned (docs/alarm-concept.md §5).",
       "kind": "broadcast",
       "name": "alarm.state_changed",
       "topic": "alarm.panel",
@@ -1292,7 +1300,7 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Server-pushed: a running exit/entry delay on an alarm area ticked (once per second).",
+      "description": "Server-pushed: a running exit/entry delay on an alarm zone ticked (once per second).",
       "kind": "broadcast",
       "name": "alarm.countdown",
       "topic": "alarm.panel",
@@ -1300,7 +1308,7 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Server-pushed: an alarm area's per-mode arm-readiness was recomputed (docs/alarm-concept.md §6.3). Carries the full per-mode map, not a delta.",
+      "description": "Server-pushed: an alarm zone's per-mode arm-readiness was recomputed (docs/alarm-concept.md §6.3). Carries the full per-mode map, not a delta.",
       "kind": "broadcast",
       "name": "alarm.readiness_changed",
       "topic": "alarm.panel",
@@ -1308,7 +1316,7 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Server-pushed: an alarm area entered `triggered` and an incident was opened (or re-adopted after a restart / reconnect).",
+      "description": "Server-pushed: an alarm zone entered `triggered` and an incident was opened (or re-adopted after a restart / reconnect).",
       "kind": "broadcast",
       "name": "alarm.triggered",
       "topic": "alarm.panel",
@@ -1316,7 +1324,7 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Server-pushed: one enrolled notification output fired for an alarm — a deliberate, per-area, mode-filtered notification signal (one-shot at fire time, never cancelled by a later silence).",
+      "description": "Server-pushed: one enrolled notification output fired for an alarm — a deliberate, per-zone, mode-filtered notification signal (one-shot at fire time, never cancelled by a later silence).",
       "kind": "broadcast",
       "name": "alarm.notification",
       "topic": "alarm.panel",
@@ -1332,7 +1340,7 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Server-pushed: a walk-test session on an alarm area recorded a sensor activation.",
+      "description": "Server-pushed: a walk-test session on an alarm zone recorded a sensor activation.",
       "kind": "broadcast",
       "name": "alarm.walktest_progress",
       "topic": "alarm.panel",
@@ -1356,7 +1364,7 @@
     },
     {
       "category": "alarm_panel",
-      "description": "Server-pushed: an arm schedule elapsed with auto-arm off while the area was not in the scheduled mode, so the engine notifies rather than arming (docs/alarm-concept.md §15 row 19).",
+      "description": "Server-pushed: an arm schedule elapsed with auto-arm off while the zone was not in the scheduled mode, so the engine notifies rather than arming (docs/alarm-concept.md §15 row 19).",
       "kind": "broadcast",
       "name": "alarm.reminder",
       "topic": "alarm.panel",

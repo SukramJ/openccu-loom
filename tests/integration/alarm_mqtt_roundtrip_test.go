@@ -15,13 +15,13 @@
 // The alarm.Service is built the same way as
 // TestAlarmFullChainWindowOpenTriggersSirenThenSilence in
 // alarm_engine_e2e_test.go (newAlarmHarness: a temp-file SQLite DB, the
-// in-process godevccu-backed central) and seeded with one area carrying
+// in-process godevccu-backed central) and seeded with one zone carrying
 // an instant sensor (no exit or entry delay, so a command-plane arm
 // resolves synchronously) rather than a full siren/window fixture — this
 // test proves the MQTT wiring, not the engine's trigger chain, which is
-// alarm_engine_e2e_test.go's job. A publish on `<base>/alarm/<area>/set`
+// alarm_engine_e2e_test.go's job. A publish on `<base>/alarm/<zone>/set`
 // must reach the engine and the resulting state change must republish on
-// the retained `<base>/alarm/<area>/state` topic.
+// the retained `<base>/alarm/<zone>/state` topic.
 //
 // Gated exactly like the sibling real-broker tests: startMosquitto skips
 // automatically when neither a Docker daemon nor a native `mosquitto`
@@ -60,29 +60,29 @@ type testAlarmSink struct {
 	ah *alarmHarness
 }
 
-func (s testAlarmSink) Arm(ctx context.Context, areaID string, mode hmenum.AlarmMode, code string) error {
-	_, err := s.ah.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{Mode: mode, Code: code, Source: alarmMqttSource})
+func (s testAlarmSink) Arm(ctx context.Context, zoneID string, mode hmenum.AlarmMode, code string) error {
+	_, err := s.ah.svc.Engine().Arm(ctx, zoneID, engine.ArmRequest{Mode: mode, Code: code, Source: alarmMqttSource})
 	return err
 }
 
-func (s testAlarmSink) Disarm(ctx context.Context, areaID, code string) error {
-	return s.ah.svc.Engine().DisarmWithCode(ctx, areaID, "", alarmMqttSource, code)
+func (s testAlarmSink) Disarm(ctx context.Context, zoneID, code string) error {
+	return s.ah.svc.Engine().DisarmWithCode(ctx, zoneID, "", alarmMqttSource, code)
 }
 
-func (s testAlarmSink) Silence(ctx context.Context, areaID, code string) error {
-	return s.ah.svc.Engine().SilenceWithCode(ctx, areaID, "", alarmMqttSource, code)
+func (s testAlarmSink) Silence(ctx context.Context, zoneID, code string) error {
+	return s.ah.svc.Engine().SilenceWithCode(ctx, zoneID, "", alarmMqttSource, code)
 }
 
 // Panic implements mqtt.AlarmSink, mirroring daemon_north.go's
 // alarmMQTTSink.Panic: the HA TRIGGER command routes onto the engine's
 // loud (non-silent) panic path (docs/alarm-concept.md §7).
-func (s testAlarmSink) Panic(ctx context.Context, areaID string) error {
-	return s.ah.svc.Engine().PanicTrigger(ctx, areaID, false, "", alarmMqttSource)
+func (s testAlarmSink) Panic(ctx context.Context, zoneID string) error {
+	return s.ah.svc.Engine().PanicTrigger(ctx, zoneID, false, "", alarmMqttSource)
 }
 
 func (s testAlarmSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) error {
 	var lastErr error
-	for _, a := range s.ah.svc.Engine().Areas() {
+	for _, a := range s.ah.svc.Engine().Zones() {
 		if _, err := s.ah.svc.Engine().Arm(ctx, a.ID, engine.ArmRequest{Mode: mode, Source: alarmMqttSource}); err != nil {
 			lastErr = err
 		}
@@ -92,7 +92,7 @@ func (s testAlarmSink) MasterArm(ctx context.Context, mode hmenum.AlarmMode) err
 
 func (s testAlarmSink) MasterDisarm(ctx context.Context) error {
 	var lastErr error
-	for _, a := range s.ah.svc.Engine().Areas() {
+	for _, a := range s.ah.svc.Engine().Zones() {
 		if err := s.ah.svc.Engine().Disarm(ctx, a.ID, "", alarmMqttSource); err != nil {
 			lastErr = err
 		}
@@ -110,7 +110,7 @@ var _ mqtt.AlarmSink = testAlarmSink{}
 // the alarm topic tree, keyed by topic.
 type alarmMqttRig struct {
 	ah     *alarmHarness
-	areaID string
+	zoneID string
 	cmdPub *mqtt.TCPClient
 	cmdSub *mqtt.CommandSubscriber
 	pub    *mqtt.AlarmMQTTPublisher
@@ -146,18 +146,18 @@ func (r *alarmMqttRig) waitStateTopic(topic, want string, timeout time.Duration)
 }
 
 // publishAlarmCommand publishes a non-retained command on
-// `<base>/alarm/<area>/set`, the shape [CommandSubscriber.Start]
+// `<base>/alarm/<zone>/set`, the shape [CommandSubscriber.Start]
 // registers for the daemon-level alarm plane.
-func (r *alarmMqttRig) publishAlarmCommand(t *testing.T, areaID, action string) {
+func (r *alarmMqttRig) publishAlarmCommand(t *testing.T, zoneID, action string) {
 	t.Helper()
-	topic := alarmMqttBase + "/alarm/" + areaID + "/set"
+	topic := alarmMqttBase + "/alarm/" + zoneID + "/set"
 	if err := r.cmdPub.Publish(context.Background(), topic, []byte(action), mqtt.QoS1, false); err != nil {
 		t.Fatalf("publish alarm command %s to %s: %v", action, topic, err)
 	}
 }
 
 // setupAlarmMqttRig boots the alarm engine (newAlarmHarness: temp SQLite
-// DB, in-process godevccu-backed central) seeded with one area and one
+// DB, in-process godevccu-backed central) seeded with one zone and one
 // instant sensor, then wires a real CommandSubscriber + AlarmSink and a
 // real AlarmMQTTPublisher against a Mosquitto broker. Skips (via
 // startMosquitto) when no broker is available.
@@ -166,18 +166,18 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 	broker := startMosquitto(t) // skips the whole test when unavailable
 
 	ah := newAlarmHarness(t)
-	const areaID = "area-mqtt"
+	const zoneID = "zone-mqtt"
 	// An instant sensor: zero exit/entry delay so a command-plane arm
 	// resolves synchronously into the armed state and a would-be trigger
 	// would not wait out an entry delay either. Bound to the harness'
 	// SWDO STATE key (never opened here) purely so the sensor row
 	// resolves to a real channel, matching the newAlarmHarness pattern.
-	ah.seedArea(areaID, "Erdgeschoss", engine.AreaConfig{
+	ah.seedZone(zoneID, "Erdgeschoss", engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {ExitDelaySeconds: 0, EntryDelaySeconds: 0, TriggerSeconds: 10},
 		},
 	})
-	ah.seedSensor("sensor-instant", areaID, ah.swdoStateKey(), hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
+	ah.seedSensor("sensor-instant", zoneID, ah.swdoStateKey(), hmenum.AlarmSensorTypeMotion, engine.SensorConfig{
 		Modes:         []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		UseEntryDelay: false,
 	})
@@ -194,7 +194,7 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 	connectCtx, connectCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer connectCancel()
 
-	rig := &alarmMqttRig{ah: ah, areaID: areaID, states: make(map[string]string)}
+	rig := &alarmMqttRig{ah: ah, zoneID: zoneID, states: make(map[string]string)}
 
 	// --- state subscriber: capture the retained alarm-plane republish ---
 	stateSub := mqtt.NewTCPClient(mqtt.TCPConfig{
@@ -225,7 +225,7 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 	rig.pub.Start()
 	t.Cleanup(rig.pub.Stop)
 
-	// --- command subscriber: the real inbound `…/alarm/<area>/set` plane ---
+	// --- command subscriber: the real inbound `…/alarm/<zone>/set` plane ---
 	cmdSubClient := mqtt.NewTCPClient(mqtt.TCPConfig{
 		BrokerURL: broker.URL(), ClientID: "alarm-cmd-sub", KeepAlive: 30 * time.Second, CleanStart: true,
 	})
@@ -261,23 +261,23 @@ func setupAlarmMqttRig(t *testing.T) *alarmMqttRig {
 
 // TestAlarmMqttArmDisarmRoundtrip proves the full daemon-level alarm MQTT
 // loop against a real broker: publishing ARM_AWAY on
-// `<base>/alarm/<area>/set` reaches the real CommandSubscriber, flows
+// `<base>/alarm/<zone>/set` reaches the real CommandSubscriber, flows
 // through the AlarmSink into the engine, and the resulting armed/full
 // state republishes as `armed_away` on the retained
-// `<base>/alarm/<area>/state` topic (docs/alarm-concept.md §13.3 state
+// `<base>/alarm/<zone>/state` topic (docs/alarm-concept.md §13.3 state
 // mapping); DISARM reverses both sides.
 func TestAlarmMqttArmDisarmRoundtrip(t *testing.T) {
 	rig := setupAlarmMqttRig(t)
-	areaID := rig.areaID
-	stateTopic := alarmMqttBase + "/alarm/" + areaID + "/state"
+	zoneID := rig.zoneID
+	stateTopic := alarmMqttBase + "/alarm/" + zoneID + "/state"
 
-	rig.publishAlarmCommand(t, areaID, alarmpanel.HAAlarmCommandArmAway)
+	rig.publishAlarmCommand(t, zoneID, alarmpanel.HAAlarmCommandArmAway)
 
-	armed := rig.ah.waitAreaState(areaID, hmenum.AlarmAreaStateArmed, 5*time.Second)
-	if armed != hmenum.AlarmAreaStateArmed {
+	armed := rig.ah.waitAreaState(zoneID, hmenum.AlarmZoneStateArmed, 5*time.Second)
+	if armed != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("after ARM_AWAY: engine state = %q, want armed", armed)
 	}
-	snap, ok := rig.ah.svc.Engine().Area(areaID)
+	snap, ok := rig.ah.svc.Engine().Zone(zoneID)
 	if !ok || snap.Mode != hmenum.AlarmModeFull {
 		t.Fatalf("after ARM_AWAY: engine mode = %q ok=%v, want full", snap.Mode, ok)
 	}
@@ -286,10 +286,10 @@ func TestAlarmMqttArmDisarmRoundtrip(t *testing.T) {
 		t.Fatalf("retained state topic %s never carried %q; last payload = %q", stateTopic, alarmpanel.HAAlarmStateArmedAway, got)
 	}
 
-	rig.publishAlarmCommand(t, areaID, alarmpanel.HAAlarmCommandDisarm)
+	rig.publishAlarmCommand(t, zoneID, alarmpanel.HAAlarmCommandDisarm)
 
-	disarmed := rig.ah.waitAreaState(areaID, hmenum.AlarmAreaStateDisarmed, 5*time.Second)
-	if disarmed != hmenum.AlarmAreaStateDisarmed {
+	disarmed := rig.ah.waitAreaState(zoneID, hmenum.AlarmZoneStateDisarmed, 5*time.Second)
+	if disarmed != hmenum.AlarmZoneStateDisarmed {
 		t.Fatalf("after DISARM: engine state = %q, want disarmed", disarmed)
 	}
 

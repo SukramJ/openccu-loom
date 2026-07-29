@@ -106,6 +106,15 @@ const (
 	// operation and the diagram name.
 	ActionDiagramConfig Action = "diagram_config"
 
+	// ActionAreaChange records create / rename / reorder / delete of an
+	// operator-defined area (a room grouping such as a floor or a shed)
+	// and full-set replacement of an area's room assignment. Distinct
+	// from ActionAlarmConfigChange, which covers the alarm engine's own
+	// "area" partitions (docs/alarm-concept.md §14) — a different
+	// concept despite the shared word. The Note carries the operation
+	// and the area id.
+	ActionAreaChange Action = "area_change"
+
 	// ActionGroupAdmin records create / update / delete of a heating group
 	// through the CCU jpages proxy (GR02). The Note carries the operation,
 	// the central, and the group name/id.
@@ -177,6 +186,12 @@ const (
 	ActionAlarmCodeChange   Action = "alarm_code_change"
 	ActionAlarmWalkTest     Action = "alarm_walk_test"
 	ActionAlarmOutputTest   Action = "alarm_output_test"
+
+	// ActionAddonUpdateInstall records an operator-triggered install of
+	// the CCU add-on's self-update (ADR 0057). The daemon restarts as
+	// part of a successful install, so this entry is the durable trace
+	// of who initiated it; the Note carries the target release version.
+	ActionAddonUpdateInstall Action = "addon_update_install"
 )
 
 // Entry is one recorded change. The User field is filled by the REST

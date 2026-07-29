@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-func freshAlarmAreaStore(t *testing.T) *AlarmAreaStore {
+func freshAlarmZoneStore(t *testing.T) *AlarmZoneStore {
 	t.Helper()
-	return NewAlarmAreaStore(openTestDB(t, "alarm_areas.db"))
+	return NewAlarmZoneStore(openTestDB(t, "alarm_zones.db"))
 }
 
-func baseAlarmAreaRow(id string) AlarmAreaRow {
-	return AlarmAreaRow{
+func baseAlarmZoneRow(id string) AlarmZoneRow {
+	return AlarmZoneRow{
 		ID:          id,
 		Name:        "Ground Floor",
 		Position:    1,
@@ -24,18 +24,18 @@ func baseAlarmAreaRow(id string) AlarmAreaRow {
 	}
 }
 
-// TestAlarmAreaStoreUpsertInsertRoundTrip verifies that Upsert on a new id
+// TestAlarmZoneStoreUpsertInsertRoundTrip verifies that Upsert on a new id
 // inserts a row and every field survives the Upsert -> Get round trip.
-func TestAlarmAreaStoreUpsertInsertRoundTrip(t *testing.T) {
-	s := freshAlarmAreaStore(t)
+func TestAlarmZoneStoreUpsertInsertRoundTrip(t *testing.T) {
+	s := freshAlarmZoneStore(t)
 	ctx := context.Background()
 
-	row := baseAlarmAreaRow("area-1")
+	row := baseAlarmZoneRow("zone-1")
 	if err := s.Upsert(ctx, row); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	got, ok, err := s.Get(ctx, "area-1")
+	got, ok, err := s.Get(ctx, "zone-1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -47,10 +47,10 @@ func TestAlarmAreaStoreUpsertInsertRoundTrip(t *testing.T) {
 	}
 }
 
-// TestAlarmAreaStoreGetMissingReturnsFalse verifies that Get on an unknown
+// TestAlarmZoneStoreGetMissingReturnsFalse verifies that Get on an unknown
 // id returns the zero value, false, nil (no error).
-func TestAlarmAreaStoreGetMissingReturnsFalse(t *testing.T) {
-	s := freshAlarmAreaStore(t)
+func TestAlarmZoneStoreGetMissingReturnsFalse(t *testing.T) {
+	s := freshAlarmZoneStore(t)
 	ctx := context.Background()
 
 	got, ok, err := s.Get(ctx, "ghost")
@@ -60,19 +60,19 @@ func TestAlarmAreaStoreGetMissingReturnsFalse(t *testing.T) {
 	if ok {
 		t.Fatal("Get: want ok=false for missing row")
 	}
-	if got != (AlarmAreaRow{}) {
+	if got != (AlarmZoneRow{}) {
 		t.Errorf("Get on miss returned non-zero row: %+v", got)
 	}
 }
 
-// TestAlarmAreaStoreUpsertUpdatePreservesCreatedAt verifies that a second
+// TestAlarmZoneStoreUpsertUpdatePreservesCreatedAt verifies that a second
 // Upsert call on the same id updates mutable fields but never overwrites
 // created_at_ms.
-func TestAlarmAreaStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
-	s := freshAlarmAreaStore(t)
+func TestAlarmZoneStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
+	s := freshAlarmZoneStore(t)
 	ctx := context.Background()
 
-	row := baseAlarmAreaRow("area-1")
+	row := baseAlarmZoneRow("zone-1")
 	if err := s.Upsert(ctx, row); err != nil {
 		t.Fatalf("Upsert 1: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestAlarmAreaStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
 		t.Fatalf("Upsert 2: %v", err)
 	}
 
-	got, ok, err := s.Get(ctx, "area-1")
+	got, ok, err := s.Get(ctx, "zone-1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -111,13 +111,13 @@ func TestAlarmAreaStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
 	}
 }
 
-// TestAlarmAreaStoreGetAllOrdering verifies GetAll orders by position then
+// TestAlarmZoneStoreGetAllOrdering verifies GetAll orders by position then
 // name.
-func TestAlarmAreaStoreGetAllOrdering(t *testing.T) {
-	s := freshAlarmAreaStore(t)
+func TestAlarmZoneStoreGetAllOrdering(t *testing.T) {
+	s := freshAlarmZoneStore(t)
 	ctx := context.Background()
 
-	rows := []AlarmAreaRow{
+	rows := []AlarmZoneRow{
 		{ID: "c", Name: "Charlie", Position: 2, ConfigJSON: "{}", CreatedAtMS: 1, UpdatedAtMS: 1},
 		{ID: "a", Name: "Alpha", Position: 1, ConfigJSON: "{}", CreatedAtMS: 1, UpdatedAtMS: 1},
 		{ID: "b", Name: "Bravo", Position: 1, ConfigJSON: "{}", CreatedAtMS: 1, UpdatedAtMS: 1},
@@ -143,35 +143,35 @@ func TestAlarmAreaStoreGetAllOrdering(t *testing.T) {
 	}
 }
 
-// TestAlarmAreaStoreDelete verifies Delete removes exactly the targeted row.
-func TestAlarmAreaStoreDelete(t *testing.T) {
-	s := freshAlarmAreaStore(t)
+// TestAlarmZoneStoreDelete verifies Delete removes exactly the targeted row.
+func TestAlarmZoneStoreDelete(t *testing.T) {
+	s := freshAlarmZoneStore(t)
 	ctx := context.Background()
 
-	if err := s.Upsert(ctx, baseAlarmAreaRow("area-1")); err != nil {
-		t.Fatalf("Upsert area-1: %v", err)
+	if err := s.Upsert(ctx, baseAlarmZoneRow("zone-1")); err != nil {
+		t.Fatalf("Upsert zone-1: %v", err)
 	}
-	if err := s.Upsert(ctx, baseAlarmAreaRow("area-2")); err != nil {
-		t.Fatalf("Upsert area-2: %v", err)
+	if err := s.Upsert(ctx, baseAlarmZoneRow("zone-2")); err != nil {
+		t.Fatalf("Upsert zone-2: %v", err)
 	}
 
-	if err := s.Delete(ctx, "area-1"); err != nil {
+	if err := s.Delete(ctx, "zone-1"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	_, ok, err := s.Get(ctx, "area-1")
+	_, ok, err := s.Get(ctx, "zone-1")
 	if err != nil {
 		t.Fatalf("Get after delete: %v", err)
 	}
 	if ok {
-		t.Error("area-1 still exists after Delete")
+		t.Error("zone-1 still exists after Delete")
 	}
 
-	_, ok, err = s.Get(ctx, "area-2")
+	_, ok, err = s.Get(ctx, "zone-2")
 	if err != nil {
-		t.Fatalf("Get area-2: %v", err)
+		t.Fatalf("Get zone-2: %v", err)
 	}
 	if !ok {
-		t.Error("area-2 must survive Delete of area-1")
+		t.Error("zone-2 must survive Delete of zone-1")
 	}
 }

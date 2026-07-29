@@ -1,0 +1,4 @@
+[
+  { "id": "zone-eg", "name": "Erdgeschoss", "position": 1, "config": {} },
+  { "id": "zone-og", "name": "Dachgeschoss", "position": 2, "config": {} }
+]

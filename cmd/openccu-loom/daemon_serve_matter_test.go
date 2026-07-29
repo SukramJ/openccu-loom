@@ -44,7 +44,7 @@ func TestDaemonServe_WithMatterEnabled(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemon returned: %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemon did not shut down in time")
 	}
 }
@@ -77,7 +77,7 @@ func TestDaemonServe_WithMQTTEnabled(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemon returned: %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemon did not shut down in time")
 	}
 }

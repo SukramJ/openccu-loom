@@ -90,10 +90,10 @@ func TestAlarmS6SilenceAndDisarmNeverStateGated(t *testing.T) {
 			t.Parallel()
 			h := newAlarmEngineFixture(t)
 			tc.drive(t, h)
-			if err := h.eng.Silence(context.Background(), "area", "contract", "test"); err != nil {
+			if err := h.eng.Silence(context.Background(), "zone", "contract", "test"); err != nil {
 				t.Fatalf("silence in state %s: %v", tc.name, err)
 			}
-			if err := h.eng.Disarm(context.Background(), "area", "contract", "test"); err != nil {
+			if err := h.eng.Disarm(context.Background(), "zone", "contract", "test"); err != nil {
 				t.Fatalf("disarm in state %s: %v", tc.name, err)
 			}
 		})
@@ -115,19 +115,19 @@ func newAlarmEngineFixture(t *testing.T) *alarmEngineFixture {
 	t.Cleanup(func() { _ = db.Close() })
 	ctx := context.Background()
 
-	areas := sqlitestore.NewAlarmAreaStore(db)
+	zones := sqlitestore.NewAlarmZoneStore(db)
 	sensors := sqlitestore.NewAlarmSensorStore(db)
-	areaCfg, _ := json.Marshal(engine.AreaConfig{Modes: map[hmenum.AlarmMode]engine.ModeConfig{
+	areaCfg, _ := json.Marshal(engine.ZoneConfig{Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 		hmenum.AlarmModeFull: {ExitDelaySeconds: 300, EntryDelaySeconds: 300, TriggerSeconds: 300},
 	}})
-	if err := areas.Upsert(ctx, sqlitestore.AlarmAreaRow{ID: "area", Name: "Area", ConfigJSON: string(areaCfg)}); err != nil {
-		t.Fatalf("seed area: %v", err)
+	if err := zones.Upsert(ctx, sqlitestore.AlarmZoneRow{ID: "zone", Name: "Zone", ConfigJSON: string(areaCfg)}); err != nil {
+		t.Fatalf("seed zone: %v", err)
 	}
 	doorCfg, _ := json.Marshal(engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}, UseEntryDelay: true})
 	windowCfg, _ := json.Marshal(engine.SensorConfig{Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}})
 	for id, cfg := range map[string][]byte{"door": doorCfg, "window": windowCfg} {
 		if err := sensors.Upsert(ctx, sqlitestore.AlarmSensorRow{
-			ID: id, AreaID: "area", CentralName: "c", InterfaceID: "HmIP-RF",
+			ID: id, ZoneID: "zone", CentralName: "c", InterfaceID: "HmIP-RF",
 			ChannelAddress: id + ":1", Parameter: "STATE",
 			SensorType: hmenum.AlarmSensorTypeWindow, ConfigJSON: string(cfg),
 		}); err != nil {
@@ -135,7 +135,7 @@ func newAlarmEngineFixture(t *testing.T) *alarmEngineFixture {
 		}
 	}
 	eng, err := engine.New(engine.Deps{
-		Areas:     areas,
+		Zones:     zones,
 		Sensors:   sensors,
 		State:     sqlitestore.NewAlarmStateStore(db),
 		Incidents: sqlitestore.NewAlarmIncidentStore(db),
@@ -152,7 +152,7 @@ func newAlarmEngineFixture(t *testing.T) *alarmEngineFixture {
 
 func (h *alarmEngineFixture) arm(t *testing.T, req engine.ArmRequest) {
 	t.Helper()
-	if _, err := h.eng.Arm(context.Background(), "area", req); err != nil {
+	if _, err := h.eng.Arm(context.Background(), "zone", req); err != nil {
 		t.Fatalf("arm: %v", err)
 	}
 }

@@ -3,7 +3,7 @@
 How to get a working OpenCCU-Loom build on your machine, run it locally, and keep your changes within the project's code-quality rules.
 
 !!! info "Who this page is for"
-    Contributors and developers setting up a local checkout for the first time. For the contribution process and review expectations, see [`CONTRIBUTING.md`](https://github.com/SukramJ/openccu-loom/blob/main/CONTRIBUTING.md).
+    Contributors and developers setting up a local checkout for the first time. For the contribution process and review expectations, see [`CONTRIBUTING.md`](https://github.com/SukramJ/openccu-loom/blob/main/CONTRIBUTING.md). Rules for AI-assisted contributions are in [`AI_POLICY.md`](https://github.com/SukramJ/openccu-loom/blob/main/AI_POLICY.md).
 
 ## Prerequisites
 

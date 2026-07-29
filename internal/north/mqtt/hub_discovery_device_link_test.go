@@ -79,7 +79,7 @@ func TestSysvarDiscoveryWithoutDeviceAddressStaysOnHubCard(t *testing.T) {
 func TestProgramDiscoveryWithDeviceAddressLinksToPhysicalDevice(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "Morning Lights", "0001ABCD")
+	item := db.BuildProgramDiscovery("ccu-01", HubProgramSpec{ID: "PRG_42", Name: "Morning Lights", DeviceAddress: "0001ABCD"})
 	m := jsonMap(t, item)
 
 	dev, ok := m["device"].(map[string]any)
@@ -101,7 +101,7 @@ func TestProgramDiscoveryWithDeviceAddressLinksToPhysicalDevice(t *testing.T) {
 func TestProgramDiscoveryWithoutDeviceAddressStaysOnHubCard(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildProgramDiscovery("ccu-01", "PRG_42", "Morning Lights", "")
+	item := db.BuildProgramDiscovery("ccu-01", HubProgramSpec{ID: "PRG_42", Name: "Morning Lights"})
 	m := jsonMap(t, item)
 
 	dev, ok := m["device"].(map[string]any)

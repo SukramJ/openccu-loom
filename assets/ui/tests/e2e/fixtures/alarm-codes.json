@@ -4,7 +4,7 @@
     "name": "Markus",
     "kind": "pin",
     "perms": { "arm": true, "disarm": true, "silence": false },
-    "areas": [],
+    "zones": [],
     "enabled": true,
     "created_ms": 1752480000000,
     "updated_ms": 1752480000000
@@ -14,7 +14,7 @@
     "name": "Gast-Code",
     "kind": "pin",
     "perms": { "arm": false, "disarm": true, "silence": false },
-    "areas": ["area-eg"],
+    "zones": ["zone-eg"],
     "enabled": true,
     "valid_from_ms": 1752192000000,
     "valid_until_ms": 1752796800000,
@@ -26,7 +26,7 @@
     "name": "Haustür-Keypad Slot 1",
     "kind": "keypad_slot",
     "perms": { "arm": true, "disarm": true, "silence": false },
-    "areas": ["area-eg"],
+    "zones": ["zone-eg"],
     "enabled": true,
     "created_ms": 1751500000000,
     "updated_ms": 1751500000000
@@ -37,7 +37,7 @@
     "kind": "pin",
     "duress": true,
     "perms": { "arm": false, "disarm": true, "silence": false },
-    "areas": [],
+    "zones": [],
     "enabled": true,
     "created_ms": 1751000000000,
     "updated_ms": 1751000000000

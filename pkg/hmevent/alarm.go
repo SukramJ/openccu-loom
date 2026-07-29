@@ -27,16 +27,16 @@ const (
 )
 
 // AlarmNotificationEvent is one enrolled notification output firing
-// for an alarm (docs/alarm-concept.md §7): a deliberate, per-area,
+// for an alarm (docs/alarm-concept.md §7): a deliberate, per-zone,
 // mode-filtered notification signal — distinct from the raw state
 // events every north-bound plane already receives. It is one-shot at
 // fire time and never cancelled by a later silence.
 type AlarmNotificationEvent struct {
 	Base
-	// AreaID identifies the alarm area.
-	AreaID string
-	// AreaName is the display name at publish time.
-	AreaName string
+	// ZoneID identifies the alarm zone.
+	ZoneID string
+	// ZoneName is the display name at publish time.
+	ZoneName string
 	// OutputID / OutputName identify the enrolled notification output.
 	OutputID   string
 	OutputName string
@@ -62,10 +62,10 @@ func (AlarmNotificationEvent) Type() EventType { return EventTypeAlarmNotificati
 // SPA never renders it. The visible journal entry is written Hidden.
 type AlarmDuressEvent struct {
 	Base
-	// AreaID identifies the alarm area.
-	AreaID string
-	// AreaName is the display name at publish time.
-	AreaName string
+	// ZoneID identifies the alarm zone.
+	ZoneID string
+	// ZoneName is the display name at publish time.
+	ZoneName string
 	// Verb is the action the duress code accompanied (arm, disarm,
 	// silence).
 	Verb string
@@ -81,18 +81,18 @@ type AlarmDuressEvent struct {
 // Type implements Event.
 func (AlarmDuressEvent) Type() EventType { return EventTypeAlarmDuress }
 
-// AlarmReminderEvent fires when an arm schedule elapses and the area is
+// AlarmReminderEvent fires when an arm schedule elapses and the zone is
 // not in the scheduled mode while the schedule is a reminder (AutoArm
 // off): the engine notifies rather than arming (docs/alarm-concept.md
 // §15 row 19). The actual reminder emission is wired by the schedule
 // service; this type defines the bus contract.
 type AlarmReminderEvent struct {
 	Base
-	// AreaID identifies the alarm area.
-	AreaID string
-	// AreaName is the display name at publish time.
-	AreaName string
-	// Mode is the protection mode the schedule expected the area to be
+	// ZoneID identifies the alarm zone.
+	ZoneID string
+	// ZoneName is the display name at publish time.
+	ZoneName string
+	// Mode is the protection mode the schedule expected the zone to be
 	// in.
 	Mode hmenum.AlarmMode
 }
@@ -113,15 +113,15 @@ type AlarmCodesChangedEvent struct {
 func (AlarmCodesChangedEvent) Type() EventType { return EventTypeAlarmCodesChanged }
 
 // AlarmPanelChangedEvent fires when the alarm-control-panel entity
-// projection of an area (or of the aggregate master panel) changes:
+// projection of an zone (or of the aggregate master panel) changes:
 // its HA state token, availability, or identity. REST, WebSocket, and
 // MQTT surfaces render this one projection.
 type AlarmPanelChangedEvent struct {
 	Base
 	// UniqueID is the stable entity identifier.
 	UniqueID string
-	// AreaID is the alarm area, or "master" for the aggregate panel.
-	AreaID string
+	// ZoneID is the alarm zone, or "master" for the aggregate panel.
+	ZoneID string
 	// Name is the display name at publish time.
 	Name string
 	// State is the HA state token (disarmed, arming, pending,
@@ -130,13 +130,13 @@ type AlarmPanelChangedEvent struct {
 	State string
 	// Available reports the alarm-health verdict.
 	Available bool
-	// CodeArmRequired / CodeDisarmRequired carry the area's effective
-	// per-verb code policy (docs/alarm-concept.md §11): the area-config
+	// CodeArmRequired / CodeDisarmRequired carry the zone's effective
+	// per-verb code policy (docs/alarm-concept.md §11): the zone-config
 	// policy half AND the "an applicable enabled pin code exists" half.
-	// The master aggregate carries the any-area-requires union.
+	// The master aggregate carries the any-zone-requires union.
 	CodeArmRequired    bool
 	CodeDisarmRequired bool
-	// Removed marks a panel whose area was deleted.
+	// Removed marks a panel whose zone was deleted.
 	Removed bool
 }
 
@@ -161,8 +161,8 @@ func (AlarmHealthChangedEvent) Type() EventType { return EventTypeAlarmHealthCha
 // activation, so the checklist view updates live.
 type AlarmWalkTestEvent struct {
 	Base
-	// AreaID identifies the alarm area under test.
-	AreaID string
+	// ZoneID identifies the alarm zone under test.
+	ZoneID string
 	// SensorID / SensorName identify the sensor that just tripped.
 	SensorID   string
 	SensorName string
@@ -179,8 +179,8 @@ func (AlarmWalkTestEvent) Type() EventType { return EventTypeAlarmWalkTest }
 // drivers can pace their ticks.
 type AlarmCountdownEvent struct {
 	Base
-	// AreaID identifies the alarm area.
-	AreaID string
+	// ZoneID identifies the alarm zone.
+	ZoneID string
 	// Kind is the running countdown: "exit_delay" or "entry_delay"
 	// (the persisted timer-kind tokens).
 	Kind string
@@ -193,17 +193,17 @@ type AlarmCountdownEvent struct {
 func (AlarmCountdownEvent) Type() EventType { return EventTypeAlarmCountdown }
 
 // AlarmStateChangedEvent fires on every arm-state-machine transition
-// of an alarm area (docs/alarm-concept.md §5). Silence is not a state
+// of an alarm zone (docs/alarm-concept.md §5). Silence is not a state
 // transition; it surfaces via the journal event instead.
 type AlarmStateChangedEvent struct {
 	Base
-	// AreaID identifies the alarm area.
-	AreaID string
-	// AreaName is the display name at publish time.
-	AreaName string
+	// ZoneID identifies the alarm zone.
+	ZoneID string
+	// ZoneName is the display name at publish time.
+	ZoneName string
 	// From and To are the machine states of the transition.
-	From hmenum.AlarmAreaState
-	To   hmenum.AlarmAreaState
+	From hmenum.AlarmZoneState
+	To   hmenum.AlarmZoneState
 	// Mode is the active (or target, while arming) protection mode.
 	Mode hmenum.AlarmMode
 	// ChangedBy attributes the transition (code name, operator
@@ -220,14 +220,14 @@ type AlarmStateChangedEvent struct {
 // Type implements Event.
 func (AlarmStateChangedEvent) Type() EventType { return EventTypeAlarmStateChanged }
 
-// AlarmTriggeredEvent fires when an area enters `triggered` and an
+// AlarmTriggeredEvent fires when an zone enters `triggered` and an
 // incident is opened (or re-adopted after a restart / reconnect).
 type AlarmTriggeredEvent struct {
 	Base
-	// AreaID identifies the alarm area.
-	AreaID string
-	// AreaName is the display name at publish time.
-	AreaName string
+	// ZoneID identifies the alarm zone.
+	ZoneID string
+	// ZoneName is the display name at publish time.
+	ZoneName string
 	// IncidentID references the incident this trigger belongs to.
 	IncidentID int64
 	// SensorID identifies the triggering sensor; empty when the cause
@@ -257,12 +257,12 @@ type AlarmModeReadiness struct {
 }
 
 // AlarmReadinessChangedEvent fires when the ready-to-arm computation
-// of an area changes for at least one mode (docs/alarm-concept.md
+// of an zone changes for at least one mode (docs/alarm-concept.md
 // §6.3). Consumers get the full per-mode map, not a delta.
 type AlarmReadinessChangedEvent struct {
 	Base
-	// AreaID identifies the alarm area.
-	AreaID string
+	// ZoneID identifies the alarm zone.
+	ZoneID string
 	// Readiness maps each configured mode to its verdict.
 	Readiness map[hmenum.AlarmMode]AlarmModeReadiness
 }
@@ -277,9 +277,9 @@ type AlarmJournalAppendedEvent struct {
 	Base
 	// EntryID is the persisted journal row ID.
 	EntryID int64
-	// AreaID identifies the alarm area; empty for engine-global
+	// ZoneID identifies the alarm zone; empty for engine-global
 	// entries.
-	AreaID string
+	ZoneID string
 	// Class buckets the entry for filtering.
 	Class hmenum.AlarmJournalClass
 	// Event is the stable machine-readable event token within the

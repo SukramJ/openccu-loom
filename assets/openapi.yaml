@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.56.0
+  version: 3.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -32,7 +32,7 @@ tags:
   - name: audit
   - name: diagnostics
   - name: alarm
-    description: Alarm system areas, arming, sensors, outputs, journal, walk-test
+    description: Alarm system zones, arming, sensors, outputs, journal, walk-test
   - name: matter
   - name: config-admin
     description: Live config section read / write / delete + schema introspection
@@ -42,6 +42,8 @@ tags:
     description: API token management v2 (fingerprint-keyed)
   - name: central-admin
     description: Central (CCU) CRUD — DB-backed multi-CCU registry
+  - name: system
+    description: Daemon-level system operations (add-on self-update)
 
 paths:
   /info:
@@ -1465,6 +1467,55 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/addon-update:
+    get:
+      tags: [system]
+      description: |
+        Self-update status of the daemon's own CCU add-on package.
+        Only meaningful on platforms with the firmware-side installer
+        (`/bin/install_addon`, i.e. OpenCCU / RaspberryMatic); elsewhere
+        `supported` is false and the check/install verbs answer 404.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddonUpdateStatus" }
+
+  /system/addon-update/check:
+    post:
+      tags: [system]
+      description: Trigger an immediate update check against the release feed.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "202":
+          description: Check started; observe via GET or the WS broadcast.
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /system/addon-update/install:
+    post:
+      tags: [system]
+      description: |
+        Download, verify (SHA256 against the release checksums), stage
+        and install the latest add-on package via the firmware's
+        install_addon. The daemon restarts as part of the install.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "202":
+          description: Install started; the daemon will restart.
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: No update available, or an install is already running.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
 
   /system/update:
     get:
@@ -3664,6 +3715,96 @@ paths:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
+  /areas:
+    get:
+      operationId: listAreas
+      summary: Operator-defined room groupings (areas) with their assigned rooms
+      tags: [hub]
+      responses:
+        "200":
+          description: Area list, ordered by position then name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Area" }
+    post:
+      operationId: createArea
+      summary: Create an area (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Area" }
+      responses:
+        "201":
+          description: Created (server-generated id)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Area" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+  /areas/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    put:
+      operationId: putArea
+      summary: Rename/reorder an area (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Area" }
+      responses:
+        "204": { description: Updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      operationId: deleteArea
+      summary: Delete an area and clear its room assignments (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /areas/{id}/rooms:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    put:
+      operationId: putAreaRooms
+      summary: Replace the full room set of an area (operator)
+      description: >-
+        Full-set replace: rooms omitted from the body are unassigned from
+        the area. A room already assigned to ANOTHER area moves to this
+        one (one area per room).
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/AreaRoomRef" }
+      responses:
+        "204": { description: Replaced }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
   /programs/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
@@ -5928,37 +6069,37 @@ paths:
   /alarm/state:
     get:
       operationId: getAlarmState
-      summary: Current live status of every alarm area
+      summary: Current live status of every alarm zone
       tags: [alarm]
       responses:
         "200":
-          description: Per-area alarm status.
+          description: Per-zone alarm status.
           content:
             application/json:
               schema:
                 type: object
-                required: [areas]
+                required: [zones]
                 properties:
-                  areas:
+                  zones:
                     type: array
-                    items: { $ref: "#/components/schemas/AlarmAreaStatus" }
+                    items: { $ref: "#/components/schemas/AlarmZoneStatus" }
 
-  /alarm/areas:
+  /alarm/zones:
     get:
-      operationId: listAlarmAreas
-      summary: List all configured alarm areas
+      operationId: listAlarmZones
+      summary: List all configured alarm zones
       tags: [alarm]
       responses:
         "200":
-          description: Alarm area list
+          description: Alarm zone list
           content:
             application/json:
               schema:
                 type: array
-                items: { $ref: "#/components/schemas/AlarmArea" }
+                items: { $ref: "#/components/schemas/AlarmZone" }
     post:
-      operationId: createAlarmArea
-      summary: Create a new alarm area (operator)
+      operationId: createAlarmZone
+      summary: Create a new alarm zone (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -5968,36 +6109,36 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/AlarmArea" }
+            schema: { $ref: "#/components/schemas/AlarmZone" }
       responses:
         "201":
           description: Created
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AlarmArea" }
+              schema: { $ref: "#/components/schemas/AlarmZone" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /alarm/areas/{id}:
+  /alarm/zones/{id}:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     get:
-      operationId: getAlarmArea
-      summary: Get a single alarm area by id
+      operationId: getAlarmZone
+      summary: Get a single alarm zone by id
       tags: [alarm]
       responses:
         "200":
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AlarmArea" }
+              schema: { $ref: "#/components/schemas/AlarmZone" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
-      operationId: putAlarmArea
-      summary: Replace an alarm area (operator)
+      operationId: putAlarmZone
+      summary: Replace an alarm zone (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6007,16 +6148,16 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/AlarmArea" }
+            schema: { $ref: "#/components/schemas/AlarmZone" }
       responses:
         "204": { description: Updated }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
-      operationId: deleteAlarmArea
-      summary: Delete an alarm area (operator)
-      description: Refused with 409 unless the area is currently disarmed.
+      operationId: deleteAlarmZone
+      summary: Delete an alarm zone (operator)
+      description: Refused with 409 unless the zone is currently disarmed.
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6027,15 +6168,15 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
-  /alarm/areas/{id}/sensors:
+  /alarm/zones/{id}/sensors:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     get:
-      operationId: listAlarmAreaSensors
-      summary: List the sensors enrolled in an alarm area
+      operationId: listAlarmZoneSensors
+      summary: List the sensors enrolled in an alarm zone
       tags: [alarm]
       responses:
         "200":
@@ -6047,11 +6188,11 @@ paths:
                 items: { $ref: "#/components/schemas/AlarmSensor" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
-      operationId: putAlarmAreaSensors
-      summary: Replace the full sensor set of an alarm area (operator)
+      operationId: putAlarmZoneSensors
+      summary: Replace the full sensor set of an alarm zone (operator)
       description: >
         Bulk replace — the request body is the complete desired sensor
-        list for the area; sensors omitted from the body are removed.
+        list for the zone; sensors omitted from the body are removed.
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6070,15 +6211,15 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /alarm/areas/{id}/outputs:
+  /alarm/zones/{id}/outputs:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     get:
-      operationId: listAlarmAreaOutputs
-      summary: List the outputs enrolled in an alarm area
+      operationId: listAlarmZoneOutputs
+      summary: List the outputs enrolled in an alarm zone
       tags: [alarm]
       responses:
         "200":
@@ -6090,11 +6231,11 @@ paths:
                 items: { $ref: "#/components/schemas/AlarmOutput" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
-      operationId: putAlarmAreaOutputs
-      summary: Replace the full output set of an alarm area (operator)
+      operationId: putAlarmZoneOutputs
+      summary: Replace the full output set of an alarm zone (operator)
       description: >
         Bulk replace — the request body is the complete desired output
-        list for the area; outputs omitted from the body are removed.
+        list for the zone; outputs omitted from the body are removed.
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6113,15 +6254,15 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /alarm/areas/{id}/arm:
+  /alarm/zones/{id}/arm:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     post:
-      operationId: armAlarmArea
-      summary: Arm an alarm area (operator)
+      operationId: armAlarmZone
+      summary: Arm an alarm zone (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6135,7 +6276,7 @@ paths:
       responses:
         "200":
           description: >
-            Arming accepted. The area may now be counting down an exit
+            Arming accepted. The zone may now be counting down an exit
             delay (state `arming`) or already armed (`exit_delay_s: 0`).
           content:
             application/json:
@@ -6143,7 +6284,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403":
           description: >
-            The area's code policy requires an arm code and the supplied
+            The zone's code policy requires an arm code and the supplied
             `code` is missing or wrong. The detail stays opaque
             (`invalid_code`) so a prober learns nothing about which codes
             exist.
@@ -6160,15 +6301,15 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
-  /alarm/areas/{id}/disarm:
+  /alarm/zones/{id}/disarm:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     post:
-      operationId: disarmAlarmArea
-      summary: Disarm an alarm area (operator)
+      operationId: disarmAlarmZone
+      summary: Disarm an alarm zone (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6189,15 +6330,15 @@ paths:
         "403": { $ref: "#/components/responses/AlarmInvalidCode" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /alarm/areas/{id}/silence:
+  /alarm/zones/{id}/silence:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     post:
-      operationId: silenceAlarmArea
-      summary: Silence the active incident on an alarm area without disarming (operator)
+      operationId: silenceAlarmZone
+      summary: Silence the active incident on an alarm zone without disarming (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6217,15 +6358,15 @@ paths:
         "403": { $ref: "#/components/responses/AlarmInvalidCode" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /alarm/areas/{id}/acknowledge:
+  /alarm/zones/{id}/acknowledge:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     post:
-      operationId: acknowledgeAlarmArea
-      summary: Acknowledge (clear) a finished incident on an alarm area (operator)
+      operationId: acknowledgeAlarmZone
+      summary: Acknowledge (clear) a finished incident on an alarm zone (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6247,8 +6388,8 @@ paths:
 
   /alarm/silence-all:
     post:
-      operationId: silenceAllAlarmAreas
-      summary: Silence the active incident on every alarm area at once (operator)
+      operationId: silenceAllAlarmZones
+      summary: Silence the active incident on every alarm zone at once (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6257,19 +6398,19 @@ paths:
       responses:
         "204": { description: Silenced }
 
-  /alarm/areas/{id}/readiness:
+  /alarm/zones/{id}/readiness:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string }
     get:
-      operationId: getAlarmAreaReadiness
-      summary: Per-mode arm-readiness of an alarm area
+      operationId: getAlarmZoneReadiness
+      summary: Per-mode arm-readiness of an alarm zone
       tags: [alarm]
       responses:
         "200":
-          description: Readiness verdict for every mode configured on the area, keyed by mode name.
+          description: Readiness verdict for every mode configured on the zone, keyed by mode name.
           content:
             application/json:
               schema:
@@ -6282,8 +6423,8 @@ paths:
       operationId: listAlarmPanels
       summary: List the alarm-control-panel entity projections
       description: |
-        The HA-facing entity view of every alarm area (plus the
-        aggregate master panel when two or more areas exist) — the
+        The HA-facing entity view of every alarm zone (plus the
+        aggregate master panel when two or more zones exist) — the
         same projection the MQTT discovery entities and the
         `alarm.panel_changed` WebSocket broadcast carry.
       tags: [alarm]
@@ -6304,9 +6445,9 @@ paths:
       tags: [alarm]
       parameters:
         - in: query
-          name: area
+          name: zone
           schema: { type: string }
-          description: Only return entries for this alarm area id.
+          description: Only return entries for this alarm zone id.
         - in: query
           name: class
           schema:
@@ -6341,7 +6482,7 @@ paths:
                 items: { $ref: "#/components/schemas/AlarmJournalEntry" }
         "400": { $ref: "#/components/responses/BadRequest" }
 
-  /alarm/areas/{id}/walktest/start:
+  /alarm/zones/{id}/walktest/start:
     parameters:
       - name: id
         in: path
@@ -6349,7 +6490,7 @@ paths:
         schema: { type: string }
     post:
       operationId: startAlarmWalkTest
-      summary: Start a walk-test session on an alarm area (operator)
+      summary: Start a walk-test session on an alarm zone (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6360,7 +6501,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
-  /alarm/areas/{id}/walktest/stop:
+  /alarm/zones/{id}/walktest/stop:
     parameters:
       - name: id
         in: path
@@ -6368,7 +6509,7 @@ paths:
         schema: { type: string }
     post:
       operationId: stopAlarmWalkTest
-      summary: Stop the running walk-test session on an alarm area (operator)
+      summary: Stop the running walk-test session on an alarm zone (operator)
       tags: [alarm]
       security:
         - basicAuth: []
@@ -6378,7 +6519,7 @@ paths:
         "204": { description: Stopped }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /alarm/areas/{id}/walktest:
+  /alarm/zones/{id}/walktest:
     parameters:
       - name: id
         in: path
@@ -6386,7 +6527,7 @@ paths:
         schema: { type: string }
     get:
       operationId: getAlarmWalkTestStatus
-      summary: Live status of an alarm area's walk-test session
+      summary: Live status of an alarm zone's walk-test session
       tags: [alarm]
       responses:
         "200":
@@ -6681,7 +6822,7 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
     AlarmInvalidCode:
       description: >
-        The area's code policy requires a code and the supplied `code` is
+        The zone's code policy requires a code and the supplied `code` is
         missing or wrong. The detail stays opaque (`invalid_code`) so a
         prober learns nothing about which codes exist
         (docs/alarm-concept.md §16).
@@ -7556,7 +7697,7 @@ components:
           description: |
             The channel's single resolved room with the group-master
             fallback applied. Empty when no unique room can be
-            resolved. External clients use it as the suggested area of
+            resolved. External clients use it as the suggested zone of
             the channel group's sub-device.
         rooms:
           type: array
@@ -9195,11 +9336,11 @@ components:
       description: |
         Payload of an `alarm.state_changed` broadcast. Topic
         `alarm.panel`. Fires on every arm-state-machine transition of
-        an alarm area (docs/alarm-concept.md §5).
-      required: [area_id, area_name, old_state, new_state]
+        an alarm zone (docs/alarm-concept.md §5).
+      required: [zone_id, zone_name, old_state, new_state]
       properties:
-        area_id: { type: string }
-        area_name: { type: string }
+        zone_id: { type: string }
+        zone_name: { type: string }
         old_state:
           type: string
           enum: [disarmed, arming, armed, pending, triggered]
@@ -9229,10 +9370,10 @@ components:
       description: |
         Payload of an `alarm.countdown` broadcast. Topic `alarm.panel`.
         Ticks once per second while an exit or entry delay runs on an
-        alarm area.
-      required: [area_id, kind, remaining_s, total_s, remaining_ms, total_ms]
+        alarm zone.
+      required: [zone_id, kind, remaining_s, total_s, remaining_ms, total_ms]
       properties:
-        area_id: { type: string }
+        zone_id: { type: string }
         kind:
           type: string
           enum: [exit_delay, entry_delay]
@@ -9250,11 +9391,11 @@ components:
       description: |
         Payload of an `alarm.readiness_changed` broadcast. Topic
         `alarm.panel`. Fires when the ready-to-arm computation of an
-        area changes for at least one mode (docs/alarm-concept.md
+        zone changes for at least one mode (docs/alarm-concept.md
         §6.3). Carries the full per-mode map, not a delta.
-      required: [area_id, readiness]
+      required: [zone_id, readiness]
       properties:
-        area_id: { type: string }
+        zone_id: { type: string }
         readiness:
           type: object
           additionalProperties: { $ref: "#/components/schemas/AlarmModeReadiness" }
@@ -9267,10 +9408,10 @@ components:
         `alarm.panel`. One enrolled notification output fired for an
         alarm — one-shot at fire time, never cancelled by a later
         silence.
-      required: [area_id, output_id, incident_id]
+      required: [zone_id, output_id, incident_id]
       properties:
-        area_id: { type: string }
-        area_name: { type: string }
+        zone_id: { type: string }
+        zone_name: { type: string }
         output_id: { type: string }
         output_name: { type: string }
         incident_id: { type: integer, format: int64 }
@@ -9280,12 +9421,12 @@ components:
       type: object
       description: |
         Payload of an `alarm.triggered` broadcast. Topic `alarm.panel`.
-        Fires when an area enters `triggered` and an incident is
+        Fires when an zone enters `triggered` and an incident is
         opened (or re-adopted after a restart / reconnect).
-      required: [area_id, area_name, incident_id, cause]
+      required: [zone_id, zone_name, incident_id, cause]
       properties:
-        area_id: { type: string }
-        area_name: { type: string }
+        zone_id: { type: string }
+        zone_name: { type: string }
         incident_id: { type: integer, format: int64 }
         sensor_id:
           type: string
@@ -9304,11 +9445,11 @@ components:
       description: |
         Alarm-control-panel entity projection (model category
         `alarm_control_panel`), identical across REST, WebSocket, and
-        MQTT. `area_id` is `master` for the aggregate panel.
-      required: [unique_id, area_id, name, category, state, available, code_arm_required, code_disarm_required]
+        MQTT. `zone_id` is `master` for the aggregate panel.
+      required: [unique_id, zone_id, name, category, state, available, code_arm_required, code_disarm_required]
       properties:
         unique_id: { type: string }
-        area_id: { type: string }
+        zone_id: { type: string }
         name: { type: string }
         category: { type: string }
         state:
@@ -9322,15 +9463,15 @@ components:
         code_arm_required:
           type: boolean
           description: |
-            Effective per-area code requirement for arming: the area's
+            Effective per-zone code requirement for arming: the zone's
             code policy AND an applicable enabled pin code exists —
             exactly the requirement the daemon enforces, so a client
             prompts for a code precisely when one is needed. The master
-            aggregate carries `true` when any member area requires one.
+            aggregate carries `true` when any member zone requires one.
         code_disarm_required:
           type: boolean
           description: |
-            Effective per-area code requirement for disarming; same
+            Effective per-zone code requirement for disarming; same
             derivation and master aggregation as `code_arm_required`.
 
     AlarmPanelChangedPayload:
@@ -9338,13 +9479,13 @@ components:
       description: |
         Payload of an `alarm.panel_changed` broadcast. Topic
         `alarm.panel`. Fires whenever a panel entity's projection
-        changes; `removed` marks a deleted area's panel.
+        changes; `removed` marks a deleted zone's panel.
         `code_arm_required` / `code_disarm_required` mirror the
         `AlarmPanelEntity` flags so live code-policy edits propagate.
-      required: [unique_id, area_id, name, state, available, code_arm_required, code_disarm_required]
+      required: [unique_id, zone_id, name, state, available, code_arm_required, code_disarm_required]
       properties:
         unique_id: { type: string }
-        area_id: { type: string }
+        zone_id: { type: string }
         name: { type: string }
         state: { type: string }
         available: { type: boolean }
@@ -9357,15 +9498,15 @@ components:
       description: |
         Payload of an `alarm.reminder` broadcast. Topic `alarm.panel`.
         Fires when an arm schedule elapses with auto-arm off while the
-        area is not in the scheduled mode — the engine notifies rather
+        zone is not in the scheduled mode — the engine notifies rather
         than arming (docs/alarm-concept.md §15 row 19).
-      required: [area_id, mode]
+      required: [zone_id, mode]
       properties:
-        area_id: { type: string }
-        area_name: { type: string }
+        zone_id: { type: string }
+        zone_name: { type: string }
         mode:
           type: string
-          description: The protection mode the schedule expected the area to be in.
+          description: The protection mode the schedule expected the zone to be in.
 
     AlarmJournalAppendedPayload:
       type: object
@@ -9377,7 +9518,7 @@ components:
       required: [entry_id, class, event]
       properties:
         entry_id: { type: integer, format: int64 }
-        area_id:
+        zone_id:
           type: string
           description: Omitted for engine-global entries.
         class:
@@ -9400,9 +9541,9 @@ components:
         Payload of an `alarm.walktest_progress` broadcast. Topic
         `alarm.panel`. Fires when a walk-test session records a
         sensor activation.
-      required: [area_id, sensor_id, seen, total]
+      required: [zone_id, sensor_id, seen, total]
       properties:
-        area_id: { type: string }
+        zone_id: { type: string }
         sensor_id: { type: string }
         sensor_name: { type: string }
         seen:
@@ -10500,22 +10641,83 @@ components:
         name: { type: string }
         device_count: { type: integer }
 
-    AlarmAreaConfig:
+    AddonUpdateStatus:
+      type: object
+      required: [supported, current_version, state]
+      description: >-
+        Self-update status of the daemon's CCU add-on package. supported
+        is false when the platform lacks the firmware installer; every
+        other field is then zero-valued.
+      properties:
+        supported:
+          type: boolean
+          description: Platform can self-install (add-on build + firmware installer present).
+        current_version: { type: string }
+        latest_version:
+          type: string
+          description: Newest published release; empty before the first successful check.
+        update_available: { type: boolean }
+        release_url:
+          type: string
+          description: Release-notes page of the latest version.
+        last_check:
+          type: string
+          format: date-time
+          description: Time of the last successful check; absent before the first.
+        state:
+          type: string
+          enum: [idle, checking, downloading, installing, failed]
+          description: >-
+            Lifecycle of the updater. `installing` is terminal from the
+            caller's perspective — the daemon restarts on success.
+        error:
+          type: string
+          description: Failure detail while state is `failed`.
+
+    Area:
+      type: object
+      required: [id, name]
+      description: >-
+        Operator-defined room grouping above CCU rooms (a floor, a shed,
+        a terrace roof). Distinct from alarm zones. Rooms are (central,
+        room) pairs; one area per room.
+      properties:
+        id:
+          type: string
+          description: Server-generated on create; ignored in the create body.
+        name: { type: string }
+        position:
+          type: integer
+          description: Manual sort order (ascending), ties by name.
+        rooms:
+          type: array
+          description: Assigned rooms; read-only here (replace via PUT /areas/{id}/rooms).
+          items: { $ref: "#/components/schemas/AreaRoomRef" }
+
+    AreaRoomRef:
+      type: object
+      required: [central, room]
+      description: One CCU room assignment of an area.
+      properties:
+        central: { type: string, description: Central (CCU) name owning the room. }
+        room: { type: string, description: CCU room name on that central. }
+
+    AlarmZoneConfig:
       type: object
       additionalProperties: true
       description: >-
-        Free-form, engine-owned document describing an alarm area's
+        Free-form, engine-owned document describing an alarm zone's
         arming modes and per-mode policy (entry/exit delays, output
         policy, post-trigger policy, central-loss policy, blocker
         policies — see docs/alarm-concept.md §14). The REST and
         WebSocket layers pass this document through unvalidated; the
         alarm engine is the sole owner of its schema and versioning.
 
-    AlarmArea:
+    AlarmZone:
       type: object
       required: [id, name]
       description: >-
-        One alarm area — an independently armable partition with its
+        One alarm zone — an independently armable partition with its
         own arm state, sensor set, and output set (docs/alarm-concept.md
         §14).
       properties:
@@ -10523,15 +10725,15 @@ components:
         name: { type: string }
         position:
           type: integer
-          description: Display ordering hint for the SPA area list.
+          description: Display ordering hint for the SPA zone list.
         config:
-          $ref: "#/components/schemas/AlarmAreaConfig"
+          $ref: "#/components/schemas/AlarmZoneConfig"
 
     AlarmSensor:
       type: object
       required: [id, central, interface_id, channel_address, parameter, type]
       description: >-
-        One CCU data point enrolled into an alarm area as a sensor
+        One CCU data point enrolled into an alarm zone as a sensor
         input (door/window contact, motion, tamper, hazard, panic —
         docs/alarm-concept.md §6.1).
       properties:
@@ -10556,7 +10758,7 @@ components:
       type: object
       required: [id, class, central, channel_address]
       description: >-
-        One CCU actuator enrolled into an alarm area as an alarm
+        One CCU actuator enrolled into an alarm zone as an alarm
         consequence — siren, switched siren, smoke-detector sounder,
         alarm light, chirp emitter, notification target, or sysvar
         mirror (docs/alarm-concept.md §7).
@@ -10602,6 +10804,14 @@ components:
         channel_address: { type: string }
         channel_no: { type: integer }
         channel_name: { type: string }
+        rooms:
+          type: array
+          description: The channel's CCU room assignments (picker filter/label).
+          items: { type: string }
+        functions:
+          type: array
+          description: The channel's CCU function assignments (picker filter/label).
+          items: { type: string }
         classes:
           type: array
           description: >-
@@ -10680,7 +10890,7 @@ components:
     AlarmModeReadiness:
       type: object
       required: [ready]
-      description: Whether an alarm area is ready to arm into one specific mode.
+      description: Whether an alarm zone is ready to arm into one specific mode.
       properties:
         ready:
           type: boolean
@@ -10694,12 +10904,12 @@ components:
           items: { type: string }
           description: Sensor ids with non-blocking health warnings for this mode.
 
-    AlarmAreaStatus:
+    AlarmZoneStatus:
       type: object
       required: [id, name, state, walktest_active]
       description: >-
-        One alarm area's live status, as returned by GET /alarm/state
-        and GET /alarm/areas/{id}/status views.
+        One alarm zone's live status, as returned by GET /alarm/state
+        and GET /alarm/zones/{id}/status views.
       properties:
         id: { type: string }
         name: { type: string }
@@ -10717,7 +10927,7 @@ components:
           description: Sensor ids currently bypassed for the active/pending arm.
         incident:
           type: object
-          description: The area's open incident, present only while `state` is `triggered`.
+          description: The zone's open incident, present only while `state` is `triggered`.
           properties:
             id: { type: string }
             silenced: { type: boolean }
@@ -10736,7 +10946,7 @@ components:
           description: Per-mode arming readiness, keyed by mode name.
         walktest_active:
           type: boolean
-          description: True while a walk-test session is running on this area.
+          description: True while a walk-test session is running on this zone.
 
     AlarmArmRequest:
       type: object
@@ -10759,7 +10969,7 @@ components:
         code:
           type: string
           description: >
-            Alarm code supplied with the arm, when the area's code policy
+            Alarm code supplied with the arm, when the zone's code policy
             requires one (or to surface a duress code). Never logged or
             persisted in cleartext.
 
@@ -10772,7 +10982,7 @@ components:
         code:
           type: string
           description: >
-            Alarm code for the verb, when the area's code policy requires
+            Alarm code for the verb, when the zone's code policy requires
             one. Never logged or persisted in cleartext.
 
     AlarmCodePerms:
@@ -10803,10 +11013,10 @@ components:
             A PIN that disarms normally but fires a silent duress alarm.
             Only meaningful for the pin kind.
         perms: { $ref: "#/components/schemas/AlarmCodePerms" }
-        areas:
+        zones:
           type: array
           items: { type: string }
-          description: Restrict to these area ids; empty means every area.
+          description: Restrict to these zone ids; empty means every zone.
         binding:
           description: >
             Engine-owned hardware-binding document for the keypad_slot /
@@ -10842,7 +11052,7 @@ components:
             update to keep the existing hash.
         duress: { type: boolean }
         perms: { $ref: "#/components/schemas/AlarmCodePerms" }
-        areas:
+        zones:
           type: array
           items: { type: string }
         binding:
@@ -10858,18 +11068,18 @@ components:
         state:
           type: string
           enum: [arming, armed]
-          description: Resulting area state.
+          description: Resulting zone state.
         bypassed:
           type: array
           items: { type: string }
           description: Sensor ids actually bypassed for this arm.
         exit_delay_s:
           type: integer
-          description: Exit delay in seconds the area is now counting down; 0 when armed immediately.
+          description: Exit delay in seconds the zone is now counting down; 0 when armed immediately.
 
     AlarmJournalEntry:
       type: object
-      required: [id, when, area_id, class, event]
+      required: [id, when, zone_id, class, event]
       description: >-
         One entry in the alarm engine's append-only event journal
         (docs/alarm-concept.md §14), as returned by GET /alarm/journal.
@@ -10878,7 +11088,7 @@ components:
           type: integer
           format: int64
         when: { type: string, format: date-time }
-        area_id: { type: string }
+        zone_id: { type: string }
         class:
           type: string
           enum: [arm, disarm, trigger, silence, bypass, fault, test, config]
@@ -10904,13 +11114,13 @@ components:
     AlarmWalkTestStatus:
       type: object
       required: [active, sensors]
-      description: Live status of a walk-test session on one alarm area, as returned by GET /alarm/areas/{id}/walktest.
+      description: Live status of a walk-test session on one alarm zone, as returned by GET /alarm/zones/{id}/walktest.
       properties:
         active: { type: boolean }
         started_at: { type: string, format: date-time }
         sensors:
           type: array
-          description: One row per sensor enrolled in the area, tracking walk-test coverage.
+          description: One row per sensor enrolled in the zone, tracking walk-test coverage.
           items:
             type: object
             required: [id, tested]

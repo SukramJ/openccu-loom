@@ -170,7 +170,7 @@ func TestFireCycle_LedgerWriteFailureBlocksActivation(t *testing.T) {
 // leaves the optical siren and the alarm light firing.
 func TestFireCycle_SilentPolicySuppressesAcousticOutputsOnly(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	opts := engine.FireOptions{Policy: engine.OutputPolicy{Silent: true}}
 	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(6, hmenum.AlarmModeFull), opts); err != nil {
@@ -199,7 +199,7 @@ func TestFireCycle_SilentPolicySuppressesAcousticOutputsOnly(t *testing.T) {
 // outputs; every acoustic class (including smoke) is skipped.
 func TestFireCycle_DegradedRestrictsToOpticalAndLight(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	opts := engine.FireOptions{Degraded: true, Policy: engine.OutputPolicy{SmokeSounders: true}}
 	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(7, hmenum.AlarmModeFull), opts); err != nil {
@@ -228,7 +228,7 @@ func TestFireCycle_DegradedRestrictsToOpticalAndLight(t *testing.T) {
 // outdoor sirens, and fires normally otherwise.
 func TestFireCycle_ExcludeOutdoorSkipsOutdoorSiren(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	excluded := engine.FireOptions{Policy: engine.OutputPolicy{ExcludeOutdoor: true}}
 	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(81, hmenum.AlarmModeFull), excluded); err != nil {
@@ -254,7 +254,7 @@ func TestFireCycle_ExcludeOutdoorSkipsOutdoorSiren(t *testing.T) {
 // smoke-sounder class fires only when Policy.SmokeSounders is set.
 func TestFireCycle_SmokeSoundersGatedByPolicy(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	off := engine.FireOptions{Policy: engine.OutputPolicy{SmokeSounders: false}}
 	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(91, hmenum.AlarmModeFull), off); err != nil {
@@ -279,7 +279,7 @@ func TestFireCycle_SmokeSoundersGatedByPolicy(t *testing.T) {
 // does.
 func TestFireCycle_ModeFilterSkipsOutputsOutsideMode(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 
 	opts := engine.FireOptions{Policy: engine.OutputPolicy{ExcludeOutdoor: true}}
 	if err := h.mgr.FireCycle(h.ctx, "eg", newIncident(10, hmenum.AlarmModePerimeter), opts); err != nil {
@@ -339,7 +339,7 @@ func TestFireCycle_SwitchedSirenActivatesBoundedWithLedgerBeforeWrite(t *testing
 // watchdog rather than leave it to fire a stray stop later.
 func TestFireCycle_SmokeSounderCancelsWatchdogOnActivationError(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.smoke("smoke").setTurnOnErr(errors.New("smoke activation failed"))
 
 	opts := engine.FireOptions{Policy: engine.OutputPolicy{SmokeSounders: true, ExcludeOutdoor: true}}
@@ -462,7 +462,7 @@ func TestOutputConfig_NotifyWebhookEnabledDefaultsToTrue(t *testing.T) {
 // firing.
 func TestFireCycle_PerOutputFailureIsolatesRemainingOutputs(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.siren("sirA").setTurnOnErr(errors.New("sirA activation failed"))
 
 	opts := engine.FireOptions{Policy: engine.OutputPolicy{ExcludeOutdoor: true}}

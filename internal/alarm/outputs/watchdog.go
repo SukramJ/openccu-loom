@@ -23,7 +23,7 @@ type stopper struct {
 // activation tracks one bounded output activation and its watchdog.
 type activation struct {
 	outputID   string
-	areaID     string
+	zoneID     string
 	incidentID int64
 	cancel     func()
 }
@@ -38,7 +38,7 @@ func (m *Manager) armStopWatchdog(inst *instance, incidentID int64, d time.Durat
 	if prev, ok := m.active[inst.row.ID]; ok && prev.cancel != nil {
 		prev.cancel()
 	}
-	act := &activation{outputID: inst.row.ID, areaID: inst.row.AreaID, incidentID: incidentID}
+	act := &activation{outputID: inst.row.ID, zoneID: inst.row.ZoneID, incidentID: incidentID}
 	m.active[inst.row.ID] = act
 	act.cancel = m.sched.Schedule(d, func() {
 		m.runStop(inst, act, s, m.clk.Now().Add(m.stopVerifyWindow))
@@ -58,6 +58,9 @@ func (m *Manager) StopWatchdogs() {
 		}
 		delete(m.active, id)
 	}
+	// Drop all shared-channel demands with the watchdogs: after a
+	// service stop every later stop must proceed (safe direction).
+	m.demands = map[string]demandRec{}
 }
 
 // cancelWatchdog drops the pending watchdog of an output (activation
@@ -81,8 +84,17 @@ func (m *Manager) cancelWatchdog(outputID string) {
 //nolint:contextcheck // watchdog stops deliberately detach from the scheduling caller's ctx
 func (m *Manager) runStop(inst *instance, act *activation, s stopper, verifyUntil time.Time) {
 	ctx := context.Background()
+	// Shared-channel arbitration: another zone still demands this
+	// channel — leave the device on for it and drop this activation
+	// (the verify chain would read the intentionally-active device as
+	// a stop failure and escalate). See arbitration.go.
+	if m.releaseDemandForeignRemains(inst) {
+		m.logSharedStopDeferred(inst)
+		m.clearActivation(act)
+		return
+	}
 	if err := s.stop(ctx); err != nil {
-		m.journalFault(ctx, act.areaID, "output_stop_failed", act.outputID, act.incidentID, err)
+		m.journalFault(ctx, act.zoneID, "output_stop_failed", act.outputID, act.incidentID, err)
 	}
 	m.mu.Lock()
 	current, ok := m.active[act.outputID]
@@ -112,7 +124,7 @@ func (m *Manager) verifyStop(inst *instance, act *activation, s stopper, verifyU
 	}
 	if m.clk.Now().After(verifyUntil) {
 		m.clearActivation(act)
-		m.journalFault(ctx, act.areaID, "output_stop_unverified", act.outputID, act.incidentID, nil)
+		m.journalFault(ctx, act.zoneID, "output_stop_unverified", act.outputID, act.incidentID, nil)
 		if m.health != nil {
 			m.health(false, "alarm output "+act.outputID+" stop unverified")
 		}
@@ -141,11 +153,20 @@ func (m *Manager) stopAndVerify(ctx context.Context, inst *instance, incidentID 
 	if !ok {
 		return nil
 	}
+	// Shared-channel arbitration: another zone still demands this
+	// channel — keep the device on for it, cancel any pending fire
+	// watchdog of this row, and skip the write + verify chain. See
+	// arbitration.go.
+	if m.releaseDemandForeignRemains(inst) {
+		m.logSharedStopDeferred(inst)
+		m.cancelWatchdog(inst.row.ID)
+		return nil
+	}
 	m.mu.Lock()
 	if prev, exists := m.active[inst.row.ID]; exists && prev.cancel != nil {
 		prev.cancel()
 	}
-	act := &activation{outputID: inst.row.ID, areaID: inst.row.AreaID, incidentID: incidentID}
+	act := &activation{outputID: inst.row.ID, zoneID: inst.row.ZoneID, incidentID: incidentID}
 	m.active[inst.row.ID] = act
 	m.mu.Unlock()
 

@@ -18,6 +18,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/alarm"
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -66,6 +67,20 @@ type fakePreferencesService struct{}
 func (fakePreferencesService) Get(context.Context, string, string) (string, error) { return "", nil }
 func (fakePreferencesService) Set(context.Context, string, string, string) error   { return nil }
 func (fakePreferencesService) Delete(context.Context, string, string) error        { return nil }
+
+type fakeAreaAdmin struct{}
+
+func (fakeAreaAdmin) GetAll(context.Context) ([]sqlite.AreaRow, error) { return nil, nil }
+func (fakeAreaAdmin) Get(context.Context, string) (sqlite.AreaRow, bool, error) {
+	return sqlite.AreaRow{}, false, nil
+}
+func (fakeAreaAdmin) Upsert(context.Context, sqlite.AreaRow) error                  { return nil }
+func (fakeAreaAdmin) Delete(context.Context, string) error                          { return nil }
+func (fakeAreaAdmin) ListAssignments(context.Context) ([]sqlite.RoomAreaRow, error) { return nil, nil }
+
+func (fakeAreaAdmin) ReplaceRooms(context.Context, string, []sqlite.RoomAreaRow) error {
+	return nil
+}
 
 type fakeDiagramConfigService struct{}
 
@@ -530,6 +545,17 @@ func (fakeCacheResetService) Clear(context.Context, cachereset.Scope) (cacherese
 	return cachereset.Report{}, nil
 }
 
+// fakeAddonUpdateService backs the CCU add-on self-update routes
+// (ADR 0057) in the walked router. GET is mounted unconditionally in
+// router.go regardless of this field's nilness, but wiring it here
+// keeps the fixture representative and covers the mount if a future
+// refactor ever gates it on non-nil.
+type fakeAddonUpdateService struct{}
+
+func (fakeAddonUpdateService) Status() addonupdate.Status         { return addonupdate.Status{} }
+func (fakeAddonUpdateService) Check(context.Context) error        { return nil }
+func (fakeAddonUpdateService) InstallAsync(context.Context) error { return nil }
+
 type fakeDataPointWriter struct{}
 
 func (fakeDataPointWriter) SetValue(context.Context, string, hmenum.Parameter, any, hmenum.CommandPriority) error {
@@ -581,6 +607,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		SelfPassword:            fakeSelfPasswordService{},
 		Preferences:             fakePreferencesService{},
 		Diagrams:                fakeDiagramConfigService{},
+		Areas:                   fakeAreaAdmin{},
 		Devices:                 fakeDeviceIndex{},
 		MasterProfiles:          fakeMasterProfilesService{},
 		UISchema:                fakeUISchemaService{},
@@ -642,6 +669,7 @@ func fullyWiredRouterDeps() rest.Deps {
 		WebhookInboundToken:   "test-token",
 		DPWriter:              fakeDataPointWriter{},
 		CustomDPWriter:        fakeCustomDPWriter{},
+		AddonUpdate:           fakeAddonUpdateService{},
 	}
 }
 

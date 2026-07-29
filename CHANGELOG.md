@@ -6,6 +6,169 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.50.0]
+
+### Added
+
+- **The CCU add-on can update itself** — on OpenCCU / RaspberryMatic,
+  where the firmware ships `/bin/install_addon` (ADR 0057). The whole
+  mechanism is capability-gated (`addon_self_update`): on other
+  platforms no button, no endpoint, no entity exists. A "check for
+  updates" button, a boot-delayed check, and a periodic check (default
+  every 24 h with random jitter; interval via
+  `addon_update.check_interval`, background checking off via
+  `addon_update.enabled=false`) watch the project's GitHub releases; installing downloads
+  the add-on package, verifies its SHA256 against the release
+  checksums, stages it and drives the firmware installer — the daemon
+  restarts, no CCU reboot. Surfaces: REST
+  `GET /api/v1/system/addon-update` + `POST …/check|install`
+  (API 3.3.0), WS broadcast `addon_update.state_changed`, an MQTT
+  Home Assistant `update` entity, and a card in the system settings.
+  The add-on tarball now embeds `.sha256` files so the firmware
+  verifies the archive a second time.
+- **mDNS announces the configured CCUs.** The `_openccu-loom._tcp` TXT
+  record gains `ccus=<sn1>,<sn2>,…` — the 10-character short serials of
+  the configured CCUs, sorted, re-announced at runtime as serials
+  resolve or centrals are adopted/removed (the `centrals` count hint is
+  refreshed on the same trigger; it was silently stale after live adopt
+  before). Deliberate reversal of ADR 0021's no-serials TXT decision —
+  see ADR 0058; `GET /api/v1/system/ccu` stays the authoritative
+  post-auth source.
+
+## [0.49.3]
+
+### Added
+
+- **Areas: room groupings above CCU rooms.** Rooms (per central) can be
+  assigned to operator-defined areas — a floor, a shed, a terrace roof —
+  managed in the rooms/functions administration (create, rename, delete,
+  assign; one area per room, reassigning moves it). The device list,
+  overview, alarm sensor/output pickers (tabs and wizard), and the group
+  editor gain an area filter. New REST surface `GET/POST /api/v1/areas`,
+  `PUT/DELETE /api/v1/areas/{id}`, `PUT /api/v1/areas/{id}/rooms`
+  (API 3.2.0, additive); assignments persist in the daemon's database —
+  the CCU itself knows nothing of areas.
+
+### Changed
+
+- The Matter schema snapshot now pins matter.js v0.17.7 (was a v0.17.5-alpha
+  commit). No cluster IDs, cluster revisions, attribute IDs or device-type
+  revisions changed between the two — the regenerated
+  `internal/north/matter/schema/` output is byte-identical, only the
+  provenance stamp moves.
+
+### Fixed
+
+- **Matter secure sessions now reject replayed message counters below the
+  first counter observed.** The MRP duplicate-detection window anchors on
+  the first counter a session receives; for an encrypted session every
+  counter below that anchor must count as already-received (Matter Core
+  Spec §4.5.4.1 replay protection), but the window started empty and
+  accepted up to 32 of them once each. Unsecured / PASE traffic keeps the
+  empty seed — there duplicate detection is not a security control and a
+  legitimately reordered message just below the first one seen has to stay
+  acceptable. Mirrors the per-variant `initialBitmap` in matter.js
+  `MessageReceptionState.ts`.
+- **A commissioner that restarts its message counter is no longer locked
+  out.** The unsecured / PASE reception window measured how far back a
+  counter sat using the rule for encrypted sessions, so a peer that
+  rebooted and resumed counting from a low value looked like a
+  four-billion-message replay: every packet was dropped until it climbed
+  back past the pre-restart maximum, and because these windows are kept
+  per source node across sessions, the lockout outlived the handshake that
+  triggered it. The window now folds distances the way matter.js
+  `MessageReceptionStateUnencryptedWithRollover` does — only the 32
+  counters directly below the maximum count as "behind", anything further
+  back rolls the window forward onto the restarted trajectory. Secure
+  sessions keep the strict reading.
+
+## [0.49.2]
+
+### Changed
+
+- **The alarm system's armable unit is now called a "zone" everywhere** —
+  formerly "area", which is being freed up for the upcoming room-grouping
+  concept above CCU rooms. This is a deliberate breaking rename across the
+  whole surface (no external API consumers yet): REST paths
+  (`/api/v1/alarm/zones…`), request/response fields (`zone_id`,
+  `zone_name`), WebSocket commands/broadcasts, MQTT alarm topics
+  (`<base>/alarm/<zone>/…`, pseudo-zone `master`), the `hmcli` output, the
+  SPA (UI texts DE "Zone"/EN "zone"), and the SQLite schema — a
+  data-preserving migration renames the tables/columns in place,
+  including the ids inside stored code bindings.
+
+### Added
+
+- **The alarm setup wizard's sensor and output candidate lists are now
+  searchable, filterable, and sortable.** The outputs step gains the
+  free-text search the sensors step already had; both steps add room and
+  function ("Gewerk") filters plus a name/room/model sort, and each row
+  shows the device's model label and room/function assignments (output
+  rows resolve the model label from the live device inventory). The
+  Sensors and Outputs tabs' add-drawers gained the same enrichment. The
+  output-candidates REST DTO now carries the channel's `rooms` and
+  `functions` (API 3.1.0, additive).
+
+### Fixed
+
+- **The same siren (or any output/sensor) can now be enrolled in more than
+  one alarm area.** Enrolling a channel in a second area failed with an
+  opaque 500: clients derived the row id from the channel key, so the
+  second area's row collided with the first area's PRIMARY KEY and the
+  whole outputs/sensors replace aborted — the area was created but its
+  sirens never attached. Row ids are now an intra-area concern: the
+  server keeps a client id only when it round-trips one of the SAME
+  area's rows and mints a fresh UUID otherwise (cross-area collisions and
+  in-payload duplicates included), and the wizard no longer sends
+  channel-derived ids at all.
+- **Shared outputs stop only when the last area releases them.** With one
+  siren enrolled in two areas, silencing or finishing area A used to
+  switch the device off even while area B was still alarming. The output
+  manager now tracks per-channel demands: a stop for a channel another
+  area still claims is deferred (logged as
+  `alarm.output_stop_deferred_shared`), and the device turns off with the
+  last demanding area. Demands are in-memory — after a daemon restart
+  every stop proceeds, which is the safe direction.
+- **The alarm setup wizard configures sensors and outputs inline.** Steps 2
+  and 3 used to link to the sensors/outputs tabs — which require an existing
+  alarm area, while the wizard only creates the area on Finish. First-run
+  users following the wizard's own links landed on an empty page whose only
+  action led back to a freshly reset wizard. The wizard now embeds real
+  pickers: security-device sensor candidates (search + show-all) in step 2,
+  output candidates in step 3; Finish applies everything in order (create
+  area → sensors → outputs) and a partial failure keeps the created area id
+  so a retry updates instead of duplicating the area.
+- **Wizard progress survives navigation.** Step, area name, delays, and
+  selections moved into a store — leaving the wizard and coming back no
+  longer silently restarts it at step 1.
+- **Honest wizard steps.** Step 5 no longer claims PIN codes ship "in a
+  later release" (the Codes tab exists); the trigger-time input now caps at
+  the engine's 600 s ceiling instead of accepting values the engine silently
+  clamps at runtime.
+- **Alarm tabs distinguish "loading" from "no areas".** The sensors,
+  outputs, policies, and codes tabs showed the "no alarm areas yet" empty
+  state while the area list was still loading — and permanently if the
+  fetch failed. They now show the shared loading and error (with retry)
+  surfaces and only report "no areas" after a successful, genuinely empty
+  load.
+
+## [0.49.0]
+
+### Changed
+
+- **Sysvar/program markers now steer Home Assistant's enabled-by-default.**
+  The marker-derived `enabled_default` flag (config `sysvar_markers` /
+  `program_markers`) was computed, surfaced on REST and the raw MQTT config
+  plane — but never reached the HA discovery payloads, so it had no effect in
+  Home Assistant. Sysvar and program discovery now carries
+  `enabled_by_default`, matching the reference stack's entity-registry
+  default: with markers configured, entries whose CCU description matches a
+  marker arrive enabled (internal entries via the `INTERNAL` marker); without
+  markers every sysvar/program entity arrives disabled and the operator
+  enables the ones they want per entity. HA applies the hint only when an
+  entity is first added to its registry, so already-discovered entities on
+  existing installs keep their current enabled/disabled state.
+
 ## [0.48.9]
 
 ### Fixed

@@ -52,7 +52,7 @@ func (j *fakeJournal) events() []string {
 	return out
 }
 
-func pinRow(t *testing.T, id, name, pin string, duress bool, perms Perms, areas []string) sqlitestore.AlarmCodeRow {
+func pinRow(t *testing.T, id, name, pin string, duress bool, perms Perms, zones []string) sqlitestore.AlarmCodeRow {
 	t.Helper()
 	hash, err := HashPIN(pin)
 	if err != nil {
@@ -62,13 +62,13 @@ func pinRow(t *testing.T, id, name, pin string, duress bool, perms Perms, areas 
 	if perms.Arm || perms.Disarm || perms.Silence {
 		permsJSON = `{"arm":` + boolStr(perms.Arm) + `,"disarm":` + boolStr(perms.Disarm) + `,"silence":` + boolStr(perms.Silence) + `}`
 	}
-	areasJSON := "[]"
-	if len(areas) > 0 {
-		areasJSON = `["` + areas[0] + `"]`
+	zonesJSON := "[]"
+	if len(zones) > 0 {
+		zonesJSON = `["` + zones[0] + `"]`
 	}
 	return sqlitestore.AlarmCodeRow{
 		ID: id, Name: name, Kind: string(KindPIN), Hash: hash, Duress: duress,
-		PermsJSON: permsJSON, AreasJSON: areasJSON, BindingJSON: "{}",
+		PermsJSON: permsJSON, ZonesJSON: zonesJSON, BindingJSON: "{}",
 		Enabled: true, CreatedAtMS: 1000, UpdatedAtMS: 1000,
 	}
 }
@@ -126,7 +126,7 @@ func TestFacadeValidateCorrectPINReturnsIdentity(t *testing.T) {
 	}}
 	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
 
-	identity, duress, err := f.Validate(context.Background(), "area-1", "disarm", "1234", "rest-operator")
+	identity, duress, err := f.Validate(context.Background(), "zone-1", "disarm", "1234", "rest-operator")
 	if err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestFacadeValidateDuressCode(t *testing.T) {
 	}}
 	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
 
-	identity, duress, err := f.Validate(context.Background(), "area-1", "disarm", "9999", "mqtt")
+	identity, duress, err := f.Validate(context.Background(), "zone-1", "disarm", "9999", "mqtt")
 	if err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestFacadeValidateWrongCodeReturnsErrInvalidCode(t *testing.T) {
 	j := &fakeJournal{}
 	f := New(Deps{Store: store, Journal: j, Clock: clock.NewFake(time.Unix(0, 0))})
 
-	_, _, err := f.Validate(context.Background(), "area-1", "disarm", "0000", "mqtt")
+	_, _, err := f.Validate(context.Background(), "zone-1", "disarm", "0000", "mqtt")
 	if !errors.Is(err, engine.ErrInvalidCode) {
 		t.Errorf("err=%v want engine.ErrInvalidCode", err)
 	}
@@ -177,12 +177,12 @@ func TestFacadeValidateWrongCodeReturnsErrInvalidCode(t *testing.T) {
 }
 
 // TestFacadeValidateEmptyCodeNoApplicableCodeIsInert verifies an empty
-// code against an area with no applicable enabled pin code is a
+// code against an zone with no applicable enabled pin code is a
 // pass-through: nil error, empty identity, no duress.
 func TestFacadeValidateEmptyCodeNoApplicableCodeIsInert(t *testing.T) {
 	f := New(Deps{Store: &fakeStore{}, Clock: clock.NewFake(time.Unix(0, 0))})
 
-	identity, duress, err := f.Validate(context.Background(), "area-1", "disarm", "", "mqtt")
+	identity, duress, err := f.Validate(context.Background(), "zone-1", "disarm", "", "mqtt")
 	if err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestFacadeValidateEmptyCodeNoApplicableCodeIsInert(t *testing.T) {
 }
 
 // TestFacadeValidateEmptyCodeWithApplicableCodeIsRefused verifies an
-// empty code against an area that does have an applicable enabled pin
+// empty code against an zone that does have an applicable enabled pin
 // code is refused (a code is required and none was supplied).
 func TestFacadeValidateEmptyCodeWithApplicableCodeIsRefused(t *testing.T) {
 	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
@@ -200,31 +200,31 @@ func TestFacadeValidateEmptyCodeWithApplicableCodeIsRefused(t *testing.T) {
 	}}
 	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
 
-	_, _, err := f.Validate(context.Background(), "area-1", "disarm", "", "mqtt")
+	_, _, err := f.Validate(context.Background(), "zone-1", "disarm", "", "mqtt")
 	if !errors.Is(err, engine.ErrInvalidCode) {
 		t.Errorf("err=%v want engine.ErrInvalidCode", err)
 	}
 }
 
-// TestFacadeValidateAreaScoping verifies a code restricted to a
-// different area does not authenticate for the requested area.
-func TestFacadeValidateAreaScoping(t *testing.T) {
+// TestFacadeValidateZoneScoping verifies a code restricted to a
+// different zone does not authenticate for the requested zone.
+func TestFacadeValidateZoneScoping(t *testing.T) {
 	store := &fakeStore{rows: []sqlitestore.AlarmCodeRow{
-		pinRow(t, "c1", "Markus", "1234", false, Perms{Disarm: true}, []string{"area-2"}),
+		pinRow(t, "c1", "Markus", "1234", false, Perms{Disarm: true}, []string{"zone-2"}),
 	}}
 	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
 
-	_, _, err := f.Validate(context.Background(), "area-1", "disarm", "1234", "mqtt")
+	_, _, err := f.Validate(context.Background(), "zone-1", "disarm", "1234", "mqtt")
 	if !errors.Is(err, engine.ErrInvalidCode) {
-		t.Errorf("err=%v want engine.ErrInvalidCode (code scoped to a different area)", err)
+		t.Errorf("err=%v want engine.ErrInvalidCode (code scoped to a different zone)", err)
 	}
 
-	identity, _, err := f.Validate(context.Background(), "area-2", "disarm", "1234", "mqtt")
+	identity, _, err := f.Validate(context.Background(), "zone-2", "disarm", "1234", "mqtt")
 	if err != nil {
-		t.Fatalf("Validate area-2: %v", err)
+		t.Fatalf("Validate zone-2: %v", err)
 	}
 	if identity != "Markus" {
-		t.Errorf("identity=%q want Markus for the code's own area", identity)
+		t.Errorf("identity=%q want Markus for the code's own zone", identity)
 	}
 }
 
@@ -238,14 +238,14 @@ func TestFacadeValidatePermissionDenied(t *testing.T) {
 	}}
 	f := New(Deps{Store: store, Clock: clock.NewFake(time.Unix(0, 0))})
 
-	_, _, err := f.Validate(context.Background(), "area-1", "arm", "1234", "mqtt")
+	_, _, err := f.Validate(context.Background(), "zone-1", "arm", "1234", "mqtt")
 	if !errors.Is(err, engine.ErrInvalidCode) {
 		t.Errorf("err=%v want engine.ErrInvalidCode", err)
 	}
 
 	// The same code still authenticates for disarm right after — proof
 	// the permission-denied path did not lock it out.
-	identity, _, err := f.Validate(context.Background(), "area-1", "disarm", "1234", "mqtt")
+	identity, _, err := f.Validate(context.Background(), "zone-1", "disarm", "1234", "mqtt")
 	if err != nil {
 		t.Fatalf("Validate disarm: %v", err)
 	}
@@ -267,18 +267,18 @@ func TestFacadeValidateLockoutAfterRepeatedFailures(t *testing.T) {
 	ctx := context.Background()
 
 	for i := range rateLimitMaxAttempts {
-		if _, _, err := f.Validate(ctx, "area-1", "disarm", "0000", "keypad:1"); !errors.Is(err, engine.ErrInvalidCode) {
+		if _, _, err := f.Validate(ctx, "zone-1", "disarm", "0000", "keypad:1"); !errors.Is(err, engine.ErrInvalidCode) {
 			t.Fatalf("attempt %d: err=%v want engine.ErrInvalidCode", i, err)
 		}
 	}
 
 	// The source is now locked out — even the correct code is refused.
-	if _, _, err := f.Validate(ctx, "area-1", "disarm", "1234", "keypad:1"); !errors.Is(err, engine.ErrInvalidCode) {
+	if _, _, err := f.Validate(ctx, "zone-1", "disarm", "1234", "keypad:1"); !errors.Is(err, engine.ErrInvalidCode) {
 		t.Errorf("locked-out correct code: err=%v want engine.ErrInvalidCode", err)
 	}
 
 	// A different source is unaffected.
-	identity, _, err := f.Validate(ctx, "area-1", "disarm", "1234", "keypad:2")
+	identity, _, err := f.Validate(ctx, "zone-1", "disarm", "1234", "keypad:2")
 	if err != nil {
 		t.Fatalf("Validate other source: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestFacadeValidateLockoutAfterRepeatedFailures(t *testing.T) {
 
 	// After the lockout window elapses, the source recovers.
 	fc.Advance(rateLimitBaseLockout + time.Second)
-	identity, _, err = f.Validate(ctx, "area-1", "disarm", "1234", "keypad:1")
+	identity, _, err = f.Validate(ctx, "zone-1", "disarm", "1234", "keypad:1")
 	if err != nil {
 		t.Fatalf("Validate after lockout elapsed: %v", err)
 	}
@@ -322,12 +322,12 @@ func TestFacadeValidateOperatorSourceExemptFromLockoutPreservesDuressDetection(t
 
 	const attempts = rateLimitMaxAttempts + 1
 	for i := range attempts {
-		if _, _, err := f.Validate(ctx, "area-1", "disarm", "0000", "rest-operator"); !errors.Is(err, engine.ErrInvalidCode) {
+		if _, _, err := f.Validate(ctx, "zone-1", "disarm", "0000", "rest-operator"); !errors.Is(err, engine.ErrInvalidCode) {
 			t.Fatalf("attempt %d: err=%v want engine.ErrInvalidCode", i, err)
 		}
 	}
 
-	identity, duress, err := f.Validate(ctx, "area-1", "disarm", "9999", "rest-operator")
+	identity, duress, err := f.Validate(ctx, "zone-1", "disarm", "9999", "rest-operator")
 	if err != nil {
 		t.Fatalf("duress code after repeated operator failures: %v", err)
 	}
@@ -353,12 +353,12 @@ func TestFacadeValidateNonOperatorSourceStillLocksOutAfterRepeatedFailures(t *te
 	ctx := context.Background()
 
 	for i := range rateLimitMaxAttempts {
-		if _, _, err := f.Validate(ctx, "area-1", "disarm", "0000", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+		if _, _, err := f.Validate(ctx, "zone-1", "disarm", "0000", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
 			t.Fatalf("attempt %d: err=%v want engine.ErrInvalidCode", i, err)
 		}
 	}
 
-	if _, _, err := f.Validate(ctx, "area-1", "disarm", "9999", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
+	if _, _, err := f.Validate(ctx, "zone-1", "disarm", "9999", "mqtt"); !errors.Is(err, engine.ErrInvalidCode) {
 		t.Errorf("valid duress code while locked out: err=%v want engine.ErrInvalidCode", err)
 	}
 }
@@ -377,7 +377,7 @@ func TestFacadeValidateOperatorSourceFailuresNeverJournalLockout(t *testing.T) {
 
 	const attempts = rateLimitMaxAttempts + 2
 	for i := range attempts {
-		if _, _, err := f.Validate(ctx, "area-1", "disarm", "0000", "rest-operator"); !errors.Is(err, engine.ErrInvalidCode) {
+		if _, _, err := f.Validate(ctx, "zone-1", "disarm", "0000", "rest-operator"); !errors.Is(err, engine.ErrInvalidCode) {
 			t.Fatalf("attempt %d: err=%v want engine.ErrInvalidCode", i, err)
 		}
 	}
@@ -401,8 +401,8 @@ func TestFacadeRowsProjectsHardwareBindings(t *testing.T) {
 		{
 			ID: "k1", Name: "Front Door Slot 1", Kind: string(KindKeypadSlot),
 			PermsJSON:   `{"arm":true,"disarm":true,"silence":false}`,
-			AreasJSON:   `["area-1"]`,
-			BindingJSON: `{"central":"ccu1","device_address":"0001ABCD","slot":1,"arm_mode":"full","area_id":"area-1"}`,
+			ZonesJSON:   `["zone-1"]`,
+			BindingJSON: `{"central":"ccu1","device_address":"0001ABCD","slot":1,"arm_mode":"full","zone_id":"zone-1"}`,
 			Enabled:     true,
 		},
 	}}
@@ -419,11 +419,11 @@ func TestFacadeRowsProjectsHardwareBindings(t *testing.T) {
 	if got.Kind != KindKeypadSlot {
 		t.Errorf("Kind=%q want %q", got.Kind, KindKeypadSlot)
 	}
-	if got.Binding.DeviceAddress != "0001ABCD" || got.Binding.Slot != 1 || got.Binding.AreaID != "area-1" {
+	if got.Binding.DeviceAddress != "0001ABCD" || got.Binding.Slot != 1 || got.Binding.ZoneID != "zone-1" {
 		t.Errorf("Binding=%+v unexpected", got.Binding)
 	}
-	if len(got.Areas) != 1 || got.Areas[0] != "area-1" {
-		t.Errorf("Areas=%v want [area-1]", got.Areas)
+	if len(got.Zones) != 1 || got.Zones[0] != "zone-1" {
+		t.Errorf("Zones=%v want [zone-1]", got.Zones)
 	}
 }
 

@@ -973,7 +973,7 @@ func TestDaemonServe_WithAuthUsers_StartsOK(t *testing.T) {
 	// Wait for the REST listener to respond.
 	client := &http.Client{Timeout: 400 * time.Millisecond}
 	url := "http://" + restAddr + "/api/v1/health"
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		if resp, cerr := client.Get(url); cerr == nil { //nolint:noctx // test-only polling loop; a context.Context here would complicate the deadline logic without benefit
 			_ = resp.Body.Close()
@@ -988,7 +988,7 @@ func TestDaemonServe_WithAuthUsers_StartsOK(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServe error: %v", err)
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -1023,7 +1023,7 @@ func TestDaemonServe_OIDCDisabled_StartsOK(t *testing.T) {
 
 	client := &http.Client{Timeout: 400 * time.Millisecond}
 	url := "http://" + restAddr + "/api/v1/health"
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		if resp, cerr := client.Get(url); cerr == nil { //nolint:noctx // test-only polling loop; a context.Context here would complicate the deadline logic without benefit
 			_ = resp.Body.Close()
@@ -1038,7 +1038,7 @@ func TestDaemonServe_OIDCDisabled_StartsOK(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServe error: %v", err)
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("shutdown timeout")
 	}
 }

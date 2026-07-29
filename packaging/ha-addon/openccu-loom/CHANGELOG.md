@@ -1,5 +1,52 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.50.0
+
+- **The CCU add-on updates itself** (OpenCCU/RaspberryMatic): check and
+  install add-on updates from the daemon's settings page, via the API,
+  or straight from Home Assistant's update view — checksum-verified, no
+  CCU reboot. (This affects the CCU add-on flavour; the HA add-on keeps
+  updating through the add-on store as usual.)
+
+## 0.49.3
+
+- **Areas: group your rooms into floors or outbuildings.** Assign CCU
+  rooms to operator-defined areas (e.g. ground floor, shed) in the rooms
+  administration and filter the device list, overview, alarm pickers,
+  and group editor by area.
+
+## 0.49.2
+
+- **Alarm wizard lists are searchable and filterable.** The outputs step
+  has a search box now; sensor and output pickers filter by room and
+  function, sort by name/room/model, and show the device model and rooms
+  per row.
+- **Alarm "areas" are now "zones".** The armable alarm unit is called a
+  zone throughout the UI, API, and MQTT topics — the term "area" is
+  freed up for the upcoming room grouping. Existing alarm configuration
+  migrates automatically.
+- **Sirens can now serve more than one alarm zone.** Enrolling a siren
+  (or sensor) that another zone already uses no longer fails the save
+  with an internal error — and a shared siren keeps sounding until the
+  **last** alarming zone silences it, instead of going quiet when any
+  single zone stops.
+
+
+- **Alarm setup wizard actually works end to end.** Sensors and outputs are
+  now selected directly inside the wizard (steps 2 and 3) instead of linking
+  to tabs that need an area that does not exist yet; finishing creates the
+  area and applies the selections in one go, and re-trying after an error no
+  longer creates duplicate areas. Wizard progress survives navigating away.
+
+## 0.49.0
+
+- **Sysvar/program markers now control which entities Home Assistant enables
+  by default.** With `sysvar_markers` / `program_markers` configured, only
+  system variables and programs whose CCU description carries a marker arrive
+  enabled; without markers they arrive disabled and you enable the ones you
+  want in HA's entity registry. Entities HA already knows keep their current
+  enabled/disabled state.
+
 ## 0.48.9
 
 - **Custom-DP unique_ids are channel-level again**, matching aiohomematic's

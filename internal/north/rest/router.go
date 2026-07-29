@@ -214,6 +214,12 @@ type Deps struct {
 	// Nil disables those routes.
 	Diagrams handlers.DiagramConfigService
 
+	// Areas backs the operator-defined area (room grouping) CRUD at
+	// /areas, incl. full-set room-assignment replace at
+	// /areas/{id}/rooms. Nil disables those routes. Distinct from the
+	// alarm engine's own "area" partitions (Alarm field above).
+	Areas handlers.AreaAdmin
+
 	// RoomFunctionAdmin backs room/function entity CRUD at /rooms and
 	// /functions (create/rename/delete). Nil disables those routes;
 	// the read-only GET /rooms + GET /functions stay available.
@@ -305,6 +311,13 @@ type Deps struct {
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
 	FirmwareDownload handlers.FirmwareDownloadPort
+	// AddonUpdate backs the CCU add-on self-update surface (ADR 0057):
+	// `GET /api/v1/system/addon-update` (always 200; nil reports a
+	// minimal supported:false body) plus the operator-gated
+	// `POST …/check` and `POST …/install` (nil/unsupported answers 404).
+	// Wired only on platforms where the capability probe passed (add-on
+	// build + firmware installer present).
+	AddonUpdate handlers.AddonUpdateService
 	// Groups backs `GET /api/v1/groups` — the read-only heating-group
 	// listing (one entry per central; `?central=` scopes to one). Nil
 	// serves the route as 503.
@@ -694,6 +707,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Put("/diagrams/{id}", handlers.UpdateDiagram(d.Diagrams, d.AuditRecorder))
 				pr.With(op).Delete("/diagrams/{id}", handlers.DeleteDiagram(d.Diagrams, d.AuditRecorder))
 			}
+			if d.Areas != nil {
+				// Read-only list is available to any authenticated caller;
+				// the write routes are operator-gated further down
+				// alongside the /rooms admin block.
+				pr.Get("/areas", handlers.ListAreas(d.Areas))
+			}
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
@@ -860,6 +879,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Patch("/functions/{name}", handlers.RenameFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Delete("/functions/{name}", handlers.DeleteFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 			}
+			// Area (room grouping) entity CRUD + room-assignment replace.
+			// Local SQLite writes, so operator-gated; the read-only GET
+			// /areas stays open above.
+			if d.Areas != nil {
+				pr.With(op).Post("/areas", handlers.CreateArea(d.Areas, d.AuditRecorder))
+				pr.With(op).Put("/areas/{id}", handlers.PutArea(d.Areas, d.AuditRecorder))
+				pr.With(op).Delete("/areas/{id}", handlers.DeleteArea(d.Areas, d.AuditRecorder))
+				pr.With(op).Put("/areas/{id}/rooms", handlers.PutAreaRooms(d.Areas, d.AuditRecorder))
+			}
 			if d.RefreshDevices != nil {
 				pr.With(op).Post("/devices/refresh", handlers.RefreshDevices(d.RefreshDevices))
 			}
@@ -886,26 +914,26 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// gates on the operator role (mirrors the alarm_panel WS
 				// command roles). Nil Alarm leaves the whole tree unmounted.
 				pr.Get("/alarm/state", handlers.AlarmState(d.Alarm))
-				pr.Get("/alarm/areas", handlers.ListAlarmAreas(d.Alarm))
-				pr.With(op).Post("/alarm/areas", handlers.CreateAlarmArea(d.Alarm, d.AuditRecorder))
-				pr.Get("/alarm/areas/{id}", handlers.GetAlarmArea(d.Alarm))
-				pr.With(op).Put("/alarm/areas/{id}", handlers.PutAlarmArea(d.Alarm, d.AuditRecorder))
-				pr.With(op).Delete("/alarm/areas/{id}", handlers.DeleteAlarmArea(d.Alarm, d.AuditRecorder))
-				pr.Get("/alarm/areas/{id}/sensors", handlers.ListAlarmAreaSensors(d.Alarm))
-				pr.With(op).Put("/alarm/areas/{id}/sensors", handlers.PutAlarmAreaSensors(d.Alarm, d.AuditRecorder))
-				pr.Get("/alarm/areas/{id}/outputs", handlers.ListAlarmAreaOutputs(d.Alarm))
-				pr.With(op).Put("/alarm/areas/{id}/outputs", handlers.PutAlarmAreaOutputs(d.Alarm, d.AuditRecorder))
-				pr.With(op).Post("/alarm/areas/{id}/arm", handlers.ArmAlarmArea(d.Alarm, d.AuditRecorder))
-				pr.With(op).Post("/alarm/areas/{id}/disarm", handlers.DisarmAlarmArea(d.Alarm, d.AuditRecorder))
-				pr.With(op).Post("/alarm/areas/{id}/silence", handlers.SilenceAlarmArea(d.Alarm, d.AuditRecorder))
-				pr.With(op).Post("/alarm/areas/{id}/acknowledge", handlers.AcknowledgeAlarmArea(d.Alarm, d.AuditRecorder))
-				pr.With(op).Post("/alarm/silence-all", handlers.SilenceAllAlarmAreas(d.Alarm, d.AuditRecorder))
-				pr.Get("/alarm/areas/{id}/readiness", handlers.GetAlarmAreaReadiness(d.Alarm))
+				pr.Get("/alarm/zones", handlers.ListAlarmZones(d.Alarm))
+				pr.With(op).Post("/alarm/zones", handlers.CreateAlarmZone(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/zones/{id}", handlers.GetAlarmZone(d.Alarm))
+				pr.With(op).Put("/alarm/zones/{id}", handlers.PutAlarmZone(d.Alarm, d.AuditRecorder))
+				pr.With(op).Delete("/alarm/zones/{id}", handlers.DeleteAlarmZone(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/zones/{id}/sensors", handlers.ListAlarmZoneSensors(d.Alarm))
+				pr.With(op).Put("/alarm/zones/{id}/sensors", handlers.PutAlarmZoneSensors(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/zones/{id}/outputs", handlers.ListAlarmZoneOutputs(d.Alarm))
+				pr.With(op).Put("/alarm/zones/{id}/outputs", handlers.PutAlarmZoneOutputs(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/zones/{id}/arm", handlers.ArmAlarmZone(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/zones/{id}/disarm", handlers.DisarmAlarmZone(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/zones/{id}/silence", handlers.SilenceAlarmZone(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/zones/{id}/acknowledge", handlers.AcknowledgeAlarmZone(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/silence-all", handlers.SilenceAllAlarmZones(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/zones/{id}/readiness", handlers.GetAlarmZoneReadiness(d.Alarm))
 				pr.Get("/alarm/journal", handlers.ListAlarmJournal(d.Alarm))
 				pr.Get("/alarm/panels", handlers.ListAlarmPanels(d.Alarm))
-				pr.With(op).Post("/alarm/areas/{id}/walktest/start", handlers.StartAlarmWalkTest(d.Alarm, d.AuditRecorder))
-				pr.With(op).Post("/alarm/areas/{id}/walktest/stop", handlers.StopAlarmWalkTest(d.Alarm, d.AuditRecorder))
-				pr.Get("/alarm/areas/{id}/walktest", handlers.GetAlarmWalkTestStatus(d.Alarm))
+				pr.With(op).Post("/alarm/zones/{id}/walktest/start", handlers.StartAlarmWalkTest(d.Alarm, d.AuditRecorder))
+				pr.With(op).Post("/alarm/zones/{id}/walktest/stop", handlers.StopAlarmWalkTest(d.Alarm, d.AuditRecorder))
+				pr.Get("/alarm/zones/{id}/walktest", handlers.GetAlarmWalkTestStatus(d.Alarm))
 				pr.Get("/alarm/output-candidates", handlers.ListAlarmOutputCandidates(d.Alarm, d.Labels))
 				pr.Get("/alarm/remote-key-candidates", handlers.ListAlarmRemoteKeyCandidates(d.Alarm))
 				pr.With(op).Post("/alarm/outputs/{id}/test", handlers.TestAlarmOutput(d.Alarm, d.AuditRecorder))
@@ -927,6 +955,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
 			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
+			// Add-on self-update (ADR 0057). GET always answers 200 (a nil
+			// d.AddonUpdate reports supported:false) — mounted unconditionally
+			// so the SPA can distinguish "unsupported platform" from "old
+			// daemon / misrouted proxy" without a 404. The check/install
+			// verbs answer 404 themselves when unsupported.
+			pr.Get("/system/addon-update", handlers.GetAddonUpdate(d.AddonUpdate))
+			pr.With(op).Post("/system/addon-update/check", handlers.PostAddonUpdateCheck(d.AddonUpdate))
+			pr.With(op).Post("/system/addon-update/install", handlers.PostAddonUpdateInstall(d.AddonUpdate, d.AuditRecorder))
 			// Read-only heating-group listing (one entry per central).
 			pr.Get("/groups", handlers.ListGroups(d.Groups))
 			// Heating-group administration (GR02) via the CCU jpages proxy.

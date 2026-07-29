@@ -17,12 +17,12 @@ type SoundingOutput struct {
 }
 
 // Sounding reads the live active-state of every siren-capable output
-// of the area (S4 reconciliation input). Only observed-active outputs
+// of the zone (S4 reconciliation input). Only observed-active outputs
 // are reported; unobserved states count as silent — reconciliation
 // must not stop or adopt on stale guesses.
-func (m *Manager) Sounding(ctx context.Context, areaID string) []SoundingOutput {
+func (m *Manager) Sounding(ctx context.Context, zoneID string) []SoundingOutput {
 	m.mu.Lock()
-	instances := append([]*instance(nil), m.byArea[areaID]...)
+	instances := append([]*instance(nil), m.byZone[zoneID]...)
 	m.mu.Unlock()
 
 	var out []SoundingOutput
@@ -70,9 +70,9 @@ func (m *Manager) isSounding(inst *instance) bool {
 // unknown, so the full bounded duration is accounted on the ledger
 // (over-counting is the safe direction) and the stop lands at
 // now + bound at the latest.
-func (m *Manager) AdoptBounded(ctx context.Context, areaID string, incidentID int64, outputIDs []string) {
+func (m *Manager) AdoptBounded(ctx context.Context, zoneID string, incidentID int64, outputIDs []string) {
 	m.mu.Lock()
-	instances := append([]*instance(nil), m.byArea[areaID]...)
+	instances := append([]*instance(nil), m.byZone[zoneID]...)
 	m.mu.Unlock()
 	wanted := map[string]bool{}
 	for _, id := range outputIDs {
@@ -91,29 +91,29 @@ func (m *Manager) AdoptBounded(ctx context.Context, areaID string, incidentID in
 		// optical/light activations are bounded but not budgeted.
 		if incidentID != 0 && inst.row.Class.Acoustic() {
 			if err := m.ledger.AddAcousticMS(ctx, incidentID, d.Milliseconds()); err != nil {
-				m.journalFault(ctx, areaID, "acoustic_ledger_failed", inst.row.ID, incidentID, err)
+				m.journalFault(ctx, zoneID, "acoustic_ledger_failed", inst.row.ID, incidentID, err)
 			}
 		}
 		m.armStopWatchdog(inst, incidentID, d, s)
 	}
 }
 
-// StopUnowned stops every sounding output of a disarmed area that has
-// no declared third-party owner (S4: only a siren whose owning area
+// StopUnowned stops every sounding output of a disarmed zone that has
+// no declared third-party owner (S4: only a siren whose owning zone
 // is disarmed, with no always-hot link and no shared-with-CCU flag,
 // is stopped immediately).
-func (m *Manager) StopUnowned(ctx context.Context, areaID string) {
+func (m *Manager) StopUnowned(ctx context.Context, zoneID string) {
 	m.mu.Lock()
-	instances := append([]*instance(nil), m.byArea[areaID]...)
+	instances := append([]*instance(nil), m.byZone[zoneID]...)
 	m.mu.Unlock()
 	for _, inst := range instances {
 		if inst.cfg.SharedWithCCU || !m.isSounding(inst) {
 			continue
 		}
 		if err := m.stopAndVerify(ctx, inst, 0); err != nil {
-			m.journalFault(ctx, areaID, "output_stop_failed", inst.row.ID, 0, err)
+			m.journalFault(ctx, zoneID, "output_stop_failed", inst.row.ID, 0, err)
 			continue
 		}
-		m.journalFault(ctx, areaID, "reconcile_stopped_unowned_siren", inst.row.ID, 0, nil)
+		m.journalFault(ctx, zoneID, "reconcile_stopped_unowned_siren", inst.row.ID, 0, nil)
 	}
 }

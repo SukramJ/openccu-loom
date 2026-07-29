@@ -13,10 +13,10 @@
 //   - arm → window-open event → pending → triggered → siren
 //     putParamset observed on the wire → silence → verified stop
 //     (S1 duration bound and S3 silence on the real command path);
-//   - boot reconciliation adopting a sounding siren of an armed area
+//   - boot reconciliation adopting a sounding siren of an armed zone
 //     (S4 adopt-before-stop), and stopping a sounding siren of a
-//     disarmed, unshared area (S4 stop-unowned);
-//   - a sysvar write can never disarm a protected area (§13.5 pin).
+//     disarmed, unshared zone (S4 stop-unowned);
+//   - a sysvar write can never disarm a protected zone (§13.5 pin).
 //
 // The siren activation/stop writes reach godevccu through the ingested
 // channel writer; the OnSetValue hook (captured by newSPAHarness'
@@ -66,7 +66,7 @@ type alarmHarness struct {
 
 // newAlarmHarness builds the central + registry + migrated alarm stores.
 // The alarm.Service is created and started later by start(), after the
-// caller has seeded areas/sensors/outputs and any persisted state.
+// caller has seeded zones/sensors/outputs and any persisted state.
 func newAlarmHarness(t *testing.T) *alarmHarness {
 	t.Helper()
 	h := newSPAHarness(t, alarmModels)
@@ -195,14 +195,14 @@ func (ah *alarmHarness) injectSirenActive(ch *device.Channel) {
 	setter.OnWireValue(true)
 }
 
-// waitAreaState polls the engine snapshot until the area reaches want or
+// waitAreaState polls the engine snapshot until the zone reaches want or
 // the timeout elapses; it returns the last observed state.
-func (ah *alarmHarness) waitAreaState(areaID string, want hmenum.AlarmAreaState, timeout time.Duration) hmenum.AlarmAreaState {
+func (ah *alarmHarness) waitAreaState(zoneID string, want hmenum.AlarmZoneState, timeout time.Duration) hmenum.AlarmZoneState {
 	ah.t.Helper()
 	deadline := time.Now().Add(timeout)
-	var last hmenum.AlarmAreaState
+	var last hmenum.AlarmZoneState
 	for {
-		if snap, ok := ah.svc.Engine().Area(areaID); ok {
+		if snap, ok := ah.svc.Engine().Zone(zoneID); ok {
 			last = snap.State
 			if snap.State == want {
 				return snap.State
@@ -232,12 +232,12 @@ func (ah *alarmHarness) waitSet(channelAddress string, parameter hmenum.Paramete
 }
 
 // waitJournalEvent polls the alarm journal for an entry with the given
-// event name in the area.
-func (ah *alarmHarness) waitJournalEvent(areaID, event string, timeout time.Duration) bool {
+// event name in the zone.
+func (ah *alarmHarness) waitJournalEvent(zoneID, event string, timeout time.Duration) bool {
 	ah.t.Helper()
 	deadline := time.Now().Add(timeout)
 	for {
-		entries, err := ah.stores.Journal.Query(context.Background(), sqlitestore.AlarmJournalFilter{AreaID: areaID})
+		entries, err := ah.stores.Journal.Query(context.Background(), sqlitestore.AlarmJournalFilter{ZoneID: zoneID})
 		if err != nil {
 			ah.t.Fatalf("journal query: %v", err)
 		}
@@ -253,23 +253,23 @@ func (ah *alarmHarness) waitJournalEvent(areaID, event string, timeout time.Dura
 	}
 }
 
-// seedArea persists one alarm area with the given config document.
-func (ah *alarmHarness) seedArea(id, name string, cfg engine.AreaConfig) {
+// seedZone persists one alarm zone with the given config document.
+func (ah *alarmHarness) seedZone(id, name string, cfg engine.ZoneConfig) {
 	ah.t.Helper()
 	now := time.Now().UnixMilli()
-	if err := ah.stores.Areas.Upsert(context.Background(), sqlitestore.AlarmAreaRow{
+	if err := ah.stores.Zones.Upsert(context.Background(), sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: mustAlarmJSON(ah.t, cfg), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
-		ah.t.Fatalf("seed area: %v", err)
+		ah.t.Fatalf("seed zone: %v", err)
 	}
 }
 
 // seedSensor persists one enrolled sensor bound to key.
-func (ah *alarmHarness) seedSensor(id, areaID string, key hmtypes.DataPointKey, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
+func (ah *alarmHarness) seedSensor(id, zoneID string, key hmtypes.DataPointKey, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
 	ah.t.Helper()
 	now := time.Now().UnixMilli()
 	if err := ah.stores.Sensors.Upsert(context.Background(), sqlitestore.AlarmSensorRow{
-		ID: id, AreaID: areaID, CentralName: ah.centralName(),
+		ID: id, ZoneID: zoneID, CentralName: ah.centralName(),
 		InterfaceID: key.InterfaceID, ChannelAddress: key.ChannelAddress, Parameter: key.Parameter,
 		SensorType: typ, Name: id, ConfigJSON: mustAlarmJSON(ah.t, cfg), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -278,11 +278,11 @@ func (ah *alarmHarness) seedSensor(id, areaID string, key hmtypes.DataPointKey, 
 }
 
 // seedOutput persists one enrolled output of the given class on channel.
-func (ah *alarmHarness) seedOutput(id, areaID string, class hmenum.AlarmOutputClass, channelAddress string, cfg outputs.OutputConfig) {
+func (ah *alarmHarness) seedOutput(id, zoneID string, class hmenum.AlarmOutputClass, channelAddress string, cfg outputs.OutputConfig) {
 	ah.t.Helper()
 	now := time.Now().UnixMilli()
 	if err := ah.stores.Outputs.Upsert(context.Background(), sqlitestore.AlarmOutputRow{
-		ID: id, AreaID: areaID, Class: class, CentralName: ah.centralName(),
+		ID: id, ZoneID: zoneID, Class: class, CentralName: ah.centralName(),
 		ChannelAddress: channelAddress, Name: id, ConfigJSON: mustAlarmJSON(ah.t, cfg), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
 		ah.t.Fatalf("seed output: %v", err)
@@ -329,41 +329,41 @@ func TestAlarmFullChainWindowOpenTriggersSirenThenSilence(t *testing.T) {
 	ah := newAlarmHarness(t)
 	ctx := context.Background()
 
-	const areaID = "area-eg"
+	const zoneID = "zone-eg"
 	asir := ah.asirChannel()
 	stateKey := ah.swdoStateKey()
 
-	ah.seedArea(areaID, "Erdgeschoss", engine.AreaConfig{
+	ah.seedZone(zoneID, "Erdgeschoss", engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {ExitDelaySeconds: 0, EntryDelaySeconds: 2, TriggerSeconds: 10},
 		},
 	})
-	ah.seedSensor("sensor-window", areaID, stateKey, hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
+	ah.seedSensor("sensor-window", zoneID, stateKey, hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes:         []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		UseEntryDelay: true,
 	})
-	ah.seedOutput("out-siren", areaID, hmenum.AlarmOutputClassAcousticSiren, asir.Address, outputs.OutputConfig{})
+	ah.seedOutput("out-siren", zoneID, hmenum.AlarmOutputClassAcousticSiren, asir.Address, outputs.OutputConfig{})
 
 	ah.start()
 
-	if _, err := ah.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{
+	if _, err := ah.svc.Engine().Arm(ctx, zoneID, engine.ArmRequest{
 		Mode: hmenum.AlarmModeFull, SkipDelay: true, By: "test", Source: "test",
 	}); err != nil {
 		t.Fatalf("arm full: %v", err)
 	}
-	if st := ah.waitAreaState(areaID, hmenum.AlarmAreaStateArmed, time.Second); st != hmenum.AlarmAreaStateArmed {
+	if st := ah.waitAreaState(zoneID, hmenum.AlarmZoneStateArmed, time.Second); st != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("after arm: state = %q, want armed", st)
 	}
 
-	// The window opens: a use_entry_delay sensor routes the area through
+	// The window opens: a use_entry_delay sensor routes the zone through
 	// pending, then the 2 s entry delay escalates it to triggered.
 	ah.h.resetEvents()
 	ah.injectWindow(stateKey, true)
 
-	if st := ah.waitAreaState(areaID, hmenum.AlarmAreaStatePending, 2*time.Second); st != hmenum.AlarmAreaStatePending {
+	if st := ah.waitAreaState(zoneID, hmenum.AlarmZoneStatePending, 2*time.Second); st != hmenum.AlarmZoneStatePending {
 		t.Fatalf("after window open: state = %q, want pending", st)
 	}
-	if st := ah.waitAreaState(areaID, hmenum.AlarmAreaStateTriggered, 6*time.Second); st != hmenum.AlarmAreaStateTriggered {
+	if st := ah.waitAreaState(zoneID, hmenum.AlarmZoneStateTriggered, 6*time.Second); st != hmenum.AlarmZoneStateTriggered {
 		t.Fatalf("after entry delay: state = %q, want triggered", st)
 	}
 
@@ -388,13 +388,13 @@ func TestAlarmFullChainWindowOpenTriggersSirenThenSilence(t *testing.T) {
 	// Silence must land a stop write (the disable defaults) on the ASIR
 	// receiver and persist the incident silenced (S3).
 	ah.h.resetEvents()
-	if err := ah.svc.Engine().Silence(ctx, areaID, "test", "human"); err != nil {
+	if err := ah.svc.Engine().Silence(ctx, zoneID, "test", "human"); err != nil {
 		t.Fatalf("silence: %v", err)
 	}
 	if _, ok := ah.waitSet(asir.Address, hmenum.ParameterAcousticAlarmSelection, 3*time.Second); !ok {
 		t.Fatalf("silence did not write the disable ACOUSTIC_ALARM_SELECTION to the ASIR %s", asir.Address)
 	}
-	inc, ok, err := ah.stores.Incidents.GetOpenByArea(ctx, areaID)
+	inc, ok, err := ah.stores.Incidents.GetOpenByZone(ctx, zoneID)
 	if err != nil {
 		t.Fatalf("get open incident: %v", err)
 	}
@@ -407,28 +407,28 @@ func TestAlarmFullChainWindowOpenTriggersSirenThenSilence(t *testing.T) {
 }
 
 // TestAlarmReconcileAdoptsSoundingSirenOfArmedArea pins S4 adopt: on
-// boot, a siren found sounding while its area is armed is adopted as a
+// boot, a siren found sounding while its zone is armed is adopted as a
 // triggered incident (cause "adopted"), kept sounding within its bound,
 // and never immediately stopped.
 func TestAlarmReconcileAdoptsSoundingSirenOfArmedArea(t *testing.T) {
 	ah := newAlarmHarness(t)
 	ctx := context.Background()
 
-	const areaID = "area-adopt"
+	const zoneID = "zone-adopt"
 	asir := ah.asirChannel()
 
-	ah.seedArea(areaID, "Erdgeschoss", engine.AreaConfig{
+	ah.seedZone(zoneID, "Erdgeschoss", engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {TriggerSeconds: 10},
 		},
 	})
-	ah.seedOutput("out-siren", areaID, hmenum.AlarmOutputClassAcousticSiren, asir.Address, outputs.OutputConfig{})
+	ah.seedOutput("out-siren", zoneID, hmenum.AlarmOutputClassAcousticSiren, asir.Address, outputs.OutputConfig{})
 
 	// Persist an armed state BEFORE the service starts — the blind
 	// window a reconciliation reasons about.
 	now := time.Now().UnixMilli()
 	if err := ah.stores.State.Upsert(ctx, sqlitestore.AlarmStateRow{
-		AreaID: areaID, State: hmenum.AlarmAreaStateArmed, Mode: hmenum.AlarmModeFull,
+		ZoneID: zoneID, State: hmenum.AlarmZoneStateArmed, Mode: hmenum.AlarmModeFull,
 		BypassJSON: "[]", TimersJSON: "[]", ContextJSON: "{}", UpdatedAtMS: now,
 	}); err != nil {
 		t.Fatalf("persist armed state: %v", err)
@@ -439,11 +439,11 @@ func TestAlarmReconcileAdoptsSoundingSirenOfArmedArea(t *testing.T) {
 	ah.h.resetEvents()
 	ah.start()
 
-	if st := ah.waitAreaState(areaID, hmenum.AlarmAreaStateTriggered, 2*time.Second); st != hmenum.AlarmAreaStateTriggered {
+	if st := ah.waitAreaState(zoneID, hmenum.AlarmZoneStateTriggered, 2*time.Second); st != hmenum.AlarmZoneStateTriggered {
 		t.Fatalf("after reconcile: state = %q, want triggered (adopted)", st)
 	}
 
-	inc, ok, err := ah.stores.Incidents.GetOpenByArea(ctx, areaID)
+	inc, ok, err := ah.stores.Incidents.GetOpenByZone(ctx, zoneID)
 	if err != nil {
 		t.Fatalf("get open incident: %v", err)
 	}
@@ -468,22 +468,22 @@ func TestAlarmReconcileAdoptsSoundingSirenOfArmedArea(t *testing.T) {
 }
 
 // TestAlarmReconcileStopsUnownedSirenOfDisarmedArea pins S4 stop: on
-// boot, a siren found sounding while its area is disarmed and unshared
+// boot, a siren found sounding while its zone is disarmed and unshared
 // is stopped immediately, with a journalled reconcile_stopped_unowned_siren.
 func TestAlarmReconcileStopsUnownedSirenOfDisarmedArea(t *testing.T) {
 	ah := newAlarmHarness(t)
 
-	const areaID = "area-stop"
+	const zoneID = "zone-stop"
 	asir := ah.asirChannel()
 
-	ah.seedArea(areaID, "Erdgeschoss", engine.AreaConfig{
+	ah.seedZone(zoneID, "Erdgeschoss", engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {TriggerSeconds: 10},
 		},
 	})
 	// No shared_with_ccu declaration: the engine owns this siren, and no
-	// persisted state row leaves the area disarmed.
-	ah.seedOutput("out-siren", areaID, hmenum.AlarmOutputClassAcousticSiren, asir.Address, outputs.OutputConfig{})
+	// persisted state row leaves the zone disarmed.
+	ah.seedOutput("out-siren", zoneID, hmenum.AlarmOutputClassAcousticSiren, asir.Address, outputs.OutputConfig{})
 	ah.injectSirenActive(asir)
 
 	ah.h.resetEvents()
@@ -492,45 +492,45 @@ func TestAlarmReconcileStopsUnownedSirenOfDisarmedArea(t *testing.T) {
 	if _, ok := ah.waitSet(asir.Address, hmenum.ParameterAcousticAlarmSelection, 3*time.Second); !ok {
 		t.Fatalf("reconcile did not stop the unowned sounding ASIR %s (no disable write)", asir.Address)
 	}
-	if !ah.waitJournalEvent(areaID, "reconcile_stopped_unowned_siren", 3*time.Second) {
+	if !ah.waitJournalEvent(zoneID, "reconcile_stopped_unowned_siren", 3*time.Second) {
 		t.Fatal("journal missing reconcile_stopped_unowned_siren")
 	}
 }
 
 // TestAlarmSysvarWriteCannotDisarmProtectedArea pins §13.5: an inbound
-// sysvar write of the disarmed index can never disarm a protected area;
-// the area stays armed and the refusal is journalled.
+// sysvar write of the disarmed index can never disarm a protected zone;
+// the zone stays armed and the refusal is journalled.
 func TestAlarmSysvarWriteCannotDisarmProtectedArea(t *testing.T) {
 	ah := newAlarmHarness(t)
 	ctx := context.Background()
 
 	const (
-		areaID     = "area-sysvar"
+		zoneID     = "zone-sysvar"
 		sysvarName = "LoomAlarmTest"
 	)
 
-	ah.seedArea(areaID, "Erdgeschoss", engine.AreaConfig{
+	ah.seedZone(zoneID, "Erdgeschoss", engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {TriggerSeconds: 10},
 		},
 	})
-	ah.seedOutput("out-sysvar", areaID, hmenum.AlarmOutputClassSysvarMirror, "", outputs.OutputConfig{
+	ah.seedOutput("out-sysvar", zoneID, hmenum.AlarmOutputClassSysvarMirror, "", outputs.OutputConfig{
 		SysvarName: sysvarName,
 	})
 
 	ah.start()
 
-	if _, err := ah.svc.Engine().Arm(ctx, areaID, engine.ArmRequest{
+	if _, err := ah.svc.Engine().Arm(ctx, zoneID, engine.ArmRequest{
 		Mode: hmenum.AlarmModeFull, SkipDelay: true, By: "test", Source: "test",
 	}); err != nil {
 		t.Fatalf("arm full: %v", err)
 	}
-	if st := ah.waitAreaState(areaID, hmenum.AlarmAreaStateArmed, time.Second); st != hmenum.AlarmAreaStateArmed {
+	if st := ah.waitAreaState(zoneID, hmenum.AlarmZoneStateArmed, time.Second); st != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("after arm: state = %q, want armed", st)
 	}
 
 	// A third-party CCU sysvar write of "Unscharf" (index 0) must be
-	// refused — a sysvar can never disarm a code-protected area.
+	// refused — a sysvar can never disarm a code-protected zone.
 	events.Publish(ah.h.central.EventBus, hmevent.SysvarChangedEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: ah.centralName(),
@@ -539,10 +539,10 @@ func TestAlarmSysvarWriteCannotDisarmProtectedArea(t *testing.T) {
 		NewValue:    hmtypes.IntValue(0),
 	})
 
-	if !ah.waitJournalEvent(areaID, "sysvar_disarm_refused", 2*time.Second) {
+	if !ah.waitJournalEvent(zoneID, "sysvar_disarm_refused", 2*time.Second) {
 		t.Fatal("journal missing sysvar_disarm_refused")
 	}
-	if snap, ok := ah.svc.Engine().Area(areaID); !ok || snap.State != hmenum.AlarmAreaStateArmed {
+	if snap, ok := ah.svc.Engine().Zone(zoneID); !ok || snap.State != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("after sysvar disarm attempt: state = %q ok=%v, want armed (sysvar cannot disarm)", snap.State, ok)
 	}
 }

@@ -15,10 +15,10 @@ func freshAlarmSensorStore(t *testing.T) *AlarmSensorStore {
 	return NewAlarmSensorStore(openTestDB(t, "alarm_sensors.db"))
 }
 
-func baseAlarmSensorRow(id, areaID string) AlarmSensorRow {
+func baseAlarmSensorRow(id, zoneID string) AlarmSensorRow {
 	return AlarmSensorRow{
 		ID:             id,
-		AreaID:         areaID,
+		ZoneID:         zoneID,
 		CentralName:    "ccu1",
 		InterfaceID:    "HmIP-RF",
 		ChannelAddress: "0001ABCD:1",
@@ -38,7 +38,7 @@ func TestAlarmSensorStoreUpsertInsertRoundTrip(t *testing.T) {
 	s := freshAlarmSensorStore(t)
 	ctx := context.Background()
 
-	row := baseAlarmSensorRow("sensor-1", "area-1")
+	row := baseAlarmSensorRow("sensor-1", "zone-1")
 	if err := s.Upsert(ctx, row); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -74,19 +74,19 @@ func TestAlarmSensorStoreGetMissingReturnsFalse(t *testing.T) {
 }
 
 // TestAlarmSensorStoreUpsertUpdatePreservesCreatedAt verifies that a second
-// Upsert on the same id updates mutable fields (including area
+// Upsert on the same id updates mutable fields (including zone
 // reassignment and sensor type) but never overwrites created_at_ms.
 func TestAlarmSensorStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
 	s := freshAlarmSensorStore(t)
 	ctx := context.Background()
 
-	row := baseAlarmSensorRow("sensor-1", "area-1")
+	row := baseAlarmSensorRow("sensor-1", "zone-1")
 	if err := s.Upsert(ctx, row); err != nil {
 		t.Fatalf("Upsert 1: %v", err)
 	}
 
 	updated := row
-	updated.AreaID = "area-2"
+	updated.ZoneID = "zone-2"
 	updated.SensorType = hmenum.AlarmSensorTypeWindow
 	updated.Name = "Renamed Window"
 	updated.CreatedAtMS = 9999 // must be ignored on update
@@ -102,8 +102,8 @@ func TestAlarmSensorStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
 	if !ok {
 		t.Fatal("Get: want ok=true")
 	}
-	if got.AreaID != "area-2" {
-		t.Errorf("AreaID=%q want area-2", got.AreaID)
+	if got.ZoneID != "zone-2" {
+		t.Errorf("ZoneID=%q want zone-2", got.ZoneID)
 	}
 	if got.SensorType != hmenum.AlarmSensorTypeWindow {
 		t.Errorf("SensorType=%q want %q", got.SensorType, hmenum.AlarmSensorTypeWindow)
@@ -119,17 +119,17 @@ func TestAlarmSensorStoreUpsertUpdatePreservesCreatedAt(t *testing.T) {
 	}
 }
 
-// TestAlarmSensorStoreListByAreaOrdering verifies ListByArea only returns
-// sensors of the given area, ordered by name then id.
-func TestAlarmSensorStoreListByAreaOrdering(t *testing.T) {
+// TestAlarmSensorStoreListByZoneOrdering verifies ListByZone only returns
+// sensors of the given zone, ordered by name then id.
+func TestAlarmSensorStoreListByZoneOrdering(t *testing.T) {
 	s := freshAlarmSensorStore(t)
 	ctx := context.Background()
 
 	rows := []AlarmSensorRow{
-		withSensorName(baseAlarmSensorRow("s-c", "area-1"), "Charlie"),
-		withSensorName(baseAlarmSensorRow("s-a", "area-1"), "Alpha"),
-		withSensorName(baseAlarmSensorRow("s-b", "area-1"), "Bravo"),
-		withSensorName(baseAlarmSensorRow("s-other", "area-2"), "Alpha"),
+		withSensorName(baseAlarmSensorRow("s-c", "zone-1"), "Charlie"),
+		withSensorName(baseAlarmSensorRow("s-a", "zone-1"), "Alpha"),
+		withSensorName(baseAlarmSensorRow("s-b", "zone-1"), "Bravo"),
+		withSensorName(baseAlarmSensorRow("s-other", "zone-2"), "Alpha"),
 	}
 	for _, r := range rows {
 		if err := s.Upsert(ctx, r); err != nil {
@@ -137,9 +137,9 @@ func TestAlarmSensorStoreListByAreaOrdering(t *testing.T) {
 		}
 	}
 
-	got, err := s.ListByArea(ctx, "area-1")
+	got, err := s.ListByZone(ctx, "zone-1")
 	if err != nil {
-		t.Fatalf("ListByArea: %v", err)
+		t.Fatalf("ListByZone: %v", err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d want 3", len(got))
@@ -152,16 +152,16 @@ func TestAlarmSensorStoreListByAreaOrdering(t *testing.T) {
 	}
 }
 
-// TestAlarmSensorStoreGetAllOrdering verifies GetAll orders by area, then
-// name, then id, and includes sensors from every area.
+// TestAlarmSensorStoreGetAllOrdering verifies GetAll orders by zone, then
+// name, then id, and includes sensors from every zone.
 func TestAlarmSensorStoreGetAllOrdering(t *testing.T) {
 	s := freshAlarmSensorStore(t)
 	ctx := context.Background()
 
 	rows := []AlarmSensorRow{
-		withSensorName(baseAlarmSensorRow("s-2b", "area-2"), "Bravo"),
-		withSensorName(baseAlarmSensorRow("s-1b", "area-1"), "Bravo"),
-		withSensorName(baseAlarmSensorRow("s-1a", "area-1"), "Alpha"),
+		withSensorName(baseAlarmSensorRow("s-2b", "zone-2"), "Bravo"),
+		withSensorName(baseAlarmSensorRow("s-1b", "zone-1"), "Bravo"),
+		withSensorName(baseAlarmSensorRow("s-1a", "zone-1"), "Alpha"),
 	}
 	for _, r := range rows {
 		if err := s.Upsert(ctx, r); err != nil {
@@ -190,10 +190,10 @@ func TestAlarmSensorStoreDelete(t *testing.T) {
 	s := freshAlarmSensorStore(t)
 	ctx := context.Background()
 
-	if err := s.Upsert(ctx, baseAlarmSensorRow("s-1", "area-1")); err != nil {
+	if err := s.Upsert(ctx, baseAlarmSensorRow("s-1", "zone-1")); err != nil {
 		t.Fatalf("Upsert s-1: %v", err)
 	}
-	if err := s.Upsert(ctx, baseAlarmSensorRow("s-2", "area-1")); err != nil {
+	if err := s.Upsert(ctx, baseAlarmSensorRow("s-2", "zone-1")); err != nil {
 		t.Fatalf("Upsert s-2: %v", err)
 	}
 
@@ -218,43 +218,43 @@ func TestAlarmSensorStoreDelete(t *testing.T) {
 	}
 }
 
-// TestAlarmSensorStoreDeleteByArea verifies DeleteByArea removes only the
-// rows of the targeted area and returns the correct row count.
-func TestAlarmSensorStoreDeleteByArea(t *testing.T) {
+// TestAlarmSensorStoreDeleteByZone verifies DeleteByZone removes only the
+// rows of the targeted zone and returns the correct row count.
+func TestAlarmSensorStoreDeleteByZone(t *testing.T) {
 	s := freshAlarmSensorStore(t)
 	ctx := context.Background()
 
 	for _, id := range []string{"s-1", "s-2", "s-3"} {
-		if err := s.Upsert(ctx, baseAlarmSensorRow(id, "area-1")); err != nil {
+		if err := s.Upsert(ctx, baseAlarmSensorRow(id, "zone-1")); err != nil {
 			t.Fatalf("Upsert %s: %v", id, err)
 		}
 	}
-	if err := s.Upsert(ctx, baseAlarmSensorRow("s-other", "area-2")); err != nil {
+	if err := s.Upsert(ctx, baseAlarmSensorRow("s-other", "zone-2")); err != nil {
 		t.Fatalf("Upsert s-other: %v", err)
 	}
 
-	n, err := s.DeleteByArea(ctx, "area-1")
+	n, err := s.DeleteByZone(ctx, "zone-1")
 	if err != nil {
-		t.Fatalf("DeleteByArea: %v", err)
+		t.Fatalf("DeleteByZone: %v", err)
 	}
 	if n != 3 {
-		t.Errorf("DeleteByArea returned %d want 3", n)
+		t.Errorf("DeleteByZone returned %d want 3", n)
 	}
 
-	remaining, err := s.ListByArea(ctx, "area-1")
+	remaining, err := s.ListByZone(ctx, "zone-1")
 	if err != nil {
-		t.Fatalf("ListByArea area-1: %v", err)
+		t.Fatalf("ListByZone zone-1: %v", err)
 	}
 	if len(remaining) != 0 {
-		t.Errorf("area-1 has %d rows left, want 0", len(remaining))
+		t.Errorf("zone-1 has %d rows left, want 0", len(remaining))
 	}
 
-	other, err := s.ListByArea(ctx, "area-2")
+	other, err := s.ListByZone(ctx, "zone-2")
 	if err != nil {
-		t.Fatalf("ListByArea area-2: %v", err)
+		t.Fatalf("ListByZone zone-2: %v", err)
 	}
 	if len(other) != 1 {
-		t.Errorf("area-2 has %d rows, want 1 (must survive)", len(other))
+		t.Errorf("zone-2 has %d rows, want 1 (must survive)", len(other))
 	}
 }
 

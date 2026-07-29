@@ -60,7 +60,7 @@ type Outbound struct {
 
 	// alarmBus is the daemon-level alarm event bus (nil until wired via
 	// SetAlarmBus). It is separate from the per-central buses because
-	// alarm areas are daemon-level, not central-scoped.
+	// alarm zones are daemon-level, not central-scoped.
 	alarmBus *events.Bus
 
 	mu      sync.Mutex
@@ -187,7 +187,7 @@ func (o *Outbound) subscribeCentral(bus *events.Bus, name string) {
 }
 
 // subscribeAlarm attaches the alarm-plane handlers to the daemon-level
-// alarm bus. Areas are daemon-level, so there is one shared bus (no
+// alarm bus. Zones are daemon-level, so there is one shared bus (no
 // per-central fan-out). Hidden journal entries (duress) never emit an
 // AlarmJournalAppendedEvent — the journal facade suppresses it — so the
 // journal handler forwards only visible entries; the silent duress
@@ -312,7 +312,7 @@ func (o *Outbound) onIncident(centralName string, e hmevent.IncidentRecordedEven
 
 // ---- alarm-plane handlers (run on the alarm bus goroutine) ----
 //
-// Alarm areas are daemon-level, so these carry no `central`. Each event
+// Alarm zones are daemon-level, so these carry no `central`. Each event
 // forwards under its hmevent EventType string and threads the existing
 // event allow-list; the alarm-specific detail rides the nested `alarm`
 // object so the flat envelope stays stable for datapoint/system/incident
@@ -320,7 +320,7 @@ func (o *Outbound) onIncident(centralName string, e hmevent.IncidentRecordedEven
 
 func (o *Outbound) onAlarmStateChanged(e hmevent.AlarmStateChangedEvent) {
 	o.enqueueAlarm(string(hmevent.EventTypeAlarmStateChanged), alarmPayload{
-		AreaID: e.AreaID, AreaName: e.AreaName,
+		ZoneID: e.ZoneID, ZoneName: e.ZoneName,
 		FromState: string(e.From), ToState: string(e.To),
 		Mode: string(e.Mode), ChangedBy: e.ChangedBy, Source: e.Source,
 		IncidentID: e.IncidentID,
@@ -329,7 +329,7 @@ func (o *Outbound) onAlarmStateChanged(e hmevent.AlarmStateChangedEvent) {
 
 func (o *Outbound) onAlarmTriggered(e hmevent.AlarmTriggeredEvent) {
 	o.enqueueAlarm(string(hmevent.EventTypeAlarmTriggered), alarmPayload{
-		AreaID: e.AreaID, AreaName: e.AreaName, IncidentID: e.IncidentID,
+		ZoneID: e.ZoneID, ZoneName: e.ZoneName, IncidentID: e.IncidentID,
 		SensorID: e.SensorID, SensorName: e.SensorName,
 		Cause: e.Cause, Mode: string(e.Mode),
 	})
@@ -343,14 +343,14 @@ func (o *Outbound) onAlarmNotification(e hmevent.AlarmNotificationEvent) {
 		return
 	}
 	o.enqueueAlarm(string(hmevent.EventTypeAlarmNotification), alarmPayload{
-		AreaID: e.AreaID, AreaName: e.AreaName, IncidentID: e.IncidentID,
+		ZoneID: e.ZoneID, ZoneName: e.ZoneName, IncidentID: e.IncidentID,
 		Mode: string(e.Mode), OutputID: e.OutputID, OutputName: e.OutputName,
 	})
 }
 
 func (o *Outbound) onAlarmJournalAppended(e hmevent.AlarmJournalAppendedEvent) {
 	o.enqueueAlarm(string(hmevent.EventTypeAlarmJournalAppended), alarmPayload{
-		AreaID: e.AreaID, EntryID: e.EntryID, Class: string(e.Class),
+		ZoneID: e.ZoneID, EntryID: e.EntryID, Class: string(e.Class),
 		JournalEvent: e.Event, ChangedBy: e.Actor, IncidentID: e.IncidentID,
 	})
 }
@@ -364,7 +364,7 @@ func (o *Outbound) onAlarmHealthChanged(e hmevent.AlarmHealthChangedEvent) {
 
 func (o *Outbound) onAlarmReminder(e hmevent.AlarmReminderEvent) {
 	o.enqueueAlarm(string(hmevent.EventTypeAlarmReminder), alarmPayload{
-		AreaID: e.AreaID, AreaName: e.AreaName, Mode: string(e.Mode),
+		ZoneID: e.ZoneID, ZoneName: e.ZoneName, Mode: string(e.Mode),
 	})
 }
 
@@ -373,7 +373,7 @@ func (o *Outbound) onAlarmReminder(e hmevent.AlarmReminderEvent) {
 // the WebSocket surface, so a screen watcher cannot learn duress fired.
 func (o *Outbound) onAlarmDuress(e hmevent.AlarmDuressEvent) {
 	o.enqueueAlarm(string(hmevent.EventTypeAlarmDuress), alarmPayload{
-		AreaID: e.AreaID, AreaName: e.AreaName, Verb: e.Verb,
+		ZoneID: e.ZoneID, ZoneName: e.ZoneName, Verb: e.Verb,
 		ChangedBy: e.By, Source: e.Source, IncidentID: e.IncidentID,
 	})
 }
@@ -586,8 +586,8 @@ type envelope struct {
 // tight. A duress code's secret is never present — only its identity and
 // the verb it accompanied (docs/alarm-concept.md §16).
 type alarmPayload struct {
-	AreaID       string `json:"area_id,omitempty"`
-	AreaName     string `json:"area_name,omitempty"`
+	ZoneID       string `json:"zone_id,omitempty"`
+	ZoneName     string `json:"zone_name,omitempty"`
 	FromState    string `json:"from_state,omitempty"`
 	ToState      string `json:"to_state,omitempty"`
 	Mode         string `json:"mode,omitempty"`

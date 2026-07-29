@@ -16,7 +16,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "2.56.0"
+const APIVersion = "3.3.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -60,6 +60,14 @@ const (
 	// the Diagrams view (SV03) — on this token so they stay hidden when
 	// recording is off.
 	CapabilityHistory = "history.v1"
+	// CapabilityAddonSelfUpdate is surfaced when the CCU add-on
+	// self-update platform capability check passed (ADR 0057: an
+	// add-on build AND an executable firmware installer). The SPA's
+	// add-on-update settings card gates its whole visibility on this
+	// token rather than on the shape of a GET /system/addon-update
+	// response, since that endpoint always answers 200 regardless of
+	// platform support.
+	CapabilityAddonSelfUpdate = "addon_self_update"
 )
 
 // InfoResponse is the body of `GET /api/v1/info`.
@@ -100,6 +108,9 @@ type CapabilityDetector interface {
 	// HasHistory reports whether the opt-in measurement-history feature
 	// is enabled.
 	HasHistory() bool
+	// HasAddonSelfUpdate reports whether the CCU add-on self-update
+	// platform capability check passed (ADR 0057).
+	HasAddonSelfUpdate() bool
 }
 
 // Info serves build metadata plus the daemon's wall-clock uptime.
@@ -160,6 +171,9 @@ func capabilities(d CapabilityDetector) []string {
 	}
 	if d.HasHistory() {
 		out = append(out, CapabilityHistory)
+	}
+	if d.HasAddonSelfUpdate() {
+		out = append(out, CapabilityAddonSelfUpdate)
 	}
 	return out
 }

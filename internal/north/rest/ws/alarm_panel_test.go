@@ -30,7 +30,7 @@ var alarmPanelDBOpenMu sync.Mutex
 // store bundle, wired directly as the AlarmPanelQuery facade the
 // alarm_panel.* command family consumes (it implements Engine() and
 // Stores() itself). Deliberately not a mock of the engine: the wire
-// mapping under test (alarmAreaStatus, alarmReadinessDTO,
+// mapping under test (alarmZoneStatus, alarmReadinessDTO,
 // alarmEngineError) only proves itself against real state-machine
 // transitions, not a hand-rolled stand-in that could silently drift
 // from the engine's actual behavior.
@@ -55,7 +55,7 @@ func newAlarmPanelHarness(t *testing.T) *alarmPanelHarness {
 
 	stores := alarmpkg.NewStores(db)
 	eng, err := engine.New(engine.Deps{
-		Areas:     stores.Areas,
+		Zones:     stores.Zones,
 		Sensors:   stores.Sensors,
 		State:     stores.State,
 		Incidents: stores.Incidents,
@@ -87,25 +87,25 @@ type stubbedPanelHarness struct {
 
 func (s stubbedPanelHarness) Panels() []alarmpanel.Panel { return s.panels }
 
-// seedArea persists one area config row.
-func (h *alarmPanelHarness) seedArea(id, name string, cfg engine.AreaConfig) {
+// seedZone persists one zone config row.
+func (h *alarmPanelHarness) seedZone(id, name string, cfg engine.ZoneConfig) {
 	h.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		h.t.Fatalf("marshal area config: %v", err)
+		h.t.Fatalf("marshal zone config: %v", err)
 	}
 	now := time.Now().UnixMilli()
-	if err := h.stores.Areas.Upsert(h.ctx, sqlitestore.AlarmAreaRow{
+	if err := h.stores.Zones.Upsert(h.ctx, sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
-		h.t.Fatalf("seed area: %v", err)
+		h.t.Fatalf("seed zone: %v", err)
 	}
 }
 
 // seedSensor persists one enrolled sensor row bound to a synthetic
 // channel address derived from its id (no real device is needed —
 // HandleSensorEvent is driven directly in these tests).
-func (h *alarmPanelHarness) seedSensor(id, areaID string, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
+func (h *alarmPanelHarness) seedSensor(id, zoneID string, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
 	h.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
@@ -113,7 +113,7 @@ func (h *alarmPanelHarness) seedSensor(id, areaID string, typ hmenum.AlarmSensor
 	}
 	now := time.Now().UnixMilli()
 	if err := h.stores.Sensors.Upsert(h.ctx, sqlitestore.AlarmSensorRow{
-		ID: id, AreaID: areaID, CentralName: "ccu-test", InterfaceID: "HmIP-RF",
+		ID: id, ZoneID: zoneID, CentralName: "ccu-test", InterfaceID: "HmIP-RF",
 		ChannelAddress: id + ":1", Parameter: "STATE", SensorType: typ,
 		Name: id, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -152,10 +152,10 @@ func dispatchJSON(ctx context.Context, t *testing.T, r *Router, command string, 
 	return r.Dispatch(ctx, command, raw)
 }
 
-// oneModeAreaConfig is the minimal single-mode area configuration
+// oneModeZoneConfig is the minimal single-mode zone configuration
 // shared by the dispatch tests below.
-func oneModeAreaConfig() engine.AreaConfig {
-	return engine.AreaConfig{
+func oneModeZoneConfig() engine.ZoneConfig {
+	return engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {TriggerSeconds: 60},
 		},
@@ -168,12 +168,12 @@ func oneModeAreaConfig() engine.AreaConfig {
 // resulting engine state.
 func TestAlarmPanelArmAndDisarmDispatch(t *testing.T) {
 	h := newAlarmPanelHarness(t)
-	h.seedArea("eg", "Erdgeschoss", oneModeAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", oneModeZoneConfig())
 	h.start()
 	r := h.router()
 
 	res := dispatchJSON(opCtx(), t, r, "alarm_panel.arm", map[string]any{
-		"area_id": "eg", "mode": "full", "skip_delay": true,
+		"zone_id": "eg", "mode": "full", "skip_delay": true,
 	})
 	if res.Error != nil {
 		t.Fatalf("arm: %+v", res.Error)
@@ -182,38 +182,38 @@ func TestAlarmPanelArmAndDisarmDispatch(t *testing.T) {
 	if !ok {
 		t.Fatalf("arm data type %T, want hmapi.AlarmArmAccepted", res.Data)
 	}
-	if accepted.State != string(hmenum.AlarmAreaStateArmed) {
+	if accepted.State != string(hmenum.AlarmZoneStateArmed) {
 		t.Fatalf("arm response state = %q, want armed", accepted.State)
 	}
-	if snap, ok := h.eng.Area("eg"); !ok || snap.State != hmenum.AlarmAreaStateArmed {
+	if snap, ok := h.eng.Zone("eg"); !ok || snap.State != hmenum.AlarmZoneStateArmed {
 		t.Fatalf("engine snapshot after arm = %+v", snap)
 	}
 
-	res = dispatchJSON(opCtx(), t, r, "alarm_panel.disarm", map[string]any{"area_id": "eg"})
+	res = dispatchJSON(opCtx(), t, r, "alarm_panel.disarm", map[string]any{"zone_id": "eg"})
 	if res.Error != nil {
 		t.Fatalf("disarm: %+v", res.Error)
 	}
 	data, ok := res.Data.(map[string]any)
-	if !ok || data["disarmed"] != true || data["area_id"] != "eg" {
+	if !ok || data["disarmed"] != true || data["zone_id"] != "eg" {
 		t.Fatalf("disarm data = %+v", res.Data)
 	}
-	if snap, ok := h.eng.Area("eg"); !ok || snap.State != hmenum.AlarmAreaStateDisarmed {
+	if snap, ok := h.eng.Zone("eg"); !ok || snap.State != hmenum.AlarmZoneStateDisarmed {
 		t.Fatalf("engine snapshot after disarm = %+v", snap)
 	}
 }
 
-// TestAlarmPanelArmUnknownAreaIsNotFound asserts the engine's
-// ErrUnknownArea maps to the not_found command error.
-func TestAlarmPanelArmUnknownAreaIsNotFound(t *testing.T) {
+// TestAlarmPanelArmUnknownZoneIsNotFound asserts the engine's
+// ErrUnknownZone maps to the not_found command error.
+func TestAlarmPanelArmUnknownZoneIsNotFound(t *testing.T) {
 	h := newAlarmPanelHarness(t)
 	h.start()
 	r := h.router()
 
 	res := dispatchJSON(opCtx(), t, r, "alarm_panel.arm", map[string]any{
-		"area_id": "missing", "mode": "full",
+		"zone_id": "missing", "mode": "full",
 	})
 	if res.Error == nil || res.Error.Code != "not_found" {
-		t.Fatalf("arm unknown area = %+v, want not_found", res.Error)
+		t.Fatalf("arm unknown zone = %+v, want not_found", res.Error)
 	}
 }
 
@@ -223,7 +223,7 @@ func TestAlarmPanelArmUnknownAreaIsNotFound(t *testing.T) {
 // flag — the same real-transition contract as the arm/disarm test.
 func TestAlarmPanelSilenceDispatch(t *testing.T) {
 	h := newAlarmPanelHarness(t)
-	h.seedArea("eg", "Erdgeschoss", oneModeAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", oneModeZoneConfig())
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -231,17 +231,17 @@ func TestAlarmPanelSilenceDispatch(t *testing.T) {
 	r := h.router()
 
 	if res := dispatchJSON(opCtx(), t, r, "alarm_panel.arm", map[string]any{
-		"area_id": "eg", "mode": "full", "skip_delay": true,
+		"zone_id": "eg", "mode": "full", "skip_delay": true,
 	}); res.Error != nil {
 		t.Fatalf("arm: %+v", res.Error)
 	}
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	if snap, ok := h.eng.Area("eg"); !ok || snap.State != hmenum.AlarmAreaStateTriggered {
+	if snap, ok := h.eng.Zone("eg"); !ok || snap.State != hmenum.AlarmZoneStateTriggered {
 		t.Fatalf("expected triggered after sensor activation, got %+v", snap)
 	}
 
-	res := dispatchJSON(opCtx(), t, r, "alarm_panel.silence", map[string]any{"area_id": "eg"})
+	res := dispatchJSON(opCtx(), t, r, "alarm_panel.silence", map[string]any{"zone_id": "eg"})
 	if res.Error != nil {
 		t.Fatalf("silence: %+v", res.Error)
 	}
@@ -249,28 +249,28 @@ func TestAlarmPanelSilenceDispatch(t *testing.T) {
 	if !ok || data["silenced"] != true {
 		t.Fatalf("silence data = %+v", res.Data)
 	}
-	if snap, ok := h.eng.Area("eg"); !ok || !snap.IncidentSilenced {
+	if snap, ok := h.eng.Zone("eg"); !ok || !snap.IncidentSilenced {
 		t.Fatalf("expected incident silenced on engine snapshot, got %+v", snap)
 	}
 }
 
 // TestAlarmPanelSilenceWithoutIncidentSucceeds pins the engine's S3/S6
 // "silence is ungated" invariant (engine.Engine.silenceLocked): unlike
-// acknowledge, silencing an area with no open incident is not an
+// acknowledge, silencing an zone with no open incident is not an
 // error — it still issues a defensive StopAll and succeeds, since
 // stopping more than strictly necessary is always the safe direction.
 func TestAlarmPanelSilenceWithoutIncidentSucceeds(t *testing.T) {
 	h := newAlarmPanelHarness(t)
-	h.seedArea("eg", "Erdgeschoss", oneModeAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", oneModeZoneConfig())
 	h.start()
 	r := h.router()
 
-	res := dispatchJSON(opCtx(), t, r, "alarm_panel.silence", map[string]any{"area_id": "eg"})
+	res := dispatchJSON(opCtx(), t, r, "alarm_panel.silence", map[string]any{"zone_id": "eg"})
 	if res.Error != nil {
 		t.Fatalf("silence without incident = %+v, want success", res.Error)
 	}
 	data, ok := res.Data.(map[string]any)
-	if !ok || data["silenced"] != true || data["area_id"] != "eg" {
+	if !ok || data["silenced"] != true || data["zone_id"] != "eg" {
 		t.Fatalf("silence data = %+v", res.Data)
 	}
 }
@@ -280,11 +280,11 @@ func TestAlarmPanelSilenceWithoutIncidentSucceeds(t *testing.T) {
 // acknowledge, unlike silence, requires a live incident.
 func TestAlarmPanelAcknowledgeWithoutIncidentIsConflict(t *testing.T) {
 	h := newAlarmPanelHarness(t)
-	h.seedArea("eg", "Erdgeschoss", oneModeAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", oneModeZoneConfig())
 	h.start()
 	r := h.router()
 
-	res := dispatchJSON(opCtx(), t, r, "alarm_panel.acknowledge", map[string]any{"area_id": "eg"})
+	res := dispatchJSON(opCtx(), t, r, "alarm_panel.acknowledge", map[string]any{"zone_id": "eg"})
 	if res.Error == nil || res.Error.Code != "conflict" {
 		t.Fatalf("acknowledge without incident = %+v, want conflict", res.Error)
 	}
@@ -292,11 +292,11 @@ func TestAlarmPanelAcknowledgeWithoutIncidentIsConflict(t *testing.T) {
 
 // TestAlarmPanelSilenceAllAndAcknowledgeDispatch covers the two
 // remaining write verbs against a live incident: acknowledge marks it
-// seen, silence_all silences every area's incident (here, the one
-// area) in a single call.
+// seen, silence_all silences every zone's incident (here, the one
+// zone) in a single call.
 func TestAlarmPanelSilenceAllAndAcknowledgeDispatch(t *testing.T) {
 	h := newAlarmPanelHarness(t)
-	h.seedArea("eg", "Erdgeschoss", oneModeAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", oneModeZoneConfig())
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -304,13 +304,13 @@ func TestAlarmPanelSilenceAllAndAcknowledgeDispatch(t *testing.T) {
 	r := h.router()
 
 	if res := dispatchJSON(opCtx(), t, r, "alarm_panel.arm", map[string]any{
-		"area_id": "eg", "mode": "full", "skip_delay": true,
+		"zone_id": "eg", "mode": "full", "skip_delay": true,
 	}); res.Error != nil {
 		t.Fatalf("arm: %+v", res.Error)
 	}
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	res := dispatchJSON(opCtx(), t, r, "alarm_panel.acknowledge", map[string]any{"area_id": "eg"})
+	res := dispatchJSON(opCtx(), t, r, "alarm_panel.acknowledge", map[string]any{"zone_id": "eg"})
 	if res.Error != nil {
 		t.Fatalf("acknowledge: %+v", res.Error)
 	}
@@ -319,7 +319,7 @@ func TestAlarmPanelSilenceAllAndAcknowledgeDispatch(t *testing.T) {
 	if res.Error != nil {
 		t.Fatalf("silence_all: %+v", res.Error)
 	}
-	if snap, ok := h.eng.Area("eg"); !ok || !snap.IncidentSilenced {
+	if snap, ok := h.eng.Zone("eg"); !ok || !snap.IncidentSilenced {
 		t.Fatalf("expected incident silenced via silence_all, got %+v", snap)
 	}
 }
@@ -331,11 +331,11 @@ var alarmPanelWriteCommands = []struct {
 	name string
 	args string
 }{
-	{"alarm_panel.arm", `{"area_id":"eg","mode":"full"}`},
-	{"alarm_panel.disarm", `{"area_id":"eg"}`},
-	{"alarm_panel.silence", `{"area_id":"eg"}`},
+	{"alarm_panel.arm", `{"zone_id":"eg","mode":"full"}`},
+	{"alarm_panel.disarm", `{"zone_id":"eg"}`},
+	{"alarm_panel.silence", `{"zone_id":"eg"}`},
 	{"alarm_panel.silence_all", `{}`},
-	{"alarm_panel.acknowledge", `{"area_id":"eg"}`},
+	{"alarm_panel.acknowledge", `{"zone_id":"eg"}`},
 }
 
 // TestAlarmPanelWriteCommandsRequireOperatorRole mirrors the
@@ -372,13 +372,13 @@ func TestAlarmPanelWriteCommandsRequireOperatorRole(t *testing.T) {
 
 // TestAlarmPanelStateAndReadinessDispatch exercises the two read
 // commands the task calls out explicitly: alarm_panel.state renders
-// every configured area (no role gate — reads stay open to any
+// every configured zone (no role gate — reads stay open to any
 // authenticated caller, mirrored here with a bare context), and
-// alarm_panel.readiness renders one area's per-mode verdict and
-// requires area_id.
+// alarm_panel.readiness renders one zone's per-mode verdict and
+// requires zone_id.
 func TestAlarmPanelStateAndReadinessDispatch(t *testing.T) {
 	h := newAlarmPanelHarness(t)
-	h.seedArea("eg", "Erdgeschoss", oneModeAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", oneModeZoneConfig())
 	h.start()
 	r := h.router()
 
@@ -390,31 +390,31 @@ func TestAlarmPanelStateAndReadinessDispatch(t *testing.T) {
 	if !ok {
 		t.Fatalf("state data type %T, want map[string]any", res.Data)
 	}
-	areas, ok := data["areas"].([]hmapi.AlarmAreaStatus)
-	if !ok || len(areas) != 1 {
-		t.Fatalf("areas = %+v", data["areas"])
+	zones, ok := data["zones"].([]hmapi.AlarmZoneStatus)
+	if !ok || len(zones) != 1 {
+		t.Fatalf("zones = %+v", data["zones"])
 	}
-	if areas[0].ID != "eg" || areas[0].State != string(hmenum.AlarmAreaStateDisarmed) {
-		t.Fatalf("area status = %+v, want id=eg state=disarmed", areas[0])
+	if zones[0].ID != "eg" || zones[0].State != string(hmenum.AlarmZoneStateDisarmed) {
+		t.Fatalf("zone status = %+v, want id=eg state=disarmed", zones[0])
 	}
 
-	res = dispatchJSON(context.Background(), t, r, "alarm_panel.readiness", map[string]any{"area_id": "eg"})
+	res = dispatchJSON(context.Background(), t, r, "alarm_panel.readiness", map[string]any{"zone_id": "eg"})
 	if res.Error != nil {
 		t.Fatalf("readiness: %+v", res.Error)
 	}
 	rdata, ok := res.Data.(map[string]any)
-	if !ok || rdata["area_id"] != "eg" {
+	if !ok || rdata["zone_id"] != "eg" {
 		t.Fatalf("readiness data = %+v", res.Data)
 	}
 
 	res = dispatchJSON(context.Background(), t, r, "alarm_panel.readiness", map[string]any{})
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
-		t.Fatalf("readiness without area_id = %+v, want bad_request", res.Error)
+		t.Fatalf("readiness without zone_id = %+v, want bad_request", res.Error)
 	}
 
-	res = dispatchJSON(context.Background(), t, r, "alarm_panel.readiness", map[string]any{"area_id": "missing"})
+	res = dispatchJSON(context.Background(), t, r, "alarm_panel.readiness", map[string]any{"zone_id": "missing"})
 	if res.Error == nil || res.Error.Code != "not_found" {
-		t.Fatalf("readiness on unknown area = %+v, want not_found", res.Error)
+		t.Fatalf("readiness on unknown zone = %+v, want not_found", res.Error)
 	}
 }
 
@@ -430,7 +430,7 @@ func TestAlarmPanelPanelsDispatchMapsCodePolicyFlags(t *testing.T) {
 		panels: []alarmpanel.Panel{
 			{
 				UniqueID:           alarmpanel.PanelUniqueID("eg"),
-				AreaID:             "eg",
+				ZoneID:             "eg",
 				Name:               "Erdgeschoss",
 				State:              "disarmed",
 				Available:          true,
@@ -455,8 +455,8 @@ func TestAlarmPanelPanelsDispatchMapsCodePolicyFlags(t *testing.T) {
 		t.Fatalf("panels = %+v", data["panels"])
 	}
 	p := panels[0]
-	if p.AreaID != "eg" {
-		t.Fatalf("area_id = %q, want eg", p.AreaID)
+	if p.ZoneID != "eg" {
+		t.Fatalf("zone_id = %q, want eg", p.ZoneID)
 	}
 	if !p.CodeArmRequired {
 		t.Errorf("code_arm_required = false, want true")

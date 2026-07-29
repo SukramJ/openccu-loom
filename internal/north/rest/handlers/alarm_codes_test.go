@@ -182,11 +182,11 @@ func TestCreateAlarmCode_KeypadSlotBindingRoundTrips(t *testing.T) {
 	t.Parallel()
 	store, admin := newAlarmCodesFixture(t)
 
-	binding := json.RawMessage(`{"central":"ccu1","device_address":"0001ABCD","slot":1,"arm_mode":"full","area_id":"eg"}`)
+	binding := json.RawMessage(`{"central":"ccu1","device_address":"0001ABCD","slot":1,"arm_mode":"full","zone_id":"eg"}`)
 	body := alarmCodeRequestBody(t, hmapi.AlarmCodeRequest{
 		Name: "Front Door Slot 1", Kind: "keypad_slot",
 		Perms: hmapi.AlarmCodePerms{Arm: true, Disarm: true},
-		Areas: []string{"eg"}, Binding: binding, Enabled: true,
+		Zones: []string{"eg"}, Binding: binding, Enabled: true,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/alarm/codes", body)
 	w := httptest.NewRecorder()
@@ -199,8 +199,8 @@ func TestCreateAlarmCode_KeypadSlotBindingRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if created.Kind != "keypad_slot" || len(created.Areas) != 1 || created.Areas[0] != "eg" {
-		t.Errorf("created = %+v, want kind=keypad_slot areas=[eg]", created)
+	if created.Kind != "keypad_slot" || len(created.Zones) != 1 || created.Zones[0] != "eg" {
+		t.Errorf("created = %+v, want kind=keypad_slot zones=[eg]", created)
 	}
 	if string(created.Binding) != string(binding) {
 		t.Errorf("binding = %s, want %s", created.Binding, binding)
@@ -274,7 +274,7 @@ func TestPutAlarmCode_UnknownID_Returns404(t *testing.T) {
 }
 
 // TestPutAlarmCode_EmptyPINKeepsExistingHash pins the update-without-PIN
-// contract: an operator editing a code's metadata (name/perms/areas)
+// contract: an operator editing a code's metadata (name/perms/zones)
 // must not have to re-enter the PIN, and the stored hash must survive
 // the round trip unchanged.
 func TestPutAlarmCode_EmptyPINKeepsExistingHash(t *testing.T) {
@@ -446,7 +446,7 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "keypad_slot valid binding",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "keypad_slot",
-				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"area_id":"eg","arm_mode":"full"}`),
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"zone_id":"eg","arm_mode":"full"}`),
 			},
 		},
 		{
@@ -466,7 +466,7 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "keypad_slot unknown binding field is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "keypad_slot",
-				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"area_id":"eg","typo_field":"x"}`),
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"zone_id":"eg","typo_field":"x"}`),
 			},
 			wantErr: true,
 		},
@@ -474,7 +474,7 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "keypad_slot missing device_address is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "keypad_slot",
-				Binding: json.RawMessage(`{"slot":1,"area_id":"eg"}`),
+				Binding: json.RawMessage(`{"slot":1,"zone_id":"eg"}`),
 			},
 			wantErr: true,
 		},
@@ -482,7 +482,7 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "keypad_slot slot 0 is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "keypad_slot",
-				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":0,"area_id":"eg"}`),
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":0,"zone_id":"eg"}`),
 			},
 			wantErr: true,
 		},
@@ -490,12 +490,12 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "keypad_slot slot 9 is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "keypad_slot",
-				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":9,"area_id":"eg"}`),
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":9,"zone_id":"eg"}`),
 			},
 			wantErr: true,
 		},
 		{
-			name: "keypad_slot missing area_id is rejected",
+			name: "keypad_slot missing zone_id is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "keypad_slot",
 				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1}`),
@@ -506,28 +506,28 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "remote_key valid binding with disarm action",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","area_id":"eg"}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","zone_id":"eg"}`),
 			},
 		},
 		{
 			name: "remote_key valid binding with arm:<mode> action",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_LONG","action":"arm:full","area_id":"eg"}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_LONG","action":"arm:full","zone_id":"eg"}`),
 			},
 		},
 		{
 			name: "remote_key valid binding with bare arm: action",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"arm:","area_id":"eg"}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"arm:","zone_id":"eg"}`),
 			},
 		},
 		{
 			name: "remote_key unsupported parameter PRESS is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS","action":"disarm","area_id":"eg"}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS","action":"disarm","zone_id":"eg"}`),
 			},
 			wantErr: true,
 		},
@@ -535,12 +535,12 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "remote_key missing channel_address is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"parameter":"PRESS_SHORT","action":"disarm","area_id":"eg"}`),
+				Binding: json.RawMessage(`{"parameter":"PRESS_SHORT","action":"disarm","zone_id":"eg"}`),
 			},
 			wantErr: true,
 		},
 		{
-			name: "remote_key missing area_id is rejected",
+			name: "remote_key missing zone_id is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
 				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm"}`),
@@ -551,7 +551,7 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "remote_key unknown action is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"bogus","area_id":"eg"}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"bogus","zone_id":"eg"}`),
 			},
 			wantErr: true,
 		},
@@ -559,7 +559,7 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "remote_key unknown binding field is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","area_id":"eg","typo":"x"}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","zone_id":"eg","typo":"x"}`),
 			},
 			wantErr: true,
 		},
@@ -575,7 +575,7 @@ func TestAlarmCodeRowFromReq_Validation(t *testing.T) {
 			name: "remote_key trailing data after binding document is rejected",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","area_id":"eg"}{}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS_SHORT","action":"disarm","zone_id":"eg"}{}`),
 			},
 			wantErr: true,
 		},
@@ -621,7 +621,7 @@ func TestCreateAlarmCode_InvalidBinding_Returns422(t *testing.T) {
 			name: "remote_key unsupported parameter",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "remote_key",
-				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS","action":"disarm","area_id":"eg"}`),
+				Binding: json.RawMessage(`{"channel_address":"0002ABCD:1","parameter":"PRESS","action":"disarm","zone_id":"eg"}`),
 			},
 			errContains: "PRESS_SHORT or PRESS_LONG",
 		},
@@ -629,7 +629,7 @@ func TestCreateAlarmCode_InvalidBinding_Returns422(t *testing.T) {
 			name: "keypad_slot unknown field",
 			req: hmapi.AlarmCodeRequest{
 				Name: "x", Kind: "keypad_slot",
-				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"area_id":"eg","typo_field":"x"}`),
+				Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":1,"zone_id":"eg","typo_field":"x"}`),
 			},
 			errContains: "keypad_slot binding",
 		},
@@ -690,7 +690,7 @@ func TestPutAlarmCode_InvalidBinding_Returns422(t *testing.T) {
 
 	body := alarmCodeRequestBody(t, hmapi.AlarmCodeRequest{
 		Name: "Front Door", Kind: "keypad_slot",
-		Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":11,"area_id":"eg"}`),
+		Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":11,"zone_id":"eg"}`),
 	})
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/alarm/codes/"+created.ID, body)
 	req = withChiParam(req, "id", created.ID)
@@ -739,7 +739,7 @@ func TestAlarmCodeStoreAdmin_OnChangeHook_FiresOnceOnSuccessNotOnValidationFailu
 	// Rejected update: no additional hook fire.
 	_, _, err = admin.UpdateCode(ctx, created.ID, hmapi.AlarmCodeRequest{
 		Name: "x", Kind: "keypad_slot",
-		Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":99,"area_id":"eg"}`),
+		Binding: json.RawMessage(`{"device_address":"0001ABCD","slot":99,"zone_id":"eg"}`),
 	})
 	if err == nil || !errors.Is(err, ErrInvalidAlarmCode) {
 		t.Fatalf("UpdateCode err = %v, want ErrInvalidAlarmCode", err)

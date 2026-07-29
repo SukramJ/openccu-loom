@@ -57,6 +57,8 @@ func ListAlarmOutputCandidates(p AlarmPanel, labels ParameterLabeler) http.Handl
 				ChannelAddress:           c.ChannelAddress,
 				ChannelNo:                c.ChannelNo,
 				ChannelName:              c.ChannelName,
+				Rooms:                    c.Rooms,
+				Functions:                c.Functions,
 				Classes:                  classes,
 				Kind:                     c.Kind,
 				AvailableTones:           c.AvailableTones,

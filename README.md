@@ -369,6 +369,9 @@ license texts live under [`licenses/`](./licenses/).
 expectations, and the release workflow. Before opening a PR, please
 open an issue so we agree on scope, especially when the change touches
 the wire layer or the device profile catalogue.
+[`AI_POLICY.md`](./AI_POLICY.md) sets the rules for AI-assisted
+contributions: AI as a tool is welcome, autonomous agent submissions
+are not.
 
 ## Development
 

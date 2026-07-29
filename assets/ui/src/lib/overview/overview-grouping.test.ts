@@ -148,6 +148,20 @@ describe("filterDevices", () => {
     });
     expect(filtered.map((d) => d.address)).toEqual(["AAA1", "AAA2"]);
   });
+
+  it("filters by area membership via areaIdOf, scoped per central", () => {
+    // "Living room" maps to area "up" on ccu1 but is unassigned on ccu2 —
+    // the area filter must not merge the two centrals' rooms.
+    const areaIdOf = (central: string, room: string) =>
+      central === "ccu1" && room === "Living room" ? "up" : undefined;
+    const filtered = filterDevices(fleet, { ...defaultOverviewFilters, area: "up" }, areaIdOf);
+    expect(filtered.map((d) => d.address)).toEqual(["AAA1", "AAA3"]);
+  });
+
+  it("area filter with no areaIdOf callback matches nothing (fails closed)", () => {
+    const filtered = filterDevices(fleet, { ...defaultOverviewFilters, area: "up" });
+    expect(filtered).toEqual([]);
+  });
 });
 
 describe("buildOverviewGroups — empty-group collapse", () => {

@@ -30,7 +30,7 @@ func lastStop(t *testing.T, o *fakeOutputs) stopCall {
 
 func TestSilence_DuringTriggeredStopsOutputsButStaysTriggered(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
@@ -46,7 +46,7 @@ func TestSilence_DuringTriggeredStopsOutputsButStaysTriggered(t *testing.T) {
 	if n := h.outputs.stopCount(); n < 1 {
 		t.Fatalf("StopAll calls = %d, want >= 1", n)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	got, ok, err := h.incidents.Get(h.ctx, inc.ID)
 	if err != nil || !ok {
@@ -62,11 +62,11 @@ func TestSilence_DuringTriggeredStopsOutputsButStaysTriggered(t *testing.T) {
 
 func TestSilence_SuppressesFurtherRetriggerCycles(t *testing.T) {
 	h := newHarness(t)
-	cfg := defaultAreaConfig()
+	cfg := defaultZoneConfig()
 	full := cfg.Modes[hmenum.AlarmModeFull]
 	full.MaxRetriggerCycles = 3
 	cfg.Modes[hmenum.AlarmModeFull] = full
-	h.seedArea("eg", "Erdgeschoss", cfg)
+	h.seedZone("eg", "Erdgeschoss", cfg)
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -86,7 +86,7 @@ func TestSilence_SuppressesFurtherRetriggerCycles(t *testing.T) {
 	if n := h.outputs.fireCount(); n != 1 {
 		t.Fatalf("FireCycle count after silenced window elapsed = %d, want 1 (no retrigger)", n)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if _, ok := h.openIncident("eg"); ok {
 		t.Fatal("incident should be closed after post-trigger")
 	}
@@ -94,7 +94,7 @@ func TestSilence_SuppressesFurtherRetriggerCycles(t *testing.T) {
 
 func TestSilence_WithoutIncidentStillStopsOutputs(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	if err := h.eng.Silence(h.ctx, "eg", "tester", "test"); err != nil {
@@ -104,15 +104,15 @@ func TestSilence_WithoutIncidentStillStopsOutputs(t *testing.T) {
 		t.Fatalf("missing silence_requested journal entry; got %v", h.journal.events())
 	}
 	stop := lastStop(t, h.outputs)
-	if stop.AreaID != "eg" || stop.IncidentID != 0 {
-		t.Fatalf("stop call = %+v, want area eg incident 0", stop)
+	if stop.ZoneID != "eg" || stop.IncidentID != 0 {
+		t.Fatalf("stop call = %+v, want zone eg incident 0", stop)
 	}
 }
 
-func TestSilence_AllSilencesEveryTriggeredArea(t *testing.T) {
+func TestSilence_AllSilencesEveryTriggeredZone(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
-	h.seedArea("og", "Obergeschoss", defaultAreaConfig())
+	h.seedStandardZone()
+	h.seedZone("og", "Obergeschoss", defaultZoneConfig())
 	h.seedSensor("og-window", "og", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -152,7 +152,7 @@ func TestSilence_AllSilencesEveryTriggeredArea(t *testing.T) {
 
 func TestDisarm_FromTriggeredClosesIncidentAndClearsBypass(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	h.eng.HandleSensorEvent(h.ctx, "door", true)
@@ -160,13 +160,13 @@ func TestDisarm_FromTriggeredClosesIncidentAndClearsBypass(t *testing.T) {
 		t.Fatalf("force arm: %v", err)
 	}
 	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if got := sortedStrings(h.mustSnapshot("eg").Bypassed); len(got) != 1 || got[0] != "door" {
 		t.Fatalf("bypassed before trigger = %v, want [door]", got)
 	}
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	inc, ok := h.openIncident("eg")
 	if !ok {
 		t.Fatal("expected an open incident")
@@ -175,7 +175,7 @@ func TestDisarm_FromTriggeredClosesIncidentAndClearsBypass(t *testing.T) {
 	if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
 		t.Fatalf("disarm: %v", err)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 	if n := h.outputs.stopCount(); n < 1 {
 		t.Fatalf("StopAll calls = %d, want >= 1", n)
 	}
@@ -194,9 +194,9 @@ func TestDisarm_FromTriggeredClosesIncidentAndClearsBypass(t *testing.T) {
 
 func TestDisarm_OnDisarmedIsIdempotent(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 
 	before := len(h.journal.events())
 	if err := h.eng.Disarm(h.ctx, "eg", "tester", "test"); err != nil {
@@ -206,17 +206,17 @@ func TestDisarm_OnDisarmedIsIdempotent(t *testing.T) {
 	if after != before {
 		t.Fatalf("journal grew from %d to %d entries on a no-op disarm", before, after)
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateDisarmed)
+	h.wantState("eg", hmenum.AlarmZoneStateDisarmed)
 }
 
 func TestAcknowledge_WithIncidentJournalsWithoutStateChange(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	if err := h.eng.Acknowledge(h.ctx, "eg", "tester", "test"); err != nil {
 		t.Fatalf("acknowledge: %v", err)
@@ -224,12 +224,12 @@ func TestAcknowledge_WithIncidentJournalsWithoutStateChange(t *testing.T) {
 	if !h.journal.has("acknowledged") {
 		t.Fatalf("missing acknowledged journal entry; got %v", h.journal.events())
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 }
 
 func TestAcknowledge_WithoutIncidentReturnsError(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 
 	err := h.eng.Acknowledge(h.ctx, "eg", "tester", "test")
@@ -240,14 +240,14 @@ func TestAcknowledge_WithoutIncidentReturnsError(t *testing.T) {
 
 func TestOutputs_FireFailureIsJournaledNotFailStop(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 
 	h.outputs.fireErr = errors.New("driver unavailable")
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if !h.journal.has("output_fire_failed") {
 		t.Fatalf("missing output_fire_failed journal entry; got %v", h.journal.events())
 	}
@@ -255,7 +255,7 @@ func TestOutputs_FireFailureIsJournaledNotFailStop(t *testing.T) {
 
 func TestOutputs_StopFailureIsJournaledNotFailStop(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea()
+	h.seedStandardZone()
 	h.start()
 	h.armFull()
 

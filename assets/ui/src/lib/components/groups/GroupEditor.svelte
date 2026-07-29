@@ -21,6 +21,7 @@
   import Switch from "$lib/components/ui/Switch.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { areasStore } from "$lib/stores/areas.svelte";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -54,10 +55,15 @@
   // Picker UI state.
   let query = $state("");
   let roomFilter = $state<string | null>(null);
+  // Area = an operator-defined grouping ABOVE CCU rooms (settings/
+  // RoomsFunctionsAdmin.svelte), single-select like roomFilter. Hidden
+  // entirely when no areas are defined.
+  let areaFilter = $state<string | null>(null);
   let selectedOnly = $state(false);
   let openDevices = $state<Set<string>>(new Set());
 
   onMount(async () => {
+    areasStore.ensureLoaded();
     try {
       if (!isEdit) {
         types = await api.groupTypes(central);
@@ -119,6 +125,7 @@
     typeId = next;
     selected = new Set();
     roomFilter = null;
+    areaFilter = null;
     query = "";
     selectedOnly = false;
     await loadMembers(next);
@@ -189,6 +196,9 @@
     const q = query.trim().toLowerCase();
     return devices.filter((g) => {
       if (roomFilter && !g.rooms.includes(roomFilter)) return false;
+      if (areaFilter && !g.rooms.some((r) => areasStore.areaIdOf(central, r) === areaFilter)) {
+        return false;
+      }
       if (selectedOnly && !g.channels.some((c) => selected.has(c.address)))
         return false;
       if (q) {
@@ -430,6 +440,19 @@
                     onclick={() => (roomFilter = roomFilter === room ? null : room)}
                   >
                     {room}
+                  </button>
+                {/each}
+                {#each areasStore.areas as a (a.id)}
+                  <button
+                    type="button"
+                    class="rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {areaFilter === a.id
+                      ? 'border-[var(--ha-primary-color)] bg-[var(--ha-primary-color)]/10 text-[var(--ha-primary-color)]'
+                      : 'border-[var(--ha-divider-color)] text-[var(--ha-secondary-text-color)] hover:bg-[var(--ha-secondary-background-color)]'}"
+                    aria-pressed={areaFilter === a.id}
+                    title={t("devicelist.area")}
+                    onclick={() => (areaFilter = areaFilter === a.id ? null : a.id)}
+                  >
+                    {a.name}
                   </button>
                 {/each}
                 <button

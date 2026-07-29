@@ -18,10 +18,10 @@ import (
 // escalation; a restore mid pre-alarm phase re-enters as a fresh full
 // trigger, never the pre-alarm phase itself.
 
-// preAlarmAreaConfig is the standard test area with a 10s pre-alarm
+// preAlarmZoneConfig is the standard test zone with a 10s pre-alarm
 // phase ahead of full's 60s trigger window.
-func preAlarmAreaConfig() engine.AreaConfig {
-	cfg := defaultAreaConfig()
+func preAlarmZoneConfig() engine.ZoneConfig {
+	cfg := defaultZoneConfig()
 	full := cfg.Modes[hmenum.AlarmModeFull]
 	full.PreAlarmSeconds = 10
 	full.TriggerSeconds = 60
@@ -29,9 +29,9 @@ func preAlarmAreaConfig() engine.AreaConfig {
 	return cfg
 }
 
-func seedPreAlarmArea(h *harness) {
+func seedPreAlarmZone(h *harness) {
 	h.t.Helper()
-	h.seedArea("eg", "Erdgeschoss", preAlarmAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", preAlarmZoneConfig())
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 	})
@@ -39,12 +39,12 @@ func seedPreAlarmArea(h *harness) {
 
 func TestPreAlarm_TwoPhaseEscalatesToTheFullPolicyAfterTheWindow(t *testing.T) {
 	h := newHarness(t)
-	seedPreAlarmArea(h)
+	seedPreAlarmZone(h)
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if n := h.outputs.fireCount(); n != 1 {
 		t.Fatalf("FireCycle count in the pre-alarm phase = %d, want 1", n)
 	}
@@ -56,7 +56,7 @@ func TestPreAlarm_TwoPhaseEscalatesToTheFullPolicyAfterTheWindow(t *testing.T) {
 	}
 
 	h.advance(10 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if n := h.outputs.fireCount(); n != 2 {
 		t.Fatalf("FireCycle count after escalation = %d, want 2", n)
 	}
@@ -68,17 +68,17 @@ func TestPreAlarm_TwoPhaseEscalatesToTheFullPolicyAfterTheWindow(t *testing.T) {
 	}
 
 	h.advance(60 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 }
 
 func TestPreAlarm_SilenceDuringThePreAlarmPhaseCancelsTheFullEscalation(t *testing.T) {
 	h := newHarness(t)
-	seedPreAlarmArea(h)
+	seedPreAlarmZone(h)
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	if err := h.eng.Silence(h.ctx, "eg", "tester", "test"); err != nil {
 		t.Fatalf("silence: %v", err)
@@ -91,7 +91,7 @@ func TestPreAlarm_SilenceDuringThePreAlarmPhaseCancelsTheFullEscalation(t *testi
 	if !h.journal.has("pre_alarm_silenced") {
 		t.Fatalf("missing pre_alarm_silenced journal entry; got %v", h.journal.events())
 	}
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 	if _, ok := h.openIncident("eg"); ok {
 		t.Fatal("incident should be closed once the pre-alarm phase cancels")
 	}
@@ -99,16 +99,16 @@ func TestPreAlarm_SilenceDuringThePreAlarmPhaseCancelsTheFullEscalation(t *testi
 
 func TestPreAlarm_RestoreDuringThePhaseEscalatesAsAFreshFullTriggerConservatively(t *testing.T) {
 	h := newHarness(t)
-	seedPreAlarmArea(h)
+	seedPreAlarmZone(h)
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 
 	h.restart(2 * time.Second) // still inside the 10s pre-alarm window
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if !h.journal.has("pre_alarm_restored_as_full") {
 		t.Fatalf("missing pre_alarm_restored_as_full journal entry; got %v", h.journal.events())
 	}
@@ -126,20 +126,20 @@ func TestPreAlarm_RestoreDuringThePhaseEscalatesAsAFreshFullTriggerConservativel
 	// The fresh window is the mode's full TriggerSeconds (60s), not the
 	// remaining pre-alarm time.
 	h.advance(59 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	h.advance(1 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 }
 
 func TestPreAlarm_ZeroSecondsSkipsThePreAlarmPhase(t *testing.T) {
 	h := newHarness(t)
-	h.seedStandardArea() // full mode has no PreAlarmSeconds configured
+	h.seedStandardZone() // full mode has no PreAlarmSeconds configured
 	h.start()
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "window", true)
 
-	h.wantState("eg", hmenum.AlarmAreaStateTriggered)
+	h.wantState("eg", hmenum.AlarmZoneStateTriggered)
 	if fire := h.outputs.lastFire(t); fire.Opts.PreAlarm {
 		t.Fatalf("Opts.PreAlarm = %v, want false when PreAlarmSeconds is unset", fire.Opts.PreAlarm)
 	}

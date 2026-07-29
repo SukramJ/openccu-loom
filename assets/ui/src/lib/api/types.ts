@@ -431,6 +431,13 @@ export type CentralLinksReport = {
 export type RoomEntry = components["schemas"]["RoomEntry"];
 export type FunctionEntry = components["schemas"]["FunctionEntry"];
 
+// Area/AreaRoomRef re-exported from generated schema. An Area is an
+// operator-defined room grouping ABOVE CCU rooms (a floor, a shed, a
+// terrace roof) — distinct from alarm zones. One area per room; rooms
+// are (central, room) pairs (AreaRoomRef).
+export type Area = components["schemas"]["Area"];
+export type AreaRoomRef = components["schemas"]["AreaRoomRef"];
+
 // UserListEntry re-exported from generated schema — shapes match.
 export type UserListEntry = components["schemas"]["UserListEntry"];
 
@@ -515,13 +522,13 @@ export type EnergyResponse = components["schemas"]["EnergyResponse"];
 // the alarm-panel schemas served under /api/v1/alarm/*. All re-exported
 // from the generated contract so the SPA tracks the spec automatically.
 
-// One armable area (partition) — config-level identity + ordering.
-export type AlarmArea = components["schemas"]["AlarmArea"];
-// Free-form engine-owned per-area configuration document.
-export type AlarmAreaConfig = components["schemas"]["AlarmAreaConfig"];
-// One area's live status (state machine + incident + countdown +
+// One armable zone (partition) — config-level identity + ordering.
+export type AlarmZone = components["schemas"]["AlarmZone"];
+// Free-form engine-owned per-zone configuration document.
+export type AlarmZoneConfig = components["schemas"]["AlarmZoneConfig"];
+// One zone's live status (state machine + incident + countdown +
 // per-mode readiness), returned by GET /alarm/state.
-export type AlarmAreaStatus = components["schemas"]["AlarmAreaStatus"];
+export type AlarmZoneStatus = components["schemas"]["AlarmZoneStatus"];
 // One enrolled sensor input (door/window/motion/tamper/hazard/panic).
 export type AlarmSensor = components["schemas"]["AlarmSensor"];
 // One enrolled output consequence (siren/light/chirp/notification/…).
@@ -534,9 +541,9 @@ export type AlarmOutputCandidate =
 // binding (PRESS_SHORT / PRESS_LONG dispatch, e.g. HmIP-KRCA).
 export type AlarmRemoteKeyCandidate =
   components["schemas"]["AlarmRemoteKeyCandidate"];
-// Whether an area is ready to arm into one specific mode + blocker list.
+// Whether a zone is ready to arm into one specific mode + blocker list.
 export type AlarmModeReadiness = components["schemas"]["AlarmModeReadiness"];
-// Arm request body (POST /alarm/areas/{id}/arm) and its accepted reply.
+// Arm request body (POST /alarm/zones/{id}/arm) and its accepted reply.
 // AlarmArmRequest carries an optional `code` (docs/alarm-concept.md §11).
 export type AlarmArmRequest = components["schemas"]["AlarmArmRequest"];
 export type AlarmArmAccepted = components["schemas"]["AlarmArmAccepted"];
@@ -555,7 +562,7 @@ export type AlarmCodePerms = components["schemas"]["AlarmCodePerms"];
 export type AlarmCodeKind = AlarmCode["kind"];
 // One append-only journal entry (GET /alarm/journal).
 export type AlarmJournalEntry = components["schemas"]["AlarmJournalEntry"];
-// Live walk-test session status (GET /alarm/areas/{id}/walktest).
+// Live walk-test session status (GET /alarm/zones/{id}/walktest).
 export type AlarmWalkTestStatus = components["schemas"]["AlarmWalkTestStatus"];
 // Output test-fire request body (POST /alarm/outputs/{id}/test).
 export type AlarmOutputTestRequest =
@@ -563,8 +570,8 @@ export type AlarmOutputTestRequest =
 
 // Convenience string unions extracted from the status schema — views
 // switch on these to pick badges / colours / mode buttons.
-export type AlarmState = AlarmAreaStatus["state"];
-export type AlarmMode = NonNullable<AlarmAreaStatus["mode"]>;
+export type AlarmState = AlarmZoneStatus["state"];
+export type AlarmMode = NonNullable<AlarmZoneStatus["mode"]>;
 export type AlarmSensorType = AlarmSensor["type"];
 export type AlarmOutputClass = AlarmOutput["class"];
 export type AlarmJournalClass = AlarmJournalEntry["class"];
@@ -586,3 +593,11 @@ export type AlarmWalkTestProgressPayload =
   components["schemas"]["AlarmWalkTestProgressPayload"];
 export type AlarmHealthChangedPayload =
   components["schemas"]["AlarmHealthChangedPayload"];
+
+// Self-update status of the daemon's CCU add-on package (ADR 0057),
+// served by GET /system/addon-update and pushed verbatim as the payload
+// of the `addon_update.state_changed` WS broadcast. `supported` is false
+// on platforms without the firmware-side installer (stock CCU3); the SPA
+// gates the whole card on the `addon_self_update` info capability rather
+// than on this field, so the two must never disagree in practice.
+export type AddonUpdateStatus = components["schemas"]["AddonUpdateStatus"];

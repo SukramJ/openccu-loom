@@ -87,20 +87,20 @@ func (s *manualScheduler) run() {
 
 // fireCall records one OutputPort.FireCycle invocation.
 type fireCall struct {
-	AreaID   string
+	ZoneID   string
 	Incident sqlitestore.AlarmIncident
 	Opts     engine.FireOptions
 }
 
 // stopCall records one OutputPort.StopAll invocation.
 type stopCall struct {
-	AreaID     string
+	ZoneID     string
 	IncidentID int64
 }
 
 // chirpCall records one OutputPort.Chirp invocation.
 type chirpCall struct {
-	AreaID string
+	ZoneID string
 	Req    engine.ChirpRequest
 }
 
@@ -114,24 +114,24 @@ type fakeOutputs struct {
 	stopErr error
 }
 
-func (f *fakeOutputs) FireCycle(_ context.Context, areaID string, inc sqlitestore.AlarmIncident, opts engine.FireOptions) error {
+func (f *fakeOutputs) FireCycle(_ context.Context, zoneID string, inc sqlitestore.AlarmIncident, opts engine.FireOptions) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.fires = append(f.fires, fireCall{AreaID: areaID, Incident: inc, Opts: opts})
+	f.fires = append(f.fires, fireCall{ZoneID: zoneID, Incident: inc, Opts: opts})
 	return f.fireErr
 }
 
-func (f *fakeOutputs) StopAll(_ context.Context, areaID string, incidentID int64) error {
+func (f *fakeOutputs) StopAll(_ context.Context, zoneID string, incidentID int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.stops = append(f.stops, stopCall{AreaID: areaID, IncidentID: incidentID})
+	f.stops = append(f.stops, stopCall{ZoneID: zoneID, IncidentID: incidentID})
 	return f.stopErr
 }
 
-func (f *fakeOutputs) Chirp(_ context.Context, areaID string, req engine.ChirpRequest) error {
+func (f *fakeOutputs) Chirp(_ context.Context, zoneID string, req engine.ChirpRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.chirps = append(f.chirps, chirpCall{AreaID: areaID, Req: req})
+	f.chirps = append(f.chirps, chirpCall{ZoneID: zoneID, Req: req})
 	return nil
 }
 
@@ -265,7 +265,7 @@ type harness struct {
 	journal *fakeJournal
 	reader  *fakeReader
 
-	areas     *sqlitestore.AlarmAreaStore
+	zones     *sqlitestore.AlarmZoneStore
 	sensors   *sqlitestore.AlarmSensorStore
 	states    *sqlitestore.AlarmStateStore
 	incidents *sqlitestore.AlarmIncidentStore
@@ -293,7 +293,7 @@ func newHarness(t *testing.T) *harness {
 		t:         t,
 		ctx:       context.Background(),
 		db:        db,
-		areas:     sqlitestore.NewAlarmAreaStore(db),
+		zones:     sqlitestore.NewAlarmZoneStore(db),
 		sensors:   sqlitestore.NewAlarmSensorStore(db),
 		states:    sqlitestore.NewAlarmStateStore(db),
 		incidents: sqlitestore.NewAlarmIncidentStore(db),
@@ -323,7 +323,7 @@ func (h *harness) build() {
 	eng, err := engine.New(engine.Deps{
 		Clock:        h.clk,
 		Scheduler:    h.sched,
-		Areas:        h.areas,
+		Zones:        h.zones,
 		Sensors:      h.sensors,
 		State:        h.states,
 		Incidents:    h.incidents,
@@ -375,41 +375,41 @@ func (h *harness) restartAt(now time.Time) {
 	h.start()
 }
 
-// mustSnapshot returns the area snapshot or fails.
-func (h *harness) mustSnapshot(areaID string) engine.AreaSnapshot {
+// mustSnapshot returns the zone snapshot or fails.
+func (h *harness) mustSnapshot(zoneID string) engine.ZoneSnapshot {
 	h.t.Helper()
-	snap, ok := h.eng.Area(areaID)
+	snap, ok := h.eng.Zone(zoneID)
 	if !ok {
-		h.t.Fatalf("unknown area %q", areaID)
+		h.t.Fatalf("unknown zone %q", zoneID)
 	}
 	return snap
 }
 
-// wantState asserts the area's state-machine position.
-func (h *harness) wantState(areaID string, want hmenum.AlarmAreaState) {
+// wantState asserts the zone's state-machine position.
+func (h *harness) wantState(zoneID string, want hmenum.AlarmZoneState) {
 	h.t.Helper()
-	if got := h.mustSnapshot(areaID).State; got != want {
-		h.t.Fatalf("area %s: state = %s, want %s", areaID, got, want)
+	if got := h.mustSnapshot(zoneID).State; got != want {
+		h.t.Fatalf("zone %s: state = %s, want %s", zoneID, got, want)
 	}
 }
 
-// seedArea persists an area row.
-func (h *harness) seedArea(id, name string, cfg engine.AreaConfig) {
+// seedZone persists an zone row.
+func (h *harness) seedZone(id, name string, cfg engine.ZoneConfig) {
 	h.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		h.t.Fatalf("marshal area config: %v", err)
+		h.t.Fatalf("marshal zone config: %v", err)
 	}
 	now := testStart.UnixMilli()
-	if err := h.areas.Upsert(h.ctx, sqlitestore.AlarmAreaRow{
+	if err := h.zones.Upsert(h.ctx, sqlitestore.AlarmZoneRow{
 		ID: id, Name: name, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
-		h.t.Fatalf("seed area: %v", err)
+		h.t.Fatalf("seed zone: %v", err)
 	}
 }
 
 // seedSensor persists a sensor row.
-func (h *harness) seedSensor(id, areaID string, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
+func (h *harness) seedSensor(id, zoneID string, typ hmenum.AlarmSensorType, cfg engine.SensorConfig) {
 	h.t.Helper()
 	b, err := json.Marshal(cfg)
 	if err != nil {
@@ -417,7 +417,7 @@ func (h *harness) seedSensor(id, areaID string, typ hmenum.AlarmSensorType, cfg 
 	}
 	now := testStart.UnixMilli()
 	if err := h.sensors.Upsert(h.ctx, sqlitestore.AlarmSensorRow{
-		ID: id, AreaID: areaID, CentralName: "ccu-test", InterfaceID: "HmIP-RF",
+		ID: id, ZoneID: zoneID, CentralName: "ccu-test", InterfaceID: "HmIP-RF",
 		ChannelAddress: id + ":1", Parameter: "STATE", SensorType: typ,
 		Name: id, ConfigJSON: string(b), CreatedAtMS: now, UpdatedAtMS: now,
 	}); err != nil {
@@ -425,21 +425,21 @@ func (h *harness) seedSensor(id, areaID string, typ hmenum.AlarmSensorType, cfg 
 	}
 }
 
-// openIncident loads the open incident of an area directly from the
+// openIncident loads the open incident of an zone directly from the
 // store.
-func (h *harness) openIncident(areaID string) (sqlitestore.AlarmIncident, bool) {
+func (h *harness) openIncident(zoneID string) (sqlitestore.AlarmIncident, bool) {
 	h.t.Helper()
-	inc, ok, err := h.incidents.GetOpenByArea(h.ctx, areaID)
+	inc, ok, err := h.incidents.GetOpenByZone(h.ctx, zoneID)
 	if err != nil {
 		h.t.Fatalf("get open incident: %v", err)
 	}
 	return inc, ok
 }
 
-// defaultAreaConfig is the standard two-mode test area: full with all
+// defaultZoneConfig is the standard two-mode test zone: full with all
 // delays, perimeter immediate.
-func defaultAreaConfig() engine.AreaConfig {
-	return engine.AreaConfig{
+func defaultZoneConfig() engine.ZoneConfig {
+	return engine.ZoneConfig{
 		Modes: map[hmenum.AlarmMode]engine.ModeConfig{
 			hmenum.AlarmModeFull: {
 				ExitDelaySeconds:  30,
@@ -453,11 +453,11 @@ func defaultAreaConfig() engine.AreaConfig {
 	}
 }
 
-// seedStandardArea seeds area "eg" with a delayed door, an instant
+// seedStandardZone seeds zone "eg" with a delayed door, an instant
 // window, and a motion sensor that participates only in full.
-func (h *harness) seedStandardArea() {
+func (h *harness) seedStandardZone() {
 	h.t.Helper()
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes:         []hmenum.AlarmMode{hmenum.AlarmModePerimeter, hmenum.AlarmModeFull},
 		UseExitDelay:  true,
@@ -472,14 +472,14 @@ func (h *harness) seedStandardArea() {
 	})
 }
 
-// armFull arms area "eg" into full and completes the exit delay.
+// armFull arms zone "eg" into full and completes the exit delay.
 func (h *harness) armFull() {
 	h.t.Helper()
 	if _, err := h.eng.Arm(h.ctx, "eg", engine.ArmRequest{Mode: hmenum.AlarmModeFull, By: "tester"}); err != nil {
 		h.t.Fatalf("arm: %v", err)
 	}
 	h.advance(30 * time.Second)
-	h.wantState("eg", hmenum.AlarmAreaStateArmed)
+	h.wantState("eg", hmenum.AlarmZoneStateArmed)
 }
 
 // sortedStrings returns a sorted copy (assertion helper).

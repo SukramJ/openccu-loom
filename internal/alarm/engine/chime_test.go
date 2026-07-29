@@ -12,7 +12,7 @@ import (
 
 // This file covers the door-chime output (docs/alarm-concept.md §15 row
 // 23): a Chime-flagged sensor sounds only on its opening edge, only
-// while the area is disarmed, and never while a walk test is running.
+// while the zone is disarmed, and never while a walk test is running.
 
 // chirpKinds returns the ordered list of chirp kinds o has recorded.
 func chirpKinds(o *fakeOutputs) []engine.ChirpKind {
@@ -37,7 +37,7 @@ func hasChirp(o *fakeOutputs, kind engine.ChirpKind) bool {
 
 func TestChime_FiresOnActivationWhileDisarmed(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		Chime: true,
@@ -53,7 +53,7 @@ func TestChime_FiresOnActivationWhileDisarmed(t *testing.T) {
 
 func TestChime_DoesNotFireWhileArmed(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}, UseEntryDelay: true, Chime: true,
 	})
@@ -61,7 +61,7 @@ func TestChime_DoesNotFireWhileArmed(t *testing.T) {
 	h.armFull()
 
 	h.eng.HandleSensorEvent(h.ctx, "door", true)
-	h.wantState("eg", hmenum.AlarmAreaStatePending) // entry delay, not evaluated here
+	h.wantState("eg", hmenum.AlarmZoneStatePending) // entry delay, not evaluated here
 
 	if hasChirp(h.outputs, engine.ChirpChime) {
 		t.Fatalf("chime fired while armed; chirps = %v", chirpKinds(h.outputs))
@@ -70,7 +70,7 @@ func TestChime_DoesNotFireWhileArmed(t *testing.T) {
 
 func TestChime_SuppressedDuringAWalkTest(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		Chime: true,
@@ -92,7 +92,7 @@ func TestChime_SuppressedDuringAWalkTest(t *testing.T) {
 
 func TestChime_OnlyFiresOnceOnTheOpeningEdge(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("door", "eg", hmenum.AlarmSensorTypeDoor, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull},
 		Chime: true,
@@ -117,7 +117,7 @@ func TestChime_OnlyFiresOnceOnTheOpeningEdge(t *testing.T) {
 
 func TestChime_NotConfiguredNeverFires(t *testing.T) {
 	h := newHarness(t)
-	h.seedArea("eg", "Erdgeschoss", defaultAreaConfig())
+	h.seedZone("eg", "Erdgeschoss", defaultZoneConfig())
 	h.seedSensor("window", "eg", hmenum.AlarmSensorTypeWindow, engine.SensorConfig{
 		Modes: []hmenum.AlarmMode{hmenum.AlarmModeFull}, // Chime left false
 	})

@@ -350,6 +350,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// start (docs/alarm-concept.md §13.4).
 		webhookOutbound.SetAlarmBus(alarmSvc.Bus())
 	}
+
+	// CCU add-on self-update (ADR 0057): constructed only when the
+	// platform capability check passes (add-on build + firmware
+	// installer present); nil everywhere else so REST/WS/MQTT all
+	// degrade to "unsupported" without re-probing. The WS broadcast is
+	// wired for the daemon's whole lifetime here; the MQTT discovery +
+	// state publish + command sink are wired per-broker-connection
+	// inside makeMQTTSubscriberBuilder below (they must target whichever
+	// bridge instance is currently live).
+	addonUpdater := wireAddonUpdate(ctx, logger)
+	defer wireAddonUpdateWS(addonUpdater, wsHub)()
+	defer startAddonUpdatePeriodicCheck(ctx, addonUpdater, cfg, logger)()
+
 	if err := northBridges.StartPhase(ctx, northbridge.PhaseEarly); err != nil {
 		logger.Warn("north.bridge.start_early", slog.String("err", err.Error()))
 	}
@@ -422,6 +435,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		mqttWiring:              mqttWiring,
 		bridge:                  bridge,
 		hubMQTT:                 hubMQTT,
+		postHubReady: func() {
+			if f := deps.mdnsTXTRefresh.Load(); f != nil {
+				(*f)()
+			}
+		},
 	}
 	sb, southboundTeardown := wireSouthbound(ctx, sbDeps, &availClosers)
 	defer southboundTeardown()
@@ -517,16 +535,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if sqUsers != nil {
 		selfPasswordSvc = sqUsers
 	}
-	// Per-user preferences (favorites / dashboard) live in the main app
-	// DB. Nil interface when persistence is disabled so the routes drop.
-	var prefSvc handlers.UserPreferencesService
-	if auditDB != nil {
-		prefSvc = sqlitestore.NewUserPreferencesStore(auditDB)
-	}
-	var diagramSvc handlers.DiagramConfigService
-	if auditDB != nil {
-		diagramSvc = newDiagramConfigAdapter(sqlitestore.NewDiagramConfigStore(auditDB))
-	}
+	prefSvc, diagramSvc, areaSvc := appDBServices(auditDB)
 	tokenAdminSvc := rw.tokenAdmin
 	// Wrap the persisted CentralAdminService so POST/PUT/DELETE
 	// /admin/centrals also drive the live orchestrator built above — the
@@ -550,7 +559,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// once for the initial stack, and re-invoked automatically on
 	// every Swap (hot-reload) so birth sync + command subscriber
 	// follow the new broker without manual re-attachment.
-	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, alarmMQTTSink, logger))
+	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(ctx, reg, valueWriter, schedulesDomain, mqttCollector, alarmMQTTSink, addonUpdater, logger))
 	if err := mqttSup.AttachSubscribers(ctx); err != nil {
 		logger.Warn("mqtt.subscribers.attach", slog.String("err", err.Error()))
 	}
@@ -697,6 +706,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		devicesAdapter:          devicesAdapter,
 		deviceAdminDomain:       deviceAdminDomain,
 		ccuMaintenanceDomain:    ccuMaintenanceDomain,
+		addonUpdater:            addonUpdater,
 		groupsDomain:            groupsDomain,
 		deviceReloader:          deviceReloader,
 		firmwareRefresher:       adapter.NewFirmwareDomain(reg, valueWriter),
@@ -730,6 +740,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		passwordSvc:             selfPasswordSvc,
 		prefSvc:                 prefSvc,
 		diagramSvc:              diagramSvc,
+		areaSvc:                 areaSvc,
 		tokenSvc:                tokenAdminSvc,
 		centSvc:                 centralAdminSvc,
 		discovery:               discoveryDeps,

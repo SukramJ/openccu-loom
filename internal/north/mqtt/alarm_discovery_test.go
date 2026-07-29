@@ -26,7 +26,7 @@ func alarmDiscoveryBody(t *testing.T, item DiscoveryItem) map[string]any {
 	return body
 }
 
-// TestBuildAlarmPanelDiscovery_AreaPanelShape covers the per-area
+// TestBuildAlarmPanelDiscovery_AreaPanelShape covers the per-zone
 // discovery config: component/node/object routing, state+command
 // topics, no value_template envelope (the topic carries the plain HA
 // token directly), two-source availability with mode "all", both code
@@ -137,17 +137,17 @@ func TestBuildAlarmPanelDiscovery_AreaPanelShape(t *testing.T) {
 }
 
 // TestBuildAlarmPanelDiscovery_MasterPanel covers the aggregate master
-// panel: the area segment is forced to the reserved "master" token
-// regardless of the areaID argument, the caller-supplied (already
+// panel: the zone segment is forced to the reserved "master" token
+// regardless of the zoneID argument, the caller-supplied (already
 // localized) display name is used verbatim, and the topics/unique_id
 // route through the master segment.
 func TestBuildAlarmPanelDiscovery_MasterPanel(t *testing.T) {
 	t.Parallel()
-	item := BuildAlarmPanelDiscovery("gh", "ignored-area-id", "Alarmanlage",
+	item := BuildAlarmPanelDiscovery("gh", "ignored-zone-id", "Alarmanlage",
 		[]hmenum.AlarmMode{hmenum.AlarmModeFull}, true, false, false)
 
-	if item.ObjectID != alarmMasterArea {
-		t.Errorf("ObjectID = %q, want %q", item.ObjectID, alarmMasterArea)
+	if item.ObjectID != alarmMasterZone {
+		t.Errorf("ObjectID = %q, want %q", item.ObjectID, alarmMasterZone)
 	}
 	body := alarmDiscoveryBody(t, item)
 	if got, want := body["name"], "Alarmanlage"; got != want {
@@ -196,17 +196,17 @@ func TestBuildAlarmPanelDiscovery_MasterNameLocalizedBothLocales(t *testing.T) {
 
 // TestBuildAlarmPanelDiscovery_EmptyAreaIsRejected guards against
 // publishing a discovery config with an empty topic/unique-id segment
-// for a non-master panel with a blank areaID.
+// for a non-master panel with a blank zoneID.
 func TestBuildAlarmPanelDiscovery_EmptyAreaIsRejected(t *testing.T) {
 	t.Parallel()
 	item := BuildAlarmPanelDiscovery("gh", "", "Nameless", nil, false, false, false)
 	if item.OK {
-		t.Fatalf("expected OK=false for an empty area segment, got %+v", item)
+		t.Fatalf("expected OK=false for an empty zone segment, got %+v", item)
 	}
 }
 
 // TestBuildAlarmPanelDiscovery_NoModesYieldsTriggerOnlyFeatureList covers
-// an area with zero configured modes (e.g. mid-setup): the payload must
+// an zone with zero configured modes (e.g. mid-setup): the payload must
 // still be valid, carrying only the always-present TRIGGER capability and
 // no arm-mode features.
 func TestBuildAlarmPanelDiscovery_NoModesYieldsTriggerOnlyFeatureList(t *testing.T) {

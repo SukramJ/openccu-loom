@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"os"
 	"slices"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -2684,8 +2685,8 @@ func (a *paseSessionCloserAdapter) ClosePaseSessions(_ context.Context) error {
 // buildRateLimitConfig projects the YAML config into the middleware
 // shape, returning nil when rate limiting is disabled so the router
 // skips the middleware wiring entirely.
-func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, centralCount int, logger *slog.Logger) (discoverymdns.Advertiser, error) {
-	svc, ok := mdnsServiceFor(cfg, centralCount)
+func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, reg *central.Registry, logger *slog.Logger) (discoverymdns.Advertiser, error) {
+	svc, ok := mdnsServiceFor(cfg, len(reg.Names()), mdnsCCUSerials(reg))
 	if !ok {
 		return nil, nil
 	}
@@ -2707,11 +2708,14 @@ func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, centralCount i
 // reach and label the daemon before authenticating: the API mount
 // path, the wire-contract version (mirrors GET /info), whether the
 // daemon's own listener is TLS (always 0 — TLS is terminated upstream
-// by a reverse proxy / HA ingress), the friendly instance label, and
-// a cheap pre-auth hint of how many CCUs this daemon serves. The CCU
-// names/serials themselves are NOT in TXT (volatile, size-limited);
-// the client reads them from GET /api/v1/system/ccu after auth.
-func mdnsServiceFor(cfg *config.Config, centralCount int) (discoverymdns.Service, bool) {
+// by a reverse proxy / HA ingress), the friendly instance label, a
+// pre-auth hint of how many CCUs this daemon serves, and — per
+// ADR 0058 — the resolved CCU serial suffixes (`ccus=`). Serials
+// resolve during the readiness-gated bring-up and change on live
+// adopt, so the record is re-announced at runtime via
+// [discoverymdns.Advertiser.UpdateTXT]; `GET /api/v1/system/ccu`
+// stays the authoritative post-auth source.
+func mdnsServiceFor(cfg *config.Config, centralCount int, ccuSerials []string) (discoverymdns.Service, bool) {
 	port, ok := splitListenPort(cfg.North.REST.Listen)
 	if !ok {
 		return discoverymdns.Service{}, false
@@ -2719,14 +2723,68 @@ func mdnsServiceFor(cfg *config.Config, centralCount int) (discoverymdns.Service
 	return discoverymdns.Service{
 		InstanceName: cfg.North.Discovery.MDNS.InstanceName,
 		Port:         port,
-		TXT: []string{
-			"path=/api/v1",
-			"api_version=" + handlers.APIVersion,
-			"tls=0",
-			"instance=" + cfg.North.Discovery.MDNS.ResolveInstanceName(),
-			"centrals=" + strconv.Itoa(centralCount),
-		},
+		TXT:          mdnsTXT(cfg, centralCount, ccuSerials),
 	}, true
+}
+
+// mdnsTXT assembles the TXT bundle. Shared by the initial Register and
+// every runtime re-announce so both paths stay identical.
+func mdnsTXT(cfg *config.Config, centralCount int, ccuSerials []string) []string {
+	txt := []string{
+		"path=/api/v1",
+		"api_version=" + handlers.APIVersion,
+		"tls=0",
+		"instance=" + cfg.North.Discovery.MDNS.ResolveInstanceName(),
+		"centrals=" + strconv.Itoa(centralCount),
+	}
+	if v := mdnsCCUsValue(ccuSerials); v != "" {
+		txt = append(txt, "ccus="+v)
+	}
+	return txt
+}
+
+// mdnsCCUsValue joins the resolved serial suffixes sorted and
+// comma-separated, dropping whole entries once the TXT string would
+// exceed the DNS 255-byte-per-string limit (an invalid record helps
+// nobody; the list is best-effort by contract, ADR 0058).
+func mdnsCCUsValue(serials []string) string {
+	const maxLen = 255 - len("ccus=")
+	sorted := make([]string, 0, len(serials))
+	for _, sn := range serials {
+		if sn != "" {
+			sorted = append(sorted, sn)
+		}
+	}
+	sort.Strings(sorted)
+	out := ""
+	for _, sn := range sorted {
+		next := sn
+		if out != "" {
+			next = out + "," + sn
+		}
+		if len(next) > maxLen {
+			break
+		}
+		out = next
+	}
+	return out
+}
+
+// mdnsCCUSerials collects the resolved serial suffixes (last-10
+// routing form) of every registered central; unresolved centrals are
+// skipped and appear on a later re-announce.
+func mdnsCCUSerials(reg *central.Registry) []string {
+	if reg == nil {
+		return nil
+	}
+	names := reg.Names()
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if sn := reg.SerialSuffix(name); sn != "" {
+			out = append(out, sn)
+		}
+	}
+	return out
 }
 
 // matterWiring carries the Matter REST/WS-facing adapters produced by

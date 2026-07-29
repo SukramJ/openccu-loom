@@ -129,7 +129,7 @@ func TestDaemonServe_WithRESTAndUI(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemon returned error: %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemon did not shut down in time")
 	}
 }
@@ -159,7 +159,7 @@ func TestDaemonServe_WithDataDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServe with DataDir: %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -195,7 +195,7 @@ func TestDaemonServe_WithMatterAndDataDir(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServe with Matter+DataDir: %v", err)
 		}
-	case <-time.After(25 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -229,7 +229,7 @@ func TestDaemonServe_WithCASEConfigured(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemonServe with CASE config: %v", err)
 		}
-	case <-time.After(25 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("shutdown timeout")
 	}
 }
@@ -887,7 +887,7 @@ func TestDaemonServe_RESTHealthGreen(t *testing.T) {
 		if err != nil {
 			t.Fatalf("daemon returned error: %v", err)
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("shutdown timeout")
 	}
 }

@@ -3,7 +3,7 @@
   import { alarmPanelStore } from "$lib/stores/alarmPanel.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
-  import type { AlarmArea, AlarmAreaConfig } from "$lib/api/types";
+  import type { AlarmZone, AlarmZoneConfig } from "$lib/api/types";
   import Icon from "$lib/components/ui/Icon.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -15,13 +15,13 @@
 
   // Policy editor (docs/alarm-concept.md §11 users/codes, §15 rows 19/21/22
   // schedules/pre-alarm/auto-rearm). Edits the engine-owned free-form
-  // AlarmAreaConfig document directly by JSON path — same "local
-  // dirty-tracked working copy, Save PUTs the whole area back" shape as
-  // AlarmSensors/AlarmOutputs, just against api.getAlarmArea/putAlarmArea
+  // AlarmZoneConfig document directly by JSON path — same "local
+  // dirty-tracked working copy, Save PUTs the whole zone back" shape as
+  // AlarmSensors/AlarmOutputs, just against api.getAlarmZone/putAlarmZone
   // instead of the sensors/outputs sub-collections. Field paths, defaults,
   // and the code-policy/output-policy semantics are transcribed verbatim
   // from internal/alarm/engine/config.go (CodePolicy, OutputPolicy,
-  // ModeConfig.PreAlarmSeconds, AreaConfig.AutoRearmSeconds/PostTrigger,
+  // ModeConfig.PreAlarmSeconds, ZoneConfig.AutoRearmSeconds/PostTrigger,
   // AlarmSchedule) — this view never invents new engine semantics.
 
   const MODES = ["perimeter", "full", "night", "vacation", "custom"] as const;
@@ -54,11 +54,11 @@
     auto_arm?: boolean;
   };
 
-  // --- area state ----------------------------------------------------
-  const areas = $derived(alarmPanelStore.areasConfig);
-  let areaId = $state("");
+  // --- zone state ----------------------------------------------------
+  const zones = $derived(alarmPanelStore.zonesConfig);
+  let zoneId = $state("");
 
-  let areaMeta = $state<{ id: string; name: string; position?: number } | null>(null);
+  let zoneMeta = $state<{ id: string; name: string; position?: number } | null>(null);
   let config = $state<Record<string, unknown>>({});
   let loading = $state(false);
   let loadError = $state<string | null>(null);
@@ -121,7 +121,7 @@
 
   // --- code policy (§11) ----------------------------------------------
   // RequireDisarm is a nullable bool in the engine (unset = "required
-  // whenever the area has an enabled code"); modeled as a tri-state
+  // whenever the zone has an enabled code"); modeled as a tri-state
   // select so the default stays representable and distinct from an
   // explicit "never".
   function requireDisarmValue(): string {
@@ -156,10 +156,10 @@
   }
 
   // --- pre-alarm (per configured mode, §15 row 21) ---------------------
-  // PreAlarmSeconds lives on ModeConfig, not AreaConfig — only modes
+  // PreAlarmSeconds lives on ModeConfig, not ZoneConfig — only modes
   // already present in config.modes are armable at all, so editing is
   // scoped to those. There is no general-purpose mode editor outside the
-  // Setup wizard's one-time delay step today; an area with no modes yet
+  // Setup wizard's one-time delay step today; a zone with no modes yet
   // configures them there first.
   function configuredModes(): Mode[] {
     const modes = getPath(["modes"]);
@@ -199,17 +199,17 @@
 
   // --- data loading ------------------------------------------------
   async function loadPolicies() {
-    if (!areaId) {
-      areaMeta = null;
+    if (!zoneId) {
+      zoneMeta = null;
       config = {};
       return;
     }
     loading = true;
     loadError = null;
     try {
-      const area = await api.getAlarmArea(areaId);
-      areaMeta = { id: area.id, name: area.name, position: area.position };
-      config = { ...((area.config as Record<string, unknown> | undefined) ?? {}) };
+      const zone = await api.getAlarmZone(zoneId);
+      zoneMeta = { id: zone.id, name: zone.name, position: zone.position };
+      config = { ...((zone.config as Record<string, unknown> | undefined) ?? {}) };
       dirty = false;
     } catch (err) {
       loadError = friendlyError(err, t);
@@ -219,16 +219,16 @@
   }
 
   async function save() {
-    if (!areaId || !areaMeta) return;
+    if (!zoneId || !zoneMeta) return;
     saving = true;
     try {
-      const area: AlarmArea = {
-        id: areaMeta.id,
-        name: areaMeta.name,
-        position: areaMeta.position,
-        config: config as AlarmAreaConfig,
+      const zone: AlarmZone = {
+        id: zoneMeta.id,
+        name: zoneMeta.name,
+        position: zoneMeta.position,
+        config: config as AlarmZoneConfig,
       };
-      await api.putAlarmArea(areaId, area);
+      await api.putAlarmZone(zoneId, zone);
       toastStore.success(t("alarm.toast.saved"));
       dirty = false;
       await alarmPanelStore.refresh();
@@ -240,18 +240,18 @@
     }
   }
 
-  const areaOptions = $derived(areas.map((a) => ({ value: a.id, label: a.name })));
+  const zoneOptions = $derived(zones.map((a) => ({ value: a.id, label: a.name })));
 
   $effect(() => {
-    if (areas.length > 0 && !areas.some((a) => a.id === areaId)) {
-      areaId = areas[0].id;
+    if (zones.length > 0 && !zones.some((a) => a.id === zoneId)) {
+      zoneId = zones[0].id;
     }
   });
 
   let loadedFor = $state("");
   $effect(() => {
-    if (areaId && areaId !== loadedFor) {
-      loadedFor = areaId;
+    if (zoneId && zoneId !== loadedFor) {
+      loadedFor = zoneId;
       void loadPolicies();
     }
   });
@@ -263,7 +263,11 @@
   const rowClass = "flex items-center justify-between gap-2 text-sm text-[var(--ha-primary-text-color)]";
 </script>
 
-{#if areas.length === 0}
+{#if alarmPanelStore.loading && zones.length === 0}
+  <LoadingState />
+{:else if alarmPanelStore.error && zones.length === 0}
+  <ErrorState message={alarmPanelStore.error} onRetry={() => void alarmPanelStore.refresh()} />
+{:else if zones.length === 0}
   <EmptyState
     icon="mdi:shield-home"
     message={t("alarm.overview.empty")}
@@ -276,12 +280,12 @@
     {/snippet}
   </EmptyState>
 {:else}
-  <!-- Toolbar: area selector -->
+  <!-- Toolbar: zone selector -->
   <div class="mb-4 flex flex-wrap items-center gap-3">
     <label class="flex items-center gap-2 text-sm text-[var(--ha-secondary-text-color)]">
-      <span>{t("alarm.sensors.area")}</span>
+      <span>{t("alarm.sensors.zone")}</span>
       <div class="min-w-48">
-        <Select options={areaOptions} bind:value={areaId} />
+        <Select options={zoneOptions} bind:value={zoneId} />
       </div>
     </label>
   </div>
@@ -304,7 +308,7 @@
 
   {#if loadError}
     <ErrorState message={loadError} onRetry={() => void loadPolicies()} />
-  {:else if loading && !areaMeta}
+  {:else if loading && !zoneMeta}
     <LoadingState message={t("common.loading")} />
   {:else}
     <div class="flex flex-col gap-4">

@@ -9,8 +9,13 @@ import { render, cleanup, waitFor, screen } from "@testing-library/svelte";
 const mockGetGroups = vi.fn();
 
 vi.mock("$lib/api/client", () => ({
+  // The areas store (pulled in transitively via the group editor) drags
+  // in the real auth wiring, which registers itself through this export
+  // at module load — the mock must provide it.
+  setUnauthorizedHandler: () => {},
   api: {
     getGroups: (...args: unknown[]) => mockGetGroups(...args),
+    listAreas: () => Promise.resolve([]),
   },
   ApiError: class ApiError extends Error {
     constructor(
