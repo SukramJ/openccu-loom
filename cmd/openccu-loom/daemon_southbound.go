@@ -358,29 +358,9 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// multi-CCU boot into a single re-wire. The seed below covers a central that
 	// became ready between the subscribe and this loop.
 	if d.mqttWiring != nil && d.hubMQTT != nil {
-		var readyBuses []*events.Bus
-		for _, u := range reg.List() {
-			if u.EventBus != nil {
-				readyBuses = append(readyBuses, u.EventBus)
-			}
-		}
-		hubReadyClosers, hubReadyTrigger := wireHubDiscoveryOnReady(
-			ctx, readyBuses, func(rctx context.Context) {
-				d.hubMQTT.Start(rctx)
-				if d.postHubReady != nil {
-					d.postHubReady()
-				}
-			},
-			hubDiscoveryReadyDebounce, logger,
-		)
+		hubReadyClosers, hubReadyTrigger := wireHubReadyRestart(ctx, d, reg, logger)
 		teardowns = append(teardowns, hubReadyClosers...)
 		hubReadyTriggerFn = hubReadyTrigger
-		for _, u := range reg.List() {
-			if u.IsSouthboundReady() {
-				hubReadyTrigger()
-				break
-			}
-		}
 	}
 
 	// Boot-time stale cleanup — clear retained channel-aggregate
@@ -467,4 +447,33 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		hubReadyTrigger: hubReadyTriggerFn,
 	}
 	return result, teardown
+}
+
+// wireHubReadyRestart subscribes every central's bus to the debounced
+// hub-discovery re-Start (serial resolution / live adopt), chains the
+// post-ready hook (mDNS TXT refresh, ADR 0058), and seeds the trigger
+// for centrals that became ready before the subscription.
+func wireHubReadyRestart(ctx context.Context, d southboundWiringDeps, reg *central.Registry, logger *slog.Logger) (closers []func(), trigger func()) {
+	var readyBuses []*events.Bus
+	for _, u := range reg.List() {
+		if u.EventBus != nil {
+			readyBuses = append(readyBuses, u.EventBus)
+		}
+	}
+	closers, trigger = wireHubDiscoveryOnReady(
+		ctx, readyBuses, func(rctx context.Context) {
+			d.hubMQTT.Start(rctx)
+			if d.postHubReady != nil {
+				d.postHubReady()
+			}
+		},
+		hubDiscoveryReadyDebounce, logger,
+	)
+	for _, u := range reg.List() {
+		if u.IsSouthboundReady() {
+			trigger()
+			break
+		}
+	}
+	return closers, trigger
 }

@@ -1,6 +1,6 @@
 {
-  "generated": "15dc626c",
-  "head": "15dc626c",
+  "generated": "080ea834",
+  "head": "080ea834",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 26901,
-    "reachable": 4644,
-    "whitelisted": 19408,
-    "unreachable": 2849
+    "total_exported": 27044,
+    "reachable": 4686,
+    "whitelisted": 19469,
+    "unreachable": 2889
   },
   "by_package": [
     {
@@ -122,7 +122,7 @@
       "package": "internal/north/discovery/mdns",
       "unreachable_funcs": 2,
       "unreachable_types": 6,
-      "unreachable_other": 2
+      "unreachable_other": 4
     },
     {
       "package": "internal/routingkey",
@@ -135,6 +135,12 @@
       "unreachable_funcs": 0,
       "unreachable_types": 2,
       "unreachable_other": 0
+    },
+    {
+      "package": "internal/addonupdate",
+      "unreachable_funcs": 0,
+      "unreachable_types": 18,
+      "unreachable_other": 18
     },
     {
       "package": "internal/alarm",
@@ -529,7 +535,7 @@
     {
       "package": "internal/north/mqtt",
       "unreachable_funcs": 0,
-      "unreachable_types": 81,
+      "unreachable_types": 83,
       "unreachable_other": 4
     },
     {
@@ -640,14 +646,266 @@
       "package": "cmd/openccu-loom",
       "identifier": "SubscriberBuilder",
       "file": "cmd/openccu-loom/mqtt_supervisor.go",
-      "line": 74,
+      "line": 75,
       "kind": "type"
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "SubscriberBuilder",
       "file": "cmd/openccu-loom/mqtt_supervisor.go",
-      "line": 74,
+      "line": 75,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "CapabilityProbe",
+      "file": "internal/addonupdate/capability.go",
+      "line": 22,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Checker",
+      "file": "internal/addonupdate/checker.go",
+      "line": 72,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Deps",
+      "file": "internal/addonupdate/updater.go",
+      "line": 19,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Deps",
+      "file": "internal/addonupdate/updater.go",
+      "line": 19,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Downloader",
+      "file": "internal/addonupdate/downloader.go",
+      "line": 40,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrBusy",
+      "file": "internal/addonupdate/status.go",
+      "line": 64,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrBusy",
+      "file": "internal/addonupdate/status.go",
+      "line": 64,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrChecksumMismatch",
+      "file": "internal/addonupdate/downloader.go",
+      "line": 31,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrChecksumMismatch",
+      "file": "internal/addonupdate/downloader.go",
+      "line": 31,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrChecksumNotFound",
+      "file": "internal/addonupdate/downloader.go",
+      "line": 32,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrChecksumNotFound",
+      "file": "internal/addonupdate/downloader.go",
+      "line": 32,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrDownloadTooLarge",
+      "file": "internal/addonupdate/downloader.go",
+      "line": 33,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrDownloadTooLarge",
+      "file": "internal/addonupdate/downloader.go",
+      "line": 33,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrMalformedRelease",
+      "file": "internal/addonupdate/checker.go",
+      "line": 66,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrMalformedRelease",
+      "file": "internal/addonupdate/checker.go",
+      "line": 66,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrNoAddonAsset",
+      "file": "internal/addonupdate/checker.go",
+      "line": 64,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrNoAddonAsset",
+      "file": "internal/addonupdate/checker.go",
+      "line": 64,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrNoChecksumsAsset",
+      "file": "internal/addonupdate/checker.go",
+      "line": 65,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrNoChecksumsAsset",
+      "file": "internal/addonupdate/checker.go",
+      "line": 65,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrNoUpdateAvailable",
+      "file": "internal/addonupdate/status.go",
+      "line": 67,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrNoUpdateAvailable",
+      "file": "internal/addonupdate/status.go",
+      "line": 67,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrUnsupported",
+      "file": "internal/addonupdate/status.go",
+      "line": 61,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ErrUnsupported",
+      "file": "internal/addonupdate/status.go",
+      "line": 61,
+      "kind": "var"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Installer",
+      "file": "internal/addonupdate/installer.go",
+      "line": 24,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "PeriodicChecker",
+      "file": "internal/addonupdate/periodic.go",
+      "line": 30,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ReleaseAsset",
+      "file": "internal/addonupdate/checker.go",
+      "line": 39,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ReleaseAsset",
+      "file": "internal/addonupdate/checker.go",
+      "line": 39,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ReleaseInfo",
+      "file": "internal/addonupdate/checker.go",
+      "line": 45,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "ReleaseInfo",
+      "file": "internal/addonupdate/checker.go",
+      "line": 45,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Runner",
+      "file": "internal/addonupdate/installer.go",
+      "line": 18,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Runner",
+      "file": "internal/addonupdate/installer.go",
+      "line": 18,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "State",
+      "file": "internal/addonupdate/status.go",
+      "line": 14,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "State",
+      "file": "internal/addonupdate/status.go",
+      "line": 14,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Status",
+      "file": "internal/addonupdate/status.go",
+      "line": 32,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Status",
+      "file": "internal/addonupdate/status.go",
+      "line": 32,
+      "kind": "type"
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "Updater",
+      "file": "internal/addonupdate/updater.go",
+      "line": 41,
       "kind": "type"
     },
     {
@@ -1354,21 +1612,21 @@
       "package": "internal/audit",
       "identifier": "Buffer",
       "file": "internal/audit/audit.go",
-      "line": 240,
+      "line": 246,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 225,
+      "line": 231,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Change",
       "file": "internal/audit/audit.go",
-      "line": 225,
+      "line": 231,
       "kind": "type"
     },
     {
@@ -1417,14 +1675,14 @@
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 194,
+      "line": 200,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Entry",
       "file": "internal/audit/audit.go",
-      "line": 194,
+      "line": 200,
       "kind": "type"
     },
     {
@@ -1466,28 +1724,28 @@
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 216,
+      "line": 222,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Query",
       "file": "internal/audit/audit.go",
-      "line": 216,
+      "line": 222,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 233,
+      "line": 239,
       "kind": "type"
     },
     {
       "package": "internal/audit",
       "identifier": "Recorder",
       "file": "internal/audit/audit.go",
-      "line": 233,
+      "line": 239,
       "kind": "type"
     },
     {
@@ -10118,63 +10376,77 @@
       "package": "internal/north/discovery/mdns",
       "identifier": "Advertiser",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 81,
+      "line": 84,
       "kind": "type"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "Advertiser",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 81,
+      "line": 84,
       "kind": "type"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "ErrAlreadyStarted",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 89,
+      "line": 93,
       "kind": "var"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "ErrAlreadyStarted",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 89,
+      "line": 93,
+      "kind": "var"
+    },
+    {
+      "package": "internal/north/discovery/mdns",
+      "identifier": "ErrNotStarted",
+      "file": "internal/north/discovery/mdns/advertiser.go",
+      "line": 97,
+      "kind": "var"
+    },
+    {
+      "package": "internal/north/discovery/mdns",
+      "identifier": "ErrNotStarted",
+      "file": "internal/north/discovery/mdns/advertiser.go",
+      "line": 97,
       "kind": "var"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "Multicast",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 137,
+      "line": 165,
       "kind": "type"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "NewNoop",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 101,
+      "line": 109,
       "kind": "func"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "NewNoop",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 101,
+      "line": 109,
       "kind": "func"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "Noop",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 94,
+      "line": 102,
       "kind": "type"
     },
     {
       "package": "internal/north/discovery/mdns",
       "identifier": "Noop",
       "file": "internal/north/discovery/mdns/advertiser.go",
-      "line": 94,
+      "line": 102,
       "kind": "type"
     },
     {
@@ -13681,7 +13953,7 @@
       "package": "internal/north/matter/transport/mrp",
       "identifier": "Window",
       "file": "internal/north/matter/transport/mrp/window.go",
-      "line": 42,
+      "line": 46,
       "kind": "type"
     },
     {
@@ -13805,6 +14077,20 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "AddonUpdateSink",
+      "file": "internal/north/mqtt/command_subscriber.go",
+      "line": 129,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "AddonUpdateSink",
+      "file": "internal/north/mqtt/command_subscriber.go",
+      "line": 129,
+      "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "AlarmMQTTPublisher",
       "file": "internal/north/mqtt/alarm_publisher.go",
       "line": 73,
@@ -13856,28 +14142,28 @@
       "package": "internal/north/mqtt",
       "identifier": "CDPInvocationSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 129,
+      "line": 143,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CDPInvocationSink",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 129,
+      "line": 143,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CDPInvokePayload",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 154,
+      "line": 168,
       "kind": "type"
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "CDPInvokePayload",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 154,
+      "line": 168,
       "kind": "type"
     },
     {
@@ -13968,7 +14254,7 @@
       "package": "internal/north/mqtt",
       "identifier": "CommandSubscriber",
       "file": "internal/north/mqtt/command_subscriber.go",
-      "line": 181,
+      "line": 195,
       "kind": "type"
     },
     {
@@ -23799,21 +24085,28 @@
       "identifier": "TestMDNSServiceForBuildsDiscoveryTXT",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/mdns_service_test.go",
-      "line": 24
+      "line": 25
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMDNSServiceForInstanceFallsBackToResolved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/mdns_service_test.go",
-      "line": 62
+      "line": 63
     },
     {
       "package": "cmd/openccu-loom",
       "identifier": "TestMDNSServiceForNoPortSkips",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/mdns_service_test.go",
-      "line": 84
+      "line": 85
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestMDNSTXTCCUsKey",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/mdns_service_test.go",
+      "line": 99
     },
     {
       "package": "cmd/openccu-loom",
@@ -26707,6 +27000,286 @@
       "line": 42
     },
     {
+      "package": "internal/addonupdate",
+      "identifier": "TestCapabilityProbeSupported",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/capability_test.go",
+      "line": 30
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleaseContextCancelled",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 126
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleaseMalformedJSON",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 92
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleaseMissingAddonAsset",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 64
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleaseMissingChecksumsAsset",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 78
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleaseMissingTagName",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 103
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleaseNon200Status",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 115
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleasePrefersSha256Sidecar",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 173
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestCheckerLatestReleaseSuccess",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 27
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestDefaultRunnerSpawnsDetachedProcess",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/installer_test.go",
+      "line": 66
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestDownloaderDownloadAndStageChecksumMismatch",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/downloader_test.go",
+      "line": 66
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestDownloaderDownloadAndStageChecksumNotFound",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/downloader_test.go",
+      "line": 91
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestDownloaderDownloadAndStageNetworkError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/downloader_test.go",
+      "line": 117
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestDownloaderDownloadAndStageSuccess",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/downloader_test.go",
+      "line": 37
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestInstallerSpawnInvokesInjectedRunner",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/installer_test.go",
+      "line": 13
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestIsNewer",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/checker_test.go",
+      "line": 141
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestJitteredInterval",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/periodic_test.go",
+      "line": 19
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestNewCapabilityProbeWiresRealFuncs",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/capability_test.go",
+      "line": 95
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestNewInstallerDefaults",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/installer_test.go",
+      "line": 40
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestPeriodicCheckerBootDelay",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/periodic_test.go",
+      "line": 142
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestPeriodicCheckerDisabledEntirely",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/periodic_test.go",
+      "line": 240
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestPeriodicCheckerNoRecurringWhenIntervalDisabled",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/periodic_test.go",
+      "line": 205
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestPeriodicCheckerRecurringInterval",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/periodic_test.go",
+      "line": 172
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestPeriodicCheckerStartTwiceIsNoOp",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/periodic_test.go",
+      "line": 303
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestPeriodicCheckerStopBeforeAnyTick",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/periodic_test.go",
+      "line": 271
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterCheckAlreadyNewest",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 250
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterCheckBusyWhileChecking",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 375
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterCheckBusyWhileInstalling",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 425
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterCheckFailure",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 264
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterCheckSuccess",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 218
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterCheckThenInstallHappyPath",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 309
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterCurrentVersionOverride",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 510
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterInstallAfterCheckFindsNoUpdate",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 295
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterInstallAsync",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 451
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterInstallBusyWhileChecking",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 398
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterInstallDownloadFailure",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 333
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterInstallInstallerFailure",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 355
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterInstallWithoutPriorCheck",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 284
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterOnChange",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 471
+    },
+    {
+      "package": "internal/addonupdate",
+      "identifier": "TestUpdaterUnsupportedPlatform",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/addonupdate/updater_test.go",
+      "line": 201
+    },
+    {
       "package": "internal/alarm",
       "identifier": "TestDeviceBackedOutputClass",
       "reason": "auto-whitelist:pattern=test-file",
@@ -27537,14 +28110,14 @@
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 258
+      "line": 264
     },
     {
       "package": "internal/audit",
       "identifier": "NewBufferWithClock",
       "reason": "auto-whitelist:pattern=test-seam-with-clock",
       "file": "internal/audit/audit.go",
-      "line": 258
+      "line": 264
     },
     {
       "package": "internal/audit",
@@ -64690,45 +65263,59 @@
     },
     {
       "package": "internal/config",
-      "identifier": "AlarmConfig",
+      "identifier": "AddonUpdateConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 154
+      "line": 141
+    },
+    {
+      "package": "internal/config",
+      "identifier": "AddonUpdateConfig",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 141
     },
     {
       "package": "internal/config",
       "identifier": "AlarmConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 154
+      "line": 180
+    },
+    {
+      "package": "internal/config",
+      "identifier": "AlarmConfig",
+      "reason": "auto-whitelist:pattern=generic-model-helper",
+      "file": "internal/config/config.go",
+      "line": 180
     },
     {
       "package": "internal/config",
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1149
+      "line": 1175
     },
     {
       "package": "internal/config",
       "identifier": "AuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1149
+      "line": 1175
     },
     {
       "package": "internal/config",
       "identifier": "BackupConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 139
+      "line": 165
     },
     {
       "package": "internal/config",
       "identifier": "BackupConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 139
+      "line": 165
     },
     {
       "package": "internal/config",
@@ -64777,70 +65364,70 @@
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1208
+      "line": 1234
     },
     {
       "package": "internal/config",
       "identifier": "CCUAuthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1208
+      "line": 1234
     },
     {
       "package": "internal/config",
       "identifier": "CCUDataConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 391
+      "line": 417
     },
     {
       "package": "internal/config",
       "identifier": "CCUDataConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 391
+      "line": 417
     },
     {
       "package": "internal/config",
       "identifier": "CallbackConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 411
+      "line": 437
     },
     {
       "package": "internal/config",
       "identifier": "CallbackConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 411
+      "line": 437
     },
     {
       "package": "internal/config",
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1305
+      "line": 1331
     },
     {
       "package": "internal/config",
       "identifier": "CentralBehavior",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1305
+      "line": 1331
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1256
+      "line": 1282
     },
     {
       "package": "internal/config",
       "identifier": "CentralConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1256
+      "line": 1282
     },
     {
       "package": "internal/config",
@@ -64917,14 +65504,14 @@
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1448
+      "line": 1474
     },
     {
       "package": "internal/config",
       "identifier": "Default",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1448
+      "line": 1474
     },
     {
       "package": "internal/config",
@@ -65071,14 +65658,14 @@
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1419
+      "line": 1445
     },
     {
       "package": "internal/config",
       "identifier": "ErrNoConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1419
+      "line": 1445
     },
     {
       "package": "internal/config",
@@ -65169,56 +65756,56 @@
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1186
+      "line": 1212
     },
     {
       "package": "internal/config",
       "identifier": "HAIngressConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1186
+      "line": 1212
     },
     {
       "package": "internal/config",
       "identifier": "HistoryConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 202
+      "line": 228
     },
     {
       "package": "internal/config",
       "identifier": "HistoryConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 202
+      "line": 228
     },
     {
       "package": "internal/config",
       "identifier": "HistoryExportConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 256
+      "line": 282
     },
     {
       "package": "internal/config",
       "identifier": "HistoryExportConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 256
+      "line": 282
     },
     {
       "package": "internal/config",
       "identifier": "HistoryRetentionFloor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 310
+      "line": 336
     },
     {
       "package": "internal/config",
       "identifier": "HistoryRetentionFloor",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 310
+      "line": 336
     },
     {
       "package": "internal/config",
@@ -65239,14 +65826,14 @@
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1423
+      "line": 1449
     },
     {
       "package": "internal/config",
       "identifier": "Load",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1423
+      "line": 1449
     },
     {
       "package": "internal/config",
@@ -65295,14 +65882,14 @@
       "identifier": "LoggingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 404
+      "line": 430
     },
     {
       "package": "internal/config",
       "identifier": "LoggingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 404
+      "line": 430
     },
     {
       "package": "internal/config",
@@ -65323,252 +65910,252 @@
       "identifier": "NorthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 422
+      "line": 448
     },
     {
       "package": "internal/config",
       "identifier": "NorthConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 422
+      "line": 448
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscovery",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 537
+      "line": 563
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscovery",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 537
+      "line": 563
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoveryMDNS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 580
+      "line": 606
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoveryMDNS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 580
+      "line": 606
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoverySSDP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 550
+      "line": 576
     },
     {
       "package": "internal/config",
       "identifier": "NorthDiscoverySSDP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 550
+      "line": 576
     },
     {
       "package": "internal/config",
       "identifier": "NorthMCP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 510
+      "line": 536
     },
     {
       "package": "internal/config",
       "identifier": "NorthMCP",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 510
+      "line": 536
     },
     {
       "package": "internal/config",
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1073
+      "line": 1099
     },
     {
       "package": "internal/config",
       "identifier": "NorthMQTT",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1073
+      "line": 1099
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 613
+      "line": 639
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 613
+      "line": 639
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterAttestation",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 782
+      "line": 808
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterAttestation",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 782
+      "line": 808
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCASE",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 907
+      "line": 933
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCASE",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 907
+      "line": 933
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCommissioning",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 803
+      "line": 829
     },
     {
       "package": "internal/config",
       "identifier": "NorthMatterCommissioning",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 803
+      "line": 829
     },
     {
       "package": "internal/config",
       "identifier": "NorthREST",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 926
+      "line": 952
     },
     {
       "package": "internal/config",
       "identifier": "NorthREST",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 926
+      "line": 952
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTRateLimit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1016
+      "line": 1042
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTRateLimit",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1016
+      "line": 1042
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTWS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1000
+      "line": 1026
     },
     {
       "package": "internal/config",
       "identifier": "NorthRESTWS",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1000
+      "line": 1026
     },
     {
       "package": "internal/config",
       "identifier": "NorthUI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1057
+      "line": 1083
     },
     {
       "package": "internal/config",
       "identifier": "NorthUI",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1057
+      "line": 1083
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhook",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 440
+      "line": 466
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhook",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 440
+      "line": 466
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhookInbound",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 494
+      "line": 520
     },
     {
       "package": "internal/config",
       "identifier": "NorthWebhookInbound",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 494
+      "line": 520
     },
     {
       "package": "internal/config",
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1236
+      "line": 1262
     },
     {
       "package": "internal/config",
       "identifier": "OIDCConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1236
+      "line": 1262
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1435
+      "line": 1461
     },
     {
       "package": "internal/config",
       "identifier": "Parse",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1435
+      "line": 1461
     },
     {
       "package": "internal/config",
@@ -65603,28 +66190,28 @@
       "identifier": "PersistenceConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 188
+      "line": 214
     },
     {
       "package": "internal/config",
       "identifier": "PersistenceConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 188
+      "line": 214
     },
     {
       "package": "internal/config",
       "identifier": "ReliabilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 373
+      "line": 399
     },
     {
       "package": "internal/config",
       "identifier": "ReliabilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 373
+      "line": 399
     },
     {
       "package": "internal/config",
@@ -65659,14 +66246,14 @@
       "identifier": "RetentionHourlyDefault",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 302
+      "line": 328
     },
     {
       "package": "internal/config",
       "identifier": "RetentionHourlyDefault",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 302
+      "line": 328
     },
     {
       "package": "internal/config",
@@ -66520,14 +67107,14 @@
       "identifier": "TracingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 919
+      "line": 945
     },
     {
       "package": "internal/config",
       "identifier": "TracingConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 919
+      "line": 945
     },
     {
       "package": "internal/config",
@@ -66548,28 +67135,28 @@
       "identifier": "ValuesCacheConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 337
+      "line": 363
     },
     {
       "package": "internal/config",
       "identifier": "ValuesCacheConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 337
+      "line": 363
     },
     {
       "package": "internal/config",
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1409
+      "line": 1435
     },
     {
       "package": "internal/config",
       "identifier": "VisibilityConfig",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/config/config.go",
-      "line": 1409
+      "line": 1435
     },
     {
       "package": "internal/config",
@@ -112951,35 +113538,35 @@
       "identifier": "NewWindow",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/transport/mrp/window.go",
-      "line": 52
+      "line": 65
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "NewWindow",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/transport/mrp/window.go",
-      "line": 52
+      "line": 65
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "NewWindowNoRollover",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/transport/mrp/window.go",
-      "line": 58
+      "line": 72
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "NewWindowNoRollover",
       "reason": "auto-whitelist:pattern=matter-protocol-handler",
       "file": "internal/north/matter/transport/mrp/window.go",
-      "line": 58
+      "line": 72
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "TestAckOfUnknownReturnsFalse",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/mrp_test.go",
-      "line": 160
+      "line": 163
     },
     {
       "package": "internal/north/matter/transport/mrp",
@@ -113011,45 +113598,87 @@
     },
     {
       "package": "internal/north/matter/transport/mrp",
+      "identifier": "TestNoRolloverWindowRejectsStale",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/mrp/mrp_test.go",
+      "line": 121
+    },
+    {
+      "package": "internal/north/matter/transport/mrp",
+      "identifier": "TestNoRolloverWindowRejectsStaleAfterAdvance",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/mrp/window_test.go",
+      "line": 133
+    },
+    {
+      "package": "internal/north/matter/transport/mrp",
       "identifier": "TestNoRolloverWindowRejectsWrappedCounter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/window_test.go",
-      "line": 35
+      "line": 43
+    },
+    {
+      "package": "internal/north/matter/transport/mrp",
+      "identifier": "TestNoRolloverWindowResetsOnBigJump",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/mrp/mrp_test.go",
+      "line": 131
+    },
+    {
+      "package": "internal/north/matter/transport/mrp",
+      "identifier": "TestNoRolloverWindowSeedsFullBitmap",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/mrp/window_test.go",
+      "line": 60
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "TestRolloverWindowAcceptsWrappedCounter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/window_test.go",
-      "line": 49
+      "line": 156
+    },
+    {
+      "package": "internal/north/matter/transport/mrp",
+      "identifier": "TestRolloverWindowRollsBackOnPeerRestart",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/mrp/window_test.go",
+      "line": 108
+    },
+    {
+      "package": "internal/north/matter/transport/mrp",
+      "identifier": "TestRolloverWindowSeedsEmptyBitmap",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/matter/transport/mrp/window_test.go",
+      "line": 87
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "TestTickAbandonsAfterMaxRetransmissions",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/mrp_test.go",
-      "line": 203
+      "line": 206
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "TestTickRetransmitsAfterBackoff",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/mrp_test.go",
-      "line": 169
+      "line": 172
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "TestTickSendErrorPropagates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/mrp_test.go",
-      "line": 229
+      "line": 232
     },
     {
       "package": "internal/north/matter/transport/mrp",
       "identifier": "TestTrackThenAckRemovesEntry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/mrp_test.go",
-      "line": 145
+      "line": 148
     },
     {
       "package": "internal/north/matter/transport/mrp",
@@ -113074,24 +113703,10 @@
     },
     {
       "package": "internal/north/matter/transport/mrp",
-      "identifier": "TestWindowRejectsStale",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/transport/mrp/mrp_test.go",
-      "line": 118
-    },
-    {
-      "package": "internal/north/matter/transport/mrp",
-      "identifier": "TestWindowResetsOnBigJump",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/matter/transport/mrp/mrp_test.go",
-      "line": 128
-    },
-    {
-      "package": "internal/north/matter/transport/mrp",
       "identifier": "TestWindowTracksFullThirtyTwoCounters",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/matter/transport/mrp/window_test.go",
-      "line": 12
+      "line": 13
     },
     {
       "package": "internal/north/matter/transport/udp",
@@ -118772,6 +119387,34 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "AddonUpdateService",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 19
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AddonUpdateService",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 19
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AddonUpdateStatusResponse",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 31
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "AddonUpdateStatusResponse",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 31
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "AlarmCodeAdmin",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm_codes.go",
@@ -119024,6 +119667,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityAddonSelfUpdate",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 70
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CapabilityAddonSelfUpdate",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/info.go",
+      "line": 70
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "CapabilityAlarm",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
@@ -119055,14 +119712,14 @@
       "identifier": "CapabilityDetector",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 87
+      "line": 95
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CapabilityDetector",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 87
+      "line": 95
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121334,6 +121991,20 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "GetAddonUpdate",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 68
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "GetAddonUpdate",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 68
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "GetAlarmCode",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/alarm_codes.go",
@@ -122373,28 +123044,28 @@
       "identifier": "Info",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 110
+      "line": 121
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "Info",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 110
+      "line": 121
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InfoResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 66
+      "line": 74
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "InfoResponse",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/info.go",
-      "line": 66
+      "line": 74
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124271,6 +124942,34 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/schedules.go",
       "line": 162
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PostAddonUpdateCheck",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 86
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PostAddonUpdateCheck",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 86
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PostAddonUpdateInstall",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 105
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "PostAddonUpdateInstall",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/addon_update.go",
+      "line": 105
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129205,28 +129904,28 @@
       "identifier": "TestInfo_APIVersionAndAlwaysOnCapabilities",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/info_test.go",
-      "line": 80
+      "line": 81
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestInfo_AddonBuild",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/info_test.go",
-      "line": 166
+      "line": 167
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestInfo_AlarmCapability",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/info_test.go",
-      "line": 133
+      "line": 134
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestInfo_ConditionalCapabilities",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/info_test.go",
-      "line": 106
+      "line": 107
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129247,7 +129946,7 @@
       "identifier": "TestInfo_SchemaDigestIsServed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/info_test.go",
-      "line": 148
+      "line": 149
     },
     {
       "package": "internal/north/rest/handlers",
@@ -135947,6 +136646,20 @@
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/north/rest/middleware/middleware.go",
       "line": 169
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AddonUpdateStatusPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/addon_update_events.go",
+      "line": 21
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AddonUpdateStatusPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/addon_update_events.go",
+      "line": 21
     },
     {
       "package": "internal/north/rest/ws",
@@ -155231,7 +155944,7 @@
       "identifier": "TestRESTRouterMatchesOpenAPISpec",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/rest_router_openapi_walk_test.go",
-      "line": 714
+      "line": 742
     },
     {
       "package": "tests/contract",
@@ -155707,7 +156420,7 @@
       "identifier": "TestWSBroadcastsHaveProductionEmitter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ws_broadcast_emitter_test.go",
-      "line": 277
+      "line": 290
     },
     {
       "package": "tests/contract",
