@@ -73,6 +73,10 @@ type wsCommandWiring struct {
 	// REST router). Backs the strict MASTER/LINK enforcement on
 	// `paramset.put` so REST and WS share one lock namespace.
 	editSessions *handlers.EditSessions
+	// addonUpdater backs addon_update.check/.install — nil when the
+	// platform has no self-update capability (commands then stay
+	// unregistered).
+	addonUpdater ws.AddonUpdater
 	logger       *slog.Logger
 	// centralName scopes every WS-command log record. Empty in multi-
 	// central setups; populated from [singleCentralName] in daemon.go.
@@ -142,6 +146,7 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		MasterProfiles: w.masterProfiles,
 		// CacheClearer: wired — delegates to the cachereset.Service (ADR 0042).
 		CacheClearer: wsCacheClearerFrom(w.cacheResetSvc),
+		AddonUpdater: w.addonUpdater,
 		// CentralLinks: wired — *adapter.CentralLinksDomain satisfies
 		// ws.CentralLinksManager directly. Backs central.create_links /
 		// central.remove_links / central.links_status.

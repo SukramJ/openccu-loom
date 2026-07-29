@@ -1027,6 +1027,16 @@
     },
     {
       "category": "system",
+      "description": "Kick a release check of the CCU add-on self-updater (ADR 0057). Fire-and-forget: progress and outcome arrive on addon_update.state_changed. Unregistered (unknown command) on platforms without the self-update capability.",
+      "name": "addon_update.check"
+    },
+    {
+      "category": "system",
+      "description": "Start the verified download + firmware install of the latest CCU add-on release (ADR 0057). Fire-and-forget: the daemon restarts on success; failures surface on addon_update.state_changed. Unregistered on platforms without the self-update capability.",
+      "name": "addon_update.install"
+    },
+    {
+      "category": "system",
       "description": "Server-pushed: the add-on self-updater changed state (check finished, download/install progressing, failure). Only emitted on platforms where self-update is supported.",
       "kind": "broadcast",
       "name": "addon_update.state_changed",

@@ -659,6 +659,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		cacheResetSvc: cacheResetSvc,
 		// alarm backs alarm_panel.* — nil when the alarm service is disabled.
 		alarm:        alarmSvc,
+		addonUpdater: wsAddonUpdaterFrom(addonUpdater),
 		logger:       logger,
 		centralName:  singleCentralName(reg),
 		sessionStore: sessionStore,
