@@ -131,6 +131,32 @@ type Config struct {
 	Persistence PersistenceConfig `yaml:"persistence,omitempty" json:"persistence,omitzero" cfg:"expert"`
 	Backup      BackupConfig      `yaml:"backup,omitempty" json:"backup,omitzero" cfg:"expert"`
 	Alarm       AlarmConfig       `yaml:"alarm,omitempty" json:"alarm,omitzero" cfg:"expert"`
+	AddonUpdate AddonUpdateConfig `yaml:"addon_update,omitempty" json:"addon_update,omitzero" cfg:"expert"`
+}
+
+// AddonUpdateConfig configures the CCU add-on self-update checker
+// (ADR 0057). Meaningful only on platforms where the capability probe
+// passes (add-on build + firmware installer present); elsewhere the
+// section has no effect.
+type AddonUpdateConfig struct {
+	// Enabled gates the background release checking — the boot-delayed
+	// check and the recurring one alike (default true). The manual
+	// check/install verbs stay available regardless. Tri-state so
+	// "unset" and an explicit false are distinguishable, mirroring the
+	// other Enabled toggles.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"expert"`
+	// CheckInterval is the recurring release-check cadence, layered on
+	// top of the unconditional boot check and the manual check/install
+	// verbs (ADR 0057 §4). Zero means "use the compiled-in default"
+	// (24h, applied in [Config.applyDefaults]); disabling the periodic
+	// check is Enabled=false, not a zero interval.
+	CheckInterval time.Duration `yaml:"check_interval,omitempty" json:"check_interval,omitzero" cfg:"expert"`
+}
+
+// PeriodicCheckEnabled reports the resolved background-check toggle
+// (default true).
+func (c AddonUpdateConfig) PeriodicCheckEnabled() bool {
+	return orDefault(c.Enabled, true)
 }
 
 // BackupConfig configures automatic, scheduled CCU backups. Off by default
@@ -1507,6 +1533,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Alarm.RestartLoopBreaker == 0 {
 		c.Alarm.RestartLoopBreaker = 3
+	}
+	if c.AddonUpdate.CheckInterval == 0 {
+		c.AddonUpdate.CheckInterval = 24 * time.Hour
 	}
 }
 

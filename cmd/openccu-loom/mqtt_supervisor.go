@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/addonupdate"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
@@ -477,6 +478,7 @@ func makeMQTTSubscriberBuilder(
 	schedulesDomain *adapter.SchedulesDomain,
 	collector *metrics.MqttCollector,
 	alarmSink *alarmMQTTSink,
+	addonUpdater *addonupdate.Updater,
 	logger *slog.Logger,
 ) SubscriberBuilder {
 	return func(ctx context.Context, client mqtt.Client, bridge *mqtt.Bridge) (func(), error) {
@@ -512,14 +514,54 @@ func makeMQTTSubscriberBuilder(
 		if alarmSink != nil {
 			cmdSub = cmdSub.WithAlarmSink(alarmSink)
 		}
+		// Same nil-pointer-check rationale as the alarm sink above.
+		addonSink := newAddonUpdateMQTTSink(addonUpdater)
+		if addonSink != nil {
+			cmdSub = cmdSub.WithAddonUpdateSink(addonSink)
+		}
 		if err := cmdSub.Start(ctx); err != nil {
 			return nil, fmt.Errorf("command_subscriber.Start: %w", err)
 		}
+
+		// Add-on self-update (ADR 0057): one daemon-level HA `update`
+		// entity, re-published on every broker (re)connect like the hub
+		// singletons. OnChange is (re-)subscribed here rather than once at
+		// daemon boot because the callback must publish through THIS
+		// bridge instance — a broker swap builds a fresh bridge, and the
+		// teardown this closure returns drops the previous subscription
+		// before Swap installs the new one, so no publisher ever targets a
+		// stale bridge.
+		var addonUnsub func()
+		if addonUpdater != nil {
+			disco := bridge.DefaultBuilder()
+			if disco == nil {
+				disco = mqtt.NewDefaultDiscoveryBuilder(bridge.Topics(), "")
+			}
+			_ = bridge.PublishHubDiscovery(ctx, disco.BuildAddonUpdateDiscovery())
+			publishState := func(st addonupdate.Status) {
+				inProgress := st.State == addonupdate.StateChecking ||
+					st.State == addonupdate.StateDownloading ||
+					st.State == addonupdate.StateInstalling
+				if err := bridge.PublishAddonUpdateState(lifecycleCtx, st.CurrentVersion, st.LatestVersion, inProgress); err != nil {
+					logger.Warn("mqtt.publish_addon_update_state", slog.String("err", err.Error()))
+				}
+			}
+			publishState(addonUpdater.Status())
+			addonUnsub = addonUpdater.OnChange(publishState)
+		}
+
 		// Subscriptions are tied to the underlying client; the
 		// supervisor's teardown calls lifecycle.Stop() which
-		// Disconnects the client and drops every active filter,
-		// so an explicit per-subscriber stop is a no-op here.
-		return func() {}, nil
+		// Disconnects the client and drops every active filter, so an
+		// explicit per-subscriber stop is a no-op for them. The
+		// addon-update OnChange subscription above is the one exception —
+		// it is bound to the Updater, not the mqtt client — so it is
+		// unsubscribed explicitly here.
+		return func() {
+			if addonUnsub != nil {
+				addonUnsub()
+			}
+		}, nil
 	}
 }
 

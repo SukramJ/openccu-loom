@@ -533,6 +533,7 @@ type runtimeCapabilityDetector struct {
 	mcpWrite          bool
 	alarm             bool
 	history           bool
+	addonSelfUpdate   bool
 }
 
 func (r runtimeCapabilityDetector) HasMQTTDiscovery() bool     { return r.mqtt }
@@ -544,6 +545,7 @@ func (r runtimeCapabilityDetector) HasMCP() bool               { return r.mcp }
 func (r runtimeCapabilityDetector) HasMCPWrite() bool          { return r.mcp && r.mcpWrite }
 func (r runtimeCapabilityDetector) HasAlarm() bool             { return r.alarm }
 func (r runtimeCapabilityDetector) HasHistory() bool           { return r.history }
+func (r runtimeCapabilityDetector) HasAddonSelfUpdate() bool   { return r.addonSelfUpdate }
 
 // detectSupervisedRestart reports whether the daemon is running
 // under a supervisor that will restart it after a clean shutdown.

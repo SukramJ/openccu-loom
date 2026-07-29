@@ -119,6 +119,20 @@ type AlarmSink interface {
 	MasterDisarm(ctx context.Context) error
 }
 
+// AddonUpdateSink is the optional domain-facing contract for the
+// daemon-level CCU add-on self-updater (ADR 0057). The composition
+// root wires it over *addonupdate.Updater; when nil the subscriber
+// drops the HA `update` entity's INSTALL command with a debug
+// breadcrumb. Unlike every other sink this one is daemon-level (no
+// central/interface/device scoping) — mirrors [AlarmSink]'s
+// central-less command topic.
+type AddonUpdateSink interface {
+	// TriggerInstall starts the download/verify/stage/install
+	// sequence. Mirrors [addonupdate.Updater.InstallAsync] — it
+	// returns once the sequence has started, not once it finishes.
+	TriggerInstall(ctx context.Context) error
+}
+
 // CDPInvocationSink is the domain-facing contract for Custom-DP
 // operation dispatch. The composition root wires this to
 // [adapter.MQTTCommandSink] which delegates to
@@ -189,6 +203,7 @@ type CommandSubscriber struct {
 	schedSink ScheduleSwitchSink     // may be nil; schedule-switch commands are dropped with a debug log when nil
 	imSink    InstallModeSink        // may be nil; install-mode button presses are dropped with a debug log when nil
 	alarmSink AlarmSink              // may be nil; alarm commands are dropped with a debug log when nil
+	addonSink AddonUpdateSink        // may be nil; the add-on update INSTALL command is dropped with a debug log when nil
 	// qos is the QoS level every inbound command subscription registers
 	// at. Defaults to QoS1 (at-least-once) in [NewCommandSubscriber] —
 	// matching [DefaultQoS.Commands] — and can be overridden via
@@ -310,6 +325,13 @@ func (c *CommandSubscriber) WithAlarmSink(s AlarmSink) *CommandSubscriber {
 	return c
 }
 
+// WithAddonUpdateSink attaches the daemon-level add-on self-update
+// sink. Returns the receiver for call-site chaining.
+func (c *CommandSubscriber) WithAddonUpdateSink(s AddonUpdateSink) *CommandSubscriber {
+	c.addonSink = s
+	return c
+}
+
 // WithLifecycleContext sets the daemon-lifetime context that command handlers
 // derive each per-command context from. Wiring this — rather than reusing
 // Start's ctx, which on a hot-reload broker swap is request-scoped and dies
@@ -404,6 +426,13 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if _, err := c.sub.Subscribe(ctx, base+"/alarm/+/set", c.qos, LegacyHandler(c.handleAlarmCommand)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe alarm_command: %w", err)
+	}
+	// {base}/system/addon_update/set — the daemon-level CCU add-on
+	// self-update INSTALL command (ADR 0057). Daemon-level like the
+	// alarm plane above, so the topic carries no <central> segment.
+	if _, err := c.sub.Subscribe(ctx, base+"/system/addon_update/set", c.qos, LegacyHandler(c.handleAddonUpdateCommand)); err != nil {
+		c.incSubscribeFailures()
+		return fmt.Errorf("subscribe addon_update_command: %w", err)
 	}
 	return nil
 }
@@ -924,6 +953,39 @@ func parseAlarmAction(body []byte) (action, code string) {
 		return strings.ToUpper(strings.TrimSpace(pay.Action)), pay.Code
 	}
 	return strings.ToUpper(s), ""
+}
+
+// handleAddonUpdateCommand triggers the add-on self-update install
+// sequence from `<base>/system/addon_update/set`. HA's `update`
+// entity publishes its configured `payload_install` ("INSTALL", see
+// [DefaultDiscoveryBuilder.BuildAddonUpdateDiscovery]) here; any
+// non-empty payload is accepted so a hand-built tool need not match
+// the exact token.
+func (c *CommandSubscriber) handleAddonUpdateCommand(topic string, body []byte, retained bool) {
+	if retained {
+		c.logger.Debug("mqtt.command.addon_update.retained_drop", slog.String("topic", topic))
+		return
+	}
+	if strings.TrimSpace(string(body)) == "" {
+		c.logger.Warn("mqtt.command.addon_update.empty_payload", slog.String("topic", topic))
+		return
+	}
+	if c.addonSink == nil {
+		c.logger.Debug("mqtt.command.addon_update.no_sink",
+			slog.String("topic", topic),
+			slog.String("detail", "AddonUpdateSink not wired; ignoring install command"))
+		return
+	}
+	c.incReceivedCommands()
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.addonSink.TriggerInstall(ctx); err != nil {
+			c.logger.Warn("mqtt.command.addon_update.install",
+				slog.String("topic", topic),
+				slog.String("err", err.Error()))
+		}
+	})
 }
 
 func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained bool) {

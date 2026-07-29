@@ -311,6 +311,13 @@ type Deps struct {
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
 	FirmwareDownload handlers.FirmwareDownloadPort
+	// AddonUpdate backs the CCU add-on self-update surface (ADR 0057):
+	// `GET /api/v1/system/addon-update` (always 200; nil reports a
+	// minimal supported:false body) plus the operator-gated
+	// `POST …/check` and `POST …/install` (nil/unsupported answers 404).
+	// Wired only on platforms where the capability probe passed (add-on
+	// build + firmware installer present).
+	AddonUpdate handlers.AddonUpdateService
 	// Groups backs `GET /api/v1/groups` — the read-only heating-group
 	// listing (one entry per central; `?central=` scopes to one). Nil
 	// serves the route as 503.
@@ -948,6 +955,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
 			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
+			// Add-on self-update (ADR 0057). GET always answers 200 (a nil
+			// d.AddonUpdate reports supported:false) — mounted unconditionally
+			// so the SPA can distinguish "unsupported platform" from "old
+			// daemon / misrouted proxy" without a 404. The check/install
+			// verbs answer 404 themselves when unsupported.
+			pr.Get("/system/addon-update", handlers.GetAddonUpdate(d.AddonUpdate))
+			pr.With(op).Post("/system/addon-update/check", handlers.PostAddonUpdateCheck(d.AddonUpdate))
+			pr.With(op).Post("/system/addon-update/install", handlers.PostAddonUpdateInstall(d.AddonUpdate, d.AuditRecorder))
 			// Read-only heating-group listing (one entry per central).
 			pr.Get("/groups", handlers.ListGroups(d.Groups))
 			// Heating-group administration (GR02) via the CCU jpages proxy.

@@ -593,3 +593,11 @@ export type AlarmWalkTestProgressPayload =
   components["schemas"]["AlarmWalkTestProgressPayload"];
 export type AlarmHealthChangedPayload =
   components["schemas"]["AlarmHealthChangedPayload"];
+
+// Self-update status of the daemon's CCU add-on package (ADR 0057),
+// served by GET /system/addon-update and pushed verbatim as the payload
+// of the `addon_update.state_changed` WS broadcast. `supported` is false
+// on platforms without the firmware-side installer (stock CCU3); the SPA
+// gates the whole card on the `addon_self_update` info capability rather
+// than on this field, so the two must never disagree in practice.
+export type AddonUpdateStatus = components["schemas"]["AddonUpdateStatus"];

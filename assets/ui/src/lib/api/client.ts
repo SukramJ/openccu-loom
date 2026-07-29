@@ -1,6 +1,7 @@
 import type {
   Area,
   AreaRoomRef,
+  AddonUpdateStatus,
   AlarmZone,
   AlarmArmAccepted,
   AlarmArmRequest,
@@ -1244,6 +1245,20 @@ export const api = {
   installSystemUpdate(central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(`/system/update/install${qs}`, { method: "POST" });
+  },
+  // --- Add-on self-update (ADR 0057) ----------------------------
+  // Capability-gated: `getAddonUpdateStatus` always answers (supported:
+  // false everywhere on platforms without the firmware installer), but
+  // check/install answer 404 there — the SPA only calls them once the
+  // `addon_self_update` info capability is present.
+  getAddonUpdateStatus() {
+    return request<AddonUpdateStatus>(`/system/addon-update`);
+  },
+  checkAddonUpdate() {
+    return request<void>(`/system/addon-update/check`, { method: "POST" });
+  },
+  installAddonUpdate() {
+    return request<void>(`/system/addon-update/install`, { method: "POST" });
   },
   // --- CCU maintenance -----------------------------------------
   // Reboot one CCU host (admin-only). This reboots the CCU hardware, not

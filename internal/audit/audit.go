@@ -186,6 +186,12 @@ const (
 	ActionAlarmCodeChange   Action = "alarm_code_change"
 	ActionAlarmWalkTest     Action = "alarm_walk_test"
 	ActionAlarmOutputTest   Action = "alarm_output_test"
+
+	// ActionAddonUpdateInstall records an operator-triggered install of
+	// the CCU add-on's self-update (ADR 0057). The daemon restarts as
+	// part of a successful install, so this entry is the durable trace
+	// of who initiated it; the Note carries the target release version.
+	ActionAddonUpdateInstall Action = "addon_update_install"
 )
 
 // Entry is one recorded change. The User field is filled by the REST

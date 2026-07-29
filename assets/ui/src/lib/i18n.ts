@@ -1155,6 +1155,8 @@ const EN: Catalog = {
   "config.field.north.rest.csrf_enabled": "CSRF protection",
   "config.field.north.rest.csrf_secure": "CSRF Secure cookie",
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP trace endpoint",
+  "config.field.addon_update.check_interval": "Update check interval",
+  "config.field.addon_update.enabled": "Background update checks",
   // Inline help — shown beneath the field label. Same key
   // namespace as the labels above, but with `.help.` instead of
   // `.field.`. A missing help row is fine; the editor just
@@ -1396,6 +1398,10 @@ const EN: Catalog = {
     "Set the Secure flag on the CSRF cookie; enable when the daemon is behind an HTTPS / TLS terminator.",
   "config.help.north.rest.tracing.otlp_endpoint":
     "Base URL of an OTLP/HTTP trace collector (e.g. http://jaeger:4318); empty (default) disables span export entirely.",
+  "config.help.addon_update.check_interval":
+    "How often the daemon checks GitHub for a new add-on release in the background, plus a random jitter of up to 1 hour so a fleet doesn't poll all at once. Zero falls back to the default of 24 h; use the enabled toggle to turn background checking off.",
+  "config.help.addon_update.enabled":
+    "Check GitHub for new add-on releases in the background (boot check plus the recurring interval); default on. The manual \"Check for updates\" button and installing stay available when disabled.",
   "settings.section.intro.persistence":
     "Local on-disk cache of CCU data-point values. The cache lets the daemon survive restarts without re-reading every paramset from the CCU. By default it is ON with a 60-second flush interval — leave it alone unless you are debugging cache behaviour.",
   "settings.section.intro.reliability":
@@ -2951,6 +2957,27 @@ const EN: Catalog = {
   "firmware_download.download": "Download",
   "firmware_download.downloading": "Downloading…",
   "firmware_download.triggered": "Firmware download triggered.",
+  // Add-on self-update card (ADR 0057) — capability-gated (`addon_self_update`).
+  "addon_update.title": "Add-on self-update",
+  "addon_update.subtitle": "Check for and install updates to the CCU add-on package. The daemon restarts during install.",
+  "addon_update.check": "Check for updates",
+  "addon_update.checking": "Checking…",
+  "addon_update.available": "Update available",
+  "addon_update.up_to_date": "Up to date",
+  "addon_update.install": "Install update",
+  "addon_update.install_starting": "Starting…",
+  "addon_update.installing_notice": "Installing the update — the daemon is restarting. This page reconnects automatically once it's back.",
+  "addon_update.confirm_title": "Install add-on update?",
+  "addon_update.confirm_body": "The daemon restarts to complete the install — the connection drops briefly and reconnects on its own. Continue?",
+  "addon_update.release_notes": "Release notes",
+  "addon_update.never_checked": "Never checked",
+  "addon_update.field.current_version": "Installed version",
+  "addon_update.field.latest_version": "Latest version",
+  "addon_update.field.last_check": "Last checked",
+  "addon_update.toast.check_failed": "Update check failed",
+  "addon_update.toast.install_trigger_failed": "Could not start the update",
+  "addon_update.toast.failed": "Add-on update failed",
+  "addon_update.toast.installed": "Add-on updated to {version}",
   // --- Column labels for migrated DataTable views ---
   "messages.col.name": "Message",
   "messages.col.device": "Device",
@@ -4195,6 +4222,8 @@ const DE: Catalog = {
   "config.field.north.rest.csrf_enabled": "CSRF-Schutz",
   "config.field.north.rest.csrf_secure": "CSRF Secure-Cookie",
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP-Trace-Endpunkt",
+  "config.field.addon_update.check_interval": "Update-Prüfintervall",
+  "config.field.addon_update.enabled": "Hintergrund-Updateprüfung",
   "config.help.locale": "Standard-Sprache der SPA beim ersten Aufruf. Operatoren können pro Benutzer in den Einstellungen umschalten.",
   "config.help.data_dir": "Verzeichnis für SQLite-Datenbank, Sessions, Backups, Logs. Muss schreibbar sein; wird beim ersten Start angelegt.",
   "config.help.logging.level": "Filter-Schwelle des strukturierten Loggers. debug zeigt Wire-Level-Traces; info ist der typische Operator-Level.",
@@ -4432,6 +4461,10 @@ const DE: Catalog = {
     "Secure-Flag auf dem CSRF-Cookie setzen; aktivieren, wenn der Daemon hinter einem HTTPS-/TLS-Terminator betrieben wird.",
   "config.help.north.rest.tracing.otlp_endpoint":
     "Basis-URL eines OTLP/HTTP-Trace-Collectors (z. B. http://jaeger:4318); leer (Standard) = kein Span-Export.",
+  "config.help.addon_update.check_interval":
+    "Wie oft der Daemon im Hintergrund bei GitHub nach einem neuen Add-on-Release sucht, plus ein zufälliger Jitter von bis zu 1 Stunde, damit nicht die ganze Flotte gleichzeitig anfragt. 0 nutzt den Standard von 24 h; zum Abschalten der Hintergrundprüfung dient der Aktiviert-Schalter.",
+  "config.help.addon_update.enabled":
+    "Im Hintergrund bei GitHub nach neuen Add-on-Releases suchen (Prüfung beim Start plus wiederkehrendes Intervall); Standard an. Der manuelle „Nach Updates suchen“-Button und das Installieren bleiben auch bei Deaktivierung verfügbar.",
   "settings.section.intro.persistence":
     "Lokaler Disk-Cache der CCU-Datenpunkt-Werte. Erlaubt dem Daemon, Neustarts ohne kompletten Paramset-Re-Read zu überstehen. Standardmäßig AN mit 60-Sekunden-Flush — nur anfassen, wenn man Cache-Verhalten debuggt.",
   "settings.section.intro.reliability":
@@ -5961,6 +5994,26 @@ const DE: Catalog = {
   "firmware_download.download": "Herunterladen",
   "firmware_download.downloading": "Wird geladen…",
   "firmware_download.triggered": "Firmware-Download angestoßen.",
+  "addon_update.title": "Add-on-Update",
+  "addon_update.subtitle": "Nach Updates für das CCU-Add-on suchen und sie installieren. Der Daemon startet während der Installation neu.",
+  "addon_update.check": "Nach Updates suchen",
+  "addon_update.checking": "Suche läuft…",
+  "addon_update.available": "Update verfügbar",
+  "addon_update.up_to_date": "Aktuell",
+  "addon_update.install": "Update installieren",
+  "addon_update.install_starting": "Wird gestartet…",
+  "addon_update.installing_notice": "Update wird installiert — der Daemon startet neu. Diese Seite verbindet sich automatisch neu, sobald er wieder da ist.",
+  "addon_update.confirm_title": "Add-on-Update installieren?",
+  "addon_update.confirm_body": "Der Daemon startet zum Abschluss der Installation neu — die Verbindung bricht kurz ab und verbindet sich von selbst neu. Fortfahren?",
+  "addon_update.release_notes": "Release-Notes",
+  "addon_update.never_checked": "Noch nie geprüft",
+  "addon_update.field.current_version": "Installierte Version",
+  "addon_update.field.latest_version": "Neueste Version",
+  "addon_update.field.last_check": "Zuletzt geprüft",
+  "addon_update.toast.check_failed": "Update-Suche fehlgeschlagen",
+  "addon_update.toast.install_trigger_failed": "Update konnte nicht gestartet werden",
+  "addon_update.toast.failed": "Add-on-Update fehlgeschlagen",
+  "addon_update.toast.installed": "Add-on auf {version} aktualisiert",
   // --- Spaltenbezeichnungen für migrierte DataTable-Views ---
   "messages.col.name": "Meldung",
   "messages.col.device": "Gerät",

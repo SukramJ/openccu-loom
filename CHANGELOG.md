@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.50.0]
+
+### Added
+
+- **The CCU add-on can update itself** — on OpenCCU / RaspberryMatic,
+  where the firmware ships `/bin/install_addon` (ADR 0057). The whole
+  mechanism is capability-gated (`addon_self_update`): on other
+  platforms no button, no endpoint, no entity exists. A "check for
+  updates" button, a boot-delayed check, and a periodic check (default
+  every 24 h with random jitter; interval via
+  `addon_update.check_interval`, background checking off via
+  `addon_update.enabled=false`) watch the project's GitHub releases; installing downloads
+  the add-on package, verifies its SHA256 against the release
+  checksums, stages it and drives the firmware installer — the daemon
+  restarts, no CCU reboot. Surfaces: REST
+  `GET /api/v1/system/addon-update` + `POST …/check|install`
+  (API 3.3.0), WS broadcast `addon_update.state_changed`, an MQTT
+  Home Assistant `update` entity, and a card in the system settings.
+  The add-on tarball now embeds `.sha256` files so the firmware
+  verifies the archive a second time.
+- **mDNS announces the configured CCUs.** The `_openccu-loom._tcp` TXT
+  record gains `ccus=<sn1>,<sn2>,…` — the 10-character short serials of
+  the configured CCUs, sorted, re-announced at runtime as serials
+  resolve or centrals are adopted/removed (the `centrals` count hint is
+  refreshed on the same trigger; it was silently stale after live adopt
+  before). Deliberate reversal of ADR 0021's no-serials TXT decision —
+  see ADR 0058; `GET /api/v1/system/ccu` stays the authoritative
+  post-auth source.
+
 ## [0.49.3]
 
 ### Added

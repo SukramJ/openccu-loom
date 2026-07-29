@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.50.0
+
+- **The CCU add-on updates itself** (OpenCCU/RaspberryMatic): check and
+  install add-on updates from the daemon's settings page, via the API,
+  or straight from Home Assistant's update view — checksum-verified, no
+  CCU reboot. (This affects the CCU add-on flavour; the HA add-on keeps
+  updating through the add-on store as usual.)
+
 ## 0.49.3
 
 - **Areas: group your rooms into floors or outbuildings.** Assign CCU

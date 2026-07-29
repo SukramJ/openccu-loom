@@ -143,6 +143,7 @@
   "discovery.connection_latency": "Connection Latency",
   "discovery.last_event_age": "Last Event Age",
   "discovery.system_update": "System Update",
+  "discovery.addon_update": "Add-on Update",
   "discovery.install_mode_duration": "Install Mode {iface} duration",
   "discovery.install_mode_activate": "Activate Install Mode {iface}",
   "discovery.connectivity": "Connectivity {iface}",
