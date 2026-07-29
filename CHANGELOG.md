@@ -6,6 +6,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.50.1]
+
+### Fixed
+
+- **Released CCU add-on installs identify as add-on again.** The release
+  pipeline packages the prebuilt standalone binaries into the CCU add-on
+  tarball, so the build-time add-on stamp was never set — every released
+  add-on install reported "Standalone", which suppressed the new
+  self-update capability (ADR 0057) **and** the CCU-delegated
+  authentication default (ADR 0043) that add-on installs were meant to
+  get. `build.IsAddon()` now also detects the add-on at runtime from the
+  executable's install path (`/usr/local/addons/openccu-loom/`), healing
+  existing installs on their next update — one more manual WebUI install
+  of this version, then the self-update card and the HA update entity
+  appear.
+
 ## [0.50.0]
 
 ### Added
