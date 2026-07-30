@@ -42,7 +42,8 @@ const EN: Catalog = {
   //     alarm-messages surface (see "messages.*"): this is loom's own
   //     intrusion-alarm engine ("Alarm system" / "Alarmanlage"). ---
   "alarm.title": "Alarm system",
-  "alarm.subtitle": "Zones, sensors, sirens — loom's local-first intrusion alarm.",
+  "alarm.subtitle":
+    "Zones, sensors, sirens — loom's local-first intrusion alarm.",
   "alarm.tab.overview": "Overview",
   "alarm.tab.sensors": "Sensors",
   "alarm.tab.outputs": "Outputs",
@@ -66,7 +67,8 @@ const EN: Catalog = {
   // Overview (§12.1).
   "alarm.overview.placeholder": "No zones configured yet",
   "alarm.overview.empty": "No alarm zones yet",
-  "alarm.overview.empty.description": "Create your first zone with the setup wizard to start protecting rooms.",
+  "alarm.overview.empty.description":
+    "Create your first zone with the setup wizard to start protecting rooms.",
   "alarm.overview.armed_by": "since {time}, by {user}",
   "alarm.overview.armed_at": "since {time}",
   "alarm.overview.master": "All zones",
@@ -79,7 +81,8 @@ const EN: Catalog = {
   "alarm.readiness.warnings_title": "Warnings",
   // Bypass sheet (§12.1).
   "alarm.bypass.title": "Arm anyway?",
-  "alarm.bypass.description": "These sensors are blocking the arm. Tick the ones to bypass, then force arm — nothing is bypassed silently.",
+  "alarm.bypass.description":
+    "These sensors are blocking the arm. Tick the ones to bypass, then force arm — nothing is bypassed silently.",
   "alarm.bypass.bypass": "Bypass",
   "alarm.bypass.force_arm": "Force arm",
   "alarm.bypass.empty": "No blocking sensors.",
@@ -125,13 +128,16 @@ const EN: Catalog = {
   "alarm.zone.edit": "Edit zone",
   "alarm.zone.delete": "Delete zone",
   "alarm.zone.delete.confirm.title": "Delete zone?",
-  "alarm.zone.delete.confirm.body": "The zone and its sensor/output assignments are removed. This cannot be undone.",
+  "alarm.zone.delete.confirm.body":
+    "The zone and its sensor/output assignments are removed. This cannot be undone.",
   // Sensor picker (§12.2).
   "alarm.sensors.placeholder": "No sensors yet",
   "alarm.sensors.title": "Sensors",
-  "alarm.sensors.subtitle": "Assign door, window, motion and hazard sensors to arm modes.",
+  "alarm.sensors.subtitle":
+    "Assign door, window, motion and hazard sensors to arm modes.",
   "alarm.sensors.empty": "No sensors assigned",
-  "alarm.sensors.empty.description": "Add security sensors and pick which modes they arm in.",
+  "alarm.sensors.empty.description":
+    "Add security sensors and pick which modes they arm in.",
   "alarm.sensors.add": "Add sensor",
   "alarm.sensors.search": "Search…",
   "alarm.sensors.selected": "{count} selected",
@@ -205,21 +211,25 @@ const EN: Catalog = {
   // Output picker (§7, §12.2).
   "alarm.outputs.placeholder": "No outputs yet",
   "alarm.outputs.title": "Outputs",
-  "alarm.outputs.subtitle": "Sirens, lights, chirps and notifications fired on trigger.",
+  "alarm.outputs.subtitle":
+    "Sirens, lights, chirps and notifications fired on trigger.",
   "alarm.outputs.empty": "No outputs assigned",
-  "alarm.outputs.empty.description": "Add sirens or lights and assign them to loud/silent policies per mode.",
+  "alarm.outputs.empty.description":
+    "Add sirens or lights and assign them to loud/silent policies per mode.",
   "alarm.outputs.add": "Add output",
   "alarm.outputs.expert": "Expert mode",
-  "alarm.outputs.expert.hint": "Show every modelled actuator, not just curated siren/light candidates.",
+  "alarm.outputs.expert.hint":
+    "Show every modelled actuator, not just curated siren/light candidates.",
   "alarm.outputs.test": "Test fire",
   "alarm.outputs.test_optical_only": "Optical only",
   "alarm.outputs.test_optical_only.hint": "Tests with light only — no tone.",
   "alarm.outputs.test.confirm.title": "Test fire this output?",
-  "alarm.outputs.test.confirm.body": "This briefly activates the real device (siren/light). Use optical-only to spare the neighbours.",
+  "alarm.outputs.test.confirm.body":
+    "This briefly activates the real device (siren/light). Use optical-only to spare the neighbours.",
   "alarm.outputs.indoor": "Indoor",
   "alarm.outputs.outdoor": "Outdoor",
   "alarm.outputs.outdoor.hint":
-    "Marks this output as outdoor, so policies with \"Exclude outdoor outputs\" skip it.",
+    'Marks this output as outdoor, so policies with "Exclude outdoor outputs" skip it.',
   "alarm.outputs.shared_with_ccu": "Shared with CCU programs",
   "alarm.outputs.shared_with_ccu.hint":
     "The output is also driven by CCU programs: Loom never switches it off automatically while the zone is disarmed.",
@@ -233,8 +243,10 @@ const EN: Catalog = {
   "alarm.outputs.optical_pattern.hint":
     "Light-pattern label from the device's list. Empty uses the device default.",
   "alarm.outputs.tier": "Tier",
-  "alarm.outputs.switched_caveat": "Convenience-grade: no sabotage contact, no battery backup, trivially unpluggable.",
-  "alarm.outputs.smoke_caveat": "Smoke detectors double as sounders — no device-side duration, engine-watchdogged only, and repeated intrusion tones shorten battery life. Best on full protection only.",
+  "alarm.outputs.switched_caveat":
+    "Convenience-grade: no sabotage contact, no battery backup, trivially unpluggable.",
+  "alarm.outputs.smoke_caveat":
+    "Smoke detectors double as sounders — no device-side duration, engine-watchdogged only, and repeated intrusion tones shorten battery life. Best on full protection only.",
   "alarm.outputs.device_default": "Device default",
   "alarm.outputs.channel_mismatch":
     "This channel cannot back the selected class — the enrollment predates channel validation and never fired. Saving is blocked until it is fixed or removed.",
@@ -243,11 +255,13 @@ const EN: Catalog = {
     "No eligible channels for this class. Expert mode lists every device without capability filtering.",
   "alarm.outputs.candidates.load_failed": "Loading output candidates failed",
   "alarm.outputs.soundfile": "Soundfile",
-  "alarm.outputs.soundfile.hint": "MP3 soundfile played for chirps. Empty uses the device default.",
+  "alarm.outputs.soundfile.hint":
+    "MP3 soundfile played for chirps. Empty uses the device default.",
   "alarm.outputs.sysvar.central": "Central",
   "alarm.outputs.sysvar.central.hint":
     "CCU the variable lives on — the mirror writes (and, for managed variables, creates) it there.",
-  "alarm.outputs.channel.hint": "Channel address as <device>:<channel>, e.g. 0001D3C9A4B2:3.",
+  "alarm.outputs.channel.hint":
+    "Channel address as <device>:<channel>, e.g. 0001D3C9A4B2:3.",
   "alarm.outputs.chirp_arm_tone.hint":
     "Tone label for the arm squawk, from the device's tone list. Empty skips it on this output.",
   "alarm.outputs.chirp_disarm_tone.hint":
@@ -268,9 +282,11 @@ const EN: Catalog = {
   "alarm.outputs.notification.note":
     "Emits a notification event to the enrolled planes when the zone alarms — no device involved. Configure the planes on the output card after adding.",
   "alarm.outputs.notify.mqtt": "MQTT event",
-  "alarm.outputs.notify.mqtt.hint": "Publish a NOTIFICATION entry on the zone's MQTT alarm event topic.",
+  "alarm.outputs.notify.mqtt.hint":
+    "Publish a NOTIFICATION entry on the zone's MQTT alarm event topic.",
   "alarm.outputs.notify.webhook": "Webhook event",
-  "alarm.outputs.notify.webhook.hint": "Forward an alarm_panel.notification event to the outbound webhook receivers.",
+  "alarm.outputs.notify.webhook.hint":
+    "Forward an alarm_panel.notification event to the outbound webhook receivers.",
   // Output classes (§7).
   "alarm.output_class.acoustic_siren": "Acoustic siren",
   "alarm.output_class.acoustic_siren.hint":
@@ -325,7 +341,8 @@ const EN: Catalog = {
   // Walk test (§12.4).
   "alarm.walktest.placeholder": "No walk test running",
   "alarm.walktest.title": "Walk test",
-  "alarm.walktest.subtitle": "Arm-less test: trip each sensor and watch it tick green.",
+  "alarm.walktest.subtitle":
+    "Arm-less test: trip each sensor and watch it tick green.",
   "alarm.walktest.start": "Start test",
   "alarm.walktest.stop": "Stop test",
   "alarm.walktest.active": "Test running",
@@ -350,7 +367,8 @@ const EN: Catalog = {
   "alarm.wizard.back": "Back",
   "alarm.wizard.skip": "Skip",
   "alarm.wizard.finish": "Finish",
-  "alarm.wizard.codes_later": "PIN codes and remote keys are managed on the Codes tab once this zone exists — there is nothing to configure here yet.",
+  "alarm.wizard.codes_later":
+    "PIN codes and remote keys are managed on the Codes tab once this zone exists — there is nothing to configure here yet.",
   // Health chip (§12.5, S7).
   "alarm.health.title": "Alarm health",
   "alarm.health.healthy": "Alarm system OK",
@@ -387,13 +405,15 @@ const EN: Catalog = {
   "alarm.toast.walktest_start_failed": "Walk test could not be started",
   "alarm.toast.walktest_stop_failed": "Walk test could not be stopped",
   "alarm.wizard.zone.default_name": "Ground floor",
-  "alarm.wizard.zone.hint": "A zone is an independently armable partition — for example one per floor.",
+  "alarm.wizard.zone.hint":
+    "A zone is an independently armable partition — for example one per floor.",
   "alarm.wizard.delay.entry": "Entry delay (s)",
   "alarm.wizard.delay.exit": "Exit delay (s)",
   "alarm.wizard.delay.trigger": "Alarm duration (s)",
   "alarm.wizard.delays.hint":
     "The exit delay lets you leave after arming; the entry delay gives you time to disarm after opening the door. Alarm duration bounds how long one alarm phase (and its sirens) runs — at most 600 s per cycle.",
-  "alarm.wizard.finish.hint": "The zone is created disarmed. Run a walk test before relying on it.",
+  "alarm.wizard.finish.hint":
+    "The zone is created disarmed. Run a walk test before relying on it.",
   "alarm.wizard.outputs.empty": "No eligible output channels found.",
   "alarm.wizard.outputs.empty.description":
     "Use the Outputs tab afterwards for expert-mode enrollment of any device.",
@@ -413,7 +433,8 @@ const EN: Catalog = {
   "alarm.codes.add": "Add code",
   "alarm.codes.zones": "Zones",
   "alarm.codes.zones.all": "All zones",
-  "alarm.codes.delete.confirm.body": "Delete the code \"{name}\"? This cannot be undone.",
+  "alarm.codes.delete.confirm.body":
+    'Delete the code "{name}"? This cannot be undone.',
   "alarm.codes.delete.confirm.title": "Delete code?",
   "alarm.codes.disabled": "Disabled",
   "alarm.codes.duress.badge": "Duress",
@@ -427,7 +448,8 @@ const EN: Catalog = {
   "alarm.codes.error.name_required": "Name is required.",
   "alarm.codes.error.pin_required": "A PIN is required for a new PIN code.",
   "alarm.codes.field.zones": "Zones",
-  "alarm.codes.field.zones.help": "Select which zones this code applies to. Leave every box unchecked to apply it to all zones.",
+  "alarm.codes.field.zones.help":
+    "Select which zones this code applies to. Leave every box unchecked to apply it to all zones.",
   "alarm.codes.field.binding": "Hardware binding",
   "alarm.codes.field.binding.help":
     "Raw JSON describing the physical binding for this code kind — e.g. the keypad channel address or the remote-key press channel. Leave empty for no binding.",
@@ -438,12 +460,14 @@ const EN: Catalog = {
     "A PIN is typed on the PIN pad or anonymous surfaces; keypad-slot and remote-key entries bind a hardware keypad user slot or a radio remote so its actions run under this name.",
   "alarm.codes.field.name": "Name",
   "alarm.codes.field.pin": "PIN",
-  "alarm.codes.field.pin.help": "4–8 digit PIN, stored as a salted hash — the daemon never returns it again.",
+  "alarm.codes.field.pin.help":
+    "4–8 digit PIN, stored as a salted hash — the daemon never returns it again.",
   "alarm.codes.field.pin.keep": "Leave empty to keep the current PIN",
   "alarm.codes.field.pin.placeholder": "Enter PIN",
   "alarm.codes.field.valid_from": "Valid from",
   "alarm.codes.field.valid_until": "Valid until",
-  "alarm.codes.field.validity.help": "Leave both empty for a code with no expiry.",
+  "alarm.codes.field.validity.help":
+    "Leave both empty for a code with no expiry.",
   "alarm.codes.kind.keypad_slot": "Keypad slot",
   "alarm.codes.kind.pin": "PIN",
   "alarm.codes.kind.remote_key": "Remote key",
@@ -456,25 +480,30 @@ const EN: Catalog = {
   "alarm.codes.remote.alarm_keyfob": "Alarm keyfob",
   "alarm.codes.remote.candidates_failed": "Loading remote keys failed",
   "alarm.codes.remote.parameter": "Trigger",
-  "alarm.codes.remote.parameter.hint": "Which press of the bound key fires the action — short or long.",
+  "alarm.codes.remote.parameter.hint":
+    "Which press of the bound key fires the action — short or long.",
   "alarm.codes.remote.param.press_short": "Short press",
   "alarm.codes.remote.param.press_long": "Long press",
   "alarm.codes.remote.action": "Action",
-  "alarm.codes.remote.action.hint": "What the key does: arm into a specific mode, disarm, silence, or panic.",
+  "alarm.codes.remote.action.hint":
+    "What the key does: arm into a specific mode, disarm, silence, or panic.",
   "alarm.codes.remote.zone.hint": "Alarm zone the action applies to.",
   "alarm.codes.remote.action.arm": "Arm",
   "alarm.codes.remote.action.disarm": "Disarm",
   "alarm.codes.remote.action.silence": "Silence",
   "alarm.codes.remote.action.panic": "Panic",
   "alarm.codes.remote.zone": "Zone",
-  "alarm.codes.error.remote_incomplete": "Pick a remote button, trigger, action, and zone.",
+  "alarm.codes.error.remote_incomplete":
+    "Pick a remote button, trigger, action, and zone.",
   "alarm.codes.perm.arm": "Arm",
   "alarm.codes.perm.disarm": "Disarm",
   "alarm.codes.perm.silence": "Silence",
   "alarm.codes.perms": "Permissions",
-  "alarm.codes.perms.hint": "What this code is allowed to do: arm, disarm, and silence sirens.",
+  "alarm.codes.perms.hint":
+    "What this code is allowed to do: arm, disarm, and silence sirens.",
   "alarm.codes.unavailable": "Alarm codes unavailable",
-  "alarm.codes.unavailable.description": "The alarm-code subsystem is not configured on this daemon.",
+  "alarm.codes.unavailable.description":
+    "The alarm-code subsystem is not configured on this daemon.",
   "alarm.codes.validity.open": "No limit",
   // Chirp tone labels (docs/alarm-concept.md §15 row 23). The driver
   // reads three tone labels: arm squawk, disarm squawk, and the tick
@@ -501,7 +530,8 @@ const EN: Catalog = {
     "Requires a valid code before the zone arms. Off by default — arming is the safe direction and stays one tap.",
   "alarm.policies.code.require_disarm": "Require code to disarm",
   "alarm.policies.code.require_disarm.always": "Always",
-  "alarm.policies.code.require_disarm.default": "Automatic (on when codes exist)",
+  "alarm.policies.code.require_disarm.default":
+    "Automatic (on when codes exist)",
   "alarm.policies.code.require_disarm.hint":
     "Automatic requires a code as soon as this zone has an enabled code. A zone without codes never demands one, so a disarm can never lock you out.",
   "alarm.policies.code.require_disarm.never": "Never",
@@ -525,15 +555,17 @@ const EN: Catalog = {
   "alarm.policies.posttrigger.hint":
     "A trigger phase is always time-limited (default 180 s, at most 600 s per cycle); sirens stop when it ends no matter what. This setting decides what the zone does afterwards: stay armed in the previous mode, or disarm.",
   "alarm.policies.posttrigger.return_to_armed": "Return to armed",
-  "alarm.policies.prealarm.empty": "No modes configured for this zone yet — add modes in the setup wizard first.",
+  "alarm.policies.prealarm.empty":
+    "No modes configured for this zone yet — add modes in the setup wizard first.",
   "alarm.policies.prealarm.hint":
     "Runs a quiet pre-alarm phase before the full trigger: only chirp, notification and light outputs fire for this many seconds, then the full output policy escalates. A silence during this phase cancels the escalation. 0 disables it.",
   "alarm.policies.rearm.hint":
-    "Re-arms the zone to its pre-incident mode this many quiet seconds after a post-trigger disarm; only takes effect when \"When the trigger phase ends\" is set to Disarm. The countdown resets on any sensor activity.",
+    'Re-arms the zone to its pre-incident mode this many quiet seconds after a post-trigger disarm; only takes effect when "When the trigger phase ends" is set to Disarm. The countdown resets on any sensor activity.',
   "alarm.policies.rearm.seconds": "Auto re-arm after (s)",
   "alarm.policies.schedules.add": "Add schedule",
   "alarm.policies.schedules.auto_arm": "Auto-arm",
-  "alarm.policies.schedules.auto_arm.hint": "When on, the zone arms automatically at this time. When off, this only raises a reminder.",
+  "alarm.policies.schedules.auto_arm.hint":
+    "When on, the zone arms automatically at this time. When off, this only raises a reminder.",
   "alarm.policies.schedules.days": "Days",
   "alarm.policies.schedules.empty": "No schedules yet",
   "alarm.policies.schedules.mode": "Mode",
@@ -616,9 +648,11 @@ const EN: Catalog = {
   "common.reload": "Reload",
   "common.remove": "Remove",
   "loglevels.title": "Log-level overrides",
-  "loglevels.subtitle": "Raise or lower logging for individual subsystems. Overrides resolve hierarchically (e.g. openccu-loom.client).",
+  "loglevels.subtitle":
+    "Raise or lower logging for individual subsystems. Overrides resolve hierarchically (e.g. openccu-loom.client).",
   "loglevels.default": "default: {level}",
-  "loglevels.empty": "No overrides — every subsystem follows the default level.",
+  "loglevels.empty":
+    "No overrides — every subsystem follows the default level.",
   "loglevels.permanent": "permanent",
   "loglevels.expires_in_min": "expires in {mins} min",
   "loglevels.expires_soon": "expires shortly",
@@ -640,12 +674,14 @@ const EN: Catalog = {
   "account.password.mismatch": "Passwords do not match.",
   "account.password.too_short": "Use at least {min} characters.",
   "tls.title": "TLS certificate",
-  "tls.subtitle": "Upload a PEM certificate and key. The listener (API + SPA) hot-reloads — no restart needed.",
+  "tls.subtitle":
+    "Upload a PEM certificate and key. The listener (API + SPA) hot-reloads — no restart needed.",
   "tls.cert_label": "Certificate (PEM)",
   "tls.key_label": "Private key (PEM)",
   "tls.upload": "Upload & reload",
   "tls.uploaded": "Certificate replaced and reloaded.",
-  "tls.not_enabled": "TLS is not enabled. Set north.rest.tls_cert_file / tls_key_file first.",
+  "tls.not_enabled":
+    "TLS is not enabled. Set north.rest.tls_cert_file / tls_key_file first.",
   "common.reset": "Reset",
   "common.download": "Download",
   "common.restore": "Restore",
@@ -663,7 +699,8 @@ const EN: Catalog = {
   "central.readiness.ready": "Ready",
   "central.readiness.waiting": "Waiting for CCU",
   "central.readiness.loading_hub": "Initializing (names)",
-  "central.readiness.loading_devices": "Initializing (devices {loaded}/{total})",
+  "central.readiness.loading_devices":
+    "Initializing (devices {loaded}/{total})",
   "central.readiness.offline": "Offline",
   "central.readiness.unknown": "Unknown",
   "matter.readiness.waiting":
@@ -672,7 +709,8 @@ const EN: Catalog = {
     "CCU '{name}' is still initializing — its devices appear in the pairing automatically once loaded.",
   "firmware.title": "Firmware",
   "firmware.subtitle": "Device firmware versions and OTA update status.",
-  "firmware.updates_available": "{count} device(s) have a firmware update available.",
+  "firmware.updates_available":
+    "{count} device(s) have a firmware update available.",
   "firmware.no_updates": "No devices with firmware updates available.",
   "firmware.filter.all": "All devices",
   "firmware.filter.updatable": "Updates available",
@@ -688,8 +726,10 @@ const EN: Catalog = {
   "firmware.up_to_date": "Up to date",
   "firmware.awaiting_transfer": "Awaiting transfer to the device",
   "firmware.triggered": "Firmware update triggered for {name}.",
-  "firmware.confirm_update": "Trigger firmware update for \"{name}\"? The device will be briefly unreachable.",
-  "firmware.duty_cycle_warning": "The radio interface duty cycle is high ({value}%). The over-the-air transfer may stall until the radio recovers.",
+  "firmware.confirm_update":
+    'Trigger firmware update for "{name}"? The device will be briefly unreachable.',
+  "firmware.duty_cycle_warning":
+    "The radio interface duty cycle is high ({value}%). The over-the-air transfer may stall until the radio recovers.",
   "firmware.count": "{count} of {total} devices",
   "firmware.state.UNKNOWN": "Unknown",
   "firmware.state.UP_TO_DATE": "Up to date",
@@ -707,7 +747,8 @@ const EN: Catalog = {
   "diagnostics.health": "Health",
   "diagnostics.interfaces": "Interfaces",
   "diagnostics.rssi.title": "Signal quality (RSSI)",
-  "diagnostics.rssi.hint": "Per-device RF reception strength (dBm) from each device's maintenance channel — RSSI_DEVICE and RSSI_PEER. Works for HmIP and BidCos devices.",
+  "diagnostics.rssi.hint":
+    "Per-device RF reception strength (dBm) from each device's maintenance channel — RSSI_DEVICE and RSSI_PEER. Works for HmIP and BidCos devices.",
   "diagnostics.rssi.empty": "No devices report RSSI.",
   "diagnostics.rssi.device": "Device",
   "diagnostics.rssi.reachable": "Reachable",
@@ -717,7 +758,8 @@ const EN: Catalog = {
   "nav.signal": "Signal quality",
   "signal.title": "Signal quality (RSSI)",
   "signal.count": "{count} devices",
-  "signal.hint": "Per-device RF reception strength and battery, read from each device's maintenance channel. Works for HmIP and BidCos.",
+  "signal.hint":
+    "Per-device RF reception strength and battery, read from each device's maintenance channel. Works for HmIP and BidCos.",
   "signal.empty": "No devices report RSSI.",
   "signal.empty.description":
     "Signal quality appears here once a device has communicated with its CCU.",
@@ -743,7 +785,8 @@ const EN: Catalog = {
   "diagnostics.unavailable": "Not available",
   "diagnostics.log_level_applied": "Log level applied.",
   "diagnostics.capture": "Capture",
-  "diagnostics.capture_help": "Records bus events, logs and health snapshots for the configured duration and packages them as a downloadable ZIP — meant for reproducible bug reports or support attachments. Anonymising replaces device addresses, serials and hosts with stable placeholders.",
+  "diagnostics.capture_help":
+    "Records bus events, logs and health snapshots for the configured duration and packages them as a downloadable ZIP — meant for reproducible bug reports or support attachments. Anonymising replaces device addresses, serials and hosts with stable placeholders.",
   "diagnostics.capture_running": "running",
   "diagnostics.capture_idle": "idle",
   "diagnostics.duration_seconds": "Duration (s)",
@@ -783,14 +826,16 @@ const EN: Catalog = {
   "diagnostics.central": "Central",
   "diagnostics.system_gauges": "System gauges",
   "diagnostics.rpc_recording.title": "RPC Traffic Recording (Replay)",
-  "diagnostics.rpc_recording.help": "Records XML/JSON-RPC traffic for deterministic golden replay. Survives daemon restarts. Distinct from the debug log capture.",
+  "diagnostics.rpc_recording.help":
+    "Records XML/JSON-RPC traffic for deterministic golden replay. Survives daemon restarts. Distinct from the debug log capture.",
   "diagnostics.rpc_recording.col_ccu": "CCU",
   "diagnostics.rpc_recording.col_status": "Status",
   "diagnostics.rpc_recording.col_entries": "Entries",
   "diagnostics.rpc_recording.col_action": "Action",
   "diagnostics.rpc_recording.active": "Active",
   "diagnostics.rpc_recording.inactive": "Inactive",
-  "diagnostics.rpc_recording.running_hint": "Recording active · survives restart",
+  "diagnostics.rpc_recording.running_hint":
+    "Recording active · survives restart",
   "diagnostics.rpc_recording.start": "Start recording",
   "diagnostics.rpc_recording.stop": "Stop",
   "diagnostics.rpc_recording.download": "Download",
@@ -816,9 +861,11 @@ const EN: Catalog = {
   "inbox.accept_dialog.functions_label": "Functions",
   "inbox.accept_dialog.group_label": "Heating group",
   "inbox.accept_dialog.group_none": "— none —",
-  "inbox.accept_dialog.group_hint": "Optionally add this device to a heating group after accepting.",
+  "inbox.accept_dialog.group_hint":
+    "Optionally add this device to a heating group after accepting.",
   "inbox.group_assign.done": "Added to group “{group}”.",
-  "inbox.group_assign.no_channel": "The device has no channel assignable to this group — add it manually later.",
+  "inbox.group_assign.no_channel":
+    "The device has no channel assignable to this group — add it manually later.",
   "inbox.group_assign.failed": "Group assignment failed.",
   "inbox.accept_dialog.no_rooms": "No rooms available.",
   "inbox.accept_dialog.no_functions": "No functions available.",
@@ -881,7 +928,8 @@ const EN: Catalog = {
   "nav.groups": "Groups",
   "nav.links": "Direct links",
   "favorites.title": "Favorites",
-  "favorites.subtitle": "Your pinned devices and system variables, synced across browsers.",
+  "favorites.subtitle":
+    "Your pinned devices and system variables, synced across browsers.",
   "favorites.empty": "No favorites yet. Pin a device from its detail page.",
   "favorites.pin": "Pin",
   "favorites.pinned": "Pinned",
@@ -899,7 +947,8 @@ const EN: Catalog = {
   "nav.about": "About",
   // --- About (#/about) ---
   "about.title": "About",
-  "about.subtitle": "Version, build and runtime details of this OpenCCU-Loom daemon.",
+  "about.subtitle":
+    "Version, build and runtime details of this OpenCCU-Loom daemon.",
   "about.load_error": "Loading failed: {error}",
   "about.section.daemon": "Daemon",
   "about.field.version": "Version",
@@ -955,13 +1004,16 @@ const EN: Catalog = {
   "overview.expand": "Expand group",
   "overview.collapse": "Collapse group",
   "unignore.title": "Hidden parameters",
-  "unignore.subtitle": "Hidden parameters promoted to first-class data points. Use at your own risk.",
-  "unignore.warning": "Excessive writes to MASTER paramset values can damage devices.",
+  "unignore.subtitle":
+    "Hidden parameters promoted to first-class data points. Use at your own risk.",
+  "unignore.warning":
+    "Excessive writes to MASTER paramset values can damage devices.",
   "unignore.central_label": "Central:",
   "unignore.include_master": "Include MASTER parameters",
   "unignore.search_placeholder": "Filter by name…",
   "unignore.add_pattern": "Add pattern",
-  "unignore.add_pattern_placeholder": "PARAMETER or PARAMETER:PARAMSET@MODEL:CHANNEL",
+  "unignore.add_pattern_placeholder":
+    "PARAMETER or PARAMETER:PARAMSET@MODEL:CHANNEL",
   "unignore.save": "Save",
   "unignore.saving": "Saving…",
   "unignore.discard": "Discard",
@@ -1015,29 +1067,36 @@ const EN: Catalog = {
   "config.field.north.mqtt.discovery_enabled": "Publish HA discovery",
   "config.field.north.mqtt.protocol_version": "MQTT protocol version",
   "config.field.north.mqtt.payload_format": "Payload format",
-  "config.field.north.mqtt.sub_devices_enabled": "One HA device per channel group",
+  "config.field.north.mqtt.sub_devices_enabled":
+    "One HA device per channel group",
   "config.field.north.matter.enabled": "Enable Matter bridge",
-  "config.field.north.matter.enable_time_sync": "Mount TimeSynchronization cluster",
+  "config.field.north.matter.enable_time_sync":
+    "Mount TimeSynchronization cluster",
   "config.field.north.matter.listen": "UDP listen address",
   "config.field.north.matter.vendor_id": "Vendor ID",
   "config.field.north.matter.product_id": "Product ID",
   "config.field.north.matter.node_label": "Bridge label",
   "config.field.north.matter.discriminator": "Commissioning discriminator",
   "config.field.north.matter.prefer_ipv4": "Force IPv4",
-  "config.field.north.matter.expose_secondary_channels": "Expose secondary channels",
+  "config.field.north.matter.expose_secondary_channels":
+    "Expose secondary channels",
   "config.field.north.matter.mdns_advertise": "mDNS advertiser",
-  "config.field.north.matter.dev_rotate_unique_ids": "Rotate unique IDs each boot (dev)",
+  "config.field.north.matter.dev_rotate_unique_ids":
+    "Rotate unique IDs each boot (dev)",
   "config.field.north.matter.commissioning.passcode": "Passcode",
   "config.field.north.matter.commissioning.salt": "PBKDF2 salt",
   "config.field.north.matter.commissioning.iterations": "PBKDF2 iterations",
-  "config.field.north.matter.commissioning.concurrent_pairings": "Concurrent pairings",
-  "config.field.north.matter.commissioning.ephemeral_window": "Ephemeral commissioning window",
+  "config.field.north.matter.commissioning.concurrent_pairings":
+    "Concurrent pairings",
+  "config.field.north.matter.commissioning.ephemeral_window":
+    "Ephemeral commissioning window",
   "config.field.north.matter.case.node_id": "Node ID",
   "config.field.north.matter.case.fabric_id": "Fabric ID",
   "config.field.north.matter.attestation.dac_path": "DAC certificate path",
   "config.field.north.matter.attestation.dac_key_path": "DAC private key path",
   "config.field.north.matter.attestation.pai_path": "PAI certificate path",
-  "config.field.north.matter.attestation.cd_path": "Certification declaration (CD) path",
+  "config.field.north.matter.attestation.cd_path":
+    "Certification declaration (CD) path",
   "config.field.north.discovery.mdns.enabled": "Advertise via mDNS",
   "config.field.north.discovery.mdns.instance_name": "mDNS instance name",
   "config.field.north.discovery.ssdp.enabled": "Discover CCUs via SSDP",
@@ -1055,7 +1114,8 @@ const EN: Catalog = {
   "config.field.north.rest.auth.oidc.client_id": "OIDC client ID",
   "config.field.north.rest.auth.oidc.redirect_url": "OIDC redirect URL",
   "config.field.north.rest.rate_limit.enabled": "REST rate-limit",
-  "config.field.north.rest.rate_limit.requests_per_second": "Refill rate (req/s)",
+  "config.field.north.rest.rate_limit.requests_per_second":
+    "Refill rate (req/s)",
   "config.field.north.rest.rate_limit.burst": "Burst capacity",
   "config.field.north.ui.enabled": "Bootstrap UI enabled",
   "config.field.callback.host": "Callback bind address",
@@ -1077,25 +1137,32 @@ const EN: Catalog = {
   "config.field.north.rest.auth.ccu.min_user_level": "Minimum user level",
   "config.field.north.rest.auth.ccu.role_mapping": "Role mapping",
   "config.field.north.rest.auth.ha_ingress.enabled": "HA Ingress passthrough",
-  "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr": "Trusted proxy CIDR",
+  "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr":
+    "Trusted proxy CIDR",
   "config.field.north.rest.auth.ha_ingress.role": "Granted role",
   "config.field.north.rest.openapi_spec_path": "OpenAPI spec path",
-  "config.field.north.rest.openapi_validate": "Validate requests against OpenAPI spec",
-  "config.field.north.rest.ws.replay_capacity": "WebSocket replay ring-buffer size",
+  "config.field.north.rest.openapi_validate":
+    "Validate requests against OpenAPI spec",
+  "config.field.north.rest.ws.replay_capacity":
+    "WebSocket replay ring-buffer size",
   "config.field.persistence.values_cache.enabled": "Enable VALUES cache",
-  "config.field.persistence.values_cache.flush_interval": "Cache flush interval",
+  "config.field.persistence.values_cache.flush_interval":
+    "Cache flush interval",
   "config.field.persistence.values_cache.disabled_centrals": "Excluded CCUs",
   "config.field.backup.schedule": "Automatic backup interval",
   "config.field.backup.keep_last": "Keep last N backups",
   "config.field.alarm.enabled": "Alarm engine enabled",
   "config.field.alarm.default_siren_seconds": "Default siren duration (s)",
-  "config.field.alarm.max_acoustic_per_incident_seconds": "Acoustic budget per incident (s)",
-  "config.field.alarm.stop_verify_seconds": "Siren stop verification window (s)",
+  "config.field.alarm.max_acoustic_per_incident_seconds":
+    "Acoustic budget per incident (s)",
+  "config.field.alarm.stop_verify_seconds":
+    "Siren stop verification window (s)",
   "config.field.alarm.journal_retention_days": "Journal retention (days)",
   "config.field.alarm.restart_loop_breaker": "Restart loop breaker (re-fires)",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
-  "config.field.persistence.history.retention_hourly": "Hourly rollup retention",
+  "config.field.persistence.history.retention_hourly":
+    "Hourly rollup retention",
   "config.field.persistence.history.retention_daily": "Daily rollup retention",
   "config.field.persistence.history.flush_interval": "History flush interval",
   "config.field.persistence.history.include": "Include parameters",
@@ -1127,18 +1194,25 @@ const EN: Catalog = {
   "config.field.centrals.interfaces.port": "Interface port",
   "config.field.centrals.interfaces.remote_path": "Remote path",
   "config.field.centrals.interfaces.rpc_type": "RPC type",
-  "config.field.centrals.check_connection_interval": "Connection check interval",
-  "config.field.centrals.behavior.delay_new_device_creation": "Defer new-device creation",
-  "config.field.centrals.behavior.enable_device_firmware_check": "Firmware update entities",
+  "config.field.centrals.check_connection_interval":
+    "Connection check interval",
+  "config.field.centrals.behavior.delay_new_device_creation":
+    "Defer new-device creation",
+  "config.field.centrals.behavior.enable_device_firmware_check":
+    "Firmware update entities",
   "config.field.centrals.behavior.enable_program_scan": "Scan programs",
   "config.field.centrals.behavior.enable_sysvar_scan": "Scan system variables",
-  "config.field.centrals.behavior.include_internal_programs": "Include internal programs",
-  "config.field.centrals.behavior.include_internal_sysvars": "Include internal sysvars",
-  "config.field.centrals.behavior.light_last_brightness": "Restore last brightness",
+  "config.field.centrals.behavior.include_internal_programs":
+    "Include internal programs",
+  "config.field.centrals.behavior.include_internal_sysvars":
+    "Include internal sysvars",
+  "config.field.centrals.behavior.light_last_brightness":
+    "Restore last brightness",
   "config.field.centrals.behavior.program_markers": "Program markers",
   "config.field.centrals.behavior.sysvar_markers": "Sysvar markers",
   "config.field.centrals.behavior.sysvar_scan_interval": "Sysvar scan interval",
-  "config.field.centrals.behavior.use_group_channel_for_cover_state": "Group channel for cover state",
+  "config.field.centrals.behavior.use_group_channel_for_cover_state":
+    "Group channel for cover state",
   "config.field.north.mcp.enabled": "Enable MCP server",
   "config.field.north.mcp.allow_writes": "Allow writes",
   "config.field.north.mcp.path": "MCP mount path",
@@ -1151,7 +1225,8 @@ const EN: Catalog = {
   "config.field.north.webhook.timeout_ms": "Delivery timeout (ms)",
   "config.field.north.webhook.inbound.enabled": "Enable inbound webhook",
   "config.field.north.webhook.inbound.token": "Inbound token",
-  "config.field.north.mqtt.retain_cleanup_window_ms": "Retain cleanup window (ms)",
+  "config.field.north.mqtt.retain_cleanup_window_ms":
+    "Retain cleanup window (ms)",
   "config.field.north.rest.csrf_enabled": "CSRF protection",
   "config.field.north.rest.csrf_secure": "CSRF Secure cookie",
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP trace endpoint",
@@ -1161,29 +1236,52 @@ const EN: Catalog = {
   // namespace as the labels above, but with `.help.` instead of
   // `.field.`. A missing help row is fine; the editor just
   // suppresses the hint line.
-  "config.help.locale": "Default UI language for the very first SPA load. Operators can flip per-user via the Settings tab.",
-  "config.help.data_dir": "Root for SQLite database, sessions, backups, logs. Must be writable; created on first start.",
-  "config.help.logging.level": "Filter threshold for the structured logger. debug exposes wire-level traces; info is the typical operator level.",
-  "config.help.logging.format": "Handler shape. json for production / log shippers; text or text-color for terminal output.",
-  "config.help.logging.overrides": "Per-subsystem level overrides keyed by dot-separated logger path. The most specific override wins.",
-  "config.help.north.mqtt.enabled": "Master switch for the MQTT bridge. When off no broker connection is opened and no topics are emitted.",
-  "config.help.north.mqtt.broker_url": "tcp://host:port (plain), tls://host:port (TLS), or mqtt:// / mqtts:// scheme aliases. Required when MQTT is enabled.",
-  "config.help.north.mqtt.client_id": "MQTT client identifier the daemon registers with. Must be unique per broker connection.",
-  "config.help.north.mqtt.username": "Broker username for authenticated brokers. Leave empty for anonymous brokers.",
-  "config.help.north.mqtt.password": "Broker password — stored encrypted-at-rest by the OS, redacted from backups. Prefer setting via OPENCCU_LOOM_MQTT_PASSWORD env var.",
-  "config.help.north.mqtt.topic_base": "Prefix every raw-plane and Discovery topic with this string. Change it when running multiple daemons against one broker.",
-  "config.help.north.mqtt.raw_enabled": "Publish per-data-point state under <topic_base>/<interface>/... — the raw topic plane non-HA consumers subscribe to.",
-  "config.help.north.mqtt.discovery_enabled": "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices.",
-  "config.help.north.mqtt.protocol_version": "MQTT wire dialect: \"5\" (default) or \"3.1.1\" for brokers without MQTT 5.0 support. No silent downgrade — a v5 connect against a v3-only broker fails with a named error.",
-  "config.help.north.mqtt.payload_format": "bare keeps primitive scalar payloads (backwards-compat); json wraps state with {value, available}. Flip only after every consumer is upgraded.",
-  "config.help.north.mqtt.sub_devices_enabled": "Split multi-channel-group devices into one HA device per channel group. Renders the parent + N children hierarchy in HA.",
-  "config.help.north.matter.enabled": "Master switch for the Matter bridge. Off by default. When enabled the daemon stands up the UDP listener and mDNS records.",
-  "config.help.north.matter.enable_time_sync": "Mount the optional TimeSynchronization cluster (0x0038) on the Matter Root endpoint. Off by default — it is optional-only on a RootNode and some controllers (e.g. Apple Home) may reject the bridge at pairing when it appears. Enable only if a controller needs a time-sync surface, and re-pair afterwards.",
-  "config.help.north.matter.listen": "UDP bind address for the Matter listener. :5540 is the IANA-assigned default; :0 lets the OS pick (useful in tests). Amazon Alexa can only commission bridges on port 5540.",
-  "config.help.north.matter.vendor_id": "IANA-assigned vendor identifier. 0xFFF1 is the test / development vendor block — never ship that value to production.",
-  "config.help.north.matter.product_id": "Vendor-assigned product identifier. Defaults to 0x8000.",
-  "config.help.north.matter.node_label": "User-visible label for the bridge node, surfaced in commissioners (Apple Home, Google Home, …).",
-  "config.help.north.matter.discriminator": "12-bit Matter commissioning discriminator. Combined with the passcode to form the manual setup code.",
+  "config.help.locale":
+    "Default UI language for the very first SPA load. Operators can flip per-user via the Settings tab.",
+  "config.help.data_dir":
+    "Root for SQLite database, sessions, backups, logs. Must be writable; created on first start.",
+  "config.help.logging.level":
+    "Filter threshold for the structured logger. debug exposes wire-level traces; info is the typical operator level.",
+  "config.help.logging.format":
+    "Handler shape. json for production / log shippers; text or text-color for terminal output.",
+  "config.help.logging.overrides":
+    "Per-subsystem level overrides keyed by dot-separated logger path. The most specific override wins.",
+  "config.help.north.mqtt.enabled":
+    "Master switch for the MQTT bridge. When off no broker connection is opened and no topics are emitted.",
+  "config.help.north.mqtt.broker_url":
+    "tcp://host:port (plain), tls://host:port (TLS), or mqtt:// / mqtts:// scheme aliases. Required when MQTT is enabled.",
+  "config.help.north.mqtt.client_id":
+    "MQTT client identifier the daemon registers with. Must be unique per broker connection.",
+  "config.help.north.mqtt.username":
+    "Broker username for authenticated brokers. Leave empty for anonymous brokers.",
+  "config.help.north.mqtt.password":
+    "Broker password — stored encrypted-at-rest by the OS, redacted from backups. Prefer setting via OPENCCU_LOOM_MQTT_PASSWORD env var.",
+  "config.help.north.mqtt.topic_base":
+    "Prefix every raw-plane and Discovery topic with this string. Change it when running multiple daemons against one broker.",
+  "config.help.north.mqtt.raw_enabled":
+    "Publish per-data-point state under <topic_base>/<interface>/... — the raw topic plane non-HA consumers subscribe to.",
+  "config.help.north.mqtt.discovery_enabled":
+    "Emit Home Assistant Discovery payloads so HA auto-registers the daemon's devices.",
+  "config.help.north.mqtt.protocol_version":
+    'MQTT wire dialect: "5" (default) or "3.1.1" for brokers without MQTT 5.0 support. No silent downgrade — a v5 connect against a v3-only broker fails with a named error.',
+  "config.help.north.mqtt.payload_format":
+    "bare keeps primitive scalar payloads (backwards-compat); json wraps state with {value, available}. Flip only after every consumer is upgraded.",
+  "config.help.north.mqtt.sub_devices_enabled":
+    "Split multi-channel-group devices into one HA device per channel group. Renders the parent + N children hierarchy in HA.",
+  "config.help.north.matter.enabled":
+    "Master switch for the Matter bridge. Off by default. When enabled the daemon stands up the UDP listener and mDNS records.",
+  "config.help.north.matter.enable_time_sync":
+    "Mount the optional TimeSynchronization cluster (0x0038) on the Matter Root endpoint. Off by default — it is optional-only on a RootNode and some controllers (e.g. Apple Home) may reject the bridge at pairing when it appears. Enable only if a controller needs a time-sync surface, and re-pair afterwards.",
+  "config.help.north.matter.listen":
+    "UDP bind address for the Matter listener. :5540 is the IANA-assigned default; :0 lets the OS pick (useful in tests). Amazon Alexa can only commission bridges on port 5540.",
+  "config.help.north.matter.vendor_id":
+    "IANA-assigned vendor identifier. 0xFFF1 is the test / development vendor block — never ship that value to production.",
+  "config.help.north.matter.product_id":
+    "Vendor-assigned product identifier. Defaults to 0x8000.",
+  "config.help.north.matter.node_label":
+    "User-visible label for the bridge node, surfaced in commissioners (Apple Home, Google Home, …).",
+  "config.help.north.matter.discriminator":
+    "12-bit Matter commissioning discriminator. Combined with the passcode to form the manual setup code.",
   "config.help.north.matter.prefer_ipv4":
     "Force the Matter UDP socket to bind IPv4-only. Default false opens an IPv6 dual-stack socket that also accepts IPv4 traffic — the standard choice.",
   "config.help.north.matter.expose_secondary_channels":
@@ -1218,48 +1316,84 @@ const EN: Catalog = {
     "Native-Go Matter bridge that exposes selected CCU devices as Matter accessories. Disabled by default. Production deployments need vendor-supplied attestation material (DAC / PAI / CD) in the Expert section; dev work pairs via chip-tool --bypass-attestation-verifier.",
   "settings.section.intro.north.mcp":
     "MCP (Model Context Protocol) server that exposes CCU devices to LLM agents as tools, served on the REST listener. Disabled by default and read-only until “Allow writes” is also enabled. Changes take effect after a daemon restart. See ADR 0025.",
-  "config.help.north.mcp.enabled": "Master switch for the MCP server, served over Streamable-HTTP on the REST listener. Off by default. Takes effect after a daemon restart.",
-  "config.help.north.mcp.allow_writes": "Enable write-capable MCP tools (e.g. set_datapoint). Off by default — the server alone is read-only; turn this on for agent-driven control. Takes effect after a daemon restart.",
-  "config.help.north.mcp.path": "HTTP mount path for the MCP transport on the REST listener. Empty defaults to /mcp. Takes effect after a daemon restart.",
-  "config.help.north.webhook.enabled": "Master switch for the outbound webhook. When on, the daemon POSTs a signed JSON payload to the configured URL on datapoint, system-status and incident events. Off by default. Takes effect after a daemon restart.",
-  "config.help.north.webhook.url": "Absolute http(s) endpoint each event is POSTed to. Empty disables delivery even while enabled.",
-  "config.help.north.webhook.secret": "Shared key for the HMAC-SHA256 body signature sent in the X-OpenCCU-Signature header. Empty means no signature is sent (the receiver cannot verify authenticity).",
-  "config.help.north.webhook.events": "Allowlist of event-type tags to deliver (e.g. datapoint.value_changed). Empty delivers all supported events.",
-  "config.help.north.webhook.centrals": "Allowlist of CCU names to deliver events for. Empty delivers events from all CCUs.",
-  "config.help.north.webhook.parameter_glob": "Optional glob (e.g. *TEMPERATURE*) restricting datapoint events to matching parameter names. Empty applies no parameter filter; other event types are unaffected.",
-  "config.help.north.webhook.timeout_ms": "Per-delivery HTTP timeout in milliseconds. Zero or negative uses the 10000 ms default.",
-  "config.help.north.webhook.inbound.enabled": "Master switch for the inbound webhook REST surface (POST /api/v1/webhook/value and /api/v1/webhook/program). Off by default. Routes are mounted only when enabled, so changing this takes effect after a daemon restart. Inbound requests are real device writes / program runs.",
-  "config.help.north.webhook.inbound.token": "Optional bearer token accepted in addition to the normal auth chain, so a header-only caller (e.g. a doorbell) can POST without a session or user login. Sent as Authorization: Bearer <token>. Empty means only the normal auth chain applies.",
-  "config.help.north.discovery.mdns.enabled": "Advertise the daemon's REST listener via mDNS / Zeroconf so LAN clients (e.g. Home Assistant) can auto-discover it.",
-  "config.help.north.discovery.mdns.instance_name": "Leftmost label of the mDNS SRV / TXT record. Empty falls back to the OS hostname.",
-  "config.help.north.discovery.ssdp.enabled": "Periodically scan the LAN for Homematic / OpenCCU central units via SSDP/UPnP so they can be adopted with one click. Read-only — no data about the daemon leaves the LAN.",
-  "config.help.north.discovery.ssdp.interval": "How often the discovery scan re-runs (e.g. 60s). Empty falls back to 60 seconds.",
-  "config.help.north.rest.enabled": "Master switch for the REST + WebSocket server. Disabling it leaves the daemon with no operator-facing surface.",
-  "config.help.north.rest.listen": "Bind address for REST + WebSocket. :8119 listens on every interface; tighten with a host: prefix when needed.",
+  "config.help.north.mcp.enabled":
+    "Master switch for the MCP server, served over Streamable-HTTP on the REST listener. Off by default. Takes effect after a daemon restart.",
+  "config.help.north.mcp.allow_writes":
+    "Enable write-capable MCP tools (e.g. set_datapoint). Off by default — the server alone is read-only; turn this on for agent-driven control. Takes effect after a daemon restart.",
+  "config.help.north.mcp.path":
+    "HTTP mount path for the MCP transport on the REST listener. Empty defaults to /mcp. Takes effect after a daemon restart.",
+  "config.help.north.webhook.enabled":
+    "Master switch for the outbound webhook. When on, the daemon POSTs a signed JSON payload to the configured URL on datapoint, system-status and incident events. Off by default. Takes effect after a daemon restart.",
+  "config.help.north.webhook.url":
+    "Absolute http(s) endpoint each event is POSTed to. Empty disables delivery even while enabled.",
+  "config.help.north.webhook.secret":
+    "Shared key for the HMAC-SHA256 body signature sent in the X-OpenCCU-Signature header. Empty means no signature is sent (the receiver cannot verify authenticity).",
+  "config.help.north.webhook.events":
+    "Allowlist of event-type tags to deliver (e.g. datapoint.value_changed). Empty delivers all supported events.",
+  "config.help.north.webhook.centrals":
+    "Allowlist of CCU names to deliver events for. Empty delivers events from all CCUs.",
+  "config.help.north.webhook.parameter_glob":
+    "Optional glob (e.g. *TEMPERATURE*) restricting datapoint events to matching parameter names. Empty applies no parameter filter; other event types are unaffected.",
+  "config.help.north.webhook.timeout_ms":
+    "Per-delivery HTTP timeout in milliseconds. Zero or negative uses the 10000 ms default.",
+  "config.help.north.webhook.inbound.enabled":
+    "Master switch for the inbound webhook REST surface (POST /api/v1/webhook/value and /api/v1/webhook/program). Off by default. Routes are mounted only when enabled, so changing this takes effect after a daemon restart. Inbound requests are real device writes / program runs.",
+  "config.help.north.webhook.inbound.token":
+    "Optional bearer token accepted in addition to the normal auth chain, so a header-only caller (e.g. a doorbell) can POST without a session or user login. Sent as Authorization: Bearer <token>. Empty means only the normal auth chain applies.",
+  "config.help.north.discovery.mdns.enabled":
+    "Advertise the daemon's REST listener via mDNS / Zeroconf so LAN clients (e.g. Home Assistant) can auto-discover it.",
+  "config.help.north.discovery.mdns.instance_name":
+    "Leftmost label of the mDNS SRV / TXT record. Empty falls back to the OS hostname.",
+  "config.help.north.discovery.ssdp.enabled":
+    "Periodically scan the LAN for Homematic / OpenCCU central units via SSDP/UPnP so they can be adopted with one click. Read-only — no data about the daemon leaves the LAN.",
+  "config.help.north.discovery.ssdp.interval":
+    "How often the discovery scan re-runs (e.g. 60s). Empty falls back to 60 seconds.",
+  "config.help.north.rest.enabled":
+    "Master switch for the REST + WebSocket server. Disabling it leaves the daemon with no operator-facing surface.",
+  "config.help.north.rest.listen":
+    "Bind address for REST + WebSocket. :8119 listens on every interface; tighten with a host: prefix when needed.",
   "config.help.north.rest.public_url":
     "Externally-reachable base URL of this daemon (scheme + host [+ port]), e.g. https://loom.example.com. Used to build absolute links such as the OIDC redirect URL and to derive secure-cookie behaviour. Leave empty to infer it per request — set it when running behind a reverse proxy or under a custom domain.",
   "config.help.north.rest.tls_cert_file":
     "Path to the PEM certificate (chain). Set this together with the key file to serve the API + SPA over HTTPS on the same port; leave both empty for plain HTTP behind a TLS-terminating proxy. An uploaded certificate is written to this path and watched for hot-reload — the upload replaces the file's contents, it does not remove the need to pick a location.",
   "config.help.north.rest.tls_key_file":
     "Path to the PEM private key that matches the certificate file. Required together with the certificate to enable HTTPS; an uploaded key is written here and hot-reloaded on change.",
-  "config.help.north.rest.cors": "Whitelisted browser origins for cross-origin REST calls. Empty disables CORS entirely; use [\"*\"] only for development.",
-  "config.help.north.rest.auth.basic_enabled": "Accept HTTP Basic credentials on protected routes. Useful for curl + CI. Default on; set to false to reject Basic auth even when users are configured.",
-  "config.help.north.rest.auth.bearer_enabled": "Accept Bearer tokens via Authorization header. Use for automation. Default on; set to false to reject tokens even when they are configured.",
-  "config.help.north.rest.auth.oidc.enabled": "Enable OpenID Connect single-sign-on. The login page surfaces an SSO button when configured.",
-  "config.help.north.rest.auth.oidc.issuer": "Issuer URL (no trailing slash). The .well-known/openid-configuration document is fetched on daemon start.",
-  "config.help.north.rest.auth.oidc.client_id": "Public client identifier registered with the IdP. PKCE flow.",
-  "config.help.north.rest.auth.oidc.redirect_url": "Must match the URL registered with the IdP. Points at the daemon's OIDC callback handler.",
-  "config.help.north.rest.rate_limit.enabled": "Enforce per-identity token-bucket rate limiting on REST requests. Excess returns HTTP 429.",
-  "config.help.north.rest.rate_limit.requests_per_second": "Steady-state token-refill rate per identity. 10 is a sensible starting point.",
-  "config.help.north.rest.rate_limit.burst": "Token-bucket size — maximum concurrent requests per identity before the limiter gates.",
-  "config.help.north.ui.enabled": "Bootstrap UI surface (login, /setup wizard, /health). The SPA itself lives on the REST listener.",
-  "config.help.callback.host": "Local interface the XML-RPC + BIN-RPC callback listeners bind to. Lock down via firewall, not via bind address.",
-  "config.help.callback.port": "XML-RPC callback listener port. 0 lets the OS pick an ephemeral port; the daemon re-advertises it on every CCU reconnect.",
-  "config.help.callback.bin_port": "BIN-RPC callback listener port (CUxD). Same dynamic-port semantics as the XML-RPC port.",
-  "config.help.callback.port_range": "Optional port range <lo>-<hi> for the dynamic-port policy. Use when the daemon sits behind a narrow firewall range.",
-  "config.help.callback.public_host": "Hostname the daemon announces to the CCU in every init() call. Set when running behind NAT.",
-  "config.help.callback.max_connections": "Cap on simultaneous connections per callback listener (XML-RPC and BIN-RPC). Bounds memory/goroutine use if an untrusted LAN host floods the socket. 0 uses the default (64).",
-  "config.help.callback.restrict_source_ips": "Only accept callbacks from the configured CCU IPs plus loopback. Adds a source-IP allowlist on top of the connection cap. Off by default; enable when no legitimate host other than your CCUs reaches the callback ports.",
+  "config.help.north.rest.cors":
+    'Whitelisted browser origins for cross-origin REST calls. Empty disables CORS entirely; use ["*"] only for development.',
+  "config.help.north.rest.auth.basic_enabled":
+    "Accept HTTP Basic credentials on protected routes. Useful for curl + CI. Default on; set to false to reject Basic auth even when users are configured.",
+  "config.help.north.rest.auth.bearer_enabled":
+    "Accept Bearer tokens via Authorization header. Use for automation. Default on; set to false to reject tokens even when they are configured.",
+  "config.help.north.rest.auth.oidc.enabled":
+    "Enable OpenID Connect single-sign-on. The login page surfaces an SSO button when configured.",
+  "config.help.north.rest.auth.oidc.issuer":
+    "Issuer URL (no trailing slash). The .well-known/openid-configuration document is fetched on daemon start.",
+  "config.help.north.rest.auth.oidc.client_id":
+    "Public client identifier registered with the IdP. PKCE flow.",
+  "config.help.north.rest.auth.oidc.redirect_url":
+    "Must match the URL registered with the IdP. Points at the daemon's OIDC callback handler.",
+  "config.help.north.rest.rate_limit.enabled":
+    "Enforce per-identity token-bucket rate limiting on REST requests. Excess returns HTTP 429.",
+  "config.help.north.rest.rate_limit.requests_per_second":
+    "Steady-state token-refill rate per identity. 10 is a sensible starting point.",
+  "config.help.north.rest.rate_limit.burst":
+    "Token-bucket size — maximum concurrent requests per identity before the limiter gates.",
+  "config.help.north.ui.enabled":
+    "Bootstrap UI surface (login, /setup wizard, /health). The SPA itself lives on the REST listener.",
+  "config.help.callback.host":
+    "Local interface the XML-RPC + BIN-RPC callback listeners bind to. Lock down via firewall, not via bind address.",
+  "config.help.callback.port":
+    "XML-RPC callback listener port. 0 lets the OS pick an ephemeral port; the daemon re-advertises it on every CCU reconnect.",
+  "config.help.callback.bin_port":
+    "BIN-RPC callback listener port (CUxD). Same dynamic-port semantics as the XML-RPC port.",
+  "config.help.callback.port_range":
+    "Optional port range <lo>-<hi> for the dynamic-port policy. Use when the daemon sits behind a narrow firewall range.",
+  "config.help.callback.public_host":
+    "Hostname the daemon announces to the CCU in every init() call. Set when running behind NAT.",
+  "config.help.callback.max_connections":
+    "Cap on simultaneous connections per callback listener (XML-RPC and BIN-RPC). Bounds memory/goroutine use if an untrusted LAN host floods the socket. 0 uses the default (64).",
+  "config.help.callback.restrict_source_ips":
+    "Only accept callbacks from the configured CCU IPs plus loopback. Adds a source-IP allowlist on top of the connection cap. Off by default; enable when no legitimate host other than your CCUs reaches the callback ports.",
   "config.help.ccu_data.translations_path":
     "Filesystem path to the OCCU translations ZIP. Defaults to the embedded archive bundled with the binary; override only when testing a custom extract.",
   "config.help.ccu_data.easymode_path":
@@ -1271,7 +1405,7 @@ const EN: Catalog = {
   "config.help.north.rest.auth.oidc.client_secret":
     "Confidential client secret registered with the IdP. Leave empty for public clients (PKCE-only). Prefer setting via environment variable.",
   "config.help.north.rest.auth.oidc.role_claim":
-    "JWT claim name the daemon reads to determine the user role (admin / user). Defaults to \"role\".",
+    'JWT claim name the daemon reads to determine the user role (admin / user). Defaults to "role".',
   "config.help.north.rest.auth.ccu.enabled":
     "Delegate login to the named CCU's user database. Users sign in with their CCU accounts; local users remain as a break-glass fallback. Restart required.",
   "config.help.north.rest.auth.ccu.primary":
@@ -1281,13 +1415,13 @@ const EN: Catalog = {
   "config.help.north.rest.auth.ccu.min_user_level":
     "Reject CCU users below this UserLevel (8 admin, 2 operator, 1 guest; 0 is always denied). Default 1 admits any real user.",
   "config.help.north.rest.auth.ccu.role_mapping":
-    "Override the default CCU UserLevel→Loom-role mapping. Keys are the UserLevel as a string (\"8\", \"2\", \"1\"); values are \"admin\" / \"operator\" / \"viewer\". Empty uses the defaults (≥8 admin, ≥2 operator, ≥1 viewer).",
+    'Override the default CCU UserLevel→Loom-role mapping. Keys are the UserLevel as a string ("8", "2", "1"); values are "admin" / "operator" / "viewer". Empty uses the defaults (≥8 admin, ≥2 operator, ≥1 viewer).',
   "config.help.north.rest.auth.ha_ingress.enabled":
     "Trust Home Assistant Ingress: a request proxied by the Supervisor counts as an authenticated admin — no login. Default (unset) = on in the HA add-on, off in a plain build; set On/Off to override. Safe only with the add-on's panel_admin: true (admins-only Ingress); real tokens/sessions still win. Restart required.",
   "config.help.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Network the Ingress request's real peer must come from. Empty uses the HA Supervisor default 172.30.32.0/23. X-Forwarded-For is never trusted.",
   "config.help.north.rest.auth.ha_ingress.role":
-    "Loom role granted to a trusted Ingress request: \"admin\" (default), \"operator\" or \"viewer\".",
+    'Loom role granted to a trusted Ingress request: "admin" (default), "operator" or "viewer".',
   "config.help.north.rest.openapi_spec_path":
     "Override path for the OpenAPI YAML. Defaults to the copy embedded in the binary at build time. Expert: set only when hot-patching the spec during development.",
   "config.help.north.rest.openapi_validate":
@@ -1335,7 +1469,7 @@ const EN: Catalog = {
   "config.help.persistence.history.export.enabled":
     "Turn on the push exporter that forwards each recorded sample to an external time-series store (InfluxDB by default); disabled by default.",
   "config.help.persistence.history.export.kind":
-    "Exporter backend; empty or \"influxdb\" selects the InfluxDB v2 line-protocol writer (the only available backend today).",
+    'Exporter backend; empty or "influxdb" selects the InfluxDB v2 line-protocol writer (the only available backend today).',
   "config.help.persistence.history.export.endpoint":
     "Base URL of the target time-series store, e.g. http://influx:8086.",
   "config.help.persistence.history.export.org":
@@ -1401,7 +1535,7 @@ const EN: Catalog = {
   "config.help.addon_update.check_interval":
     "How often the daemon checks GitHub for a new add-on release in the background, plus a random jitter of up to 1 hour so a fleet doesn't poll all at once. Zero falls back to the default of 24 h; use the enabled toggle to turn background checking off.",
   "config.help.addon_update.enabled":
-    "Check GitHub for new add-on releases in the background (boot check plus the recurring interval); default on. The manual \"Check for updates\" button and installing stay available when disabled.",
+    'Check GitHub for new add-on releases in the background (boot check plus the recurring interval); default on. The manual "Check for updates" button and installing stay available when disabled.',
   "settings.section.intro.persistence":
     "Local on-disk cache of CCU data-point values. The cache lets the daemon survive restarts without re-reading every paramset from the CCU. By default it is ON with a 60-second flush interval — leave it alone unless you are debugging cache behaviour.",
   "settings.section.intro.reliability":
@@ -1522,7 +1656,8 @@ const EN: Catalog = {
   "settings.tab.rest": "API & WebSocket",
   "settings.tab.oidc": "OIDC",
   "settings.tab.ccu_auth": "CCU login",
-  "settings.ccu_auth.hint": "Delegate login to the CCU's own user database. When enabled, users sign in with their CCU accounts; local users stay as a break-glass fallback. Changes take effect after a daemon restart.",
+  "settings.ccu_auth.hint":
+    "Delegate login to the CCU's own user database. When enabled, users sign in with their CCU accounts; local users stay as a break-glass fallback. Changes take effect after a daemon restart.",
   "settings.tab.callback": "Callback Ports",
   "settings.tab.reliability": "Reliability",
   "settings.tab.persistence": "Persistence",
@@ -1559,13 +1694,16 @@ const EN: Catalog = {
   "changes.not_revertible": "Not revertible here",
   "changes.intro": "Settings you have overridden. Revert any to its default.",
   "settings.restart_later": "Later",
-  "settings.reset_confirm": "Remove the persisted override for this section? The daemon will revert to its built-in defaults on the next restart.",
+  "settings.reset_confirm":
+    "Remove the persisted override for this section? The daemon will revert to its built-in defaults on the next restart.",
   "settings.reset_done": "Section reset to built-in defaults.",
-  "restart.banner_text": "Configuration changes need a daemon restart to take effect.",
+  "restart.banner_text":
+    "Configuration changes need a daemon restart to take effect.",
   "restart.banner_action": "Open settings",
   "restart.now": "Restart now",
   "settings.json_parse_error": "Invalid JSON — check syntax.",
-  "settings.duration_parse_error": "Invalid duration. Use Go syntax: 60s, 5m, 250ms, 1h30m.",
+  "settings.duration_parse_error":
+    "Invalid duration. Use Go syntax: 60s, 5m, 250ms, 1h30m.",
   "settings.tristate.default": "Default",
   "settings.tristate.on": "On",
   "settings.tristate.off": "Off",
@@ -1582,7 +1720,8 @@ const EN: Catalog = {
   "users.new_password": "New password",
   "users.password": "Password",
   "users.confirm_delete_title": "Remove user?",
-  "users.confirm_delete_body": "Remove user \"{subject}\"? This action cannot be undone.",
+  "users.confirm_delete_body":
+    'Remove user "{subject}"? This action cannot be undone.',
   "users.col.subject": "Username",
   "users.col.role": "Role",
   "users.col.created": "Created",
@@ -1600,7 +1739,8 @@ const EN: Catalog = {
   "tokens.copy_failed":
     "Copy failed — the clipboard needs a secure (HTTPS) context. The token is selected so you can copy it manually.",
   "tokens.confirm_revoke_title": "Revoke token?",
-  "tokens.confirm_revoke_body": "Revoke token {fingerprint}? Any client using it will lose access immediately.",
+  "tokens.confirm_revoke_body":
+    "Revoke token {fingerprint}? Any client using it will lose access immediately.",
   "tokens.col.subject": "Subject",
   "tokens.col.role": "Role",
   "tokens.col.fingerprint": "Fingerprint",
@@ -1611,10 +1751,12 @@ const EN: Catalog = {
   "discovery.add": "Add",
   "discovery.already_configured": "Already configured",
   "discovery.empty": "No CCUs found on the network.",
-  "discovery.found_hint": "CCUs found on your network via SSDP — click Add to prefill the form.",
+  "discovery.found_hint":
+    "CCUs found on your network via SSDP — click Add to prefill the form.",
   "discovery.ignore": "Ignore",
-  "discovery.ignore_confirm": "Ignore \"{name}\" ({serial})? It will no longer appear in the discovered list.",
-  "discovery.ignored": "\"{name}\" ignored.",
+  "discovery.ignore_confirm":
+    'Ignore "{name}" ({serial})? It will no longer appear in the discovered list.',
+  "discovery.ignored": '"{name}" ignored.',
   "discovery.refresh": "Refresh",
   "discovery.title": "Discovered CCUs",
   // --- Centrals admin ---
@@ -1628,40 +1770,53 @@ const EN: Catalog = {
   "centrals.edit_title": "Edit CCU",
   "centrals.created": "CCU added.",
   "centrals.updated": "CCU updated.",
-  "centrals.updated_restart_required": "CCU settings saved. A daemon restart is required to apply them to the running connection.",
+  "centrals.updated_restart_required":
+    "CCU settings saved. A daemon restart is required to apply them to the running connection.",
   "centrals.deleted": "CCU removed.",
   "centrals.enabled": "CCU enabled.",
   "centrals.disabled": "CCU disabled.",
   "centrals.confirm_delete_title": "Remove CCU?",
-  "centrals.confirm_delete_body": "Remove CCU \"{name}\"? Devices managed by this CCU will become unavailable.",
+  "centrals.confirm_delete_body":
+    'Remove CCU "{name}"? Devices managed by this CCU will become unavailable.',
   "centrals.field.name": "Name",
   "centrals.field.host": "Host",
   "centrals.field.interfaces": "Interfaces",
-  "centrals.field.interfaces_hint": "Pick the interfaces the CCU exposes. Port column accepts an override; blank uses the default.",
+  "centrals.field.interfaces_hint":
+    "Pick the interfaces the CCU exposes. Port column accepts an override; blank uses the default.",
   "centrals.field.interfaces_json": "Interfaces (JSON)",
   "centrals.field.port": "Port",
-  "centrals.field.port_hint": "Leave the port empty to use the default. Override only when the CCU exposes a non-standard port.",
+  "centrals.field.port_hint":
+    "Leave the port empty to use the default. Override only when the CCU exposes a non-standard port.",
   "centrals.field.json_rpc_port": "JSON-RPC port",
-  "centrals.field.json_rpc_port_hint": "CCU web/ReGa port for JSON-RPC. Empty uses the default (80, or 443 with TLS). Override for a non-standard CCU HTTP port.",
+  "centrals.field.json_rpc_port_hint":
+    "CCU web/ReGa port for JSON-RPC. Empty uses the default (80, or 443 with TLS). Override for a non-standard CCU HTTP port.",
   "centrals.field.primary_interface": "Primary interface",
   "centrals.behavior.title": "Advanced behaviour",
-  "centrals.behavior.light_last_brightness": "Restore last brightness on light turn-on",
-  "centrals.behavior.use_group_channel_for_cover_state": "Report cover position from the group channel",
+  "centrals.behavior.light_last_brightness":
+    "Restore last brightness on light turn-on",
+  "centrals.behavior.use_group_channel_for_cover_state":
+    "Report cover position from the group channel",
   "centrals.behavior.enable_sysvar_scan": "Scan system variables",
   "centrals.behavior.enable_program_scan": "Scan programs",
-  "centrals.behavior.include_internal_sysvars": "Include internal system variables",
+  "centrals.behavior.include_internal_sysvars":
+    "Include internal system variables",
   "centrals.behavior.include_internal_programs": "Include internal programs",
-  "centrals.behavior.enable_device_firmware_check": "Surface device firmware-update entities",
-  "centrals.behavior.delay_new_device_creation": "Defer new-device creation to the inbox",
-  "centrals.behavior.sysvar_scan_interval": "System-variable scan interval (seconds, 0 = default)",
+  "centrals.behavior.enable_device_firmware_check":
+    "Surface device firmware-update entities",
+  "centrals.behavior.delay_new_device_creation":
+    "Defer new-device creation to the inbox",
+  "centrals.behavior.sysvar_scan_interval":
+    "System-variable scan interval (seconds, 0 = default)",
   "centrals.behavior.sysvar_markers": "System-variable markers",
   "centrals.behavior.program_markers": "Program markers",
   "centrals.field.username": "Username",
   "centrals.field.password": "Password",
-  "centrals.field.password_hint": "Stored in the daemon's SQLite database (file mode 0600). Backup tarballs redact it unless --include-secrets is passed.",
+  "centrals.field.password_hint":
+    "Stored in the daemon's SQLite database (file mode 0600). Backup tarballs redact it unless --include-secrets is passed.",
   "centrals.field.password_placeholder_env": "(resolved from env variable)",
   "centrals.field.password_env": "Password env-var (override)",
-  "centrals.field.password_env_hint": "Optional. Name of an environment variable; when set, it overrides the password field above. Use for Kubernetes / Vault / systemd-creds workflows. See README → Secrets.",
+  "centrals.field.password_env_hint":
+    "Optional. Name of an environment variable; when set, it overrides the password field above. Use for Kubernetes / Vault / systemd-creds workflows. See README → Secrets.",
   "centrals.field.tls_insecure": "Skip TLS verification",
   "centrals.field.tls_insecure_warn":
     "Disables certificate chain + hostname checks. Use only against CCUs with self-signed certificates on a trusted network.",
@@ -1723,7 +1878,8 @@ const EN: Catalog = {
   "device.offline": "offline",
   "device.update_available": "update available",
   "device.firmware_update": "Update firmware",
-  "device.firmware_update.tooltip": "Trigger firmware update ({current} → {available})",
+  "device.firmware_update.tooltip":
+    "Trigger firmware update ({current} → {available})",
   "device.firmware_triggered": "Firmware update triggered.",
   "device.confirm_remove":
     'Really remove device "{name}"?\n\nThe CCU pairing will be dropped.',
@@ -1836,8 +1992,7 @@ const EN: Catalog = {
   "links.empty": "No direct links.",
   "links.add": "Add link",
   "links.remove": "Remove",
-  "links.confirm_remove":
-    "Really remove the link from {sender} to {receiver}?",
+  "links.confirm_remove": "Really remove the link from {sender} to {receiver}?",
   "links.removed": "Link removed.",
   "links.added": "Link added.",
   "links.outgoing": "outgoing",
@@ -1865,7 +2020,8 @@ const EN: Catalog = {
   "central.title": "Press events to central",
   "central.subtitle":
     "Controls whether the CCU forwards press events (PRESS_SHORT/LONG) to OpenCCU-Loom.",
-  "central.help.summary": "Why a button seems to do nothing, and what enabling costs",
+  "central.help.summary":
+    "Why a button seems to do nothing, and what enabling costs",
   "central.help.no_link":
     "Without forwarding enabled, many HmIP buttons never send their press events to the CCU or OpenCCU-Loom — this is the most common reason a button appears to do nothing.",
   "central.help.duty_cycle":
@@ -1895,10 +2051,8 @@ const EN: Catalog = {
   "central.action_failed": "Could not change press-event forwarding",
   // --- Schedules ---
   "schedule.loading": "Loading schedule…",
-  "schedule.unsupported":
-    "This device does not support a schedule.",
-  "schedule.unsupported_channel":
-    "This channel has no climate schedule.",
+  "schedule.unsupported": "This device does not support a schedule.",
+  "schedule.unsupported_channel": "This channel has no climate schedule.",
   "schedule.saved": "Saved.",
   "schedule.profile_active": "Active profile: {profile}",
   "schedule.set_active": "Set active",
@@ -2000,7 +2154,8 @@ const EN: Catalog = {
   "climate.fill_all.tooltip": "Apply Monday to all days",
   "climate.set_active": "Set active",
   "climate.profile_active_badge": "active",
-  "channel.expert.tooltip": "Show all parameters, even when a profile would hide them",
+  "channel.expert.tooltip":
+    "Show all parameters, even when a profile would hide them",
   "channel.advanced.tooltip": "Show advanced parameters (e.g. logging, debug)",
   "channel.no_master": "No master parameters available.",
   "channel.no_values": "No value parameters available.",
@@ -2024,8 +2179,10 @@ const EN: Catalog = {
     "Snapshot is from {snapshot}. Apply to {current} anyway?",
   "channel.lock_count": "{count} parameters locked by profile.",
   "channel.unlock_label": "Unlock",
-  "channel.advanced_label": "Show advanced parameters (jump targets, conditions)",
-  "channel.expert_label": "Expert mode (show all parameters, including untranslated)",
+  "channel.advanced_label":
+    "Show advanced parameters (jump targets, conditions)",
+  "channel.expert_label":
+    "Expert mode (show all parameters, including untranslated)",
   "channel.no_params_in_group": "No parameters in this group.",
   "channel.other": "Other",
   "channel.cross_validation_error":
@@ -2056,7 +2213,8 @@ const EN: Catalog = {
     "Secured (AES-signed) transmission adds an acknowledgement round-trip to every command, which increases this channel's radio load and — on battery devices — battery drain. Enable it anyway?",
   "channel.secure_transmission.enable": "Enable",
   "channel.secure_transmission.enabled_toast": "Secured transmission enabled.",
-  "channel.secure_transmission.disabled_toast": "Secured transmission disabled.",
+  "channel.secure_transmission.disabled_toast":
+    "Secured transmission disabled.",
   "channel.secure_transmission.failed": "Could not change transmission mode.",
   // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
   "channel.brightness.apply": "Use brightness {value}",
@@ -2087,9 +2245,11 @@ const EN: Catalog = {
   "quick.partial": "Position",
   "quick.stop": "Stop",
   "links.confirm.title": "Remove link?",
-  "links.confirm.body": "The CCU pairing between sender and receiver will be removed.",
+  "links.confirm.body":
+    "The CCU pairing between sender and receiver will be removed.",
   "links.add.title": "New direct link",
-  "links.add.subtitle": "Pick a sender channel and the receiver this device should react to.",
+  "links.add.subtitle":
+    "Pick a sender channel and the receiver this device should react to.",
   "links.add.sender": "Sender",
   "links.add.receiver": "Receiver",
   "links.add.preset": "Preset",
@@ -2108,11 +2268,13 @@ const EN: Catalog = {
   "history.reload": "Reload",
   "history.empty": "No recorded samples in this time range.",
   "history.disabled_title": "History recording is off",
-  "history.disabled_hint": "Turn it on under Settings → Persistence to chart this value.",
+  "history.disabled_hint":
+    "Turn it on under Settings → Persistence to chart this value.",
   "history.enable_link": "Open settings",
   // --- Energy view (GET /api/v1/energy) ---
   "energy.title": "Energy",
-  "energy.subtitle": "Consumption and feed-in per device, aggregated over time.",
+  "energy.subtitle":
+    "Consumption and feed-in per device, aggregated over time.",
   "energy.central": "Central",
   "energy.group": "Group by",
   "energy.group.hour": "Hour",
@@ -2135,20 +2297,20 @@ const EN: Catalog = {
   "energy.col.avg_power": "Avg. power",
   "energy.col.peak_power": "Peak power",
   "energy.col.reset": "reset",
-  "energy.reset_note": "A meter reset occurred for at least one device in this range — the affected bucket reports the counter value since the reset, not a negative delta.",
+  "energy.reset_note":
+    "A meter reset occurred for at least one device in this range — the affected bucket reports the counter value since the reset, not a negative delta.",
   "energy.empty": "No energy devices recorded data in this range.",
   "energy.disabled_title": "History recording is off",
-  "energy.disabled_hint": "Turn it on under Settings → Persistence to see energy data.",
+  "energy.disabled_hint":
+    "Turn it on under Settings → Persistence to see energy data.",
   "energy.enable_link": "Open settings",
   "links.add.create": "Create",
   "links.add.creating": "Creating…",
   "links.add.no_candidates": "No press channels available.",
   "links.add.placeholder": "Search…",
   "links.add.title2": "New link",
-  "links.add.step1":
-    "Step 1 — pick a channel of this device to link from.",
-  "links.add.step2":
-    "Step 2 — choose the role and pick a peer channel.",
+  "links.add.step1": "Step 1 — pick a channel of this device to link from.",
+  "links.add.step2": "Step 2 — choose the role and pick a peer channel.",
   "links.add.step3": "Step 3 — review the mapping and confirm.",
   "links.add.loading_channels": "Loading channels…",
   "links.add.no_linkable": "No linkable channels available.",
@@ -2189,8 +2351,7 @@ const EN: Catalog = {
   "links.rename.saving": "Saving…",
   "links.renamed": "Link renamed.",
   "links.rename_failed": "Rename failed",
-  "links.confirm_delete":
-    "Really delete the link {sender} → {receiver}?",
+  "links.confirm_delete": "Really delete the link {sender} → {receiver}?",
   "links.links_label": "links",
   "links.section.outgoing": "Outgoing",
   "links.section.incoming": "Incoming",
@@ -2411,8 +2572,7 @@ const EN: Catalog = {
   "device.delete.warning_title": "This device is still referenced",
   "device.delete.warning_links":
     "{count} direct link(s) reference this device and will stop working.",
-  "device.delete.warning_programs":
-    "{count} program(s) reference this device.",
+  "device.delete.warning_programs": "{count} program(s) reference this device.",
   "device.confirm_firmware_body":
     'Trigger firmware update for "{name}"? The device will be briefly unreachable.',
   "device.restore_config": "Restore config",
@@ -2422,7 +2582,8 @@ const EN: Catalog = {
     'Re-transmit the stored configuration (all channel settings and direct links) to "{name}"? Use this after a factory reset — the transfer runs over the radio and may take a while.',
   "device.restore_config_triggered": "Configuration transfer started.",
   "device.communication_test": "Test",
-  "device.communication_test.tooltip": "Send a radio test frame and check the device answers",
+  "device.communication_test.tooltip":
+    "Send a radio test frame and check the device answers",
   "device.communication_test_running": "Testing…",
   "device.communication_test_passed": "Communication OK",
   "device.communication_test_failed": "No response",
@@ -2464,7 +2625,8 @@ const EN: Catalog = {
   "matter.tab.fabrics": "Fabrics",
   "matter.tab.pair": "Pair",
   "matter.status.enabled": "Matter Bridge active",
-  "matter.status.disabled": "Matter bridge is not enabled. Set matter.enabled = true in config.yaml to activate.",
+  "matter.status.disabled":
+    "Matter bridge is not enabled. Set matter.enabled = true in config.yaml to activate.",
   "matter.status.listening": "listening",
   "matter.status.not_listening": "not listening",
   "matter.status.endpoints": "{count} endpoints",
@@ -2487,10 +2649,14 @@ const EN: Catalog = {
   "matter.expose.kind.combined": "Combined",
   "matter.expose.kind.measurement": "Measurement",
   "matter.expose.unmappable_hint": "Not mappable to a Matter endpoint.",
-  "matter.expose.partially_mappable_hint": "Partially mappable — some clusters will remain MQTT-only.",
-  "matter.expose.conflict_hint": "Already exposed via another data point on this channel.",
-  "matter.expose.conflict_hint_custom_active": "Already exposed via custom DP `{profile}` — bridging the generic DP risks duplicate Matter entities.",
-  "matter.expose.conflict_hint_generic_active": "Channel also exposes generic DP(s) — Apple Home may show duplicate entities.",
+  "matter.expose.partially_mappable_hint":
+    "Partially mappable — some clusters will remain MQTT-only.",
+  "matter.expose.conflict_hint":
+    "Already exposed via another data point on this channel.",
+  "matter.expose.conflict_hint_custom_active":
+    "Already exposed via custom DP `{profile}` — bridging the generic DP risks duplicate Matter entities.",
+  "matter.expose.conflict_hint_generic_active":
+    "Channel also exposes generic DP(s) — Apple Home may show duplicate entities.",
   "matter.expose.bulk_expose": "Expose selection",
   "matter.expose.bulk_hide": "Hide selection",
   "matter.expose.save": "Save changes",
@@ -2502,7 +2668,8 @@ const EN: Catalog = {
   "matter.expose.state_partial": "Partially mappable",
   "matter.expose.state_available": "Available (not exposed)",
   "matter.expose.state_unmappable": "Cannot be mapped",
-  "matter.expose.unmappable_checkbox_title": "Cannot be mapped to a Matter endpoint",
+  "matter.expose.unmappable_checkbox_title":
+    "Cannot be mapped to a Matter endpoint",
   "matter.pair.window_open": "Pairing window open",
   "matter.pair.window_open_duration": "Open pairing window",
   "matter.pair.qr_caption": "Scan QR with your Matter controller app",
@@ -2527,7 +2694,8 @@ const EN: Catalog = {
   "sensor_actor.send": "Send",
   "sensor_actor.cancel": "Cancel",
   "sensor_actor.more_channels": "more channels ({count})",
-  "sensor_actor.no_primary": "No primary value available yet — waiting for first CCU push.",
+  "sensor_actor.no_primary":
+    "No primary value available yet — waiting for first CCU push.",
   "sensor_actor.loading": "Loading {address}…",
   "sensor_actor.load_failed": "Could not load channel {address}.",
   "sensor_actor.true": "On",
@@ -2573,8 +2741,10 @@ const EN: Catalog = {
   "diagnostics.recordings.col_size": "Size / Entries",
   "diagnostics.recordings.col_action": "Action",
   "diagnostics.recordings.empty": "No recordings yet.",
-  "diagnostics.recordings.anonymise_hint": "Anonymise hashes operator-identifying fields (login subject, username) — interface names, device addresses and host IPs remain visible.",
-  "diagnostics.recordings.retention_hint": "Debug-log captures use a rolling RAM buffer for the configured duration. RPC recordings keep the full session in memory until stopped and survive daemon restarts.",
+  "diagnostics.recordings.anonymise_hint":
+    "Anonymise hashes operator-identifying fields (login subject, username) — interface names, device addresses and host IPs remain visible.",
+  "diagnostics.recordings.retention_hint":
+    "Debug-log captures use a rolling RAM buffer for the configured duration. RPC recordings keep the full session in memory until stopped and survive daemon restarts.",
   "diagnostics.recordings.format_map": "Map",
   "diagnostics.recordings.format_golden": "Golden",
   "diagnostics.recordings.until": "until {time}",
@@ -2653,7 +2823,8 @@ const EN: Catalog = {
   "cdp.panel.group": "Group {n}",
   "cdp.panel.loading": "Loading {addr}/cdps · {n}s…",
   "cdp.panel.no_controls": "No controls for this device.",
-  "cdp.panel.server_unresponsive": "Server not responding. Check if the daemon is running (browser Network tab: <code>/api/v1/devices/{addr}/cdps</code>).",
+  "cdp.panel.server_unresponsive":
+    "Server not responding. Check if the daemon is running (browser Network tab: <code>/api/v1/devices/{addr}/cdps</code>).",
   "cdp.retry": "Retry",
   "cdp.siren.acoustic": "Acoustic",
   "cdp.siren.duration": "Duration",
@@ -2736,10 +2907,12 @@ const EN: Catalog = {
   "devicelist.apply": "Apply",
   "devicelist.availability": "Availability",
   "devicelist.available": "Available",
-  "devicelist.bulk_firmware_body": "Trigger firmware update for {count} device(s)?",
+  "devicelist.bulk_firmware_body":
+    "Trigger firmware update for {count} device(s)?",
   "devicelist.bulk_firmware_confirm": "Start update",
   "devicelist.bulk_firmware_label": "Firmware update",
-  "devicelist.bulk_no_updates": "No selected devices have a firmware update available.",
+  "devicelist.bulk_no_updates":
+    "No selected devices have a firmware update available.",
   "devicelist.bulk_result": "{ok} OK, {fail} failed.",
   "devicelist.ccu_refresh": "Reload from CCU",
   "devicelist.ccu_refresh_title": "Re-read device list and names from the CCU",
@@ -2780,10 +2953,13 @@ const EN: Catalog = {
   "inbox.install_mode_pairing": "Pairing · {seconds} s",
   "inbox.install_mode_running": "Pairing mode running",
   "inbox.install_mode_seconds_left": "seconds remaining",
-  "inbox.install_mode_start_title": "Start pairing mode (60 s) to pair new devices",
+  "inbox.install_mode_start_title":
+    "Start pairing mode (60 s) to pair new devices",
   "inbox.install_mode_interface_label": "Interface",
-  "inbox.install_mode_select_interface": "Select an interface to start pairing.",
-  "inbox.install_mode_banner_iface_on": "Pairing mode active on {iface} ({seconds} s).",
+  "inbox.install_mode_select_interface":
+    "Select an interface to start pairing.",
+  "inbox.install_mode_banner_iface_on":
+    "Pairing mode active on {iface} ({seconds} s).",
   "inbox.install_mode_banner_iface_off": "Pairing mode stopped on {iface}.",
   "inbox.pair_serial_label": "Pair by serial:",
   "inbox.pair_serial_placeholder": "Device address / serial",
@@ -2799,8 +2975,10 @@ const EN: Catalog = {
   "inbox.install_mode_local_hint":
     "Works without internet access: only the device matching SGTIN and key can pair.",
   "inbox.search_wired": "Search wired bus",
-  "inbox.search_wired_title": "Scan the BidCos-Wired bus for newly connected devices",
-  "inbox.search_wired_hint": "Scans the wired bus; found devices appear in the inbox.",
+  "inbox.search_wired_title":
+    "Scan the BidCos-Wired bus for newly connected devices",
+  "inbox.search_wired_hint":
+    "Scans the wired bus; found devices appear in the inbox.",
   "inbox.search_wired_running": "Scanning…",
   "inbox.search_wired_done": "Found {count} device(s) — check the inbox.",
   "inbox.replace.button": "Replace device",
@@ -2814,7 +2992,7 @@ const EN: Catalog = {
   "inbox.replace.compatible_type": "Compatible",
   "inbox.replace.confirm_title": "Replace device?",
   "inbox.replace.confirm_text":
-    "\"{new}\" will replace \"{old}\". The old device is unpaired and removed from the system. This cannot be undone.",
+    '"{new}" will replace "{old}". The old device is unpaired and removed from the system. This cannot be undone.',
   "inbox.replace.confirm_label": "Replace",
   "inbox.replace.success": "Device replaced.",
   "inbox.pair_serial_started": "Pairing window opened for {addr}.",
@@ -2898,12 +3076,14 @@ const EN: Catalog = {
   "diagnostics.col.client": "Client",
   "diagnostics.col.score": "Score",
   "diagnostics.reliability.title": "Reliability",
-  "diagnostics.reliability.help": "Circuit-breaker and connection state per (central, interface) pair.",
+  "diagnostics.reliability.help":
+    "Circuit-breaker and connection state per (central, interface) pair.",
   "diagnostics.reliability.col.central": "Central",
   "diagnostics.reliability.col.interface": "Interface",
   "diagnostics.reliability.col.circuit": "Circuit",
   "diagnostics.reliability.col.state": "State",
-  "diagnostics.reliability.col.requests": "Requests (total / executed / pending)",
+  "diagnostics.reliability.col.requests":
+    "Requests (total / executed / pending)",
   "diagnostics.reliability.col.last_failure": "Last failure",
   "diagnostics.reliability.col.last_callback": "Last callback",
   "diagnostics.reliability.circuit.closed": "Closed",
@@ -2911,7 +3091,8 @@ const EN: Catalog = {
   "diagnostics.reliability.circuit.half_open": "Half-open",
   "diagnostics.reliability.empty": "No interface clients reporting yet.",
   "diagnostics.values_cache.title": "Values cache",
-  "diagnostics.values_cache.help": "Persistent VALUES-cache row count, size, and cumulative counters since process start.",
+  "diagnostics.values_cache.help":
+    "Persistent VALUES-cache row count, size, and cumulative counters since process start.",
   "diagnostics.values_cache.rows": "Rows",
   "diagnostics.values_cache.bytes": "Value JSON bytes",
   "diagnostics.values_cache.restored": "Restored",
@@ -2921,37 +3102,46 @@ const EN: Catalog = {
   "diagnostics.values_cache.flushed_entries": "Flushed entries",
   "diagnostics.values_cache.reset": "Reset cache",
   "diagnostics.values_cache.reset_confirm_title": "Reset the VALUES cache?",
-  "diagnostics.values_cache.reset_confirm_body": "Every cached wire value is dropped. Data points read source=unobserved until live events repopulate them.",
+  "diagnostics.values_cache.reset_confirm_body":
+    "Every cached wire value is dropped. Data points read source=unobserved until live events repopulate them.",
   "diagnostics.values_cache.reset_success": "Values cache reset.",
-  "diagnostics.values_cache.disabled": "Values-cache feature disabled or unavailable.",
+  "diagnostics.values_cache.disabled":
+    "Values-cache feature disabled or unavailable.",
   "schedule.aria.weekdays": "Weekdays",
   "schedule.duration_placeholder": "e.g. 10s, 5min",
   "schedule.ramp_placeholder": "e.g. 500ms, 2s",
   "ccu_maintenance.title": "CCU maintenance",
-  "ccu_maintenance.subtitle": "Host-level actions for each connected CCU. Rebooting restarts the CCU and briefly drops its connection.",
+  "ccu_maintenance.subtitle":
+    "Host-level actions for each connected CCU. Rebooting restarts the CCU and briefly drops its connection.",
   "ccu_maintenance.empty": "No CCU configured yet.",
   "ccu_maintenance.online": "Online",
   "ccu_maintenance.offline": "Offline",
   "ccu_maintenance.reboot": "Reboot CCU",
   "ccu_maintenance.rebooting": "Rebooting…",
   "ccu_maintenance.confirm_title": "Reboot CCU?",
-  "ccu_maintenance.confirm_body": "{central} will reboot now. The connection to this CCU drops until it is back online. Continue?",
-  "ccu_maintenance.triggered": "Reboot triggered for {central} — it will be back shortly.",
+  "ccu_maintenance.confirm_body":
+    "{central} will reboot now. The connection to this CCU drops until it is back online. Continue?",
+  "ccu_maintenance.triggered":
+    "Reboot triggered for {central} — it will be back shortly.",
   "ccu_maintenance.admin_only": "Only administrators can reboot a CCU.",
   "ccu_update.admin_only": "Only administrators can install CCU updates.",
   "ccu_update.available": "Update available",
-  "ccu_update.confirm_body": "{central} will download and install its firmware update and reboot — the connection drops briefly. Continue?",
+  "ccu_update.confirm_body":
+    "{central} will download and install its firmware update and reboot — the connection drops briefly. Continue?",
   "ccu_update.confirm_title": "Install CCU update?",
   "ccu_update.empty": "No CCU update info available yet.",
   "ccu_update.in_progress": "Installing…",
   "ccu_update.install": "Install update",
   "ccu_update.installing": "Triggering…",
   "ccu_update.not_observed": "Update status not yet fetched.",
-  "ccu_update.subtitle": "Trigger the CCU's own firmware update. The CCU reboots during the install.",
+  "ccu_update.subtitle":
+    "Trigger the CCU's own firmware update. The CCU reboots during the install.",
   "ccu_update.title": "CCU system update",
-  "ccu_update.triggered": "CCU update triggered for {central} — it will reboot.",
+  "ccu_update.triggered":
+    "CCU update triggered for {central} — it will reboot.",
   "firmware_download.title": "Download firmware to a CCU",
-  "firmware_download.subtitle": "The CCU fetches a firmware image from the URL onto the central so it can be staged for installation.",
+  "firmware_download.subtitle":
+    "The CCU fetches a firmware image from the URL onto the central so it can be staged for installation.",
   "firmware_download.url_label": "Firmware image URL",
   "firmware_download.url_placeholder": "https://…",
   "firmware_download.download": "Download",
@@ -2959,16 +3149,19 @@ const EN: Catalog = {
   "firmware_download.triggered": "Firmware download triggered.",
   // Add-on self-update card (ADR 0057) — capability-gated (`addon_self_update`).
   "addon_update.title": "Add-on self-update",
-  "addon_update.subtitle": "Check for and install updates to the CCU add-on package. The daemon restarts during install.",
+  "addon_update.subtitle":
+    "Check for and install updates to the CCU add-on package. The daemon restarts during install.",
   "addon_update.check": "Check for updates",
   "addon_update.checking": "Checking…",
   "addon_update.available": "Update available",
   "addon_update.up_to_date": "Up to date",
   "addon_update.install": "Install update",
   "addon_update.install_starting": "Starting…",
-  "addon_update.installing_notice": "Installing the update — the daemon is restarting. This page reconnects automatically once it's back.",
+  "addon_update.installing_notice":
+    "Installing the update — the daemon is restarting. This page reconnects automatically once it's back.",
   "addon_update.confirm_title": "Install add-on update?",
-  "addon_update.confirm_body": "The daemon restarts to complete the install — the connection drops briefly and reconnects on its own. Continue?",
+  "addon_update.confirm_body":
+    "The daemon restarts to complete the install — the connection drops briefly and reconnects on its own. Continue?",
   "addon_update.release_notes": "Release notes",
   "addon_update.never_checked": "Never checked",
   "addon_update.field.current_version": "Installed version",
@@ -3008,10 +3201,12 @@ const EN: Catalog = {
   "access.edit_user_title": "Edit user",
   "access.password_leave_blank": "Leave blank to keep current",
   "access.forbidden": "Admin access required.",
-  "access.degraded_note": "The live user store is not available. Users shown are from the bootstrap list and cannot be edited here. Manage users via config.yaml.",
+  "access.degraded_note":
+    "The live user store is not available. Users shown are from the bootstrap list and cannot be edited here. Manage users via config.yaml.",
   // --- Fleet (read-only cross-CCU overview) ---
   "fleet.title": "Fleet",
-  "fleet.subtitle": "All configured CCUs, their status, interfaces and device counts at a glance.",
+  "fleet.subtitle":
+    "All configured CCUs, their status, interfaces and device counts at a glance.",
   "fleet.empty": "No CCUs configured yet.",
   "fleet.empty.description":
     "Register a CCU in Settings to monitor its connection and devices here.",
@@ -3024,6 +3219,18 @@ const EN: Catalog = {
   "fleet.field.serial": "Serial",
   "fleet.field.devices": "Devices",
   "fleet.field.interfaces": "Interfaces",
+  "fleet.field.ccu_interfaces": "Interfaces reported by the CCU",
+  "fleet.field.ccu_interfaces.unmanaged":
+    "The CCU offers this interface, but this daemon is not configured for it.",
+  "fleet.field.ccu_security": "CCU security",
+  "fleet.field.auth_enabled.on": "Authentication required",
+  "fleet.field.auth_enabled.off": "No authentication",
+  "fleet.field.auth_enabled.hint":
+    "Whether the CCU itself requires authentication. Also shows as “no authentication” when the CCU firmware does not answer the query.",
+  "fleet.field.https_redirect.on": "HTTPS redirect on",
+  "fleet.field.https_redirect.off": "HTTPS redirect off",
+  "fleet.field.https_redirect.hint":
+    "Whether the CCU redirects plain HTTP to HTTPS. Also shows as “off” when the CCU firmware does not answer the query.",
   "fleet.open_webui": "Open CCU WebUI",
   // --- Heating groups (read-only, GR01) ---
   "groups.title": "Heating groups",
@@ -3039,7 +3246,8 @@ const EN: Catalog = {
   "groups.new": "New group",
   "groups.select_ccu_first": "Select a CCU first.",
   "groups.delete.title": "Delete group?",
-  "groups.delete.body": "Delete the heating group “{name}”? Its member wiring on the CCU is removed. This cannot be undone.",
+  "groups.delete.body":
+    "Delete the heating group “{name}”? Its member wiring on the CCU is removed. This cannot be undone.",
   "groups.delete.done": "Group deleted.",
   "groups.editor.create_title": "New heating group",
   "groups.editor.edit_title": "Edit heating group",
@@ -3056,7 +3264,8 @@ const EN: Catalog = {
   "groups.editor.no_matches": "No matches — adjust the search or filter.",
   "groups.editor.selected": "Selected",
   "groups.editor.clear_all": "Clear all",
-  "groups.editor.no_selection": "Nothing selected yet — tap a device or channel.",
+  "groups.editor.no_selection":
+    "Nothing selected yet — tap a device or channel.",
   "groups.editor.channel_fallback": "Channel {no}",
   "groups.editor.not_selectable": "not assignable",
   "groups.editor.config_pending": "config pending",
@@ -3075,12 +3284,14 @@ const EN: Catalog = {
   "areas.placeholder": "Area name…",
   "areas.assign_rooms": "Assign rooms",
   "areas.delete_confirm": "Remove area?",
-  "areas.delete_confirm.body": "Its room assignments are cleared; the rooms themselves are unaffected.",
+  "areas.delete_confirm.body":
+    "Its room assignments are cleared; the rooms themselves are unaffected.",
   "areas.rooms_dialog.title": "Assign rooms — {name}",
   "areas.rooms_dialog.hint":
     "Checking a room moves it here from its current area — a room can only belong to one area at a time.",
   "areas.rooms_dialog.search_placeholder": "Search rooms…",
-  "areas.rooms_dialog.empty": "No rooms known yet — assign a room to a device first.",
+  "areas.rooms_dialog.empty":
+    "No rooms known yet — assign a room to a device first.",
   "areas.rooms_dialog.current_area": "currently: {name}",
 };
 
@@ -3089,7 +3300,8 @@ const DE: Catalog = {
   //     CCU-Alarmmeldungen (siehe "messages.*"): dies ist looms eigene
   //     Einbruchmelde-Engine ("Alarmanlage"). ---
   "alarm.title": "Alarmanlage",
-  "alarm.subtitle": "Zonen, Sensoren, Sirenen — looms lokale Einbruchmeldeanlage.",
+  "alarm.subtitle":
+    "Zonen, Sensoren, Sirenen — looms lokale Einbruchmeldeanlage.",
   "alarm.tab.overview": "Übersicht",
   "alarm.tab.sensors": "Sensoren",
   "alarm.tab.outputs": "Ausgänge",
@@ -3113,7 +3325,8 @@ const DE: Catalog = {
   // Übersicht (§12.1).
   "alarm.overview.placeholder": "Noch keine Zonen eingerichtet",
   "alarm.overview.empty": "Noch keine Alarmzonen",
-  "alarm.overview.empty.description": "Lege deine erste Zone mit dem Einrichtungsassistenten an, um Räume zu schützen.",
+  "alarm.overview.empty.description":
+    "Lege deine erste Zone mit dem Einrichtungsassistenten an, um Räume zu schützen.",
   "alarm.overview.armed_by": "seit {time}, von {user}",
   "alarm.overview.armed_at": "seit {time}",
   "alarm.overview.master": "Alle Zonen",
@@ -3126,7 +3339,8 @@ const DE: Catalog = {
   "alarm.readiness.warnings_title": "Warnungen",
   // Überbrückungs-Dialog (§12.1).
   "alarm.bypass.title": "Trotzdem scharf schalten?",
-  "alarm.bypass.description": "Diese Sensoren blockieren das Scharfschalten. Wähle die zu überbrückenden aus und erzwinge das Schärfen — nichts wird stillschweigend überbrückt.",
+  "alarm.bypass.description":
+    "Diese Sensoren blockieren das Scharfschalten. Wähle die zu überbrückenden aus und erzwinge das Schärfen — nichts wird stillschweigend überbrückt.",
   "alarm.bypass.bypass": "Überbrücken",
   "alarm.bypass.force_arm": "Erzwingen",
   "alarm.bypass.empty": "Keine blockierenden Sensoren.",
@@ -3172,13 +3386,16 @@ const DE: Catalog = {
   "alarm.zone.edit": "Zone bearbeiten",
   "alarm.zone.delete": "Zone löschen",
   "alarm.zone.delete.confirm.title": "Zone löschen?",
-  "alarm.zone.delete.confirm.body": "Die Zone und ihre Sensor-/Ausgangs-Zuordnungen werden entfernt. Das lässt sich nicht rückgängig machen.",
+  "alarm.zone.delete.confirm.body":
+    "Die Zone und ihre Sensor-/Ausgangs-Zuordnungen werden entfernt. Das lässt sich nicht rückgängig machen.",
   // Sensor-Auswahl (§12.2).
   "alarm.sensors.placeholder": "Noch keine Sensoren",
   "alarm.sensors.title": "Sensoren",
-  "alarm.sensors.subtitle": "Ordne Tür-, Fenster-, Bewegungs- und Gefahrensensoren den Modi zu.",
+  "alarm.sensors.subtitle":
+    "Ordne Tür-, Fenster-, Bewegungs- und Gefahrensensoren den Modi zu.",
   "alarm.sensors.empty": "Keine Sensoren zugewiesen",
-  "alarm.sensors.empty.description": "Füge Sicherheitssensoren hinzu und wähle, in welchen Modi sie scharf sind.",
+  "alarm.sensors.empty.description":
+    "Füge Sicherheitssensoren hinzu und wähle, in welchen Modi sie scharf sind.",
   "alarm.sensors.add": "Sensor hinzufügen",
   "alarm.sensors.search": "Suchen …",
   "alarm.sensors.selected": "{count} ausgewählt",
@@ -3252,17 +3469,21 @@ const DE: Catalog = {
   // Ausgangs-Auswahl (§7, §12.2).
   "alarm.outputs.placeholder": "Noch keine Ausgänge",
   "alarm.outputs.title": "Ausgänge",
-  "alarm.outputs.subtitle": "Sirenen, Lichter, Signaltöne und Benachrichtigungen bei Auslösung.",
+  "alarm.outputs.subtitle":
+    "Sirenen, Lichter, Signaltöne und Benachrichtigungen bei Auslösung.",
   "alarm.outputs.empty": "Keine Ausgänge zugewiesen",
-  "alarm.outputs.empty.description": "Füge Sirenen oder Lichter hinzu und ordne sie pro Modus laut/still zu.",
+  "alarm.outputs.empty.description":
+    "Füge Sirenen oder Lichter hinzu und ordne sie pro Modus laut/still zu.",
   "alarm.outputs.add": "Ausgang hinzufügen",
   "alarm.outputs.expert": "Expertenmodus",
-  "alarm.outputs.expert.hint": "Alle modellierten Aktoren anzeigen, nicht nur kuratierte Sirenen/Lichter.",
+  "alarm.outputs.expert.hint":
+    "Alle modellierten Aktoren anzeigen, nicht nur kuratierte Sirenen/Lichter.",
   "alarm.outputs.test": "Test auslösen",
   "alarm.outputs.test_optical_only": "Nur optisch",
   "alarm.outputs.test_optical_only.hint": "Testet nur mit Licht — ohne Ton.",
   "alarm.outputs.test.confirm.title": "Ausgang testen?",
-  "alarm.outputs.test.confirm.body": "Das aktiviert kurz das echte Gerät (Sirene/Licht). Nur optisch schont die Nachbarn.",
+  "alarm.outputs.test.confirm.body":
+    "Das aktiviert kurz das echte Gerät (Sirene/Licht). Nur optisch schont die Nachbarn.",
   "alarm.outputs.indoor": "Innen",
   "alarm.outputs.outdoor": "Außen",
   "alarm.outputs.outdoor.hint":
@@ -3280,21 +3501,26 @@ const DE: Catalog = {
   "alarm.outputs.optical_pattern.hint":
     "Lichtmuster-Bezeichner aus der Liste des Geräts. Leer nutzt den Geräte-Standard.",
   "alarm.outputs.tier": "Stufe",
-  "alarm.outputs.switched_caveat": "Komfort-Klasse: kein Sabotagekontakt, keine Batteriepufferung, leicht ausgesteckt.",
-  "alarm.outputs.smoke_caveat": "Rauchmelder dienen zusätzlich als Sirenen — keine geräteseitige Dauer, nur per Engine überwacht, und wiederholte Alarmtöne verkürzen die Batterielaufzeit. Am besten nur im Vollschutz.",
+  "alarm.outputs.switched_caveat":
+    "Komfort-Klasse: kein Sabotagekontakt, keine Batteriepufferung, leicht ausgesteckt.",
+  "alarm.outputs.smoke_caveat":
+    "Rauchmelder dienen zusätzlich als Sirenen — keine geräteseitige Dauer, nur per Engine überwacht, und wiederholte Alarmtöne verkürzen die Batterielaufzeit. Am besten nur im Vollschutz.",
   "alarm.outputs.device_default": "Geräte-Standard",
   "alarm.outputs.channel_mismatch":
     "Dieser Kanal kann die gewählte Klasse nicht tragen — die Zuordnung stammt aus einer Version ohne Kanalprüfung und hat nie ausgelöst. Speichern ist blockiert, bis sie repariert oder entfernt ist.",
   "alarm.outputs.channel_mismatch.repair": "Kanal reparieren",
   "alarm.outputs.candidates.empty":
     "Keine geeigneten Kanäle für diese Klasse. Der Expertenmodus listet alle Geräte ohne Fähigkeitsfilter.",
-  "alarm.outputs.candidates.load_failed": "Laden der Ausgangs-Kandidaten fehlgeschlagen",
+  "alarm.outputs.candidates.load_failed":
+    "Laden der Ausgangs-Kandidaten fehlgeschlagen",
   "alarm.outputs.soundfile": "Sounddatei",
-  "alarm.outputs.soundfile.hint": "MP3-Sounddatei für Signaltöne. Leer nutzt den Geräte-Standard.",
+  "alarm.outputs.soundfile.hint":
+    "MP3-Sounddatei für Signaltöne. Leer nutzt den Geräte-Standard.",
   "alarm.outputs.sysvar.central": "Zentrale",
   "alarm.outputs.sysvar.central.hint":
     "CCU, auf der die Variable liegt — der Spiegel schreibt sie dort (und legt verwaltete Variablen dort an).",
-  "alarm.outputs.channel.hint": "Kanaladresse als <Gerät>:<Kanal>, z. B. 0001D3C9A4B2:3.",
+  "alarm.outputs.channel.hint":
+    "Kanaladresse als <Gerät>:<Kanal>, z. B. 0001D3C9A4B2:3.",
   "alarm.outputs.chirp_arm_tone.hint":
     "Ton-Bezeichner für den Scharf-Quittungston, aus der Tonliste des Geräts. Leer überspringt ihn auf diesem Ausgang.",
   "alarm.outputs.chirp_disarm_tone.hint":
@@ -3307,17 +3533,21 @@ const DE: Catalog = {
     "Beschreibt eine eigene Variable vom Typ Alarm: wahr bei ausgelöstem Alarm, sonst falsch. Die Variable wird nie angelegt oder umtypisiert und nimmt keine eingehenden Befehle an.",
   "alarm.outputs.sysvar.existing.badge": "bestehend",
   "alarm.outputs.sysvar.pick": "Alarm-Variable",
-  "alarm.outputs.sysvar.none": "Keine Variablen vom Typ Alarm auf dieser Zentrale.",
-  "alarm.outputs.sysvar.load_failed": "Laden der Systemvariablen fehlgeschlagen",
+  "alarm.outputs.sysvar.none":
+    "Keine Variablen vom Typ Alarm auf dieser Zentrale.",
+  "alarm.outputs.sysvar.load_failed":
+    "Laden der Systemvariablen fehlgeschlagen",
   "alarm.outputs.sysvar.allow_disarm": "Unscharf über Variable erlauben",
   "alarm.outputs.sysvar.allow_disarm.hint":
     "Aus (Standard): ein CCU-Schreibzugriff kann nur scharf schalten — nie unscharf. Nur aktivieren, wenn jedes CCU-Programm mit Schreibzugriff vertrauenswürdig ist.",
   "alarm.outputs.notification.note":
     "Sendet bei Alarm ein Benachrichtigungs-Ereignis an die gewählten Kanäle — ohne Gerät. Die Kanäle werden nach dem Hinzufügen auf der Karte konfiguriert.",
   "alarm.outputs.notify.mqtt": "MQTT-Ereignis",
-  "alarm.outputs.notify.mqtt.hint": "Veröffentlicht einen NOTIFICATION-Eintrag auf dem MQTT-Alarm-Ereignis-Topic der Zone.",
+  "alarm.outputs.notify.mqtt.hint":
+    "Veröffentlicht einen NOTIFICATION-Eintrag auf dem MQTT-Alarm-Ereignis-Topic der Zone.",
   "alarm.outputs.notify.webhook": "Webhook-Ereignis",
-  "alarm.outputs.notify.webhook.hint": "Leitet ein alarm_panel.notification-Ereignis an die ausgehenden Webhook-Empfänger weiter.",
+  "alarm.outputs.notify.webhook.hint":
+    "Leitet ein alarm_panel.notification-Ereignis an die ausgehenden Webhook-Empfänger weiter.",
   // Ausgangsklassen (§7).
   "alarm.output_class.acoustic_siren": "Akustische Sirene",
   "alarm.output_class.acoustic_siren.hint":
@@ -3346,7 +3576,8 @@ const DE: Catalog = {
   // Journal (§12.5).
   "alarm.journal.placeholder": "Keine Journaleinträge",
   "alarm.journal.title": "Journal",
-  "alarm.journal.subtitle": "Alles, was die Alarm-Engine getan oder beobachtet hat.",
+  "alarm.journal.subtitle":
+    "Alles, was die Alarm-Engine getan oder beobachtet hat.",
   "alarm.journal.empty": "Keine Journaleinträge",
   "alarm.journal.filter.zone": "Zone",
   "alarm.journal.filter.class": "Kategorie",
@@ -3372,7 +3603,8 @@ const DE: Catalog = {
   // Begehungstest (§12.4).
   "alarm.walktest.placeholder": "Kein Begehungstest aktiv",
   "alarm.walktest.title": "Begehungstest",
-  "alarm.walktest.subtitle": "Test ohne Scharfschaltung: jeden Sensor auslösen und grün abhaken.",
+  "alarm.walktest.subtitle":
+    "Test ohne Scharfschaltung: jeden Sensor auslösen und grün abhaken.",
   "alarm.walktest.start": "Test starten",
   "alarm.walktest.stop": "Test beenden",
   "alarm.walktest.active": "Test läuft",
@@ -3397,7 +3629,8 @@ const DE: Catalog = {
   "alarm.wizard.back": "Zurück",
   "alarm.wizard.skip": "Überspringen",
   "alarm.wizard.finish": "Fertigstellen",
-  "alarm.wizard.codes_later": "PIN-Codes und Funkschlüssel werden im Codes-Tab verwaltet, sobald diese Zone existiert — hier gibt es noch nichts einzurichten.",
+  "alarm.wizard.codes_later":
+    "PIN-Codes und Funkschlüssel werden im Codes-Tab verwaltet, sobald diese Zone existiert — hier gibt es noch nichts einzurichten.",
   // Zustands-Chip (§12.5, S7).
   "alarm.health.title": "Alarm-Zustand",
   "alarm.health.healthy": "Alarmanlage OK",
@@ -3431,16 +3664,20 @@ const DE: Catalog = {
   "alarm.sensors.field.name": "Name",
   "alarm.sensors.field.parameter": "Parameter",
   "alarm.sensors.select_all": "Alle gefilterten auswählen",
-  "alarm.toast.walktest_start_failed": "Begehungstest konnte nicht gestartet werden",
-  "alarm.toast.walktest_stop_failed": "Begehungstest konnte nicht beendet werden",
+  "alarm.toast.walktest_start_failed":
+    "Begehungstest konnte nicht gestartet werden",
+  "alarm.toast.walktest_stop_failed":
+    "Begehungstest konnte nicht beendet werden",
   "alarm.wizard.zone.default_name": "Erdgeschoss",
-  "alarm.wizard.zone.hint": "Eine Zone ist eine unabhängig scharfschaltbare Einheit — zum Beispiel eine pro Etage.",
+  "alarm.wizard.zone.hint":
+    "Eine Zone ist eine unabhängig scharfschaltbare Einheit — zum Beispiel eine pro Etage.",
   "alarm.wizard.delay.entry": "Eintrittsverzögerung (s)",
   "alarm.wizard.delay.exit": "Austrittsverzögerung (s)",
   "alarm.wizard.delay.trigger": "Alarmdauer (s)",
   "alarm.wizard.delays.hint":
     "Die Austrittsverzögerung lässt Zeit zum Verlassen nach dem Scharfschalten; die Eintrittsverzögerung gibt Zeit zum Unscharfschalten nach dem Öffnen der Tür. Die Alarmdauer begrenzt, wie lange eine Alarmphase (und ihre Sirenen) läuft — höchstens 600 s pro Zyklus.",
-  "alarm.wizard.finish.hint": "Die Zone wird unscharf angelegt. Führe vor dem Verlassen auf die Anlage einen Begehungstest durch.",
+  "alarm.wizard.finish.hint":
+    "Die Zone wird unscharf angelegt. Führe vor dem Verlassen auf die Anlage einen Begehungstest durch.",
   "alarm.wizard.outputs.empty": "Keine geeigneten Ausgangskanäle gefunden.",
   "alarm.wizard.outputs.empty.description":
     "Nutze anschließend den Ausgaben-Tab für die Aufnahme im Expertenmodus für jedes Gerät.",
@@ -3460,7 +3697,8 @@ const DE: Catalog = {
   "alarm.codes.add": "Code hinzufügen",
   "alarm.codes.zones": "Zonen",
   "alarm.codes.zones.all": "Alle Zonen",
-  "alarm.codes.delete.confirm.body": "Code \"{name}\" löschen? Das lässt sich nicht rückgängig machen.",
+  "alarm.codes.delete.confirm.body":
+    'Code "{name}" löschen? Das lässt sich nicht rückgängig machen.',
   "alarm.codes.delete.confirm.title": "Code löschen?",
   "alarm.codes.disabled": "Deaktiviert",
   "alarm.codes.duress.badge": "Duress",
@@ -3472,9 +3710,11 @@ const DE: Catalog = {
     "Füge einen PIN-Code, einen Codetastatur-Slot oder einen Funkschlüssel hinzu, damit sich die Anlage scharf-/unscharfschalten oder stummschalten lässt.",
   "alarm.codes.error.binding_json": "Bindung muss gültiges JSON sein.",
   "alarm.codes.error.name_required": "Name ist erforderlich.",
-  "alarm.codes.error.pin_required": "Für einen neuen PIN-Code ist ein PIN-Code erforderlich.",
+  "alarm.codes.error.pin_required":
+    "Für einen neuen PIN-Code ist ein PIN-Code erforderlich.",
   "alarm.codes.field.zones": "Zonen",
-  "alarm.codes.field.zones.help": "Wähle aus, für welche Zonen dieser Code gilt. Lässt du alle Kästchen leer, gilt er für alle Zonen.",
+  "alarm.codes.field.zones.help":
+    "Wähle aus, für welche Zonen dieser Code gilt. Lässt du alle Kästchen leer, gilt er für alle Zonen.",
   "alarm.codes.field.binding": "Hardware-Bindung",
   "alarm.codes.field.binding.help":
     "Rohes JSON zur physischen Bindung dieser Code-Art — z. B. die Kanaladresse der Codetastatur oder der Tastenkanal des Funkschlüssels. Leer lassen für keine Bindung.",
@@ -3485,12 +3725,15 @@ const DE: Catalog = {
     "Ein PIN wird am PIN-Pad oder auf anonymen Wegen eingegeben; Codetastatur-Slot und Funkschlüssel binden einen Hardware-Slot bzw. eine Funkfernbedienung, sodass deren Aktionen unter diesem Namen laufen.",
   "alarm.codes.field.name": "Name",
   "alarm.codes.field.pin": "PIN-Code",
-  "alarm.codes.field.pin.help": "4–8-stelliger PIN-Code, wird als gesalzener Hash gespeichert – der Daemon gibt ihn nie wieder aus.",
-  "alarm.codes.field.pin.keep": "Leer lassen, um den aktuellen PIN-Code zu behalten",
+  "alarm.codes.field.pin.help":
+    "4–8-stelliger PIN-Code, wird als gesalzener Hash gespeichert – der Daemon gibt ihn nie wieder aus.",
+  "alarm.codes.field.pin.keep":
+    "Leer lassen, um den aktuellen PIN-Code zu behalten",
   "alarm.codes.field.pin.placeholder": "PIN-Code eingeben",
   "alarm.codes.field.valid_from": "Gültig ab",
   "alarm.codes.field.valid_until": "Gültig bis",
-  "alarm.codes.field.validity.help": "Beide Felder leer lassen für einen Code ohne Ablaufdatum.",
+  "alarm.codes.field.validity.help":
+    "Beide Felder leer lassen für einen Code ohne Ablaufdatum.",
   "alarm.codes.kind.keypad_slot": "Codetastatur-Slot",
   "alarm.codes.kind.pin": "PIN-Code",
   "alarm.codes.kind.remote_key": "Funkschlüssel",
@@ -3503,25 +3746,30 @@ const DE: Catalog = {
   "alarm.codes.remote.alarm_keyfob": "Alarm-Fernbedienung",
   "alarm.codes.remote.candidates_failed": "Laden der Funktasten fehlgeschlagen",
   "alarm.codes.remote.parameter": "Auslöser",
-  "alarm.codes.remote.parameter.hint": "Welcher Druck der gebundenen Taste die Aktion auslöst — kurz oder lang.",
+  "alarm.codes.remote.parameter.hint":
+    "Welcher Druck der gebundenen Taste die Aktion auslöst — kurz oder lang.",
   "alarm.codes.remote.param.press_short": "Kurzer Tastendruck",
   "alarm.codes.remote.param.press_long": "Langer Tastendruck",
   "alarm.codes.remote.action": "Aktion",
-  "alarm.codes.remote.action.hint": "Was die Taste tut: in einen Modus scharf schalten, unscharf schalten, stummschalten oder Panik.",
+  "alarm.codes.remote.action.hint":
+    "Was die Taste tut: in einen Modus scharf schalten, unscharf schalten, stummschalten oder Panik.",
   "alarm.codes.remote.zone.hint": "Alarmzone, auf die die Aktion wirkt.",
   "alarm.codes.remote.action.arm": "Scharf",
   "alarm.codes.remote.action.disarm": "Unscharf",
   "alarm.codes.remote.action.silence": "Stummschalten",
   "alarm.codes.remote.action.panic": "Panik",
   "alarm.codes.remote.zone": "Zone",
-  "alarm.codes.error.remote_incomplete": "Funktaste, Auslöser, Aktion und Zone auswählen.",
+  "alarm.codes.error.remote_incomplete":
+    "Funktaste, Auslöser, Aktion und Zone auswählen.",
   "alarm.codes.perm.arm": "Scharf schalten",
   "alarm.codes.perm.disarm": "Unscharf schalten",
   "alarm.codes.perm.silence": "Sirenen aus",
   "alarm.codes.perms": "Berechtigungen",
-  "alarm.codes.perms.hint": "Was dieser Code darf: scharf schalten, unscharf schalten und Sirenen stummschalten.",
+  "alarm.codes.perms.hint":
+    "Was dieser Code darf: scharf schalten, unscharf schalten und Sirenen stummschalten.",
   "alarm.codes.unavailable": "Alarm-Codes nicht verfügbar",
-  "alarm.codes.unavailable.description": "Das Alarm-Code-Subsystem ist auf diesem Daemon nicht eingerichtet.",
+  "alarm.codes.unavailable.description":
+    "Das Alarm-Code-Subsystem ist auf diesem Daemon nicht eingerichtet.",
   "alarm.codes.validity.open": "Unbegrenzt",
   // Chirp tone labels (docs/alarm-concept.md §15 row 23). The driver
   // reads three tone labels: arm squawk, disarm squawk, and the tick
@@ -3546,9 +3794,11 @@ const DE: Catalog = {
   "alarm.policies.code.require_arm": "Code zum Scharfschalten erforderlich",
   "alarm.policies.code.require_arm.hint":
     "Verlangt einen gültigen Code, bevor die Zone scharf schaltet. Standardmäßig aus — Scharfschalten ist die sichere Richtung und bleibt ein Fingertipp.",
-  "alarm.policies.code.require_disarm": "Code zum Unscharfschalten erforderlich",
+  "alarm.policies.code.require_disarm":
+    "Code zum Unscharfschalten erforderlich",
   "alarm.policies.code.require_disarm.always": "Immer",
-  "alarm.policies.code.require_disarm.default": "Automatisch (an, sobald Codes existieren)",
+  "alarm.policies.code.require_disarm.default":
+    "Automatisch (an, sobald Codes existieren)",
   "alarm.policies.code.require_disarm.hint":
     "Automatisch verlangt einen Code, sobald für diese Zone ein aktiver Code existiert. Eine Zone ohne Codes verlangt nie einen — ein Aussperren ist damit ausgeschlossen.",
   "alarm.policies.code.require_disarm.never": "Nie",
@@ -3572,15 +3822,17 @@ const DE: Catalog = {
   "alarm.policies.posttrigger.hint":
     "Eine Auslösephase ist immer zeitlich begrenzt (Standard 180 s, höchstens 600 s pro Zyklus); Sirenen stoppen an ihrem Ende in jedem Fall. Diese Einstellung bestimmt, was die Zone danach tut: im vorherigen Modus scharf bleiben oder unscharf schalten.",
   "alarm.policies.posttrigger.return_to_armed": "Zurück zu scharf",
-  "alarm.policies.prealarm.empty": "Für diese Zone sind noch keine Modi eingerichtet — lege sie zuerst im Einrichtungsassistenten an.",
+  "alarm.policies.prealarm.empty":
+    "Für diese Zone sind noch keine Modi eingerichtet — lege sie zuerst im Einrichtungsassistenten an.",
   "alarm.policies.prealarm.hint":
     "Startet vor der vollen Auslösung eine leise Voralarm-Phase: Nur Quittungston-, Benachrichtigungs- und Licht-Ausgänge feuern für diese Sekunden, danach eskaliert die volle Ausgangs-Richtlinie. Ein Stummschalten während dieser Phase verhindert die Eskalation. 0 deaktiviert die Phase.",
   "alarm.policies.rearm.hint":
-    "Schaltet die Zone diese Sekunden nach einem Unscharfschalten am Ende der Auslösephase wieder in den Modus vor dem Vorfall scharf; wirkt nur, wenn \"Wenn die Auslösephase endet\" auf Unscharf schalten steht. Der Countdown setzt sich bei jeder Sensoraktivität zurück.",
+    'Schaltet die Zone diese Sekunden nach einem Unscharfschalten am Ende der Auslösephase wieder in den Modus vor dem Vorfall scharf; wirkt nur, wenn "Wenn die Auslösephase endet" auf Unscharf schalten steht. Der Countdown setzt sich bei jeder Sensoraktivität zurück.',
   "alarm.policies.rearm.seconds": "Automatisches Wiederscharfschalten nach (s)",
   "alarm.policies.schedules.add": "Zeitplan hinzufügen",
   "alarm.policies.schedules.auto_arm": "Automatisch scharf schalten",
-  "alarm.policies.schedules.auto_arm.hint": "Wenn aktiv, schaltet die Zone zu dieser Zeit automatisch scharf. Wenn inaktiv, erscheint nur eine Erinnerung.",
+  "alarm.policies.schedules.auto_arm.hint":
+    "Wenn aktiv, schaltet die Zone zu dieser Zeit automatisch scharf. Wenn inaktiv, erscheint nur eine Erinnerung.",
   "alarm.policies.schedules.days": "Tage",
   "alarm.policies.schedules.empty": "Noch keine Zeitpläne",
   "alarm.policies.schedules.mode": "Modus",
@@ -3595,7 +3847,8 @@ const DE: Catalog = {
   "alarm.policies.section.panic.hint":
     "Immer aktive Ausgangs-Richtlinie für Panik-Auslöser — unabhängig vom Scharf-Modus. Ein als stiller Panik-Auslöser markierter Sensor unterdrückt akustische Ausgänge bei seinen Auslösungen unabhängig von dieser Richtlinie.",
   "alarm.policies.section.prealarm": "Voralarm",
-  "alarm.policies.section.rearm": "Nachlauf & automatisches Wiederscharfschalten",
+  "alarm.policies.section.rearm":
+    "Nachlauf & automatisches Wiederscharfschalten",
   "alarm.policies.section.schedules": "Zeitpläne",
   "alarm.policies.section.schedules.hint":
     "Tägliche Scharfschalt-Zeitpläne für diese Zone, ausgewertet in der lokalen Zeitzone des Daemons. Ohne ausgewählte Tage feuert ein Eintrag jeden Tag. Mit automatischem Scharfschalten wird die Zone wirklich scharf geschaltet; andernfalls erscheint nur eine Erinnerung, wenn die Zone nicht im erwarteten Modus ist.",
@@ -3663,9 +3916,11 @@ const DE: Catalog = {
   "common.reload": "Neu laden",
   "common.remove": "Entfernen",
   "loglevels.title": "Log-Level-Overrides",
-  "loglevels.subtitle": "Logging einzelner Subsysteme anheben oder absenken. Overrides greifen hierarchisch (z. B. openccu-loom.client).",
+  "loglevels.subtitle":
+    "Logging einzelner Subsysteme anheben oder absenken. Overrides greifen hierarchisch (z. B. openccu-loom.client).",
   "loglevels.default": "Standard: {level}",
-  "loglevels.empty": "Keine Overrides — jedes Subsystem folgt dem Standard-Level.",
+  "loglevels.empty":
+    "Keine Overrides — jedes Subsystem folgt dem Standard-Level.",
   "loglevels.permanent": "dauerhaft",
   "loglevels.expires_in_min": "läuft in {mins} min ab",
   "loglevels.expires_soon": "läuft bald ab",
@@ -3676,7 +3931,8 @@ const DE: Catalog = {
   "loglevels.add": "Override hinzufügen",
   "loglevels.added": "Override für {path} gesetzt.",
   "loglevels.removed": "Override für {path} entfernt.",
-  "loglevels.admin_only": "Nur Administratoren können Log-Level-Overrides ändern.",
+  "loglevels.admin_only":
+    "Nur Administratoren können Log-Level-Overrides ändern.",
   "account.password.title": "Passwort ändern",
   "account.password.subtitle": "Passwort für Ihr Konto ({user}) aktualisieren.",
   "account.password.current": "Aktuelles Passwort",
@@ -3687,12 +3943,14 @@ const DE: Catalog = {
   "account.password.mismatch": "Passwörter stimmen nicht überein.",
   "account.password.too_short": "Mindestens {min} Zeichen verwenden.",
   "tls.title": "TLS-Zertifikat",
-  "tls.subtitle": "PEM-Zertifikat und Schlüssel hochladen. Der Listener (API + SPA) lädt das Zertifikat neu — ohne Neustart.",
+  "tls.subtitle":
+    "PEM-Zertifikat und Schlüssel hochladen. Der Listener (API + SPA) lädt das Zertifikat neu — ohne Neustart.",
   "tls.cert_label": "Zertifikat (PEM)",
   "tls.key_label": "Privater Schlüssel (PEM)",
   "tls.upload": "Hochladen & neu laden",
   "tls.uploaded": "Zertifikat ersetzt und neu geladen.",
-  "tls.not_enabled": "TLS ist nicht aktiviert. Zuerst north.rest.tls_cert_file / tls_key_file setzen.",
+  "tls.not_enabled":
+    "TLS ist nicht aktiviert. Zuerst north.rest.tls_cert_file / tls_key_file setzen.",
   "common.reset": "Zurücksetzen",
   "common.download": "Herunterladen",
   "common.restore": "Wiederherstellen",
@@ -3710,7 +3968,8 @@ const DE: Catalog = {
   "central.readiness.ready": "Bereit",
   "central.readiness.waiting": "Wartet auf CCU",
   "central.readiness.loading_hub": "Initialisiert (Namen)",
-  "central.readiness.loading_devices": "Initialisiert (Geräte {loaded}/{total})",
+  "central.readiness.loading_devices":
+    "Initialisiert (Geräte {loaded}/{total})",
   "central.readiness.offline": "Offline",
   "central.readiness.unknown": "Unbekannt",
   "matter.readiness.waiting":
@@ -3719,7 +3978,8 @@ const DE: Catalog = {
     "CCU '{name}' initialisiert noch — deren Geräte erscheinen nach Abschluss automatisch in der Kopplung.",
   "firmware.title": "Firmware",
   "firmware.subtitle": "Firmware-Versionen und OTA-Update-Status.",
-  "firmware.updates_available": "{count} Gerät(e) haben ein Firmware-Update verfügbar.",
+  "firmware.updates_available":
+    "{count} Gerät(e) haben ein Firmware-Update verfügbar.",
   "firmware.no_updates": "Keine Geräte mit verfügbaren Firmware-Updates.",
   "firmware.filter.all": "Alle Geräte",
   "firmware.filter.updatable": "Updates verfügbar",
@@ -3735,8 +3995,10 @@ const DE: Catalog = {
   "firmware.up_to_date": "Aktuell",
   "firmware.awaiting_transfer": "Übertragung ans Gerät steht aus",
   "firmware.triggered": "Firmware-Update für {name} angestoßen.",
-  "firmware.confirm_update": "Firmware-Update für \"{name}\" anstoßen? Das Gerät ist während des Updates kurz nicht erreichbar.",
-  "firmware.duty_cycle_warning": "Der Duty Cycle der Funkschnittstelle ist hoch ({value}%). Die Funkübertragung kann stocken, bis sich der Funk erholt hat.",
+  "firmware.confirm_update":
+    'Firmware-Update für "{name}" anstoßen? Das Gerät ist während des Updates kurz nicht erreichbar.',
+  "firmware.duty_cycle_warning":
+    "Der Duty Cycle der Funkschnittstelle ist hoch ({value}%). Die Funkübertragung kann stocken, bis sich der Funk erholt hat.",
   "firmware.count": "{count} von {total} Geräten",
   "firmware.state.UNKNOWN": "Unbekannt",
   "firmware.state.UP_TO_DATE": "Aktuell",
@@ -3754,7 +4016,8 @@ const DE: Catalog = {
   "diagnostics.health": "Gesundheit",
   "diagnostics.interfaces": "Interfaces",
   "diagnostics.rssi.title": "Signalqualität (RSSI)",
-  "diagnostics.rssi.hint": "Empfangsfeldstärke pro Gerät (dBm) aus dem Wartungskanal — RSSI_DEVICE und RSSI_PEER. Funktioniert für HmIP- und BidCos-Geräte.",
+  "diagnostics.rssi.hint":
+    "Empfangsfeldstärke pro Gerät (dBm) aus dem Wartungskanal — RSSI_DEVICE und RSSI_PEER. Funktioniert für HmIP- und BidCos-Geräte.",
   "diagnostics.rssi.empty": "Keine Geräte melden RSSI.",
   "diagnostics.rssi.device": "Gerät",
   "diagnostics.rssi.reachable": "Erreichbar",
@@ -3764,7 +4027,8 @@ const DE: Catalog = {
   "nav.signal": "Signalqualität",
   "signal.title": "Signalqualität (RSSI)",
   "signal.count": "{count} Geräte",
-  "signal.hint": "Empfangsfeldstärke und Batterie pro Gerät, aus dem Wartungskanal. Funktioniert für HmIP und BidCos.",
+  "signal.hint":
+    "Empfangsfeldstärke und Batterie pro Gerät, aus dem Wartungskanal. Funktioniert für HmIP und BidCos.",
   "signal.empty": "Keine Geräte melden RSSI.",
   "signal.empty.description":
     "Die Signalqualität erscheint hier, sobald ein Gerät mit seiner CCU kommuniziert hat.",
@@ -3790,7 +4054,8 @@ const DE: Catalog = {
   "diagnostics.unavailable": "Nicht verfügbar",
   "diagnostics.log_level_applied": "Log-Level übernommen.",
   "diagnostics.capture": "Aufzeichnung",
-  "diagnostics.capture_help": "Zeichnet interne Bus-Events, Logs und Health-Snapshots für die eingestellte Dauer auf und packt sie als herunterladbares ZIP — gedacht für reproduzierbare Fehlerberichte oder Support-Anhänge. Anonymisieren ersetzt Geräteadressen, Seriennummern und Hostnamen durch stabile Platzhalter.",
+  "diagnostics.capture_help":
+    "Zeichnet interne Bus-Events, Logs und Health-Snapshots für die eingestellte Dauer auf und packt sie als herunterladbares ZIP — gedacht für reproduzierbare Fehlerberichte oder Support-Anhänge. Anonymisieren ersetzt Geräteadressen, Seriennummern und Hostnamen durch stabile Platzhalter.",
   "diagnostics.capture_running": "läuft",
   "diagnostics.capture_idle": "inaktiv",
   "diagnostics.duration_seconds": "Dauer (s)",
@@ -3819,7 +4084,8 @@ const DE: Catalog = {
   "health.note.breaker_open_escalated": "Sicherung offen (eskaliert)",
   "health.note.recovery_started": "Wiederherstellung gestartet",
   "health.note.recovery_completed": "Wiederherstellung abgeschlossen",
-  "health.note.recovery_failed_escalated": "Wiederherstellung fehlgeschlagen (eskaliert)",
+  "health.note.recovery_failed_escalated":
+    "Wiederherstellung fehlgeschlagen (eskaliert)",
   "diagnostics.last_ok": "Zuletzt OK",
   "diagnostics.last_fail": "Letzter Fehler",
   "diagnostics.last_event": "Letztes Event",
@@ -3828,14 +4094,16 @@ const DE: Catalog = {
   "diagnostics.central": "Zentrale",
   "diagnostics.system_gauges": "System-Metriken",
   "diagnostics.rpc_recording.title": "RPC-Verkehr aufzeichnen (Replay)",
-  "diagnostics.rpc_recording.help": "Zeichnet den XML/JSON-RPC-Verkehr für deterministisches Replay auf; getrennt vom Debug-Log-Capture. Aufzeichnung übersteht Daemon-Neustarts.",
+  "diagnostics.rpc_recording.help":
+    "Zeichnet den XML/JSON-RPC-Verkehr für deterministisches Replay auf; getrennt vom Debug-Log-Capture. Aufzeichnung übersteht Daemon-Neustarts.",
   "diagnostics.rpc_recording.col_ccu": "CCU",
   "diagnostics.rpc_recording.col_status": "Status",
   "diagnostics.rpc_recording.col_entries": "Einträge",
   "diagnostics.rpc_recording.col_action": "Aktion",
   "diagnostics.rpc_recording.active": "Aktiv",
   "diagnostics.rpc_recording.inactive": "Inaktiv",
-  "diagnostics.rpc_recording.running_hint": "🔴 Aufzeichnung läuft · übersteht Neustart",
+  "diagnostics.rpc_recording.running_hint":
+    "🔴 Aufzeichnung läuft · übersteht Neustart",
   "diagnostics.rpc_recording.start": "Aufzeichnung starten",
   "diagnostics.rpc_recording.stop": "Beenden",
   "diagnostics.rpc_recording.download": "Herunterladen",
@@ -3859,13 +4127,16 @@ const DE: Catalog = {
   "diagnostics.recordings.col_size": "Größe / Einträge",
   "diagnostics.recordings.col_action": "Aktion",
   "diagnostics.recordings.empty": "Noch keine Aufzeichnungen.",
-  "diagnostics.recordings.anonymise_hint": "Anonymisieren ersetzt operator-spezifische Felder (Login-Subject, Benutzername) — Interface-Namen, Geräteadressen und Host-IPs bleiben sichtbar.",
-  "diagnostics.recordings.retention_hint": "Debug-Log-Aufzeichnungen nutzen einen rollierenden RAM-Puffer für die eingestellte Dauer. RPC-Aufzeichnungen behalten die gesamte Sitzung im Speicher bis zum Beenden und überstehen Daemon-Neustarts.",
+  "diagnostics.recordings.anonymise_hint":
+    "Anonymisieren ersetzt operator-spezifische Felder (Login-Subject, Benutzername) — Interface-Namen, Geräteadressen und Host-IPs bleiben sichtbar.",
+  "diagnostics.recordings.retention_hint":
+    "Debug-Log-Aufzeichnungen nutzen einen rollierenden RAM-Puffer für die eingestellte Dauer. RPC-Aufzeichnungen behalten die gesamte Sitzung im Speicher bis zum Beenden und überstehen Daemon-Neustarts.",
   "diagnostics.recordings.format_map": "Map",
   "diagnostics.recordings.format_golden": "Golden",
   "diagnostics.recordings.until": "läuft bis {time}",
   "diagnostics.recordings.anonymised": "anonymisiert",
-  "diagnostics.recordings.duration_open_hint": "0 = offen (Server-Limit 60 min)",
+  "diagnostics.recordings.duration_open_hint":
+    "0 = offen (Server-Limit 60 min)",
   "inbox.title": "Posteingang",
   "inbox.subtitle":
     "Geräte, die die CCU im Anlernmodus erkannt hat, aber noch nicht übernommen wurden.",
@@ -3885,14 +4156,17 @@ const DE: Catalog = {
   "inbox.accept_dialog.functions_label": "Gewerke",
   "inbox.accept_dialog.group_label": "Heizungsgruppe",
   "inbox.accept_dialog.group_none": "— keine —",
-  "inbox.accept_dialog.group_hint": "Das Gerät nach dem Annehmen optional einer Heizungsgruppe hinzufügen.",
+  "inbox.accept_dialog.group_hint":
+    "Das Gerät nach dem Annehmen optional einer Heizungsgruppe hinzufügen.",
   "inbox.group_assign.done": "Zur Gruppe „{group}“ hinzugefügt.",
-  "inbox.group_assign.no_channel": "Das Gerät hat keinen für diese Gruppe zuweisbaren Kanal — später manuell hinzufügen.",
+  "inbox.group_assign.no_channel":
+    "Das Gerät hat keinen für diese Gruppe zuweisbaren Kanal — später manuell hinzufügen.",
   "inbox.group_assign.failed": "Gruppen-Zuordnung fehlgeschlagen.",
   "inbox.accept_dialog.no_rooms": "Keine Räume verfügbar.",
   "inbox.accept_dialog.no_functions": "Keine Gewerke verfügbar.",
   "inbox.accept_dialog.submit": "Übernehmen",
-  "inbox.accept_dialog.catalog_error": "Räume und Gewerke konnten nicht geladen werden.",
+  "inbox.accept_dialog.catalog_error":
+    "Räume und Gewerke konnten nicht geladen werden.",
   "messages.title": "Meldungen",
   "messages.alarms": "Alarme",
   "messages.service": "Service-Meldungen",
@@ -3946,8 +4220,10 @@ const DE: Catalog = {
   "nav.favorites": "Favoriten",
   "nav.firmware": "Firmware",
   "favorites.title": "Favoriten",
-  "favorites.subtitle": "Ihre angehefteten Geräte und Systemvariablen, browserübergreifend synchronisiert.",
-  "favorites.empty": "Noch keine Favoriten. Heften Sie ein Gerät auf seiner Detailseite an.",
+  "favorites.subtitle":
+    "Ihre angehefteten Geräte und Systemvariablen, browserübergreifend synchronisiert.",
+  "favorites.empty":
+    "Noch keine Favoriten. Heften Sie ein Gerät auf seiner Detailseite an.",
   "favorites.pin": "Anheften",
   "favorites.pinned": "Angeheftet",
   "favorites.unpin": "Lösen",
@@ -3968,7 +4244,8 @@ const DE: Catalog = {
   "nav.about": "Info",
   // --- Info (#/about) ---
   "about.title": "Info",
-  "about.subtitle": "Version, Build und Laufzeitdaten dieses OpenCCU-Loom-Daemons.",
+  "about.subtitle":
+    "Version, Build und Laufzeitdaten dieses OpenCCU-Loom-Daemons.",
   "about.load_error": "Laden fehlgeschlagen: {error}",
   "about.section.daemon": "Daemon",
   "about.field.version": "Version",
@@ -4022,13 +4299,16 @@ const DE: Catalog = {
   "overview.expand": "Gruppe aufklappen",
   "overview.collapse": "Gruppe einklappen",
   "unignore.title": "Ausgeblendete Parameter",
-  "unignore.subtitle": "Versteckte Parameter als reguläre Datenpunkte verfügbar machen. Verwendung auf eigene Gefahr.",
-  "unignore.warning": "Häufige Schreibvorgänge auf MASTER-Paramset-Werte können Geräte beschädigen.",
+  "unignore.subtitle":
+    "Versteckte Parameter als reguläre Datenpunkte verfügbar machen. Verwendung auf eigene Gefahr.",
+  "unignore.warning":
+    "Häufige Schreibvorgänge auf MASTER-Paramset-Werte können Geräte beschädigen.",
   "unignore.central_label": "Zentrale:",
   "unignore.include_master": "MASTER-Parameter einbeziehen",
   "unignore.search_placeholder": "Nach Name filtern…",
   "unignore.add_pattern": "Hinzufügen",
-  "unignore.add_pattern_placeholder": "PARAMETER oder PARAMETER:PARAMSET@MODEL:CHANNEL",
+  "unignore.add_pattern_placeholder":
+    "PARAMETER oder PARAMETER:PARAMSET@MODEL:CHANNEL",
   "unignore.save": "Speichern",
   "unignore.saving": "Speichere…",
   "unignore.discard": "Verwerfen",
@@ -4036,7 +4316,8 @@ const DE: Catalog = {
   "unignore.no_centrals": "Keine Zentralen registriert.",
   "unignore.no_candidates": "Keine versteckten Parameter verfügbar.",
   "unignore.no_match": "kein Treffer",
-  "unignore.parse_errors_title": "Einige Muster konnten nicht angewendet werden:",
+  "unignore.parse_errors_title":
+    "Einige Muster konnten nicht angewendet werden:",
   "unignore.saved": "Un-Ignore-Liste aktualisiert ({count} Muster).",
   "unignore.saved_with_errors": "Gespeichert mit {count} Parse-Fehler(n).",
   "unignore.save_failed": "Speichern fehlgeschlagen: {err}",
@@ -4082,29 +4363,36 @@ const DE: Catalog = {
   "config.field.north.mqtt.discovery_enabled": "HA-Discovery veröffentlichen",
   "config.field.north.mqtt.protocol_version": "MQTT-Protokollversion",
   "config.field.north.mqtt.payload_format": "Payload-Format",
-  "config.field.north.mqtt.sub_devices_enabled": "Ein HA-Gerät pro Kanal-Gruppe",
+  "config.field.north.mqtt.sub_devices_enabled":
+    "Ein HA-Gerät pro Kanal-Gruppe",
   "config.field.north.matter.enabled": "Matter-Bridge aktiv",
-  "config.field.north.matter.enable_time_sync": "TimeSynchronization-Cluster mounten",
+  "config.field.north.matter.enable_time_sync":
+    "TimeSynchronization-Cluster mounten",
   "config.field.north.matter.listen": "UDP-Bind-Adresse",
   "config.field.north.matter.vendor_id": "Vendor-ID",
   "config.field.north.matter.product_id": "Product-ID",
   "config.field.north.matter.node_label": "Bridge-Label",
   "config.field.north.matter.discriminator": "Commissioning-Discriminator",
   "config.field.north.matter.prefer_ipv4": "IPv4 erzwingen",
-  "config.field.north.matter.expose_secondary_channels": "Sekundärkanäle exponieren",
+  "config.field.north.matter.expose_secondary_channels":
+    "Sekundärkanäle exponieren",
   "config.field.north.matter.mdns_advertise": "mDNS-Advertiser",
-  "config.field.north.matter.dev_rotate_unique_ids": "UniqueID pro Boot rotieren (Dev)",
+  "config.field.north.matter.dev_rotate_unique_ids":
+    "UniqueID pro Boot rotieren (Dev)",
   "config.field.north.matter.commissioning.passcode": "Setup-Code",
   "config.field.north.matter.commissioning.salt": "PBKDF2-Salt",
   "config.field.north.matter.commissioning.iterations": "PBKDF2-Iterationen",
-  "config.field.north.matter.commissioning.concurrent_pairings": "Parallele Pairings",
-  "config.field.north.matter.commissioning.ephemeral_window": "Ephemeres Pairing-Fenster",
+  "config.field.north.matter.commissioning.concurrent_pairings":
+    "Parallele Pairings",
+  "config.field.north.matter.commissioning.ephemeral_window":
+    "Ephemeres Pairing-Fenster",
   "config.field.north.matter.case.node_id": "Node-ID",
   "config.field.north.matter.case.fabric_id": "Fabric-ID",
   "config.field.north.matter.attestation.dac_path": "DAC-Zertifikatspfad",
   "config.field.north.matter.attestation.dac_key_path": "DAC-Schlüsselpfad",
   "config.field.north.matter.attestation.pai_path": "PAI-Zertifikatspfad",
-  "config.field.north.matter.attestation.cd_path": "CD-Pfad (Certification Declaration)",
+  "config.field.north.matter.attestation.cd_path":
+    "CD-Pfad (Certification Declaration)",
   "config.field.north.discovery.mdns.enabled": "mDNS-Bekanntgabe",
   "config.field.north.discovery.mdns.instance_name": "mDNS-Instanzname",
   "config.field.north.discovery.ssdp.enabled": "CCUs per SSDP finden",
@@ -4122,7 +4410,8 @@ const DE: Catalog = {
   "config.field.north.rest.auth.oidc.client_id": "OIDC Client-ID",
   "config.field.north.rest.auth.oidc.redirect_url": "OIDC-Redirect-URL",
   "config.field.north.rest.rate_limit.enabled": "REST-Rate-Limit",
-  "config.field.north.rest.rate_limit.requests_per_second": "Refill-Rate (Req/s)",
+  "config.field.north.rest.rate_limit.requests_per_second":
+    "Refill-Rate (Req/s)",
   "config.field.north.rest.rate_limit.burst": "Burst-Kapazität",
   "config.field.north.ui.enabled": "Bootstrap-UI aktiv",
   "config.field.callback.host": "Callback-Bind-Adresse",
@@ -4131,7 +4420,8 @@ const DE: Catalog = {
   "config.field.callback.port_range": "Ephemerer Port-Bereich",
   "config.field.callback.public_host": "Öffentlicher Hostname (NAT)",
   "config.field.callback.max_connections": "Max. Callback-Verbindungen",
-  "config.field.callback.restrict_source_ips": "Callbacks auf CCU-IPs beschränken",
+  "config.field.callback.restrict_source_ips":
+    "Callbacks auf CCU-IPs beschränken",
   "config.field.ccu_data.translations_path": "Pfad zum Übersetzungsarchiv",
   "config.field.ccu_data.easymode_path": "Pfad zum Easymode-Archiv",
   "config.field.north.rest.auth.users": "Bootstrap-Benutzer",
@@ -4144,26 +4434,35 @@ const DE: Catalog = {
   "config.field.north.rest.auth.ccu.min_user_level": "Minimales User-Level",
   "config.field.north.rest.auth.ccu.role_mapping": "Rollen-Zuordnung",
   "config.field.north.rest.auth.ha_ingress.enabled": "HA-Ingress-Passthrough",
-  "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr": "Vertrauenswürdiges Proxy-CIDR",
+  "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr":
+    "Vertrauenswürdiges Proxy-CIDR",
   "config.field.north.rest.auth.ha_ingress.role": "Gewährte Rolle",
   "config.field.north.rest.openapi_spec_path": "OpenAPI-Spec-Pfad",
-  "config.field.north.rest.openapi_validate": "Anfragen gegen OpenAPI-Spec prüfen",
-  "config.field.north.rest.ws.replay_capacity": "WebSocket-Replay-Ringpuffer-Größe",
+  "config.field.north.rest.openapi_validate":
+    "Anfragen gegen OpenAPI-Spec prüfen",
+  "config.field.north.rest.ws.replay_capacity":
+    "WebSocket-Replay-Ringpuffer-Größe",
   "config.field.persistence.values_cache.enabled": "VALUES-Cache aktiv",
-  "config.field.persistence.values_cache.flush_interval": "Cache-Flush-Intervall",
-  "config.field.persistence.values_cache.disabled_centrals": "Ausgeschlossene CCUs",
+  "config.field.persistence.values_cache.flush_interval":
+    "Cache-Flush-Intervall",
+  "config.field.persistence.values_cache.disabled_centrals":
+    "Ausgeschlossene CCUs",
   "config.field.backup.schedule": "Intervall für automatische Backups",
   "config.field.backup.keep_last": "Letzte N Backups behalten",
   "config.field.alarm.enabled": "Alarmanlage aktiviert",
   "config.field.alarm.default_siren_seconds": "Standard-Sirenendauer (s)",
-  "config.field.alarm.max_acoustic_per_incident_seconds": "Akustik-Budget pro Vorfall (s)",
+  "config.field.alarm.max_acoustic_per_incident_seconds":
+    "Akustik-Budget pro Vorfall (s)",
   "config.field.alarm.stop_verify_seconds": "Prüffenster Sirenenstopp (s)",
   "config.field.alarm.journal_retention_days": "Journal-Aufbewahrung (Tage)",
-  "config.field.alarm.restart_loop_breaker": "Neustart-Schleifenbegrenzer (Reaktivierungen)",
+  "config.field.alarm.restart_loop_breaker":
+    "Neustart-Schleifenbegrenzer (Reaktivierungen)",
   "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
   "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
-  "config.field.persistence.history.retention_hourly": "Aufbewahrung Stunden-Rollup",
-  "config.field.persistence.history.retention_daily": "Aufbewahrung Tages-Rollup",
+  "config.field.persistence.history.retention_hourly":
+    "Aufbewahrung Stunden-Rollup",
+  "config.field.persistence.history.retention_daily":
+    "Aufbewahrung Tages-Rollup",
   "config.field.persistence.history.flush_interval": "Verlaufs-Flush-Intervall",
   "config.field.persistence.history.include": "Parameter einschließen",
   "config.field.persistence.history.exclude": "Parameter ausschließen",
@@ -4173,8 +4472,10 @@ const DE: Catalog = {
   "config.field.persistence.history.export.endpoint": "Export-Endpunkt",
   "config.field.persistence.history.export.org": "InfluxDB-Organisation",
   "config.field.persistence.history.export.bucket": "InfluxDB-Bucket",
-  "config.field.persistence.history.export.token_env": "Token-Umgebungsvariable",
-  "config.field.reliability.command_retry_initial_delay": "Retry-Anfangsverzögerung",
+  "config.field.persistence.history.export.token_env":
+    "Token-Umgebungsvariable",
+  "config.field.reliability.command_retry_initial_delay":
+    "Retry-Anfangsverzögerung",
   "config.field.reliability.command_throttle_inter_command_delay":
     "Throttle-Befehlsabstand",
   "config.field.centrals": "CCUs",
@@ -4194,18 +4495,27 @@ const DE: Catalog = {
   "config.field.centrals.interfaces.port": "Interface-Port",
   "config.field.centrals.interfaces.remote_path": "Remote-Pfad",
   "config.field.centrals.interfaces.rpc_type": "RPC-Typ",
-  "config.field.centrals.check_connection_interval": "Verbindungsprüfungsintervall",
-  "config.field.centrals.behavior.delay_new_device_creation": "Neue Geräte zurückstellen",
-  "config.field.centrals.behavior.enable_device_firmware_check": "Firmware-Update-Entitäten",
+  "config.field.centrals.check_connection_interval":
+    "Verbindungsprüfungsintervall",
+  "config.field.centrals.behavior.delay_new_device_creation":
+    "Neue Geräte zurückstellen",
+  "config.field.centrals.behavior.enable_device_firmware_check":
+    "Firmware-Update-Entitäten",
   "config.field.centrals.behavior.enable_program_scan": "Programme scannen",
-  "config.field.centrals.behavior.enable_sysvar_scan": "Systemvariablen scannen",
-  "config.field.centrals.behavior.include_internal_programs": "Interne Programme einschließen",
-  "config.field.centrals.behavior.include_internal_sysvars": "Interne Systemvariablen einschließen",
-  "config.field.centrals.behavior.light_last_brightness": "Letzte Helligkeit wiederherstellen",
+  "config.field.centrals.behavior.enable_sysvar_scan":
+    "Systemvariablen scannen",
+  "config.field.centrals.behavior.include_internal_programs":
+    "Interne Programme einschließen",
+  "config.field.centrals.behavior.include_internal_sysvars":
+    "Interne Systemvariablen einschließen",
+  "config.field.centrals.behavior.light_last_brightness":
+    "Letzte Helligkeit wiederherstellen",
   "config.field.centrals.behavior.program_markers": "Programm-Marker",
   "config.field.centrals.behavior.sysvar_markers": "Systemvariablen-Marker",
-  "config.field.centrals.behavior.sysvar_scan_interval": "Systemvariablen-Scan-Intervall",
-  "config.field.centrals.behavior.use_group_channel_for_cover_state": "Gruppenkanal für Rollladenstatus",
+  "config.field.centrals.behavior.sysvar_scan_interval":
+    "Systemvariablen-Scan-Intervall",
+  "config.field.centrals.behavior.use_group_channel_for_cover_state":
+    "Gruppenkanal für Rollladenstatus",
   "config.field.north.mcp.enabled": "MCP-Server aktiv",
   "config.field.north.mcp.allow_writes": "Schreibzugriff erlauben",
   "config.field.north.mcp.path": "MCP-Mount-Pfad",
@@ -4216,37 +4526,62 @@ const DE: Catalog = {
   "config.field.north.webhook.centrals": "CCU-Filter",
   "config.field.north.webhook.parameter_glob": "Parameter-Glob",
   "config.field.north.webhook.timeout_ms": "Zustellungs-Timeout (ms)",
-  "config.field.north.webhook.inbound.enabled": "Eingehenden Webhook aktivieren",
+  "config.field.north.webhook.inbound.enabled":
+    "Eingehenden Webhook aktivieren",
   "config.field.north.webhook.inbound.token": "Eingangs-Token",
-  "config.field.north.mqtt.retain_cleanup_window_ms": "Retain-Cleanup-Fenster (ms)",
+  "config.field.north.mqtt.retain_cleanup_window_ms":
+    "Retain-Cleanup-Fenster (ms)",
   "config.field.north.rest.csrf_enabled": "CSRF-Schutz",
   "config.field.north.rest.csrf_secure": "CSRF Secure-Cookie",
   "config.field.north.rest.tracing.otlp_endpoint": "OTLP-Trace-Endpunkt",
   "config.field.addon_update.check_interval": "Update-Prüfintervall",
   "config.field.addon_update.enabled": "Hintergrund-Updateprüfung",
-  "config.help.locale": "Standard-Sprache der SPA beim ersten Aufruf. Operatoren können pro Benutzer in den Einstellungen umschalten.",
-  "config.help.data_dir": "Verzeichnis für SQLite-Datenbank, Sessions, Backups, Logs. Muss schreibbar sein; wird beim ersten Start angelegt.",
-  "config.help.logging.level": "Filter-Schwelle des strukturierten Loggers. debug zeigt Wire-Level-Traces; info ist der typische Operator-Level.",
-  "config.help.logging.format": "Handler-Form. json für Produktion / Log-Shipper; text oder text-color für Terminal-Output.",
-  "config.help.logging.overrides": "Per-Subsystem-Level-Überschreibungen, dot-separierter Logger-Pfad. Spezifischste Überschreibung gewinnt.",
-  "config.help.north.mqtt.enabled": "Hauptschalter der MQTT-Bridge. Aus = keine Broker-Verbindung, keine Topics.",
-  "config.help.north.mqtt.broker_url": "tcp://host:port (plain), tls://host:port (TLS) oder mqtt:// / mqtts://-Schema. Pflicht wenn MQTT aktiv.",
-  "config.help.north.mqtt.client_id": "MQTT-Client-Identifier. Muss pro Broker-Verbindung eindeutig sein.",
-  "config.help.north.mqtt.username": "Broker-Benutzer für authentifizierte Broker. Leer für anonyme Broker.",
-  "config.help.north.mqtt.password": "Broker-Passwort — verschlüsselt at-rest im SQLite-File, in Backups redaktiert. Bevorzugt via OPENCCU_LOOM_MQTT_PASSWORD-Env-Variable setzen.",
-  "config.help.north.mqtt.topic_base": "Präfix für jedes Raw- und Discovery-Topic. Ändern, wenn mehrere Daemons gegen denselben Broker laufen.",
-  "config.help.north.mqtt.raw_enabled": "Veröffentlicht pro-DataPoint-State unter <topic_base>/<interface>/… — die rohe Ebene für non-HA-Konsumenten.",
-  "config.help.north.mqtt.discovery_enabled": "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert.",
-  "config.help.north.mqtt.protocol_version": "MQTT-Dialekt: \"5\" (Standard) oder \"3.1.1\" für Broker ohne MQTT-5.0-Unterstützung. Kein stilles Downgrade — ein v5-Connect gegen einen v3-Broker schlägt mit benanntem Fehler fehl.",
-  "config.help.north.mqtt.payload_format": "bare bleibt bei primitiven Scalar-Payloads (rückwärtskompatibel); json wrapper {value, available}. Erst umschalten, wenn alle Konsumenten umgestellt sind.",
-  "config.help.north.mqtt.sub_devices_enabled": "Multi-Channel-Group-Geräte als ein HA-Gerät pro Kanal-Gruppe rendern. Zeigt Parent + N Children in HA.",
-  "config.help.north.matter.enabled": "Hauptschalter der Matter-Bridge. Standard aus. Aktiv = UDP-Listener und mDNS-Records gehen hoch.",
-  "config.help.north.matter.enable_time_sync": "Mountet den optionalen TimeSynchronization-Cluster (0x0038) am Matter-Root-Endpoint. Standard aus — auf einer RootNode nur optional, und manche Controller (z. B. Apple Home) lehnen die Bridge beim Pairing ab, wenn er auftaucht. Nur aktivieren, wenn ein Controller eine Zeit-Sync-Oberfläche braucht; danach neu koppeln.",
-  "config.help.north.matter.listen": "UDP-Bind-Adresse des Matter-Listeners. :5540 ist die IANA-Default; :0 lässt das OS wählen (für Tests). Amazon Alexa kann Bridges nur auf Port 5540 koppeln.",
-  "config.help.north.matter.vendor_id": "IANA-vergebene Vendor-ID. 0xFFF1 ist der Test-/Dev-Block — niemals in Produktion ausliefern.",
-  "config.help.north.matter.product_id": "Vendor-vergebene Produkt-ID. Default 0x8000.",
-  "config.help.north.matter.node_label": "Nutzer-sichtbarer Label des Bridge-Nodes (sichtbar in Apple Home, Google Home, …).",
-  "config.help.north.matter.discriminator": "12-bit Matter-Commissioning-Discriminator. Mit dem Passcode bildet er den manuellen Setup-Code.",
+  "config.help.locale":
+    "Standard-Sprache der SPA beim ersten Aufruf. Operatoren können pro Benutzer in den Einstellungen umschalten.",
+  "config.help.data_dir":
+    "Verzeichnis für SQLite-Datenbank, Sessions, Backups, Logs. Muss schreibbar sein; wird beim ersten Start angelegt.",
+  "config.help.logging.level":
+    "Filter-Schwelle des strukturierten Loggers. debug zeigt Wire-Level-Traces; info ist der typische Operator-Level.",
+  "config.help.logging.format":
+    "Handler-Form. json für Produktion / Log-Shipper; text oder text-color für Terminal-Output.",
+  "config.help.logging.overrides":
+    "Per-Subsystem-Level-Überschreibungen, dot-separierter Logger-Pfad. Spezifischste Überschreibung gewinnt.",
+  "config.help.north.mqtt.enabled":
+    "Hauptschalter der MQTT-Bridge. Aus = keine Broker-Verbindung, keine Topics.",
+  "config.help.north.mqtt.broker_url":
+    "tcp://host:port (plain), tls://host:port (TLS) oder mqtt:// / mqtts://-Schema. Pflicht wenn MQTT aktiv.",
+  "config.help.north.mqtt.client_id":
+    "MQTT-Client-Identifier. Muss pro Broker-Verbindung eindeutig sein.",
+  "config.help.north.mqtt.username":
+    "Broker-Benutzer für authentifizierte Broker. Leer für anonyme Broker.",
+  "config.help.north.mqtt.password":
+    "Broker-Passwort — verschlüsselt at-rest im SQLite-File, in Backups redaktiert. Bevorzugt via OPENCCU_LOOM_MQTT_PASSWORD-Env-Variable setzen.",
+  "config.help.north.mqtt.topic_base":
+    "Präfix für jedes Raw- und Discovery-Topic. Ändern, wenn mehrere Daemons gegen denselben Broker laufen.",
+  "config.help.north.mqtt.raw_enabled":
+    "Veröffentlicht pro-DataPoint-State unter <topic_base>/<interface>/… — die rohe Ebene für non-HA-Konsumenten.",
+  "config.help.north.mqtt.discovery_enabled":
+    "Emittiert Home-Assistant-Discovery-Payloads, sodass HA die Geräte automatisch registriert.",
+  "config.help.north.mqtt.protocol_version":
+    'MQTT-Dialekt: "5" (Standard) oder "3.1.1" für Broker ohne MQTT-5.0-Unterstützung. Kein stilles Downgrade — ein v5-Connect gegen einen v3-Broker schlägt mit benanntem Fehler fehl.',
+  "config.help.north.mqtt.payload_format":
+    "bare bleibt bei primitiven Scalar-Payloads (rückwärtskompatibel); json wrapper {value, available}. Erst umschalten, wenn alle Konsumenten umgestellt sind.",
+  "config.help.north.mqtt.sub_devices_enabled":
+    "Multi-Channel-Group-Geräte als ein HA-Gerät pro Kanal-Gruppe rendern. Zeigt Parent + N Children in HA.",
+  "config.help.north.matter.enabled":
+    "Hauptschalter der Matter-Bridge. Standard aus. Aktiv = UDP-Listener und mDNS-Records gehen hoch.",
+  "config.help.north.matter.enable_time_sync":
+    "Mountet den optionalen TimeSynchronization-Cluster (0x0038) am Matter-Root-Endpoint. Standard aus — auf einer RootNode nur optional, und manche Controller (z. B. Apple Home) lehnen die Bridge beim Pairing ab, wenn er auftaucht. Nur aktivieren, wenn ein Controller eine Zeit-Sync-Oberfläche braucht; danach neu koppeln.",
+  "config.help.north.matter.listen":
+    "UDP-Bind-Adresse des Matter-Listeners. :5540 ist die IANA-Default; :0 lässt das OS wählen (für Tests). Amazon Alexa kann Bridges nur auf Port 5540 koppeln.",
+  "config.help.north.matter.vendor_id":
+    "IANA-vergebene Vendor-ID. 0xFFF1 ist der Test-/Dev-Block — niemals in Produktion ausliefern.",
+  "config.help.north.matter.product_id":
+    "Vendor-vergebene Produkt-ID. Default 0x8000.",
+  "config.help.north.matter.node_label":
+    "Nutzer-sichtbarer Label des Bridge-Nodes (sichtbar in Apple Home, Google Home, …).",
+  "config.help.north.matter.discriminator":
+    "12-bit Matter-Commissioning-Discriminator. Mit dem Passcode bildet er den manuellen Setup-Code.",
   "config.help.north.matter.prefer_ipv4":
     "Erzwingt IPv4-only auf dem Matter-UDP-Socket. Default aus = IPv6-Dual-Stack-Socket, der auch IPv4 akzeptiert (Standardwahl).",
   "config.help.north.matter.expose_secondary_channels":
@@ -4281,60 +4616,96 @@ const DE: Catalog = {
     "Native-Go Matter-Bridge, die ausgewählte CCU-Geräte als Matter-Accessories zur Verfügung stellt. Standardmäßig aus. Produktion benötigt Vendor-Attestation-Material (DAC / PAI / CD) im Experten-Bereich; Entwicklung pairt mit chip-tool --bypass-attestation-verifier.",
   "settings.section.intro.north.mcp":
     "MCP-Server (Model Context Protocol), der CCU-Geräte LLM-Agenten als Tools über den REST-Listener bereitstellt. Standardmäßig aus und nur lesend, bis zusätzlich „Schreibzugriff erlauben“ aktiviert ist. Änderungen greifen erst nach einem Daemon-Neustart. Siehe ADR 0025.",
-  "config.help.north.mcp.enabled": "Hauptschalter des MCP-Servers (Streamable-HTTP auf dem REST-Listener). Standardmäßig aus. Greift erst nach einem Daemon-Neustart.",
-  "config.help.north.mcp.allow_writes": "Schreibfähige MCP-Tools (z. B. set_datapoint) freischalten. Standardmäßig aus — der Server allein ist nur lesend; für Agenten-gesteuerte Steuerung aktivieren. Greift erst nach einem Daemon-Neustart.",
-  "config.help.north.mcp.path": "HTTP-Mount-Pfad des MCP-Transports auf dem REST-Listener. Leer = /mcp. Greift erst nach einem Daemon-Neustart.",
-  "config.help.north.webhook.enabled": "Hauptschalter für den ausgehenden Webhook. Aktiv sendet der Daemon bei Datenpunkt-, System-Status- und Incident-Ereignissen eine signierte JSON-Nutzlast per POST an die konfigurierte URL. Standardmäßig aus. Greift erst nach einem Daemon-Neustart.",
-  "config.help.north.webhook.url": "Absolute http(s)-Adresse, an die jedes Ereignis per POST gesendet wird. Leer deaktiviert die Zustellung auch bei aktivem Schalter.",
-  "config.help.north.webhook.secret": "Gemeinsamer Schlüssel für die HMAC-SHA256-Signatur des Bodys im Header X-OpenCCU-Signature. Leer = keine Signatur (der Empfänger kann die Echtheit nicht prüfen).",
-  "config.help.north.webhook.events": "Positivliste der zuzustellenden Ereignistyp-Tags (z. B. datapoint.value_changed). Leer stellt alle unterstützten Ereignisse zu.",
-  "config.help.north.webhook.centrals": "Positivliste der CCU-Namen, deren Ereignisse zugestellt werden. Leer stellt Ereignisse aller CCUs zu.",
-  "config.help.north.webhook.parameter_glob": "Optionaler Glob (z. B. *TEMPERATURE*), der Datenpunkt-Ereignisse auf passende Parameternamen beschränkt. Leer = kein Parameterfilter; andere Ereignistypen sind nicht betroffen.",
-  "config.help.north.webhook.timeout_ms": "HTTP-Timeout pro Zustellung in Millisekunden. Null oder negativ verwendet den Standard von 10000 ms.",
-  "config.help.north.webhook.inbound.enabled": "Hauptschalter für die eingehende Webhook-REST-Schnittstelle (POST /api/v1/webhook/value und /api/v1/webhook/program). Standardmäßig aus. Die Routen werden nur bei aktivem Schalter eingehängt, daher greift eine Änderung erst nach einem Daemon-Neustart. Eingehende Anfragen sind echte Geräte-Schreibvorgänge / Programmausführungen.",
-  "config.help.north.webhook.inbound.token": "Optionaler Bearer-Token, der zusätzlich zur normalen Auth-Kette akzeptiert wird, damit ein reiner Header-Aufrufer (z. B. eine Türklingel) ohne Sitzung oder Benutzer-Login senden kann. Als Authorization: Bearer <token> gesendet. Leer = nur die normale Auth-Kette gilt.",
-  "config.help.north.discovery.mdns.enabled": "Daemon via mDNS / Zeroconf im LAN bekannt machen, damit z. B. Home Assistant ihn auto-erkennt.",
-  "config.help.north.discovery.mdns.instance_name": "Linkester Label des mDNS-SRV/TXT-Records. Leer = OS-Hostname.",
-  "config.help.north.discovery.ssdp.enabled": "Das LAN regelmäßig per SSDP/UPnP nach Homematic-/OpenCCU-Zentralen durchsuchen, damit sie mit einem Klick übernommen werden können. Nur lesend — es verlassen keine Daemon-Daten das LAN.",
-  "config.help.north.discovery.ssdp.interval": "Wie oft die Suche wiederholt wird (z. B. 60s). Leer = 60 Sekunden.",
-  "config.help.north.rest.enabled": "Hauptschalter des REST-/WebSocket-Servers. Aus = Daemon hat keine Operator-Oberfläche.",
-  "config.help.north.rest.listen": "Bind-Adresse von REST + WebSocket. :8119 lauscht auf allen Interfaces; mit host:-Präfix einschränken.",
+  "config.help.north.mcp.enabled":
+    "Hauptschalter des MCP-Servers (Streamable-HTTP auf dem REST-Listener). Standardmäßig aus. Greift erst nach einem Daemon-Neustart.",
+  "config.help.north.mcp.allow_writes":
+    "Schreibfähige MCP-Tools (z. B. set_datapoint) freischalten. Standardmäßig aus — der Server allein ist nur lesend; für Agenten-gesteuerte Steuerung aktivieren. Greift erst nach einem Daemon-Neustart.",
+  "config.help.north.mcp.path":
+    "HTTP-Mount-Pfad des MCP-Transports auf dem REST-Listener. Leer = /mcp. Greift erst nach einem Daemon-Neustart.",
+  "config.help.north.webhook.enabled":
+    "Hauptschalter für den ausgehenden Webhook. Aktiv sendet der Daemon bei Datenpunkt-, System-Status- und Incident-Ereignissen eine signierte JSON-Nutzlast per POST an die konfigurierte URL. Standardmäßig aus. Greift erst nach einem Daemon-Neustart.",
+  "config.help.north.webhook.url":
+    "Absolute http(s)-Adresse, an die jedes Ereignis per POST gesendet wird. Leer deaktiviert die Zustellung auch bei aktivem Schalter.",
+  "config.help.north.webhook.secret":
+    "Gemeinsamer Schlüssel für die HMAC-SHA256-Signatur des Bodys im Header X-OpenCCU-Signature. Leer = keine Signatur (der Empfänger kann die Echtheit nicht prüfen).",
+  "config.help.north.webhook.events":
+    "Positivliste der zuzustellenden Ereignistyp-Tags (z. B. datapoint.value_changed). Leer stellt alle unterstützten Ereignisse zu.",
+  "config.help.north.webhook.centrals":
+    "Positivliste der CCU-Namen, deren Ereignisse zugestellt werden. Leer stellt Ereignisse aller CCUs zu.",
+  "config.help.north.webhook.parameter_glob":
+    "Optionaler Glob (z. B. *TEMPERATURE*), der Datenpunkt-Ereignisse auf passende Parameternamen beschränkt. Leer = kein Parameterfilter; andere Ereignistypen sind nicht betroffen.",
+  "config.help.north.webhook.timeout_ms":
+    "HTTP-Timeout pro Zustellung in Millisekunden. Null oder negativ verwendet den Standard von 10000 ms.",
+  "config.help.north.webhook.inbound.enabled":
+    "Hauptschalter für die eingehende Webhook-REST-Schnittstelle (POST /api/v1/webhook/value und /api/v1/webhook/program). Standardmäßig aus. Die Routen werden nur bei aktivem Schalter eingehängt, daher greift eine Änderung erst nach einem Daemon-Neustart. Eingehende Anfragen sind echte Geräte-Schreibvorgänge / Programmausführungen.",
+  "config.help.north.webhook.inbound.token":
+    "Optionaler Bearer-Token, der zusätzlich zur normalen Auth-Kette akzeptiert wird, damit ein reiner Header-Aufrufer (z. B. eine Türklingel) ohne Sitzung oder Benutzer-Login senden kann. Als Authorization: Bearer <token> gesendet. Leer = nur die normale Auth-Kette gilt.",
+  "config.help.north.discovery.mdns.enabled":
+    "Daemon via mDNS / Zeroconf im LAN bekannt machen, damit z. B. Home Assistant ihn auto-erkennt.",
+  "config.help.north.discovery.mdns.instance_name":
+    "Linkester Label des mDNS-SRV/TXT-Records. Leer = OS-Hostname.",
+  "config.help.north.discovery.ssdp.enabled":
+    "Das LAN regelmäßig per SSDP/UPnP nach Homematic-/OpenCCU-Zentralen durchsuchen, damit sie mit einem Klick übernommen werden können. Nur lesend — es verlassen keine Daemon-Daten das LAN.",
+  "config.help.north.discovery.ssdp.interval":
+    "Wie oft die Suche wiederholt wird (z. B. 60s). Leer = 60 Sekunden.",
+  "config.help.north.rest.enabled":
+    "Hauptschalter des REST-/WebSocket-Servers. Aus = Daemon hat keine Operator-Oberfläche.",
+  "config.help.north.rest.listen":
+    "Bind-Adresse von REST + WebSocket. :8119 lauscht auf allen Interfaces; mit host:-Präfix einschränken.",
   "config.help.north.rest.public_url":
     "Von außen erreichbare Basis-URL dieses Daemons (Schema + Host [+ Port]), z. B. https://loom.example.com. Dient zum Bilden absoluter Links wie der OIDC-Redirect-URL und zur Ableitung des Secure-Cookie-Verhaltens. Leer lassen, um sie pro Anfrage abzuleiten — setzen, wenn hinter einem Reverse Proxy oder unter eigener Domain.",
   "config.help.north.rest.tls_cert_file":
     "Pfad zur PEM-Zertifikatskette. Zusammen mit der Schlüsseldatei setzen, um API + SPA über HTTPS auf demselben Port auszuliefern; beide leer lassen für reines HTTP hinter einem TLS-terminierenden Proxy. Ein hochgeladenes Zertifikat wird in diesen Pfad geschrieben und für Hot-Reload überwacht — der Upload ersetzt den Dateiinhalt, nicht die Wahl des Speicherorts.",
   "config.help.north.rest.tls_key_file":
     "Pfad zum PEM-Privatschlüssel passend zur Zertifikatsdatei. Zusammen mit dem Zertifikat erforderlich, um HTTPS zu aktivieren; ein hochgeladener Schlüssel wird hierher geschrieben und bei Änderung neu geladen.",
-  "config.help.north.rest.cors": "Erlaubte Browser-Origins für Cross-Origin-REST-Aufrufe. Leer = CORS aus; [\"*\"] nur für Entwicklung.",
-  "config.help.north.rest.auth.basic_enabled": "Akzeptiere HTTP-Basic-Credentials auf geschützten Routen. Nützlich für curl + CI. Standard: an; false lehnt Basic-Auth auch mit konfigurierten Benutzern ab.",
-  "config.help.north.rest.auth.bearer_enabled": "Akzeptiere Bearer-Tokens via Authorization-Header. Für Automation. Standard: an; false lehnt Tokens auch mit konfigurierten Einträgen ab.",
-  "config.help.north.rest.auth.oidc.enabled": "OpenID Connect Single-Sign-On aktivieren. Die Login-Seite zeigt einen SSO-Button, wenn konfiguriert.",
-  "config.help.north.rest.auth.oidc.issuer": "Issuer-URL (ohne trailing slash). Das .well-known/openid-configuration-Dokument wird beim Daemon-Start geladen.",
-  "config.help.north.rest.auth.oidc.client_id": "Public-Client-Identifier, beim IdP registriert. PKCE-Flow.",
-  "config.help.north.rest.auth.oidc.redirect_url": "Muss mit der beim IdP registrierten URL übereinstimmen. Zeigt auf den OIDC-Callback-Handler.",
-  "config.help.north.rest.rate_limit.enabled": "Per-Identity-Token-Bucket-Rate-Limit auf REST-Requests. Überschuss bekommt HTTP 429.",
-  "config.help.north.rest.rate_limit.requests_per_second": "Steady-State-Token-Refill-Rate pro Identity. 10 ist ein sinnvoller Startwert.",
-  "config.help.north.rest.rate_limit.burst": "Token-Bucket-Größe — maximale gleichzeitige Requests pro Identity vor Drosselung.",
-  "config.help.north.ui.enabled": "Bootstrap-UI-Oberfläche (Login, /setup-Wizard, /health). Die SPA selbst läuft auf dem REST-Listener.",
-  "config.help.callback.host": "Lokales Interface, auf dem die XML-RPC- + BIN-RPC-Callback-Listener binden. Einschränken via Firewall, nicht via Bind-Adresse.",
-  "config.help.callback.port": "Port des XML-RPC-Callback-Listeners. 0 = OS wählt ephemeren Port; der Daemon meldet ihn bei jedem CCU-Reconnect neu.",
-  "config.help.callback.bin_port": "Port des BIN-RPC-Callback-Listeners (CUxD). Gleiche Dynamic-Port-Semantik wie der XML-RPC-Port.",
-  "config.help.callback.port_range": "Optionaler Port-Bereich <lo>-<hi> für die Dynamic-Port-Policy. Wenn der Daemon hinter einer engen Firewall sitzt.",
-  "config.help.callback.public_host": "Hostname, den der Daemon der CCU bei init() ansagt. Setzen wenn der Daemon hinter NAT läuft.",
-  "config.help.callback.max_connections": "Obergrenze gleichzeitiger Verbindungen pro Callback-Listener (XML-RPC und BIN-RPC). Begrenzt Speicher-/Goroutine-Verbrauch, falls ein nicht vertrauenswürdiger LAN-Host den Socket flutet. 0 = Standard (64).",
-  "config.help.callback.restrict_source_ips": "Nur Callbacks von den konfigurierten CCU-IPs plus Loopback annehmen. Ergänzt eine Quell-IP-Allowlist zusätzlich zum Verbindungslimit. Standardmäßig aus; aktivieren, wenn außer den CCUs kein legitimer Host die Callback-Ports erreicht.",
+  "config.help.north.rest.cors":
+    'Erlaubte Browser-Origins für Cross-Origin-REST-Aufrufe. Leer = CORS aus; ["*"] nur für Entwicklung.',
+  "config.help.north.rest.auth.basic_enabled":
+    "Akzeptiere HTTP-Basic-Credentials auf geschützten Routen. Nützlich für curl + CI. Standard: an; false lehnt Basic-Auth auch mit konfigurierten Benutzern ab.",
+  "config.help.north.rest.auth.bearer_enabled":
+    "Akzeptiere Bearer-Tokens via Authorization-Header. Für Automation. Standard: an; false lehnt Tokens auch mit konfigurierten Einträgen ab.",
+  "config.help.north.rest.auth.oidc.enabled":
+    "OpenID Connect Single-Sign-On aktivieren. Die Login-Seite zeigt einen SSO-Button, wenn konfiguriert.",
+  "config.help.north.rest.auth.oidc.issuer":
+    "Issuer-URL (ohne trailing slash). Das .well-known/openid-configuration-Dokument wird beim Daemon-Start geladen.",
+  "config.help.north.rest.auth.oidc.client_id":
+    "Public-Client-Identifier, beim IdP registriert. PKCE-Flow.",
+  "config.help.north.rest.auth.oidc.redirect_url":
+    "Muss mit der beim IdP registrierten URL übereinstimmen. Zeigt auf den OIDC-Callback-Handler.",
+  "config.help.north.rest.rate_limit.enabled":
+    "Per-Identity-Token-Bucket-Rate-Limit auf REST-Requests. Überschuss bekommt HTTP 429.",
+  "config.help.north.rest.rate_limit.requests_per_second":
+    "Steady-State-Token-Refill-Rate pro Identity. 10 ist ein sinnvoller Startwert.",
+  "config.help.north.rest.rate_limit.burst":
+    "Token-Bucket-Größe — maximale gleichzeitige Requests pro Identity vor Drosselung.",
+  "config.help.north.ui.enabled":
+    "Bootstrap-UI-Oberfläche (Login, /setup-Wizard, /health). Die SPA selbst läuft auf dem REST-Listener.",
+  "config.help.callback.host":
+    "Lokales Interface, auf dem die XML-RPC- + BIN-RPC-Callback-Listener binden. Einschränken via Firewall, nicht via Bind-Adresse.",
+  "config.help.callback.port":
+    "Port des XML-RPC-Callback-Listeners. 0 = OS wählt ephemeren Port; der Daemon meldet ihn bei jedem CCU-Reconnect neu.",
+  "config.help.callback.bin_port":
+    "Port des BIN-RPC-Callback-Listeners (CUxD). Gleiche Dynamic-Port-Semantik wie der XML-RPC-Port.",
+  "config.help.callback.port_range":
+    "Optionaler Port-Bereich <lo>-<hi> für die Dynamic-Port-Policy. Wenn der Daemon hinter einer engen Firewall sitzt.",
+  "config.help.callback.public_host":
+    "Hostname, den der Daemon der CCU bei init() ansagt. Setzen wenn der Daemon hinter NAT läuft.",
+  "config.help.callback.max_connections":
+    "Obergrenze gleichzeitiger Verbindungen pro Callback-Listener (XML-RPC und BIN-RPC). Begrenzt Speicher-/Goroutine-Verbrauch, falls ein nicht vertrauenswürdiger LAN-Host den Socket flutet. 0 = Standard (64).",
+  "config.help.callback.restrict_source_ips":
+    "Nur Callbacks von den konfigurierten CCU-IPs plus Loopback annehmen. Ergänzt eine Quell-IP-Allowlist zusätzlich zum Verbindungslimit. Standardmäßig aus; aktivieren, wenn außer den CCUs kein legitimer Host die Callback-Ports erreicht.",
   "config.help.ccu_data.translations_path":
     "Dateisystempfad zum OCCU-Übersetzungs-ZIP. Standard ist das im Binary eingebettete Archiv; nur überschreiben, um ein eigenes Extrakt zu testen.",
   "config.help.ccu_data.easymode_path":
     "Dateisystempfad zum OCCU-Easymode-ZIP. Standard ist das eingebettete Archiv; nur überschreiben, um ein eigenes Extrakt zu testen.",
   "config.help.north.rest.auth.users":
-    "Seed-only-Benutzerliste, die einmalig beim ersten Start geladen wird. Nach dem ersten Start Benutzer im Tab \"Benutzer\" verwalten; Einträge hier werden ignoriert, sobald die Datenbank existiert.",
+    'Seed-only-Benutzerliste, die einmalig beim ersten Start geladen wird. Nach dem ersten Start Benutzer im Tab "Benutzer" verwalten; Einträge hier werden ignoriert, sobald die Datenbank existiert.',
   "config.help.north.rest.auth.tokens":
-    "Seed-only-Token-Liste, die einmalig beim ersten Start geladen wird. Nach dem ersten Start Tokens im Tab \"API-Tokens\" verwalten; Einträge hier werden ignoriert, sobald die Datenbank existiert.",
+    'Seed-only-Token-Liste, die einmalig beim ersten Start geladen wird. Nach dem ersten Start Tokens im Tab "API-Tokens" verwalten; Einträge hier werden ignoriert, sobald die Datenbank existiert.',
   "config.help.north.rest.auth.oidc.client_secret":
     "Vertrauliches Client-Secret des IdP. Leer für Public Clients (PKCE-only). Bevorzugt per Umgebungsvariable setzen.",
   "config.help.north.rest.auth.oidc.role_claim":
-    "JWT-Claim-Name, aus dem der Daemon die Benutzerrolle (admin / user) liest. Default \"role\".",
+    'JWT-Claim-Name, aus dem der Daemon die Benutzerrolle (admin / user) liest. Default "role".',
   "config.help.north.rest.auth.ccu.enabled":
     "Anmeldung an die Benutzerdatenbank der genannten CCU delegieren. Nutzer melden sich mit ihren CCU-Konten an; lokale Nutzer bleiben als Break-Glass-Fallback. Neustart erforderlich.",
   "config.help.north.rest.auth.ccu.primary":
@@ -4344,13 +4715,13 @@ const DE: Catalog = {
   "config.help.north.rest.auth.ccu.min_user_level":
     "CCU-Nutzer unterhalb dieses UserLevels ablehnen (8 Admin, 2 Operator, 1 Gast; 0 wird immer abgelehnt). Default 1 lässt jeden echten Nutzer zu.",
   "config.help.north.rest.auth.ccu.role_mapping":
-    "Standard-Zuordnung CCU-UserLevel→Loom-Rolle überschreiben. Schlüssel sind das UserLevel als String (\"8\", \"2\", \"1\"); Werte \"admin\" / \"operator\" / \"viewer\". Leer = Defaults (≥8 admin, ≥2 operator, ≥1 viewer).",
+    'Standard-Zuordnung CCU-UserLevel→Loom-Rolle überschreiben. Schlüssel sind das UserLevel als String ("8", "2", "1"); Werte "admin" / "operator" / "viewer". Leer = Defaults (≥8 admin, ≥2 operator, ≥1 viewer).',
   "config.help.north.rest.auth.ha_ingress.enabled":
     "Home Assistant Ingress vertrauen: eine vom Supervisor geproxyte Anfrage gilt als authentifizierter Admin — ohne Login. Standard (nicht gesetzt) = an im HA-Add-on, aus im normalen Build; An/Aus überschreibt. Nur sicher mit panel_admin: true des Add-ons (nur HA-Admins erreichen Ingress); echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
   "config.help.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Netz, aus dem der echte Peer der Ingress-Anfrage stammen muss. Leer nutzt den HA-Supervisor-Standard 172.30.32.0/23. X-Forwarded-For wird nie vertraut.",
   "config.help.north.rest.auth.ha_ingress.role":
-    "Loom-Rolle für eine vertrauenswürdige Ingress-Anfrage: \"admin\" (Standard), \"operator\" oder \"viewer\".",
+    'Loom-Rolle für eine vertrauenswürdige Ingress-Anfrage: "admin" (Standard), "operator" oder "viewer".',
   "config.help.north.rest.openapi_spec_path":
     "Override-Pfad für die OpenAPI-YAML. Standard ist die zur Build-Zeit eingebettete Kopie. Expert: nur setzen, um die Spec während der Entwicklung ohne Neubau zu patchen.",
   "config.help.north.rest.openapi_validate":
@@ -4402,7 +4773,7 @@ const DE: Catalog = {
   "config.help.persistence.history.export.enabled":
     "Push-Exporter aktivieren, der jeden aufgezeichneten Messwert an einen externen Zeitreihenspeicher weiterleitet (Standard: InfluxDB); standardmäßig aus.",
   "config.help.persistence.history.export.kind":
-    "Exporter-Backend; leer oder \"influxdb\" wählt den InfluxDB-v2-Line-Protocol-Writer (aktuell einziges Backend).",
+    'Exporter-Backend; leer oder "influxdb" wählt den InfluxDB-v2-Line-Protocol-Writer (aktuell einziges Backend).',
   "config.help.persistence.history.export.endpoint":
     "Basis-URL des Zeitreihenspeichers, z. B. http://influx:8086.",
   "config.help.persistence.history.export.org":
@@ -4495,7 +4866,8 @@ const DE: Catalog = {
   "settings.startup_capture": "Aufzeichnung beim Start",
   "settings.startup_capture_help":
     "Öffnet eine Diagnose-Aufzeichnung als erstem Boot-Schritt, damit Wire-/Paramset-/Callback-Init im Archiv landen. Wirkt beim nächsten Neustart.",
-  "settings.startup_capture_saved": "Gespeichert. Wirkt beim nächsten Neustart.",
+  "settings.startup_capture_saved":
+    "Gespeichert. Wirkt beim nächsten Neustart.",
   "settings.mqtt.reload_title": "MQTT-Änderungen anwenden",
   "settings.mqtt.reload_description":
     "Nach dem Speichern oben sind die neuen Werte zwar im Konfigurationsspeicher, aber der laufende MQTT-Stack nutzt weiter die alte Broker-Verbindung. Mit dieser Schaltfläche wird der Stack ohne Daemon-Neustart neu aufgebaut. Die neue Verbindung wird aufgebaut, bevor die alte getrennt wird — schlägt sie fehl, läuft der alte Stack unverändert weiter.",
@@ -4519,10 +4891,12 @@ const DE: Catalog = {
   "connectivity.amber": "eingeschränkt",
   "connectivity.red": "fehlgeschlagen",
   "connectivity.grey": "deaktiviert",
-  "connectivity.no_components": "Nicht in die Health-Probe des Daemons eingehängt.",
+  "connectivity.no_components":
+    "Nicht in die Health-Probe des Daemons eingehängt.",
   "settings.restart_confirm":
     "Daemon wirklich neu starten? CCU-Verbindungen sind für ein paar Sekunden weg.",
-  "settings.restart_signalled": "Shutdown signalisiert — warte auf den Supervisor.",
+  "settings.restart_signalled":
+    "Shutdown signalisiert — warte auf den Supervisor.",
   "settings.restarting": "Wird neu gestartet…",
   "admin.cache_clear.button": "CCU-Cache leeren",
   "admin.cache_clear.title": "CCU-Cache leeren",
@@ -4585,7 +4959,8 @@ const DE: Catalog = {
   "settings.tab.rest": "API & WebSocket",
   "settings.tab.oidc": "OIDC",
   "settings.tab.ccu_auth": "CCU-Anmeldung",
-  "settings.ccu_auth.hint": "Anmeldung an die CCU-eigene Benutzerdatenbank delegieren. Wenn aktiviert, melden sich Nutzer mit ihren CCU-Konten an; lokale Nutzer bleiben als Break-Glass-Fallback. Änderungen werden nach einem Daemon-Neustart wirksam.",
+  "settings.ccu_auth.hint":
+    "Anmeldung an die CCU-eigene Benutzerdatenbank delegieren. Wenn aktiviert, melden sich Nutzer mit ihren CCU-Konten an; lokale Nutzer bleiben als Break-Glass-Fallback. Änderungen werden nach einem Daemon-Neustart wirksam.",
   "settings.tab.callback": "Callback-Ports",
   "settings.tab.reliability": "Zuverlässigkeit",
   "settings.tab.persistence": "Persistenz",
@@ -4620,15 +4995,19 @@ const DE: Catalog = {
   "changes.n_entries": "{count} Einträge",
   "changes.manage_ccus": "Zu CCUs",
   "changes.not_revertible": "Hier nicht rücknehmbar",
-  "changes.intro": "Von dir überschriebene Einstellungen. Einzeln auf Standard zurücksetzbar.",
+  "changes.intro":
+    "Von dir überschriebene Einstellungen. Einzeln auf Standard zurücksetzbar.",
   "settings.restart_later": "Später",
-  "settings.reset_confirm": "Gespeicherte Überschreibung für diesen Bereich entfernen? Der Daemon fällt beim nächsten Neustart auf die eingebauten Standards zurück.",
+  "settings.reset_confirm":
+    "Gespeicherte Überschreibung für diesen Bereich entfernen? Der Daemon fällt beim nächsten Neustart auf die eingebauten Standards zurück.",
   "settings.reset_done": "Bereich auf eingebaute Standards zurückgesetzt.",
-  "restart.banner_text": "Konfigurationsänderungen werden erst nach einem Neustart des Daemons wirksam.",
+  "restart.banner_text":
+    "Konfigurationsänderungen werden erst nach einem Neustart des Daemons wirksam.",
   "restart.banner_action": "Einstellungen öffnen",
   "restart.now": "Jetzt neu starten",
   "settings.json_parse_error": "Ungültiges JSON — Syntax prüfen.",
-  "settings.duration_parse_error": "Ungültige Dauer. Go-Syntax: 60s, 5m, 250ms, 1h30m.",
+  "settings.duration_parse_error":
+    "Ungültige Dauer. Go-Syntax: 60s, 5m, 250ms, 1h30m.",
   "settings.tristate.default": "Standard",
   "settings.tristate.on": "An",
   "settings.tristate.off": "Aus",
@@ -4645,7 +5024,8 @@ const DE: Catalog = {
   "users.new_password": "Neues Passwort",
   "users.password": "Passwort",
   "users.confirm_delete_title": "Benutzer entfernen?",
-  "users.confirm_delete_body": "Benutzer \"{subject}\" wirklich entfernen? Diese Aktion lässt sich nicht rückgängig machen.",
+  "users.confirm_delete_body":
+    'Benutzer "{subject}" wirklich entfernen? Diese Aktion lässt sich nicht rückgängig machen.',
   "users.col.subject": "Benutzername",
   "users.col.role": "Rolle",
   "users.col.created": "Erstellt",
@@ -4658,12 +5038,14 @@ const DE: Catalog = {
   "tokens.revoke": "Widerrufen",
   "tokens.revoked": "Token widerrufen.",
   "tokens.reveal_title": "Token erstellt",
-  "tokens.reveal_warning": "Dieser Token wird nicht erneut angezeigt. Jetzt kopieren.",
+  "tokens.reveal_warning":
+    "Dieser Token wird nicht erneut angezeigt. Jetzt kopieren.",
   "tokens.copied": "Kopiert!",
   "tokens.copy_failed":
     "Kopieren fehlgeschlagen — die Zwischenablage benötigt einen sicheren (HTTPS-)Kontext. Der Token ist markiert und kann manuell kopiert werden.",
   "tokens.confirm_revoke_title": "Token widerrufen?",
-  "tokens.confirm_revoke_body": "Token {fingerprint} widerrufen? Jeder Client, der ihn verwendet, verliert sofort den Zugriff.",
+  "tokens.confirm_revoke_body":
+    "Token {fingerprint} widerrufen? Jeder Client, der ihn verwendet, verliert sofort den Zugriff.",
   "tokens.col.subject": "Subject",
   "tokens.col.role": "Rolle",
   "tokens.col.fingerprint": "Fingerprint",
@@ -4674,10 +5056,12 @@ const DE: Catalog = {
   "discovery.add": "Hinzufügen",
   "discovery.already_configured": "Bereits konfiguriert",
   "discovery.empty": "Keine CCUs im Netzwerk gefunden.",
-  "discovery.found_hint": "Im Netzwerk per SSDP gefundene CCUs - auf Hinzufügen klicken, um das Formular vorzubefüllen.",
+  "discovery.found_hint":
+    "Im Netzwerk per SSDP gefundene CCUs - auf Hinzufügen klicken, um das Formular vorzubefüllen.",
   "discovery.ignore": "Ignorieren",
-  "discovery.ignore_confirm": "\"{name}\" ({serial}) ignorieren? Die CCU erscheint dann nicht mehr in der Gefundene-CCUs-Liste.",
-  "discovery.ignored": "\"{name}\" ignoriert.",
+  "discovery.ignore_confirm":
+    '"{name}" ({serial}) ignorieren? Die CCU erscheint dann nicht mehr in der Gefundene-CCUs-Liste.',
+  "discovery.ignored": '"{name}" ignoriert.',
   "discovery.refresh": "Aktualisieren",
   "discovery.title": "Gefundene CCUs",
   // --- CCU-Verwaltung ---
@@ -4691,40 +5075,54 @@ const DE: Catalog = {
   "centrals.edit_title": "CCU bearbeiten",
   "centrals.created": "CCU hinzugefügt.",
   "centrals.updated": "CCU aktualisiert.",
-  "centrals.updated_restart_required": "CCU-Einstellungen gespeichert. Ein Neustart des Diensts ist erforderlich, damit sie auf die laufende Verbindung angewendet werden.",
+  "centrals.updated_restart_required":
+    "CCU-Einstellungen gespeichert. Ein Neustart des Diensts ist erforderlich, damit sie auf die laufende Verbindung angewendet werden.",
   "centrals.deleted": "CCU entfernt.",
   "centrals.enabled": "CCU aktiviert.",
   "centrals.disabled": "CCU deaktiviert.",
   "centrals.confirm_delete_title": "CCU entfernen?",
-  "centrals.confirm_delete_body": "CCU \"{name}\" wirklich entfernen? Geräte dieser CCU werden nicht mehr erreichbar sein.",
+  "centrals.confirm_delete_body":
+    'CCU "{name}" wirklich entfernen? Geräte dieser CCU werden nicht mehr erreichbar sein.',
   "centrals.field.name": "Name",
   "centrals.field.host": "Host",
   "centrals.field.interfaces": "Interfaces",
-  "centrals.field.interfaces_hint": "Schnittstellen ankreuzen, die die CCU bereitstellt. Der Port-Eingabewert überschreibt den Standardwert; leer = Default.",
+  "centrals.field.interfaces_hint":
+    "Schnittstellen ankreuzen, die die CCU bereitstellt. Der Port-Eingabewert überschreibt den Standardwert; leer = Default.",
   "centrals.field.interfaces_json": "Interfaces (JSON)",
   "centrals.field.port": "Port",
-  "centrals.field.port_hint": "Port leer lassen, um den Standardwert zu verwenden. Nur überschreiben, wenn die CCU einen abweichenden Port nutzt.",
+  "centrals.field.port_hint":
+    "Port leer lassen, um den Standardwert zu verwenden. Nur überschreiben, wenn die CCU einen abweichenden Port nutzt.",
   "centrals.field.json_rpc_port": "JSON-RPC-Port",
-  "centrals.field.json_rpc_port_hint": "CCU-Web-/ReGa-Port für JSON-RPC. Leer = Standard (80, mit TLS 443). Nur bei abweichendem CCU-HTTP-Port überschreiben.",
+  "centrals.field.json_rpc_port_hint":
+    "CCU-Web-/ReGa-Port für JSON-RPC. Leer = Standard (80, mit TLS 443). Nur bei abweichendem CCU-HTTP-Port überschreiben.",
   "centrals.field.primary_interface": "Primäres Interface",
   "centrals.behavior.title": "Erweitertes Verhalten",
-  "centrals.behavior.light_last_brightness": "Letzte Helligkeit beim Einschalten wiederherstellen",
-  "centrals.behavior.use_group_channel_for_cover_state": "Rollladen-Position vom Gruppenkanal melden",
+  "centrals.behavior.light_last_brightness":
+    "Letzte Helligkeit beim Einschalten wiederherstellen",
+  "centrals.behavior.use_group_channel_for_cover_state":
+    "Rollladen-Position vom Gruppenkanal melden",
   "centrals.behavior.enable_sysvar_scan": "Systemvariablen scannen",
   "centrals.behavior.enable_program_scan": "Programme scannen",
-  "centrals.behavior.include_internal_sysvars": "Interne Systemvariablen einschließen",
-  "centrals.behavior.include_internal_programs": "Interne Programme einschließen",
-  "centrals.behavior.enable_device_firmware_check": "Firmware-Update-Entitäten anzeigen",
-  "centrals.behavior.delay_new_device_creation": "Neue Geräte erst über den Posteingang anlegen",
-  "centrals.behavior.sysvar_scan_interval": "Scan-Intervall für Systemvariablen (Sekunden, 0 = Standard)",
+  "centrals.behavior.include_internal_sysvars":
+    "Interne Systemvariablen einschließen",
+  "centrals.behavior.include_internal_programs":
+    "Interne Programme einschließen",
+  "centrals.behavior.enable_device_firmware_check":
+    "Firmware-Update-Entitäten anzeigen",
+  "centrals.behavior.delay_new_device_creation":
+    "Neue Geräte erst über den Posteingang anlegen",
+  "centrals.behavior.sysvar_scan_interval":
+    "Scan-Intervall für Systemvariablen (Sekunden, 0 = Standard)",
   "centrals.behavior.sysvar_markers": "Systemvariablen-Marker",
   "centrals.behavior.program_markers": "Programm-Marker",
   "centrals.field.username": "Benutzername",
   "centrals.field.password": "Passwort",
-  "centrals.field.password_hint": "Wird in der SQLite-Datenbank des Daemons abgelegt (Dateirechte 0600). Backup-Archive redaktieren das Feld, außer du verwendest --include-secrets.",
+  "centrals.field.password_hint":
+    "Wird in der SQLite-Datenbank des Daemons abgelegt (Dateirechte 0600). Backup-Archive redaktieren das Feld, außer du verwendest --include-secrets.",
   "centrals.field.password_placeholder_env": "(wird aus Env-Variable gelesen)",
   "centrals.field.password_env": "Passwort-Umgebungsvariable (überschreibt)",
-  "centrals.field.password_env_hint": "Optional. Name einer Env-Variable; wenn gesetzt, hat sie Vorrang vor dem Passwortfeld oben. Sinnvoll für Kubernetes / Vault / systemd-creds. Details siehe README → Secrets.",
+  "centrals.field.password_env_hint":
+    "Optional. Name einer Env-Variable; wenn gesetzt, hat sie Vorrang vor dem Passwortfeld oben. Sinnvoll für Kubernetes / Vault / systemd-creds. Details siehe README → Secrets.",
   "centrals.field.tls_insecure": "TLS-Prüfung überspringen",
   "centrals.field.tls_insecure_warn":
     "Deaktiviert Zertifikatsketten- und Hostnamen-Prüfung. Nur bei CCUs mit selbst-signierten Zertifikaten in vertrauenswürdigen Netzen einsetzen.",
@@ -4749,7 +5147,7 @@ const DE: Catalog = {
     "Typ-Änderungen erfordern Löschen + Neuanlegen. Hier werden nur Metadaten aktualisiert.",
   "sysvars.modified_badge": "geändert",
   "sysvars.search": "Suchen…",
-  "sysvars.confirm_remove": "Systemvariable \"{name}\" wirklich entfernen?",
+  "sysvars.confirm_remove": 'Systemvariable "{name}" wirklich entfernen?',
   "sysvars.usage.warning":
     "Achtung: {count} Programm(e) verwenden diese Variable und sind vom Löschen betroffen:",
   "sysvars.usage.internal": "intern",
@@ -4785,12 +5183,13 @@ const DE: Catalog = {
   "device.offline": "offline",
   "device.update_available": "Update verfügbar",
   "device.firmware_update": "Firmware aktualisieren",
-  "device.firmware_update.tooltip": "Firmware-Update auslösen ({current} → {available})",
+  "device.firmware_update.tooltip":
+    "Firmware-Update auslösen ({current} → {available})",
   "device.firmware_triggered": "Firmware-Update angestoßen.",
   "device.confirm_remove":
-    "Gerät \"{name}\" wirklich entfernen?\n\nDie Kopplung wird aus der CCU gelöst.",
+    'Gerät "{name}" wirklich entfernen?\n\nDie Kopplung wird aus der CCU gelöst.',
   "device.confirm_firmware":
-    "Firmware-Update für \"{name}\" jetzt anstoßen? Das Gerät bleibt während des Updates kurzzeitig nicht erreichbar.",
+    'Firmware-Update für "{name}" jetzt anstoßen? Das Gerät bleibt während des Updates kurzzeitig nicht erreichbar.',
   "device.removed": "Gerät entfernt.",
   "device.renamed": "Gerät umbenannt.",
   "device.rename_include_channels": "Kanäle mitbenennen",
@@ -4870,10 +5269,11 @@ const DE: Catalog = {
   "quick.actual": "Ist",
   "quick.mode": "Modus",
   "programs.toggle.tooltip": "Aktivierung umschalten",
-  "programs.executed": "Programm \"{name}\" ausgeführt.",
-  "programs.not_executed": "Programm \"{name}\" nicht ausgeführt — Bedingung nicht erfüllt.",
+  "programs.executed": 'Programm "{name}" ausgeführt.',
+  "programs.not_executed":
+    'Programm "{name}" nicht ausgeführt — Bedingung nicht erfüllt.',
   "programs.check_conditions": "Nur ausführen, wenn Bedingung erfüllt",
-  "programs.toggle_done": "Programm \"{name}\" {state}.",
+  "programs.toggle_done": 'Programm "{name}" {state}.',
   "programs.enabled": "aktiviert",
   "programs.disabled": "deaktiviert",
   "programs.active": "aktiv",
@@ -4886,9 +5286,10 @@ const DE: Catalog = {
   "programs.never_executed": "nie",
   "programs.inactive": "inaktiv",
   "programs.count": "{count} Programme",
-  "programs.confirm_run": "Programm \"{name}\" ausführen?",
-  "programs.confirm_delete": "Programm \"{name}\" löschen? Dies kann nicht rückgängig gemacht werden.",
-  "programs.deleted": "Programm \"{name}\" gelöscht.",
+  "programs.confirm_run": 'Programm "{name}" ausführen?',
+  "programs.confirm_delete":
+    'Programm "{name}" löschen? Dies kann nicht rückgängig gemacht werden.',
+  "programs.deleted": 'Programm "{name}" gelöscht.',
   "programs.delete.tooltip": "Programm von der CCU löschen",
   "programs.show_internal": "Systemprogramme anzeigen",
   "links.title": "Direktverknüpfungen",
@@ -4916,14 +5317,16 @@ const DE: Catalog = {
   "profile.test.long": "Test (langer Tastendruck)",
   "links.test.ok": "Verknüpfung am Gerät ausgelöst.",
   "links.test.error": "Verknüpfung konnte nicht ausgelöst werden.",
-  "links.test.unsupported": "Dieses Interface unterstützt keinen Verknüpfungstest.",
+  "links.test.unsupported":
+    "Dieses Interface unterstützt keinen Verknüpfungstest.",
   "links.test.confirm_title": "Verknüpfung am Gerät testen?",
   "links.test.confirm_body":
     "Dies löst den Empfänger physisch aus (ein Schalter klickt, ein Rollladen fährt), als hätte der Sender ausgelöst. Fortfahren?",
   "central.title": "Tastendruck an Zentrale",
   "central.subtitle":
     "Steuert, ob die CCU Tastendruck-Ereignisse (PRESS_SHORT/LONG) an OpenCCU-Loom weiterleitet.",
-  "central.help.summary": "Warum ein Taster scheinbar nichts tut und was das Aktivieren kostet",
+  "central.help.summary":
+    "Warum ein Taster scheinbar nichts tut und was das Aktivieren kostet",
   "central.help.no_link":
     "Ohne aktivierte Weiterleitung senden viele HmIP-Taster ihre Tasterevents gar nicht an die CCU oder OpenCCU-Loom — das ist die häufigste Ursache dafür, dass ein Taster scheinbar nichts tut.",
   "central.help.duty_cycle":
@@ -4950,7 +5353,8 @@ const DE: Catalog = {
   "central.confirm.disable_title": "Tasterevent-Weiterleitung deaktivieren?",
   "central.confirm.disable_body":
     "CCU-seitige Programme könnten diese Tasterevents nutzen. Nach dem Deaktivieren erhalten weder CCU-Programme noch OpenCCU-Loom Tasterevents dieses Kanals.",
-  "central.action_failed": "Tasterevent-Weiterleitung konnte nicht geändert werden",
+  "central.action_failed":
+    "Tasterevent-Weiterleitung konnte nicht geändert werden",
   "schedule.loading": "Lade Zeitplan…",
   "schedule.unsupported": "Dieses Gerät unterstützt keinen Zeitplan.",
   "schedule.unsupported_channel":
@@ -5081,8 +5485,7 @@ const DE: Catalog = {
     "Import vorgemerkt — zum Anwenden Speichern drücken.",
   "channel.import_paramset_mismatch":
     "Paramset-Mismatch: Snapshot={snapshot}, aktuell={current}.",
-  "channel.import_invalid_file":
-    "Datei ist kein gültiger OpenCCU-Loom-Export.",
+  "channel.import_invalid_file": "Datei ist kein gültiger OpenCCU-Loom-Export.",
   "channel.import_cross_channel_confirm":
     "Snapshot stammt von {snapshot}. Trotzdem auf {current} anwenden?",
   "channel.lock_count": "{count} Parameter durch Profil gesperrt.",
@@ -5112,17 +5515,22 @@ const DE: Catalog = {
   "channel.flags.locked.help":
     "Blockiert Steuer-Schreibzugriffe auf diesen Kanal. Lesen und Konfiguration bleiben unberührt.",
   "channel.flags.saved_toast": "Kanal-Einstellungen gespeichert",
-  "channel.flags.failed": "Kanal-Einstellungen konnten nicht gespeichert werden",
+  "channel.flags.failed":
+    "Kanal-Einstellungen konnten nicht gespeichert werden",
   "channel.secure_transmission.title": "Gesicherte Übertragung",
   "channel.secure_transmission.help":
     "Funktelegramme dieses Kanals signieren (AES). Erhöht die Sicherheit, steigert aber die Funklast des Kanals und – bei Batteriegeräten – den Batterieverbrauch.",
-  "channel.secure_transmission.confirm_title": "Gesicherte Übertragung aktivieren?",
+  "channel.secure_transmission.confirm_title":
+    "Gesicherte Übertragung aktivieren?",
   "channel.secure_transmission.confirm_body":
     "Die gesicherte (AES-signierte) Übertragung fügt jedem Befehl eine Bestätigungsrunde hinzu. Das erhöht die Funklast dieses Kanals und – bei Batteriegeräten – den Batterieverbrauch. Trotzdem aktivieren?",
   "channel.secure_transmission.enable": "Aktivieren",
-  "channel.secure_transmission.enabled_toast": "Gesicherte Übertragung aktiviert.",
-  "channel.secure_transmission.disabled_toast": "Gesicherte Übertragung deaktiviert.",
-  "channel.secure_transmission.failed": "Übertragungsmodus konnte nicht geändert werden.",
+  "channel.secure_transmission.enabled_toast":
+    "Gesicherte Übertragung aktiviert.",
+  "channel.secure_transmission.disabled_toast":
+    "Gesicherte Übertragung deaktiviert.",
+  "channel.secure_transmission.failed":
+    "Übertragungsmodus konnte nicht geändert werden.",
   // --- Motion-detector brightness helper (channel/brightness-helper.ts) ---
   "channel.brightness.apply": "Helligkeit {value} übernehmen",
   "channel.brightness.apply_tooltip":
@@ -5175,11 +5583,13 @@ const DE: Catalog = {
   "history.reload": "Neu laden",
   "history.empty": "Keine aufgezeichneten Messwerte in diesem Zeitraum.",
   "history.disabled_title": "Verlaufsaufzeichnung ist deaktiviert",
-  "history.disabled_hint": "Unter Einstellungen → Persistenz aktivieren, um diesen Wert aufzuzeichnen.",
+  "history.disabled_hint":
+    "Unter Einstellungen → Persistenz aktivieren, um diesen Wert aufzuzeichnen.",
   "history.enable_link": "Einstellungen öffnen",
   // --- Energie-Ansicht (GET /api/v1/energy) ---
   "energy.title": "Energie",
-  "energy.subtitle": "Verbrauch und Einspeisung pro Gerät, über die Zeit aggregiert.",
+  "energy.subtitle":
+    "Verbrauch und Einspeisung pro Gerät, über die Zeit aggregiert.",
   "energy.central": "Zentrale",
   "energy.group": "Gruppieren nach",
   "energy.group.hour": "Stunde",
@@ -5202,10 +5612,12 @@ const DE: Catalog = {
   "energy.col.avg_power": "Ø Leistung",
   "energy.col.peak_power": "Spitzenleistung",
   "energy.col.reset": "Reset",
-  "energy.reset_note": "Bei mindestens einem Gerät gab es in diesem Zeitraum einen Zählerreset — der betroffene Bucket meldet den Zählerstand seit dem Reset, kein negatives Delta.",
+  "energy.reset_note":
+    "Bei mindestens einem Gerät gab es in diesem Zeitraum einen Zählerreset — der betroffene Bucket meldet den Zählerstand seit dem Reset, kein negatives Delta.",
   "energy.empty": "Keine Energiegeräte mit Daten in diesem Zeitraum.",
   "energy.disabled_title": "Verlaufsaufzeichnung ist deaktiviert",
-  "energy.disabled_hint": "Unter Einstellungen → Persistenz aktivieren, um Energiedaten zu sehen.",
+  "energy.disabled_hint":
+    "Unter Einstellungen → Persistenz aktivieren, um Energiedaten zu sehen.",
   "energy.enable_link": "Einstellungen öffnen",
   "links.add.create": "Anlegen",
   "links.add.creating": "Lege an…",
@@ -5214,8 +5626,7 @@ const DE: Catalog = {
   "links.add.title2": "Neue Verknüpfung",
   "links.add.step1":
     "Schritt 1 — Wähle den Kanal dieses Geräts, der verknüpft werden soll.",
-  "links.add.step2":
-    "Schritt 2 — Rolle wählen und Partnerkanal auswählen.",
+  "links.add.step2": "Schritt 2 — Rolle wählen und Partnerkanal auswählen.",
   "links.add.step3": "Schritt 3 — Prüfe die Zuordnung und bestätige.",
   "links.add.loading_channels": "Lade Kanäle…",
   "links.add.no_linkable": "Keine verknüpfbaren Kanäle vorhanden.",
@@ -5230,7 +5641,8 @@ const DE: Catalog = {
   "links.add.desc_optional": "Beschreibung (optional)",
   "links.add.aria_progress": "Fortschritt",
   "links.config.title": "Verknüpfungs-Konfiguration",
-  "links.config.no_params": "Keine Parameter auf dieser Verknüpfung editierbar.",
+  "links.config.no_params":
+    "Keine Parameter auf dieser Verknüpfung editierbar.",
   "links.config.preset": "Voreinstellung",
   "links.config.short_keypress": "Kurzer Tastendruck",
   "links.config.long_keypress": "Langer Tastendruck",
@@ -5256,8 +5668,7 @@ const DE: Catalog = {
   "links.rename.saving": "Speichern…",
   "links.renamed": "Verknüpfung umbenannt.",
   "links.rename_failed": "Umbenennen fehlgeschlagen",
-  "links.confirm_delete":
-    "Verknüpfung {sender} → {receiver} wirklich löschen?",
+  "links.confirm_delete": "Verknüpfung {sender} → {receiver} wirklich löschen?",
   "links.links_label": "Verknüpfungen",
   "links.section.outgoing": "Ausgehend",
   "links.section.incoming": "Eingehend",
@@ -5297,7 +5708,8 @@ const DE: Catalog = {
   "connection.live_on": "Live",
   "connection.live_off": "Live getrennt",
   "connection.ws_tooltip": "Echtzeit-Aktualisierungen vom Daemon (WebSocket)",
-  "connection.tooltip.on": "Live-Verbindung aktiv — Änderungen erscheinen sofort.",
+  "connection.tooltip.on":
+    "Live-Verbindung aktiv — Änderungen erscheinen sofort.",
   "connection.tooltip.off":
     "Live-Verbindung getrennt — Werte aktualisieren sich nicht automatisch. Die Verbindung wird automatisch wiederhergestellt.",
   "connection.tooltip.connecting": "Live-Verbindung wird hergestellt…",
@@ -5358,9 +5770,10 @@ const DE: Catalog = {
   "diagrams.picker.label": "Bezeichnung (optional)",
   "diagrams.picker.channels_failed": "Kanäle konnten nicht geladen werden",
   "diagrams.picker.params_failed": "Werte konnten nicht geladen werden",
-  "diagrams.delete.confirm_title": "Diagramm \"{name}\" löschen?",
+  "diagrams.delete.confirm_title": 'Diagramm "{name}" löschen?',
   "diagrams.error.name_required": "Ein Name ist erforderlich.",
-  "diagrams.error.series_required": "Mindestens eine Serie mit Zentrale hinzufügen.",
+  "diagrams.error.series_required":
+    "Mindestens eine Serie mit Zentrale hinzufügen.",
   "diagrams.error.save": "Diagramm konnte nicht gespeichert werden.",
   "diagrams.error.delete": "Diagramm konnte nicht gelöscht werden.",
   "diagrams.chart.empty": "Keine aufgezeichneten Messwerte in diesem Zeitraum.",
@@ -5452,7 +5865,8 @@ const DE: Catalog = {
   "device.subtab.links": "Verknüpfungen",
   "device.subtab.schedule": "Zeitplan",
   "device.virtual": "Virtuell",
-  "device.no_device_config": "Dieses Gerät hat keine Geräte-Konfigurationsebene.",
+  "device.no_device_config":
+    "Dieses Gerät hat keine Geräte-Konfigurationsebene.",
   "device.week_profile_channel.title": "Zeitplan-Kanal",
   "device.week_profile_channel.body":
     "Dieser Kanal hält nur den Geräte-Zeitplan. Öffne den Zeitplan-Editor zum Bearbeiten.",
@@ -5484,7 +5898,8 @@ const DE: Catalog = {
     'Die gespeicherte Konfiguration (alle Kanaleinstellungen und Direktverknüpfungen) erneut an "{name}" übertragen? Nach einem Werksreset verwenden — die Übertragung läuft über Funk und kann etwas dauern.',
   "device.restore_config_triggered": "Konfigurationsübertragung gestartet.",
   "device.communication_test": "Test",
-  "device.communication_test.tooltip": "Ein Funk-Testtelegramm senden und prüfen, ob das Gerät antwortet",
+  "device.communication_test.tooltip":
+    "Ein Funk-Testtelegramm senden und prüfen, ob das Gerät antwortet",
   "device.communication_test_running": "Test läuft…",
   "device.communication_test_passed": "Kommunikation OK",
   "device.communication_test_failed": "Keine Antwort",
@@ -5513,13 +5928,11 @@ const DE: Catalog = {
   // --- Friendly API errors ---
   "api.error.upstream_unavailable":
     "CCU vorübergehend nicht erreichbar. In wenigen Sekunden erneut versuchen.",
-  "api.error.unauthorized":
-    "Sitzung abgelaufen. Bitte erneut anmelden.",
+  "api.error.unauthorized": "Sitzung abgelaufen. Bitte erneut anmelden.",
   "auth.error.invalid_credentials": "Ungültige Anmeldedaten.",
   "api.error.forbidden": "Für diese Aktion fehlt die Berechtigung.",
   "api.error.not_found": "Ressource nicht gefunden.",
-  "api.error.rate_limited":
-    "Zu viele Anfragen — Geschwindigkeit gedrosselt.",
+  "api.error.rate_limited": "Zu viele Anfragen — Geschwindigkeit gedrosselt.",
   "api.error.server": "Server-Fehler ({status}).",
   // --- Matter-Bridge ---
   "nav.matter": "Matter",
@@ -5528,7 +5941,8 @@ const DE: Catalog = {
   "matter.tab.fabrics": "Fabrics",
   "matter.tab.pair": "Koppeln",
   "matter.status.enabled": "Matter-Bridge aktiv",
-  "matter.status.disabled": "Matter-Bridge ist nicht aktiviert. Setze matter.enabled = true in config.yaml.",
+  "matter.status.disabled":
+    "Matter-Bridge ist nicht aktiviert. Setze matter.enabled = true in config.yaml.",
   "matter.status.listening": "empfangsbereit",
   "matter.status.not_listening": "nicht empfangsbereit",
   "matter.status.endpoints": "{count} Endpunkte",
@@ -5551,10 +5965,14 @@ const DE: Catalog = {
   "matter.expose.kind.combined": "Kombiniert",
   "matter.expose.kind.measurement": "Messung",
   "matter.expose.unmappable_hint": "Kein passender Matter-Endpunkt verfügbar.",
-  "matter.expose.partially_mappable_hint": "Teilweise abbildbar — bestimmte Cluster bleiben MQTT-only.",
-  "matter.expose.conflict_hint": "Bereits über einen anderen Datenpunkt auf diesem Kanal exponiert.",
-  "matter.expose.conflict_hint_custom_active": "Bereits über Custom DP `{profile}` exponiert — die Generic-DP zusätzlich zu bridgen kann zu doppelten Matter-Entities führen.",
-  "matter.expose.conflict_hint_generic_active": "Kanal hat zusätzlich Generic DPs exponiert — Apple Home kann doppelte Entities anzeigen.",
+  "matter.expose.partially_mappable_hint":
+    "Teilweise abbildbar — bestimmte Cluster bleiben MQTT-only.",
+  "matter.expose.conflict_hint":
+    "Bereits über einen anderen Datenpunkt auf diesem Kanal exponiert.",
+  "matter.expose.conflict_hint_custom_active":
+    "Bereits über Custom DP `{profile}` exponiert — die Generic-DP zusätzlich zu bridgen kann zu doppelten Matter-Entities führen.",
+  "matter.expose.conflict_hint_generic_active":
+    "Kanal hat zusätzlich Generic DPs exponiert — Apple Home kann doppelte Entities anzeigen.",
   "matter.expose.bulk_expose": "Auswahl verfügbar machen",
   "matter.expose.bulk_hide": "Auswahl verbergen",
   "matter.expose.save": "Änderungen speichern",
@@ -5566,7 +5984,8 @@ const DE: Catalog = {
   "matter.expose.state_partial": "Teilweise abbildbar",
   "matter.expose.state_available": "Verfügbar (nicht exponiert)",
   "matter.expose.state_unmappable": "Nicht abbildbar",
-  "matter.expose.unmappable_checkbox_title": "Nicht als Matter-Endpunkt abbildbar",
+  "matter.expose.unmappable_checkbox_title":
+    "Nicht als Matter-Endpunkt abbildbar",
   "matter.pair.window_open": "Koppelfenster offen",
   "matter.pair.window_open_duration": "Koppelfenster öffnen",
   "matter.pair.qr_caption": "QR-Code mit Matter-Controller-App scannen",
@@ -5588,7 +6007,8 @@ const DE: Catalog = {
   "sensor_actor.send": "Senden",
   "sensor_actor.cancel": "Abbrechen",
   "sensor_actor.more_channels": "weitere Kanäle ({count})",
-  "sensor_actor.no_primary": "Noch kein Hauptwert vorhanden — warte auf erstes CCU-Update.",
+  "sensor_actor.no_primary":
+    "Noch kein Hauptwert vorhanden — warte auf erstes CCU-Update.",
   "sensor_actor.loading": "Lädt {address}…",
   "sensor_actor.load_failed": "Konnte Kanal {address} nicht laden.",
   "sensor_actor.true": "An",
@@ -5690,7 +6110,8 @@ const DE: Catalog = {
   "cdp.panel.group": "Gruppe {n}",
   "cdp.panel.loading": "Lädt {addr}/cdps · seit {n}s…",
   "cdp.panel.no_controls": "Keine Bedienelemente für dieses Gerät.",
-  "cdp.panel.server_unresponsive": "Server antwortet nicht. Prüfe ob der Daemon läuft (Browser-Network-Tab: <code>/api/v1/devices/{addr}/cdps</code>).",
+  "cdp.panel.server_unresponsive":
+    "Server antwortet nicht. Prüfe ob der Daemon läuft (Browser-Network-Tab: <code>/api/v1/devices/{addr}/cdps</code>).",
   "cdp.retry": "Erneut versuchen",
   "cdp.siren.acoustic": "Akustik",
   "cdp.siren.duration": "Dauer",
@@ -5773,13 +6194,16 @@ const DE: Catalog = {
   "devicelist.apply": "Übernehmen",
   "devicelist.availability": "Verfügbarkeit",
   "devicelist.available": "Verfügbar",
-  "devicelist.bulk_firmware_body": "Firmware-Update für {count} Gerät(e) anstoßen?",
+  "devicelist.bulk_firmware_body":
+    "Firmware-Update für {count} Gerät(e) anstoßen?",
   "devicelist.bulk_firmware_confirm": "Update starten",
   "devicelist.bulk_firmware_label": "Firmware-Update",
-  "devicelist.bulk_no_updates": "Keine selektierten Geräte haben ein Firmware-Update verfügbar.",
+  "devicelist.bulk_no_updates":
+    "Keine selektierten Geräte haben ein Firmware-Update verfügbar.",
   "devicelist.bulk_result": "{ok} OK, {fail} fehlgeschlagen.",
   "devicelist.ccu_refresh": "Von CCU neu einlesen",
-  "devicelist.ccu_refresh_title": "Geräteliste und Namen neu von der CCU einlesen",
+  "devicelist.ccu_refresh_title":
+    "Geräteliste und Namen neu von der CCU einlesen",
   "devicelist.clear_selection": "Auswahl leeren",
   "devicelist.col.address": "Adresse",
   "devicelist.col.model": "Modell",
@@ -5812,20 +6236,25 @@ const DE: Catalog = {
   "garage.state.unknown": "Unbekannt",
   "garage.state.ventilating": "Lüftet",
   "inbox.install_mode": "Anlernmodus",
-  "inbox.install_mode_active_title": "Anlernmodus aktiv — klicken um zu beenden",
+  "inbox.install_mode_active_title":
+    "Anlernmodus aktiv — klicken um zu beenden",
   "inbox.install_mode_badge": "aktiv",
   "inbox.install_mode_pairing": "Anlernen · {seconds} s",
   "inbox.install_mode_running": "Anlernmodus läuft",
   "inbox.install_mode_seconds_left": "Sekunden verbleibend",
-  "inbox.install_mode_start_title": "Anlernmodus starten (60 s) um neue Geräte zu koppeln",
+  "inbox.install_mode_start_title":
+    "Anlernmodus starten (60 s) um neue Geräte zu koppeln",
   "inbox.install_mode_interface_label": "Schnittstelle",
-  "inbox.install_mode_select_interface": "Bitte eine Schnittstelle zum Anlernen wählen.",
-  "inbox.install_mode_banner_iface_on": "Anlernmodus aktiv auf {iface} ({seconds} s).",
+  "inbox.install_mode_select_interface":
+    "Bitte eine Schnittstelle zum Anlernen wählen.",
+  "inbox.install_mode_banner_iface_on":
+    "Anlernmodus aktiv auf {iface} ({seconds} s).",
   "inbox.install_mode_banner_iface_off": "Anlernmodus beendet auf {iface}.",
   "inbox.pair_serial_label": "Per Seriennummer anlernen:",
   "inbox.pair_serial_placeholder": "Geräteadresse / Seriennummer",
   "inbox.pair_serial_submit": "Gerät anlernen",
-  "inbox.install_mode_local_label": "HmIP-Gerät offline anlernen (SGTIN + Key):",
+  "inbox.install_mode_local_label":
+    "HmIP-Gerät offline anlernen (SGTIN + Key):",
   "inbox.install_mode_local_sgtin_label": "SGTIN",
   "inbox.install_mode_local_sgtin_placeholder": "SGTIN, z. B. 3014-F711-A000-…",
   "inbox.install_mode_local_key_label": "Geräteschlüssel",
@@ -5836,8 +6265,10 @@ const DE: Catalog = {
   "inbox.install_mode_local_hint":
     "Funktioniert ohne Internetzugang: Nur das Gerät mit passender SGTIN und Key kann sich anmelden.",
   "inbox.search_wired": "Draht-Bus durchsuchen",
-  "inbox.search_wired_title": "Den BidCos-Wired-Bus nach neu angeschlossenen Geräten durchsuchen",
-  "inbox.search_wired_hint": "Durchsucht den Draht-Bus; gefundene Geräte erscheinen im Posteingang.",
+  "inbox.search_wired_title":
+    "Den BidCos-Wired-Bus nach neu angeschlossenen Geräten durchsuchen",
+  "inbox.search_wired_hint":
+    "Durchsucht den Draht-Bus; gefundene Geräte erscheinen im Posteingang.",
   "inbox.search_wired_running": "Suche läuft…",
   "inbox.search_wired_done": "{count} Gerät(e) gefunden — siehe Posteingang.",
   "inbox.replace.button": "Gerät tauschen",
@@ -5881,7 +6312,8 @@ const DE: Catalog = {
   "setup.username": "Benutzername",
   "setup.password": "Passwort",
   "setup.confirm": "Passwort bestätigen",
-  "setup.password.too_short": "Das Passwort muss mindestens 8 Zeichen lang sein.",
+  "setup.password.too_short":
+    "Das Passwort muss mindestens 8 Zeichen lang sein.",
   "setup.password.mismatch": "Die Passwörter stimmen nicht überein.",
   "setup.locale.label": "Sprache",
   "setup.theme.label": "Darstellung",
@@ -5935,12 +6367,14 @@ const DE: Catalog = {
   "diagnostics.col.client": "Client",
   "diagnostics.col.score": "Score",
   "diagnostics.reliability.title": "Zuverlässigkeit",
-  "diagnostics.reliability.help": "Circuit-Breaker- und Verbindungsstatus je (Zentrale, Interface)-Paar.",
+  "diagnostics.reliability.help":
+    "Circuit-Breaker- und Verbindungsstatus je (Zentrale, Interface)-Paar.",
   "diagnostics.reliability.col.central": "Zentrale",
   "diagnostics.reliability.col.interface": "Interface",
   "diagnostics.reliability.col.circuit": "Circuit",
   "diagnostics.reliability.col.state": "Status",
-  "diagnostics.reliability.col.requests": "Requests (gesamt / ausgeführt / ausstehend)",
+  "diagnostics.reliability.col.requests":
+    "Requests (gesamt / ausgeführt / ausstehend)",
   "diagnostics.reliability.col.last_failure": "Letzter Fehler",
   "diagnostics.reliability.col.last_callback": "Letzter Callback",
   "diagnostics.reliability.circuit.closed": "Geschlossen",
@@ -5948,7 +6382,8 @@ const DE: Catalog = {
   "diagnostics.reliability.circuit.half_open": "Halb offen",
   "diagnostics.reliability.empty": "Noch keine meldenden Interface-Clients.",
   "diagnostics.values_cache.title": "Werte-Cache",
-  "diagnostics.values_cache.help": "Zeilenanzahl, Größe und kumulative Zähler des persistenten VALUES-Caches seit Prozessstart.",
+  "diagnostics.values_cache.help":
+    "Zeilenanzahl, Größe und kumulative Zähler des persistenten VALUES-Caches seit Prozessstart.",
   "diagnostics.values_cache.rows": "Zeilen",
   "diagnostics.values_cache.bytes": "Value-JSON-Bytes",
   "diagnostics.values_cache.restored": "Wiederhergestellt",
@@ -5958,60 +6393,75 @@ const DE: Catalog = {
   "diagnostics.values_cache.flushed_entries": "Geflushte Einträge",
   "diagnostics.values_cache.reset": "Cache zurücksetzen",
   "diagnostics.values_cache.reset_confirm_title": "VALUES-Cache zurücksetzen?",
-  "diagnostics.values_cache.reset_confirm_body": "Jeder zwischengespeicherte Wire-Wert wird gelöscht. Datenpunkte zeigen source=unobserved, bis Live-Events sie neu befüllen.",
+  "diagnostics.values_cache.reset_confirm_body":
+    "Jeder zwischengespeicherte Wire-Wert wird gelöscht. Datenpunkte zeigen source=unobserved, bis Live-Events sie neu befüllen.",
   "diagnostics.values_cache.reset_success": "Werte-Cache zurückgesetzt.",
-  "diagnostics.values_cache.disabled": "Werte-Cache-Funktion deaktiviert oder nicht verfügbar.",
+  "diagnostics.values_cache.disabled":
+    "Werte-Cache-Funktion deaktiviert oder nicht verfügbar.",
   "schedule.aria.weekdays": "Wochentage",
   "schedule.duration_placeholder": "z.B. 10s, 5min",
   "schedule.ramp_placeholder": "z.B. 500ms, 2s",
   "ccu_maintenance.title": "CCU-Wartung",
-  "ccu_maintenance.subtitle": "Aktionen auf Host-Ebene für jede verbundene CCU. Ein Neustart startet die CCU neu und unterbricht kurz ihre Verbindung.",
+  "ccu_maintenance.subtitle":
+    "Aktionen auf Host-Ebene für jede verbundene CCU. Ein Neustart startet die CCU neu und unterbricht kurz ihre Verbindung.",
   "ccu_maintenance.empty": "Noch keine CCU konfiguriert.",
   "ccu_maintenance.online": "Verbunden",
   "ccu_maintenance.offline": "Getrennt",
   "ccu_maintenance.reboot": "CCU neu starten",
   "ccu_maintenance.rebooting": "Wird neu gestartet…",
   "ccu_maintenance.confirm_title": "CCU neu starten?",
-  "ccu_maintenance.confirm_body": "{central} wird jetzt neu gestartet. Die Verbindung zu dieser CCU bricht ab, bis sie wieder online ist. Fortfahren?",
-  "ccu_maintenance.triggered": "Neustart für {central} angestoßen — sie ist in Kürze wieder erreichbar.",
-  "ccu_maintenance.admin_only": "Nur Administratoren können eine CCU neu starten.",
-  "ccu_update.admin_only": "Nur Administratoren können CCU-Updates installieren.",
+  "ccu_maintenance.confirm_body":
+    "{central} wird jetzt neu gestartet. Die Verbindung zu dieser CCU bricht ab, bis sie wieder online ist. Fortfahren?",
+  "ccu_maintenance.triggered":
+    "Neustart für {central} angestoßen — sie ist in Kürze wieder erreichbar.",
+  "ccu_maintenance.admin_only":
+    "Nur Administratoren können eine CCU neu starten.",
+  "ccu_update.admin_only":
+    "Nur Administratoren können CCU-Updates installieren.",
   "ccu_update.available": "Update verfügbar",
-  "ccu_update.confirm_body": "{central} lädt und installiert sein Firmware-Update und startet neu — die Verbindung bricht kurz ab. Fortfahren?",
+  "ccu_update.confirm_body":
+    "{central} lädt und installiert sein Firmware-Update und startet neu — die Verbindung bricht kurz ab. Fortfahren?",
   "ccu_update.confirm_title": "CCU-Update installieren?",
   "ccu_update.empty": "Noch keine CCU-Update-Informationen verfügbar.",
   "ccu_update.in_progress": "Wird installiert…",
   "ccu_update.install": "Update installieren",
   "ccu_update.installing": "Wird gestartet…",
   "ccu_update.not_observed": "Update-Status noch nicht abgerufen.",
-  "ccu_update.subtitle": "Stößt das Firmware-Update der CCU an. Die CCU startet während der Installation neu.",
+  "ccu_update.subtitle":
+    "Stößt das Firmware-Update der CCU an. Die CCU startet während der Installation neu.",
   "ccu_update.title": "CCU-System-Update",
-  "ccu_update.triggered": "CCU-Update für {central} angestoßen — sie startet neu.",
+  "ccu_update.triggered":
+    "CCU-Update für {central} angestoßen — sie startet neu.",
   "firmware_download.title": "Firmware auf eine CCU laden",
-  "firmware_download.subtitle": "Die CCU lädt ein Firmware-Abbild von der URL auf die Zentrale, damit es für die Installation bereitsteht.",
+  "firmware_download.subtitle":
+    "Die CCU lädt ein Firmware-Abbild von der URL auf die Zentrale, damit es für die Installation bereitsteht.",
   "firmware_download.url_label": "URL des Firmware-Abbilds",
   "firmware_download.url_placeholder": "https://…",
   "firmware_download.download": "Herunterladen",
   "firmware_download.downloading": "Wird geladen…",
   "firmware_download.triggered": "Firmware-Download angestoßen.",
   "addon_update.title": "Add-on-Update",
-  "addon_update.subtitle": "Nach Updates für das CCU-Add-on suchen und sie installieren. Der Daemon startet während der Installation neu.",
+  "addon_update.subtitle":
+    "Nach Updates für das CCU-Add-on suchen und sie installieren. Der Daemon startet während der Installation neu.",
   "addon_update.check": "Nach Updates suchen",
   "addon_update.checking": "Suche läuft…",
   "addon_update.available": "Update verfügbar",
   "addon_update.up_to_date": "Aktuell",
   "addon_update.install": "Update installieren",
   "addon_update.install_starting": "Wird gestartet…",
-  "addon_update.installing_notice": "Update wird installiert — der Daemon startet neu. Diese Seite verbindet sich automatisch neu, sobald er wieder da ist.",
+  "addon_update.installing_notice":
+    "Update wird installiert — der Daemon startet neu. Diese Seite verbindet sich automatisch neu, sobald er wieder da ist.",
   "addon_update.confirm_title": "Add-on-Update installieren?",
-  "addon_update.confirm_body": "Der Daemon startet zum Abschluss der Installation neu — die Verbindung bricht kurz ab und verbindet sich von selbst neu. Fortfahren?",
+  "addon_update.confirm_body":
+    "Der Daemon startet zum Abschluss der Installation neu — die Verbindung bricht kurz ab und verbindet sich von selbst neu. Fortfahren?",
   "addon_update.release_notes": "Release-Notes",
   "addon_update.never_checked": "Noch nie geprüft",
   "addon_update.field.current_version": "Installierte Version",
   "addon_update.field.latest_version": "Neueste Version",
   "addon_update.field.last_check": "Zuletzt geprüft",
   "addon_update.toast.check_failed": "Update-Suche fehlgeschlagen",
-  "addon_update.toast.install_trigger_failed": "Update konnte nicht gestartet werden",
+  "addon_update.toast.install_trigger_failed":
+    "Update konnte nicht gestartet werden",
   "addon_update.toast.failed": "Add-on-Update fehlgeschlagen",
   "addon_update.toast.installed": "Add-on auf {version} aktualisiert",
   // --- Spaltenbezeichnungen für migrierte DataTable-Views ---
@@ -6044,10 +6494,12 @@ const DE: Catalog = {
   "access.edit_user_title": "Benutzer bearbeiten",
   "access.password_leave_blank": "Leer lassen um beizubehalten",
   "access.forbidden": "Administratorzugriff erforderlich.",
-  "access.degraded_note": "Der Live-Benutzerspeicher ist nicht verfügbar. Die angezeigten Benutzer stammen aus der Bootstrap-Liste und können hier nicht bearbeitet werden. Benutzer über config.yaml verwalten.",
+  "access.degraded_note":
+    "Der Live-Benutzerspeicher ist nicht verfügbar. Die angezeigten Benutzer stammen aus der Bootstrap-Liste und können hier nicht bearbeitet werden. Benutzer über config.yaml verwalten.",
   // --- CCU-Flotte (schreibgeschützte CCU-übergreifende Übersicht) ---
   "fleet.title": "CCUs",
-  "fleet.subtitle": "Alle konfigurierten CCUs mit Status, Schnittstellen und Geräteanzahl auf einen Blick.",
+  "fleet.subtitle":
+    "Alle konfigurierten CCUs mit Status, Schnittstellen und Geräteanzahl auf einen Blick.",
   "fleet.empty": "Noch keine CCUs konfiguriert.",
   "fleet.empty.description":
     "Registriere eine CCU in den Einstellungen, um Verbindung und Geräte hier zu überwachen.",
@@ -6060,6 +6512,18 @@ const DE: Catalog = {
   "fleet.field.serial": "Seriennummer",
   "fleet.field.devices": "Geräte",
   "fleet.field.interfaces": "Schnittstellen",
+  "fleet.field.ccu_interfaces": "Von der CCU gemeldete Schnittstellen",
+  "fleet.field.ccu_interfaces.unmanaged":
+    "Die CCU bietet diese Schnittstelle an, dieser Daemon ist dafür aber nicht konfiguriert.",
+  "fleet.field.ccu_security": "CCU-Sicherheit",
+  "fleet.field.auth_enabled.on": "Authentifizierung erforderlich",
+  "fleet.field.auth_enabled.off": "Keine Authentifizierung",
+  "fleet.field.auth_enabled.hint":
+    "Ob die CCU selbst eine Authentifizierung verlangt. Wird auch als „keine Authentifizierung“ angezeigt, wenn die CCU-Firmware die Abfrage nicht beantwortet.",
+  "fleet.field.https_redirect.on": "HTTPS-Weiterleitung an",
+  "fleet.field.https_redirect.off": "HTTPS-Weiterleitung aus",
+  "fleet.field.https_redirect.hint":
+    "Ob die CCU einfaches HTTP auf HTTPS weiterleitet. Wird auch als „aus“ angezeigt, wenn die CCU-Firmware die Abfrage nicht beantwortet.",
   "fleet.open_webui": "CCU-WebUI öffnen",
   // --- Heizungsgruppen (schreibgeschützt, GR01) ---
   "groups.title": "Heizungsgruppen",
@@ -6075,7 +6539,8 @@ const DE: Catalog = {
   "groups.new": "Neue Gruppe",
   "groups.select_ccu_first": "Zuerst eine CCU auswählen.",
   "groups.delete.title": "Gruppe löschen?",
-  "groups.delete.body": "Die Heizungsgruppe „{name}“ löschen? Die Mitglieder-Verdrahtung auf der CCU wird entfernt. Das kann nicht rückgängig gemacht werden.",
+  "groups.delete.body":
+    "Die Heizungsgruppe „{name}“ löschen? Die Mitglieder-Verdrahtung auf der CCU wird entfernt. Das kann nicht rückgängig gemacht werden.",
   "groups.delete.done": "Gruppe gelöscht.",
   "groups.editor.create_title": "Neue Heizungsgruppe",
   "groups.editor.edit_title": "Heizungsgruppe bearbeiten",
@@ -6085,14 +6550,16 @@ const DE: Catalog = {
   "groups.editor.members": "Mitglieder",
   "groups.editor.no_members": "Keine zuweisbaren Geräte für diesen Typ.",
   "groups.editor.no_types": "Keine Gruppentypen verfügbar.",
-  "groups.editor.search_placeholder": "Nach Name, Raum, Typ oder Seriennummer suchen…",
+  "groups.editor.search_placeholder":
+    "Nach Name, Raum, Typ oder Seriennummer suchen…",
   "groups.editor.selection_summary": "{channels} Kanäle · {devices} Geräte",
   "groups.editor.only_selected": "Nur ausgewählte",
   "groups.editor.select_visible": "Sichtbare wählen",
   "groups.editor.no_matches": "Keine Treffer — Suche oder Filter anpassen.",
   "groups.editor.selected": "Ausgewählt",
   "groups.editor.clear_all": "Alle abwählen",
-  "groups.editor.no_selection": "Noch nichts ausgewählt — tippe auf ein Gerät oder einen Kanal.",
+  "groups.editor.no_selection":
+    "Noch nichts ausgewählt — tippe auf ein Gerät oder einen Kanal.",
   "groups.editor.channel_fallback": "Kanal {no}",
   "groups.editor.not_selectable": "nicht auswählbar",
   "groups.editor.config_pending": "Konfig. ausstehend",
@@ -6117,7 +6584,8 @@ const DE: Catalog = {
   "areas.rooms_dialog.hint":
     "Ein Häkchen verschiebt den Raum aus seinem aktuellen Bereich hierher — ein Raum kann immer nur einem Bereich angehören.",
   "areas.rooms_dialog.search_placeholder": "Räume suchen…",
-  "areas.rooms_dialog.empty": "Noch keine Räume bekannt — weise zunächst einem Gerät einen Raum zu.",
+  "areas.rooms_dialog.empty":
+    "Noch keine Räume bekannt — weise zunächst einem Gerät einen Raum zu.",
   "areas.rooms_dialog.current_area": "aktuell: {name}",
 };
 

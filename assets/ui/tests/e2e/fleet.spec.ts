@@ -34,6 +34,21 @@ test.describe('Fleet', () => {
     // ccu1 host + model surface.
     await expect(page.getByText('172.18.4.29')).toBeVisible();
     await expect(page.getByText('CCU3')).toBeVisible();
+
+    // CCU-reported security posture: ccu1 requires auth, neither CCU
+    // redirects to HTTPS. The flags are independent labels, not one badge.
+    await expect(page.getByText('Authentication required', { exact: true })).toBeVisible();
+    await expect(page.getByText('No authentication', { exact: true })).toBeVisible();
+    await expect(page.getByText('HTTPS redirect off', { exact: true }).first()).toBeVisible();
+
+    // The CCU's own interface list carries ports, and the CUxD interface the
+    // daemon is not configured for is flagged as unmanaged.
+    await expect(page.getByText('HmIP-RF:2010', { exact: true })).toBeVisible();
+    await expect(page.getByText('CUxD:8701', { exact: true })).toBeVisible();
+    await expect(page.getByText('CUxD:8701', { exact: true })).toHaveAttribute(
+      'title',
+      'The CCU offers this interface, but this daemon is not configured for it.',
+    );
   });
 });
 
