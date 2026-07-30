@@ -60,7 +60,7 @@ jobs:
           # sanctioned fix for version-skew drift; bump all three here (and
           # the baselines in model_snapshot_drift_check.py) when the embedded
           # extracts are regenerated. See docs/adr/0038-cross-stack-ci-gate.md.
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.6.2" "pydevccu==0.2.5"
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.7.9" "pydevccu==0.2.5"
           "$RUNNER_TEMP/refstack/bin/python" -m pip install "openccu-data==2026.6.1"
           # Make the venv's python the `python3` the Makefile targets invoke,
           # and expose it explicitly for aiohomematic_snapshot.py's re-exec.
