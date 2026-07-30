@@ -57,11 +57,12 @@ jobs:
           # drift (channel_fields / generic_data_points) and failed the gate
           # on unrelated commits. Pinning openccu-data to the matching release
           # makes the gate deterministic. ADR 0038 documents this pin as the
-          # sanctioned fix for version-skew drift; bump all three here (and
-          # the baselines in model_snapshot_drift_check.py) when the embedded
-          # extracts are regenerated. See docs/adr/0038-cross-stack-ci-gate.md.
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.7.9" "pydevccu==0.2.5"
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install "openccu-data==2026.6.1"
+          # sanctioned fix for version-skew drift. The versions themselves
+          # live in script/requirements/reference-stack.txt — one place for
+          # both parity workflows, watched by Dependabot. Bump them there
+          # (and the baselines in model_snapshot_drift_check.py) when the
+          # embedded extracts are regenerated. See ADR 0038.
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install -r script/requirements/reference-stack.txt
           # Make the venv's python the `python3` the Makefile targets invoke,
           # and expose it explicitly for aiohomematic_snapshot.py's re-exec.
           echo "$RUNNER_TEMP/refstack/bin" >> "$GITHUB_PATH"

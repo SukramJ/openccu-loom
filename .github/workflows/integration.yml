@@ -38,11 +38,12 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       # The datasource diff below compares pydevccu's wire data against the
       # godevccu Go module. pydevccu is the ONLY reference package this step
-      # needs (no aiohomematic / openccu-data), so install just it — pinned to
-      # the version godevccu's embedded data was generated from. Mirrors the
-      # pin in cross-stack-parity.yml; bump both together on a data refresh.
+      # needs (no aiohomematic / openccu-data), so it installs the narrow
+      # requirements file rather than the full reference stack. The pin lives
+      # in script/requirements/pydevccu.txt and is shared with the parity
+      # workflows, so a data refresh moves one line, not three.
       - name: provision pydevccu (wire-data reference)
-        run: python3 -m pip install "pydevccu==0.2.5"
+        run: python3 -m pip install -r script/requirements/pydevccu.txt
       # `make coverage` runs the full suite with -tags=integration and
       # writes coverage.out. This both exercises the godevccu integration
       # tests (functional failures fail the step) and produces the

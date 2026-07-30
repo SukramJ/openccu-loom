@@ -50,3 +50,20 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+
+  # The Python reference stack the cross-stack parity gates measure against.
+  # Pinned on purpose (ADR 0038), which makes a stale pin its own failure
+  # mode: openccu-loom follows upstream model fixes, so a frozen reference
+  # reports our corrections as drift. Dependabot keeps the bump on the radar
+  # instead of leaving it to whoever next debugs a red nightly run.
+  - package-ecosystem: pip
+    directory: /script/requirements
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+    groups:
+      python-reference-stack:
+        patterns: ["*"]
