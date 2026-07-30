@@ -62,8 +62,7 @@ jobs:
           # embedded Go extracts were generated from. Mirrors the pins in
           # cross-stack-parity.yml; keep the two workflows in lockstep so a
           # PR and the nightly run compare against the same reference.
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.6.2" "pydevccu==0.2.5"
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install "openccu-data==2026.6.1"
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install -r script/requirements/reference-stack.txt
           # Make the venv python the `python3` the Makefile targets invoke,
           # and expose it for aiohomematic_snapshot.py's venv re-exec guard.
           echo "$RUNNER_TEMP/refstack/bin" >> "$GITHUB_PATH"

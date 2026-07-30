@@ -1,0 +1,8 @@
+# Wire-data reference for the datasource diff (pydevccu vs the godevccu Go
+# module). Pinned to the version godevccu's embedded data was generated
+# from — bump this together with the godevccu module in go.mod, never
+# alone, or the diff compares two different fixture generations.
+#
+# Kept separate from reference-stack.txt so the integration workflow, which
+# needs nothing else, does not pull the whole Python reference stack.
+pydevccu==0.2.5

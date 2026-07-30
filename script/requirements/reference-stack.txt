@@ -1,0 +1,19 @@
+# The Python reference stack the cross-stack model-parity gates compare
+# openccu-loom against. Single source of truth for these versions: the
+# workflows install from this file, so a bump lands in one place instead of
+# being duplicated across cross-stack-parity.yml and model-parity.yml.
+#
+# Why pinned at all: an unpinned reference re-resolves on every scheduled
+# run, so an upstream release turns the gate red on an unrelated commit.
+# ADR 0038 documents the pin as the sanctioned fix for version-skew drift.
+#
+# Why that makes bumping a real task: openccu-loom follows upstream model
+# fixes, so a reference frozen behind them reports our corrections as
+# drift. That is exactly how this file came to exist — aiohomematic sat on
+# 2026.6.2 while both stacks had moved on, and the nightly gate failed for
+# weeks on 16 phantom `group_no` drifts. Bump promptly, and when a bump
+# does surface real drift, fix the drift or record it in
+# docs/parity/by_design.md — do not pin backwards to hide it.
+-r pydevccu.txt
+aiohomematic==2026.7.9
+openccu-data==2026.7.1

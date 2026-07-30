@@ -295,7 +295,13 @@ snapshot-diff: ## compare both stack snapshots; exit 0 = full intersection parit
 	@if [ ! -f tests/integration/testdata/model_snapshot_aiohomematic.json ]; then \
 		echo "missing py snapshot — run 'make snapshot-py' first"; exit 2; \
 	fi
-	@python3 script/model_snapshot_diff.py | python3 script/model_snapshot_drift_check.py
+	# The drift check owns the verdict, not the diff. model_snapshot_diff.py
+	# exits 1 on *any* drift, and .SHELLFLAGS sets pipefail, so its status
+	# would decide the pipeline and silently override every tolerance
+	# baseline in model_snapshot_drift_check.py — a run inside the accepted
+	# baselines still failed. Swallow the diff's status so the check's own
+	# exit code is the one that counts.
+	@{ python3 script/model_snapshot_diff.py || true; } | python3 script/model_snapshot_drift_check.py
 
 .PHONY: snapshot
 snapshot: snapshot-go snapshot-py snapshot-diff ## full snapshot-verification pipeline (datasource diff + both snapshots + diff)
