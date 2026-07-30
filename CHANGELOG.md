@@ -33,6 +33,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   three now wired into the system info above) and the coercion helpers
   gained direct tests, putting the package at 99.7 %.
 
+### Changed
+
+- **Dependencies refreshed.** Go: `modelcontextprotocol/go-sdk` 1.6.1 →
+  1.7.0, `modernc.org/sqlite` 1.54.0 → 1.55.0 (plus its `libc`). SPA:
+  Playwright 1.61.1 → 1.62.0, `@testing-library/jest-dom` 6 → 7,
+  `@lucide/svelte` 1.25 → 1.27, Svelte 5.56.6 → 5.56.8, `svelte-check`
+  4.7.3 → 4.7.4. The Playwright container the e2e workflow pins moved to
+  `v1.62.0-noble` in lockstep — it had drifted behind the package version
+  — and every visual baseline was regenerated on both platforms against
+  the new renderer. TypeScript stays on 6.x: `svelte-check` supports
+  TypeScript 7 only through a dual install behind an
+  `--tsgo-experimental-api` flag, which is not a basis for a blocking CI
+  gate.
+
 ## [0.51.0]
 
 ### Added
