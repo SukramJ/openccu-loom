@@ -198,6 +198,20 @@ func waitForState(t *testing.T, u *Updater, want State) {
 	}
 }
 
+func waitForCallCount(t *testing.T, r *recordingRunner, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if got := r.callCount(); got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for installer Run calls = %d, last = %d", want, r.callCount())
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestUpdaterUnsupportedPlatform(t *testing.T) {
 	t.Parallel()
 
@@ -462,10 +476,11 @@ func TestUpdaterInstallAsync(t *testing.T) {
 		t.Fatalf("InstallAsync() error = %v", err)
 	}
 
-	waitForState(t, u, StateInstalling)
-	if got := runner.callCount(); got != 1 {
-		t.Errorf("installer Run calls = %d, want 1", got)
-	}
+	// Wait on the observable the assertion is about. Reaching
+	// StateInstalling only means the goroutine started; the installer call
+	// happens after that transition, so asserting the count right after the
+	// state check races the goroutine and fails under CI load.
+	waitForCallCount(t, runner, 1)
 }
 
 func TestUpdaterOnChange(t *testing.T) {

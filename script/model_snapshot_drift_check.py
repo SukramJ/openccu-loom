@@ -74,9 +74,23 @@ def main() -> int:
         print(f"[drift-check] failed to parse stdin as JSON: {exc}", file=sys.stderr)
         return 2
 
-    counts = report.get("summary", {}).get("drift_counts", {})
+    # A missing summary block is not "no drift" — it means the diff did not
+    # produce a usable report at all. That distinction matters because the
+    # caller (`make snapshot-diff`) deliberately discards the diff's exit
+    # status so this check owns the verdict; without the guard, a diff that
+    # crashed or wrote nothing would read as a clean run.
+    summary = report.get("summary")
+    if not isinstance(summary, dict):
+        print(
+            "[drift-check] report carries no summary block — the diff produced "
+            "no usable output; refusing to report a pass",
+            file=sys.stderr,
+        )
+        return 2
+
+    counts = summary.get("drift_counts", {})
     if not counts:
-        print("[drift-check] no drift_counts in report; treating as pass", file=sys.stderr)
+        print("[drift-check] summary reports no drift", file=sys.stderr)
         return 0
 
     failures: list[str] = []
