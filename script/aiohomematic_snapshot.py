@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import importlib.metadata
+import importlib.util
 import json
 import logging
 import os
@@ -92,17 +93,30 @@ _ensure_venv()
 
 _GITHUB_ROOT = Path(__file__).resolve().parents[2]
 
-_AIOHM_VENV = Path.home() / "Documents" / "GitHub" / "aiohomematic" / ".venv"
-if _AIOHM_VENV.is_dir():
-    # Determine site-packages inside the venv
-    for _candidate in (_AIOHM_VENV / "lib").glob("python*/site-packages"):
-        if str(_candidate) not in sys.path:
-            sys.path.insert(0, str(_candidate))
 
-for _pkg in ("aiohomematic", "pydevccu"):
-    _pkg_path = _GITHUB_ROOT / _pkg
-    if _pkg_path.is_dir() and str(_pkg_path) not in sys.path:
-        sys.path.insert(0, str(_pkg_path))
+def _bootstrap_sibling_checkouts() -> None:
+    """
+    Make aiohomematic and pydevccu importable when the script runs straight
+    from the openccu-loom repo with no environment prepared for it.
+
+    This is a *fallback*, and the ordering matters. Whatever the active
+    interpreter can already import wins: appending (never prepending) keeps
+    a deliberately provisioned environment — CI's pinned refstack venv, or
+    one named via AIOHOMEMATIC_VENV_PYTHON — in charge of which
+    aiohomematic version the snapshot captures. Prepending sibling
+    checkouts made every local run silently capture the working copy next
+    to the repo instead, so a CI failure pinned to an older release could
+    not be reproduced locally at all.
+    """
+    for pkg in ("aiohomematic", "pydevccu"):
+        if importlib.util.find_spec(pkg) is not None:
+            continue
+        pkg_path = _GITHUB_ROOT / pkg
+        if pkg_path.is_dir() and str(pkg_path) not in sys.path:
+            sys.path.append(str(pkg_path))
+
+
+_bootstrap_sibling_checkouts()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Imports
