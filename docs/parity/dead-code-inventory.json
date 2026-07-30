@@ -1,6 +1,6 @@
 {
-  "generated": "080ea834",
-  "head": "080ea834",
+  "generated": "e06f7534",
+  "head": "e06f7534",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27044,
+    "total_exported": 27064,
     "reachable": 4686,
-    "whitelisted": 19469,
-    "unreachable": 2889
+    "whitelisted": 19487,
+    "unreachable": 2891
   },
   "by_package": [
     {
@@ -193,7 +193,7 @@
     {
       "package": "internal/central",
       "unreachable_funcs": 0,
-      "unreachable_types": 22,
+      "unreachable_types": 24,
       "unreachable_other": 2
     },
     {
@@ -2123,56 +2123,56 @@
       "package": "internal/build",
       "identifier": "AddonBuild",
       "file": "internal/build/version.go",
-      "line": 24,
+      "line": 31,
       "kind": "var"
     },
     {
       "package": "internal/build",
       "identifier": "AddonBuild",
       "file": "internal/build/version.go",
-      "line": 24,
+      "line": 31,
       "kind": "var"
     },
     {
       "package": "internal/build",
       "identifier": "BuildDate",
       "file": "internal/build/version.go",
-      "line": 18,
+      "line": 25,
       "kind": "var"
     },
     {
       "package": "internal/build",
       "identifier": "BuildDate",
       "file": "internal/build/version.go",
-      "line": 18,
+      "line": 25,
       "kind": "var"
     },
     {
       "package": "internal/build",
       "identifier": "Commit",
       "file": "internal/build/version.go",
-      "line": 16,
+      "line": 23,
       "kind": "var"
     },
     {
       "package": "internal/build",
       "identifier": "Commit",
       "file": "internal/build/version.go",
-      "line": 16,
+      "line": 23,
       "kind": "var"
     },
     {
       "package": "internal/build",
       "identifier": "Version",
       "file": "internal/build/version.go",
-      "line": 14,
+      "line": 21,
       "kind": "var"
     },
     {
       "package": "internal/build",
       "identifier": "Version",
       "file": "internal/build/version.go",
-      "line": 14,
+      "line": 21,
       "kind": "var"
     },
     {
@@ -2443,16 +2443,30 @@
     },
     {
       "package": "internal/central",
-      "identifier": "Config",
+      "identifier": "CCUInterface",
       "file": "internal/central/central.go",
-      "line": 37,
+      "line": 251,
+      "kind": "type"
+    },
+    {
+      "package": "internal/central",
+      "identifier": "CCUInterface",
+      "file": "internal/central/central.go",
+      "line": 251,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "Config",
       "file": "internal/central/central.go",
-      "line": 37,
+      "line": 38,
+      "kind": "type"
+    },
+    {
+      "package": "internal/central",
+      "identifier": "Config",
+      "file": "internal/central/central.go",
+      "line": 38,
       "kind": "type"
     },
     {
@@ -2515,14 +2529,14 @@
       "package": "internal/central",
       "identifier": "Readiness",
       "file": "internal/central/central.go",
-      "line": 433,
+      "line": 469,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "Readiness",
       "file": "internal/central/central.go",
-      "line": 433,
+      "line": 469,
       "kind": "type"
     },
     {
@@ -2592,14 +2606,14 @@
       "package": "internal/central",
       "identifier": "SystemInfo",
       "file": "internal/central/central.go",
-      "line": 217,
+      "line": 224,
       "kind": "type"
     },
     {
       "package": "internal/central",
       "identifier": "SystemInfo",
       "file": "internal/central/central.go",
-      "line": 217,
+      "line": 224,
       "kind": "type"
     },
     {
@@ -2620,14 +2634,14 @@
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 481,
+      "line": 510,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "AssignmentMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 481,
+      "line": 510,
       "kind": "type"
     },
     {
@@ -3131,28 +3145,28 @@
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2257,
+      "line": 2286,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrServiceMessageSuppressorNoClient",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2257,
+      "line": 2286,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2136,
+      "line": 2165,
       "kind": "var"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "ErrSysvarCreatorNoPrimary",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 2136,
+      "line": 2165,
       "kind": "var"
     },
     {
@@ -3278,14 +3292,14 @@
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 473,
+      "line": 502,
       "kind": "type"
     },
     {
       "package": "internal/central/adapter",
       "identifier": "IseAddressMap",
       "file": "internal/central/adapter/hub_wiring.go",
-      "line": 473,
+      "line": 502,
       "kind": "type"
     },
     {
@@ -25531,10 +25545,24 @@
     },
     {
       "package": "cmd/openccu-loom",
+      "identifier": "TestSystemCCUAdapterList_MapsCCUReportedFacts",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/system_ccu_adapter_test.go",
+      "line": 177
+    },
+    {
+      "package": "cmd/openccu-loom",
       "identifier": "TestSystemCCUAdapterList_NilRegistryReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "cmd/openccu-loom/system_ccu_adapter_test.go",
       "line": 114
+    },
+    {
+      "package": "cmd/openccu-loom",
+      "identifier": "TestSystemCCUAdapterList_OmitsCCUInterfacesBeforeFirstConnect",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "cmd/openccu-loom/system_ccu_adapter_test.go",
+      "line": 241
     },
     {
       "package": "cmd/openccu-loom",
@@ -29612,17 +29640,10 @@
     },
     {
       "package": "internal/build",
-      "identifier": "TestIsAddon_DefaultFalse",
+      "identifier": "TestIsAddonInstallPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/build/version_test.go",
-      "line": 8
-    },
-    {
-      "package": "internal/build",
-      "identifier": "TestIsAddon_TrueWhenStamped",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/build/version_test.go",
-      "line": 18
+      "line": 12
     },
     {
       "package": "internal/ccudata",
@@ -62526,6 +62547,27 @@
     },
     {
       "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestBidcosBool",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2910
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestBidcosPercent",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2944
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestBidcosString",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2892
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
       "identifier": "TestCallOnceClientErrorStatus",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/client_deep_test.go",
@@ -63037,6 +63079,20 @@
     },
     {
       "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestGetAuthEnabled",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2671
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestGetAuthEnabledError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2702
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
       "identifier": "TestGetDeviceDetails",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/methods_test.go",
@@ -63048,6 +63104,20 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/methods_test.go",
       "line": 2269
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestGetHTTPSRedirectEnabled",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2721
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestGetHTTPSRedirectEnabledError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2752
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -63496,6 +63566,34 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/transport/jsonrpc/methods_test.go",
       "line": 2546
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestListInterfaces",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2767
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestListInterfacesEmptyResult",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2848
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestListInterfacesError",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2867
+    },
+    {
+      "package": "internal/client/transport/jsonrpc",
+      "identifier": "TestListInterfacesMalformedFieldsDegradeToZero",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/transport/jsonrpc/methods_test.go",
+      "line": 2816
     },
     {
       "package": "internal/client/transport/jsonrpc",
@@ -119950,14 +120048,14 @@
       "identifier": "CentralReadiness",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 60
+      "line": 82
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CentralReadiness",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 60
+      "line": 82
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126306,14 +126404,14 @@
       "identifier": "SystemCCU",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 71
+      "line": 93
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "SystemCCU",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
-      "line": 71
+      "line": 93
     },
     {
       "package": "internal/north/rest/handlers",
@@ -126328,6 +126426,20 @@
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/system_ccu.go",
       "line": 25
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SystemCCUInterface",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/system_ccu.go",
+      "line": 73
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "SystemCCUInterface",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/system_ccu.go",
+      "line": 73
     },
     {
       "package": "internal/north/rest/handlers",
@@ -134052,6 +134164,13 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestSystemCCU_CCUReportedFactsWireShape",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/system_ccu_test.go",
+      "line": 83
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestSystemCCU_EmptyRegistry",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/system_ccu_test.go",
@@ -136663,6 +136782,20 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "AddonUpdater",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands_extended.go",
+      "line": 199
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "AddonUpdater",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands_extended.go",
+      "line": 199
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "AlarmCodeAdmin",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/alarm_panel.go",
@@ -137030,140 +137163,140 @@
       "identifier": "CommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 214
+      "line": 216
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 214
+      "line": 216
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorBadRequest",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 230
+      "line": 232
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorBadRequest",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 230
+      "line": 232
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorForbidden",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 235
+      "line": 237
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorForbidden",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 235
+      "line": 237
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorInternal",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 231
+      "line": 233
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandErrorInternal",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
+      "line": 233
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorLocked",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 251
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorLocked",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 251
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorNotImplemented",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 243
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorNotImplemented",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 243
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorRateLimited",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 246
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorRateLimited",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 246
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorUnauthorized",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 234
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorUnauthorized",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
+      "line": 234
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "CommandErrorUnknownCommand",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/commands.go",
       "line": 231
     },
     {
       "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorLocked",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 249
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorLocked",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 249
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorNotImplemented",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 241
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorNotImplemented",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 241
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorRateLimited",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 244
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorRateLimited",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 244
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorUnauthorized",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 232
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorUnauthorized",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 232
-    },
-    {
-      "package": "internal/north/rest/ws",
       "identifier": "CommandErrorUnknownCommand",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 229
-    },
-    {
-      "package": "internal/north/rest/ws",
-      "identifier": "CommandErrorUnknownCommand",
-      "reason": "auto-whitelist:pattern=ws-command-pkg",
-      "file": "internal/north/rest/ws/commands.go",
-      "line": 229
+      "line": 231
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandHandler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 208
+      "line": 210
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CommandHandler",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 208
+      "line": 210
     },
     {
       "package": "internal/north/rest/ws",
@@ -137506,14 +137639,14 @@
       "identifier": "ExtendedCommandsConfig",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 227
+      "line": 237
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ExtendedCommandsConfig",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 227
+      "line": 237
     },
     {
       "package": "internal/north/rest/ws",
@@ -137548,14 +137681,14 @@
       "identifier": "GroupsQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 1079
+      "line": 1120
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "GroupsQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 1079
+      "line": 1120
     },
     {
       "package": "internal/north/rest/ws",
@@ -137730,28 +137863,28 @@
       "identifier": "IncidentClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 197
+      "line": 207
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "IncidentClearer",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 197
+      "line": 207
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "IncidentLister",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 205
+      "line": 215
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "IncidentLister",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 205
+      "line": 215
     },
     {
       "package": "internal/north/rest/ws",
@@ -137912,14 +138045,14 @@
       "identifier": "NewCommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 223
+      "line": 225
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewCommandError",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 223
+      "line": 225
     },
     {
       "package": "internal/north/rest/ws",
@@ -137996,14 +138129,14 @@
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 286
+      "line": 288
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewRouter",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 286
+      "line": 288
     },
     {
       "package": "internal/north/rest/ws",
@@ -138178,14 +138311,14 @@
       "identifier": "RegisterExtendedCommands",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 301
+      "line": 313
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "RegisterExtendedCommands",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 301
+      "line": 313
     },
     {
       "package": "internal/north/rest/ws",
@@ -138220,28 +138353,28 @@
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 462
+      "line": 464
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Result",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 462
+      "line": 464
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 266
+      "line": 268
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "Router",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands.go",
-      "line": 266
+      "line": 268
     },
     {
       "package": "internal/north/rest/ws",
@@ -138445,6 +138578,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_default_test.go",
       "line": 917
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "TestAddonUpdateCommands",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/commands_extended_test.go",
+      "line": 1128
     },
     {
       "package": "internal/north/rest/ws",
@@ -139186,7 +139326,7 @@
       "identifier": "TestExtendedCentralCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 685
+      "line": 686
     },
     {
       "package": "internal/north/rest/ws",
@@ -139214,7 +139354,7 @@
       "identifier": "TestExtendedChangeHistoryList",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 677
+      "line": 678
     },
     {
       "package": "internal/north/rest/ws",
@@ -139242,7 +139382,7 @@
       "identifier": "TestExtendedDeviceInstallMode",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 443
+      "line": 444
     },
     {
       "package": "internal/north/rest/ws",
@@ -139263,7 +139403,7 @@
       "identifier": "TestExtendedDeviceRenameChannelHandler",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 301
+      "line": 302
     },
     {
       "package": "internal/north/rest/ws",
@@ -139277,98 +139417,98 @@
       "identifier": "TestExtendedDeviceRenameHandler",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 289
+      "line": 290
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceReplace",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 592
+      "line": 593
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceReplaceCandidates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 549
+      "line": 550
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceReplaceCandidatesEmptyReturnsEmptyArray",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 573
+      "line": 574
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceRestoreConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 460
+      "line": 461
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceSetChannelFunctions",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 381
+      "line": 382
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceSetChannelFunctionsEmptyArrayClears",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 419
+      "line": 420
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceSetChannelRooms",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 316
+      "line": 317
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceSetChannelRoomsEmptyArrayClears",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 355
+      "line": 356
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceSetTeam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 528
+      "line": 529
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceTeamCandidates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 516
+      "line": 517
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceTest",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 482
+      "line": 483
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedDeviceTestMissingAddressReturnsBadRequest",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 503
+      "line": 504
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedMasterProfilesApply",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 656
+      "line": 657
     },
     {
       "package": "internal/north/rest/ws",
@@ -139389,98 +139529,98 @@
       "identifier": "TestExtendedMasterProfilesListAndGet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 633
+      "line": 634
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedMasterProfilesMatchDispatch",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 951
+      "line": 952
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedParamsetPut",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 613
+      "line": 614
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedParamsetPutHiddenParamReturnsForbidenError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 781
+      "line": 782
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedParamsetPutVisibleParamSucceeds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 815
+      "line": 816
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedParamsetPut_EditLockEnforced",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 1044
+      "line": 1045
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedRouterCountsNewCommands",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 838
+      "line": 839
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedServiceMessagesDisable",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 700
+      "line": 701
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedServiceMessagesSuppressed",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 711
+      "line": 712
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedServiceMessagesSuppressedEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 722
+      "line": 723
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedServiceMessagesSuppressedHandlerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 732
+      "line": 733
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedServiceMessagesUnsuppress",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 742
+      "line": 743
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedServiceMessagesUnsuppressHandlerError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 769
+      "line": 770
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestExtendedServiceMessagesUnsuppressMissingChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 758
+      "line": 759
     },
     {
       "package": "internal/north/rest/ws",
@@ -139753,14 +139893,14 @@
       "identifier": "TestIncidentsListAndGetAliasSameOutput",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 991
+      "line": 992
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestIncidentsListEmptyReturnsEmptyArray",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 1020
+      "line": 1021
     },
     {
       "package": "internal/north/rest/ws",
@@ -141608,21 +141748,21 @@
       "identifier": "TestWSParamsetFormSchema",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 889
+      "line": 890
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestWSParamsetFormSchema_DefaultsParamset",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 919
+      "line": 920
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestWSParamsetFormSchema_MissingAddressReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/commands_extended_test.go",
-      "line": 935
+      "line": 936
     },
     {
       "package": "internal/north/rest/ws",
@@ -141692,14 +141832,14 @@
       "identifier": "UISchemaQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 215
+      "line": 225
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "UISchemaQuery",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_extended.go",
-      "line": 215
+      "line": 225
     },
     {
       "package": "internal/north/rest/ws",
