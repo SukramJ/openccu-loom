@@ -6,6 +6,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The CCU's own security posture and interface list in the fleet view.**
+  Each central now reports whether the CCU requires authentication
+  (`auth_enabled`) and whether it redirects plain HTTP to HTTPS
+  (`https_redirect_enabled`), plus the interface adapters the CCU reports
+  for itself (`ccu_interfaces`, with type / address / XML-RPC port / URL)
+  — all three on `GET /api/v1/system/ccu` (API 3.5.0, additive). The
+  Fleet cards render the two flags as labelled chips and list the
+  CCU-reported interfaces, highlighting any the daemon is *not*
+  configured for. All three facts are best-effort at bring-up: a firmware
+  that does not answer leaves the zero value, which reads as "no / not
+  discovered" instead of failing the central. The flags stay out of the
+  MQTT-Discovery hub block by design (pinned by a test) so no published
+  payload changes.
+
+### Fixed
+
+- **The per-package coverage gate passes again.** `internal/client/transport/jsonrpc`
+  had drifted to 95.9 % against its 96 % floor, failing every `integration`
+  workflow run since 0.46.0 — the gate averages per-function percentages,
+  so the small `bidcos*` coercion helpers added back then pulled the mean
+  under the floor. Three long-untested client methods
+  (`GetAuthEnabled`, `GetHTTPSRedirectEnabled`, `ListInterfaces` — all
+  three now wired into the system info above) and the coercion helpers
+  gained direct tests, putting the package at 99.7 %.
+
 ## [0.51.0]
 
 ### Added

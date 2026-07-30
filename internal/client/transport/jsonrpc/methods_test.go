@@ -2660,3 +2660,321 @@ func TestListBidcosInterfacesEmptyResult(t *testing.T) {
 		t.Fatalf("len=%d, want 0", len(got))
 	}
 }
+
+// --- CCU security posture + CCU-reported interface list -------------------
+// GetAuthEnabled / GetHTTPSRedirectEnabled / ListInterfaces feed the
+// per-central system info (`GET /api/v1/system/ccu`). All three are
+// best-effort at bring-up: a firmware that does not implement the method
+// must degrade to the zero value rather than fail the central, so the
+// nil-result and wrong-type paths matter as much as the happy path.
+
+func TestGetAuthEnabled(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		result any
+		want   bool
+	}{
+		{name: "true", result: true, want: true},
+		{name: "false", result: false, want: false},
+		{name: "nil result means not configured", result: nil, want: false},
+		{name: "non-bool result degrades to false", result: "yes", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := newTestServer(t, map[string]func(envelope) any{
+				"CCU.getAuthEnabled": func(envelope) any { return okResult(tc.result) },
+			})
+			defer srv.Close()
+
+			c, _ := New(Config{Endpoint: srv.URL})
+			got, err := c.GetAuthEnabled(context.Background())
+			if err != nil {
+				t.Fatalf("GetAuthEnabled: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("GetAuthEnabled = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestGetAuthEnabledError(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"CCU.getAuthEnabled": func(envelope) any {
+			return response{Error: &wireError{Code: -32601, Message: "method not found"}}
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.GetAuthEnabled(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if got {
+		t.Errorf("GetAuthEnabled = true on error, want false")
+	}
+}
+
+func TestGetHTTPSRedirectEnabled(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		result any
+		want   bool
+	}{
+		{name: "true", result: true, want: true},
+		{name: "false", result: false, want: false},
+		{name: "nil result means not configured", result: nil, want: false},
+		{name: "non-bool result degrades to false", result: 1.0, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := newTestServer(t, map[string]func(envelope) any{
+				"CCU.getHttpsRedirectEnabled": func(envelope) any { return okResult(tc.result) },
+			})
+			defer srv.Close()
+
+			c, _ := New(Config{Endpoint: srv.URL})
+			got, err := c.GetHTTPSRedirectEnabled(context.Background())
+			if err != nil {
+				t.Fatalf("GetHTTPSRedirectEnabled: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("GetHTTPSRedirectEnabled = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestGetHTTPSRedirectEnabledError(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"CCU.getHttpsRedirectEnabled": func(envelope) any {
+			return response{Error: &wireError{Code: -32603, Message: "internal"}}
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	if _, err := c.GetHTTPSRedirectEnabled(context.Background()); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestListInterfaces(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listInterfaces": func(envelope) any {
+			return okResult([]map[string]any{
+				{
+					"type":    "HmIP-RF",
+					"address": "HmIP-RF",
+					"port":    2010,
+					"url":     "http://127.0.0.1:2010",
+				},
+				{
+					"type":    "BidCos-RF",
+					"address": "BidCos-RF",
+					"port":    2001,
+					"url":     "http://127.0.0.1:2001",
+				},
+			})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListInterfaces(context.Background())
+	if err != nil {
+		t.Fatalf("ListInterfaces: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2", len(got))
+	}
+	first := got[0]
+	if first.Type != "HmIP-RF" || first.Address != "HmIP-RF" {
+		t.Errorf("first = %+v", first)
+	}
+	if first.Port != 2010 {
+		t.Errorf("Port = %d, want 2010", first.Port)
+	}
+	if first.URL != "http://127.0.0.1:2010" {
+		t.Errorf("URL = %q", first.URL)
+	}
+	if got[1].Port != 2001 {
+		t.Errorf("second Port = %d, want 2001", got[1].Port)
+	}
+}
+
+// TestListInterfacesMalformedFieldsDegradeToZero pins that an entry whose
+// fields carry an unexpected wire shape (or are missing entirely) still
+// yields an entry with zero values instead of erroring — the CCU-side view
+// is a status-page nicety and must never fail bring-up.
+func TestListInterfacesMalformedFieldsDegradeToZero(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listInterfaces": func(envelope) any {
+			return okResult([]map[string]any{
+				{
+					"type":    123,     // not a string
+					"address": nil,     // explicitly null
+					"port":    "2010",  // string instead of number
+					"url":     []any{}, // wrong shape entirely
+				},
+				{}, // every field missing
+			})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListInterfaces(context.Background())
+	if err != nil {
+		t.Fatalf("ListInterfaces: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2", len(got))
+	}
+	for i, entry := range got {
+		if entry.Type != "" || entry.Address != "" || entry.Port != 0 || entry.URL != "" {
+			t.Errorf("entry %d = %+v, want all-zero", i, entry)
+		}
+	}
+}
+
+func TestListInterfacesEmptyResult(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listInterfaces": func(envelope) any {
+			return okResult([]map[string]any{})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListInterfaces(context.Background())
+	if err != nil {
+		t.Fatalf("ListInterfaces: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len=%d, want 0", len(got))
+	}
+}
+
+func TestListInterfacesError(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listInterfaces": func(envelope) any {
+			return response{Error: &wireError{Code: -32603, Message: "internal"}}
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListInterfaces(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if got != nil {
+		t.Errorf("got = %+v on error, want nil", got)
+	}
+}
+
+// --- wire-coercion helpers ------------------------------------------------
+// Tested directly rather than through ListBidcosInterfaces: the CCU emits
+// these fields in several shapes across firmware generations, and the
+// json.Number branch is unreachable through the default decoder, so a
+// server-driven test cannot cover it.
+
+func TestBidcosString(t *testing.T) {
+	t.Parallel()
+	m := map[string]any{"str": "value", "num": 42.0, "nil": nil}
+	for _, tc := range []struct {
+		key  string
+		want string
+	}{
+		{key: "str", want: "value"},
+		{key: "num", want: ""},
+		{key: "nil", want: ""},
+		{key: "absent", want: ""},
+	} {
+		if got := bidcosString(m, tc.key); got != tc.want {
+			t.Errorf("bidcosString(%q) = %q, want %q", tc.key, got, tc.want)
+		}
+	}
+}
+
+func TestBidcosBool(t *testing.T) {
+	t.Parallel()
+	m := map[string]any{
+		"native_true":  true,
+		"native_false": false,
+		"str_true":     "true",
+		"str_one":      "1",
+		"str_false":    "false",
+		"str_zero":     "0",
+		"str_junk":     "maybe",
+		"number":       1.0,
+		"nil":          nil,
+	}
+	for _, tc := range []struct {
+		key  string
+		want bool
+	}{
+		{key: "native_true", want: true},
+		{key: "native_false", want: false},
+		{key: "str_true", want: true},
+		{key: "str_one", want: true},
+		{key: "str_false", want: false},
+		{key: "str_zero", want: false},
+		{key: "str_junk", want: false},
+		{key: "number", want: false},
+		{key: "nil", want: false},
+		{key: "absent", want: false},
+	} {
+		if got := bidcosBool(m, tc.key); got != tc.want {
+			t.Errorf("bidcosBool(%q) = %v, want %v", tc.key, got, tc.want)
+		}
+	}
+}
+
+func TestBidcosPercent(t *testing.T) {
+	t.Parallel()
+	m := map[string]any{
+		"float":        42.0,
+		"float_trunc":  42.9,
+		"json_number":  json.Number("42"),
+		"json_bad":     json.Number("not-a-number"),
+		"str":          "42",
+		"str_padded":   " 42 ",
+		"str_empty":    "",
+		"str_junk":     "n/a",
+		"str_negative": "-1",
+		"wrong_type":   true,
+		"nil":          nil,
+	}
+	for _, tc := range []struct {
+		key  string
+		want int
+	}{
+		{key: "float", want: 42},
+		{key: "float_trunc", want: 42},
+		{key: "json_number", want: 42},
+		{key: "json_bad", want: -1},
+		{key: "str", want: 42},
+		{key: "str_padded", want: 42},
+		{key: "str_empty", want: -1},
+		{key: "str_junk", want: -1},
+		{key: "str_negative", want: -1},
+		{key: "wrong_type", want: -1},
+		{key: "nil", want: -1},
+		{key: "absent", want: -1},
+	} {
+		if got := bidcosPercent(m, tc.key); got != tc.want {
+			t.Errorf("bidcosPercent(%q) = %d, want %d", tc.key, got, tc.want)
+		}
+	}
+}

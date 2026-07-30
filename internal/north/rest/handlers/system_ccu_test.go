@@ -73,3 +73,80 @@ func TestSystemCCU_HappyPath(t *testing.T) {
 		t.Fatalf("interfaces len=%d", len(e.ConfiguredInterfaces))
 	}
 }
+
+// TestSystemCCU_CCUReportedFactsWireShape pins the JSON shape of the
+// CCU-sourced fields. The two security flags are always present (a bool
+// without omitempty, so "false" is distinguishable from a client that
+// predates the field), while ccu_interfaces is omitted entirely until the
+// CCU has reported one — the SPA reads its absence as "not discovered yet"
+// rather than as "no interfaces".
+func TestSystemCCU_CCUReportedFactsWireShape(t *testing.T) {
+	t.Parallel()
+	reader := fakeSystemCCUReader{entries: []SystemCCUEntry{
+		{
+			Name: "reported", Available: true,
+			AuthEnabled:          true,
+			HTTPSRedirectEnabled: false,
+			ConfiguredInterfaces: []string{"HmIP-RF"},
+			CCUInterfaces: []SystemCCUInterface{
+				{Type: "HmIP-RF", Address: "HmIP-RF", Port: 2010, URL: "http://ccu:2010"},
+				{Type: "CUxD", Address: "CUxD", Port: 8701},
+			},
+		},
+		{Name: "silent", Available: false},
+	}}
+	w := httptest.NewRecorder()
+	SystemCCU(reader).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/system/ccu", http.NoBody))
+
+	var raw struct {
+		Entries []map[string]any `json:"entries"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(raw.Entries) != 2 {
+		t.Fatalf("len=%d, want 2", len(raw.Entries))
+	}
+
+	reported := raw.Entries[0]
+	if reported["auth_enabled"] != true {
+		t.Errorf("auth_enabled = %v, want true", reported["auth_enabled"])
+	}
+	// Present-but-false, not absent: an operator reading the fleet view must
+	// be able to tell "the CCU says no" from "nobody asked".
+	redirect, present := reported["https_redirect_enabled"]
+	if !present {
+		t.Error("https_redirect_enabled missing — a false bool must still serialise")
+	}
+	if redirect != false {
+		t.Errorf("https_redirect_enabled = %v, want false", redirect)
+	}
+	ifaces, ok := reported["ccu_interfaces"].([]any)
+	if !ok {
+		t.Fatalf("ccu_interfaces = %T, want array", reported["ccu_interfaces"])
+	}
+	if len(ifaces) != 2 {
+		t.Fatalf("ccu_interfaces len=%d, want 2", len(ifaces))
+	}
+	first, _ := ifaces[0].(map[string]any)
+	if first["address"] != "HmIP-RF" || first["port"] != float64(2010) {
+		t.Errorf("ccu_interfaces[0] = %+v", first)
+	}
+	if first["url"] != "http://ccu:2010" {
+		t.Errorf("ccu_interfaces[0].url = %v", first["url"])
+	}
+	// The CUxD entry carries no URL — omitempty must drop the key rather
+	// than emit an empty string.
+	second, _ := ifaces[1].(map[string]any)
+	if _, hasURL := second["url"]; hasURL {
+		t.Errorf("ccu_interfaces[1] carries an empty url key: %+v", second)
+	}
+
+	silent := raw.Entries[1]
+	if _, hasIfaces := silent["ccu_interfaces"]; hasIfaces {
+		t.Errorf("ccu_interfaces present for a central that reported none: %+v", silent)
+	}
+	if silent["auth_enabled"] != false {
+		t.Errorf("auth_enabled = %v, want false", silent["auth_enabled"])
+	}
+}

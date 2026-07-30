@@ -168,3 +168,96 @@ func TestSystemCCUAdapterList_ResolverStillPopulatesConfigFields(t *testing.T) {
 		}
 	}
 }
+
+// TestSystemCCUAdapterList_MapsCCUReportedFacts verifies that List carries
+// the CCU's own view northbound: the two security flags from SystemInfo and
+// the interface list the CCU reports for itself. The CCU-reported list is
+// independent of ConfiguredInterfaces — an interface present in one and not
+// the other is exactly the mismatch the fleet view highlights.
+func TestSystemCCUAdapterList_MapsCCUReportedFacts(t *testing.T) {
+	t.Parallel()
+
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: "ccu-echo"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	unit.SetSystemInformation(central.SystemInfo{
+		Model:                "HmIP-CCU3",
+		AuthEnabled:          true,
+		HTTPSRedirectEnabled: true,
+	})
+	unit.SetCCUInterfaces([]central.CCUInterface{
+		{Type: "HmIP-RF", Address: "HmIP-RF", Port: 2010, URL: "http://127.0.0.1:2010"},
+		// Reported by the CCU but absent from the configured list below.
+		{Type: "CUxD", Address: "CUxD", Port: 8701},
+	})
+
+	resolve := func(_ context.Context, name string) (config.CentralConfig, bool) {
+		return config.CentralConfig{
+			Name:       name,
+			Host:       "10.0.0.9",
+			Interfaces: []config.InterfaceSpec{{Name: "HmIP-RF"}},
+		}, true
+	}
+
+	entries := newSystemCCUAdapter(reg, resolve).List(context.Background())
+	if len(entries) != 1 {
+		t.Fatalf("List() returned %d entries, want 1", len(entries))
+	}
+	got := entries[0]
+	if !got.AuthEnabled {
+		t.Error("AuthEnabled = false, want true")
+	}
+	if !got.HTTPSRedirectEnabled {
+		t.Error("HTTPSRedirectEnabled = false, want true")
+	}
+	if len(got.CCUInterfaces) != 2 {
+		t.Fatalf("CCUInterfaces = %+v, want 2 entries", got.CCUInterfaces)
+	}
+	if got.CCUInterfaces[0].Address != "HmIP-RF" || got.CCUInterfaces[0].Port != 2010 {
+		t.Errorf("CCUInterfaces[0] = %+v", got.CCUInterfaces[0])
+	}
+	if got.CCUInterfaces[0].URL != "http://127.0.0.1:2010" {
+		t.Errorf("CCUInterfaces[0].URL = %q", got.CCUInterfaces[0].URL)
+	}
+	if got.CCUInterfaces[1].Address != "CUxD" {
+		t.Errorf("CCUInterfaces[1] = %+v, want the CUxD entry", got.CCUInterfaces[1])
+	}
+	// The configured list stays the daemon's own view — the CCU-reported
+	// CUxD entry must not leak into it.
+	if len(got.ConfiguredInterfaces) != 1 || got.ConfiguredInterfaces[0] != "HmIP-RF" {
+		t.Errorf("ConfiguredInterfaces = %v, want [HmIP-RF]", got.ConfiguredInterfaces)
+	}
+}
+
+// TestSystemCCUAdapterList_OmitsCCUInterfacesBeforeFirstConnect pins that a
+// central which has not completed a connect round emits no ccu_interfaces
+// key at all (nil, not an empty array), so the SPA can tell "not discovered
+// yet" from "the CCU reports no interfaces".
+func TestSystemCCUAdapterList_OmitsCCUInterfacesBeforeFirstConnect(t *testing.T) {
+	t.Parallel()
+
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: "ccu-foxtrot"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	entries := newSystemCCUAdapter(reg, nil).List(context.Background())
+	if len(entries) != 1 {
+		t.Fatalf("List() returned %d entries, want 1", len(entries))
+	}
+	if entries[0].CCUInterfaces != nil {
+		t.Errorf("CCUInterfaces = %+v, want nil before the first connect", entries[0].CCUInterfaces)
+	}
+	if entries[0].AuthEnabled || entries[0].HTTPSRedirectEnabled {
+		t.Error("security flags default to true, want false before the first connect")
+	}
+}

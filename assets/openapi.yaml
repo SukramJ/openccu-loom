@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.4.0
+  version: 3.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -7332,10 +7332,12 @@ components:
         One CCU as known to the daemon. `name` is the daemon-local
         identifier (config-driven, multi-CCU-safe). The other fields
         either come from the static config (`host`, `configured_interfaces`)
-        or from the CCU's reported SystemInformation block
-        (`model`, `version`, `hostname`, `serial`, `url`, `is_ha_app`)
-        — the latter set may be empty before the first successful
-        connect.
+        or from the CCU itself — its reported SystemInformation block
+        (`model`, `version`, `hostname`, `serial`, `url`, `is_ha_app`),
+        its security posture (`auth_enabled`,
+        `https_redirect_enabled`) and the interface list it reports for
+        itself (`ccu_interfaces`). The CCU-sourced set may be empty
+        before the first successful connect.
 
         NORMATIVE — central-scope identity. `name` is the single
         scoping discriminator for a CCU across the whole API and is
@@ -7368,6 +7370,41 @@ components:
         configured_interfaces:
           type: array
           items: { type: string }
+        auth_enabled:
+          type: boolean
+          description: |
+            Whether the CCU requires authentication on its own
+            interfaces. False both when the CCU runs unauthenticated and
+            when its firmware does not answer the query — a status-page
+            hint, not a security guarantee.
+        https_redirect_enabled:
+          type: boolean
+          description: |
+            Whether the CCU redirects plain HTTP to HTTPS. Same caveat as
+            `auth_enabled`.
+        ccu_interfaces:
+          type: array
+          description: |
+            The interface adapters the CCU reports for itself — the
+            CCU-side counterpart to `configured_interfaces`. Absent until
+            the first successful connect round; a difference between the
+            two lists is the interesting signal.
+          items:
+            type: object
+            required: [type, address, port]
+            properties:
+              type:
+                type: string
+                description: CCU interface type string (e.g. `HmIP-RF`).
+              address:
+                type: string
+                description: Interface identifier the CCU uses in callbacks.
+              port:
+                type: integer
+                description: XML-RPC port the interface listens on.
+              url:
+                type: string
+                description: Full XML-RPC endpoint URL the CCU reports.
         readiness:
           type: object
           required: [phase, ready, interfaces_loaded, interfaces_total]
