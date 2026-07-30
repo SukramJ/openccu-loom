@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 080ea834
-HEAD: 080ea834
+Generated: e06f7534
+HEAD: e06f7534
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27044 |
+| Total Exported | 27064 |
 | Reachable | 4686 |
-| Whitelisted | 19469 |
-| **Unreachable** | **2889** |
+| Whitelisted | 19487 |
+| **Unreachable** | **2891** |
 
 ## Top-20 Packages by Dead Code
 
@@ -125,7 +125,7 @@ HEAD: 080ea834
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
 | internal/build | 0 | 0 | 8 |
-| internal/central | 0 | 22 | 2 |
+| internal/central | 0 | 24 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |
 | internal/central/coordinators | 0 | 121 | 4 |
 | internal/central/registry | 0 | 15 | 0 |

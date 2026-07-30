@@ -60,6 +60,19 @@ func (a *systemCCUAdapter) List(ctx context.Context) []handlers.SystemCCUEntry {
 		entry.Serial = si.Serial
 		entry.URL = si.URL
 		entry.IsHaApp = si.IsHaApp
+		entry.AuthEnabled = si.AuthEnabled
+		entry.HTTPSRedirectEnabled = si.HTTPSRedirectEnabled
+		if ifaces := c.CCUInterfaces(); len(ifaces) > 0 {
+			entry.CCUInterfaces = make([]handlers.SystemCCUInterface, 0, len(ifaces))
+			for _, ifc := range ifaces {
+				entry.CCUInterfaces = append(entry.CCUInterfaces, handlers.SystemCCUInterface{
+					Type:    ifc.Type,
+					Address: ifc.Address,
+					Port:    ifc.Port,
+					URL:     ifc.URL,
+				})
+			}
+		}
 		r := c.Readiness()
 		entry.Readiness = handlers.CentralReadiness{
 			Phase:            string(r.Phase),

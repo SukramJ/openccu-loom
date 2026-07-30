@@ -50,9 +50,31 @@ type SystemCCUEntry struct {
 	// that the daemon manages the same interfaces the operator
 	// expects.
 	ConfiguredInterfaces []string `json:"configured_interfaces"`
+	// AuthEnabled reports whether the CCU requires authentication on its
+	// own interfaces. False both when the CCU runs unauthenticated and
+	// when its firmware does not answer the query, so treat it as a hint
+	// on a status page rather than as a security guarantee.
+	AuthEnabled bool `json:"auth_enabled"`
+	// HTTPSRedirectEnabled reports whether the CCU redirects plain HTTP
+	// to HTTPS. Same caveat as AuthEnabled.
+	HTTPSRedirectEnabled bool `json:"https_redirect_enabled"`
+	// CCUInterfaces lists the interface adapters the CCU reports for
+	// itself — the CCU-side counterpart to ConfiguredInterfaces above.
+	// Omitted until the first successful connect round; a difference
+	// between the two lists is the interesting signal.
+	CCUInterfaces []SystemCCUInterface `json:"ccu_interfaces,omitempty"`
 	// Readiness reports where the central is in its readiness-gated
 	// southbound bring-up (see CentralReadiness).
 	Readiness CentralReadiness `json:"readiness"`
+}
+
+// SystemCCUInterface is one interface adapter as the CCU itself reports
+// it, including the XML-RPC port and endpoint URL it listens on.
+type SystemCCUInterface struct {
+	Type    string `json:"type"`
+	Address string `json:"address"`
+	Port    int    `json:"port"`
+	URL     string `json:"url,omitempty"`
 }
 
 // CentralReadiness surfaces where a central is in its readiness-gated southbound

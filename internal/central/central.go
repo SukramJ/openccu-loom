@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,6 +138,12 @@ type Unit struct {
 	systemInfoMu sync.RWMutex
 	systemInfo   SystemInfo
 
+	// ccuInterfacesMu guards the CCU-reported interface list. Kept out of
+	// [SystemInfo] because that struct feeds the MQTT-Discovery hub block
+	// through [internal/payload], which flattens scalars only.
+	ccuInterfacesMu sync.RWMutex
+	ccuInterfaces   []CCUInterface
+
 	// services bundles the runtime service-dispatch closures populated by
 	// the hub-wiring adapter once the JSON-RPC session is up; Unit.Service*
 	// methods delegate through them to the actual transport.
@@ -221,6 +228,35 @@ type SystemInfo struct {
 	Serial   string `payload:"info,alt=serial_number"`
 	URL      string `payload:"info,alt=configuration_url"`
 	IsHaApp  bool   `payload:"info,alt=is_ha_app"`
+
+	// AuthEnabled reports whether the CCU requires authentication on its
+	// own interfaces, and HTTPSRedirectEnabled whether it redirects plain
+	// HTTP to HTTPS. Both are operator-facing security facts about the CCU
+	// itself, not about the daemon, and both default to false when the
+	// firmware does not implement the query.
+	//
+	// Deliberately untagged: [internal/payload] skips fields without a
+	// `payload:` tag, which keeps these out of the MQTT-Discovery hub
+	// block. They are a status-page concern, and adding them to the
+	// discovery payload would change a published wire contract.
+	AuthEnabled          bool
+	HTTPSRedirectEnabled bool
+}
+
+// CCUInterface is one interface adapter the CCU itself reports as
+// registered. This is the CCU-side view — it can differ from the
+// interfaces the daemon is configured to talk to, which is exactly what
+// makes it useful on a status page: an interface the CCU offers but the
+// daemon does not manage (or vice versa) shows up as a mismatch.
+type CCUInterface struct {
+	// Type is the CCU interface type string (e.g. "HmIP-RF").
+	Type string
+	// Address is the interface identifier the CCU uses in callbacks.
+	Address string
+	// Port is the XML-RPC port the interface listens on.
+	Port int
+	// URL is the full XML-RPC endpoint URL the CCU reports.
+	URL string
 }
 
 // New constructs a fully-wired Unit. Call [Start] to begin
@@ -701,6 +737,26 @@ func (u *Unit) SetSystemInformation(info SystemInfo) {
 	u.systemInfoMu.Lock()
 	u.systemInfo = info
 	u.systemInfoMu.Unlock()
+}
+
+// CCUInterfaces returns the interface list the CCU reports for itself.
+// The hub-wiring adapter populates it after Login; before then the slice
+// is empty. The returned slice is a copy — callers may retain or sort it
+// without racing the next refresh.
+func (u *Unit) CCUInterfaces() []CCUInterface {
+	u.ccuInterfacesMu.RLock()
+	defer u.ccuInterfacesMu.RUnlock()
+	return slices.Clone(u.ccuInterfaces)
+}
+
+// SetCCUInterfaces replaces the cached CCU-reported interface list.
+// Called from the hub-wiring adapter once `Interface.listInterfaces`
+// returns. Stores a copy so a caller mutating its own slice afterwards
+// cannot reach into the cache.
+func (u *Unit) SetCCUInterfaces(ifaces []CCUInterface) {
+	u.ccuInterfacesMu.Lock()
+	u.ccuInterfaces = slices.Clone(ifaces)
+	u.ccuInterfacesMu.Unlock()
 }
 
 // Model returns the CCU model string from the cached system info. Empty

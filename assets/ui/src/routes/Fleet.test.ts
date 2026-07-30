@@ -69,15 +69,42 @@ const CCUS = [
     url: "https://172.18.4.10",
     is_ha_app: false,
     configured_interfaces: ["HmIP-RF", "BidCos-RF"],
-    readiness: { phase: "ready", ready: true, interfaces_loaded: 2, interfaces_total: 2 },
+    auth_enabled: true,
+    https_redirect_enabled: false,
+    // The CCU reports a third interface the daemon is not configured for —
+    // the mismatch the fleet card highlights.
+    ccu_interfaces: [
+      {
+        type: "HmIP-RF",
+        address: "HmIP-RF",
+        port: 2010,
+        url: "http://172.18.4.10:2010",
+      },
+      { type: "BidCos-RF", address: "BidCos-RF", port: 2001 },
+      { type: "CUxD", address: "CUxD", port: 8701 },
+    ],
+    readiness: {
+      phase: "ready",
+      ready: true,
+      interfaces_loaded: 2,
+      interfaces_total: 2,
+    },
   },
   {
+    // No CCU-sourced facts at all — the pre-first-connect shape.
     name: "ccu-offline",
     host: "172.18.4.11",
     available: false,
     is_ha_app: false,
     configured_interfaces: ["HmIP-RF"],
-    readiness: { phase: "waiting_for_ccu", ready: false, interfaces_loaded: 0, interfaces_total: 0 },
+    auth_enabled: false,
+    https_redirect_enabled: false,
+    readiness: {
+      phase: "waiting_for_ccu",
+      ready: false,
+      interfaces_loaded: 0,
+      interfaces_total: 0,
+    },
   },
 ];
 
@@ -186,5 +213,95 @@ describe("Fleet — empty state", () => {
       expect(screen.getByText("fleet.empty")).toBeInTheDocument();
     });
     expect(screen.queryByText("fleet.field.devices")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. CCU-reported facts: security posture + the CCU's own interface list
+// ---------------------------------------------------------------------------
+
+describe("Fleet — CCU security posture", () => {
+  it("labels the flags per CCU instead of collapsing them to one state", async () => {
+    mockGetSystemCCUs.mockResolvedValue(CCUS);
+    mockListDevices.mockResolvedValue(devicesPage(DEVICES));
+
+    const { container } = render(Fleet);
+
+    await waitFor(() => {
+      expect(screen.getByText("ccu-online")).toBeInTheDocument();
+    });
+
+    // Sorted order: "ccu-offline" first, "ccu-online" second.
+    const cards = container.querySelectorAll(".grid > div");
+    expect(cards[0].textContent).toContain("fleet.field.auth_enabled.off");
+    expect(cards[1].textContent).toContain("fleet.field.auth_enabled.on");
+    // Both CCUs have the redirect off — the flags are independent, so the
+    // auth flag being on must not pull the redirect label with it.
+    expect(cards[1].textContent).toContain("fleet.field.https_redirect.off");
+    expect(cards[1].textContent).not.toContain("fleet.field.https_redirect.on");
+  });
+
+  it("renders the security block even before the first connect round", async () => {
+    mockGetSystemCCUs.mockResolvedValue([CCUS[1]]);
+    mockListDevices.mockResolvedValue(devicesPage([]));
+
+    render(Fleet);
+
+    await waitFor(() => {
+      expect(screen.getByText("ccu-offline")).toBeInTheDocument();
+    });
+
+    // The label is always present — a CCU that never answered still gets a
+    // row, reading "no authentication" rather than silently dropping out.
+    expect(screen.getByText("fleet.field.ccu_security")).toBeInTheDocument();
+    expect(
+      screen.getByText("fleet.field.auth_enabled.off"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Fleet — CCU-reported interface list", () => {
+  it("lists the CCU's interfaces with ports and flags the unmanaged one", async () => {
+    mockGetSystemCCUs.mockResolvedValue([CCUS[0]]);
+    mockListDevices.mockResolvedValue(devicesPage([]));
+
+    const { container } = render(Fleet);
+
+    await waitFor(() => {
+      expect(screen.getByText("ccu-online")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("fleet.field.ccu_interfaces")).toBeInTheDocument();
+    expect(screen.getByText("HmIP-RF:2010")).toBeInTheDocument();
+    expect(screen.getByText("BidCos-RF:2001")).toBeInTheDocument();
+    expect(screen.getByText("CUxD:8701")).toBeInTheDocument();
+
+    // CUxD is reported by the CCU but not in configured_interfaces, so it
+    // carries the unmanaged hint; a managed one falls back to its URL/address.
+    const cuxd = screen.getByText("CUxD:8701");
+    expect(cuxd.getAttribute("title")).toBe(
+      "fleet.field.ccu_interfaces.unmanaged",
+    );
+    const hmip = screen.getByText("HmIP-RF:2010");
+    expect(hmip.getAttribute("title")).toBe("http://172.18.4.10:2010");
+
+    // The daemon's own configured list stays a separate row.
+    expect(screen.getByText("fleet.field.interfaces")).toBeInTheDocument();
+    expect(container.textContent).toContain("fleet.field.interfaces");
+  });
+
+  it("omits the block entirely when the CCU has not reported interfaces yet", async () => {
+    mockGetSystemCCUs.mockResolvedValue([CCUS[1]]);
+    mockListDevices.mockResolvedValue(devicesPage([]));
+
+    render(Fleet);
+
+    await waitFor(() => {
+      expect(screen.getByText("ccu-offline")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByText("fleet.field.ccu_interfaces"),
+    ).not.toBeInTheDocument();
   });
 });

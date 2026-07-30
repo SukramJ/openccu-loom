@@ -5592,10 +5592,12 @@ export interface components {
          * @description One CCU as known to the daemon. `name` is the daemon-local
          *     identifier (config-driven, multi-CCU-safe). The other fields
          *     either come from the static config (`host`, `configured_interfaces`)
-         *     or from the CCU's reported SystemInformation block
-         *     (`model`, `version`, `hostname`, `serial`, `url`, `is_ha_app`)
-         *     — the latter set may be empty before the first successful
-         *     connect.
+         *     or from the CCU itself — its reported SystemInformation block
+         *     (`model`, `version`, `hostname`, `serial`, `url`, `is_ha_app`),
+         *     its security posture (`auth_enabled`,
+         *     `https_redirect_enabled`) and the interface list it reports for
+         *     itself (`ccu_interfaces`). The CCU-sourced set may be empty
+         *     before the first successful connect.
          *
          *     NORMATIVE — central-scope identity. `name` is the single
          *     scoping discriminator for a CCU across the whole API and is
@@ -5628,6 +5630,34 @@ export interface components {
             url?: string;
             is_ha_app: boolean;
             configured_interfaces: string[];
+            /**
+             * @description Whether the CCU requires authentication on its own
+             *     interfaces. False both when the CCU runs unauthenticated and
+             *     when its firmware does not answer the query — a status-page
+             *     hint, not a security guarantee.
+             */
+            auth_enabled?: boolean;
+            /**
+             * @description Whether the CCU redirects plain HTTP to HTTPS. Same caveat as
+             *     `auth_enabled`.
+             */
+            https_redirect_enabled?: boolean;
+            /**
+             * @description The interface adapters the CCU reports for itself — the
+             *     CCU-side counterpart to `configured_interfaces`. Absent until
+             *     the first successful connect round; a difference between the
+             *     two lists is the interesting signal.
+             */
+            ccu_interfaces?: {
+                /** @description CCU interface type string (e.g. `HmIP-RF`). */
+                type: string;
+                /** @description Interface identifier the CCU uses in callbacks. */
+                address: string;
+                /** @description XML-RPC port the interface listens on. */
+                port: number;
+                /** @description Full XML-RPC endpoint URL the CCU reports. */
+                url?: string;
+            }[];
             /**
              * @description Where the central is in its readiness-gated southbound
              *     bring-up, so the SPA can distinguish "still initializing"

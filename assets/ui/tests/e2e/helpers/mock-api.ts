@@ -339,6 +339,11 @@ export async function mockAllApis(page: Page): Promise<void> {
             version: '3.75.7',
             is_ha_app: false,
             configured_interfaces: ['HmIP-RF'],
+            auth_enabled: true,
+            https_redirect_enabled: true,
+            ccu_interfaces: [
+              { type: 'HmIP-RF', address: 'HmIP-RF', port: 2010, url: 'http://172.18.4.29:2010' },
+            ],
             readiness: { phase: 'ready', ready: true, interfaces_loaded: 1, interfaces_total: 1 },
           },
         ],
@@ -676,14 +681,27 @@ export async function mockFleet(page: Page): Promise<void> {
             url: 'https://172.18.4.29',
             is_ha_app: false,
             configured_interfaces: ['HmIP-RF', 'BidCos-RF'],
+            // CCU-reported facts: auth on, redirect off, and a CUxD
+            // interface the daemon is not configured for (renders as the
+            // unmanaged-interface chip).
+            auth_enabled: true,
+            https_redirect_enabled: false,
+            ccu_interfaces: [
+              { type: 'HmIP-RF', address: 'HmIP-RF', port: 2010, url: 'http://172.18.4.29:2010' },
+              { type: 'BidCos-RF', address: 'BidCos-RF', port: 2001, url: 'http://172.18.4.29:2001' },
+              { type: 'CUxD', address: 'CUxD', port: 8701 },
+            ],
             readiness: { phase: 'ready', ready: true, interfaces_loaded: 2, interfaces_total: 2 },
           },
           {
+            // Offline: no CCU-sourced facts at all (pre-first-connect shape).
             name: 'ccu2',
             host: '172.18.4.30',
             available: false,
             is_ha_app: false,
             configured_interfaces: ['HmIP-RF'],
+            auth_enabled: false,
+            https_redirect_enabled: false,
             readiness: { phase: 'waiting_for_ccu', ready: false, interfaces_loaded: 0, interfaces_total: 0 },
           },
         ],

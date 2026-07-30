@@ -227,7 +227,36 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		return nil, HubData{}, nil, fmt.Errorf("hub serial unresolved (central-id slot of every hub/internal/virtual-remote unique_id): %w", serialErr)
 	}
 	si.Serial = serial
+	// The CCU's own security posture (auth required? plain HTTP redirected?)
+	// and the interface list it reports for itself. All three are status-page
+	// facts, so a failure must not hold up bring-up — an older firmware
+	// without these methods simply leaves the zero values in place, which
+	// renders as "unknown" northbound rather than as an error.
+	if authEnabled, authErr := jc.GetAuthEnabled(ctx); authErr != nil {
+		logger.Warn("hub.auth_enabled.fetch_failed", slog.String("err", authErr.Error()))
+	} else {
+		si.AuthEnabled = authEnabled
+	}
+	if redirect, redirectErr := jc.GetHTTPSRedirectEnabled(ctx); redirectErr != nil {
+		logger.Warn("hub.https_redirect.fetch_failed", slog.String("err", redirectErr.Error()))
+	} else {
+		si.HTTPSRedirectEnabled = redirect
+	}
 	unit.SetSystemInformation(si)
+	if entries, ifaceErr := jc.ListInterfaces(ctx); ifaceErr != nil {
+		logger.Warn("hub.ccu_interfaces.fetch_failed", slog.String("err", ifaceErr.Error()))
+	} else {
+		ifaces := make([]central.CCUInterface, 0, len(entries))
+		for _, e := range entries {
+			ifaces = append(ifaces, central.CCUInterface{
+				Type:    e.Type,
+				Address: e.Address,
+				Port:    e.Port,
+				URL:     e.URL,
+			})
+		}
+		unit.SetCCUInterfaces(ifaces)
+	}
 
 	// InitHub must run before the first refresh cycle so stale state from a
 	// previous run (sysvars, programs) is cleared before new data arrives.

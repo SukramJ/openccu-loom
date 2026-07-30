@@ -62,6 +62,14 @@
   function deviceCount(central: string): number {
     return deviceStore.items.filter((d) => d.central === central).length;
   }
+
+  // An interface the CCU reports but the daemon is not configured for (or
+  // the reverse) is the signal worth surfacing — the lists are matched on
+  // the interface identifier the CCU uses in callbacks, which is the same
+  // token `configured_interfaces` carries.
+  function unmanaged(ccu: SystemCCUEntry, address: string): boolean {
+    return !ccu.configured_interfaces.includes(address);
+  }
 </script>
 
 <svelte:head>
@@ -133,6 +141,52 @@
               </div>
             </div>
           {/if}
+
+          {#if ccu.ccu_interfaces && ccu.ccu_interfaces.length > 0}
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-[var(--ha-secondary-text-color)]">
+                {t("fleet.field.ccu_interfaces")}
+              </span>
+              <div class="flex flex-wrap gap-1">
+                {#each ccu.ccu_interfaces as iface (iface.address)}
+                  <Badge
+                    variant={unmanaged(ccu, iface.address) ? "warning" : "muted"}
+                    class="font-mono"
+                  >
+                    <span
+                      title={unmanaged(ccu, iface.address)
+                        ? t("fleet.field.ccu_interfaces.unmanaged")
+                        : iface.url || iface.address}
+                    >
+                      {iface.address}{iface.port ? `:${iface.port}` : ""}
+                    </span>
+                  </Badge>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <div class="flex flex-col gap-1">
+            <span class="text-xs text-[var(--ha-secondary-text-color)]">
+              {t("fleet.field.ccu_security")}
+            </span>
+            <div class="flex flex-wrap gap-1">
+              <Badge variant={ccu.auth_enabled ? "success" : "muted"}>
+                <span title={t("fleet.field.auth_enabled.hint")}>
+                  {ccu.auth_enabled
+                    ? t("fleet.field.auth_enabled.on")
+                    : t("fleet.field.auth_enabled.off")}
+                </span>
+              </Badge>
+              <Badge variant={ccu.https_redirect_enabled ? "success" : "muted"}>
+                <span title={t("fleet.field.https_redirect.hint")}>
+                  {ccu.https_redirect_enabled
+                    ? t("fleet.field.https_redirect.on")
+                    : t("fleet.field.https_redirect.off")}
+                </span>
+              </Badge>
+            </div>
+          </div>
 
           {#if ccu.url}
             <a
