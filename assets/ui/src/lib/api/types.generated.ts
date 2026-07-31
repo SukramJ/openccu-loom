@@ -1881,6 +1881,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/ccu/{central}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a CCU's astro reference position
+         * @description Writes the CCU's latitude/longitude (decimal degrees) via ReGa. Every sunrise/sunset time the CCU computes for its own programs and for the weekly profiles this daemon edits derives from this position, so a wrong value skews schedules silently rather than failing — which is why it is exposed at all. Admin-gated and audited. The CCU reads the values back and the daemon compares them, so a 204 means the CCU holds exactly what was sent. The time zone is not writable here; it is set on the CCU itself.
+         */
+        put: operations["setSystemCCUPosition"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/restart-pending": {
         parameters: {
             query?: never;
@@ -5644,6 +5664,25 @@ export interface components {
              *     `auth_enabled`.
              */
             https_redirect_enabled?: boolean;
+            /**
+             * @description The CCU's astro reference longitude in decimal degrees. Every
+             *     sunrise/sunset time the CCU computes derives from it, so a
+             *     wrong value skews astro schedules silently. Absent while the
+             *     position is unresolved — never reported as 0, which is a real
+             *     coordinate.
+             */
+            longitude?: number;
+            /**
+             * @description The CCU's astro reference latitude in decimal degrees. Same
+             *     absence rule as `longitude`.
+             */
+            latitude?: number;
+            /**
+             * @description The CCU's configured IANA time zone (e.g. `Europe/Berlin`),
+             *     read from its time configuration. Read-only here: it is set on
+             *     the CCU itself.
+             */
+            timezone?: string;
             /**
              * @description The interface adapters the CCU reports for itself — the
              *     CCU-side counterpart to `configured_interfaces`. Absent until
@@ -9555,6 +9594,45 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    setSystemCCUPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Target central name (matches `SystemCCUEntry.name`). */
+                central: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    longitude: number;
+                    latitude: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Position written and confirmed by read-back */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description Coordinate out of range, or the central's backend has no ReGa path (CUxD, Homegear). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };

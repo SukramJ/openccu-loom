@@ -3,6 +3,7 @@
   import { api, ApiError } from "$lib/api/client";
   import type { SystemCCUEntry } from "$lib/api/types";
   import Button from "$lib/components/ui/Button.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -23,6 +24,66 @@
   let error = $state<string | null>(null);
   // The central whose reboot is currently being triggered (button busy).
   let busy = $state<string | null>(null);
+  // Edited coordinates per central, keyed by name. Seeded from the loaded
+  // entry; an untouched central has no draft and its inputs read the
+  // server value directly, so a reload cannot silently discard an edit.
+  let posDrafts = $state<Record<string, { lon: string; lat: string }>>({});
+  let savingPos = $state<string | null>(null);
+
+  function draftFor(e: SystemCCUEntry): { lon: string; lat: string } {
+    return (
+      posDrafts[e.name] ?? {
+        lon: e.longitude != null ? String(e.longitude) : "",
+        lat: e.latitude != null ? String(e.latitude) : "",
+      }
+    );
+  }
+
+  function setDraft(name: string, field: "lon" | "lat", value: string) {
+    const cur = posDrafts[name] ?? { lon: "", lat: "" };
+    posDrafts[name] = { ...cur, [field]: value };
+  }
+
+  // A draft counts as saveable only once both fields parse as finite
+  // numbers inside the coordinate ranges - the daemon rejects anything
+  // else with 422, and failing here keeps the round trip out of it.
+  function draftValid(d: { lon: string; lat: string }): boolean {
+    const lon = Number(d.lon);
+    const lat = Number(d.lat);
+    return (
+      d.lon.trim() !== "" &&
+      d.lat.trim() !== "" &&
+      Number.isFinite(lon) &&
+      Number.isFinite(lat) &&
+      lon >= -180 &&
+      lon <= 180 &&
+      lat >= -90 &&
+      lat <= 90
+    );
+  }
+
+  async function savePosition(e: SystemCCUEntry) {
+    const d = draftFor(e);
+    if (!draftValid(d)) return;
+    const central = e.name;
+    const ok = await confirmStore.ask({
+      title: t("ccu_position.confirm_title"),
+      body: t("ccu_position.confirm_body", { central }),
+      confirmLabel: t("common.save"),
+    });
+    if (!ok) return;
+    savingPos = central;
+    try {
+      await api.setCCUPosition(central, Number(d.lon), Number(d.lat));
+      toastStore.success(t("ccu_position.saved", { central }));
+      delete posDrafts[central];
+      await load();
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      savingPos = null;
+    }
+  }
 
   const isAdmin = $derived(authStore.identity?.role === "admin");
 
@@ -81,6 +142,7 @@
   {:else}
     <div class="space-y-3">
       {#each entries as e (e.name)}
+        {@const d = draftFor(e)}
         <div class="rounded-md bg-[var(--ha-secondary-background-color)] p-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
@@ -109,6 +171,60 @@
                 </Button>
               {/if}
             </div>
+          </div>
+
+          <!-- Astro reference position. Read-only for non-admins: it moves
+               every sunrise/sunset time the CCU computes. -->
+          <div class="mt-3 border-t border-[var(--ha-divider-color)] pt-3">
+            <div class="mb-2 flex flex-wrap items-center gap-2">
+              <span class="text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
+                {t("ccu_position.title")}
+              </span>
+              {#if e.timezone}
+                <Badge variant="muted">{e.timezone}</Badge>
+              {/if}
+            </div>
+            {#if isAdmin}
+              <div class="flex flex-wrap items-end gap-2">
+                <label class="text-xs">
+                  <span class="block text-[var(--ha-secondary-text-color)]">{t("ccu_position.latitude")}</span>
+                  <Input
+                    type="number"
+                    step="0.000001"
+                    class="w-36"
+                    value={d.lat}
+                    oninput={(ev) => setDraft(e.name, "lat", (ev.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <label class="text-xs">
+                  <span class="block text-[var(--ha-secondary-text-color)]">{t("ccu_position.longitude")}</span>
+                  <Input
+                    type="number"
+                    step="0.000001"
+                    class="w-36"
+                    value={d.lon}
+                    oninput={(ev) => setDraft(e.name, "lon", (ev.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={savingPos === e.name || !draftValid(d)}
+                  onclick={() => void savePosition(e)}
+                >
+                  {savingPos === e.name ? "…" : t("common.save")}
+                </Button>
+              </div>
+              <p class="mt-1.5 text-xs text-[var(--ha-secondary-text-color)]">
+                {t("ccu_position.help")}
+              </p>
+            {:else if e.latitude != null && e.longitude != null}
+              <p class="font-mono text-xs text-[var(--ha-secondary-text-color)]">
+                {e.latitude} / {e.longitude}
+              </p>
+            {:else}
+              <p class="text-xs text-[var(--ha-secondary-text-color)]">{t("ccu_position.unknown")}</p>
+            {/if}
           </div>
         </div>
       {/each}

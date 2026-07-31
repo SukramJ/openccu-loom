@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.7.0
+  version: 3.8.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1675,6 +1675,60 @@ paths:
           description: Reboot triggered
         "404":
           $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/position:
+    put:
+      operationId: setSystemCCUPosition
+      summary: Set a CCU's astro reference position
+      tags: [system]
+      description: >
+        Writes the CCU's latitude/longitude (decimal degrees) via ReGa.
+        Every sunrise/sunset time the CCU computes for its own programs
+        and for the weekly profiles this daemon edits derives from this
+        position, so a wrong value skews schedules silently rather than
+        failing — which is why it is exposed at all. Admin-gated and
+        audited. The CCU reads the values back and the daemon compares
+        them, so a 204 means the CCU holds exactly what was sent. The
+        time zone is not writable here; it is set on the CCU itself.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [longitude, latitude]
+              properties:
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+      responses:
+        "204":
+          description: Position written and confirmed by read-back
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >
+            Coordinate out of range, or the central's backend has no ReGa
+            path (CUxD, Homegear).
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -7399,6 +7453,25 @@ components:
           description: |
             Whether the CCU redirects plain HTTP to HTTPS. Same caveat as
             `auth_enabled`.
+        longitude:
+          type: number
+          description: |
+            The CCU's astro reference longitude in decimal degrees. Every
+            sunrise/sunset time the CCU computes derives from it, so a
+            wrong value skews astro schedules silently. Absent while the
+            position is unresolved — never reported as 0, which is a real
+            coordinate.
+        latitude:
+          type: number
+          description: |
+            The CCU's astro reference latitude in decimal degrees. Same
+            absence rule as `longitude`.
+        timezone:
+          type: string
+          description: |
+            The CCU's configured IANA time zone (e.g. `Europe/Berlin`),
+            read from its time configuration. Read-only here: it is set on
+            the CCU itself.
         ccu_interfaces:
           type: array
           description: |

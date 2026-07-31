@@ -4,6 +4,28 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **The CCU's astro position is visible and editable (SY05).** Every
+  sunrise/sunset time a CCU computes — for its own programs and for the
+  weekly profiles this daemon edits — derives from a latitude/longitude
+  pair stored on the CCU. It was invisible here, so a wrong location
+  skewed every astro schedule with no error anywhere. `GET
+  /api/v1/system/ccu` now reports `longitude`, `latitude` and the CCU's
+  `timezone`, and the CCU maintenance card in Settings → System shows
+  them and lets an admin correct them (`PUT
+  /api/v1/system/ccu/{central}/position`, audited; API 3.8.0, additive).
+  The write is confirmed rather than assumed: the ReGa script reads the
+  values back and the daemon compares them, so a success response means
+  the CCU holds exactly what was sent. Coordinates are range-checked
+  before substitution — a ReGa script takes its parameters textually, so
+  an out-of-range value would otherwise be written verbatim. An
+  unresolved position is reported as absent, never as 0/0, which is a
+  real place in the Atlantic. Verified against real firmware: write,
+  independent read-back, and restoration of the original coordinates.
+
 ## [0.52.0]
 
 ### Added

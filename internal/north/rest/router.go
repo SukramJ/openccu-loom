@@ -307,6 +307,10 @@ type Deps struct {
 	// CCUReboot backs `POST /api/v1/system/ccu/{central}/reboot` — an
 	// admin-only reboot of one CCU host. Nil serves the route as 503.
 	CCUReboot handlers.CCURebootPort
+	// CCUPosition backs `PUT /api/v1/system/ccu/{central}/position` — an
+	// admin-only write of a CCU's astro reference position. Nil serves
+	// the route as 503.
+	CCUPosition handlers.CCUPositionPort
 	// FirmwareDownload backs `POST /api/v1/system/firmware/download` — an
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
@@ -954,6 +958,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// Reboot one CCU host. Admin-gated like DELETE /devices; the
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
 			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
+			// Astro reference position. Admin-gated: it moves every
+			// sunrise/sunset time the CCU computes, for its own programs
+			// as well as the weekly profiles this daemon edits.
+			pr.With(admin).Put("/system/ccu/{central}/position", handlers.PutCCUPosition(d.CCUPosition, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
 			// Add-on self-update (ADR 0057). GET always answers 200 (a nil
 			// d.AddonUpdate reports supported:false) — mounted unconditionally

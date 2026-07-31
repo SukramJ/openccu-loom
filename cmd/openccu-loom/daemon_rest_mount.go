@@ -285,6 +285,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		},
 		SystemCCU:        newSystemCCUAdapter(d.reg, centralResolve),
 		CCUReboot:        d.ccuMaintenanceDomain,
+		CCUPosition:      d.ccuMaintenanceDomain,
 		FirmwareDownload: d.ccuMaintenanceDomain,
 		AddonUpdate:      addonUpdateServiceFrom(d.addonUpdater),
 		Groups:           newGroupsAdapter(d.groupsDomain),

@@ -241,6 +241,19 @@ type SystemInfo struct {
 	// discovery payload would change a published wire contract.
 	AuthEnabled          bool
 	HTTPSRedirectEnabled bool
+
+	// Longitude and Latitude are the CCU's astro reference position in
+	// decimal degrees, and Timezone its configured IANA zone. Every
+	// sunrise/sunset time the CCU computes derives from the position, so
+	// surfacing it makes a wrong location visible instead of letting it
+	// skew every astro schedule silently.
+	//
+	// Untagged for the same reason as the two flags above: they are a
+	// status-page concern and must not change the published MQTT
+	// discovery hub block.
+	Longitude float64
+	Latitude  float64
+	Timezone  string
 }
 
 // CCUInterface is one interface adapter the CCU itself reports as
@@ -729,6 +742,17 @@ func (u *Unit) SystemInformation() SystemInfo {
 	u.systemInfoMu.RLock()
 	defer u.systemInfoMu.RUnlock()
 	return u.systemInfo
+}
+
+// PatchSystemPosition updates only the cached astro position, leaving
+// every other field untouched. Used after a successful position write so
+// the status surfaces reflect it immediately, without re-running the
+// whole hub-wiring pass just to refresh two numbers.
+func (u *Unit) PatchSystemPosition(longitude, latitude float64) {
+	u.systemInfoMu.Lock()
+	u.systemInfo.Longitude = longitude
+	u.systemInfo.Latitude = latitude
+	u.systemInfoMu.Unlock()
 }
 
 // SetSystemInformation overwrites the cached metadata. Called from

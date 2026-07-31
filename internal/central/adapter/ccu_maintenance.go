@@ -19,6 +19,13 @@ type ccuRebooter interface {
 	RebootCCU(ctx context.Context) (bool, error)
 }
 
+// ccuPositionSetter is the narrow capability a backend exposes when it can
+// write its CCU's astro reference position. ReGa-backed only, for the same
+// reason as ccuRebooter.
+type ccuPositionSetter interface {
+	SetCCUPosition(ctx context.Context, longitude, latitude float64) error
+}
+
 // CCUMaintenanceDomain runs per-central CCU host-maintenance operations.
 // Today that is a reboot; the type is the landing place for further CCU
 // maintenance actions (each resolving the target central's primary backend
@@ -55,6 +62,39 @@ func (a *CCUMaintenanceDomain) RebootCCU(ctx context.Context, centralName string
 	}
 	_, err = rb.RebootCCU(ctx)
 	return err
+}
+
+// SetCCUPosition writes the astro reference position of the CCU behind the
+// named central. It returns [hmerr.ErrUnknownCentral] when the central is
+// not registered, [backends.ErrUnsupported] when the resolved backend has
+// no ReGa path, and the runner's validation error when a coordinate is out
+// of range.
+//
+// On success the central's cached SystemInfo is patched in place so the
+// fleet view reflects the new position without waiting for the next hub
+// wiring pass - the values are known-good, since the runner only returns
+// nil after the CCU read them back unchanged.
+func (a *CCUMaintenanceDomain) SetCCUPosition(ctx context.Context, centralName string, longitude, latitude float64) error {
+	if a.registry == nil || a.writer == nil {
+		return hmerr.ErrUnknownCentral
+	}
+	unit, ok := a.registry.Get(centralName)
+	if !ok || unit == nil {
+		return hmerr.ErrUnknownCentral
+	}
+	_, backend, err := primaryBackendOf(unit, a.writer)
+	if err != nil {
+		return err
+	}
+	ps, ok := backend.(ccuPositionSetter)
+	if !ok {
+		return backends.ErrUnsupported
+	}
+	if err := ps.SetCCUPosition(ctx, longitude, latitude); err != nil {
+		return err
+	}
+	unit.PatchSystemPosition(longitude, latitude)
+	return nil
 }
 
 // DownloadFirmware instructs the CCU behind the named central to fetch a

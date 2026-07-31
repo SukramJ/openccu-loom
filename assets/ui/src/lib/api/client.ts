@@ -1277,6 +1277,15 @@ export const api = {
       { method: "POST" },
     );
   },
+  // Writes a CCU's astro reference position. 204 on success; the daemon
+  // only returns success after the CCU read the values back unchanged.
+  setCCUPosition(central: string, longitude: number, latitude: number) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/position`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ longitude, latitude }),
+    });
+  },
   // --- Messages: ack / clear -----------------------------------
   ackAlarm(id: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";

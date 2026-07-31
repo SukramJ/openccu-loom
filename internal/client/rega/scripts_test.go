@@ -130,6 +130,12 @@ func TestScriptBodyContainsExpectedPlaceholders(t *testing.T) {
 			script:      hmenum.RegaScriptUsageBySysvar,
 			mustContain: []string{"##name##", "DPEnumUsagePrograms"},
 		},
+		{
+			script: hmenum.RegaScriptSetCCUPosition,
+			// The read-back is what lets the caller confirm the CCU
+			// accepted the write instead of trusting a bare ack.
+			mustContain: []string{"##longitude##", "##latitude##", "system.Longitude(", "system.Latitude("},
+		},
 	}
 
 	for _, tc := range cases {

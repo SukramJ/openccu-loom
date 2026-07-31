@@ -90,6 +90,11 @@ const (
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"
 
+	// ActionSystemCCUPosition records a change to a CCU's astro reference
+	// position. Audited because it silently moves every sunrise/sunset
+	// time the CCU computes.
+	ActionSystemCCUPosition Action = "system_ccu_position"
+
 	// ActionSystemFirmwareDownload records an operator-triggered CCU
 	// firmware download: the CCU fetches a firmware image from a URL onto
 	// the central so it can be staged for installation. The Entry's Note

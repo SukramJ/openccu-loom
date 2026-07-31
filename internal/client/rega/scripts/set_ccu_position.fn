@@ -1,0 +1,25 @@
+!# openccu-loom — set_ccu_position
+!# Params: ##longitude## (decimal degrees, -180..180),
+!#         ##latitude##  (decimal degrees, -90..90)
+!# Output: {"longitude":<deg>,"latitude":<deg>}
+!#
+!# Sets the CCU's astro reference position. Every sunrise/sunset time
+!# the CCU computes — for its own programs and for the weekly profiles
+!# openccu-loom edits — derives from these two values, so a wrong
+!# position skews schedules silently rather than failing.
+!#
+!# The caller validates the ranges before substitution; this script
+!# assumes well-formed decimal literals. It writes both values and then
+!# reads them back, so the caller can confirm the CCU accepted them
+!# instead of trusting a bare acknowledgement.
+!#
+!# dom.ChangedTimeManually() tells ReGa that the time reference moved,
+!# which is what makes it recompute the pending astro trigger times
+!# instead of keeping the ones derived from the old position.
+
+system.Longitude(##longitude##);
+system.Latitude(##latitude##);
+dom.ChangedTimeManually();
+
+Write('{"longitude":' # system.Longitude().ToString(6) # ',');
+Write('"latitude":' # system.Latitude().ToString(6) # '}');

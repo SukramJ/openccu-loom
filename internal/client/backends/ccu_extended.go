@@ -856,6 +856,32 @@ func (b *CcuBackend) RebootCCU(ctx context.Context) (bool, error) {
 	return resp.Success, nil
 }
 
+// SetCCUPosition writes the CCU's astro reference position in decimal
+// degrees via the set_ccu_position ReGa script. Backends without a ReGa
+// runner (CUxD, Homegear) report [ErrUnsupported]: the position lives in
+// ReGa, not on the wire.
+//
+// It returns no values because the runner already compares the script's
+// read-back against what was sent and fails on a mismatch - a successful
+// return means the CCU holds exactly the requested position.
+func (b *CcuBackend) SetCCUPosition(ctx context.Context, longitude, latitude float64) error {
+	if b.rega == nil {
+		return ErrUnsupported
+	}
+	// ScriptRunner is deliberately a thin transport seam (Run/RunJSON), so
+	// the position semantics stay in the ReGa runner and are reached
+	// through this narrow assertion rather than by widening that seam with
+	// a domain method every other backend would have to carry.
+	pw, ok := b.rega.(interface {
+		SetPosition(ctx context.Context, longitude, latitude float64) (float64, float64, error)
+	})
+	if !ok {
+		return ErrUnsupported
+	}
+	_, _, err := pw.SetPosition(ctx, longitude, latitude)
+	return err
+}
+
 // --- system variable deletion ------------------------------------------
 
 // DeleteSystemVariable implements Operations. Deletes a CCU system variable

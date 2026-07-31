@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -62,6 +63,78 @@ func PostCCUReboot(svc CCURebootPort, rec audit.Recorder) http.HandlerFunc {
 			})
 		}
 		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// CCUPositionPort writes the astro reference position of one CCU host
+// addressed by central name. *adapter.CCUMaintenanceDomain satisfies it.
+type CCUPositionPort interface {
+	SetCCUPosition(ctx context.Context, central string, longitude, latitude float64) error
+}
+
+// ccuPositionRequest is the PUT body. Both coordinates are required:
+// writing only one would leave the CCU with a position that is half old
+// and half new, which is worse than rejecting the request.
+type ccuPositionRequest struct {
+	Longitude *float64 `json:"longitude"`
+	Latitude  *float64 `json:"latitude"`
+}
+
+// PutCCUPosition sets the named CCU's astro reference position. The router
+// gates it on the admin role. Every sunrise/sunset time the CCU computes
+// derives from this position, so it is a system-wide setting rather than a
+// display preference.
+//
+// Responses: 204 on success, 400 on a missing central or malformed body,
+// 422 when a coordinate is out of range or the backend has no ReGa path,
+// 404 when the central is unknown, 502 when the CCU-side call failed, 503
+// when the service is unwired.
+func PutCCUPosition(svc CCUPositionPort, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "CCU maintenance unwired", ""))
+			return
+		}
+		centralName := chi.URLParam(r, "central")
+		if centralName == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing central", "central path parameter is required"))
+			return
+		}
+		var req ccuPositionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON body", err.Error()))
+			return
+		}
+		if req.Longitude == nil || req.Latitude == nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing coordinate",
+					"longitude and latitude are both required"))
+			return
+		}
+		if err := svc.SetCCUPosition(r.Context(), centralName, *req.Longitude, *req.Latitude); err != nil {
+			switch {
+			case errors.Is(err, hmerr.ErrUnknownCentral):
+				problem.Write(w, http.StatusNotFound,
+					problem.New(problem.TypeNotFound, r, "Unknown central", centralName))
+			case errors.Is(err, hmerr.ErrValidation), errors.Is(err, backends.ErrUnsupported):
+				problem.Write(w, http.StatusUnprocessableEntity,
+					problem.New(problem.TypeValidation, r, "Position rejected", err.Error()))
+			default:
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "CCU position write failed", err)
+			}
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
+				Action: audit.ActionSystemCCUPosition,
+				Note:   centralName,
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

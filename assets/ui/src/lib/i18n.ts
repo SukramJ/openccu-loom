@@ -3130,6 +3130,16 @@ const EN: Catalog = {
   "schedule.aria.weekdays": "Weekdays",
   "schedule.duration_placeholder": "e.g. 10s, 5min",
   "schedule.ramp_placeholder": "e.g. 500ms, 2s",
+  "ccu_position.title": "Astro position",
+  "ccu_position.latitude": "Latitude",
+  "ccu_position.longitude": "Longitude",
+  "ccu_position.help":
+    "Reference position for the CCU's sunrise and sunset times. Wrong coordinates shift every astro schedule without any error.",
+  "ccu_position.unknown": "Position not known yet.",
+  "ccu_position.confirm_title": "Change astro position?",
+  "ccu_position.confirm_body":
+    "This changes the sunrise and sunset times {central} computes — for its own programs and for the weekly profiles edited here.",
+  "ccu_position.saved": "Astro position of {central} saved.",
   "ccu_maintenance.title": "CCU maintenance",
   "ccu_maintenance.subtitle":
     "Host-level actions for each connected CCU. Rebooting restarts the CCU and briefly drops its connection.",
@@ -6441,6 +6451,16 @@ const DE: Catalog = {
   "schedule.aria.weekdays": "Wochentage",
   "schedule.duration_placeholder": "z.B. 10s, 5min",
   "schedule.ramp_placeholder": "z.B. 500ms, 2s",
+  "ccu_position.title": "Astro-Position",
+  "ccu_position.latitude": "Breitengrad",
+  "ccu_position.longitude": "Längengrad",
+  "ccu_position.help":
+    "Bezugspunkt für die Sonnenauf- und -untergangszeiten der CCU. Falsche Koordinaten verschieben jede Astro-Schaltzeit, ohne dass ein Fehler auftritt.",
+  "ccu_position.unknown": "Position noch nicht bekannt.",
+  "ccu_position.confirm_title": "Astro-Position ändern?",
+  "ccu_position.confirm_body":
+    "Das ändert die Sonnenauf- und -untergangszeiten, die {central} berechnet — für die eigenen Programme ebenso wie für die hier bearbeiteten Wochenprofile.",
+  "ccu_position.saved": "Astro-Position von {central} gespeichert.",
   "ccu_maintenance.title": "CCU-Wartung",
   "ccu_maintenance.subtitle":
     "Aktionen auf Host-Ebene für jede verbundene CCU. Ein Neustart startet die CCU neu und unterbricht kurz ihre Verbindung.",
