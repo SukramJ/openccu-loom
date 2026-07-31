@@ -57,6 +57,9 @@ Pick the lane that matches what you want to do.
     [Web UI](user/web-ui.md) ·
     [Matter](user/matter.md)
 
+    Running Home Assistant? Start with
+    [choosing your integration path](user/home-assistant.md).
+
 - :material-server-network: **For administrators**
 
     ---

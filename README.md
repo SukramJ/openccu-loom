@@ -252,6 +252,35 @@ aircraft: many conductors, one routed path. That is the daemon's job —
 many CCU wire protocols come in on one side, the standard north-bound
 protocols come out on the other. The mark shows that cross-section.
 
+## Relationship to Home Assistant
+
+OpenCCU-Loom does not need Home Assistant, and Home Assistant does not
+need OpenCCU-Loom — they overlap, so the useful question is which one
+owns the CCU connection and how devices travel from there.
+
+- **HA only, one CCU, everything fine?** Keep *Homematic(IP) Local*
+  talking to the CCU directly; the daemon adds nothing.
+- **Want one CCU connection, several CCUs as one fleet, CCU
+  administration outside the CCU WebUI, a local alarm system or
+  measurement history?** Let the daemon own the CCU and feed HA over
+  **MQTT Discovery**.
+- **Only a third system (Node-RED, InfluxDB, evcc, …) needs the data?**
+  Run the daemon with the **raw topic plane** and Discovery **off** —
+  no HA entities, no duplicates.
+- **Matter** mainly pays off *without* HA; with HA you would usually
+  publish to Apple/Google/Alexa from HA itself.
+- The *Homematic(IP) Local* **loom backend** (integration talks REST/WS
+  to the daemon) is wired but not yet user-selectable — a preview.
+
+MQTT Discovery, the loom backend and the Matter bridge each create their
+own HA entities, so exactly **one** of them per device. Wherever that
+lands, the recommended place to *run* the daemon is **on the CCU**
+(CCU / RaspberryMatic add-on): the chatty XML-RPC/BIN-RPC hop stays on
+loopback, callback addressing resolves itself, and HA restarts stop
+touching the Homematic side. The full scenario catalogue, combination
+matrix, anti-patterns and migration paths are in
+[`docs/user/home-assistant.md`](./docs/user/home-assistant.md).
+
 ## Relationship to `aiohomematic`
 
 OpenCCU-Loom began as a Go port of
@@ -304,6 +333,9 @@ tests, wire snapshots (`make wire-snapshots`) and E2E smoke
 - [`docs/user-guide.md`](./docs/user-guide.md) — the operator manual;
   [`docs/user/`](./docs/user/) covers concepts, the web UI, multi-CCU
   and Matter.
+- [`docs/user/home-assistant.md`](./docs/user/home-assistant.md) — which
+  integration path to run when Home Assistant is in the picture, and
+  which combinations are mutually exclusive.
 - [`SPECIFICATION.md`](./SPECIFICATION.md) — design intent, hard
   constraints, resolved decisions; [`docs/adr/`](./docs/adr/) — the
   architecture decisions behind them, e.g. Matter
