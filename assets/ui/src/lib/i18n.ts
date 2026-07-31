@@ -1161,6 +1161,8 @@ const EN: Catalog = {
   "config.field.alarm.restart_loop_breaker": "Restart loop breaker (re-fires)",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
+  "config.field.persistence.history.energy_price_per_kwh": "Electricity tariff per kWh",
+  "config.field.persistence.history.energy_currency": "Currency label",
   "config.field.persistence.history.retention_hourly":
     "Hourly rollup retention",
   "config.field.persistence.history.retention_daily": "Daily rollup retention",
@@ -1454,6 +1456,10 @@ const EN: Catalog = {
     "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
   "config.help.persistence.history.retention":
     "How long raw samples are kept; zero falls back to 30 days (720 h), after which the retention job purges older rows.",
+  "config.help.persistence.history.energy_price_per_kwh":
+    "Price of one kilowatt-hour, used by the energy view to show costs next to consumption. Leave at 0 to show no costs at all — a tariff of 0 would render every amount as 0.00.",
+  "config.help.persistence.history.energy_currency":
+    "Label for the amounts derived from the tariff (symbol or code, e.g. € or CHF). Defaults to the euro sign. Purely a label — no conversion happens.",
   "config.help.persistence.history.retention_hourly":
     "How long the hourly rollup tier is kept; zero falls back to 13 months. Hourly rows are folded into the daily tier before this cutoff removes them.",
   "config.help.persistence.history.retention_daily":
@@ -2300,6 +2306,7 @@ const EN: Catalog = {
   "energy.col.consumed": "Consumed",
   "energy.col.feed_in": "Feed-in",
   "energy.col.avg_power": "Avg. power",
+  "energy.col.cost": "Cost",
   "energy.col.peak_power": "Peak power",
   "energy.col.reset": "reset",
   "energy.reset_note":
@@ -4465,6 +4472,8 @@ const DE: Catalog = {
     "Neustart-Schleifenbegrenzer (Reaktivierungen)",
   "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
   "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
+  "config.field.persistence.history.energy_price_per_kwh": "Strompreis pro kWh",
+  "config.field.persistence.history.energy_currency": "Währungsbezeichnung",
   "config.field.persistence.history.retention_hourly":
     "Aufbewahrung Stunden-Rollup",
   "config.field.persistence.history.retention_daily":
@@ -4764,6 +4773,10 @@ const DE: Catalog = {
     "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
   "config.help.persistence.history.retention":
     "Wie lange Rohmesswerte aufbewahrt werden; 0 = Standardwert von 30 Tagen (720 h), ältere Zeilen werden vom Retention-Job gelöscht.",
+  "config.help.persistence.history.energy_price_per_kwh":
+    "Preis einer Kilowattstunde; die Energie-Ansicht zeigt damit Kosten neben dem Verbrauch. Bei 0 werden gar keine Kosten angezeigt — ein Tarif von 0 würde jeden Betrag als 0,00 darstellen.",
+  "config.help.persistence.history.energy_currency":
+    "Bezeichnung für die aus dem Tarif berechneten Beträge (Symbol oder Code, z. B. € oder CHF). Standard ist das Euro-Zeichen. Reine Beschriftung — es wird nichts umgerechnet.",
   "config.help.persistence.history.retention_hourly":
     "Wie lange die Stunden-Rollup-Ebene aufbewahrt wird; 0 = Standardwert von 13 Monaten. Stunden-Zeilen werden vor diesem Cutoff in die Tages-Ebene gefaltet.",
   "config.help.persistence.history.retention_daily":
@@ -5621,6 +5634,7 @@ const DE: Catalog = {
   "energy.col.consumed": "Verbrauch",
   "energy.col.feed_in": "Einspeisung",
   "energy.col.avg_power": "Ø Leistung",
+  "energy.col.cost": "Kosten",
   "energy.col.peak_power": "Spitzenleistung",
   "energy.col.reset": "Reset",
   "energy.reset_note":

@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Electricity costs in the energy view (SY18).** A tariff
+  (`persistence.history.energy_price_per_kwh`, plus an
+  `energy_currency` label) makes the energy view show what the recorded
+  consumption cost — under the consumption total and as an extra,
+  sortable column per device. Without a configured tariff nothing
+  changes: no cost figure appears anywhere, because a tariff of zero
+  would render every amount as `0.00`, which reads as "free" rather than
+  "not configured". The daemon echoes the tariff on
+  `GET /api/v1/energy` (`price_per_kwh`, `currency`; API 3.7.0,
+  additive) rather than computing the amounts itself — rounding and
+  money formatting are locale decisions the UI already owns.
 - **A configurable start page per user (O03).** Settings → Interface gains
   a "Start page" selector; the chosen view is what opens after logging in
   or reloading. The preference is stored server-side per user, so it

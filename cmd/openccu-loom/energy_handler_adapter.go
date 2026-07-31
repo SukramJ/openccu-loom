@@ -21,17 +21,31 @@ import (
 type energyHandlerAdapter struct {
 	store *sqlite.MeasurementStore
 	reg   *central.Registry
+	// tariff and currency are echoed on every response so the view can
+	// derive costs. Read once at wiring time: a tariff change is a config
+	// change, which already implies a restart.
+	tariff   float64
+	currency string
 }
 
 // newEnergyHandlerAdapter returns an EnergyService backed by the store,
 // or a genuine nil interface when the store is nil (history disabled)
 // so the router omits the /energy route entirely — mirrors
 // [newHistoryHandlerAdapter]'s nil handling.
-func newEnergyHandlerAdapter(s *sqlite.MeasurementStore, reg *central.Registry) handlers.EnergyService {
+func newEnergyHandlerAdapter(
+	s *sqlite.MeasurementStore, reg *central.Registry, tariff float64, currency string,
+) handlers.EnergyService {
 	if s == nil {
 		return nil
 	}
-	return &energyHandlerAdapter{store: s, reg: reg}
+	// An unset currency label falls back to the euro sign rather than
+	// rendering a bare number: the tariff is only ever configured
+	// together with an intended currency, and the euro is this project's
+	// overwhelming default.
+	if currency == "" {
+		currency = "€"
+	}
+	return &energyHandlerAdapter{store: s, reg: reg, tariff: tariff, currency: currency}
 }
 
 // Energy reads the matching rollup tier via [sqlite.MeasurementStore.QueryEnergy]
@@ -57,7 +71,14 @@ func (a *energyHandlerAdapter) Energy(ctx context.Context, q handlers.EnergyQuer
 			Count:          rows[i].Count,
 		}
 	}
-	return handlers.FoldEnergyRows(q, raw, a.deviceNamer(q.Central)), nil
+	resp := handlers.FoldEnergyRows(q, raw, a.deviceNamer(q.Central))
+	// Only advertise the currency when a tariff actually exists, so a
+	// client cannot mistake "no tariff configured" for "free".
+	if a.tariff > 0 {
+		resp.PricePerKWh = a.tariff
+		resp.Currency = a.currency
+	}
+	return resp, nil
 }
 
 // deviceNamer returns a [handlers.DeviceNamer] resolving addresses

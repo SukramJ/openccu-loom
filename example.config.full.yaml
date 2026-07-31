@@ -641,6 +641,15 @@ persistence:
     # Batch-flush cadence. 0 = default (5s).
     # flush_interval: 5s
 
+    # Electricity tariff per kWh. The energy view shows costs next to
+    # consumption when this is set. 0 (the default) shows no costs at
+    # all — a tariff of 0 would render every amount as 0.00.
+    # energy_price_per_kwh: 0.32
+
+    # Label for the amounts derived from the tariff (symbol or code).
+    # Purely a label; nothing is converted.  [default: €]
+    # energy_currency: "€"
+
     # Parameter-name globs to record. Empty = every numeric VALUES
     # parameter. Non-empty = only matching parameters.
     # include: ["TEMPERATURE", "HUMIDITY", "*POWER*", "ACTUAL_*"]

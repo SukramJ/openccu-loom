@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.6.0
+  version: 3.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -8452,6 +8452,22 @@ components:
         total_feed_in_wh:
           type: number
           description: Sum of every device's `total_feed_in_wh`, in Wh.
+        price_per_kwh:
+          type: number
+          description: >
+            Configured electricity tariff
+            (`persistence.history.energy_price_per_kwh`), echoed so the
+            client can derive costs. Absent or zero means no tariff is
+            configured — a client must then show no cost at all rather
+            than a misleading 0. The daemon does not compute the amounts:
+            rounding and money formatting are locale decisions the client
+            owns.
+        currency:
+          type: string
+          description: >
+            Free-text label for amounts derived from `price_per_kwh`
+            (symbol or ISO code; defaults to the euro sign). Never used
+            for conversion. Only present together with a non-zero tariff.
     AuditEntry:
       type: object
       required: [timestamp, action]

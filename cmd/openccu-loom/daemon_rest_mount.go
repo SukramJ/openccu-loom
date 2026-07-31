@@ -384,7 +384,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		RecordingOverrides:    newRecordingOverrideAdapter(d.recordingOverrides),
 		ChannelFlags:          d.channelFlagsStore,
 		ChannelFlagsOverlay:   d.channelFlagsOverlay,
-		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg),
+		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg, cfg.Persistence.History.EnergyPricePerKWh, cfg.Persistence.History.EnergyCurrency),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
 		CSRFSecure:            cfg.North.REST.CSRFSecure,

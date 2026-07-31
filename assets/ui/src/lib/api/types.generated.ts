@@ -6569,6 +6569,10 @@ export interface components {
             total_consumed_wh: number;
             /** @description Sum of every device's `total_feed_in_wh`, in Wh. */
             total_feed_in_wh: number;
+            /** @description Configured electricity tariff (`persistence.history.energy_price_per_kwh`), echoed so the client can derive costs. Absent or zero means no tariff is configured — a client must then show no cost at all rather than a misleading 0. The daemon does not compute the amounts: rounding and money formatting are locale decisions the client owns. */
+            price_per_kwh?: number;
+            /** @description Free-text label for amounts derived from `price_per_kwh` (symbol or ISO code; defaults to the euro sign). Never used for conversion. Only present together with a non-zero tariff. */
+            currency?: string;
         };
         /** @description One recorded user-initiated configuration change. */
         AuditEntry: {
