@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: e06f7534
-HEAD: e06f7534
+Generated: cb6dcbda
+HEAD: cb6dcbda
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27064 |
-| Reachable | 4686 |
-| Whitelisted | 19487 |
-| **Unreachable** | **2891** |
+| Total Exported | 27101 |
+| Reachable | 4692 |
+| Whitelisted | 19516 |
+| **Unreachable** | **2893** |
 
 ## Top-20 Packages by Dead Code
 
@@ -194,7 +194,7 @@ HEAD: e06f7534
 | internal/store/masterprofile | 0 | 4 | 2 |
 | internal/store/patches | 0 | 3 | 0 |
 | internal/store/session | 0 | 15 | 0 |
-| internal/store/sqlite | 0 | 98 | 28 |
+| internal/store/sqlite | 0 | 100 | 28 |
 | pkg/hmapi | 0 | 129 | 16 |
 | pkg/hmenum | 0 | 100 | 46 |
 | pkg/hmevent | 0 | 7 | 0 |
