@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: cb6dcbda
-HEAD: cb6dcbda
+Generated: edb42f6a
+HEAD: edb42f6a
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27101 |
-| Reachable | 4692 |
-| Whitelisted | 19516 |
-| **Unreachable** | **2893** |
+| Total Exported | 27225 |
+| Reachable | 4712 |
+| Whitelisted | 19614 |
+| **Unreachable** | **2899** |
 
 ## Top-20 Packages by Dead Code
 
@@ -124,6 +124,7 @@ HEAD: cb6dcbda
 | internal/alarm/outputs | 0 | 24 | 4 |
 | internal/auth/ccuauth | 0 | 2 | 0 |
 | internal/auth/oidc | 0 | 17 | 2 |
+| internal/backup/sbk | 0 | 2 | 4 |
 | internal/build | 0 | 0 | 8 |
 | internal/central | 0 | 24 | 2 |
 | internal/central/cachereset | 0 | 20 | 0 |

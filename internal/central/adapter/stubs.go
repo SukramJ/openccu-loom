@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
 // ErrUnimplemented is returned by MVP stubs when a feature needs a
@@ -388,9 +389,12 @@ type uploadedBackupSaver interface {
 	SaveUploaded(ctx context.Context, filename string, data []byte) (hmapi.BackupEntry, error)
 }
 
-// ErrUploadUnsupported is returned when no storage is wired, or the wired
-// storage cannot take in externally-supplied archives.
-var ErrUploadUnsupported = errors.New("backup: storage does not accept uploads")
+// errUploadUnsupported reports that no storage is wired, or that the wired
+// storage cannot take in externally-supplied archives. It wraps the shared
+// [hmerr.ErrUnsupported] so the REST layer can recognise the condition
+// without importing this package - handlers deliberately depend on narrow
+// interfaces, not on the adapter.
+var errUploadUnsupported = fmt.Errorf("backup: storage does not accept uploads: %w", hmerr.ErrUnsupported)
 
 // SaveUploaded stores an operator-supplied backup archive so it becomes
 // restorable through the ordinary restore path.
@@ -398,11 +402,11 @@ func (a *BackupAdapter) SaveUploaded(
 	ctx context.Context, filename string, data []byte,
 ) (hmapi.BackupEntry, error) {
 	if a == nil || a.storage == nil {
-		return hmapi.BackupEntry{}, ErrUploadUnsupported
+		return hmapi.BackupEntry{}, errUploadUnsupported
 	}
 	saver, ok := a.storage.(uploadedBackupSaver)
 	if !ok {
-		return hmapi.BackupEntry{}, ErrUploadUnsupported
+		return hmapi.BackupEntry{}, errUploadUnsupported
 	}
 	return saver.SaveUploaded(ctx, filename, data)
 }

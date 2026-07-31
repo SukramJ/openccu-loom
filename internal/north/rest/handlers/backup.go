@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -215,12 +216,29 @@ func UploadBackup(svc BackupUploader, rec audit.Recorder) http.HandlerFunc {
 		}
 		info, err := sbk.InspectBytes(data)
 		if err != nil {
+			// The two failures call for different things from the
+			// operator: an unreadable archive usually means the wrong file
+			// was picked, while a readable one missing a member means the
+			// right kind of file arrived damaged or truncated. Saying
+			// which saves a round of guessing.
+			title := "Not a CCU system backup"
+			if errors.Is(err, sbk.ErrIncomplete) {
+				title = "Incomplete CCU system backup"
+			}
 			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "Not a CCU system backup", err.Error()))
+				problem.New(problem.TypeValidation, r, title, err.Error()))
 			return
 		}
 		entry, err := svc.SaveUploaded(r.Context(), filename, data)
 		if err != nil {
+			// A storage that cannot take in archives is a deployment
+			// state, not a fault: reporting it as an internal error would
+			// send the operator hunting for a bug that is not there.
+			if errors.Is(err, hmerr.ErrUnsupported) {
+				problem.Write(w, http.StatusServiceUnavailable,
+					problem.New(problem.TypeServiceUnready, r, "Backup import unavailable", err.Error()))
+				return
+			}
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Storing the backup failed", err)
 			return
 		}
