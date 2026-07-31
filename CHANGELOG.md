@@ -8,6 +8,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A guide for placing OpenCCU-Loom next to Home Assistant**
+  (`docs/user/home-assistant.md`). The daemon and HA overlap, and there
+  are three ways devices can travel from the daemon into HA — MQTT
+  Discovery, the *Homematic(IP) Local* loom backend (preview), and the
+  Matter bridge — each of which creates its **own** HA entities. The
+  page states that constraint ("exactly one device path per device"),
+  maps nine scenarios from "HA only, no daemon" to "daemon as the logic
+  host", and adds a combination matrix, the anti-patterns (duplicate
+  entity sets, disabling MQTT Discovery without retracting its retained
+  configs, the UDP-5540 collision with HA's Matter Server, the lost
+  alarm panel), migration paths, and a per-path feature comparison. The
+  deployment-topology section carries an explicit recommendation — run
+  the daemon **on the CCU** via the CCU / RaspberryMatic add-on, with the
+  four cases that argue for a separate host. Linked from the README, the
+  docs landing page and Getting Started.
 - **The CCU's own security posture and interface list in the fleet view.**
   Each central now reports whether the CCU requires authentication
   (`auth_enabled`) and whether it redirects plain HTTP to HTTPS

@@ -70,6 +70,7 @@ nav:
       - Observability: admin/observability.md
       - Troubleshooting: admin/troubleshooting.md
   - Integrations:
+      - Home Assistant — Choosing a Path: user/home-assistant.md
       - MQTT Topics: mqtt-topic-schema.md
       - REST & WebSocket API: integrations/rest-ws.md
       - MCP Server: external-clients/mcp.md

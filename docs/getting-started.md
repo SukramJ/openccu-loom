@@ -3,6 +3,13 @@
 This page gets a single CCU bridged and the daemon reachable. For the
 full operator walkthrough see the [User Guide](user-guide.md).
 
+!!! tip "Already running Home Assistant?"
+    Decide *how* the daemon and HA should divide the work before you
+    wire anything up — the paths (MQTT Discovery, the *Homematic(IP)
+    Local* loom backend, Matter) are mutually exclusive per device.
+    [Home Assistant: choosing your integration path](user/home-assistant.md)
+    walks through every scenario.
+
 ## Prerequisites
 
 - A reachable Homematic / HomematicIP CCU (CCU2, CCU3, RaspberryMatic,
