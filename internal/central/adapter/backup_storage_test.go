@@ -303,6 +303,88 @@ func TestNewFilesystemBackupStorageCreatesDir(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// FilesystemBackupStorage.SaveUploaded
+// ---------------------------------------------------------------------------
+
+// TestFilesystemBackupStorageSaveUploadedIDCarriesUploadPrefix verifies the
+// generated id starts with "upload-" — that prefix is how List/the
+// scheduled-backup pruner tell an operator-imported archive apart from one
+// this daemon pulled from a CCU itself.
+func TestFilesystemBackupStorageSaveUploadedIDCarriesUploadPrefix(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	entry, err := st.SaveUploaded(context.Background(), "whatever.sbk", []byte("payload"))
+	if err != nil {
+		t.Fatalf("SaveUploaded: %v", err)
+	}
+	if !strings.HasPrefix(entry.ID, uploadedBackupPrefix) {
+		t.Errorf("ID = %q, want the %q prefix", entry.ID, uploadedBackupPrefix)
+	}
+}
+
+// TestFilesystemBackupStorageSaveUploadedIgnoresSuppliedFilename verifies
+// that a hostile filename (path traversal) cannot influence the generated
+// id or where the archive is written — the id is derived from the wall
+// clock, never from browser-supplied input, and the stored file stays
+// inside the backup directory.
+func TestFilesystemBackupStorageSaveUploadedIgnoresSuppliedFilename(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	entry, err := st.SaveUploaded(context.Background(), "../../etc/passwd", []byte("payload"))
+	if err != nil {
+		t.Fatalf("SaveUploaded: %v", err)
+	}
+	if strings.ContainsAny(entry.ID, "/\\") {
+		t.Fatalf("id must not carry path separators from the supplied filename, got %q", entry.ID)
+	}
+
+	path, err := st.pathForID(entry.ID)
+	if err != nil {
+		t.Fatalf("pathForID(%q): %v", entry.ID, err)
+	}
+	wantPrefix := filepath.Clean(dir) + string(filepath.Separator)
+	if !strings.HasPrefix(filepath.Clean(path), wantPrefix) {
+		t.Fatalf("stored path %q escaped the backup dir %q", path, dir)
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Fatalf("expected the archive to be written at %q: %v", path, statErr)
+	}
+}
+
+// TestFilesystemBackupStorageSaveUploadedReturnsMatchingByteCount verifies
+// the returned entry's Bytes field matches the payload actually stored.
+func TestFilesystemBackupStorageSaveUploadedReturnsMatchingByteCount(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	st, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	payload := []byte("a payload of a known, specific length")
+	entry, err := st.SaveUploaded(context.Background(), "x.sbk", payload)
+	if err != nil {
+		t.Fatalf("SaveUploaded: %v", err)
+	}
+	if entry.Bytes != int64(len(payload)) {
+		t.Errorf("Bytes = %d, want %d", entry.Bytes, len(payload))
+	}
+}
+
+// ---------------------------------------------------------------------------
 // BackupAdapter integration tests
 // ---------------------------------------------------------------------------
 

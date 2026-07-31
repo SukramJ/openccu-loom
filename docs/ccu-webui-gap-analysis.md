@@ -31,7 +31,17 @@ Der Umsetzungsplan in §7 enthält nur die beschlossenen Punkte.
 2026-07-31 auf sie eingedampft, die 48 gelieferten Punkte stehen als
 Ein-Zeilen-Index in §8.)
 
-**Umsetzungsstand 2026-07-31 (Basis 0.51.0):** Alle sechs beschlossenen
+**Umsetzungsstand 2026-07-31 (Basis 0.52.0):** Die aus der
+Frequenz-Einstufung abgeleiteten Wellen **7 (Alltagsflächen) und 8
+(Zentralen-Wartung & Korrektheit) sind geliefert** — D01, SV04, O03,
+SY18, O01, SY05, SY07/SY15/SY16, SY01/SY02, SY06, alle in 0.52.0
+(API 3.5.0 → 3.11.0). Zwei Punkte wichen dabei bewusst vom Plan ab:
+SY06 liefert **keinen** Changelog-Link, weil die Firmware-Prüfung der
+CCU nachweislich keine Release-Notes-Quelle meldet, und SY01 stellte
+sich als Einzeiler heraus — der HTTP-Pfad existierte bereits, nur der
+ReGa-Vorlauf brach auf einer Stock-CCU3 ab. Details im `CHANGELOG.md`.
+
+**Vorheriger Stand (Basis 0.51.0):** Alle sechs beschlossenen
 Wellen (§7) sind **geliefert** — Wellen 1a–1h + GR01 bis 0.46.0, Wellen 3,
 5, 6 sowie die Welle-4-Kernpunkte G11/G14 mit 0.47.0, G12 mit API 2.51.0
 und die komplette **Welle 2 (GR02–GR05) mit 0.48.0** (jpages-Proxy,
@@ -61,8 +71,8 @@ Commits). Was ein gelieferter Punkt konkret gebracht hat, steht im
 **Frequenz-Einstufung (2026-07-31):** Jeder unerledigte Punkt trägt jetzt
 zusätzlich ein Feld **Frequenz:** `hoch` / `mittel` / `corner` — die
 geschätzte Nutzungshäufigkeit aus Bedienersicht, unabhängig von Priorität
-und Aufwand (Legende in §4). Verteilung: 6 × `hoch`, 11 × `mittel`,
-21 × `corner`. Daraus abgeleitet schlägt §7 zwei Abschlusswellen vor
+und Aufwand (Legende in §4). Verteilung nach Welle 7+8: **kein** `hoch` mehr offen (alle sechs sind
+geliefert), 5 × `mittel`, 21 × `corner`. Daraus abgeleitet schlägt §7 zwei Abschlusswellen vor
 (**7 Alltagsflächen**, **8 Zentralen-Wartung & Korrektheit**); beide sind
 Vorschläge und ersetzen die Einzelentscheidungen nicht. Der
 Programmeditor-Block bleibt bewusst unbewertet.
@@ -356,14 +366,6 @@ nicht beginnen darf).
 
 ### 4.6 Organisation: Favoriten, Benutzer
 
-- **O01 — Favoritenseiten bedienbar machen** (partial, P2 M)
-  Geräte-Pins sind reine Sprungkarten; Kanäle und Programme sind nicht
-  pinbar. *Empfehlung:* Kachel-Technik aus `Overview.svelte` (CDP-/
-  Auto-Tiles) wiederverwenden, Pin-Typen um `channel`/`program` erweitern.
-  Rein Loom-seitig.
-  **Frequenz:** `hoch` — Favoriten sind die Alltagsfläche (Wandtablet,
-  Startseite); heute nur Sprungkarten
-  **Entscheidung:** `offen`
 - **O02 — Favoriten-Editor (Seiten, Reihenfolge, Layout)** (missing, P2 L)
   Mehrere benannte Seiten, Drag-and-Drop-Reihenfolge, Trennzeilen,
   Spaltenzahl. *Empfehlung:* serverseitiges Seitenmodell (SQLite +
@@ -371,12 +373,6 @@ nicht beginnen darf).
   Namensposition) entfallen. Rein Loom-seitig.
   **Frequenz:** `corner` — sinnvoll erst nach O01 und nur bei mehreren
   Seiten/Nutzern
-  **Entscheidung:** `offen`
-- **O03 — Startseite pro Benutzer** (missing, P2 S)
-  Konfigurierbare Einstiegsroute nach Login. *Empfehlung:* `start_route`
-  über den vorhandenen `/me/preferences`-Store; `App.svelte` wertet sie
-  beim Initial-Load aus; Auswahlfeld in Settings.
-  **Frequenz:** `hoch` — greift bei jedem Login
   **Entscheidung:** `offen`
 - **O04 — Favoriten-Zuordnung: global / an Benutzer / als Startseite** (missing, P3 M)
   Geteilte Seiten, Admin-Zuweisung, Startseiten-Flag. *Empfehlung:*
@@ -392,15 +388,6 @@ nicht beginnen darf).
 
 ### 4.7 Systemvariablen & Diagramme
 
-- **SV04 — Diagramm-Anzeige: Langzeit, freier Zeitraum, Zoom, Vergleich** (partial, P2 M)
-  `QueryBuckets` liest nur die Raw-Tabelle (Retention 30 d), obwohl
-  Hourly-/Daily-Rollups existieren → Tier-Fallback einbauen (dann trägt
-  `GET /history` 13+ Monate); von-bis-Picker (API kann es bereits),
-  Drag-Zoom, Vergleichszeitraum. Rein Loom-seitig.
-  **Frequenz:** `hoch` — jede Diagrammansicht jenseits von 30 Tagen ist
-  heute leer, obwohl die Rollups 13 Monate vorhalten — eher Defekt als
-  Ausbau
-  **Entscheidung:** `offen`
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.
@@ -417,20 +404,6 @@ nicht beginnen darf).
 
 ### 4.8 Systemsteuerung
 
-- **SY01 — Backup erstellen: Fallback für Original-CCU3** (partial, P2 S)
-  Der Trigger läuft über `createBackup.sh` (nur OpenCCU/RaspberryMatic).
-  *Empfehlung:* Fallback per HTTP-GET auf
-  `cp_security.cgi?action=create_backup` mit Session (Muster
-  `HTTPBackupRestorer` existiert). *HTTP-CGI.*
-  **Frequenz:** `mittel` — selten gebraucht — dann aber im Ernstfall
-  **Entscheidung:** `offen`
-- **SY02 — Backup-Restore: Upload externer .sbk + Vorab-Validierung** (partial, P2 M)
-  Restore geht nur aus daemon-eigenen Backups. *Empfehlung:*
-  `POST /backups/upload` (multipart) + Validierungsschritt
-  (Signatur-/Versions-Check der cp_security-Antwort auswerten). *HTTP-CGI.*
-  **Frequenz:** `mittel` — selten gebraucht — dann aber im Ernstfall (Fremd-
-  Backup einspielen)
-  **Entscheidung:** `offen`
 - **SY03 — System-Sicherheitsschlüssel (AES) setzen/ändern** (missing, P2 L)
   *Empfehlung:* XML-RPC `changeKey` (rfd) + `crypttool -S` per
   ReGa-`system.Exec` (Key-Index läuft nur auf der Zentrale);
@@ -444,31 +417,6 @@ nicht beginnen darf).
   Selbst-Aussperr-Schutz (eigene Daemon-IP immer freihalten). *JSON-RPC.*
   **Frequenz:** `corner` — einmal konfiguriert; die CCU-WebUI ist pro
   Zentrale verlinkt
-  **Entscheidung:** `offen`
-- **SY05 — Position (Koordinaten) + Zeitzone für Astro** (missing, P2 M)
-  Wichtig, weil Loom Astro-Schedules bereits editiert — falsche Koordinaten
-  verfälschen alle Sonnenzeiten; Voraussetzung für PR04. *Empfehlung:*
-  `system.Longitude()/Latitude()` per ReGa-Skript (reines ReGa-DOM),
-  Read-Back in `/system/ccu`, Karte im System-Tab. *ReGa.*
-  **Frequenz:** `hoch` — einmal gesetzt, aber jede Astro-Schaltzeit der
-  bereits editierbaren Wochenprofile hängt daran
-  **Entscheidung:** `offen`
-- **SY06 — Zentralen-Firmware-Update: Vorab-Backup, EULA/Changelog, CCU3-Pfad** (partial, P2 M)
-  Check + unbeaufsichtigte Installation funktionieren nur auf
-  OpenCCU/RaspberryMatic. *Empfehlung:* Vorab-Backup als Option verketten,
-  Changelog-Link; Original-CCU-Pfad nur bei Bedarf, sonst by-design
-  dokumentieren.
-  **Frequenz:** `mittel` — wenige Male im Jahr, hängt direkt an einer
-  vorhandenen Funktion
-  **Entscheidung:** `offen`
-- **SY07 — Recovery-Modus + „CCU-Wartung"-Karte** (missing, P2 M)
-  OpenCCU-JSON-RPC `RecoveryMode.enter` (nicht auf Original-CCU3, nicht auf
-  oci/lxc → Capability-Gating via `get_backend_info.fn`-Erweiterung).
-  *Empfehlung:* Settings-Karte „CCU-Wartung" pro Central als gemeinsamer
-  Landeplatz für Recovery/Reboot/Shutdown/SafeMode; Confirm + Hinweis auf
-  die Recovery-Oberfläche auf der CCU-IP. *JSON-RPC.*
-  **Frequenz:** `mittel` — Reboot ist regelmäßig, Recovery selten; die Karte
-  gibt dem ausgelieferten K03 eine auffindbare Heimat
   **Entscheidung:** `offen`
 - **SY08 — SSH-Zugang + root-Passwort** (missing, P3 M)
   *Empfehlung:* `CCU.getSSHState/setSSH/setSSHPassword/restartSSHDaemon`
@@ -518,29 +466,11 @@ nicht beginnen darf).
   Neustart. *HTTP-CGI + JSON-RPC.*
   **Frequenz:** `corner` — selten
   **Entscheidung:** `offen`
-- **SY15 — Zentrale herunterfahren (Poweroff)** (missing, P3 S)
-  *Empfehlung:* analog K03 im selben Endpoint-Namensraum; nachrangig.
-  *ReGa.*
-  **Frequenz:** `mittel` — selten für sich, fährt mit der Wartungskarte
-  (SY07) mit
-  **Entscheidung:** `offen`
-- **SY16 — Abgesicherter Modus (SafeMode)** (missing, P3 S)
-  *Empfehlung:* JSON-RPC `SafeMode.enter` neben dem CCU-Reboot; sinnvoll
-  erst mit einer Addon-Sicht (E05/E06). *JSON-RPC.*
-  **Frequenz:** `mittel` — selten für sich, fährt mit der Wartungskarte
-  (SY07) mit
-  **Entscheidung:** `offen`
 - **SY17 — Funk-/LAN-Gateway-Verwaltung (BidCos)** (missing, P3 L)
   Gateway-Status/Firmware/DutyCycle + Geräte-Zuordnung
   (`setBidcosInterface`). Nur für BidCos-Bestandsanlagen mit Gateways
   relevant. *JSON-RPC + XML-RPC.*
   **Frequenz:** `corner` — nur Bestandsanlagen mit LAN-Gateways
-  **Entscheidung:** `offen`
-- **SY18 — Energiekosten-Satz (Preis pro kWh)** (missing, P3 S)
-  *Empfehlung:* rein Loom-lokal: cfg-Feld + Kostenberechnung in
-  `handlers/energy.go` + Anzeige in Energy (i18n-Pflicht beachten).
-  **Frequenz:** `hoch` — die Energy-Ansicht wird regelmäßig geöffnet; es
-  fehlt nur das Feld
   **Entscheidung:** `offen`
 - **SY19 — Werksreset der Zentrale** (missing, P3 M)
   Nur per ReGa-`system.Exec` (Marker-Datei + Reboot) möglich; hohes
@@ -560,14 +490,6 @@ nicht beginnen darf).
 
 ### 4.9 Diagnose & Meldungen
 
-- **D01 — Meldungszähler in der Kopfzeile/Sidebar + Live-Reload** (partial, P2 S)
-  Die `hub.*_messages`-Broadcasts existieren serverseitig, werden aber von
-  keiner globalen Fläche konsumiert. *Empfehlung:* kleiner Store + Badge in
-  der Sidebar mit Direktsprung; MessageList bei Broadcast nachladen.
-  Rein Loom-seitig.
-  **Frequenz:** `hoch` — wird bei jedem Seitenaufruf gelesen; die Broadcasts
-  liegen serverseitig ungenutzt bereit
-  **Entscheidung:** `offen`
 - **D03 — Systemprotokoll (chronologisches Ereignisprotokoll)** (partial, P2 L)
   Der Recorder verwirft bool/enum/string; Sysvar-Änderungen werden nicht
   aufgezeichnet; keine systemweite Ereignisliste/CSV/Löschen. *Empfehlung:*
@@ -755,11 +677,10 @@ abgearbeitet:** Wellen **1a–1h ✅** und **GR01 ✅** (bis 0.46.0); Wellen
 **Offen:** die Welle-4-Restposten **G08, G16** (beide Hardware-abhängig
 zurückgestellt) und — außerhalb jeder Welle — **V06** (siehe §4.5).
 
-**Wellen 7 und 8** sind aus der Frequenz-Einstufung (§4) abgeleitet und
-noch nicht beschlossen: sie bündeln die sechs `hoch`-Punkte und die
-`mittel`-Punkte, die ein bereits ausgeliefertes Thema abschließen. Die
-enthaltenen Punkte stehen weiterhin auf `Entscheidung: offen` — der
-Vorschlag ersetzt die Einzelentscheidung nicht.
+**Wellen 7 und 8** wurden aus der Frequenz-Einstufung (§4) abgeleitet und
+mit 0.52.0 geliefert: sie bündelten die sechs `hoch`-Punkte und die
+`mittel`-Punkte, die ein bereits ausgeliefertes Thema abschließen. Damit
+ist **kein `hoch`-Punkt mehr offen**; der Rest ist `mittel` und `corner`.
 
 | Welle | Punkte | Inhalt |
 |---|---|---|
@@ -776,8 +697,8 @@ Vorschlag ersetzt die Einzelentscheidung nicht.
 | 4 | G08, G09, G11, G12, G14, G16 | Geräte-Restarbeiten: addDevice/setTempKey, Wired-Suche, Kommunikationstest, Kanal-Sichtbarkeit/Sperre, setTeam, Spezialdialoge |
 | 5 | V01, V02, V03 | Verknüpfungen: globale Übersicht, Rollen-Matching, Link-Test am Gerät |
 | 6 | SV03, SV07, SV10, W01, W02 | Diagramm-Definitionen, Sysvar-Verwendungsübersicht, Protokoll-Toggle, Wochenprofil-Restlücken |
-| **7** | D01, SV04, O03, SY18, O01 | **Alltagsflächen** (Vorschlag, nicht beschlossen) — alle `hoch`-Punkte mit Ausnahme von SY05 |
-| **8** | SY05, SY07 (+SY15, SY16), SY01, SY02, SY06 | **Zentralen-Wartung & Korrektheit** (Vorschlag, nicht beschlossen) |
+| **7 ✅** | D01, SV04, O03, SY18, O01 | **Alltagsflächen** — geliefert mit 0.52.0 |
+| **8 ✅** | SY05, SY07 (+SY15, SY16), SY01, SY02, SY06 | **Zentralen-Wartung & Korrektheit** — geliefert mit 0.52.0 (ohne den Changelog-Link, siehe unten) |
 
 ### Welle 7 — Alltagsflächen
 
@@ -862,6 +783,18 @@ Verbleibende Reste einzelner Punkte stehen in §4.11.
 
 | ID | Punkt | geliefert |
 |---|---|---|
+| O01 | Favoritenseiten bedienbar machen | 0.52.0 |
+| O03 | Startseite pro Benutzer | 0.52.0 |
+| D01 | Meldungszähler in der Sidebar + Live-Reload | 0.52.0 |
+| SV04 | Diagramm-Anzeige: Rollup-Tiers statt nur Rohdaten | 0.52.0 · API 3.6.0 |
+| SY18 | Energiekosten-Satz (Preis pro kWh) | 0.52.0 · API 3.7.0 |
+| SY05 | Position (Koordinaten) + Zeitzone für Astro | 0.52.0 · API 3.8.0 |
+| SY07 | „CCU-Wartung"-Karte (Recovery) | 0.52.0 · API 3.9.0 |
+| SY15 | Zentrale herunterfahren (Poweroff) | 0.52.0 · API 3.9.0 |
+| SY16 | Abgesicherter Modus (SafeMode) | 0.52.0 · API 3.9.0 |
+| SY01 | Backup erstellen: Fallback für Original-CCU3 | 0.52.0 |
+| SY02 | Backup-Restore: Upload externer .sbk + Vorab-Validierung | 0.52.0 · API 3.10.0 |
+| SY06 | Zentralen-Firmware-Update: Vorab-Backup | 0.52.0 · API 3.11.0 |
 | K01 | Gerät/Kanäle umbenennen persistent zur CCU | 0.46.0 |
 | K02 | Systemvariablen Logikwert/Alarm als Schalter bedienen | 0.46.0 |
 | K03 | CCU-Neustart | 0.46.0 |

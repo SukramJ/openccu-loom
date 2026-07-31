@@ -4,18 +4,23 @@
 package handlers
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // stubBackupService is an inline stub for BackupService.
@@ -330,5 +335,184 @@ func TestDownloadBackup_ServiceNil_Returns503(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UploadBackup
+// ---------------------------------------------------------------------------
+
+// fakeBackupUploader implements BackupUploader for the UploadBackup handler
+// tests. It records the payload it was given and returns a configurable
+// entry/error.
+type fakeBackupUploader struct {
+	calls    int
+	lastName string
+	lastData []byte
+	entry    hmapi.BackupEntry
+	err      error
+}
+
+func (f *fakeBackupUploader) SaveUploaded(_ context.Context, filename string, data []byte) (hmapi.BackupEntry, error) {
+	f.calls++
+	f.lastName = filename
+	f.lastData = data
+	return f.entry, f.err
+}
+
+// buildValidSbkBytes assembles a minimal but structurally valid CCU backup
+// archive: an uncompressed tar carrying the configuration payload, its
+// signature, and a firmware_version member sbk.Inspect can parse.
+func buildValidSbkBytes(t *testing.T) []byte {
+	t.Helper()
+	members := []struct{ name, body string }{
+		{"usr_local.tar.gz", "config-archive-bytes"},
+		{"signature", "sig-bytes"},
+		{"firmware_version", "VERSION=3.89.8.20260719\nPRODUCT=HM-CCU3\n"},
+		{"key_index", "1"},
+	}
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, m := range members {
+		if err := tw.WriteHeader(&tar.Header{Name: m.name, Mode: 0o644, Size: int64(len(m.body))}); err != nil {
+			t.Fatalf("write tar header %s: %v", m.name, err)
+		}
+		if _, err := tw.Write([]byte(m.body)); err != nil {
+			t.Fatalf("write tar body %s: %v", m.name, err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// multipartBackupRequest builds a POST /api/v1/backups/upload request whose
+// body is multipart/form-data with a single `file` part carrying data.
+func multipartBackupRequest(t *testing.T, data []byte) *http.Request {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("file", "backup.sbk")
+	if err != nil {
+		t.Fatalf("CreateFormFile: %v", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatalf("write part: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups/upload", &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req
+}
+
+// TestUploadBackup_NonMultipartBody_Returns400 verifies a request that
+// never claims to be multipart/form-data is rejected before any part is
+// read, rather than being (mis)parsed as an empty upload.
+func TestUploadBackup_NonMultipartBody_Returns400(t *testing.T) {
+	t.Parallel()
+	svc := &fakeBackupUploader{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups/upload", strings.NewReader("just some bytes"))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	w := httptest.NewRecorder()
+	UploadBackup(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.calls != 0 {
+		t.Fatal("service must not be called for a non-multipart body")
+	}
+}
+
+// TestUploadBackup_MissingFilePart_Returns400 verifies a well-formed
+// multipart body that never carries a `file` part is rejected, rather than
+// silently proceeding with a zero-byte archive.
+func TestUploadBackup_MissingFilePart_Returns400(t *testing.T) {
+	t.Parallel()
+	svc := &fakeBackupUploader{}
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	field, err := w.CreateFormField("comment")
+	if err != nil {
+		t.Fatalf("CreateFormField: %v", err)
+	}
+	if _, err := field.Write([]byte("no file attached")); err != nil {
+		t.Fatalf("write field: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/backups/upload", &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	rr := httptest.NewRecorder()
+	UploadBackup(svc, nil).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if svc.calls != 0 {
+		t.Fatal("service must not be called when the file part is missing")
+	}
+}
+
+// TestUploadBackup_InvalidArchive_Returns422 verifies a multipart upload
+// whose `file` part is not a CCU system backup is rejected by inspection
+// before the storage layer ever sees it — an operator picking the wrong
+// file learns immediately, not at restore time.
+func TestUploadBackup_InvalidArchive_Returns422(t *testing.T) {
+	t.Parallel()
+	svc := &fakeBackupUploader{}
+	req := multipartBackupRequest(t, []byte("this is not a tar archive at all"))
+	rr := httptest.NewRecorder()
+	UploadBackup(svc, nil).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if svc.calls != 0 {
+		t.Fatal("service must not be called for an archive that fails inspection")
+	}
+}
+
+// TestUploadBackup_ValidArchive_Returns201WithEntryAndAudits verifies the
+// happy path: a structurally valid archive is stored, the response carries
+// both the stored entry and the firmware_version the archive reported, and
+// the upload is audited.
+func TestUploadBackup_ValidArchive_Returns201WithEntryAndAudits(t *testing.T) {
+	t.Parallel()
+	svc := &fakeBackupUploader{entry: hmapi.BackupEntry{ID: "upload-20260731-120000.000", Bytes: 999}}
+	rec := &captureRecorder{}
+	req := multipartBackupRequest(t, buildValidSbkBytes(t))
+	rr := httptest.NewRecorder()
+	UploadBackup(svc, rec).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var body uploadedBackupResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.ID != "upload-20260731-120000.000" {
+		t.Errorf("ID = %q, want the stored entry id", body.ID)
+	}
+	if body.FirmwareVersion != "3.89.8.20260719" {
+		t.Errorf("FirmwareVersion = %q, want 3.89.8.20260719", body.FirmwareVersion)
+	}
+	if body.Product != "HM-CCU3" {
+		t.Errorf("Product = %q, want HM-CCU3", body.Product)
+	}
+	if svc.calls != 1 {
+		t.Fatalf("expected 1 SaveUploaded call, got %d", svc.calls)
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(rec.entries))
+	}
+	if got := rec.entries[0]; got.Action != audit.ActionBackupUpload || got.Note != "upload-20260731-120000.000" {
+		t.Fatalf("audit entry mismatch: %+v", got)
 	}
 }

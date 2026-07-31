@@ -96,6 +96,199 @@ func TestPostCCUReboot_HappyPath_Returns202AndAudits(t *testing.T) {
 	}
 }
 
+// fakeCCUHostActioner implements CCUHostActionPort. Each of the three
+// actions has its own central/error slots so a test can drive one action
+// without the others' stubs interfering.
+type fakeCCUHostActioner struct {
+	poweroffCentral string
+	poweroffErr     error
+
+	safeModeCentral string
+	safeModeErr     error
+
+	recoveryModeCentral string
+	recoveryModeErr     error
+}
+
+func (f *fakeCCUHostActioner) PoweroffCCU(_ context.Context, central string) error {
+	f.poweroffCentral = central
+	return f.poweroffErr
+}
+
+func (f *fakeCCUHostActioner) EnterSafeMode(_ context.Context, central string) error {
+	f.safeModeCentral = central
+	return f.safeModeErr
+}
+
+func (f *fakeCCUHostActioner) EnterRecoveryMode(_ context.Context, central string) error {
+	f.recoveryModeCentral = central
+	return f.recoveryModeErr
+}
+
+// ccuHostActionCase describes one of the three host actions for the
+// table-driven ladder + audit tests below: which handler constructor to
+// exercise, which error field on fakeCCUHostActioner drives it, which
+// central field records the call, and which audit.Action it must record.
+// Testing all three through one table (rather than three independent copy
+// -pasted suites) is what catches a copy-paste error that swaps the
+// audit action or the error field between two of the three handlers.
+type ccuHostActionCase struct {
+	name        string
+	handler     func(svc CCUHostActionPort, rec audit.Recorder) http.HandlerFunc
+	auditAction audit.Action
+	setErr      func(f *fakeCCUHostActioner, err error)
+	lastCentral func(f *fakeCCUHostActioner) string
+}
+
+func ccuHostActionCases() []ccuHostActionCase {
+	return []ccuHostActionCase{
+		{
+			name:        "Poweroff",
+			handler:     PostCCUPoweroff,
+			auditAction: audit.ActionSystemCCUPoweroff,
+			setErr:      func(f *fakeCCUHostActioner, err error) { f.poweroffErr = err },
+			lastCentral: func(f *fakeCCUHostActioner) string { return f.poweroffCentral },
+		},
+		{
+			name:        "SafeMode",
+			handler:     PostCCUSafeMode,
+			auditAction: audit.ActionSystemCCUSafeMode,
+			setErr:      func(f *fakeCCUHostActioner, err error) { f.safeModeErr = err },
+			lastCentral: func(f *fakeCCUHostActioner) string { return f.safeModeCentral },
+		},
+		{
+			name:        "RecoveryMode",
+			handler:     PostCCURecoveryMode,
+			auditAction: audit.ActionSystemCCURecoveryMode,
+			setErr:      func(f *fakeCCUHostActioner, err error) { f.recoveryModeErr = err },
+			lastCentral: func(f *fakeCCUHostActioner) string { return f.recoveryModeCentral },
+		},
+	}
+}
+
+func ccuHostActionRequest(centralParam string) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	return req.WithContext(chiContext(req, map[string]string{"central": centralParam}))
+}
+
+// TestCCUHostAction_NilService_Returns503 covers the status ladder shared by
+// all three host actions: a nil service must be reported as unwired.
+func TestCCUHostAction_NilService_Returns503(t *testing.T) {
+	t.Parallel()
+	for _, tc := range ccuHostActionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := httptest.NewRecorder()
+			tc.handler(nil, nil).ServeHTTP(w, ccuHostActionRequest("home"))
+			if w.Code != http.StatusServiceUnavailable {
+				t.Fatalf("expected 503, got %d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestCCUHostAction_MissingCentral_Returns400 verifies the central path
+// parameter is required for every host action.
+func TestCCUHostAction_MissingCentral_Returns400(t *testing.T) {
+	t.Parallel()
+	for _, tc := range ccuHostActionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &fakeCCUHostActioner{}
+			w := httptest.NewRecorder()
+			tc.handler(svc, nil).ServeHTTP(w, ccuHostActionRequest(""))
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestCCUHostAction_UnknownCentral_Returns404 verifies
+// hmerr.ErrUnknownCentral maps to 404 for every host action.
+func TestCCUHostAction_UnknownCentral_Returns404(t *testing.T) {
+	t.Parallel()
+	for _, tc := range ccuHostActionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &fakeCCUHostActioner{}
+			tc.setErr(svc, hmerr.ErrUnknownCentral)
+			w := httptest.NewRecorder()
+			tc.handler(svc, nil).ServeHTTP(w, ccuHostActionRequest("nope"))
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestCCUHostAction_UnsupportedBackend_Returns422 verifies
+// backends.ErrUnsupported (CUxD/Homegear, or a firmware without the
+// method) maps to 422 — an operator-fixable request, not a transport
+// failure.
+func TestCCUHostAction_UnsupportedBackend_Returns422(t *testing.T) {
+	t.Parallel()
+	for _, tc := range ccuHostActionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &fakeCCUHostActioner{}
+			tc.setErr(svc, backends.ErrUnsupported)
+			w := httptest.NewRecorder()
+			tc.handler(svc, nil).ServeHTTP(w, ccuHostActionRequest("home"))
+			if w.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestCCUHostAction_UpstreamFailure_Returns502 verifies a generic backend
+// error (CCU-side transport failure) maps to 502 for every host action.
+func TestCCUHostAction_UpstreamFailure_Returns502(t *testing.T) {
+	t.Parallel()
+	for _, tc := range ccuHostActionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &fakeCCUHostActioner{}
+			tc.setErr(svc, hmerr.ErrNoConnection)
+			w := httptest.NewRecorder()
+			tc.handler(svc, nil).ServeHTTP(w, ccuHostActionRequest("home"))
+			if w.Code != http.StatusBadGateway {
+				t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestCCUHostAction_HappyPath_Returns202AndAuditsOwnAction is the case that
+// would stay silent under a copy-paste bug: each handler must record ITS
+// OWN audit.Action, not one borrowed from a sibling handler that shares the
+// same ccuHostActionHandler plumbing.
+func TestCCUHostAction_HappyPath_Returns202AndAuditsOwnAction(t *testing.T) {
+	t.Parallel()
+	for _, tc := range ccuHostActionCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &fakeCCUHostActioner{}
+			rec := &captureRecorder{}
+			w := httptest.NewRecorder()
+			tc.handler(svc, rec).ServeHTTP(w, ccuHostActionRequest("home"))
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+			}
+			if got := tc.lastCentral(svc); got != "home" {
+				t.Fatalf("expected the action to target central=home, got %q", got)
+			}
+			if len(rec.entries) != 1 {
+				t.Fatalf("expected 1 audit entry, got %d", len(rec.entries))
+			}
+			if got := rec.entries[0]; got.Action != tc.auditAction || got.Note != "home" {
+				t.Fatalf("audit entry mismatch: got %+v, want Action=%q Note=home", got, tc.auditAction)
+			}
+		})
+	}
+}
+
 // fakeCCUPositionSetter records the arguments of the last position write
 // and returns a configurable error.
 type fakeCCUPositionSetter struct {
