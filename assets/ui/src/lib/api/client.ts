@@ -59,6 +59,7 @@ import type {
   RSSIMatrix,
   RpcRecordingStatus,
   ServiceMessage,
+  HubDataPoints,
   SuppressedServiceMessage,
   SysvarEntry,
   SysvarUsage,
@@ -819,6 +820,12 @@ export const api = {
   },
   listServiceMessages() {
     return request<ServiceMessage[]>(`/service-messages`);
+  },
+  // Per-central hub snapshot (alarm/service message counts, inbox,
+  // update). Seeds the sidebar message badge, which the hub broadcasts
+  // then keep live.
+  getHubDataPoints() {
+    return request<HubDataPoints[]>(`/hub/data-points`);
   },
   // --- Interfaces -----------------------------------------------
   listInterfaces() {

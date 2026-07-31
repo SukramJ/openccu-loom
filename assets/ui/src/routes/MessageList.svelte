@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type {
     AlarmMessage,
@@ -18,6 +18,7 @@
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
+  import { subscribe } from "$lib/stores/events.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
 
@@ -52,8 +53,12 @@
     return known.has(typeId) ? t(`messages.type.${typeId}`) : typeId;
   }
 
-  async function load() {
-    loading = true;
+  // A broadcast-driven refresh must not blank the table: `silent` keeps
+  // the rendered rows in place while the new ones are fetched, so a
+  // message acknowledged elsewhere updates without the view flashing
+  // back to its loading state.
+  async function load(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) loading = true;
     loadError = null;
     try {
       const [a, s, sup] = await Promise.all([
@@ -202,7 +207,39 @@
     }
   }
 
-  onMount(load);
+  // A message acknowledged elsewhere (another tab, the CCU WebUI, a
+  // rule) only reaches this view over the hub broadcast; without the
+  // subscription the list would keep showing entries that are already
+  // gone. The broadcast carries a count, not the rows, so a change
+  // triggers a reload rather than a patch.
+  let unsubEvents: (() => void) | null = null;
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Acknowledging in this view already reloads, and the server answers the
+  // same action with a broadcast; a multi-central ack-all produces one
+  // broadcast per central. Debouncing collapses that burst into a single
+  // silent refetch instead of one per event.
+  function scheduleReload(): void {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null;
+      void load({ silent: true });
+    }, 300);
+  }
+
+  onMount(() => {
+    void load();
+    unsubEvents = subscribe((ev) => {
+      if (ev.type === "hub.service_message" || ev.type === "hub.alarm_message") {
+        scheduleReload();
+      }
+    });
+  });
+
+  onDestroy(() => {
+    unsubEvents?.();
+    if (reloadTimer) clearTimeout(reloadTimer);
+  });
 
   function formatDate(iso: string): string {
     try {

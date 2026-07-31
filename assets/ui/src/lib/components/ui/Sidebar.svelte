@@ -5,6 +5,7 @@
   import type { IconName } from "$lib/icons";
   import { t } from "$lib/i18n";
   import { installModeStore } from "$lib/stores/installMode.svelte";
+  import { messagesStore } from "$lib/stores/messages.svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
@@ -21,6 +22,10 @@
   // counted so polling stops once nobody is listening.
   onMount(() => {
     installModeStore.ensurePoll();
+    // Pending-message counters for the badge on the Messages entry. Held
+    // for the session so the count stays live on every route, not just
+    // the message list.
+    messagesStore.ensureStream();
     // Probe Matter status once so the sidebar knows whether to show
     // the Bridges cluster. No polling — the store will refresh on
     // navigation to the Matter route.
@@ -28,7 +33,10 @@
     // Daemon version for the footer line; cached for the session.
     void infoStore.ensure();
   });
-  onDestroy(() => installModeStore.release());
+  onDestroy(() => {
+    installModeStore.release();
+    messagesStore.release();
+  });
 
   // HA-style left sidebar with 4 navigation clusters. Mirrors the
   // information-architecture proposal: Übersicht / Inbox /
@@ -380,6 +388,7 @@
         {#each cluster.items as item (item.href)}
           {@const active = isActive(item)}
           {@const showInstallDot = item.matches.includes("inbox") && installModeStore.active}
+          {@const pendingMessages = item.matches.includes("messages") ? messagesStore.total : 0}
           <li>
             <a
               href={item.href}
@@ -390,7 +399,9 @@
               title={!expanded
                 ? showInstallDot
                   ? `${item.label} · ${t("sidebar.install_mode_active")}`
-                  : item.label
+                  : pendingMessages > 0
+                    ? `${item.label} · ${t("sidebar.pending_messages", { count: String(pendingMessages) })}`
+                    : item.label
                 : undefined}
             >
               <span class="relative inline-flex">
@@ -401,6 +412,12 @@
                     style="background-color: var(--ha-primary-color);"
                     aria-hidden="true"
                   ></span>
+                {:else if pendingMessages > 0 && !expanded}
+                  <span
+                    class="absolute -right-1 -top-1 inline-block h-2 w-2 rounded-full"
+                    style="background-color: var(--ha-error-color, #db4437);"
+                    aria-hidden="true"
+                  ></span>
                 {/if}
               </span>
               {#if expanded}
@@ -408,6 +425,14 @@
                 {#if showInstallDot}
                   <span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--ha-primary-color);">
                     {installModeStore.remainingSeconds ?? "…"}s
+                  </span>
+                {:else if pendingMessages > 0}
+                  <span
+                    class="inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                    style="background-color: var(--ha-error-color, #db4437);"
+                    aria-label={t("sidebar.pending_messages", { count: String(pendingMessages) })}
+                  >
+                    {pendingMessages > 99 ? "99+" : pendingMessages}
                   </span>
                 {/if}
               {/if}

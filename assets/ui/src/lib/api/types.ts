@@ -310,6 +310,7 @@ export type AlarmMessage = components["schemas"]["AlarmMessage"];
 // required (the Go DTO always emits it). MessageList.svelte builds its composite
 // key as (s.central ?? "") + "/" + s.id.
 export type ServiceMessage = components["schemas"]["ServiceMessage"];
+export type HubDataPoints = components["schemas"]["HubDataPoints"];
 
 // SuppressedServiceMessage re-exported from generated schema — one
 // permanently-suppressed channel parameter (`GET /service-messages/suppressed`).

@@ -2535,6 +2535,7 @@ const EN: Catalog = {
   "sidebar.cluster.diagnose": "Status & Diagnose",
   "sidebar.cluster.system": "System",
   "sidebar.install_mode_active": "Pairing mode active",
+  "sidebar.pending_messages": "{count} pending message(s)",
   "diagnostics.all_ccus": "all",
   // --- DeviceList ---
   "device.list.select_aria": "Select device",
@@ -5848,6 +5849,7 @@ const DE: Catalog = {
   "sidebar.cluster.diagnose": "Status & Diagnose",
   "sidebar.cluster.system": "System",
   "sidebar.install_mode_active": "Anlernmodus aktiv",
+  "sidebar.pending_messages": "{count} offene Meldung(en)",
   "diagnostics.all_ccus": "alle",
   // --- DeviceList ---
   "device.list.select_aria": "Gerät auswählen",

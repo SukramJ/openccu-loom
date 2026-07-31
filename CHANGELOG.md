@@ -6,6 +6,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.52.0]
 
+### Added
+
+- **The sidebar shows how many messages are waiting (D01).** The
+  navigation's Messages entry carries a badge with the number of pending
+  service and alarm messages — a count in the expanded sidebar, a dot in
+  the collapsed one. Until now an operator only learned about a pending
+  message by opening the list: the daemon has always broadcast
+  `hub.service_message` / `hub.alarm_message` on every change, but nothing
+  in the UI consumed them. The badge seeds from the per-central hub
+  snapshot and is then kept live by those broadcasts, so a message
+  acknowledged anywhere — this tab, another tab, the CCU WebUI, a rule —
+  moves the count without a reload. Counts are tracked per central and
+  summed, so one CCU's broadcast cannot overwrite another's. The message
+  list itself now refreshes on the same broadcasts, silently (the table
+  stays in place instead of flashing back to its loading state) and
+  debounced, so an acknowledge-all across several centrals triggers one
+  refetch rather than one per central.
+
 ### Fixed
 
 - **Charts beyond the raw retention are no longer empty (SV04).** The
