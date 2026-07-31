@@ -90,6 +90,29 @@ const (
 	// host. The Entry's Note carries the target central name.
 	ActionSystemCCUReboot Action = "system_ccu_reboot"
 
+	// ActionSystemCCUPosition records a change to a CCU's astro reference
+	// position. Audited because it silently moves every sunrise/sunset
+	// time the CCU computes.
+	ActionSystemCCUPosition Action = "system_ccu_position"
+
+	// ActionBackupUpload records an externally-supplied CCU backup being
+	// taken into the daemon's store. Audited because that archive can
+	// later overwrite a CCU's entire configuration.
+	ActionBackupUpload Action = "backup_upload"
+
+	// ActionBackupPreUpdate records the safety backup taken before a CCU
+	// firmware update, so the archive can be tied to the update that
+	// prompted it.
+	ActionBackupPreUpdate Action = "backup_pre_update"
+
+	// ActionSystemCCUPoweroff, ActionSystemCCUSafeMode and
+	// ActionSystemCCURecoveryMode record the host-level power and
+	// boot-mode actions. All three take the CCU out of normal service,
+	// so who triggered them matters.
+	ActionSystemCCUPoweroff     Action = "system_ccu_poweroff"
+	ActionSystemCCUSafeMode     Action = "system_ccu_safe_mode"
+	ActionSystemCCURecoveryMode Action = "system_ccu_recovery_mode"
+
 	// ActionSystemFirmwareDownload records an operator-triggered CCU
 	// firmware download: the CCU fetches a firmware image from a URL onto
 	// the central so it can be staged for installation. The Entry's Note

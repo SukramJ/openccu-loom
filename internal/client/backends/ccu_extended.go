@@ -668,16 +668,23 @@ func (b *CcuBackend) CreateBackupAndDownload(ctx context.Context, maxWaitTime, p
 	}
 
 	// 1. Start the backup process in the background.
+	//
+	// This prelude drives /bin/createBackup.sh, which only OpenCCU and
+	// RaspberryMatic ship. On a stock CCU3 the script is absent and the
+	// start reports failure - but the archive is still reachable, because
+	// the download step below posts to cp_security.cgi?action=create_backup,
+	// and that CGI builds the archive itself rather than reading the file
+	// the script would have produced (occu WebUI/www/config/backup.tcl,
+	// proc create_backup). So a failed start is not fatal: it means this
+	// firmware has no background-backup helper, and the synchronous CGI is
+	// the whole job. Falling back keeps stock CCU3 hosts working instead of
+	// failing them with a missing-script error.
 	var start backupStart
 	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptCreateBackupStart, nil, &start); err != nil {
 		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: start: %w", err)
 	}
 	if !start.Success {
-		msg := start.Message
-		if msg == "" {
-			msg = start.Status
-		}
-		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: start failed: %s", msg)
+		return b.downloadBackup(ctx)
 	}
 
 	// 2. Poll create_backup_status until completion, failure, or timeout.
@@ -854,6 +861,79 @@ func (b *CcuBackend) RebootCCU(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return resp.Success, nil
+}
+
+// SetCCUPosition writes the CCU's astro reference position in decimal
+// degrees via the set_ccu_position ReGa script. Backends without a ReGa
+// runner (CUxD, Homegear) report [ErrUnsupported]: the position lives in
+// ReGa, not on the wire.
+//
+// It returns no values because the runner already compares the script's
+// read-back against what was sent and fails on a mismatch - a successful
+// return means the CCU holds exactly the requested position.
+func (b *CcuBackend) SetCCUPosition(ctx context.Context, longitude, latitude float64) error {
+	if b.rega == nil {
+		return ErrUnsupported
+	}
+	// ScriptRunner is deliberately a thin transport seam (Run/RunJSON), so
+	// the position semantics stay in the ReGa runner and are reached
+	// through this narrow assertion rather than by widening that seam with
+	// a domain method every other backend would have to carry.
+	pw, ok := b.rega.(interface {
+		SetPosition(ctx context.Context, longitude, latitude float64) (float64, float64, error)
+	})
+	if !ok {
+		return ErrUnsupported
+	}
+	_, _, err := pw.SetPosition(ctx, longitude, latitude)
+	return err
+}
+
+// PoweroffCCU shuts the CCU host down via the poweroff_ccu ReGa script.
+// Nothing brings it back: the readiness gate holds the central in
+// "waiting for CCU" until someone powers it on again.
+func (b *CcuBackend) PoweroffCCU(ctx context.Context) (bool, error) {
+	if b.rega == nil {
+		return false, ErrUnsupported
+	}
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptPoweroffCCU, nil, &resp); err != nil {
+		return false, err
+	}
+	return resp.Success, nil
+}
+
+// EnterSafeMode restarts the CCU into its safe mode, where the ReGa logic
+// layer stays down so a broken configuration can be repaired.
+//
+// EnterRecoveryMode restarts it into the separate recovery system.
+//
+// Both go through JSON-RPC and behave identically on the wire: the CCU
+// writes its flag file, persists the ReGa object model and schedules a
+// reboot two seconds out, then answers `true` — so the response arrives
+// normally and neither call needs a connection error treated as success
+// (occu api/methods/{safemode,recoverymode}/enter.tcl). Recovery mode is
+// an OpenCCU / RaspberryMatic feature; a stock CCU3 has no such method
+// and must fail loudly rather than silently doing nothing.
+func (b *CcuBackend) EnterSafeMode(ctx context.Context) error {
+	if b.json == nil {
+		return ErrUnsupported
+	}
+	_, err := b.json.Call(ctx, "SafeMode.enter")
+	return err
+}
+
+// EnterRecoveryMode restarts the CCU into its recovery system. See
+// [CcuBackend.EnterSafeMode] for the shared wire behaviour.
+func (b *CcuBackend) EnterRecoveryMode(ctx context.Context) error {
+	if b.json == nil {
+		return ErrUnsupported
+	}
+	_, err := b.json.Call(ctx, "RecoveryMode.enter")
+	return err
 }
 
 // --- system variable deletion ------------------------------------------

@@ -44,3 +44,7 @@ getDeviceTeamCandidates -- godevccu has no listTeams; live CCU returns team chan
 setDeviceChannelTeam -- godevccu has no setTeam; live CCU assigns the team
 getSysvarUsage -- godevccu has no DPEnumUsagePrograms; live CCU returns referencing programs
 testLinkAtDevice -- godevccu lacks activateLinkParamset; live CCU triggers the actuator
+setSystemCCUPosition -- godevccu has no ReGa position surface; live CCU stores lat/lon
+postSystemCCUPoweroff -- godevccu has no CCU host-control surface; live CCU reboots
+postSystemCCUSafeMode -- godevccu has no CCU host-control surface; live CCU reboots
+postSystemCCURecoveryMode -- godevccu has no CCU host-control surface; live CCU reboots

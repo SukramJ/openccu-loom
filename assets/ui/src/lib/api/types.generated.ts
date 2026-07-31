@@ -1645,6 +1645,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Starts the CCU firmware update. With `backup_first` a full CCU backup is taken first and the update starts only once it is durably stored; a failed backup aborts and the update does not run, because the point of asking for one is to have something to return to. The call then blocks for as long as the backup takes — minutes on a large configuration — since its response is what tells the operator whether that safety net exists. */
         post: {
             parameters: {
                 query?: {
@@ -1655,7 +1656,17 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Take a full backup of the target central before starting the update.
+                         * @default false
+                         */
+                        backup_first?: boolean;
+                    };
+                };
+            };
             responses: {
                 /** @description Accepted */
                 202: {
@@ -1664,8 +1675,10 @@ export interface paths {
                     };
                     content?: never;
                 };
+                400: components["responses"]["BadRequest"];
                 404: components["responses"]["NotFound"];
                 502: components["responses"]["BadGateway"];
+                503: components["responses"]["ServiceUnavailable"];
             };
         };
         delete?: never;
@@ -1875,6 +1888,86 @@ export interface paths {
          *     OpenCCU-Loom daemon itself — this reboots the CCU hardware.
          */
         post: operations["rebootSystemCCU"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/ccu/{central}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a CCU's astro reference position
+         * @description Writes the CCU's latitude/longitude (decimal degrees) via ReGa. Every sunrise/sunset time the CCU computes for its own programs and for the weekly profiles this daemon edits derives from this position, so a wrong value skews schedules silently rather than failing — which is why it is exposed at all. Admin-gated and audited. The CCU reads the values back and the daemon compares them, so a 204 means the CCU holds exactly what was sent. The time zone is not writable here; it is set on the CCU itself.
+         */
+        put: operations["setSystemCCUPosition"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/ccu/{central}/poweroff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Shut a CCU host down
+         * @description Powers the CCU off via ReGa. Nothing brings it back on: the central stays in the readiness gate's waiting state until it is switched on again, which is the intended outcome rather than a fault. Admin-gated and audited. Answers 202 once the CCU accepted the request; 422 when the central's backend cannot host the action (CUxD, Homegear, or a firmware without the method).
+         */
+        post: operations["postSystemCCUPoweroff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/ccu/{central}/safe-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart a CCU into safe mode
+         * @description Restarts the CCU with its ReGa logic layer held down, so a configuration that breaks normal startup can be repaired. Admin-gated and audited. Answers 202 once the CCU accepted the request; 422 when the central's backend cannot host the action (CUxD, Homegear, or a firmware without the method).
+         */
+        post: operations["postSystemCCUSafeMode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/ccu/{central}/recovery-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart a CCU into its recovery system
+         * @description Restarts the CCU into the separate recovery system reachable on the CCU's own address. OpenCCU / RaspberryMatic only - a stock CCU3 has no such method and the error is reported rather than swallowed. Admin-gated and audited. Answers 202 once the CCU accepted the request; 422 when the central's backend cannot host the action (CUxD, Homegear, or a firmware without the method).
+         */
+        post: operations["postSystemCCURecoveryMode"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3649,6 +3742,30 @@ export interface paths {
          *     backward compatibility.
          */
         post: operations["triggerBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backups/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an externally-supplied CCU backup
+         * @description Takes in a `.sbk` archive produced elsewhere — another CCU, an older daemon, the CCU WebUI — and stores it so it can be restored through `POST /backups/{id}/restore` like any locally-taken backup.
+         *
+         *     The archive is inspected before it is stored, so picking the wrong file fails here rather than at restore time when the CCU is already being wiped. The check is structural: a readable tar carrying `usr_local.tar.gz` and its `signature`. The signature itself cannot be verified without the CCU's key material, so it is not claimed to be. The firmware version the archive came from is read from its `firmware_version` member and returned, so the operator can compare it against the target CCU — the same fact the CCU's own restore consults.
+         *
+         *     Admin-gated and audited. The request body is streamed, not schema-validated, because a real archive is far larger than the validator's buffer.
+         */
+        post: operations["uploadBackup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5644,6 +5761,33 @@ export interface components {
              *     `auth_enabled`.
              */
             https_redirect_enabled?: boolean;
+            /**
+             * @description The CCU's astro reference longitude in decimal degrees. Every
+             *     sunrise/sunset time the CCU computes derives from it, so a
+             *     wrong value skews astro schedules silently. Absent while the
+             *     position is unresolved — never reported as 0, which is a real
+             *     coordinate.
+             */
+            longitude?: number;
+            /**
+             * @description The CCU's astro reference latitude in decimal degrees. Same
+             *     absence rule as `longitude`.
+             */
+            latitude?: number;
+            /**
+             * @description The CCU's configured IANA time zone (e.g. `Europe/Berlin`),
+             *     read from its time configuration. Read-only here: it is set on
+             *     the CCU itself.
+             */
+            timezone?: string;
+            /**
+             * @description Whether this CCU offers a recovery system
+             *     (`POST .../recovery-mode`). True for OpenCCU / RaspberryMatic
+             *     firmware, false for a stock CCU3 and while the product is not
+             *     yet known — so a client hides the action rather than offering
+             *     one that cannot work.
+             */
+            recovery_mode_supported?: boolean;
             /**
              * @description The interface adapters the CCU reports for itself — the
              *     CCU-side counterpart to `configured_interfaces`. Absent until
@@ -9559,6 +9703,141 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    setSystemCCUPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Target central name (matches `SystemCCUEntry.name`). */
+                central: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    longitude: number;
+                    latitude: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Position written and confirmed by read-back */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description Coordinate out of range, or the central's backend has no ReGa path (CUxD, Homegear). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    postSystemCCUPoweroff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Target central name (matches `SystemCCUEntry.name`). */
+                central: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Poweroff triggered */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description The central's backend cannot host this action. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    postSystemCCUSafeMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Target central name (matches `SystemCCUEntry.name`). */
+                central: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Safe-mode restart triggered */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description The central's backend cannot host this action. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    postSystemCCURecoveryMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Target central name (matches `SystemCCUEntry.name`). */
+                central: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recovery-mode restart triggered */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description The central's backend cannot host this action. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getRestartPending: {
         parameters: {
             query?: never;
@@ -12149,6 +12428,58 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    uploadBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description The `.sbk` archive.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Archive accepted and stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupEntry"] & {
+                        /** @description Firmware the archive was taken from, from its `firmware_version` member. Absent for CCU2-era archives, which predate it. */
+                        firmware_version?: string;
+                        /** @description Product label from the same member. */
+                        product?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description The archive exceeds the accepted size. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a CCU system backup — unreadable as a tar, or missing the configuration archive or its signature. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

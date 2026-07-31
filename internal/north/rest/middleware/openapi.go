@@ -52,6 +52,20 @@ type OpenAPIValidator struct {
 // limit ever gets a chance to reject it.
 const openAPIBodyLimit = 1 << 20 // 1 MiB
 
+// streamingBodyRoutes lists routes whose request body is a file upload far
+// larger than [openAPIBodyLimit] and is therefore streamed by the handler
+// rather than buffered here. A CCU system backup runs to tens of
+// megabytes, so buffering it for schema validation would both reject every
+// real upload and defeat the point of the limit.
+//
+// These routes skip body validation entirely; their handler owns the
+// parsing and its own size bound. Keyed by "METHOD /path" as the spec
+// declares it — matching on the matched route, not on the raw URL, so a
+// path parameter cannot be used to slip past the limit.
+var streamingBodyRoutes = map[string]bool{
+	"POST /backups/upload": true,
+}
+
 // OpenAPIValidatorConfig parametrises [NewOpenAPIValidator].
 type OpenAPIValidatorConfig struct {
 	// Spec is the YAML/JSON-encoded OpenAPI 3.1 document. Required.
@@ -130,7 +144,8 @@ func (v *OpenAPIValidator) Middleware() func(http.Handler) http.Handler {
 			// into memory in full at this pre-handler stage.
 			var bodyCopy []byte
 			validatorReq := r
-			if r.Body != nil && r.ContentLength > 0 {
+			streaming := route != nil && streamingBodyRoutes[r.Method+" "+route.Path]
+			if !streaming && r.Body != nil && r.ContentLength > 0 {
 				buf, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, openAPIBodyLimit))
 				if readErr != nil {
 					var mbe *http.MaxBytesError
@@ -154,6 +169,10 @@ func (v *OpenAPIValidator) Middleware() func(http.Handler) http.Handler {
 				Route:      route,
 				Options: &openapi3filter.Options{
 					AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+					// A streaming route's body is the handler's to read.
+					// Without this the validator would consume the upload
+					// here and the handler would receive an empty stream.
+					ExcludeRequestBody: streaming,
 				},
 			}
 			if err := openapi3filter.ValidateRequest(r.Context(), input); err != nil {

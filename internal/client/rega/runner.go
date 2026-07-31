@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
@@ -302,6 +304,56 @@ type BackendInfo struct {
 	// IsHAApp reports whether the CCU is running inside a Home-Assistant
 	// supervisor environment.
 	IsHAApp bool `json:"is_ha_app"`
+	// Longitude and Latitude are the CCU's astro reference position in
+	// decimal degrees. Every sunrise/sunset time the CCU computes derives
+	// from them, so a wrong position skews schedules rather than failing.
+	Longitude float64 `json:"longitude"`
+	Latitude  float64 `json:"latitude"`
+	// Timezone is the IANA zone from the CCU's time configuration
+	// (e.g. "Europe/Berlin"). Read-only: it is set on the CCU itself.
+	Timezone string `json:"timezone"`
+}
+
+// positionEpsilon bounds the read-back comparison in [Runner.SetPosition].
+// The CCU renders six decimals, so a mismatch beyond this is a genuine
+// rejection rather than a rounding artefact - 1e-5 degrees is about a
+// metre, far below anything astro calculations care about.
+const positionEpsilon = 1e-5
+
+// SetPosition writes the CCU's astro reference position and confirms it
+// by comparing the script's read-back against what was sent.
+//
+// The ranges are validated here rather than in the script: a ReGa script
+// receives its parameters by textual substitution, so an out-of-range or
+// non-finite value would be written verbatim before anything could
+// object. Rejecting first also keeps the failure legible - the caller
+// learns which bound it violated instead of reading a skewed read-back.
+func (r *Runner) SetPosition(ctx context.Context, longitude, latitude float64) (gotLon, gotLat float64, err error) {
+	switch {
+	case math.IsNaN(longitude) || math.IsInf(longitude, 0):
+		return 0, 0, fmt.Errorf("rega: longitude must be a finite number: %w", hmerr.ErrValidation)
+	case math.IsNaN(latitude) || math.IsInf(latitude, 0):
+		return 0, 0, fmt.Errorf("rega: latitude must be a finite number: %w", hmerr.ErrValidation)
+	case longitude < -180 || longitude > 180:
+		return 0, 0, fmt.Errorf("rega: longitude %g out of range [-180,180]: %w", longitude, hmerr.ErrValidation)
+	case latitude < -90 || latitude > 90:
+		return 0, 0, fmt.Errorf("rega: latitude %g out of range [-90,90]: %w", latitude, hmerr.ErrValidation)
+	}
+	var got BackendInfo
+	err = r.RunJSON(ctx, hmenum.RegaScriptSetCCUPosition, map[string]string{
+		"longitude": strconv.FormatFloat(longitude, 'f', 6, 64),
+		"latitude":  strconv.FormatFloat(latitude, 'f', 6, 64),
+	}, &got)
+	if err != nil {
+		return 0, 0, err
+	}
+	if math.Abs(got.Longitude-longitude) > positionEpsilon || math.Abs(got.Latitude-latitude) > positionEpsilon {
+		return 0, 0, fmt.Errorf(
+			"rega: CCU read back position %g/%g after writing %g/%g: %w",
+			got.Longitude, got.Latitude, longitude, latitude, hmerr.ErrClientException,
+		)
+	}
+	return got.Longitude, got.Latitude, nil
 }
 
 // GetBackendInfo queries the CCU for its firmware version, product label,

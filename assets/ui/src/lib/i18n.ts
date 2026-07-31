@@ -610,6 +610,12 @@ const EN: Catalog = {
   "backup.title": "Backups",
   "backup.subtitle": "CCU backups stored on the daemon host.",
   "backup.empty": "No backups yet.",
+  "backup.upload": "Import…",
+  "backup.uploading": "Importing…",
+  "backup.upload.help":
+    "Take in a .sbk archive from elsewhere so it can be restored like a local backup. The archive is checked before it is stored.",
+  "backup.uploaded": "Backup {id} imported.",
+  "backup.uploaded_with_version": "Backup {id} imported (from firmware {version}).",
   "backup.trigger": "Trigger backup",
   "backup.trigger_central": "Target CCU",
   "backup.triggering": "Starting…",
@@ -3130,6 +3136,31 @@ const EN: Catalog = {
   "schedule.aria.weekdays": "Weekdays",
   "schedule.duration_placeholder": "e.g. 10s, 5min",
   "schedule.ramp_placeholder": "e.g. 500ms, 2s",
+  "ccu_position.title": "Astro position",
+  "ccu_position.latitude": "Latitude",
+  "ccu_position.longitude": "Longitude",
+  "ccu_position.help":
+    "Reference position for the CCU's sunrise and sunset times. Wrong coordinates shift every astro schedule without any error.",
+  "ccu_position.unknown": "Position not known yet.",
+  "ccu_position.confirm_title": "Change astro position?",
+  "ccu_position.confirm_body":
+    "This changes the sunrise and sunset times {central} computes — for its own programs and for the weekly profiles edited here.",
+  "ccu_position.saved": "Astro position of {central} saved.",
+  "ccu_host.poweroff.action": "Shut down",
+  "ccu_host.poweroff.confirm_title": "Shut the CCU down?",
+  "ccu_host.poweroff.confirm_body":
+    "{central} will power off. Nothing brings it back on remotely — it has to be switched on at the device.",
+  "ccu_host.poweroff.triggered": "Shutdown of {central} triggered.",
+  "ccu_host.safe_mode.action": "Safe mode",
+  "ccu_host.safe_mode.confirm_title": "Restart into safe mode?",
+  "ccu_host.safe_mode.confirm_body":
+    "{central} restarts with its logic layer held down. Programs and system variables do not run until you leave safe mode again.",
+  "ccu_host.safe_mode.triggered": "{central} is restarting into safe mode.",
+  "ccu_host.recovery_mode.action": "Recovery",
+  "ccu_host.recovery_mode.confirm_title": "Restart into the recovery system?",
+  "ccu_host.recovery_mode.confirm_body":
+    "{central} restarts into its recovery system and stays out of service until you leave it there. The recovery interface is reachable at the CCU's own address.",
+  "ccu_host.recovery_mode.triggered": "{central} is restarting into the recovery system.",
   "ccu_maintenance.title": "CCU maintenance",
   "ccu_maintenance.subtitle":
     "Host-level actions for each connected CCU. Rebooting restarts the CCU and briefly drops its connection.",
@@ -3148,6 +3179,12 @@ const EN: Catalog = {
   "ccu_update.available": "Update available",
   "ccu_update.confirm_body":
     "{central} will download and install its firmware update and reboot — the connection drops briefly. Continue?",
+  "ccu_update.backup_first": "Back up first",
+  "ccu_update.backup_first.help":
+    "Take a full CCU backup before the update. The update only starts once the backup is stored, and does not start at all if it fails. This can take several minutes.",
+  "ccu_update.backing_up": "Backing up…",
+  "ccu_update.confirm_body_with_backup":
+    "A full backup of {central} is taken first; the update starts only if it succeeds. This can take several minutes — leave the page open.",
   "ccu_update.confirm_title": "Install CCU update?",
   "ccu_update.empty": "No CCU update info available yet.",
   "ccu_update.in_progress": "Installing…",
@@ -3898,6 +3935,12 @@ const DE: Catalog = {
   "backup.title": "Backups",
   "backup.subtitle": "CCU-Sicherungen auf dem Daemon-Host.",
   "backup.empty": "Noch keine Backups vorhanden.",
+  "backup.upload": "Importieren…",
+  "backup.uploading": "Wird importiert…",
+  "backup.upload.help":
+    "Ein .sbk-Archiv von anderswo übernehmen, damit es wie ein lokales Backup zurückgespielt werden kann. Das Archiv wird vor dem Speichern geprüft.",
+  "backup.uploaded": "Backup {id} importiert.",
+  "backup.uploaded_with_version": "Backup {id} importiert (von Firmware {version}).",
   "backup.trigger": "Backup anstoßen",
   "backup.trigger_central": "Ziel-CCU",
   "backup.triggering": "Erstelle…",
@@ -6441,6 +6484,31 @@ const DE: Catalog = {
   "schedule.aria.weekdays": "Wochentage",
   "schedule.duration_placeholder": "z.B. 10s, 5min",
   "schedule.ramp_placeholder": "z.B. 500ms, 2s",
+  "ccu_position.title": "Astro-Position",
+  "ccu_position.latitude": "Breitengrad",
+  "ccu_position.longitude": "Längengrad",
+  "ccu_position.help":
+    "Bezugspunkt für die Sonnenauf- und -untergangszeiten der CCU. Falsche Koordinaten verschieben jede Astro-Schaltzeit, ohne dass ein Fehler auftritt.",
+  "ccu_position.unknown": "Position noch nicht bekannt.",
+  "ccu_position.confirm_title": "Astro-Position ändern?",
+  "ccu_position.confirm_body":
+    "Das ändert die Sonnenauf- und -untergangszeiten, die {central} berechnet — für die eigenen Programme ebenso wie für die hier bearbeiteten Wochenprofile.",
+  "ccu_position.saved": "Astro-Position von {central} gespeichert.",
+  "ccu_host.poweroff.action": "Herunterfahren",
+  "ccu_host.poweroff.confirm_title": "CCU herunterfahren?",
+  "ccu_host.poweroff.confirm_body":
+    "{central} wird ausgeschaltet. Aus der Ferne lässt sie sich nicht wieder starten — das geht nur am Gerät.",
+  "ccu_host.poweroff.triggered": "Herunterfahren von {central} ausgelöst.",
+  "ccu_host.safe_mode.action": "Abgesicherter Modus",
+  "ccu_host.safe_mode.confirm_title": "In den abgesicherten Modus neu starten?",
+  "ccu_host.safe_mode.confirm_body":
+    "{central} startet ohne Logikschicht neu. Programme und Systemvariablen laufen erst wieder, wenn der abgesicherte Modus verlassen wird.",
+  "ccu_host.safe_mode.triggered": "{central} startet in den abgesicherten Modus.",
+  "ccu_host.recovery_mode.action": "Recovery",
+  "ccu_host.recovery_mode.confirm_title": "In das Recovery-System neu starten?",
+  "ccu_host.recovery_mode.confirm_body":
+    "{central} startet in das Recovery-System und bleibt außer Betrieb, bis es dort wieder verlassen wird. Die Recovery-Oberfläche ist unter der Adresse der CCU erreichbar.",
+  "ccu_host.recovery_mode.triggered": "{central} startet in das Recovery-System.",
   "ccu_maintenance.title": "CCU-Wartung",
   "ccu_maintenance.subtitle":
     "Aktionen auf Host-Ebene für jede verbundene CCU. Ein Neustart startet die CCU neu und unterbricht kurz ihre Verbindung.",
@@ -6461,6 +6529,12 @@ const DE: Catalog = {
   "ccu_update.available": "Update verfügbar",
   "ccu_update.confirm_body":
     "{central} lädt und installiert sein Firmware-Update und startet neu — die Verbindung bricht kurz ab. Fortfahren?",
+  "ccu_update.backup_first": "Vorher sichern",
+  "ccu_update.backup_first.help":
+    "Vor dem Update ein vollständiges CCU-Backup anlegen. Das Update startet erst, wenn das Backup gespeichert ist, und gar nicht, wenn es fehlschlägt. Das kann mehrere Minuten dauern.",
+  "ccu_update.backing_up": "Sichere…",
+  "ccu_update.confirm_body_with_backup":
+    "Zuerst wird ein vollständiges Backup von {central} angelegt; das Update startet nur, wenn das gelingt. Das kann mehrere Minuten dauern — lass die Seite offen.",
   "ccu_update.confirm_title": "CCU-Update installieren?",
   "ccu_update.empty": "Noch keine CCU-Update-Informationen verfügbar.",
   "ccu_update.in_progress": "Wird installiert…",

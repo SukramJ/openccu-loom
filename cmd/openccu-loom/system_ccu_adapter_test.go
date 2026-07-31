@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -231,6 +233,80 @@ func TestSystemCCUAdapterList_MapsCCUReportedFacts(t *testing.T) {
 	// CUxD entry must not leak into it.
 	if len(got.ConfiguredInterfaces) != 1 || got.ConfiguredInterfaces[0] != "HmIP-RF" {
 		t.Errorf("ConfiguredInterfaces = %v, want [HmIP-RF]", got.ConfiguredInterfaces)
+	}
+}
+
+// TestSystemCCUAdapterList_PositionPointersNilAtOrigin verifies that List
+// leaves Longitude/Latitude nil — and the JSON encoding omits both keys —
+// when SystemInfo holds the exact zero position. 0/0 is the zero value of
+// an unresolved read, not a real place; reporting it as a coordinate would
+// tell the operator their CCU sits off the coast of Africa.
+func TestSystemCCUAdapterList_PositionPointersNilAtOrigin(t *testing.T) {
+	t.Parallel()
+
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: "ccu-golf"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	unit.SetSystemInformation(central.SystemInfo{Hostname: "ccu-golf.local"})
+
+	entries := newSystemCCUAdapter(reg, nil).List(context.Background())
+	if len(entries) != 1 {
+		t.Fatalf("List() returned %d entries, want 1", len(entries))
+	}
+	got := entries[0]
+	if got.Longitude != nil || got.Latitude != nil {
+		t.Errorf("Longitude/Latitude = %v/%v, want both nil at 0/0", got.Longitude, got.Latitude)
+	}
+
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if strings.Contains(string(raw), `"longitude"`) || strings.Contains(string(raw), `"latitude"`) {
+		t.Errorf("JSON should omit longitude/latitude at 0/0, got %s", raw)
+	}
+}
+
+// TestSystemCCUAdapterList_PositionPointersSetForRealCoordinate verifies
+// that a genuine coordinate — including a negative one, so the sign is not
+// mistaken for "unset" anywhere along the path — round-trips through both
+// the pointer fields and the JSON encoding.
+func TestSystemCCUAdapterList_PositionPointersSetForRealCoordinate(t *testing.T) {
+	t.Parallel()
+
+	reg := central.NewRegistry()
+	unit, err := central.New(central.Config{Name: "ccu-hotel"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(unit); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	unit.SetSystemInformation(central.SystemInfo{Longitude: -70.5, Latitude: -33.25})
+
+	entries := newSystemCCUAdapter(reg, nil).List(context.Background())
+	if len(entries) != 1 {
+		t.Fatalf("List() returned %d entries, want 1", len(entries))
+	}
+	got := entries[0]
+	if got.Longitude == nil || *got.Longitude != -70.5 {
+		t.Errorf("Longitude = %v, want -70.5", got.Longitude)
+	}
+	if got.Latitude == nil || *got.Latitude != -33.25 {
+		t.Errorf("Latitude = %v, want -33.25", got.Latitude)
+	}
+
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"longitude":-70.5`) || !strings.Contains(string(raw), `"latitude":-33.25`) {
+		t.Errorf("JSON should carry the real coordinates, got %s", raw)
 	}
 }
 

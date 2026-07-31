@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -321,5 +322,191 @@ func TestPostInstallModeInterface_LocalUnsupportedIs422(t *testing.T) {
 	rr := postInstallMode(idx, nil, `{"interface":"HmIP-RF","active":true,"seconds":60,"sgtin":"3014F711A061A7D569892A67","key":"0110C8531D0952D8D73E1194E95B5F19"}`)
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422, body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PostSystemUpdateInstall — optional pre-update backup (backup_first)
+// ---------------------------------------------------------------------------
+
+// orderedFirmwareUpdater implements hub.FirmwareUpdater and, when log is
+// set, appends "install" to the shared log — letting a test pin the
+// backup-then-install ordering directly rather than just checking both ran.
+type orderedFirmwareUpdater struct {
+	log   *[]string
+	calls int
+	err   error
+}
+
+func (o *orderedFirmwareUpdater) TriggerFirmwareUpdate(_ context.Context) error {
+	o.calls++
+	if o.log != nil {
+		*o.log = append(*o.log, "install")
+	}
+	return o.err
+}
+
+// orderedBackupPort implements PreUpdateBackupPort for the pre-update
+// backup tests. It records every central it was asked to back up and, when
+// log is set, appends "backup" to the same shared log orderedFirmwareUpdater
+// writes to.
+type orderedBackupPort struct {
+	log         *[]string
+	calls       int
+	lastCentral string
+	id          string
+	err         error
+}
+
+func (o *orderedBackupPort) CreateBackupForCentral(_ context.Context, centralName string) (string, error) {
+	o.calls++
+	o.lastCentral = centralName
+	if o.log != nil {
+		*o.log = append(*o.log, "backup")
+	}
+	if o.err != nil {
+		return "", o.err
+	}
+	return o.id, nil
+}
+
+func systemUpdateInstallRequestBody(body string) *http.Request {
+	return httptest.NewRequest(http.MethodPost, "/system/update/install", strings.NewReader(body))
+}
+
+// TestPostSystemUpdateInstall_BackupFirstFailure_Returns502AndSkipsInstall
+// verifies that a failing pre-update backup aborts the whole request: the
+// entire reason to ask for a backup before a firmware update is to have
+// something to fall back to, so an update must never proceed without it.
+func TestPostSystemUpdateInstall_BackupFirstFailure_Returns502AndSkipsInstall(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	fw := &orderedFirmwareUpdater{}
+	h.Update.FirmwareUpdater = fw
+	idx := &testHubIndex{h: h}
+	backup := &orderedBackupPort{err: errors.New("ccu busy")}
+
+	rr := httptest.NewRecorder()
+	PostSystemUpdateInstall(idx, backup, nil)(rr, systemUpdateInstallRequestBody(`{"backup_first":true}`))
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502, body=%s", rr.Code, rr.Body.String())
+	}
+	if backup.calls != 1 {
+		t.Fatalf("expected the backup to be attempted once, got %d", backup.calls)
+	}
+	if fw.calls != 0 {
+		t.Fatal("the update must not be installed when the pre-update backup fails")
+	}
+}
+
+// TestPostSystemUpdateInstall_BackupFirstSuccess_BacksUpThenInstalls
+// verifies the happy path runs the backup to completion before triggering
+// the install, in that order, and records the backup_pre_update audit
+// entry.
+func TestPostSystemUpdateInstall_BackupFirstSuccess_BacksUpThenInstalls(t *testing.T) {
+	t.Parallel()
+	var order []string
+	h := hub.NewHub("test-ccu")
+	fw := &orderedFirmwareUpdater{log: &order}
+	h.Update.FirmwareUpdater = fw
+	idx := &testHubIndex{h: h}
+	backup := &orderedBackupPort{log: &order, id: "b1"}
+	rec := &captureRecorder{}
+
+	rr := httptest.NewRecorder()
+	PostSystemUpdateInstall(idx, backup, rec)(rr, systemUpdateInstallRequestBody(`{"backup_first":true}`))
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202, body=%s", rr.Code, rr.Body.String())
+	}
+	if backup.calls != 1 || backup.lastCentral != "test-ccu" {
+		t.Fatalf("expected 1 backup call for test-ccu, got calls=%d central=%q", backup.calls, backup.lastCentral)
+	}
+	if fw.calls != 1 {
+		t.Fatalf("expected 1 install call, got %d", fw.calls)
+	}
+	if len(order) != 2 || order[0] != "backup" || order[1] != "install" {
+		t.Fatalf("call order = %v, want [backup install]", order)
+	}
+	if len(rec.entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(rec.entries))
+	}
+	if got := rec.entries[0]; got.Action != audit.ActionBackupPreUpdate {
+		t.Fatalf("audit action = %q, want %q", got.Action, audit.ActionBackupPreUpdate)
+	}
+}
+
+// TestPostSystemUpdateInstall_BackupFirstNilPort_Returns503 verifies that
+// backup_first with no backup port wired is reported as unwired rather
+// than silently skipping the safety net.
+func TestPostSystemUpdateInstall_BackupFirstNilPort_Returns503(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Update.FirmwareUpdater = &orderedFirmwareUpdater{}
+	idx := &testHubIndex{h: h}
+
+	rr := httptest.NewRecorder()
+	PostSystemUpdateInstall(idx, nil, nil)(rr, systemUpdateInstallRequestBody(`{"backup_first":true}`))
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503, body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// ambiguousBackupHubIndex resolves a single hub via the back-compat Hub()
+// getter (the same shape adapter.HubAdapter.Hub uses) while Hubs() reports
+// none — the condition under which resolveHubForMutation can still find a
+// hub for an empty `central` query, but the pre-update-backup target
+// defaulting (which re-reads idx.Hubs()) cannot infer a single central and
+// must demand an explicit one.
+type ambiguousBackupHubIndex struct {
+	h *hub.Hub
+}
+
+func (a *ambiguousBackupHubIndex) Hub() *hub.Hub                { return a.h }
+func (a *ambiguousBackupHubIndex) Hubs() []NamedHub             { return nil }
+func (a *ambiguousBackupHubIndex) HubFor(_ string) *hub.Hub     { return nil }
+func (a *ambiguousBackupHubIndex) SerialSuffix(_ string) string { return "" }
+
+// TestPostSystemUpdateInstall_BackupFirstAmbiguousCentral_Returns400
+// verifies that backup_first refuses to guess a target central when it
+// cannot resolve exactly one from the hub index, even though the update
+// target itself resolved via the legacy Hub() fallback.
+func TestPostSystemUpdateInstall_BackupFirstAmbiguousCentral_Returns400(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	h.Update.FirmwareUpdater = &orderedFirmwareUpdater{}
+	idx := &ambiguousBackupHubIndex{h: h}
+	backup := &orderedBackupPort{id: "b1"}
+
+	rr := httptest.NewRecorder()
+	PostSystemUpdateInstall(idx, backup, nil)(rr, systemUpdateInstallRequestBody(`{"backup_first":true}`))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body=%s", rr.Code, rr.Body.String())
+	}
+	if backup.calls != 0 {
+		t.Fatal("backup must not be attempted when the target central is ambiguous")
+	}
+}
+
+// TestPostSystemUpdateInstall_WithoutBackupFirst_InstallOnlyBackupNeverCalled
+// verifies the default (no flag) behaviour is unchanged: only the update
+// runs, the backup port is never consulted.
+func TestPostSystemUpdateInstall_WithoutBackupFirst_InstallOnlyBackupNeverCalled(t *testing.T) {
+	t.Parallel()
+	h := hub.NewHub("test-ccu")
+	fw := &orderedFirmwareUpdater{}
+	h.Update.FirmwareUpdater = fw
+	idx := &testHubIndex{h: h}
+	backup := &orderedBackupPort{}
+
+	rr := httptest.NewRecorder()
+	PostSystemUpdateInstall(idx, backup, nil)(rr, systemUpdateInstallRequestBody(`{}`))
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202, body=%s", rr.Code, rr.Body.String())
+	}
+	if backup.calls != 0 {
+		t.Fatal("backup must never run when backup_first is not set")
+	}
+	if fw.calls != 1 {
+		t.Fatalf("expected 1 install call, got %d", fw.calls)
 	}
 }

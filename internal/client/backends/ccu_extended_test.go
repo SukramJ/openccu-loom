@@ -1016,6 +1016,88 @@ func TestCcuRebootCCUScriptError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// SetCCUPosition
+// ---------------------------------------------------------------------------
+
+// fakePositionScriptRunner is a ScriptRunner that also implements the
+// narrow position-setter capability CcuBackend.SetCCUPosition type-asserts
+// for. Run/RunJSON are never exercised by these tests — only the position
+// seam matters, so they are inherited unused from fakeScriptRunner.
+type fakePositionScriptRunner struct {
+	fakeScriptRunner
+
+	calls   int
+	lastLon float64
+	lastLat float64
+	gotLon  float64
+	gotLat  float64
+	err     error
+}
+
+func (f *fakePositionScriptRunner) SetPosition(_ context.Context, longitude, latitude float64) (gotLon, gotLat float64, err error) { //nolint:gocritic // named results mirror the runner method this fake stands in for
+	f.calls++
+	f.lastLon, f.lastLat = longitude, latitude
+	if f.err != nil {
+		return 0, 0, f.err
+	}
+	return f.gotLon, f.gotLat, nil
+}
+
+func TestCcuSetCCUPositionNoRega(t *testing.T) {
+	t.Parallel()
+	// The position lives in ReGa, not on the wire — without a ScriptRunner
+	// there is no path to write it.
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	err := b.SetCCUPosition(context.Background(), 10, 50)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// TestCcuSetCCUPositionRunnerWithoutPositionCapability verifies that a
+// ScriptRunner implementing only Run/RunJSON (no SetPosition) — the shape
+// every non-position ReGa call uses — also reports ErrUnsupported through
+// the narrow type assertion, rather than panicking on a failed cast.
+func TestCcuSetCCUPositionRunnerWithoutPositionCapability(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(&fakeScriptRunner{})
+	err := b.SetCCUPosition(context.Background(), 10, 50)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuSetCCUPositionForwardsToRunner(t *testing.T) {
+	t.Parallel()
+	runner := &fakePositionScriptRunner{gotLon: 10, gotLat: 50}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+	if err := b.SetCCUPosition(context.Background(), 10, 50); err != nil {
+		t.Fatalf("SetCCUPosition: %v", err)
+	}
+	if runner.calls != 1 || runner.lastLon != 10 || runner.lastLat != 50 {
+		t.Fatalf("runner not called with the expected position: calls=%d lon=%g lat=%g",
+			runner.calls, runner.lastLon, runner.lastLat)
+	}
+}
+
+// TestCcuSetCCUPositionPropagatesRunnerError verifies that a runner-side
+// failure (validation or read-back mismatch) surfaces to the caller
+// unchanged — SetCCUPosition adds no error translation of its own.
+func TestCcuSetCCUPositionPropagatesRunnerError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("ccu rejected the position")
+	runner := &fakePositionScriptRunner{err: sentinel}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+	err := b.SetCCUPosition(context.Background(), 10, 50)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("want sentinel error, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DeleteSystemVariable
 // ---------------------------------------------------------------------------
 
@@ -1536,5 +1618,139 @@ func TestHomegearBackendTestDeviceUnsupported(t *testing.T) {
 	_, err := b.TestDevice(context.Background(), "HG0001", 1, 1)
 	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PoweroffCCU
+// ---------------------------------------------------------------------------
+
+func TestCcuPoweroffCCUNoScriptRunner(t *testing.T) {
+	t.Parallel()
+	// The poweroff_ccu script is the only wire path (no JSON-RPC
+	// equivalent), so without a ScriptRunner this must be ErrUnsupported.
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	_, err := b.PoweroffCCU(context.Background())
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuPoweroffCCUDispatch(t *testing.T) {
+	t.Parallel()
+	sr := &fakeScriptRunner{rawJSON: `{"success":true,"message":"CCU poweroff triggered"}`}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(sr)
+	ok, err := b.PoweroffCCU(context.Background())
+	if err != nil {
+		t.Fatalf("PoweroffCCU: %v", err)
+	}
+	if !ok {
+		t.Fatal("ok should be true on success")
+	}
+	if sr.lastScript != hmenum.RegaScriptPoweroffCCU {
+		t.Fatalf("script = %q, want poweroff_ccu", sr.lastScript)
+	}
+}
+
+func TestCcuPoweroffCCUScriptError(t *testing.T) {
+	t.Parallel()
+	sr := &fakeScriptRunner{err: errors.New("rega down")}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(sr)
+	if _, err := b.PoweroffCCU(context.Background()); err == nil {
+		t.Fatal("expected error when the ReGa script fails")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// EnterSafeMode / EnterRecoveryMode
+// ---------------------------------------------------------------------------
+
+func TestCcuEnterSafeModeNoJSON(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(&fakeCaller{}, nil, nil)
+	if err := b.EnterSafeMode(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuEnterSafeModeDispatch(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: true}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	if err := b.EnterSafeMode(context.Background()); err != nil {
+		t.Fatalf("EnterSafeMode: %v", err)
+	}
+	method, _, ok := loadArgs(j)
+	if !ok || method != "SafeMode.enter" {
+		t.Fatalf("method=%s, want SafeMode.enter", method)
+	}
+}
+
+// TestCcuEnterSafeModePropagatesError verifies that a JSON-RPC failure
+// (e.g. the CCU rejects the call) surfaces to the caller unchanged.
+func TestCcuEnterSafeModePropagatesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("ccu rejected safe mode")
+	j := &fakeCaller{err: sentinel}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	if err := b.EnterSafeMode(context.Background()); !errors.Is(err, sentinel) {
+		t.Fatalf("want sentinel error, got %v", err)
+	}
+}
+
+func TestCcuEnterRecoveryModeNoJSON(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(&fakeCaller{}, nil, nil)
+	if err := b.EnterRecoveryMode(context.Background()); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuEnterRecoveryModeDispatch(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: true}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	if err := b.EnterRecoveryMode(context.Background()); err != nil {
+		t.Fatalf("EnterRecoveryMode: %v", err)
+	}
+	method, _, ok := loadArgs(j)
+	if !ok || method != "RecoveryMode.enter" {
+		t.Fatalf("method=%s, want RecoveryMode.enter", method)
+	}
+}
+
+// TestCcuEnterRecoveryModePropagatesError verifies that a stock CCU3 (no
+// RecoveryMode.enter method) fails loudly rather than silently doing
+// nothing — a stock CCU3 has no such method.
+func TestCcuEnterRecoveryModePropagatesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("unknown method RecoveryMode.enter")
+	j := &fakeCaller{err: sentinel}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	if err := b.EnterRecoveryMode(context.Background()); !errors.Is(err, sentinel) {
+		t.Fatalf("want sentinel error, got %v", err)
+	}
+}
+
+// TestCcuEnterSafeModeAndRecoveryModeAreIndependentCalls verifies the two
+// JSON-RPC methods never bleed into each other: a caller that wires only
+// one of them must never accidentally trigger the other.
+func TestCcuEnterSafeModeAndRecoveryModeAreIndependentCalls(t *testing.T) {
+	t.Parallel()
+	j := &fakeCaller{reply: true}
+	b := NewCcuBackend(&fakeCaller{}, j, nil)
+	if err := b.EnterSafeMode(context.Background()); err != nil {
+		t.Fatalf("EnterSafeMode: %v", err)
+	}
+	if method, _, _ := loadArgs(j); method != "SafeMode.enter" {
+		t.Fatalf("after EnterSafeMode, method=%s, want SafeMode.enter", method)
+	}
+	if err := b.EnterRecoveryMode(context.Background()); err != nil {
+		t.Fatalf("EnterRecoveryMode: %v", err)
+	}
+	if method, _, _ := loadArgs(j); method != "RecoveryMode.enter" {
+		t.Fatalf("after EnterRecoveryMode, method=%s, want RecoveryMode.enter", method)
 	}
 }

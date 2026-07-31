@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.7.0
+  version: 3.11.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1546,11 +1546,34 @@ paths:
           required: false
           schema: { type: string }
           description: Target central (optional for single-CCU deployments).
+      description: >
+        Starts the CCU firmware update. With `backup_first` a full CCU
+        backup is taken first and the update starts only once it is
+        durably stored; a failed backup aborts and the update does not
+        run, because the point of asking for one is to have something to
+        return to. The call then blocks for as long as the backup takes —
+        minutes on a large configuration — since its response is what
+        tells the operator whether that safety net exists.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backup_first:
+                  type: boolean
+                  default: false
+                  description: >
+                    Take a full backup of the target central before
+                    starting the update.
       responses:
         "202":
           description: Accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /system/metrics:
     get:
@@ -1675,6 +1698,156 @@ paths:
           description: Reboot triggered
         "404":
           $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/position:
+    put:
+      operationId: setSystemCCUPosition
+      summary: Set a CCU's astro reference position
+      tags: [system]
+      description: >
+        Writes the CCU's latitude/longitude (decimal degrees) via ReGa.
+        Every sunrise/sunset time the CCU computes for its own programs
+        and for the weekly profiles this daemon edits derives from this
+        position, so a wrong value skews schedules silently rather than
+        failing — which is why it is exposed at all. Admin-gated and
+        audited. The CCU reads the values back and the daemon compares
+        them, so a 204 means the CCU holds exactly what was sent. The
+        time zone is not writable here; it is set on the CCU itself.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [longitude, latitude]
+              properties:
+                longitude:
+                  type: number
+                  minimum: -180
+                  maximum: 180
+                latitude:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+      responses:
+        "204":
+          description: Position written and confirmed by read-back
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >
+            Coordinate out of range, or the central's backend has no ReGa
+            path (CUxD, Homegear).
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/poweroff:
+    post:
+      operationId: postSystemCCUPoweroff
+      summary: Shut a CCU host down
+      tags: [system]
+      description: >
+        Powers the CCU off via ReGa. Nothing brings it back on: the central stays in the readiness gate's waiting state until it is switched on again, which is the intended outcome rather than a fault.
+        Admin-gated and audited. Answers 202 once the CCU accepted the
+        request; 422 when the central's backend cannot host the action
+        (CUxD, Homegear, or a firmware without the method).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Poweroff triggered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The central's backend cannot host this action.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/safe-mode:
+    post:
+      operationId: postSystemCCUSafeMode
+      summary: Restart a CCU into safe mode
+      tags: [system]
+      description: >
+        Restarts the CCU with its ReGa logic layer held down, so a configuration that breaks normal startup can be repaired.
+        Admin-gated and audited. Answers 202 once the CCU accepted the
+        request; 422 when the central's backend cannot host the action
+        (CUxD, Homegear, or a firmware without the method).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Safe-mode restart triggered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The central's backend cannot host this action.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/recovery-mode:
+    post:
+      operationId: postSystemCCURecoveryMode
+      summary: Restart a CCU into its recovery system
+      tags: [system]
+      description: >
+        Restarts the CCU into the separate recovery system reachable on the CCU's own address. OpenCCU / RaspberryMatic only - a stock CCU3 has no such method and the error is reported rather than swallowed.
+        Admin-gated and audited. Answers 202 once the CCU accepted the
+        request; 422 when the central's backend cannot host the action
+        (CUxD, Homegear, or a firmware without the method).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Recovery-mode restart triggered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The central's backend cannot host this action.
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -4095,6 +4268,79 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/BackupEntry" }
         "502": { $ref: "#/components/responses/BadGateway" }
+  /backups/upload:
+    post:
+      operationId: uploadBackup
+      summary: Import an externally-supplied CCU backup
+      tags: [system]
+      description: >
+        Takes in a `.sbk` archive produced elsewhere — another CCU, an
+        older daemon, the CCU WebUI — and stores it so it can be restored
+        through `POST /backups/{id}/restore` like any locally-taken
+        backup.
+
+
+        The archive is inspected before it is stored, so picking the wrong
+        file fails here rather than at restore time when the CCU is
+        already being wiped. The check is structural: a readable tar
+        carrying `usr_local.tar.gz` and its `signature`. The signature
+        itself cannot be verified without the CCU's key material, so it is
+        not claimed to be. The firmware version the archive came from is
+        read from its `firmware_version` member and returned, so the
+        operator can compare it against the target CCU — the same fact the
+        CCU's own restore consults.
+
+
+        Admin-gated and audited. The request body is streamed, not
+        schema-validated, because a real archive is far larger than the
+        validator's buffer.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The `.sbk` archive.
+      responses:
+        "201":
+          description: Archive accepted and stored.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/BackupEntry"
+                  - type: object
+                    properties:
+                      firmware_version:
+                        type: string
+                        description: >
+                          Firmware the archive was taken from, from its
+                          `firmware_version` member. Absent for CCU2-era
+                          archives, which predate it.
+                      product:
+                        type: string
+                        description: Product label from the same member.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: The archive exceeds the accepted size.
+        "422":
+          description: >
+            Not a CCU system backup — unreadable as a tar, or missing the
+            configuration archive or its signature.
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
   /backups/{id}/download:
     get:
       operationId: downloadBackup
@@ -7399,6 +7645,33 @@ components:
           description: |
             Whether the CCU redirects plain HTTP to HTTPS. Same caveat as
             `auth_enabled`.
+        longitude:
+          type: number
+          description: |
+            The CCU's astro reference longitude in decimal degrees. Every
+            sunrise/sunset time the CCU computes derives from it, so a
+            wrong value skews astro schedules silently. Absent while the
+            position is unresolved — never reported as 0, which is a real
+            coordinate.
+        latitude:
+          type: number
+          description: |
+            The CCU's astro reference latitude in decimal degrees. Same
+            absence rule as `longitude`.
+        timezone:
+          type: string
+          description: |
+            The CCU's configured IANA time zone (e.g. `Europe/Berlin`),
+            read from its time configuration. Read-only here: it is set on
+            the CCU itself.
+        recovery_mode_supported:
+          type: boolean
+          description: |
+            Whether this CCU offers a recovery system
+            (`POST .../recovery-mode`). True for OpenCCU / RaspberryMatic
+            firmware, false for a stock CCU3 and while the product is not
+            yet known — so a client hides the action rather than offering
+            one that cannot work.
         ccu_interfaces:
           type: array
           description: |

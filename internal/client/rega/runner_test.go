@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1248,5 +1250,192 @@ func TestGetSerialKeepsShortSerialVerbatim(t *testing.T) {
 	}
 	if serial != "ABC1234567" {
 		t.Errorf("serial=%q, want ABC1234567 verbatim", serial)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetPosition: astro reference position write + read-back validation
+// ---------------------------------------------------------------------------
+
+// TestSetPositionRejectsInvalidInputWithoutCallingCCU verifies that every
+// validation failure — non-finite values and out-of-range longitude or
+// latitude — is rejected before any network call, wraps
+// hmerr.ErrValidation, and returns a zeroed position. Params are received
+// by textual substitution into the ReGa script, so an out-of-range value
+// would otherwise be written to the CCU verbatim before anything could
+// object; the fake server fails the test if SetPosition ever dispatches to
+// it, proving the rejection happens client-side.
+func TestSetPositionRejectsInvalidInputWithoutCallingCCU(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		longitude float64
+		latitude  float64
+	}{
+		{"longitude NaN", math.NaN(), 0},
+		{"longitude +Inf", math.Inf(1), 0},
+		{"longitude -Inf", math.Inf(-1), 0},
+		{"latitude NaN", 0, math.NaN()},
+		{"latitude +Inf", 0, math.Inf(1)},
+		{"latitude -Inf", 0, math.Inf(-1)},
+		{"longitude above range", 180.1, 0},
+		{"longitude below range", -180.1, 0},
+		{"latitude above range", 0, 90.1},
+		{"latitude below range", 0, -90.1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				t.Errorf("%s: SetPosition dispatched a network call for an invalid input", tc.name)
+			}))
+			defer srv.Close()
+
+			r := newRunner(t, srv.URL)
+			gotLon, gotLat, err := r.SetPosition(context.Background(), tc.longitude, tc.latitude)
+			if err == nil {
+				t.Fatal("expected a validation error")
+			}
+			if !errors.Is(err, hmerr.ErrValidation) {
+				t.Errorf("error should wrap hmerr.ErrValidation, got %v", err)
+			}
+			if gotLon != 0 || gotLat != 0 {
+				t.Errorf("expected zero coordinates on rejection, got %g/%g", gotLon, gotLat)
+			}
+		})
+	}
+}
+
+// TestSetPositionAcceptsBoundaryValues verifies that longitude/latitude
+// exactly at the documented range boundaries (±180 / ±90) pass validation
+// and reach the ReGa script, rather than being rejected by an off-by-one
+// bound check.
+func TestSetPositionAcceptsBoundaryValues(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		lon, lat  float64
+		wantReply string
+	}{
+		{"longitude +180", 180, 0, `{"longitude":180,"latitude":0}`},
+		{"longitude -180", -180, 0, `{"longitude":-180,"latitude":0}`},
+		{"latitude +90", 0, 90, `{"longitude":0,"latitude":90}`},
+		{"latitude -90", 0, -90, `{"longitude":0,"latitude":-90}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			capture := &scriptCapture{}
+			srv := newFakeCCU(t, capture, tc.wantReply)
+			defer srv.Close()
+
+			r := newRunner(t, srv.URL)
+			gotLon, gotLat, err := r.SetPosition(context.Background(), tc.lon, tc.lat)
+			if err != nil {
+				t.Fatalf("SetPosition: %v", err)
+			}
+			if gotLon != tc.lon || gotLat != tc.lat {
+				t.Errorf("got %g/%g, want %g/%g", gotLon, gotLat, tc.lon, tc.lat)
+			}
+			if capture.lastScript() == "" {
+				t.Error("expected the script to reach the CCU")
+			}
+		})
+	}
+}
+
+// TestSetPositionFormatsSixDecimalPlaces verifies the wire format is
+// always fixed-point with six decimals, including values that Go's default
+// float formatting would otherwise render in scientific notation — a
+// ReGa script's numeric literal parser does not accept "1e-07".
+func TestSetPositionFormatsSixDecimalPlaces(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name           string
+		lon, lat       float64
+		wantLonLiteral string
+		wantLatLiteral string
+	}{
+		{
+			name: "ordinary decimal degrees",
+			lon:  10.222946, lat: 53.551086,
+			wantLonLiteral: "10.222946",
+			wantLatLiteral: "53.551086",
+		},
+		{
+			name: "value that would otherwise render in scientific notation",
+			lon:  1e-7, lat: 0,
+			wantLonLiteral: "0.000000",
+			wantLatLiteral: "0.000000",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			capture := &scriptCapture{}
+			reply := `{"longitude":` + strconv.FormatFloat(tc.lon, 'f', 6, 64) +
+				`,"latitude":` + strconv.FormatFloat(tc.lat, 'f', 6, 64) + `}`
+			srv := newFakeCCU(t, capture, reply)
+			defer srv.Close()
+
+			r := newRunner(t, srv.URL)
+			if _, _, err := r.SetPosition(context.Background(), tc.lon, tc.lat); err != nil {
+				t.Fatalf("SetPosition: %v", err)
+			}
+			script := capture.lastScript()
+			if !strings.Contains(script, tc.wantLonLiteral) {
+				t.Errorf("script missing formatted longitude %q: %s", tc.wantLonLiteral, script)
+			}
+			if !strings.Contains(script, tc.wantLatLiteral) {
+				t.Errorf("script missing formatted latitude %q: %s", tc.wantLatLiteral, script)
+			}
+			if strings.Contains(script, "e-") || strings.Contains(script, "e+") {
+				t.Errorf("script contains scientific notation: %s", script)
+			}
+		})
+	}
+}
+
+// TestSetPositionReadBackMismatchIsClientException verifies that a
+// materially different read-back — e.g. the CCU silently clamping or
+// ignoring the write — surfaces as hmerr.ErrClientException with a
+// zeroed result rather than a false success.
+func TestSetPositionReadBackMismatchIsClientException(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"longitude":10.0,"latitude":50.0}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	gotLon, gotLat, err := r.SetPosition(context.Background(), 10.222946, 53.551086)
+	if err == nil {
+		t.Fatal("expected a read-back mismatch error")
+	}
+	if !errors.Is(err, hmerr.ErrClientException) {
+		t.Errorf("error should wrap hmerr.ErrClientException, got %v", err)
+	}
+	if gotLon != 0 || gotLat != 0 {
+		t.Errorf("expected zero coordinates on mismatch, got %g/%g", gotLon, gotLat)
+	}
+}
+
+// TestSetPositionAcceptsReadBackWithinEpsilon verifies that a read-back
+// difference below positionEpsilon (1e-5) — the CCU's own six-decimal
+// rounding — is tolerated as a rounding artefact rather than rejected, and
+// that the returned coordinates are the CCU's own read-back values.
+func TestSetPositionAcceptsReadBackWithinEpsilon(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	// 5e-6 difference, below the 1e-5 epsilon.
+	srv := newFakeCCU(t, capture, `{"longitude":10.222951,"latitude":53.551086}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	gotLon, gotLat, err := r.SetPosition(context.Background(), 10.222946, 53.551086)
+	if err != nil {
+		t.Fatalf("SetPosition: %v", err)
+	}
+	if gotLon != 10.222951 || gotLat != 53.551086 {
+		t.Errorf("got %g/%g, want the CCU's read-back 10.222951/53.551086", gotLon, gotLat)
 	}
 }

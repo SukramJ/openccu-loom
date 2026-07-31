@@ -1,11 +1,18 @@
 !# openccu-loom — get_backend_info
 !# Output: {"version":"<ver>","product":"<CCU|OpenCCU>",
-!#          "hostname":"<host>","is_ha_app":<bool>}
+!#          "hostname":"<host>","is_ha_app":<bool>,
+!#          "longitude":<deg>,"latitude":<deg>,"timezone":"<tz>"}
 !#
 !# Reads /VERSION for firmware version + product label, classifies
 !# anything that is not a real CCU/debmatic backend as "OpenCCU",
 !# resolves the hostname, and reports whether the daemon is executing
 !# inside a Home-Assistant-App environment.
+!#
+!# The position is the CCU's own astro reference: every sunrise/sunset
+!# schedule the CCU computes derives from it, so it is reported here to
+!# make a wrong location visible instead of silently skewing schedules.
+!# ToString(6) pins the precision rather than relying on the default
+!# rendering (~0.1 m at these latitudes, far beyond what astro needs).
 
 string sVersion = "";
 string sProduct = "";
@@ -40,7 +47,14 @@ if (sHaFlag == "1") {
     }
 }
 
+string sTimezone = "";
+system.Exec("grep -h TIMEZONE= /etc/config/time.conf 2>/dev/null | cut -d= -f2 | tr -d '[:space:]'", &sTimezone);
+sTimezone = sTimezone.Trim();
+
 Write('{"version":"' # sVersion # '",');
 Write('"product":"' # sProduct # '",');
 Write('"hostname":"' # sHostname # '",');
-Write('"is_ha_app":' # sIsHaApp # '}');
+Write('"is_ha_app":' # sIsHaApp # ',');
+Write('"longitude":' # system.Longitude().ToString(6) # ',');
+Write('"latitude":' # system.Latitude().ToString(6) # ',');
+Write('"timezone":"' # sTimezone # '"}');

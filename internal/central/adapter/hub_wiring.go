@@ -209,6 +209,9 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		si.Version = info.Version
 		si.Hostname = info.Hostname
 		si.IsHaApp = info.IsHAApp
+		si.Longitude = info.Longitude
+		si.Latitude = info.Latitude
+		si.Timezone = info.Timezone
 	}
 	// The serial is the central-id slot of every canonical HA routing key for
 	// hub / internal / virtual-remote data points; an empty serial yields broken

@@ -59,6 +59,36 @@
     }
   }
 
+  let uploading = $state(false);
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  // Importing an archive taken elsewhere. The daemon inspects it before
+  // storing, so a wrong file is refused here rather than at restore time
+  // when the CCU is already being wiped.
+  async function onFilePicked(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    // Clear immediately so picking the same file twice still fires.
+    input.value = "";
+    if (!file) return;
+    uploading = true;
+    try {
+      const entry = await api.uploadBackup(file);
+      toastStore.success(
+        entry.firmware_version
+          ? t("backup.uploaded_with_version", { id: entry.id, version: entry.firmware_version })
+          : t("backup.uploaded", { id: entry.id }),
+      );
+      await load();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
+      );
+    } finally {
+      uploading = false;
+    }
+  }
+
   async function trigger() {
     triggering = true;
     try {
@@ -179,6 +209,23 @@
           <Select options={centralOptions} bind:value={triggerCentral} class="w-40" />
         </label>
       {/if}
+      <input
+        bind:this={fileInput}
+        type="file"
+        accept=".sbk"
+        class="hidden"
+        onchange={(ev) => void onFilePicked(ev)}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={() => fileInput?.click()}
+        disabled={uploading}
+        title={t("backup.upload.help")}
+      >
+        {uploading ? t("backup.uploading") : t("backup.upload")}
+      </Button>
       <Button type="button" size="sm" onclick={() => void trigger()} disabled={triggering}>
         {triggering ? t("backup.triggering") : t("backup.trigger")}
       </Button>

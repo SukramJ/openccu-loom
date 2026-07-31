@@ -907,6 +907,17 @@ export const api = {
       body: form,
     });
   },
+  // Imports an externally-supplied .sbk. The daemon inspects the archive
+  // before storing it and answers 422 when it is not a CCU backup, so the
+  // caller can surface a precise reason rather than a generic failure.
+  async uploadBackup(file: File | Blob) {
+    const form = new FormData();
+    form.append("file", file);
+    return request<BackupEntry & { firmware_version?: string; product?: string }>(
+      `/backups/upload`,
+      { method: "POST", body: form },
+    );
+  },
   // --- Refresh devices (CCU re-pull) ---------------------------
   refreshDevices() {
     return request<void>(`/devices/refresh`, { method: "POST" });
@@ -1249,9 +1260,15 @@ export const api = {
   getSystemUpdate() {
     return request<SystemUpdateEntry[]>(`/system/update`);
   },
-  installSystemUpdate(central?: string) {
+  // backupFirst takes a full CCU backup before the update and aborts the
+  // update if it fails, so the call can block for minutes.
+  installSystemUpdate(central?: string, backupFirst = false) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
-    return request<void>(`/system/update/install${qs}`, { method: "POST" });
+    return request<void>(`/system/update/install${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backup_first: backupFirst }),
+    });
   },
   // --- Add-on self-update (ADR 0057) ----------------------------
   // Capability-gated: `getAddonUpdateStatus` always answers (supported:
@@ -1276,6 +1293,27 @@ export const api = {
       `/system/ccu/${encodeURIComponent(central)}/reboot`,
       { method: "POST" },
     );
+  },
+  // Writes a CCU's astro reference position. 204 on success; the daemon
+  // only returns success after the CCU read the values back unchanged.
+  setCCUPosition(central: string, longitude: number, latitude: number) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/position`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ longitude, latitude }),
+    });
+  },
+  // Host power and boot mode. Each answers 202 once the CCU accepted the
+  // request; the box goes down a moment later, so a client must not wait
+  // for the central to stay reachable.
+  poweroffCCU(central: string) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/poweroff`, { method: "POST" });
+  },
+  ccuSafeMode(central: string) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/safe-mode`, { method: "POST" });
+  },
+  ccuRecoveryMode(central: string) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/recovery-mode`, { method: "POST" });
   },
   // --- Messages: ack / clear -----------------------------------
   ackAlarm(id: string, central?: string) {

@@ -307,6 +307,20 @@ type Deps struct {
 	// CCUReboot backs `POST /api/v1/system/ccu/{central}/reboot` — an
 	// admin-only reboot of one CCU host. Nil serves the route as 503.
 	CCUReboot handlers.CCURebootPort
+	// CCUPosition backs `PUT /api/v1/system/ccu/{central}/position` — an
+	// admin-only write of a CCU's astro reference position. Nil serves
+	// the route as 503.
+	CCUPosition handlers.CCUPositionPort
+	// CCUHostActions backs the admin-only host power and boot-mode routes
+	// under `/api/v1/system/ccu/{central}/`. Nil serves them as 503.
+	CCUHostActions handlers.CCUHostActionPort
+	// BackupUpload backs `POST /api/v1/backups/upload` — importing an
+	// externally-supplied .sbk. Nil serves the route as 503.
+	BackupUpload handlers.BackupUploader
+	// PreUpdateBackup backs the optional `backup_first` flag on
+	// `POST /api/v1/system/update/install`. Nil rejects that flag with
+	// 503 rather than silently updating without a backup.
+	PreUpdateBackup handlers.PreUpdateBackupPort
 	// FirmwareDownload backs `POST /api/v1/system/firmware/download` — an
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
@@ -954,6 +968,16 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// Reboot one CCU host. Admin-gated like DELETE /devices; the
 			// handler serves 503 when d.CCUReboot is nil (bridge unwired).
 			pr.With(admin).Post("/system/ccu/{central}/reboot", handlers.PostCCUReboot(d.CCUReboot, d.AuditRecorder))
+			// Astro reference position. Admin-gated: it moves every
+			// sunrise/sunset time the CCU computes, for its own programs
+			// as well as the weekly profiles this daemon edits.
+			pr.With(admin).Put("/system/ccu/{central}/position", handlers.PutCCUPosition(d.CCUPosition, d.AuditRecorder))
+			// Host power and boot mode. All three take the CCU out of
+			// normal service, so they sit next to the reboot: admin-gated,
+			// audited, and confirmed in the UI before dispatch.
+			pr.With(admin).Post("/system/ccu/{central}/poweroff", handlers.PostCCUPoweroff(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin).Post("/system/ccu/{central}/safe-mode", handlers.PostCCUSafeMode(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin).Post("/system/ccu/{central}/recovery-mode", handlers.PostCCURecoveryMode(d.CCUHostActions, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
 			// Add-on self-update (ADR 0057). GET always answers 200 (a nil
 			// d.AddonUpdate reports supported:false) — mounted unconditionally
@@ -1066,6 +1090,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Backup != nil {
 				pr.With(admin).Post("/backups", handlers.TriggerBackup(d.Backup))
 				pr.Get("/backups", handlers.ListBackups(d.Backup))
+				// Importing an operator-supplied archive. Admin-gated like
+				// the trigger: what is imported here can later overwrite a
+				// CCU's entire configuration.
+				pr.With(admin).Post("/backups/upload", handlers.UploadBackup(d.BackupUpload, d.AuditRecorder))
 				pr.With(admin).Get("/backups/{id}/download", handlers.DownloadBackup(d.Backup))
 				pr.With(admin).Post("/backups/{id}/restore", handlers.RestoreBackup(d.Backup))
 			}
@@ -1111,7 +1139,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Hub singletons for external clients: system-update info,
 				// hub metrics, per-interface install mode.
 				pr.Get("/system/update", handlers.GetSystemUpdate(d.Hub))
-				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub))
+				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub, d.PreUpdateBackup, d.AuditRecorder))
 				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
 				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
 				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub, d.AuditRecorder))

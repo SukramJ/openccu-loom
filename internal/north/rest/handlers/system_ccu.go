@@ -58,6 +58,20 @@ type SystemCCUEntry struct {
 	// HTTPSRedirectEnabled reports whether the CCU redirects plain HTTP
 	// to HTTPS. Same caveat as AuthEnabled.
 	HTTPSRedirectEnabled bool `json:"https_redirect_enabled"`
+	// Longitude and Latitude are the CCU's astro reference position in
+	// decimal degrees, Timezone its configured IANA zone. Pointers so an
+	// unresolved position (older firmware, or bring-up not finished) is
+	// null rather than 0/0 - which is a real place in the Atlantic and
+	// would read as a plausible answer.
+	Longitude *float64 `json:"longitude,omitempty"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Timezone  string   `json:"timezone,omitempty"`
+	// RecoveryModeSupported reports whether this CCU offers a recovery
+	// system. Derived from the product label rather than probed: recovery
+	// is an OpenCCU / RaspberryMatic feature, and a stock CCU3 has no such
+	// JSON-RPC method. False while the product is still unknown, so a
+	// client hides the action instead of offering one that cannot work.
+	RecoveryModeSupported bool `json:"recovery_mode_supported"`
 	// CCUInterfaces lists the interface adapters the CCU reports for
 	// itself — the CCU-side counterpart to ConfiguredInterfaces above.
 	// Omitted until the first successful connect round; a difference

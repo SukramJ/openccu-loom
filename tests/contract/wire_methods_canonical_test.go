@@ -78,6 +78,13 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"CCU.getHttpsRedirectEnabled": true,
 		"CCU.getHeatingGroupList":     true,
 
+		// JSON-RPC — host maintenance. Both write a flag file, persist the
+		// ReGa object model and reboot on a short delay, answering `true`
+		// before the box goes down (occu api/methods/{safemode,
+		// recoverymode}/enter.tcl).
+		"SafeMode.enter":     true,
+		"RecoveryMode.enter": true,
+
 		// JSON-RPC — Interface
 		"Interface.getInstallMode":               true,
 		"Interface.setInstallModeHMIP":           true,

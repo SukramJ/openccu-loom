@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
@@ -205,4 +206,40 @@ func (a *BackupAdapter) RestorerForCentral(centralName string) BackupRestorer {
 		return nil
 	}
 	return a.restorers[centralName]
+}
+
+// uploadedBackupPrefix marks ids of archives the operator supplied rather
+// than ones this daemon pulled from a CCU. It keeps them apart in the
+// listing and, more importantly, keeps the scheduled-backup pruner from
+// ever treating an imported archive as one of its own rotations.
+const uploadedBackupPrefix = "upload-"
+
+// SaveUploaded stores an externally-supplied archive under a generated id
+// and returns the entry describing it.
+//
+// The id is derived from the wall clock rather than the uploaded file
+// name: a name comes from a browser and cannot be trusted to be unique,
+// path-safe, or even present. The original name is deliberately not kept
+// — nothing downstream reads it, and storing attacker-controlled text
+// would be a liability for no gain.
+func (s *FilesystemBackupStorage) SaveUploaded(
+	ctx context.Context, _ string, data []byte,
+) (hmapi.BackupEntry, error) {
+	now := time.Now().UTC()
+	id := uploadedBackupPrefix + now.Format("20060102-150405.000")
+	// The generated id carries a dot from the millisecond field, which
+	// pathForID tolerates; only separators and the dot-only names are
+	// rejected. Guard anyway so a future format change cannot silently
+	// produce a traversal.
+	if _, err := s.pathForID(id); err != nil {
+		return hmapi.BackupEntry{}, err
+	}
+	if err := s.Save(ctx, id, data); err != nil {
+		return hmapi.BackupEntry{}, err
+	}
+	return hmapi.BackupEntry{
+		ID:        id,
+		Bytes:     int64(len(data)),
+		CreatedAt: now,
+	}, nil
 }

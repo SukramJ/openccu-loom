@@ -4,14 +4,18 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/backup/sbk"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -128,4 +132,138 @@ func DownloadBackup(svc BackupService) http.HandlerFunc {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup stream failed", err)
 		}
 	}
+}
+
+// BackupUploader stores an externally-supplied CCU backup so it becomes
+// restorable through the ordinary restore path. Implemented by the
+// filesystem backup storage via the cmd-layer adapter.
+type BackupUploader interface {
+	// SaveUploaded persists data under a generated id and returns the
+	// entry describing it.
+	SaveUploaded(ctx context.Context, filename string, data []byte) (hmapi.BackupEntry, error)
+}
+
+// maxUploadedBackupBytes bounds an uploaded .sbk. Real archives run to a
+// few tens of megabytes; 512 MiB is far above any genuine backup and
+// still keeps a hostile or mistaken upload from exhausting memory. The
+// body is read into memory rather than streamed to disk because the
+// archive has to be inspected before it is stored — writing an
+// unvalidated file first would leave junk behind on every bad upload.
+const maxUploadedBackupBytes = 512 << 20
+
+// UploadBackup handles `POST /api/v1/backups/upload`: a multipart form
+// with a single `file` part carrying a CCU `.sbk` archive. The archive is
+// inspected before it is stored, so an operator who picks the wrong file
+// is told immediately rather than at restore time, when the CCU is
+// already being wiped.
+//
+// The daemon cannot verify the archive's signature — that needs the CCU's
+// key material — so the check is deliberately structural: a readable tar
+// carrying the configuration archive and its signature. The firmware
+// version the backup came from is reported back so the operator can
+// compare it against the target CCU, which is exactly what the CCU's own
+// restore does before deciding whether the backup is usable.
+func UploadBackup(svc BackupUploader, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Backup storage unavailable", ""))
+			return
+		}
+		reader, err := r.MultipartReader()
+		if err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Expected multipart/form-data", err.Error()))
+			return
+		}
+		var (
+			data     []byte
+			filename string
+		)
+		for {
+			part, partErr := reader.NextPart()
+			if errors.Is(partErr, io.EOF) {
+				break
+			}
+			if partErr != nil {
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeBadRequest, r, "Malformed multipart body", partErr.Error()))
+				return
+			}
+			if part.FormName() != "file" {
+				_ = part.Close()
+				continue
+			}
+			filename = part.FileName()
+			data, err = io.ReadAll(io.LimitReader(part, maxUploadedBackupBytes+1))
+			_ = part.Close()
+			if err != nil {
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeBadRequest, r, "Upload failed", err.Error()))
+				return
+			}
+			break
+		}
+		switch {
+		case len(data) == 0:
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing file part", "a `file` part carrying the .sbk archive is required"))
+			return
+		case len(data) > maxUploadedBackupBytes:
+			problem.Write(w, http.StatusRequestEntityTooLarge,
+				problem.New(problem.TypeValidation, r, "Backup too large", "the archive exceeds the accepted size"))
+			return
+		}
+		info, err := sbk.InspectBytes(data)
+		if err != nil {
+			// The two failures call for different things from the
+			// operator: an unreadable archive usually means the wrong file
+			// was picked, while a readable one missing a member means the
+			// right kind of file arrived damaged or truncated. Saying
+			// which saves a round of guessing.
+			title := "Not a CCU system backup"
+			if errors.Is(err, sbk.ErrIncomplete) {
+				title = "Incomplete CCU system backup"
+			}
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, title, err.Error()))
+			return
+		}
+		entry, err := svc.SaveUploaded(r.Context(), filename, data)
+		if err != nil {
+			// A storage that cannot take in archives is a deployment
+			// state, not a fault: reporting it as an internal error would
+			// send the operator hunting for a bug that is not there.
+			if errors.Is(err, hmerr.ErrUnsupported) {
+				problem.Write(w, http.StatusServiceUnavailable,
+					problem.New(problem.TypeServiceUnready, r, "Backup import unavailable", err.Error()))
+				return
+			}
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Storing the backup failed", err)
+			return
+		}
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   identityFromCtx(r.Context()),
+				Action: audit.ActionBackupUpload,
+				Note:   entry.ID,
+			})
+		}
+		JSON(w, http.StatusCreated, uploadedBackupResponse{
+			BackupEntry:     entry,
+			FirmwareVersion: info.FirmwareVersion,
+			Product:         info.Product,
+		})
+	}
+}
+
+// uploadedBackupResponse is the 201 body: the stored entry plus what the
+// inspection learned about where the archive came from.
+type uploadedBackupResponse struct {
+	hmapi.BackupEntry
+	// FirmwareVersion and Product describe the CCU that produced the
+	// archive, read from its firmware_version member. Empty when the
+	// archive omits it (CCU2-era backups predate it).
+	FirmwareVersion string `json:"firmware_version,omitempty"`
+	Product         string `json:"product,omitempty"`
 }

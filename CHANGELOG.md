@@ -4,6 +4,82 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Optional backup before a CCU firmware update (SY06).** The system
+  update card gains a "back up first" checkbox: with it,
+  `POST /api/v1/system/update/install` takes a full CCU backup and starts
+  the update only once that backup is durably stored. A failed backup
+  aborts and the update does not run — the whole point of asking for one
+  is to have something to return to. The call blocks while the backup
+  runs (minutes on a large configuration), because its response is what
+  tells the operator whether the safety net exists; the checkbox is off
+  by default so that wait is never a surprise (API 3.11.0, additive).
+  No changelog link is offered: the CCU's firmware check reports only
+  version numbers and no release-notes source, and a constructed URL
+  would be a guess that breaks differently on every firmware variant.
+
+- **Import an externally-supplied CCU backup (SY02).** `POST
+  /api/v1/backups/upload` takes in a `.sbk` archive produced elsewhere —
+  another CCU, an older daemon, the CCU WebUI — and stores it so it can
+  be restored like a locally-taken backup. The archive is inspected
+  before it is stored, so picking the wrong file fails immediately rather
+  than at restore time, when the CCU is already being wiped: it must be a
+  readable tar carrying the configuration archive and its signature. The
+  signature itself is not verified — that needs the CCU's key material,
+  and claiming otherwise would be dishonest — but the firmware version
+  the archive came from is read and reported, which is the same fact the
+  CCU's own restore consults. Admin-gated and audited; the Backups view
+  gains an Import button (API 3.10.0, additive).
+
+### Fixed
+
+- **Backups work on a stock CCU3 again (SY01).** Creating a backup drove
+  `/bin/createBackup.sh`, which only OpenCCU and RaspberryMatic ship, and
+  failed outright when the script was absent. It turns out the download
+  step already did the whole job on its own: it posts to
+  `cp_security.cgi?action=create_backup`, and that CGI builds the archive
+  itself rather than reading what the script would have produced. A
+  failed start is therefore no longer fatal — it now means "this firmware
+  has no background-backup helper" and the synchronous CGI path is used
+  instead.
+
+### Added
+
+- **CCU host control: shutdown, safe mode and recovery (SY07, SY15,
+  SY16).** The CCU maintenance card in Settings → System gains three
+  actions next to the existing reboot: shut the CCU down, restart it into
+  safe mode (logic layer held down, so a configuration that breaks normal
+  startup can be repaired), and restart it into its recovery system. All
+  three are admin-gated, audited and confirmed before dispatch
+  (`POST /api/v1/system/ccu/{central}/{poweroff,safe-mode,recovery-mode}`;
+  API 3.9.0, additive). Recovery is an OpenCCU / RaspberryMatic feature,
+  so `GET /api/v1/system/ccu` reports `recovery_mode_supported` and the
+  button is hidden — not disabled — where it cannot work: there is
+  nothing an operator could do to enable it on a stock CCU3. The
+  shutdown confirmation says plainly that nothing brings the CCU back
+  remotely.
+
+- **The CCU's astro position is visible and editable (SY05).** Every
+  sunrise/sunset time a CCU computes — for its own programs and for the
+  weekly profiles this daemon edits — derives from a latitude/longitude
+  pair stored on the CCU. It was invisible here, so a wrong location
+  skewed every astro schedule with no error anywhere. `GET
+  /api/v1/system/ccu` now reports `longitude`, `latitude` and the CCU's
+  `timezone`, and the CCU maintenance card in Settings → System shows
+  them and lets an admin correct them (`PUT
+  /api/v1/system/ccu/{central}/position`, audited; API 3.8.0, additive).
+  The write is confirmed rather than assumed: the ReGa script reads the
+  values back and the daemon compares them, so a success response means
+  the CCU holds exactly what was sent. Coordinates are range-checked
+  before substitution — a ReGa script takes its parameters textually, so
+  an out-of-range value would otherwise be written verbatim. An
+  unresolved position is reported as absent, never as 0/0, which is a
+  real place in the Atlantic. Verified against real firmware: write,
+  independent read-back, and restoration of the original coordinates.
+
 ## [0.52.0]
 
 ### Added

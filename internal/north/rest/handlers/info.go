@@ -16,7 +16,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "3.7.0"
+const APIVersion = "3.11.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
