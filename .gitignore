@@ -69,7 +69,11 @@ secret.key
 
 # TLS + backup artifacts (never commit)
 tls/
-backup/
+# Anchored: an unanchored `backup/` matches any directory of that name at
+# any depth, which silently swallowed internal/backup/ (a source package)
+# from `git add`. Runtime backups live under the data dir, which `var/`
+# already covers.
+/backup/
 *.sbk
 *.tar.gz
 *.tgz
