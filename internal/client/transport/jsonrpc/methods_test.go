@@ -2809,6 +2809,62 @@ func TestListInterfaces(t *testing.T) {
 	}
 }
 
+// TestListInterfacesRealFirmwareShape pins the payload real firmware
+// actually sends. OpenCCU 3.89.8 answers with name/port/info and reports
+// no type, no address and no url at all - so a decoder that reads only
+// the latter three yields entries whose every string field is empty.
+//
+// That is not cosmetic: the fleet view keys its interface badges by
+// address and compares that address against configured_interfaces, so
+// empty addresses made every badge blank, marked every interface
+// unmanaged, and handed Svelte one duplicate key per interface - which
+// throws and takes the whole route down.
+//
+// The test above uses a hypothetical type/address/url payload, which is
+// how the gap survived: it encoded the assumption rather than the wire.
+func TestListInterfacesRealFirmwareShape(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Interface.listInterfaces": func(envelope) any {
+			// Captured verbatim from a live CCU.
+			return okResult([]map[string]any{
+				{"name": "CUxD", "port": 8701, "info": "CUxD"},
+				{"name": "BidCos-RF", "port": 32001, "info": "BidCos-RF"},
+				{"name": "VirtualDevices", "port": 39292, "info": "Virtual Devices"},
+				{"name": "HmIP-RF", "port": 32010, "info": "HmIP-RF"},
+			})
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL})
+	got, err := c.ListInterfaces(context.Background())
+	if err != nil {
+		t.Fatalf("ListInterfaces: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("len=%d, want 4", len(got))
+	}
+	// `name` is the token configured_interfaces is keyed on, so it has to
+	// reach Address for the managed/unmanaged comparison to mean anything.
+	seen := make(map[string]bool, len(got))
+	for _, e := range got {
+		if e.Address == "" {
+			t.Errorf("entry %+v has an empty Address; the fleet view keys on it", e)
+		}
+		if e.Type == "" {
+			t.Errorf("entry %+v has an empty Type", e)
+		}
+		if seen[e.Address] {
+			t.Errorf("duplicate Address %q; keyed rendering requires uniqueness", e.Address)
+		}
+		seen[e.Address] = true
+	}
+	if got[3].Address != "HmIP-RF" || got[3].Port != 32010 {
+		t.Errorf("got[3] = %+v, want HmIP-RF on 32010", got[3])
+	}
+}
+
 // TestListInterfacesMalformedFieldsDegradeToZero pins that an entry whose
 // fields carry an unexpected wire shape (or are missing entirely) still
 // yields an entry with zero values instead of erroring — the CCU-side view
