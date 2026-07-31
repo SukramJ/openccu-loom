@@ -2,11 +2,23 @@ import { api } from "$lib/api/client";
 
 // A pinned item. `type` keeps favorites of different kinds apart so the
 // same id can exist as e.g. both a device and a sysvar without clashing.
-// `id` is the natural key (device address, sysvar name); `label` is a
-// cached display string so the favorites view can render without
-// re-fetching every referenced entity.
+// `id` is the natural key; `label` is a cached display string so the
+// favorites view can render a heading without re-fetching every
+// referenced entity first.
+//
+// Natural keys per type:
+//   device   device address        ABC0000001
+//   channel  channel address       ABC0000001:4
+//   sysvar   variable name
+//   program  program id
+//
+// The value is opaque JSON in the per-user preferences store, so adding
+// a type needs no migration: an older client simply ignores a kind it
+// does not know, and this one tolerates entries it cannot resolve.
+export type FavoriteType = "device" | "channel" | "sysvar" | "program";
+
 export type Favorite = {
-  type: "device" | "sysvar";
+  type: FavoriteType;
   id: string;
   label: string;
 };
@@ -34,7 +46,7 @@ function createFavoritesStore() {
     await api.putPreference(PREF_KEY, items);
   }
 
-  function isPinned(type: Favorite["type"], id: string): boolean {
+  function isPinned(type: FavoriteType, id: string): boolean {
     return items.some((f) => f.type === type && f.id === id);
   }
 
@@ -51,7 +63,7 @@ function createFavoritesStore() {
     return !pinned;
   }
 
-  async function remove(type: Favorite["type"], id: string) {
+  async function remove(type: FavoriteType, id: string) {
     items = items.filter((f) => !(f.type === type && f.id === id));
     await persist();
   }

@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Favourites are operable, and channels and programs can be pinned
+  (O01).** Pinned entries stop being bookmarks: a pinned device now
+  renders its live tile set right on the favourites page — the same
+  CDP-tile and AutoTile pipeline the overview uses, not a second
+  implementation — a pinned channel renders its own tile, and a pinned
+  program gets a run button. Channels are pinned from the star on their
+  tile in the device's channel list, programs from the program list.
+  Pinned system variables were already editable inline and are
+  unchanged. The pin store is per-user server-side preferences holding
+  opaque JSON, so the two new kinds need no migration: an older client
+  ignores a kind it does not know, and this one tolerates entries it
+  cannot resolve — a device that has since disappeared degrades to the
+  plain link it was before rather than blanking the page.
 - **Electricity costs in the energy view (SY18).** A tariff
   (`persistence.history.energy_price_per_kwh`, plus an
   `energy_currency` label) makes the energy view show what the recorded

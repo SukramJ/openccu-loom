@@ -334,7 +334,9 @@
        all render as siblings in the same grid; the composer's
        gridSpan hint widens readout-heavy tiles to 2 cells. Shared with
        the fleet-wide Overview route via ChannelTiles. -->
-  <ChannelTiles {detail} {cdps} />
+  <!-- Pinning is offered here, on the device's own channel list: this is
+       where an operator decides a channel is worth quick access. -->
+  <ChannelTiles {detail} {cdps} pinnable />
 {/if}
 
 {#if !loading && !error && renderable.length === 0 && orphanChannels.length === 0}

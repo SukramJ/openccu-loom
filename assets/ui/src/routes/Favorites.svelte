@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { SysvarEntry } from "$lib/api/types";
-  import { favoritesStore } from "$lib/stores/favorites.svelte";
+  import type { SysvarEntry, DeviceDetail, CustomDPSummary } from "$lib/api/types";
+  import { favoritesStore, type FavoriteType } from "$lib/stores/favorites.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -14,6 +14,8 @@
   import Icon from "$lib/components/ui/Icon.svelte";
   import { t } from "$lib/i18n";
   import { sysvarWidget, sysvarNumberStep } from "$lib/sysvar-widget";
+  import ChannelTiles from "$lib/cdp/ChannelTiles.svelte";
+  import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
   // Start page: the user's pinned devices and system variables, served
@@ -26,11 +28,70 @@
   let sysvars = $state<SysvarEntry[]>([]);
   let drafts = $state<Record<string, unknown>>({});
   let savingName = $state<string | null>(null);
+  // Device details and CDP summaries for the pinned devices and
+  // channels, keyed by device address. A channel pin resolves through
+  // its parent device, so both kinds share one fetch.
+  let details = $state<Record<string, DeviceDetail>>({});
+  let cdps = $state<Record<string, CustomDPSummary[]>>({});
+  let runningProgram = $state<string | null>(null);
 
   onMount(() => {
-    if (!favoritesStore.loaded) void favoritesStore.load();
+    if (!favoritesStore.loaded) void favoritesStore.load().then(loadTileSources);
+    else void loadTileSources();
     void loadSysvars();
   });
+
+  // Device address behind a favorite: the id itself for a device pin,
+  // the part before the colon for a channel pin.
+  function deviceAddressOf(fav: { type: string; id: string }): string | null {
+    if (fav.type === "device") return fav.id;
+    if (fav.type === "channel") return fav.id.split(":")[0] ?? null;
+    return null;
+  }
+
+  // Fetches every pinned device once. Failures are per device: one
+  // unreachable device must not blank the whole favorites page, so its
+  // card falls back to the plain link it was before.
+  async function loadTileSources() {
+    const addresses = new Set<string>();
+    for (const fav of favoritesStore.items) {
+      const addr = deviceAddressOf(fav);
+      if (addr) addresses.add(addr);
+    }
+    await Promise.all(
+      [...addresses].map(async (addr) => {
+        try {
+          const [detail, cdpList] = await Promise.all([
+            api.getDevice(addr),
+            api.listCustomDataPoints(addr).catch(() => [] as CustomDPSummary[]),
+          ]);
+          details[addr] = detail;
+          cdps[addr] = cdpList;
+        } catch {
+          // Leave it unresolved; the card renders as a link.
+        }
+      }),
+    );
+  }
+
+  // The pinned channel's summary, once its device detail has arrived.
+  function channelFor(id: string) {
+    const addr = deviceAddressOf({ type: "channel", id });
+    if (!addr) return undefined;
+    return details[addr]?.channels.find((c) => c.address === id);
+  }
+
+  async function runProgram(id: string, label: string) {
+    runningProgram = id;
+    try {
+      await api.executeProgram(id);
+      toastStore.success(t("favorites.program_started", { label }));
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      runningProgram = null;
+    }
+  }
 
   async function loadSysvars() {
     try {
@@ -94,10 +155,15 @@
 
   function hrefFor(type: string, id: string): string {
     if (type === "device") return `#/devices/${encodeURIComponent(id)}`;
+    if (type === "channel") {
+      const addr = deviceAddressOf({ type, id });
+      return addr ? `#/devices/${encodeURIComponent(addr)}` : "#/devices";
+    }
+    if (type === "program") return "#/programs";
     return "#/sysvars";
   }
 
-  async function unpin(type: "device" | "sysvar", id: string, label: string) {
+  async function unpin(type: FavoriteType, id: string, label: string) {
     try {
       await favoritesStore.remove(type, id);
       toastStore.success(t("favorites.removed", { label }));
@@ -131,7 +197,13 @@
                 class="flex min-w-0 items-center gap-2 hover:text-brand-700"
               >
                 <Icon
-                  name={fav.type === "device" ? "mdi:home" : "mdi:zap"}
+                  name={fav.type === "device"
+                    ? "mdi:home"
+                    : fav.type === "channel"
+                      ? "mdi:sliders"
+                      : fav.type === "program"
+                        ? "mdi:play"
+                        : "mdi:zap"}
                   class="shrink-0"
                 />
                 <span class="min-w-0">
@@ -208,6 +280,35 @@
                   disabled={!dirty || saving}
                 >
                   {saving ? "…" : t("common.save")}
+                </Button>
+              </div>
+            {/if}
+
+            {#if fav.type === "device"}
+              {@const detail = details[fav.id]}
+              {#if detail}
+                <div class="border-t border-slate-200 pt-2 dark:border-slate-700">
+                  <ChannelTiles {detail} cdps={cdps[fav.id] ?? []} />
+                </div>
+              {/if}
+            {:else if fav.type === "channel"}
+              {@const ch = channelFor(fav.id)}
+              {@const devAddr = deviceAddressOf(fav)}
+              {#if ch && devAddr}
+                <div class="border-t border-slate-200 pt-2 dark:border-slate-700">
+                  <AutoTile address={devAddr} channel={ch} />
+                </div>
+              {/if}
+            {:else if fav.type === "program"}
+              <div class="flex items-center gap-2 border-t border-slate-200 pt-2 dark:border-slate-700">
+                <Button
+                  type="button"
+                  size="sm"
+                  onclick={() => void runProgram(fav.id, fav.label)}
+                  disabled={runningProgram === fav.id}
+                >
+                  <Icon name="mdi:play" class="mr-1" />
+                  {runningProgram === fav.id ? "…" : t("programs.execute")}
                 </Button>
               </div>
             {/if}

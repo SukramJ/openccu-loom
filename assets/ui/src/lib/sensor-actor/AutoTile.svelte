@@ -19,6 +19,8 @@
   import { subscribe } from "$lib/stores/events.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { favoritesStore } from "$lib/stores/favorites.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
 
   import { composeTile, type ControlSpec } from "./composer";
   import { dpLabel } from "./classify";
@@ -40,9 +42,35 @@
   type Props = {
     address: string;
     channel: ChannelSummary;
+    /**
+     * Renders a pin toggle in the header. Opt-in so the control appears
+     * only where pinning is a sensible action - the device's own channel
+     * list - and not on the fleet overview or inside the favorites view
+     * that already lists the pinned channel.
+     */
+    pinnable?: boolean;
   };
 
-  let { address, channel }: Props = $props();
+  let { address, channel, pinnable = false }: Props = $props();
+
+  const pinned = $derived(favoritesStore.isPinned("channel", channel.address));
+
+  async function togglePin() {
+    try {
+      const nowPinned = await favoritesStore.toggle({
+        type: "channel",
+        id: channel.address,
+        label: channelLabel,
+      });
+      toastStore.success(
+        nowPinned
+          ? t("favorites.added", { label: channelLabel })
+          : t("favorites.removed", { label: channelLabel }),
+      );
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   let dataPoints = $state<DataPointSummary[]>([]);
   let loading = $state(true);
@@ -150,9 +178,22 @@
         <span class="text-xs text-[var(--ha-secondary-text-color)]">{channel.type_label}</span>
       {/if}
     </div>
-    <span class="text-[10px] uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
-      CH {channelNo}
-    </span>
+    <div class="flex items-center gap-1.5">
+      {#if pinnable}
+        <button
+          type="button"
+          class="inline-flex min-h-8 min-w-8 items-center justify-center rounded text-[var(--ha-secondary-text-color)] hover:text-[var(--ha-primary-color)]"
+          onclick={() => void togglePin()}
+          title={pinned ? t("favorites.unpin_channel") : t("favorites.pin_channel")}
+          aria-label={pinned ? t("favorites.unpin_channel") : t("favorites.pin_channel")}
+        >
+          <Icon name={pinned ? "mdi:star" : "mdi:star-outline"} size={14} />
+        </button>
+      {/if}
+      <span class="text-[10px] uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
+        CH {channelNo}
+      </span>
+    </div>
   </header>
 
   {#if error}
