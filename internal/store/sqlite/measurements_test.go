@@ -1705,6 +1705,7 @@ func TestPickHistoryTierSelectsByWidth(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := s.pickHistoryTier(ctx, key, tc.width, fromMs)
 			if err != nil {
 				t.Fatalf("pickHistoryTier: %v", err)
@@ -1966,7 +1967,7 @@ func TestQueryBucketsAverageIsExactNotAverageOfAverages(t *testing.T) {
 		CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param,
 		TS: base, Value: 100,
 	})
-	for i := 0; i < lowSampleCount; i++ {
+	for i := range lowSampleCount {
 		// Spread across hour B (300ms apart, well inside the 1h bucket) so
 		// every sample gets a distinct primary-key timestamp.
 		samples = append(samples, MeasurementSample{
@@ -2123,12 +2124,14 @@ func TestFoldTierBuckets(t *testing.T) {
 	t.Parallel()
 
 	t.Run("empty input yields nil", func(t *testing.T) {
+		t.Parallel()
 		if got := foldTierBuckets(nil, 0, 1000, 4); got != nil {
 			t.Errorf("foldTierBuckets(nil) = %v, want nil", got)
 		}
 	})
 
 	t.Run("out-of-range index clamps to the last bucket", func(t *testing.T) {
+		t.Parallel()
 		// Integer truncation in the width computation can leave a source
 		// bucket start beyond fromMs+width*buckets; it must fold into the
 		// last valid bucket instead of being dropped or overflowing.
@@ -2145,6 +2148,7 @@ func TestFoldTierBuckets(t *testing.T) {
 	})
 
 	t.Run("negative index clamps to zero", func(t *testing.T) {
+		t.Parallel()
 		// A source bucket that starts before fromMs (possible at a tier
 		// boundary) must fold into bucket 0, never underflow the slice.
 		src := []tierBucket{
@@ -2157,6 +2161,7 @@ func TestFoldTierBuckets(t *testing.T) {
 	})
 
 	t.Run("repeated indices accumulate", func(t *testing.T) {
+		t.Parallel()
 		// Two source buckets mapping to the same output index — the
 		// straddling-day-bucket case — must merge (sum/count add, min/max
 		// fold), not silently overwrite one another.
@@ -2181,6 +2186,7 @@ func TestFoldTierBuckets(t *testing.T) {
 	})
 
 	t.Run("zero-count sources are skipped", func(t *testing.T) {
+		t.Parallel()
 		src := []tierBucket{
 			{bucketTS: 0, sum: 0, minV: 0, maxV: 0, count: 0},
 			{bucketTS: 1000, sum: 20, minV: 20, maxV: 20, count: 1},
@@ -2195,6 +2201,7 @@ func TestFoldTierBuckets(t *testing.T) {
 	})
 
 	t.Run("output is sorted ascending by TS", func(t *testing.T) {
+		t.Parallel()
 		src := []tierBucket{
 			{bucketTS: 3000, sum: 3, minV: 3, maxV: 3, count: 1},
 			{bucketTS: 0, sum: 0, minV: 0, maxV: 0, count: 1},

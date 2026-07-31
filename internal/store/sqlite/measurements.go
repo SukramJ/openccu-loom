@@ -312,9 +312,9 @@ func (s *MeasurementStore) pickHistoryTier(
 
 // rawFloor returns the oldest raw sample timestamp for one series and
 // false when the series has no raw rows at all.
-func (s *MeasurementStore) rawFloor(ctx context.Context, key seriesKey) (int64, bool, error) {
+func (s *MeasurementStore) rawFloor(ctx context.Context, key seriesKey) (oldestMs int64, ok bool, err error) { //nolint:gocritic // named results document which bool means "has rows"
 	var floor sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `
+	err = s.db.QueryRowContext(ctx, `
         SELECT MIN(ts)
           FROM measurements
          WHERE central_name = ? AND interface_id = ?
@@ -472,8 +472,11 @@ func (s *MeasurementStore) assembleTierBuckets(
 	if err != nil {
 		return nil, err
 	}
-	out := append(tierRows, hourlyTail...)
-	return append(out, rawTail...), nil
+	out := make([]tierBucket, 0, len(tierRows)+len(hourlyTail)+len(rawTail))
+	out = append(out, tierRows...)
+	out = append(out, hourlyTail...)
+	out = append(out, rawTail...)
+	return out, nil
 }
 
 // readHistoryRange runs one of the fixed tier statements over [fromMs, toMs).
