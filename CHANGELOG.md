@@ -149,6 +149,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Actuator channels can be pinned to favourites.** The pin star only
+  ever appeared on the generic fallback tile, so exactly the channels
+  worth quick access to — switches, dimmers, covers, thermostats, every
+  channel backed by a custom data point — were the ones that could not be
+  pinned. The star now sits on those tiles too, and a pinned channel
+  renders its real control tile in the favourites view instead of the
+  generic fallback, so pinning a switch no longer costs it its toggle.
+
 - **Backups work on a stock CCU3 again (SY01).** Creating a backup drove
   `/bin/createBackup.sh`, which only OpenCCU and RaspberryMatic ship, and
   failed outright when the script was absent. It turns out the download

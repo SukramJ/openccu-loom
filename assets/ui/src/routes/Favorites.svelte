@@ -16,6 +16,7 @@
   import { sysvarWidget, sysvarNumberStep } from "$lib/sysvar-widget";
   import ChannelTiles from "$lib/cdp/ChannelTiles.svelte";
   import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
+  import { cdpWidgetFor, hasCdpWidget } from "$lib/cdp/dispatch";
   import { toastStore } from "$lib/stores/toast.svelte";
 
   // Start page: the user's pinned devices and system variables, served
@@ -79,6 +80,19 @@
     const addr = deviceAddressOf({ type: "channel", id });
     if (!addr) return undefined;
     return details[addr]?.channels.find((c) => c.address === id);
+  }
+
+  // A pinned channel must render the way it does on the device page: an
+  // actuator backed by a custom data point gets its real control tile,
+  // not the generic fallback. Without this a pinned switch would lose
+  // its toggle the moment it was pinned, which is the opposite of the
+  // point.
+  function cdpFor(id: string) {
+    const addr = deviceAddressOf({ type: "channel", id });
+    if (!addr) return undefined;
+    const no = Number(id.split(":")[1]);
+    if (!Number.isFinite(no)) return undefined;
+    return (cdps[addr] ?? []).find((c) => c.channel_no === no && hasCdpWidget(c.kind));
   }
 
   async function runProgram(id: string, label: string) {
@@ -294,7 +308,13 @@
             {:else if fav.type === "channel"}
               {@const ch = channelFor(fav.id)}
               {@const devAddr = deviceAddressOf(fav)}
-              {#if ch && devAddr}
+              {@const cdp = cdpFor(fav.id)}
+              {@const Widget = cdp ? cdpWidgetFor(cdp.kind) : undefined}
+              {#if devAddr && cdp && Widget}
+                <div class="border-t border-slate-200 pt-2 dark:border-slate-700">
+                  <Widget address={devAddr} {cdp} title={fav.label} />
+                </div>
+              {:else if ch && devAddr}
                 <div class="border-t border-slate-200 pt-2 dark:border-slate-700">
                   <AutoTile address={devAddr} channel={ch} />
                 </div>
