@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"syscall"
 )
 
 // Runner spawns the firmware installer. ctx is checked once before
@@ -80,7 +79,7 @@ func DefaultRunner(ctx context.Context, path string, args ...string) error {
 	}
 	//nolint:noctx,gosec // deliberately exec.Command not CommandContext (see doc comment above); path/args come from the daemon's own compiled-in installer path + staged tarball, not external input
 	cmd := exec.Command(path, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	detachProcess(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("addonupdate: spawn installer: %w", err)
 	}
