@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" width="980" height="560" role="img" aria-labelledby="title desc">
+  <title id="title">What OpenCCU-Loom does</title>
+  <desc id="desc">Your Homematic CCU on the left, the OpenCCU-Loom daemon in the middle, and on the right the places your devices show up: Home Assistant over MQTT, Apple Home, Google Home and Alexa over Matter, a browser for the config UI, your own scripts over REST and WebSocket, and AI assistants over MCP.</desc>
+
+  <style>
+    text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .col-head  { font-size: 13px; font-weight: 700; letter-spacing: .08em; fill: #64748B; text-transform: uppercase; }
+    .card-name { font-size: 15px; font-weight: 600; fill: #1E293B; }
+    .card-sub  { font-size: 12.5px; fill: #475569; }
+    .wire      { font-size: 11px; fill: #64748B; font-weight: 500; }
+    .hub-name  { font-size: 22px; font-weight: 700; fill: #0F766E; }
+    .hub-sub   { font-size: 13px; fill: #475569; }
+    .hub-item  { font-size: 12.5px; fill: #1E293B; }
+    .panel     { fill: #F8FAFC; stroke: #E2E8F0; stroke-width: 1; }
+    .hub       { fill: #F0FDFA; stroke: #5EEAD4; stroke-width: 1.5; }
+    .flow      { stroke: #94A3B8; stroke-width: 1.5; fill: none; }
+    .dot       { fill: #0F766E; }
+  </style>
+
+  <rect x="0" y="0" width="980" height="560" rx="12" fill="#FFFFFF"/>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94A3B8"/>
+    </marker>
+  </defs>
+
+  <!-- ── column headings ────────────────────────────────────────────── -->
+  <text class="col-head" x="20"  y="30">Your Homematic system</text>
+  <text class="col-head" x="370" y="30">One daemon</text>
+  <text class="col-head" x="672" y="30">Where your devices show up</text>
+
+  <!-- ── left: the CCU ──────────────────────────────────────────────── -->
+  <rect class="panel" x="20" y="46" width="270" height="120" rx="10"/>
+  <text class="card-name" x="40" y="76">CCU3 · RaspberryMatic</text>
+  <text class="card-name" x="40" y="97">CCU2 · OpenCCU</text>
+  <text class="card-sub"  x="40" y="122">The central you already own —</text>
+  <text class="card-sub"  x="40" y="140">unchanged, no firmware patching.</text>
+
+  <rect class="panel" x="20" y="186" width="270" height="132" rx="10"/>
+  <text class="card-name" x="40" y="214">Your devices</text>
+  <text class="card-sub"  x="40" y="238">HmIP-RF · BidCos-RF</text>
+  <text class="card-sub"  x="40" y="258">HmIP-Wired · BidCos-Wired</text>
+  <text class="card-sub"  x="40" y="278">CUxD · virtual devices</text>
+  <text class="card-sub"  x="40" y="300">Thermostats, switches, sensors…</text>
+
+  <!-- left → hub -->
+  <path class="flow" d="M 300 182 H 348" marker-end="url(#arrow)"/>
+  <text class="wire" x="296" y="140">XML-RPC</text>
+  <text class="wire" x="296" y="156">BIN-RPC</text>
+  <text class="wire" x="296" y="172">JSON-RPC</text>
+
+  <!-- ── middle: the daemon ─────────────────────────────────────────── -->
+  <rect class="hub" x="358" y="46" width="272" height="380" rx="14"/>
+  <text class="hub-name" x="382" y="82">OpenCCU-Loom</text>
+  <text class="hub-sub"  x="382" y="104">A single program. No cloud.</text>
+  <text class="hub-sub"  x="382" y="122">Runs on the CCU, a Pi, a NAS,</text>
+  <text class="hub-sub"  x="382" y="140">a server — or next to HA.</text>
+
+  <circle class="dot" cx="388" cy="176" r="3"/>
+  <text class="hub-item" x="402" y="181">Reads every device once,</text>
+  <text class="hub-item" x="402" y="199">keeps one live model</text>
+
+  <circle class="dot" cx="388" cy="226" r="3"/>
+  <text class="hub-item" x="402" y="231">Administers the CCU:</text>
+  <text class="hub-item" x="402" y="249">pairing, links, programs,</text>
+  <text class="hub-item" x="402" y="267">variables, firmware</text>
+
+  <circle class="dot" cx="388" cy="294" r="3"/>
+  <text class="hub-item" x="402" y="299">Built-in alarm system</text>
+
+  <circle class="dot" cx="388" cy="326" r="3"/>
+  <text class="hub-item" x="402" y="331">Records measurements,</text>
+  <text class="hub-item" x="402" y="349">draws charts</text>
+
+  <circle class="dot" cx="388" cy="376" r="3"/>
+  <text class="hub-item" x="402" y="381">Several CCUs at once —</text>
+  <text class="hub-item" x="402" y="399">one view over all of them</text>
+
+  <!-- ── right: the consumers ───────────────────────────────────────── -->
+  <path class="flow" d="M 640 92 H 668" marker-end="url(#arrow)"/>
+  <rect class="panel" x="672" y="46" width="288" height="86" rx="10"/>
+  <text class="card-name" x="692" y="74">Home Assistant</text>
+  <text class="card-sub"  x="692" y="96">via MQTT auto-discovery, or as the</text>
+  <text class="card-sub"  x="692" y="114">backend of Homematic(IP) Local</text>
+
+  <path class="flow" d="M 640 184 H 668" marker-end="url(#arrow)"/>
+  <rect class="panel" x="672" y="146" width="288" height="76" rx="10"/>
+  <text class="card-name" x="692" y="174">Apple · Google · Alexa</text>
+  <text class="card-sub"  x="692" y="196">via Matter — your Homematic devices</text>
+  <text class="card-sub"  x="692" y="214">appear like any smart-home product</text>
+
+  <path class="flow" d="M 640 266 H 668" marker-end="url(#arrow)"/>
+  <rect class="panel" x="672" y="236" width="288" height="66" rx="10"/>
+  <text class="card-name" x="692" y="264">Any web browser</text>
+  <text class="card-sub"  x="692" y="286">the built-in config UI — no HA needed</text>
+
+  <path class="flow" d="M 640 346 H 668" marker-end="url(#arrow)"/>
+  <rect class="panel" x="672" y="316" width="288" height="66" rx="10"/>
+  <text class="card-name" x="692" y="344">Your own scripts</text>
+  <text class="card-sub"  x="692" y="366">REST + WebSocket · MQTT · webhooks</text>
+
+  <path class="flow" d="M 640 426 H 668" marker-end="url(#arrow)"/>
+  <rect class="panel" x="672" y="396" width="288" height="66" rx="10"/>
+  <text class="card-name" x="692" y="424">AI assistants</text>
+  <text class="card-sub"  x="692" y="446">via MCP — ask about your home</text>
+
+  <!-- ── footnote ───────────────────────────────────────────────────── -->
+  <text class="card-sub" x="20" y="500">Pick one path per device, or run several side by side — the daemon feeds them all from the same live model.</text>
+  <text class="wire"     x="20" y="524">The CCU pushes every change — nothing is polled. Matter is off by default, and Home Assistant is optional: OpenCCU-Loom is useful entirely on its own.</text>
+</svg>
