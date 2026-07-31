@@ -58,6 +58,15 @@ etwa für die `Ref: docs/ccu-webui-gap-analysis.md <ID>`-Zeilen in älteren
 Commits). Was ein gelieferter Punkt konkret gebracht hat, steht im
 `CHANGELOG.md` unter der im Index genannten Version.
 
+**Frequenz-Einstufung (2026-07-31):** Jeder unerledigte Punkt trägt jetzt
+zusätzlich ein Feld **Frequenz:** `hoch` / `mittel` / `corner` — die
+geschätzte Nutzungshäufigkeit aus Bedienersicht, unabhängig von Priorität
+und Aufwand (Legende in §4). Verteilung: 6 × `hoch`, 11 × `mittel`,
+21 × `corner`. Daraus abgeleitet schlägt §7 zwei Abschlusswellen vor
+(**7 Alltagsflächen**, **8 Zentralen-Wartung & Korrektheit**); beide sind
+Vorschläge und ersetzen die Einzelentscheidungen nicht. Der
+Programmeditor-Block bleibt bewusst unbewertet.
+
 ---
 
 ## 1. Zusammenfassung
@@ -222,7 +231,29 @@ WebUI-Ersatz) / P2 (wichtig) / P3 (nice-to-have) · Aufwand S/M/L/XL.
 Empfohlene CCU-Schnittstelle jeweils am Ende der Empfehlung. Abgedeckte
 Funktionen je Bereich sind in §5 zusammengefasst.
 
+**Feld `Frequenz` (eingetragen 2026-07-31):** geschätzte Nutzungshäufigkeit
+aus Bedienersicht, unabhängig von Priorität und Aufwand — die Frage
+„gehört das in die SPA, weil man es dauernd braucht?".
+
+- `hoch` — wird regelmäßig bis bei jedem Seitenaufruf benutzt, oder einmal
+  gesetzt, wirkt dann aber auf jede Nutzung (z. B. Astro-Koordinaten).
+- `mittel` — punktuell, aber vorhersehbar wiederkehrend; oder selten und
+  dann im Ernstfall (Backup/Restore).
+- `corner` — Einmal-Einstellungen, Debugging-Nischen, einzelne
+  Gerätefamilien. Bei den CCU-Systemschaltern gilt zusätzlich: die
+  CCU-WebUI ist pro Zentrale ohnehin verlinkt, dort kosten sie null
+  Wartung — in Loom kosten sie dauerhaft Pflege bei jedem Firmwarewechsel.
+
+Auswertung: `grep -n 'Frequenz:' docs/ccu-webui-gap-analysis.md`. Der
+Programmeditor-Block (§4.2) trägt bewusst **keine** Einstufung, die
+abgelehnten Punkte (E01, E03, E04) und die ADR-Fragen in §6 ebenfalls nicht.
+
 ### 4.2 Programme, Zentralenverknüpfungen & HM-Script
+
+Der gesamte Block bleibt von der Frequenz-Einstufung ausgenommen: die
+Entscheidung über Programm- und Skripteditor steht vor der Frage, wie oft
+man sie benutzen würde (ADR A4 ist der Sicherheitsrahmen, ohne den PR01
+nicht beginnen darf).
 
 - **PR01 — HM-Script-Konsole (Skript-Testfenster)** (missing, P1 M)
   Kein öffentlicher run-script-Endpunkt; der ReGa-Runner existiert nur
@@ -284,6 +315,8 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Gezieltes Anlernfenster existiert; es fehlen der aktive
   addDevice-Fetch-Pfad und der Geräte-AES-Key-Dialog bei Key-Mismatch.
   *XML-RPC.*
+  **Frequenz:** `corner` — nur beim Anlernen alter BidCos-Geräte mit Key-
+  Mismatch
   **Entscheidung:** `umsetzen` — **zurückgestellt** (2026-07-23): Recon
   vollständig (BidCos-RF-only: `addDevice`/`setTempKey`/
   `getKeyMismatchDevice`). Blocker: der Key-Mismatch-Fault-Code ist nur
@@ -296,6 +329,7 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Fälle wie Klima-Party/RGBW/Display-Text sind abgedeckt). *Empfehlung:*
   priorisiert E-Paper-Editor als CDP-Erweiterung; Kanalgruppen im ui-schema
   als Gruppe mit Write-Fan-out.
+  **Frequenz:** `corner` — je Dialog eine einzelne Gerätefamilie
   **Entscheidung:** `umsetzen` — **zurückgestellt** (2026-07-23): Der
   E-Paper-Kern (HM-Dis-EP-WM55) hängt am SUBMIT-Hexstring-Byte-Layout,
   das weder in occu noch aiohomematic steht und nur gegen ein echtes
@@ -309,6 +343,7 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Bewährte LINK-Parametrierung als wiederverwendbare Vorlage. *Empfehlung:*
   SQLite-Store + REST-CRUD `/link-profiles` + „Als Vorlage speichern" im
   ProfileSelector. Rein Loom-seitig.
+  **Frequenz:** `mittel` — lohnt erst bei vielen gleichartigen Verknüpfungen
   **Entscheidung:** `umsetzen` — ⚠️ **offen, ohne Wellen-Zuordnung**
   (bemerkt 2026-07-31): Der Punkt ist beschlossen, taucht aber in keiner
   Welle des §7-Plans auf und ist nie gebaut worden. Vorhanden ist nur der
@@ -326,26 +361,33 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   pinbar. *Empfehlung:* Kachel-Technik aus `Overview.svelte` (CDP-/
   Auto-Tiles) wiederverwenden, Pin-Typen um `channel`/`program` erweitern.
   Rein Loom-seitig.
+  **Frequenz:** `hoch` — Favoriten sind die Alltagsfläche (Wandtablet,
+  Startseite); heute nur Sprungkarten
   **Entscheidung:** `offen`
 - **O02 — Favoriten-Editor (Seiten, Reihenfolge, Layout)** (missing, P2 L)
   Mehrere benannte Seiten, Drag-and-Drop-Reihenfolge, Trennzeilen,
   Spaltenzahl. *Empfehlung:* serverseitiges Seitenmodell (SQLite +
   REST-CRUD `/favorite-pages`); CCU-Layout-Artefakte (Ausrichtung,
   Namensposition) entfallen. Rein Loom-seitig.
+  **Frequenz:** `corner` — sinnvoll erst nach O01 und nur bei mehreren
+  Seiten/Nutzern
   **Entscheidung:** `offen`
 - **O03 — Startseite pro Benutzer** (missing, P2 S)
   Konfigurierbare Einstiegsroute nach Login. *Empfehlung:* `start_route`
   über den vorhandenen `/me/preferences`-Store; `App.svelte` wertet sie
   beim Initial-Load aus; Auswahlfeld in Settings.
+  **Frequenz:** `hoch` — greift bei jedem Login
   **Entscheidung:** `offen`
 - **O04 — Favoriten-Zuordnung: global / an Benutzer / als Startseite** (missing, P3 M)
   Geteilte Seiten, Admin-Zuweisung, Startseiten-Flag. *Empfehlung:*
   owner/visibility-Feld auf dem Seitenmodell (setzt O02 voraus).
+  **Frequenz:** `corner` — setzt O02 voraus; Mehr-Personen-Haushalte
   **Entscheidung:** `offen`
 - **O05 — Auto-Login (Wandtablet/Kiosk)** (missing, P3 M)
   *Empfehlung:* Opt-in-Config mit Subject + Pflicht-CIDR-Beschränkung als
   zusätzliche Auth-Quelle in `internal/auth/chain.go` (Muster:
   Ingress-Pfad); Sicherheitsabwägung als ADR.
+  **Frequenz:** `corner` — enge Nische, eigene Sicherheitsabwägung
   **Entscheidung:** `offen`
 
 ### 4.7 Systemvariablen & Diagramme
@@ -355,16 +397,22 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Hourly-/Daily-Rollups existieren → Tier-Fallback einbauen (dann trägt
   `GET /history` 13+ Monate); von-bis-Picker (API kann es bereits),
   Drag-Zoom, Vergleichszeitraum. Rein Loom-seitig.
+  **Frequenz:** `hoch` — jede Diagrammansicht jenseits von 30 Tagen ist
+  heute leer, obwohl die Rollups 13 Monate vorhalten — eher Defekt als
+  Ausbau
   **Entscheidung:** `offen`
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.
+  **Frequenz:** `mittel` — gelegentlicher Export
   **Entscheidung:** `offen`
 - **SV09 — Messwerterfassung kanalgenau konfigurieren** (partial, P3 M)
   Globs matchen nur Parameternamen über alle Geräte („`*POWER*`", nicht
   „nur POWER von Gerät X"); keine Nicht-Experten-UI. *Empfehlung:*
   kanal-scoped Patterns (`ADDR:4/POWER`) im Recorder-Filter + einfache
   Aufnahme-Verwaltung in der SPA. Rein Loom-seitig.
+  **Frequenz:** `corner` — durch SV10 (Per-Datenpunkt-Toggle) weitgehend
+  absorbiert
   **Entscheidung:** `offen`
 
 ### 4.8 Systemsteuerung
@@ -374,34 +422,44 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   *Empfehlung:* Fallback per HTTP-GET auf
   `cp_security.cgi?action=create_backup` mit Session (Muster
   `HTTPBackupRestorer` existiert). *HTTP-CGI.*
+  **Frequenz:** `mittel` — selten gebraucht — dann aber im Ernstfall
   **Entscheidung:** `offen`
 - **SY02 — Backup-Restore: Upload externer .sbk + Vorab-Validierung** (partial, P2 M)
   Restore geht nur aus daemon-eigenen Backups. *Empfehlung:*
   `POST /backups/upload` (multipart) + Validierungsschritt
   (Signatur-/Versions-Check der cp_security-Antwort auswerten). *HTTP-CGI.*
+  **Frequenz:** `mittel` — selten gebraucht — dann aber im Ernstfall (Fremd-
+  Backup einspielen)
   **Entscheidung:** `offen`
 - **SY03 — System-Sicherheitsschlüssel (AES) setzen/ändern** (missing, P2 L)
   *Empfehlung:* XML-RPC `changeKey` (rfd) + `crypttool -S` per
   ReGa-`system.Exec` (Key-Index läuft nur auf der Zentrale);
   `POST /system/security-key` mit Validierung; destruktiv → Confirm
   zwingend. *XML-RPC + ReGa.*
+  **Frequenz:** `corner` — einmal im Anlagenleben, destruktiv
   **Entscheidung:** `offen`
 - **SY04 — Firewall-Konfiguration der CCU** (missing, P2 M)
   Modus (voll/eingeschränkt) + IP-Freigabelisten. *Empfehlung:*
   `Firewall.get/setConfiguration` per JSON-RPC + Karte mit
   Selbst-Aussperr-Schutz (eigene Daemon-IP immer freihalten). *JSON-RPC.*
+  **Frequenz:** `corner` — einmal konfiguriert; die CCU-WebUI ist pro
+  Zentrale verlinkt
   **Entscheidung:** `offen`
 - **SY05 — Position (Koordinaten) + Zeitzone für Astro** (missing, P2 M)
   Wichtig, weil Loom Astro-Schedules bereits editiert — falsche Koordinaten
   verfälschen alle Sonnenzeiten; Voraussetzung für PR04. *Empfehlung:*
   `system.Longitude()/Latitude()` per ReGa-Skript (reines ReGa-DOM),
   Read-Back in `/system/ccu`, Karte im System-Tab. *ReGa.*
+  **Frequenz:** `hoch` — einmal gesetzt, aber jede Astro-Schaltzeit der
+  bereits editierbaren Wochenprofile hängt daran
   **Entscheidung:** `offen`
 - **SY06 — Zentralen-Firmware-Update: Vorab-Backup, EULA/Changelog, CCU3-Pfad** (partial, P2 M)
   Check + unbeaufsichtigte Installation funktionieren nur auf
   OpenCCU/RaspberryMatic. *Empfehlung:* Vorab-Backup als Option verketten,
   Changelog-Link; Original-CCU-Pfad nur bei Bedarf, sonst by-design
   dokumentieren.
+  **Frequenz:** `mittel` — wenige Male im Jahr, hängt direkt an einer
+  vorhandenen Funktion
   **Entscheidung:** `offen`
 - **SY07 — Recovery-Modus + „CCU-Wartung"-Karte** (missing, P2 M)
   OpenCCU-JSON-RPC `RecoveryMode.enter` (nicht auf Original-CCU3, nicht auf
@@ -409,10 +467,14 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   *Empfehlung:* Settings-Karte „CCU-Wartung" pro Central als gemeinsamer
   Landeplatz für Recovery/Reboot/Shutdown/SafeMode; Confirm + Hinweis auf
   die Recovery-Oberfläche auf der CCU-IP. *JSON-RPC.*
+  **Frequenz:** `mittel` — Reboot ist regelmäßig, Recovery selten; die Karte
+  gibt dem ausgelieferten K03 eine auffindbare Heimat
   **Entscheidung:** `offen`
 - **SY08 — SSH-Zugang + root-Passwort** (missing, P3 M)
   *Empfehlung:* `CCU.getSSHState/setSSH/setSSHPassword/restartSSHDaemon`
   per JSON-RPC, Admin-Panel im System-Tab. *JSON-RPC.*
+  **Frequenz:** `corner` — einmal konfiguriert; die CCU-WebUI ist pro
+  Zentrale verlinkt
   **Entscheidung:** `offen`
 - **SY09 — Auth für CCU-Remote-APIs erzwingen (`CCU.setAuthEnabled`)** (partial, P3 S)
   Sicherheitsrelevant (offene XML-RPC-API schwächt das Gesamtsystem).
@@ -421,59 +483,79 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   ungenutzte Getter ist verdrahtet, `GET /api/v1/system/ccu` meldet
   `auth_enabled`, die Fleet-Karte zeigt es als Chip. Der **Setter** fehlt
   weiterhin.
+  **Frequenz:** `corner` — die Leseseite (API 3.5.0) deckt den
+  Informationsbedarf, der Setter ist ein Einmal-Schalter
   **Entscheidung:** `offen`
 - **SY10 — Automatische HTTPS-Umleitung der CCU** (partial, P3 S)
   *Empfehlung:* Setter + Toggle; Wechselwirkung mit der vom Daemon
   genutzten Basis-URL beachten. *JSON-RPC.*
   **Teilstand (0.51.0+, API 3.5.0):** analog SY09 — `https_redirect_enabled`
   wird gelesen und in der Fleet-Karte angezeigt; der Setter fehlt.
+  **Frequenz:** `corner` — die Leseseite (API 3.5.0) deckt den
+  Informationsbedarf, der Setter ist ein Einmal-Schalter
   **Entscheidung:** `offen`
 - **SY11 — Session-Timeout der Loom-Sessions konfigurierbar** (partial, P3 S)
   TTL ist hart codiert (12 h). *Empfehlung:* cfg-Feld
   `north.rest.auth.session_ttl` (+ idle_ttl) inkl. i18n-Labels und
   Contract-Test. Rein Loom-seitig.
+  **Frequenz:** `mittel` — einmal konfiguriert, wirkt danach auf jede
+  Sitzung
   **Entscheidung:** `offen`
 - **SY12 — Uhrzeit/Datum der Zentrale manuell setzen** (missing, P3 M)
   *Empfehlung:* ReGa-`system.Exec` (date/hwclock) + Interface-Clock-Sync;
   niedrig, weil NTP der Normalfall ist. *ReGa/OS.*
+  **Frequenz:** `corner` — einmal; NTP ist der Normalfall
   **Entscheidung:** `offen`
 - **SY13 — NTP-Server der Zentrale konfigurieren** (missing, P3 M)
   *Empfehlung:* Sync-Status lesen (chronyc via ReGa-`system.Exec`) als
   Diagnose-Anzeige; Serverliste schreiben per Exec-Skript. *ReGa/OS.*
+  **Frequenz:** `corner` — einmal; NTP läuft im Normalfall von selbst
   **Entscheidung:** `offen`
 - **SY14 — CCU-HTTPS-Zertifikat verwalten** (partial, P3 M)
   Loom-eigenes Zertifikat ist tauschbar; das CCU-`server.pem` nicht
   (relevant für `tls_insecure_skip_verify`). *Empfehlung:* Upload an
   `cp_network.cgi?action=cert_upload` analog HTTPBackupRestorer + lighttpd-
   Neustart. *HTTP-CGI + JSON-RPC.*
+  **Frequenz:** `corner` — selten
   **Entscheidung:** `offen`
 - **SY15 — Zentrale herunterfahren (Poweroff)** (missing, P3 S)
   *Empfehlung:* analog K03 im selben Endpoint-Namensraum; nachrangig.
   *ReGa.*
+  **Frequenz:** `mittel` — selten für sich, fährt mit der Wartungskarte
+  (SY07) mit
   **Entscheidung:** `offen`
 - **SY16 — Abgesicherter Modus (SafeMode)** (missing, P3 S)
   *Empfehlung:* JSON-RPC `SafeMode.enter` neben dem CCU-Reboot; sinnvoll
   erst mit einer Addon-Sicht (E05/E06). *JSON-RPC.*
+  **Frequenz:** `mittel` — selten für sich, fährt mit der Wartungskarte
+  (SY07) mit
   **Entscheidung:** `offen`
 - **SY17 — Funk-/LAN-Gateway-Verwaltung (BidCos)** (missing, P3 L)
   Gateway-Status/Firmware/DutyCycle + Geräte-Zuordnung
   (`setBidcosInterface`). Nur für BidCos-Bestandsanlagen mit Gateways
   relevant. *JSON-RPC + XML-RPC.*
+  **Frequenz:** `corner` — nur Bestandsanlagen mit LAN-Gateways
   **Entscheidung:** `offen`
 - **SY18 — Energiekosten-Satz (Preis pro kWh)** (missing, P3 S)
   *Empfehlung:* rein Loom-lokal: cfg-Feld + Kostenberechnung in
   `handlers/energy.go` + Anzeige in Energy (i18n-Pflicht beachten).
+  **Frequenz:** `hoch` — die Energy-Ansicht wird regelmäßig geöffnet; es
+  fehlt nur das Feld
   **Entscheidung:** `offen`
 - **SY19 — Werksreset der Zentrale** (missing, P3 M)
   Nur per ReGa-`system.Exec` (Marker-Datei + Reboot) möglich; hohes
   Zerstörungspotenzial. *Empfehlung:* eher ausschließen — die
   Recovery-WebUI der CCU bleibt der sichere Weg.
+  **Frequenz:** `corner` — bewusst ausschließen — Recovery-WebUI der CCU ist
+  der sichere Weg
   **Entscheidung:** `offen`
 - **SY20 — CCU-Netzwerkkonfiguration (IP/DNS/Hostname)** (missing, P3 L)
   Keine API; die WebUI schreibt Konfig-Dateien direkt. Fehlkonfiguration
   kappt die Verbindung Daemon→CCU. *Empfehlung:* eher ausschließen
   (Non-Goal dokumentieren, nur Anzeige in `/system/ccu` ausbauen);
   Container-Betrieb blendet die Seite ebenfalls aus.
+  **Frequenz:** `corner` — bewusst ausschließen — Fehlkonfiguration kappt
+  die Verbindung zum Daemon
   **Entscheidung:** `offen`
 
 ### 4.9 Diagnose & Meldungen
@@ -483,22 +565,28 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   keiner globalen Fläche konsumiert. *Empfehlung:* kleiner Store + Badge in
   der Sidebar mit Direktsprung; MessageList bei Broadcast nachladen.
   Rein Loom-seitig.
+  **Frequenz:** `hoch` — wird bei jedem Seitenaufruf gelesen; die Broadcasts
+  liegen serverseitig ungenutzt bereit
   **Entscheidung:** `offen`
 - **D03 — Systemprotokoll (chronologisches Ereignisprotokoll)** (partial, P2 L)
   Der Recorder verwirft bool/enum/string; Sysvar-Änderungen werden nicht
   aufgezeichnet; keine systemweite Ereignisliste/CSV/Löschen. *Empfehlung:*
   Event-Log-Tier im History-Subsystem + `GET /api/v1/protocol` (Filter,
   CSV, Löschen) + SPA-Route. Kein CCU-Zugriff nötig.
+  **Frequenz:** `mittel` — häufig nachgefragt („was war heute Nacht?"), aber
+  L-Aufwand
   **Entscheidung:** `offen`
 - **D04 — Loglevel der CCU-Dienste (rfd/hs485d/ReGa)** (missing, P3 M)
   *Empfehlung:* XML-RPC `logLevel` an rfd/hs485d, ReGa-Level per
   Mini-Skript; „CCU-Loglevel"-Karte neben dem LogLevelsPanel. Syslog-Ziel +
   HMIPServer-Level sind OS-gebunden → auslassen. *XML-RPC + ReGa.*
+  **Frequenz:** `corner` — Debugging-Nische
   **Entscheidung:** `offen`
 - **D05 — CCU-Logfile-Download (/var/log/messages, hmserver.log)** (missing, P3 L)
   Keine RPC-Schnittstelle; der WebUI-CGI streamt lokale Dateien.
   *Empfehlung:* CGI-Session-Proxy (fragil) oder künftiger CCU-Agent (A1);
   bis dahin bewusste Lücke.
+  **Frequenz:** `corner` — Debugging-Nische, OS-gebunden (A1)
   **Entscheidung:** `offen`
 
 ### 4.10 Drittanbieter-API & Ökosystem
@@ -519,6 +607,7 @@ Funktionen je Bereich sind in §5 zusammengefasst.
 - **E02 — ReGa-Metadatenspeicher (`get/set/removeMetadata`)** (missing, P3 S)
   Von Community-Tools als K/V-Store genutzt; auch ohne E01 als kleines
   Feature über den ReGa-Runner nachrüstbar. *ReGa.*
+  **Frequenz:** `corner` — Werkzeug für Drittanbieter, nicht für Bediener
   **Entscheidung:** `offen`
 - **E03 — XML-API-Listen (devicelist.xml, roomlist.xml, …)** (missing, P3 M)
   Guest-Level-XML für Alt-Clients; braucht dieselbe ise_id-Tabelle wie E01.
@@ -536,11 +625,14 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   konfigurierbare Addon-Links-Kachel (neuer Tab, Session bleibt bei der
   CCU); optional später Einbettung hinter Loom-Auth per Reverse-Proxy
   (Muster `internal/remoteproxy`).
+  **Frequenz:** `mittel` — hängt davon ab, ob überhaupt Addons im Einsatz
+  sind
   **Entscheidung:** `offen`
 - **E06 — Addon-Vollverwaltung (Install/Update/Uninstall)** (missing, P3 XL)
   Remote nicht sauber machbar (keine RPC-API; rc.d + tar-Upload =
   OS-Zugriff). *Empfehlung:* eher ausschließen bzw. an die
   Agent-Entscheidung (A1) koppeln.
+  **Frequenz:** `corner` — OS-gebunden (A1)
   **Entscheidung:** `offen`
 
 ### 4.11 Restposten aus erledigten Punkten
@@ -622,6 +714,10 @@ Initialisierung.
   (Muster: OpenCCU-Loom-Remote-Add-on / HA-Add-on-`update_script`).
   Empfehlung: (a) für 1.0, (b) als eigenes Projekt prüfen. Betrifft D05,
   E06, SY12/13/19/20.
+  Die Frequenz-Einstufung stützt (a): **jeder** betroffene Punkt ist
+  `corner`, und die CCU-WebUI ist pro Zentrale bereits verlinkt — ein
+  Agent würde dauerhafte Pflege gegen Firmwarewechsel kosten, ohne eine
+  regelmäßig genutzte Fläche zu gewinnen.
   **Entscheidung:** `offen`
 - **A2 — JSON-RPC-Kompat-API.**
   Nur bei Vollersatz-Szenario mit abgeschotteter CCU nötig; Scope
@@ -644,21 +740,26 @@ Initialisierung.
   Betrifft PR01–PR06.
   **Entscheidung:** `offen`
 
-## 7. Umsetzungsplan (nur beschlossene Punkte)
+## 7. Umsetzungsplan (Wellen 1–6 beschlossen, 7–8 vorgeschlagen)
 
 Welle 1 besteht aus acht unabhängigen, klein geschnittenen Paketen
 (je 1–2 PRs, parallelisierbar); ab Welle 2 folgen die großen Blöcke.
 Abhängigkeiten: K01 vor G10 (gleiches Paket), A3-ADR vor GR02,
 GR02 vor GR03–GR05.
 
-**Lieferstand 2026-07-31 (0.51.0) — der Wellenplan ist abgearbeitet:**
-Wellen **1a–1h ✅** und **GR01 ✅** (bis 0.46.0); Wellen **3 ✅, 5 ✅, 6 ✅**
-sowie die Welle-4-Kernpunkte **G11 ✅, G14 ✅** (0.47.0); **G12 ✅**
-(Kanal-Sichtbarkeit/Sperre, API 2.51.0); Welle **2 ✅ komplett**
+**Lieferstand 2026-07-31 (0.51.0) — der ursprüngliche Wellenplan (1–6) ist
+abgearbeitet:** Wellen **1a–1h ✅** und **GR01 ✅** (bis 0.46.0); Wellen
+**3 ✅, 5 ✅, 6 ✅** sowie die Welle-4-Kernpunkte **G11 ✅, G14 ✅** (0.47.0);
+**G12 ✅** (Kanal-Sichtbarkeit/Sperre, API 2.51.0); Welle **2 ✅ komplett**
 (GR02–GR05, 0.48.0, nachgeschärft bis 0.48.8).
 **Offen:** die Welle-4-Restposten **G08, G16** (beide Hardware-abhängig
-zurückgestellt) und — außerhalb jeder Welle — **V06** (siehe §4.5; als
-`umsetzen` beschlossen, aber nie eingeplant).
+zurückgestellt) und — außerhalb jeder Welle — **V06** (siehe §4.5).
+
+**Wellen 7 und 8** sind aus der Frequenz-Einstufung (§4) abgeleitet und
+noch nicht beschlossen: sie bündeln die sechs `hoch`-Punkte und die
+`mittel`-Punkte, die ein bereits ausgeliefertes Thema abschließen. Die
+enthaltenen Punkte stehen weiterhin auf `Entscheidung: offen` — der
+Vorschlag ersetzt die Einzelentscheidung nicht.
 
 | Welle | Punkte | Inhalt |
 |---|---|---|
@@ -675,17 +776,68 @@ zurückgestellt) und — außerhalb jeder Welle — **V06** (siehe §4.5; als
 | 4 | G08, G09, G11, G12, G14, G16 | Geräte-Restarbeiten: addDevice/setTempKey, Wired-Suche, Kommunikationstest, Kanal-Sichtbarkeit/Sperre, setTeam, Spezialdialoge |
 | 5 | V01, V02, V03 | Verknüpfungen: globale Übersicht, Rollen-Matching, Link-Test am Gerät |
 | 6 | SV03, SV07, SV10, W01, W02 | Diagramm-Definitionen, Sysvar-Verwendungsübersicht, Protokoll-Toggle, Wochenprofil-Restlücken |
+| **7** | D01, SV04, O03, SY18, O01 | **Alltagsflächen** (Vorschlag, nicht beschlossen) — alle `hoch`-Punkte mit Ausnahme von SY05 |
+| **8** | SY05, SY07 (+SY15, SY16), SY01, SY02, SY06 | **Zentralen-Wartung & Korrektheit** (Vorschlag, nicht beschlossen) |
 
-Nicht im Plan und weiterhin unerledigt: **V06** — beschlossen, aber keiner
-Welle zugeordnet (die Welle 1f deckt nur V05/V07/V08 ab). Beim nächsten
-Aufgreifen des Plans entweder anhängen oder neu entscheiden.
+### Welle 7 — Alltagsflächen
 
-Zurückgestellt (Status `offen`) bleiben insbesondere der
-Programmeditor-Block (PR01–PR06, PR09, PR10), Favoriten/Benutzer (O01–O05),
-Diagramm-Anzeige/Export (SV04, SV08, SV09), die gesamte Systemsteuerung
-(SY01–SY20, mit der Leseseite von SY09/SY10 als einzigem Teilstand),
-Diagnose-Ausbau (D01, D03–D05) und das Addon-Umfeld (E02, E05, E06) samt
-der ADR-Fragen A1/A2/A4. Abgelehnt: E01, E03, E04.
+Die höchste Nutzungsfrequenz pro Aufwand im gesamten Restbestand, und
+**vollständig Loom-intern**: kein CCU-Zugriff, keine Live-Freigabe, alles
+hermetisch testbar.
+
+- **D01** (S) — Meldungs-Badge in der Sidebar. Schließt das Thema
+  Meldungen ab: Quittierung einzeln und gesammelt sowie die dauerhafte
+  Unterdrückung sind ausgeliefert, es fehlt nur die globale Sichtbarkeit.
+- **SV04** (M) — Tier-Fallback in `QueryBuckets`. Der eigentliche Kern ist
+  eine Fehlfunktion, kein Ausbau: die Rollups halten 13 Monate, die
+  Abfrage liest nur die 30-Tage-Rohtabelle. Danach tragen die frisch
+  ausgelieferten Diagramme (SV03) auch lange Zeiträume; von-bis-Picker,
+  Zoom und Vergleichszeitraum sind die Zugabe.
+- **O03** (S) — Startseite pro Benutzer über den vorhandenen
+  `/me/preferences`-Store.
+- **SY18** (S) — Energiekosten-Satz; ein Config-Feld schließt die
+  Energy-Ansicht ab.
+- **O01** (M) — Favoriten bedienbar machen (Kachel-Technik aus
+  `Overview.svelte` wiederverwenden, Pin-Typen um `channel`/`program`
+  erweitern). Der größte Brocken der Welle und die Voraussetzung dafür,
+  dass O02/O04 überhaupt Sinn ergeben.
+
+### Welle 8 — Zentralen-Wartung & Korrektheit
+
+Braucht CCU-Zugriff, aber nur über ReGa- und JSON-RPC-Pfade, die es
+bereits gibt.
+
+- **SY05** (M) — Position/Koordinaten lesen und schreiben. Schließt ein
+  Korrektheitsloch unter den bereits editierbaren Astro-Wochenprofilen;
+  auch Voraussetzung für PR04, falls der Programmeditor je kommt.
+- **SY07** (M) mit **SY15**, **SY16** — eine Karte „CCU-Wartung" pro
+  Zentrale als gemeinsame Heimat für Recovery, Reboot (das ausgelieferte
+  K03), Poweroff und SafeMode. Capability-Gating über
+  `get_backend_info.fn`, weil Recovery auf der Original-CCU3 und in
+  oci/lxc fehlt.
+- **SY01**, **SY02** (S/M) — Backup-Fallback für die Original-CCU3 und
+  Upload einer externen `.sbk`. Selten benutzt, aber genau dann, wenn es
+  darauf ankommt.
+- **SY06** (M) — Vorab-Backup und Changelog-Link beim
+  Zentralen-Firmware-Update.
+
+### Bewusst nicht eingeplant
+
+- **V06** bleibt der einzige beschlossene Punkt ohne Wellen-Zuordnung. Die
+  Frequenz-Einstufung (`mittel`, lohnt erst bei vielen gleichartigen
+  Verknüpfungen) trägt keine eigene Welle. Entweder als kleinen Anhang zu
+  Welle 7 mitnehmen oder die `umsetzen`-Entscheidung zurücknehmen — eine
+  dritte Möglichkeit gibt es nicht.
+- **G08**, **G16** bleiben zurückgestellt, bis die jeweilige Hardware
+  verfügbar ist.
+- Die `corner`-Punkte der Systemsteuerung (SY03, SY04, SY08, SY09/SY10-
+  Setter, SY12–SY14, SY17, SY19, SY20) sind Duplikate der CCU-WebUI, die
+  pro Zentrale ohnehin verlinkt ist. Sie kosten dort null Wartung und in
+  Loom dauerhaft Pflege bei jedem Firmwarewechsel — das ist zugleich die
+  Antwort auf **A1** (siehe §6).
+- Ebenfalls offen und ohne Welle: der Programmeditor-Block (PR01–PR06,
+  PR09, PR10) samt **A4**, Favoriten-Ausbau (O02, O04, O05), SV08/SV09,
+  D03–D05, E02/E05/E06 und **A2**. Abgelehnt: E01, E03, E04.
 
 Der operative Wellen-Runbook (Ausführungsschleife, CI-Fallen,
 Wieder-Aufsetzen) ist mit dem abgearbeiteten Plan aufgelöst worden: die
