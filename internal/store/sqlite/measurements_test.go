@@ -136,7 +136,7 @@ func TestMeasurement_QueryBuckets_AggregatesCorrectly(t *testing.T) {
 		t.Fatalf("SaveBatch: %v", err)
 	}
 
-	buckets, err := s.QueryBuckets(ctx, central, iface, ch, param, from, to, 4)
+	buckets, _, err := s.QueryBuckets(ctx, central, iface, ch, param, from, to, 4)
 	if err != nil {
 		t.Fatalf("QueryBuckets: %v", err)
 	}
@@ -189,24 +189,24 @@ func TestMeasurement_QueryBuckets_ErrorPaths(t *testing.T) {
 	now := time.Now()
 	later := now.Add(time.Hour)
 
-	_, err := s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", now, later, 0)
+	_, _, err := s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", now, later, 0)
 	if err == nil {
 		t.Error("QueryBuckets(buckets=0): expected error, got nil")
 	}
 
-	_, err = s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", now, later, -1)
+	_, _, err = s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", now, later, -1)
 	if err == nil {
 		t.Error("QueryBuckets(buckets=-1): expected error, got nil")
 	}
 
 	// to == from
-	_, err = s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", now, now, 10)
+	_, _, err = s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", now, now, 10)
 	if err == nil {
 		t.Error("QueryBuckets(to==from): expected error, got nil")
 	}
 
 	// to before from
-	_, err = s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", later, now, 10)
+	_, _, err = s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "CH:1", "P", later, now, 10)
 	if err == nil {
 		t.Error("QueryBuckets(to<from): expected error, got nil")
 	}
@@ -248,7 +248,7 @@ func TestMeasurement_QueryBuckets_Isolation(t *testing.T) {
 		t.Fatalf("SaveBatch: %v", err)
 	}
 
-	buckets, err := s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "SHARED:1", "TEMP", from, to, 2)
+	buckets, _, err := s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "SHARED:1", "TEMP", from, to, 2)
 	if err != nil {
 		t.Fatalf("QueryBuckets: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestMeasurement_DeleteDevice_PrefixSafety(t *testing.T) {
 	}
 
 	// Confirm the survivor is ABC1234:1 by querying it.
-	buckets, err := s.QueryBuckets(ctx, central, iface, "ABC1234:1", "P",
+	buckets, _, err := s.QueryBuckets(ctx, central, iface, "ABC1234:1", "P",
 		time.UnixMilli(0), time.UnixMilli(2000), 1)
 	if err != nil {
 		t.Fatalf("QueryBuckets ABC1234:1: %v", err)
@@ -394,7 +394,7 @@ func TestMeasurement_DeleteForCentral_RemovesOnlyThatCentral(t *testing.T) {
 		t.Errorf("Stats.Rows = %d after DeleteForCentral(central-a), want 1 (only central-b must survive)", st.Rows)
 	}
 
-	buckets, err := s.QueryBuckets(ctx, "central-b", "HmIP-RF", "DEV:1", "TEMP",
+	buckets, _, err := s.QueryBuckets(ctx, "central-b", "HmIP-RF", "DEV:1", "TEMP",
 		time.UnixMilli(0), time.UnixMilli(2000), 1)
 	if err != nil {
 		t.Fatalf("QueryBuckets central-b: %v", err)
@@ -403,7 +403,7 @@ func TestMeasurement_DeleteForCentral_RemovesOnlyThatCentral(t *testing.T) {
 		t.Errorf("central-b history was incorrectly removed by DeleteForCentral(central-a)")
 	}
 
-	buckets, err = s.QueryBuckets(ctx, "central-a", "HmIP-RF", "DEV:1", "TEMP",
+	buckets, _, err = s.QueryBuckets(ctx, "central-a", "HmIP-RF", "DEV:1", "TEMP",
 		time.UnixMilli(0), time.UnixMilli(2000), 1)
 	if err != nil {
 		t.Fatalf("QueryBuckets central-a: %v", err)
@@ -518,7 +518,7 @@ func TestMeasurement_LastWriteWins_SameMillisecond(t *testing.T) {
 		t.Errorf("Stats.Rows = %d, want 1 (last-write-wins collision)", st.Rows)
 	}
 
-	buckets, err := s.QueryBuckets(ctx, central, iface, ch, param,
+	buckets, _, err := s.QueryBuckets(ctx, central, iface, ch, param,
 		time.UnixMilli(0), time.UnixMilli(100000), 1)
 	if err != nil {
 		t.Fatalf("QueryBuckets: %v", err)
@@ -564,7 +564,7 @@ func TestMeasurement_MultiCCU_Isolation(t *testing.T) {
 
 	query := func(central string) []MeasurementBucket {
 		t.Helper()
-		b, qErr := s.QueryBuckets(ctx, central, iface, ch, param,
+		b, _, qErr := s.QueryBuckets(ctx, central, iface, ch, param,
 			time.UnixMilli(0), time.UnixMilli(10000), 1)
 		if qErr != nil {
 			t.Fatalf("QueryBuckets %s: %v", central, qErr)
@@ -598,7 +598,7 @@ func TestMeasurement_NilStore_NoOps(t *testing.T) {
 		t.Errorf("nil SaveBatch: %v", err)
 	}
 
-	got, err := s.QueryBuckets(ctx, "c", "i", "d:1", "P", now, now.Add(time.Second), 1)
+	got, _, err := s.QueryBuckets(ctx, "c", "i", "d:1", "P", now, now.Add(time.Second), 1)
 	if err != nil {
 		t.Errorf("nil QueryBuckets: %v", err)
 	}
@@ -725,6 +725,45 @@ func queryDaily(t *testing.T, s *MeasurementStore, central, iface, ch, param str
 		out = append(out, r)
 	}
 	return out
+}
+
+// insertHourlyRow writes one measurements_hourly row directly, bypassing
+// RollupHourly. Used to simulate a series whose folded history exists but
+// that never had a raw row recorded through this store — e.g. imported
+// history, or a series whose raw retention window has always excluded it.
+func insertHourlyRow(
+	t *testing.T, s *MeasurementStore,
+	central, iface, ch, param string,
+	bucketTS int64, sum, minV, maxV float64, count int64, first, last float64,
+) {
+	t.Helper()
+	_, err := s.db.ExecContext(context.Background(), `
+        INSERT INTO measurements_hourly
+            (central_name, interface_id, channel_address, parameter, bucket_ts,
+             sum, min, max, count, first, last)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, central, iface, ch, param, bucketTS, sum, minV, maxV, count, first, last)
+	if err != nil {
+		t.Fatalf("insertHourlyRow: %v", err)
+	}
+}
+
+// advanceHourlyWatermark moves the hourly rollup watermark forward directly,
+// without going through RollupHourly, so a manually-inserted hourly row (see
+// insertHourlyRow) becomes visible to assembleTierBuckets.
+func advanceHourlyWatermark(t *testing.T, s *MeasurementStore, wm int64) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("advanceHourlyWatermark begin: %v", err)
+	}
+	if err := advanceWatermark(ctx, tx, rollupTierHourly, wm); err != nil {
+		t.Fatalf("advanceHourlyWatermark: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("advanceHourlyWatermark commit: %v", err)
+	}
 }
 
 // TestMeasurement_RollupHourly_AggregatesCorrectly verifies that
@@ -1606,7 +1645,7 @@ func TestMeasurement_QueryBuckets_FinalBucketIndexClamped(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveBatch: %v", err)
 	}
-	buckets, err := s.QueryBuckets(ctx, central, iface, ch, param, from, to, 3)
+	buckets, _, err := s.QueryBuckets(ctx, central, iface, ch, param, from, to, 3)
 	if err != nil {
 		t.Fatalf("QueryBuckets: %v", err)
 	}
@@ -1626,5 +1665,580 @@ func TestMeasurement_QueryBuckets_FinalBucketIndexClamped(t *testing.T) {
 		if b.TS.UnixMilli() == 9 {
 			t.Errorf("found spurious overflow bucket at TS=9ms (index 3)")
 		}
+	}
+}
+
+// TestPickHistoryTierSelectsByWidth verifies the width-based tier choice in
+// pickHistoryTier: day- and hour-wide buckets pick their tier directly from
+// the width, and only the sub-hour case falls through to the raw-floor
+// check. A single raw row at fromMs keeps that sub-hour case selecting raw
+// (rather than being promoted) so this table isolates the width comparison,
+// not the promotion behaviour covered separately below.
+func TestPickHistoryTierSelectsByWidth(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "TEMP"
+	)
+	fromMs := int64(1000)
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(fromMs), Value: 1},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	key := seriesKey{central: central, iface: iface, channel: ch, parameter: param}
+
+	cases := []struct {
+		name  string
+		width int64
+		want  HistoryTier
+	}{
+		{"sub-hour width with fresh raw data", 1000, HistoryTierRaw},
+		{"exactly one hour", hourBucketMs, HistoryTierHour},
+		{"exactly one day", dayBucketMs, HistoryTierDay},
+		{"above one day", dayBucketMs * 2, HistoryTierDay},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := s.pickHistoryTier(ctx, key, tc.width, fromMs)
+			if err != nil {
+				t.Fatalf("pickHistoryTier: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("pickHistoryTier(width=%d) = %q, want %q", tc.width, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestQueryBucketsPromotesToHourlyWhenRawPurged is the regression case the
+// tiering change exists for: once the raw rows behind a range have been
+// rolled up and purged, a narrow-bucket query over that range used to read
+// the (now empty) raw table directly and come back empty even though the
+// hourly rollup still holds the data. It must instead promote to the hourly
+// tier and return the real aggregate.
+func TestQueryBucketsPromotesToHourlyWhenRawPurged(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 10},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(20 * time.Minute), Value: 30},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.DeleteOlderThan(ctx, base.Add(time.Hour)); err != nil {
+		t.Fatalf("DeleteOlderThan: %v", err)
+	}
+	// Confirm the raw rows are actually gone, or the test below would not be
+	// exercising the promotion at all.
+	if st, err := s.Stats(ctx); err != nil {
+		t.Fatalf("Stats: %v", err)
+	} else if st.Rows != 0 {
+		t.Fatalf("raw rows survived the purge: Stats.Rows = %d, want 0", st.Rows)
+	}
+
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param,
+		base, base.Add(time.Hour), 60) // width = 1 minute, sub-hour
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierHour {
+		t.Fatalf("tier = %q, want %q", tier, HistoryTierHour)
+	}
+	if len(buckets) == 0 {
+		t.Fatal("QueryBuckets returned no buckets after promotion; the data did not come back")
+	}
+	var total int64
+	for _, b := range buckets {
+		total += b.Count
+	}
+	if total != 2 {
+		t.Errorf("total sample count across buckets = %d, want 2", total)
+	}
+}
+
+// TestQueryBucketsPromotesToHourlyWhenSeriesHasNoRawRows covers the second
+// promotion trigger: a series that never had a raw row recorded through this
+// store at all (rawFloor's !ok branch, as opposed to the purge case above
+// where a floor exists but is too recent). The hourly row is inserted
+// directly and its watermark advanced by hand, since there is no raw data to
+// roll up from.
+func TestQueryBucketsPromotesToHourlyWhenSeriesHasNoRawRows(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	bucketTS := base.Truncate(time.Hour).UnixMilli()
+
+	insertHourlyRow(t, s, central, iface, ch, param, bucketTS, 40, 10, 30, 2, 10, 30)
+	advanceHourlyWatermark(t, s, bucketTS+hourBucketMs)
+
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param,
+		base.Truncate(time.Hour), base.Truncate(time.Hour).Add(time.Hour), 60) // sub-hour width
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierHour {
+		t.Fatalf("tier = %q, want %q", tier, HistoryTierHour)
+	}
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1", len(buckets))
+	}
+	if buckets[0].Count != 2 || buckets[0].Avg != 20 {
+		t.Errorf("bucket = %+v, want Count=2 Avg=20", buckets[0])
+	}
+}
+
+// TestQueryBucketsHourlyAssemblyMergesAcrossWatermark verifies that the
+// hourly tier assembly merges the persisted rollup (below the watermark)
+// with the still-un-rolled raw tail (at/above it) into disjoint buckets: the
+// total sample count across every returned bucket must equal the number of
+// samples written, proving neither source is double-counted.
+func TestQueryBucketsHourlyAssemblyMergesAcrossWatermark(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		// hour 0 — will be folded below the watermark.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 10},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(30 * time.Minute), Value: 20},
+		// hour 1 — stays the un-rolled raw tail (RollupHourly's cutoff below
+		// stops exactly at the hour-1 boundary).
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(time.Hour), Value: 30},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(time.Hour + 30*time.Minute), Value: 40},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param,
+		base, base.Add(2*time.Hour), 2) // width = 1 hour
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierHour {
+		t.Fatalf("tier = %q, want %q", tier, HistoryTierHour)
+	}
+	if len(buckets) != 2 {
+		t.Fatalf("buckets = %d, want 2", len(buckets))
+	}
+	var total int64
+	for _, b := range buckets {
+		total += b.Count
+	}
+	if total != int64(len(samples)) {
+		t.Errorf("total sample count across buckets = %d, want %d (a source was double-counted or dropped)", total, len(samples))
+	}
+	if buckets[0].Count != 2 || buckets[0].Avg != 15 {
+		t.Errorf("hour-0 bucket (rollup tier) = %+v, want Count=2 Avg=15", buckets[0])
+	}
+	if buckets[1].Count != 2 || buckets[1].Avg != 35 {
+		t.Errorf("hour-1 bucket (raw tail) = %+v, want Count=2 Avg=35", buckets[1])
+	}
+}
+
+// TestQueryBucketsDailyAssemblyMergesThreeSources exercises the three-source
+// day tier assembly (persisted daily tier + hourly tail folded to day + raw
+// tail folded to day) with a fine enough output resolution (one output
+// bucket per day) that day0 and day1 stay in separate buckets. The total
+// sample count across buckets must equal the number of samples written,
+// proving the three sources are disjoint rather than double-counting the
+// data at the tier boundaries.
+func TestQueryBucketsDailyAssemblyMergesThreeSources(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	day0 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	day1 := day0.Add(24 * time.Hour)
+	samples := []MeasurementSample{
+		// day0 — fully rolled into the daily tier.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(1 * time.Hour), Value: 10},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(3 * time.Hour), Value: 20},
+		// day1 — folded into the hourly tier but not yet the daily tier.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(1 * time.Hour), Value: 30},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(3 * time.Hour), Value: 40},
+		// day1 — a later sample that stays the un-folded raw tail.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(5 * time.Hour), Value: 50},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	// Fold everything up to day1+4h into hourly, but only day0 into daily.
+	if _, err := s.RollupHourly(ctx, day1.Add(4*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, day1); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param,
+		day0, day1.Add(24*time.Hour), 2) // width = 1 day
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierDay {
+		t.Fatalf("tier = %q, want %q", tier, HistoryTierDay)
+	}
+	if len(buckets) != 2 {
+		t.Fatalf("buckets = %d, want 2", len(buckets))
+	}
+	var total int64
+	for _, b := range buckets {
+		total += b.Count
+	}
+	if total != int64(len(samples)) {
+		t.Errorf("total sample count across buckets = %d, want %d (a source was double-counted or dropped)", total, len(samples))
+	}
+	if buckets[0].Count != 2 || buckets[0].Avg != 15 {
+		t.Errorf("day0 bucket (daily tier) = %+v, want Count=2 Avg=15", buckets[0])
+	}
+	if buckets[1].Count != 3 || buckets[1].Avg != 40 {
+		t.Errorf("day1 bucket (hourly + raw tail) = %+v, want Count=3 Avg=40", buckets[1])
+	}
+}
+
+// TestQueryBucketsAverageIsExactNotAverageOfAverages is the core property
+// the sum+count rollup design buys: folding two source buckets with very
+// different sample counts into one output bucket must produce the true
+// sum/count average, not the average of the two sources' own averages. One
+// hour contributes a single sample of 100; the other contributes 9999
+// samples of 0. The naive average-of-averages would read (100+0)/2 = 50;
+// the true average is 100/10000 = 0.01.
+func TestQueryBucketsAverageIsExactNotAverageOfAverages(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	hourB := base.Add(time.Hour)
+
+	const lowSampleCount = 9999
+	samples := make([]MeasurementSample, 0, lowSampleCount+1)
+	samples = append(samples, MeasurementSample{
+		CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param,
+		TS: base, Value: 100,
+	})
+	for i := range lowSampleCount {
+		// Spread across hour B (300ms apart, well inside the 1h bucket) so
+		// every sample gets a distinct primary-key timestamp.
+		samples = append(samples, MeasurementSample{
+			CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param,
+			TS: hourB.Add(time.Duration(i) * 300 * time.Millisecond), Value: 0,
+		})
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(2*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	// One output bucket spanning both hourly rows forces the merge in
+	// foldTierBuckets.
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param, base, base.Add(2*time.Hour), 1)
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierHour {
+		t.Fatalf("tier = %q, want %q", tier, HistoryTierHour)
+	}
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1", len(buckets))
+	}
+	if buckets[0].Count != int64(len(samples)) {
+		t.Fatalf("Count = %d, want %d", buckets[0].Count, len(samples))
+	}
+	want := 100.0 / float64(len(samples))
+	if buckets[0].Avg != want {
+		t.Errorf("Avg = %v, want %v (sum/count)", buckets[0].Avg, want)
+	}
+	if buckets[0].Avg == 50 {
+		t.Error("Avg = 50: this is the average of the two per-hour averages, not the true sum/count")
+	}
+}
+
+// TestQueryBucketsMinMaxSurviveHourlyRefold verifies that folding two
+// already-aggregated hourly rows into a single wider output bucket keeps the
+// true global min/max, not just one source's extremes.
+func TestQueryBucketsMinMaxSurviveHourlyRefold(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "TEMP"
+	)
+	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		// hour 0 — holds the coldest reading of the pair.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: -40},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(20 * time.Minute), Value: 5},
+		// hour 1 — holds the warmest reading of the pair.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(time.Hour), Value: 0},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(time.Hour + 20*time.Minute), Value: 60},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(2*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param, base, base.Add(2*time.Hour), 1)
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierHour {
+		t.Fatalf("tier = %q, want %q", tier, HistoryTierHour)
+	}
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1", len(buckets))
+	}
+	if buckets[0].Min != -40 {
+		t.Errorf("Min = %v, want -40 (coldest reading from hour 0)", buckets[0].Min)
+	}
+	if buckets[0].Max != 60 {
+		t.Errorf("Max = %v, want 60 (warmest reading from hour 1)", buckets[0].Max)
+	}
+}
+
+// TestQueryBucketsMinMaxSurviveDailyThreeSourceMerge exercises the min/max
+// fold across all three day-tier sources at once by requesting a single
+// output bucket wide enough to swallow day0 and day1 together — including
+// the day1 sub-merge of its hourly tail and raw tail (the "day bucket
+// straddling the hourly frontier" case the assembleTierBuckets doc comment
+// describes). The global min/max must survive intact through every fold.
+func TestQueryBucketsMinMaxSurviveDailyThreeSourceMerge(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "TEMP"
+	)
+	day0 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	day1 := day0.Add(24 * time.Hour)
+	samples := []MeasurementSample{
+		// day0 (daily tier) — holds the global minimum.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(1 * time.Hour), Value: -100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(3 * time.Hour), Value: 50},
+		// day1 hourly tail — holds the global maximum.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(1 * time.Hour), Value: 10},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(3 * time.Hour), Value: 200},
+		// day1 raw tail — mid-range, must not overwrite either extreme.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(5 * time.Hour), Value: -5},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, day1.Add(4*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, day1); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	buckets, tier, err := s.QueryBuckets(ctx, central, iface, ch, param,
+		day0, day1.Add(24*time.Hour), 1) // width = 2 days, collapses everything into one bucket
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if tier != HistoryTierDay {
+		t.Fatalf("tier = %q, want %q", tier, HistoryTierDay)
+	}
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1", len(buckets))
+	}
+	if buckets[0].Count != int64(len(samples)) {
+		t.Errorf("Count = %d, want %d", buckets[0].Count, len(samples))
+	}
+	if buckets[0].Min != -100 {
+		t.Errorf("Min = %v, want -100", buckets[0].Min)
+	}
+	if buckets[0].Max != 200 {
+		t.Errorf("Max = %v, want 200", buckets[0].Max)
+	}
+}
+
+// TestFoldTierBuckets exercises the pure re-folding function directly,
+// without touching the database, for the edge cases the SQL-side callers
+// rely on: index clamping in both directions, accumulation when several
+// source buckets land on the same output index (the day-bucket-straddling
+// case), skipping empty sources, and a sorted-by-TS result.
+func TestFoldTierBuckets(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty input yields nil", func(t *testing.T) {
+		t.Parallel()
+		if got := foldTierBuckets(nil, 0, 1000, 4); got != nil {
+			t.Errorf("foldTierBuckets(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("out-of-range index clamps to the last bucket", func(t *testing.T) {
+		t.Parallel()
+		// Integer truncation in the width computation can leave a source
+		// bucket start beyond fromMs+width*buckets; it must fold into the
+		// last valid bucket instead of being dropped or overflowing.
+		src := []tierBucket{
+			{bucketTS: 100_000, sum: 10, minV: 10, maxV: 10, count: 1},
+		}
+		got := foldTierBuckets(src, 0, 1000, 4) // valid indices 0..3
+		if len(got) != 1 {
+			t.Fatalf("got %d buckets, want 1", len(got))
+		}
+		if want := int64(3 * 1000); got[0].TS.UnixMilli() != want {
+			t.Errorf("TS = %d, want %d (clamped to the last bucket)", got[0].TS.UnixMilli(), want)
+		}
+	})
+
+	t.Run("negative index clamps to zero", func(t *testing.T) {
+		t.Parallel()
+		// A source bucket that starts before fromMs (possible at a tier
+		// boundary) must fold into bucket 0, never underflow the slice.
+		src := []tierBucket{
+			{bucketTS: -5000, sum: 7, minV: 7, maxV: 7, count: 1},
+		}
+		got := foldTierBuckets(src, 0, 1000, 4)
+		if len(got) != 1 || got[0].TS.UnixMilli() != 0 {
+			t.Fatalf("got %+v, want one bucket at TS=0", got)
+		}
+	})
+
+	t.Run("repeated indices accumulate", func(t *testing.T) {
+		t.Parallel()
+		// Two source buckets mapping to the same output index — the
+		// straddling-day-bucket case — must merge (sum/count add, min/max
+		// fold), not silently overwrite one another.
+		src := []tierBucket{
+			{bucketTS: 0, sum: 10, minV: 1, maxV: 10, count: 2},
+			{bucketTS: 500, sum: 5, minV: -3, maxV: 8, count: 3},
+		}
+		got := foldTierBuckets(src, 0, 1000, 1)
+		if len(got) != 1 {
+			t.Fatalf("got %d buckets, want 1", len(got))
+		}
+		b := got[0]
+		if b.Count != 5 {
+			t.Errorf("Count = %d, want 5 (2+3)", b.Count)
+		}
+		if b.Avg != 3 { // (10+5) / 5
+			t.Errorf("Avg = %v, want 3", b.Avg)
+		}
+		if b.Min != -3 || b.Max != 10 {
+			t.Errorf("Min/Max = %v/%v, want -3/10", b.Min, b.Max)
+		}
+	})
+
+	t.Run("zero-count sources are skipped", func(t *testing.T) {
+		t.Parallel()
+		src := []tierBucket{
+			{bucketTS: 0, sum: 0, minV: 0, maxV: 0, count: 0},
+			{bucketTS: 1000, sum: 20, minV: 20, maxV: 20, count: 1},
+		}
+		got := foldTierBuckets(src, 0, 1000, 4)
+		if len(got) != 1 {
+			t.Fatalf("got %d buckets, want 1 (the zero-count source must not produce an empty output bucket)", len(got))
+		}
+		if got[0].TS.UnixMilli() != 1000 {
+			t.Errorf("TS = %d, want 1000", got[0].TS.UnixMilli())
+		}
+	})
+
+	t.Run("output is sorted ascending by TS", func(t *testing.T) {
+		t.Parallel()
+		src := []tierBucket{
+			{bucketTS: 3000, sum: 3, minV: 3, maxV: 3, count: 1},
+			{bucketTS: 0, sum: 0, minV: 0, maxV: 0, count: 1},
+			{bucketTS: 1000, sum: 1, minV: 1, maxV: 1, count: 1},
+		}
+		got := foldTierBuckets(src, 0, 1000, 4)
+		if len(got) != 3 {
+			t.Fatalf("got %d buckets, want 3", len(got))
+		}
+		for i := 1; i < len(got); i++ {
+			if !got[i].TS.After(got[i-1].TS) {
+				t.Errorf("buckets not strictly ascending at index %d: %v then %v", i, got[i-1].TS, got[i].TS)
+			}
+		}
+	})
+}
+
+// TestQueryBucketsNoDataReturnsNilWithValidTier verifies that querying a
+// series with no recorded rows at all returns a nil bucket slice and no
+// error, and that the reported tier is still one of the defined HistoryTier
+// values rather than the zero value. The series has no raw floor at all, so
+// the sub-hour width requested here is promoted to the hourly tier — the
+// same promotion path as when raw data has been purged.
+func TestQueryBucketsNoDataReturnsNilWithValidTier(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	buckets, tier, err := s.QueryBuckets(ctx, "ccu1", "HmIP-RF", "DEV:1", "TEMP",
+		time.UnixMilli(0), time.UnixMilli(60_000), 10) // width = 6s, sub-hour
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	if buckets != nil {
+		t.Errorf("buckets = %v, want nil for a series with no recorded rows", buckets)
+	}
+	if tier != HistoryTierHour {
+		t.Errorf("tier = %q, want %q (promoted: the series has no raw floor at all)", tier, HistoryTierHour)
 	}
 }

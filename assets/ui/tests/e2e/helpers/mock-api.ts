@@ -191,6 +191,18 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/service-messages', (route) =>
     route.fulfill({ json: [] }),
   );
+  // Seeds the sidebar's message badge. An empty snapshot keeps the badge
+  // absent, so every existing visual baseline stays byte-identical.
+  await page.route('**/api/v1/hub/data-points', (route) =>
+    route.fulfill({ json: [] }),
+  );
+  // Per-user preferences. 404 means "unset", which is what every existing
+  // baseline assumes: no start route, so the router keeps its default.
+  await page.route('**/api/v1/me/preferences/**', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 404, json: { title: 'not found' } })
+      : route.fulfill({ status: 204, body: '' }),
+  );
   await page.route('**/api/v1/service-messages/**', (route) =>
     route.fulfill({ status: 200 }),
   );

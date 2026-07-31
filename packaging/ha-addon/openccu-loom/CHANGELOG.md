@@ -1,5 +1,9 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.0
+
+- Placeholder — filled in as the release lands.
+
 ## 0.51.0
 
 - **Add-on updates are scriptable over WebSocket** (`addon_update.check`

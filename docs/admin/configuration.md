@@ -570,6 +570,8 @@ an external time-series store.
 | `persistence.history.include` | list | — (all numeric) | — | no |
 | `persistence.history.exclude` | list | — | — | no |
 | `persistence.history.disabled_centrals` | list | — | — | no |
+| `persistence.history.energy_price_per_kwh` | number | `0` (no costs) | — | no |
+| `persistence.history.energy_currency` | string | `€` | — | no |
 | `persistence.history.export.enabled` | bool | `false` | — | no |
 | `persistence.history.export.kind` | string | `influxdb` | — | no |
 | `persistence.history.export.endpoint` | string | — | — | no |
@@ -582,6 +584,12 @@ an external time-series store.
 `include`/`exclude` are parameter-name globs (`exclude` wins). The
 export token is never inline — the daemon reads it from the env var
 named by `export.token_env`.
+
+`energy_price_per_kwh` makes the energy view show costs next to
+consumption. Leave it at `0` to show no costs at all — a tariff of zero
+would render every amount as `0.00`, which reads as "free" rather than
+"not configured". `energy_currency` only labels those amounts; nothing
+is ever converted.
 
 ### `reliability`
 

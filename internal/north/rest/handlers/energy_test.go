@@ -84,6 +84,51 @@ func TestGetEnergy_EmptyDevicesIsJSONArray(t *testing.T) {
 	}
 }
 
+// TestGetEnergy_TariffOmittedWhenZero pins the omitempty contract on
+// PricePerKWh/Currency: a response with no tariff configured must not
+// carry those keys in the JSON body at all, so the SPA can distinguish
+// "not configured" from an explicit 0.00.
+func TestGetEnergy_TariffOmittedWhenZero(t *testing.T) {
+	t.Parallel()
+	svc := &stubEnergyService{resp: EnergyResponse{Group: "day"}}
+	req := httptest.NewRequest(http.MethodGet, validEnergyURL(), http.NoBody)
+	w := httptest.NewRecorder()
+	GetEnergy(svc).ServeHTTP(w, req)
+
+	var raw map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := raw["price_per_kwh"]; ok {
+		t.Errorf("price_per_kwh present in JSON with no tariff configured: %s", w.Body.String())
+	}
+	if _, ok := raw["currency"]; ok {
+		t.Errorf("currency present in JSON with no tariff configured: %s", w.Body.String())
+	}
+}
+
+// TestGetEnergy_TariffPresentWhenSet is the counterpart to
+// TestGetEnergy_TariffOmittedWhenZero: once a tariff is set, both fields
+// must serialize onto the wire under their documented keys.
+func TestGetEnergy_TariffPresentWhenSet(t *testing.T) {
+	t.Parallel()
+	svc := &stubEnergyService{resp: EnergyResponse{Group: "day", PricePerKWh: 0.35, Currency: "€"}}
+	req := httptest.NewRequest(http.MethodGet, validEnergyURL(), http.NoBody)
+	w := httptest.NewRecorder()
+	GetEnergy(svc).ServeHTTP(w, req)
+
+	var raw map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, ok := raw["price_per_kwh"]; !ok || got != 0.35 {
+		t.Errorf("price_per_kwh = %v (present=%v), want 0.35", got, ok)
+	}
+	if got, ok := raw["currency"]; !ok || got != "€" {
+		t.Errorf("currency = %v (present=%v), want €", got, ok)
+	}
+}
+
 func TestGetEnergy_NilServiceIsUnavailable(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, validEnergyURL(), http.NoBody)

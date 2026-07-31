@@ -9,6 +9,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -195,11 +197,45 @@ func (s *MeasurementStore) SaveBatch(ctx context.Context, samples []MeasurementS
 	return nil
 }
 
-// QueryBuckets aggregates the rows for one data point in [from, to) into
-// at most buckets evenly spaced buckets, returning avg/min/max/count per
-// non-empty bucket in chronological order. The server-side aggregate
-// bounds the response regardless of how many raw rows back the range, so
-// the SPA never pulls the raw series.
+// HistoryTier names the source resolution [MeasurementStore.QueryBuckets]
+// assembled an answer from. It is reported alongside the buckets so a
+// caller can tell the operator that a long range is drawn at hourly or
+// daily resolution instead of from raw samples.
+type HistoryTier string
+
+const (
+	// HistoryTierRaw reads the raw measurements table directly.
+	HistoryTierRaw HistoryTier = "raw"
+	// HistoryTierHour reads the hourly rollup plus the un-rolled raw tail.
+	HistoryTierHour HistoryTier = "hour"
+	// HistoryTierDay reads the daily rollup plus the hourly and raw tails.
+	HistoryTierDay HistoryTier = "day"
+)
+
+// QueryBuckets aggregates the recorded history of one data point in
+// [from, to) into at most buckets evenly spaced buckets, returning
+// avg/min/max/count per non-empty bucket in chronological order plus the
+// source tier the answer was assembled from. The server-side aggregate
+// bounds the response regardless of how many rows back the range, so the
+// SPA never pulls the raw series.
+//
+// The source is chosen by the requested bucket width, mirroring the tier
+// assembly the energy path already performs ([MeasurementStore.QueryEnergy]):
+// a bucket at least a day wide is served from the daily rollup, at least an
+// hour wide from the hourly rollup, anything finer from raw rows. Reading
+// only the raw table — which the recorder purges after its (short) raw
+// retention — is why a range beyond that retention used to come back empty
+// even though the rollups still held the data.
+//
+// Each tier is completed by the still-un-rolled tail above its watermark,
+// so the running hour and the running day are never missing. Rollup rows
+// carry sum+count, so the average stays exact across a re-fold (never an
+// average of averages) and min/max keep the peak contract.
+//
+// Source buckets are aligned to the hour or UTC day while output buckets
+// are aligned to `from`; a source bucket is attributed to the output bucket
+// that contains its start. At tier boundaries that shifts a value by at
+// most one source-bucket width, which is inherent to downsampling.
 //
 // buckets must be > 0 and to must be after from.
 func (s *MeasurementStore) QueryBuckets(
@@ -207,22 +243,94 @@ func (s *MeasurementStore) QueryBuckets(
 	centralName, interfaceID, channelAddress, parameter string,
 	from, to time.Time,
 	buckets int,
-) ([]MeasurementBucket, error) {
+) ([]MeasurementBucket, HistoryTier, error) {
 	if s == nil || s.db == nil {
-		return nil, nil
+		return nil, HistoryTierRaw, nil
 	}
 	if buckets <= 0 {
-		return nil, errors.New("measurements.QueryBuckets: buckets must be > 0")
+		return nil, "", errors.New("measurements.QueryBuckets: buckets must be > 0")
 	}
 	fromMs, toMs := from.UnixMilli(), to.UnixMilli()
 	if toMs <= fromMs {
-		return nil, errors.New("measurements.QueryBuckets: to must be after from")
+		return nil, "", errors.New("measurements.QueryBuckets: to must be after from")
 	}
 	// Bucket width in ms, at least 1 so very short ranges still group.
 	width := (toMs - fromMs) / int64(buckets)
 	if width < 1 {
 		width = 1
 	}
+	key := seriesKey{centralName, interfaceID, channelAddress, parameter}
+
+	tier, err := s.pickHistoryTier(ctx, key, width, fromMs)
+	if err != nil {
+		return nil, "", err
+	}
+	if tier == HistoryTierRaw {
+		out, err := s.queryRawBuckets(ctx, key, fromMs, toMs, width, buckets)
+		return out, HistoryTierRaw, err
+	}
+	src, err := s.assembleTierBuckets(ctx, key, tier, fromMs, toMs)
+	if err != nil {
+		return nil, "", err
+	}
+	return foldTierBuckets(src, fromMs, width, buckets), tier, nil
+}
+
+// seriesKey identifies one recorded data point across all three tiers,
+// which share the same (central, interface, channel, parameter) key.
+type seriesKey struct {
+	central   string
+	iface     string
+	channel   string
+	parameter string
+}
+
+// pickHistoryTier selects the source resolution for a bucket width. The
+// width decides the base choice; a raw choice is then promoted when the
+// series has no raw row old enough to cover the range, because the
+// recorder has already purged that far back and only the rollups still
+// hold it. Without the promotion a narrow-bucket query over an old range
+// silently renders empty.
+func (s *MeasurementStore) pickHistoryTier(
+	ctx context.Context, key seriesKey, width, fromMs int64,
+) (HistoryTier, error) {
+	switch {
+	case width >= dayBucketMs:
+		return HistoryTierDay, nil
+	case width >= hourBucketMs:
+		return HistoryTierHour, nil
+	}
+	floor, ok, err := s.rawFloor(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	if !ok || floor > fromMs {
+		return HistoryTierHour, nil
+	}
+	return HistoryTierRaw, nil
+}
+
+// rawFloor returns the oldest raw sample timestamp for one series and
+// false when the series has no raw rows at all.
+func (s *MeasurementStore) rawFloor(ctx context.Context, key seriesKey) (oldestMs int64, ok bool, err error) { //nolint:gocritic // named results document which bool means "has rows"
+	var floor sql.NullInt64
+	err = s.db.QueryRowContext(ctx, `
+        SELECT MIN(ts)
+          FROM measurements
+         WHERE central_name = ? AND interface_id = ?
+           AND channel_address = ? AND parameter = ?
+    `, key.central, key.iface, key.channel, key.parameter).Scan(&floor)
+	if err != nil {
+		return 0, false, fmt.Errorf("measurements.rawFloor: %w", err)
+	}
+	return floor.Int64, floor.Valid, nil
+}
+
+// queryRawBuckets is the fast path: one grouped scan of the raw table that
+// buckets server-side, unchanged from before the tiering.
+func (s *MeasurementStore) queryRawBuckets(
+	ctx context.Context, key seriesKey, fromMs, toMs, width int64, buckets int,
+) ([]MeasurementBucket, error) {
 	// Integer bucket width truncates, so width*buckets can be strictly less
 	// than the range: a ts just below `to` then maps to index `buckets`,
 	// one past the last valid slot, yielding a spurious tail bucket. Clamp
@@ -241,7 +349,7 @@ func (s *MeasurementStore) QueryBuckets(
            AND ts < ?
          GROUP BY bucket
          ORDER BY bucket
-    `, fromMs, width, maxBucket, centralName, interfaceID, channelAddress, parameter, fromMs, toMs)
+    `, fromMs, width, maxBucket, key.central, key.iface, key.channel, key.parameter, fromMs, toMs)
 	if err != nil {
 		return nil, fmt.Errorf("measurements.QueryBuckets: %w", err)
 	}
@@ -269,6 +377,209 @@ func (s *MeasurementStore) QueryBuckets(
 		return nil, fmt.Errorf("measurements.QueryBuckets rows: %w", err)
 	}
 	return out, nil
+}
+
+// tierBucket is one source-tier aggregate, keyed by its own (hour- or
+// day-aligned) bucket start. Unlike the energy rows it carries no
+// first/last: a history chart needs avg/min/max only, so the folds below
+// are plain GROUP BY aggregates instead of window functions.
+type tierBucket struct {
+	bucketTS int64
+	sum      float64
+	minV     float64
+	maxV     float64
+	count    int64
+}
+
+// The three history source reads. Each projects the same five-column shape
+// (bucket start, sum, min, max, count) so one scanner drains them all.
+const (
+	historyTierHourlySelectSQL = `
+        SELECT bucket_ts, sum, min, max, count
+          FROM measurements_hourly
+         WHERE central_name = ? AND interface_id = ?
+           AND channel_address = ? AND parameter = ?
+           AND bucket_ts >= ? AND bucket_ts < ?
+    `
+	historyTierDailySelectSQL = `
+        SELECT bucket_ts, sum, min, max, count
+          FROM measurements_daily
+         WHERE central_name = ? AND interface_id = ?
+           AND channel_address = ? AND parameter = ?
+           AND bucket_ts >= ? AND bucket_ts < ?
+    `
+	// historyRawFoldSQL folds the un-rolled raw tail into fixed-width
+	// buckets; the width (hour or day) is a bind parameter so one statement
+	// serves both tiers.
+	historyRawFoldSQL = `
+        SELECT ts - (ts % ?) AS bucket_ts,
+               SUM(value), MIN(value), MAX(value), COUNT(*)
+          FROM measurements
+         WHERE central_name = ? AND interface_id = ?
+           AND channel_address = ? AND parameter = ?
+           AND ts >= ? AND ts < ?
+         GROUP BY bucket_ts
+    `
+	// historyHourlyToDayFoldSQL re-aggregates hourly rows into UTC-day
+	// buckets for the slice already folded to hourly but not yet to daily.
+	historyHourlyToDayFoldSQL = `
+        SELECT bucket_ts - (bucket_ts % 86400000) AS day_bucket,
+               SUM(sum), MIN(min), MAX(max), SUM(count)
+          FROM measurements_hourly
+         WHERE central_name = ? AND interface_id = ?
+           AND channel_address = ? AND parameter = ?
+           AND bucket_ts >= ? AND bucket_ts < ?
+         GROUP BY day_bucket
+    `
+)
+
+// assembleTierBuckets collects the source buckets for a tier over
+// [fromMs, toMs), completing the persisted rollup with the tails that are
+// not folded yet. The slices are disjoint by time except for the single
+// day bucket that can straddle the (hour-aligned) hourly frontier, which
+// foldTierBuckets merges by accumulating into the same output bucket.
+func (s *MeasurementStore) assembleTierBuckets(
+	ctx context.Context, key seriesKey, tier HistoryTier, fromMs, toMs int64,
+) ([]tierBucket, error) {
+	hourlyWM, err := readWatermark(ctx, s.db, rollupTierHourly)
+	if err != nil {
+		return nil, err
+	}
+	if tier == HistoryTierHour {
+		tierRows, err := s.readHistoryRange(ctx, historyTierHourlySelectSQL, key, fromMs, min(toMs, hourlyWM))
+		if err != nil {
+			return nil, err
+		}
+		tail, err := s.foldRawHistory(ctx, key, hourBucketMs, max(fromMs, hourlyWM), toMs)
+		if err != nil {
+			return nil, err
+		}
+		return append(tierRows, tail...), nil
+	}
+	dailyWM, err := readWatermark(ctx, s.db, rollupTierDaily)
+	if err != nil {
+		return nil, err
+	}
+	tierRows, err := s.readHistoryRange(ctx, historyTierDailySelectSQL, key, fromMs, min(toMs, dailyWM))
+	if err != nil {
+		return nil, err
+	}
+	hourlyTail, err := s.readHistoryRange(ctx, historyHourlyToDayFoldSQL, key, max(fromMs, dailyWM), min(toMs, hourlyWM))
+	if err != nil {
+		return nil, err
+	}
+	rawTail, err := s.foldRawHistory(ctx, key, dayBucketMs, max(fromMs, hourlyWM), toMs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tierBucket, 0, len(tierRows)+len(hourlyTail)+len(rawTail))
+	out = append(out, tierRows...)
+	out = append(out, hourlyTail...)
+	out = append(out, rawTail...)
+	return out, nil
+}
+
+// readHistoryRange runs one of the fixed tier statements over [fromMs, toMs).
+// An empty or inverted range yields no rows without touching the database.
+func (s *MeasurementStore) readHistoryRange(
+	ctx context.Context, query string, key seriesKey, fromMs, toMs int64,
+) ([]tierBucket, error) {
+	if toMs <= fromMs {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, query,
+		key.central, key.iface, key.channel, key.parameter, fromMs, toMs)
+	if err != nil {
+		return nil, fmt.Errorf("measurements.readHistoryRange: %w", err)
+	}
+	return scanTierBuckets(rows)
+}
+
+// foldRawHistory folds raw rows into widthMs buckets over [fromMs, toMs).
+func (s *MeasurementStore) foldRawHistory(
+	ctx context.Context, key seriesKey, widthMs, fromMs, toMs int64,
+) ([]tierBucket, error) {
+	if toMs <= fromMs {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, historyRawFoldSQL,
+		widthMs, key.central, key.iface, key.channel, key.parameter, fromMs, toMs)
+	if err != nil {
+		return nil, fmt.Errorf("measurements.foldRawHistory: %w", err)
+	}
+	return scanTierBuckets(rows)
+}
+
+// scanTierBuckets drains a five-column source-bucket result set.
+func scanTierBuckets(rows *sql.Rows) ([]tierBucket, error) {
+	defer func() { _ = rows.Close() }()
+	var out []tierBucket
+	for rows.Next() {
+		var b tierBucket
+		if err := rows.Scan(&b.bucketTS, &b.sum, &b.minV, &b.maxV, &b.count); err != nil {
+			return nil, fmt.Errorf("measurements.scanTierBuckets: %w", err)
+		}
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("measurements.scanTierBuckets: %w", err)
+	}
+	return out, nil
+}
+
+// foldTierBuckets re-folds source buckets into the caller's evenly spaced
+// output buckets. Accumulating sum and count (rather than averaging the
+// sources' averages) keeps the reported average exact; min/max take the
+// extremes. Source buckets are unordered and may repeat an output index —
+// that is how the day bucket straddling the hourly frontier merges.
+func foldTierBuckets(src []tierBucket, fromMs, width int64, buckets int) []MeasurementBucket {
+	if len(src) == 0 {
+		return nil
+	}
+	type acc struct {
+		sum        float64
+		minV, maxV float64
+		count      int64
+	}
+	maxIdx := int64(buckets - 1)
+	byIdx := make(map[int64]*acc, len(src))
+	order := make([]int64, 0, len(src))
+	for i := range src {
+		b := &src[i]
+		if b.count == 0 {
+			continue
+		}
+		idx := (b.bucketTS - fromMs) / width
+		if idx < 0 {
+			idx = 0
+		}
+		if idx > maxIdx {
+			idx = maxIdx
+		}
+		a, ok := byIdx[idx]
+		if !ok {
+			byIdx[idx] = &acc{sum: b.sum, minV: b.minV, maxV: b.maxV, count: b.count}
+			order = append(order, idx)
+			continue
+		}
+		a.sum += b.sum
+		a.count += b.count
+		a.minV = math.Min(a.minV, b.minV)
+		a.maxV = math.Max(a.maxV, b.maxV)
+	}
+	slices.Sort(order)
+	out := make([]MeasurementBucket, 0, len(order))
+	for _, idx := range order {
+		a := byIdx[idx]
+		out = append(out, MeasurementBucket{
+			TS:    time.UnixMilli(fromMs + idx*width),
+			Avg:   a.sum / float64(a.count),
+			Min:   a.minV,
+			Max:   a.maxV,
+			Count: a.count,
+		})
+	}
+	return out
 }
 
 // Bucket widths on the shared epoch-ms axis. The hourly tier truncates raw

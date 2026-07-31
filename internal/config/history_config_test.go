@@ -75,6 +75,46 @@ func TestHistoryConfig_EnabledNoCentralsRestriction(t *testing.T) {
 	}
 }
 
+// TestHistoryConfig_EnergyTariffYAMLRoundTrip verifies that the electricity
+// tariff fields decode from persistence.history in the daemon YAML config.
+func TestHistoryConfig_EnergyTariffYAMLRoundTrip(t *testing.T) {
+	t.Parallel()
+	buf := []byte(minimalCentralYAML + `
+persistence:
+  history:
+    energy_price_per_kwh: 0.32
+    energy_currency: "$"
+`)
+	cfg, err := Parse(buf)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.Persistence.History.EnergyPricePerKWh != 0.32 {
+		t.Errorf("EnergyPricePerKWh = %v, want 0.32", cfg.Persistence.History.EnergyPricePerKWh)
+	}
+	if cfg.Persistence.History.EnergyCurrency != "$" {
+		t.Errorf("EnergyCurrency = %q, want %q", cfg.Persistence.History.EnergyCurrency, "$")
+	}
+}
+
+// TestHistoryConfig_EnergyTariffAbsentKeysStayZero verifies that omitting
+// the tariff keys leaves both fields at their zero value — this is the
+// signal the daemon and the SPA use to mean "no tariff configured", as
+// opposed to an explicit free (0.00) tariff.
+func TestHistoryConfig_EnergyTariffAbsentKeysStayZero(t *testing.T) {
+	t.Parallel()
+	cfg, err := Parse([]byte(minimalCentralYAML))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.Persistence.History.EnergyPricePerKWh != 0 {
+		t.Errorf("EnergyPricePerKWh = %v, want 0 (unset)", cfg.Persistence.History.EnergyPricePerKWh)
+	}
+	if cfg.Persistence.History.EnergyCurrency != "" {
+		t.Errorf("EnergyCurrency = %q, want empty (unset)", cfg.Persistence.History.EnergyCurrency)
+	}
+}
+
 func TestHistoryConfig_DisabledCentralExcludesIt(t *testing.T) {
 	t.Parallel()
 	boolPtr := func(b bool) *bool { return &b }

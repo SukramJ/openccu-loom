@@ -18,12 +18,13 @@ import (
 type stubHistoryService struct {
 	buckets []HistoryBucket
 	err     error
+	tier    string
 	gotQ    HistoryQuery
 }
 
-func (s *stubHistoryService) Query(_ context.Context, q HistoryQuery) ([]HistoryBucket, error) {
+func (s *stubHistoryService) Query(_ context.Context, q HistoryQuery) ([]HistoryBucket, string, error) {
 	s.gotQ = q
-	return s.buckets, s.err
+	return s.buckets, s.tier, s.err
 }
 
 // validHistoryURL builds a request URL with every required parameter set.

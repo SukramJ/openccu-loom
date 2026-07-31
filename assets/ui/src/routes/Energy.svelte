@@ -14,6 +14,7 @@
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { t } from "$lib/i18n";
+  import { prefs } from "$lib/stores/preferences.svelte";
 
   // GET /api/v1/energy view — per-device consumption/feed-in breakdown
   // over a time range, grouped by hour/day/month. See
@@ -156,17 +157,45 @@
 
   const anyDeviceReset = $derived(deviceRows.some((r) => r.anyReset));
 
+  // The tariff rides on the response; zero (or absent) means none is
+  // configured, in which case no cost is shown anywhere rather than a
+  // row of 0.00 that reads as "free".
+  const tariff = $derived(status.kind === "data" ? (status.data.price_per_kwh ?? 0) : 0);
+  const currency = $derived(status.kind === "data" ? (status.data.currency ?? "") : "");
+  const hasTariff = $derived(tariff > 0);
+
+  // Amounts are formatted here, not by the daemon: the locale decides the
+  // decimal separator and grouping, and the SPA already knows it.
+  function formatCost(kwh: number): string {
+    return `${(kwh * tariff).toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} ${currency}`;
+  }
+
   const deviceColumns: DataColumn<DeviceRow>[] = $derived([
     { key: "name", label: t("energy.col.device"), sortable: true, title: true, get: (r) => r.name },
     { key: "consumed", label: t("energy.col.consumed"), sortable: true, align: "right", get: (r) => r.consumedKwh },
     { key: "feed_in", label: t("energy.col.feed_in"), sortable: true, align: "right", get: (r) => r.feedInKwh },
     { key: "avg_power", label: t("energy.col.avg_power"), sortable: true, align: "right", get: (r) => r.avgPowerW },
     { key: "peak_power", label: t("energy.col.peak_power"), sortable: true, align: "right", get: (r) => r.peakPowerW },
+    ...(hasTariff
+      ? [
+          {
+            key: "cost",
+            label: t("energy.col.cost"),
+            sortable: true,
+            align: "right" as const,
+            get: (r: DeviceRow) => r.consumedKwh * tariff,
+          },
+        ]
+      : []),
   ]);
 
   function formatKwh(v: number): string {
     return `${v.toFixed(2)} kWh`;
   }
+
   function formatW(v: number): string {
     return `${v.toFixed(0)} W`;
   }
@@ -328,6 +357,11 @@
             {t("energy.total_consumed")}
           </div>
           <div class="mt-1 text-2xl font-bold tabular-nums">{formatKwh(status.data.total_consumed_wh / 1000)}</div>
+          {#if hasTariff}
+            <div class="mt-0.5 text-sm tabular-nums text-[var(--ha-secondary-text-color)]">
+              {formatCost(status.data.total_consumed_wh / 1000)}
+            </div>
+          {/if}
         </Card>
         <Card class="p-4">
           <div class="text-xs uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
@@ -451,6 +485,8 @@
               <span class="tabular-nums">{formatW(row.avgPowerW)}</span>
             {:else if col.key === "peak_power"}
               <span class="tabular-nums">{formatW(row.peakPowerW)}</span>
+            {:else if col.key === "cost"}
+              <span class="tabular-nums">{formatCost(row.consumedKwh)}</span>
             {/if}
           {/snippet}
         </DataTable>

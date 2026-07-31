@@ -936,6 +936,13 @@ const EN: Catalog = {
   "favorites.unpin": "Unpin",
   "favorites.added": "{label} pinned to favorites.",
   "favorites.removed": "{label} removed from favorites.",
+  "favorites.kind.channel": "Channel",
+  "favorites.kind.program": "Program",
+  "favorites.program_started": "{label} started.",
+  "favorites.pin_channel": "Pin channel to favorites",
+  "favorites.unpin_channel": "Remove channel from favorites",
+  "favorites.pin_program": "Pin program to favorites",
+  "favorites.unpin_program": "Remove program from favorites",
   "favorites.kind.device": "Device",
   "favorites.kind.sysvar": "System variable",
   "nav.logout": "Logout",
@@ -1161,6 +1168,8 @@ const EN: Catalog = {
   "config.field.alarm.restart_loop_breaker": "Restart loop breaker (re-fires)",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
+  "config.field.persistence.history.energy_price_per_kwh": "Electricity tariff per kWh",
+  "config.field.persistence.history.energy_currency": "Currency label",
   "config.field.persistence.history.retention_hourly":
     "Hourly rollup retention",
   "config.field.persistence.history.retention_daily": "Daily rollup retention",
@@ -1454,6 +1463,10 @@ const EN: Catalog = {
     "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
   "config.help.persistence.history.retention":
     "How long raw samples are kept; zero falls back to 30 days (720 h), after which the retention job purges older rows.",
+  "config.help.persistence.history.energy_price_per_kwh":
+    "Price of one kilowatt-hour, used by the energy view to show costs next to consumption. Leave at 0 to show no costs at all — a tariff of 0 would render every amount as 0.00.",
+  "config.help.persistence.history.energy_currency":
+    "Label for the amounts derived from the tariff (symbol or code, e.g. € or CHF). Defaults to the euro sign. Purely a label — no conversion happens.",
   "config.help.persistence.history.retention_hourly":
     "How long the hourly rollup tier is kept; zero falls back to 13 months. Hourly rows are folded into the daily tier before this cutoff removes them.",
   "config.help.persistence.history.retention_daily":
@@ -1544,6 +1557,11 @@ const EN: Catalog = {
     "XML-RPC and BIN-RPC callback listeners that the CCU pushes state-change events into. Defaults bind on 0.0.0.0 and let the OS pick ports; override only when the daemon sits behind NAT or a narrow firewall.",
   "settings.interface": "Interface",
   "settings.language": "Language",
+  "settings.start_route": "Start page",
+  "settings.start_route.default": "Device list (default)",
+  "settings.start_route.help":
+    "The view that opens after logging in. Opening a direct link always wins over this setting.",
+  "settings.start_route.saved": "Start page saved",
   "settings.theme": "Theme",
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
@@ -2295,6 +2313,7 @@ const EN: Catalog = {
   "energy.col.consumed": "Consumed",
   "energy.col.feed_in": "Feed-in",
   "energy.col.avg_power": "Avg. power",
+  "energy.col.cost": "Cost",
   "energy.col.peak_power": "Peak power",
   "energy.col.reset": "reset",
   "energy.reset_note":
@@ -2535,6 +2554,7 @@ const EN: Catalog = {
   "sidebar.cluster.diagnose": "Status & Diagnose",
   "sidebar.cluster.system": "System",
   "sidebar.install_mode_active": "Pairing mode active",
+  "sidebar.pending_messages": "{count} pending message(s)",
   "diagnostics.all_ccus": "all",
   // --- DeviceList ---
   "device.list.select_aria": "Select device",
@@ -4229,6 +4249,13 @@ const DE: Catalog = {
   "favorites.unpin": "Lösen",
   "favorites.added": "{label} zu Favoriten hinzugefügt.",
   "favorites.removed": "{label} aus Favoriten entfernt.",
+  "favorites.kind.channel": "Kanal",
+  "favorites.kind.program": "Programm",
+  "favorites.program_started": "{label} gestartet.",
+  "favorites.pin_channel": "Kanal zu Favoriten hinzufügen",
+  "favorites.unpin_channel": "Kanal aus Favoriten entfernen",
+  "favorites.pin_program": "Programm zu Favoriten hinzufügen",
+  "favorites.unpin_program": "Programm aus Favoriten entfernen",
   "favorites.kind.device": "Gerät",
   "favorites.kind.sysvar": "Systemvariable",
   "nav.inbox": "Posteingang",
@@ -4459,6 +4486,8 @@ const DE: Catalog = {
     "Neustart-Schleifenbegrenzer (Reaktivierungen)",
   "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
   "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
+  "config.field.persistence.history.energy_price_per_kwh": "Strompreis pro kWh",
+  "config.field.persistence.history.energy_currency": "Währungsbezeichnung",
   "config.field.persistence.history.retention_hourly":
     "Aufbewahrung Stunden-Rollup",
   "config.field.persistence.history.retention_daily":
@@ -4758,6 +4787,10 @@ const DE: Catalog = {
     "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
   "config.help.persistence.history.retention":
     "Wie lange Rohmesswerte aufbewahrt werden; 0 = Standardwert von 30 Tagen (720 h), ältere Zeilen werden vom Retention-Job gelöscht.",
+  "config.help.persistence.history.energy_price_per_kwh":
+    "Preis einer Kilowattstunde; die Energie-Ansicht zeigt damit Kosten neben dem Verbrauch. Bei 0 werden gar keine Kosten angezeigt — ein Tarif von 0 würde jeden Betrag als 0,00 darstellen.",
+  "config.help.persistence.history.energy_currency":
+    "Bezeichnung für die aus dem Tarif berechneten Beträge (Symbol oder Code, z. B. € oder CHF). Standard ist das Euro-Zeichen. Reine Beschriftung — es wird nichts umgerechnet.",
   "config.help.persistence.history.retention_hourly":
     "Wie lange die Stunden-Rollup-Ebene aufbewahrt wird; 0 = Standardwert von 13 Monaten. Stunden-Zeilen werden vor diesem Cutoff in die Tages-Ebene gefaltet.",
   "config.help.persistence.history.retention_daily":
@@ -4844,6 +4877,11 @@ const DE: Catalog = {
     "XML-RPC- und BIN-RPC-Callback-Listener, in die die CCU State-Change-Events pusht. Defaults binden auf 0.0.0.0 mit OS-gewählten Ports; nur überschreiben wenn der Daemon hinter NAT oder einer engen Firewall sitzt.",
   "settings.interface": "Oberfläche",
   "settings.language": "Sprache",
+  "settings.start_route": "Startseite",
+  "settings.start_route.default": "Geräteliste (Standard)",
+  "settings.start_route.help":
+    "Die Ansicht, die nach dem Anmelden geöffnet wird. Ein direkt aufgerufener Link hat immer Vorrang vor dieser Einstellung.",
+  "settings.start_route.saved": "Startseite gespeichert",
   "settings.theme": "Design",
   "settings.theme.light": "Hell",
   "settings.theme.dark": "Dunkel",
@@ -5610,6 +5648,7 @@ const DE: Catalog = {
   "energy.col.consumed": "Verbrauch",
   "energy.col.feed_in": "Einspeisung",
   "energy.col.avg_power": "Ø Leistung",
+  "energy.col.cost": "Kosten",
   "energy.col.peak_power": "Spitzenleistung",
   "energy.col.reset": "Reset",
   "energy.reset_note":
@@ -5848,6 +5887,7 @@ const DE: Catalog = {
   "sidebar.cluster.diagnose": "Status & Diagnose",
   "sidebar.cluster.system": "System",
   "sidebar.install_mode_active": "Anlernmodus aktiv",
+  "sidebar.pending_messages": "{count} offene Meldung(en)",
   "diagnostics.all_ccus": "alle",
   // --- DeviceList ---
   "device.list.select_aria": "Gerät auswählen",

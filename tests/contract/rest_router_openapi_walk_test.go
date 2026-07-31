@@ -187,8 +187,8 @@ func (fakeAuditService) List(int) []audit.Entry { return nil }
 
 type fakeHistoryService struct{}
 
-func (fakeHistoryService) Query(context.Context, handlers.HistoryQuery) ([]handlers.HistoryBucket, error) {
-	return nil, nil
+func (fakeHistoryService) Query(context.Context, handlers.HistoryQuery) ([]handlers.HistoryBucket, string, error) {
+	return nil, "raw", nil
 }
 
 type fakeEnergyService struct{}

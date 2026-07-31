@@ -18,9 +18,11 @@
   type Props = {
     detail: DeviceDetail;
     cdps: CustomDPSummary[];
+    /** Forwarded to AutoTile: show the pin toggle on each channel tile. */
+    pinnable?: boolean;
   };
 
-  let { detail, cdps }: Props = $props();
+  let { detail, cdps, pinnable = false }: Props = $props();
 
   // CDPs with a registered widget — these render as CDP tiles.
   const renderable = $derived(cdps.filter((c) => hasCdpWidget(c.kind)));
@@ -77,7 +79,7 @@
       {/if}
     {/each}
     {#each autoTileChannels as ch (ch.address)}
-      <AutoTile address={detail.address} channel={ch} />
+      <AutoTile address={detail.address} channel={ch} {pinnable} />
     {/each}
   </div>
 {/if}

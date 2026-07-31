@@ -670,8 +670,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	sysStatusBuf, hubEventsCentralHook, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, mqttSup, alarmSvc, alarmMQTTSink, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
 	defer sysStatusTeardown()
+	// Installed here rather than next to the Matter/alarm hooks above because
+	// the subscriber it closes over is built by the call right above. Runtime
+	// adoption is driven over REST, which is not listening yet, so no central
+	// can be adopted before this point.
+	centralOrch.setHubEventsCentralHook(hubEventsCentralHook)
 
 	// --- REST --------------------------------------------------
 	// Build + mount the REST router/server (and optional mDNS advertiser).

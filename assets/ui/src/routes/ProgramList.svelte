@@ -12,7 +12,9 @@
   import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
   import { t } from "$lib/i18n";
+  import { favoritesStore } from "$lib/stores/favorites.svelte";
   import { loadLS, saveLS } from "$lib/utils";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -56,6 +58,17 @@
   function toggleShowInternal(next: boolean) {
     showInternal = next;
     void load();
+  }
+
+  async function togglePin(id: string, name: string) {
+    try {
+      const pinned = await favoritesStore.toggle({ type: "program", id, label: name });
+      toastStore.success(
+        pinned ? t("favorites.added", { label: name }) : t("favorites.removed", { label: name }),
+      );
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function execute(id: string, name: string, central?: string) {
@@ -278,6 +291,20 @@
             {/if}
           {:else if col.key === "actions"}
             <span class="inline-flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onclick={() => void togglePin(p.id, p.name)}
+                title={favoritesStore.isPinned("program", p.id)
+                  ? t("favorites.unpin_program")
+                  : t("favorites.pin_program")}
+                aria-label={favoritesStore.isPinned("program", p.id)
+                  ? t("favorites.unpin_program")
+                  : t("favorites.pin_program")}
+              >
+                <Icon name={favoritesStore.isPinned("program", p.id) ? "mdi:star" : "mdi:star-outline"} />
+              </Button>
               {#if p.active !== undefined}
                 <Button
                   type="button"

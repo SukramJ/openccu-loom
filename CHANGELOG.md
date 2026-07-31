@@ -4,7 +4,82 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.52.0]
+
+### Added
+
+- **Favourites are operable, and channels and programs can be pinned
+  (O01).** Pinned entries stop being bookmarks: a pinned device now
+  renders its live tile set right on the favourites page — the same
+  CDP-tile and AutoTile pipeline the overview uses, not a second
+  implementation — a pinned channel renders its own tile, and a pinned
+  program gets a run button. Channels are pinned from the star on their
+  tile in the device's channel list, programs from the program list.
+  Pinned system variables were already editable inline and are
+  unchanged. The pin store is per-user server-side preferences holding
+  opaque JSON, so the two new kinds need no migration: an older client
+  ignores a kind it does not know, and this one tolerates entries it
+  cannot resolve — a device that has since disappeared degrades to the
+  plain link it was before rather than blanking the page.
+- **Electricity costs in the energy view (SY18).** A tariff
+  (`persistence.history.energy_price_per_kwh`, plus an
+  `energy_currency` label) makes the energy view show what the recorded
+  consumption cost — under the consumption total and as an extra,
+  sortable column per device. Without a configured tariff nothing
+  changes: no cost figure appears anywhere, because a tariff of zero
+  would render every amount as `0.00`, which reads as "free" rather than
+  "not configured". The daemon echoes the tariff on
+  `GET /api/v1/energy` (`price_per_kwh`, `currency`; API 3.7.0,
+  additive) rather than computing the amounts itself — rounding and
+  money formatting are locale decisions the UI already owns.
+- **A configurable start page per user (O03).** Settings → Interface gains
+  a "Start page" selector; the chosen view is what opens after logging in
+  or reloading. The preference is stored server-side per user, so it
+  follows the operator to another browser or device — unlike theme and
+  language, which stay device-local because they are device-shaped. A
+  direct link always wins: an explicit `#/…` in the URL is never
+  overridden. The selector offers exactly the views the operator can
+  currently reach (the Matter, history and admin views appear only when
+  their gate is open), because it is built from the same navigation table
+  the sidebar renders — previously that table lived inside the sidebar
+  component, and any second list would have drifted from it. A stored
+  route whose view no longer exists falls back to the default.
+- **The sidebar shows how many messages are waiting (D01).** The
+  navigation's Messages entry carries a badge with the number of pending
+  service and alarm messages — a count in the expanded sidebar, a dot in
+  the collapsed one. Until now an operator only learned about a pending
+  message by opening the list: the daemon has always broadcast
+  `hub.service_message` / `hub.alarm_message` on every change, but nothing
+  in the UI consumed them. The badge seeds from the per-central hub
+  snapshot and is then kept live by those broadcasts, so a message
+  acknowledged anywhere — this tab, another tab, the CCU WebUI, a rule —
+  moves the count without a reload. Counts are tracked per central and
+  summed, so one CCU's broadcast cannot overwrite another's. The message
+  list itself now refreshes on the same broadcasts, silently (the table
+  stays in place instead of flashing back to its loading state) and
+  debounced, so an acknowledge-all across several centrals triggers one
+  refetch rather than one per central.
+
+### Fixed
+
+- **Charts beyond the raw retention are no longer empty (SV04).** The
+  recorder folds raw samples into an hourly and a daily rollup and keeps
+  those for 13 months, then purges the raw rows after their much shorter
+  retention — but `GET /api/v1/history` only ever read the raw table, so
+  any range reaching further back rendered as an empty chart on data that
+  was still there. History now picks its source the way the energy
+  endpoint already did: a bucket at least a day wide is served from the
+  daily rollup, at least an hour wide from the hourly rollup, anything
+  finer from raw samples, and each tier is completed by the tail that is
+  not folded up yet so the running hour and day are never missing. A
+  narrow-bucket query over a range older than the raw data is promoted to
+  the hourly tier instead of returning nothing. Rollup rows carry sum and
+  count, so the average stays exact across the re-fold rather than
+  becoming an average of averages, and min/max keep the peak contract.
+  The chosen resolution is reported in a new `X-History-Tier` response
+  header (`raw` / `hour` / `day`) — a header rather than a body field
+  because the response is a bare array and the OpenAPI contract is
+  additive-only. API version → 3.6.0.
 
 ### Added
 

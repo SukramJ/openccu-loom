@@ -267,6 +267,17 @@ type HistoryConfig struct {
 	// recorded. Empty (default) records every enabled central.
 	DisabledCentrals []string `yaml:"disabled_centrals,omitempty" json:"disabled_centrals,omitempty" cfg:"expert"`
 
+	// EnergyPricePerKWh is the electricity tariff the energy view uses to
+	// show costs next to kWh. Zero (the default) means no tariff is
+	// configured and the view omits every cost figure rather than
+	// rendering a misleading 0.00.
+	EnergyPricePerKWh float64 `yaml:"energy_price_per_kwh,omitempty" json:"energy_price_per_kwh,omitempty" cfg:"basic"`
+
+	// EnergyCurrency labels the amounts derived from EnergyPricePerKWh.
+	// Free text so any symbol or ISO code works; empty falls back to the
+	// euro sign. It is a label only - no conversion happens anywhere.
+	EnergyCurrency string `yaml:"energy_currency,omitempty" json:"energy_currency,omitempty" cfg:"basic"`
+
 	// Export configures the opt-in push exporter that forwards each
 	// recorded sample to an external time-series store (ADR 0040). The
 	// embedded history.db stays the default surface; this is additive.

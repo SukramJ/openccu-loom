@@ -62,6 +62,16 @@ type EnergyResponse struct {
 	Devices         []EnergyDevice `json:"devices"`
 	TotalConsumedWh float64        `json:"total_consumed_wh"`
 	TotalFeedInWh   float64        `json:"total_feed_in_wh"`
+
+	// PricePerKWh is the configured electricity tariff, echoed so the view
+	// can derive costs. Zero means no tariff is configured; the view then
+	// shows no cost at all rather than a misleading 0.00. The daemon
+	// deliberately does not compute the amounts itself: rounding and
+	// money formatting are locale decisions the SPA already owns.
+	PricePerKWh float64 `json:"price_per_kwh,omitempty"`
+	// Currency labels those amounts. A free-text symbol or code, never
+	// used for conversion.
+	Currency string `json:"currency,omitempty"`
 }
 
 // EnergyQuery is the parsed, validated request for the energy handler.

@@ -3,8 +3,10 @@
   import Icon from "./Icon.svelte";
   import BrandMark from "./BrandMark.svelte";
   import type { IconName } from "$lib/icons";
+  import { navClusters, type NavItem, type RouteKind } from "$lib/nav";
   import { t } from "$lib/i18n";
   import { installModeStore } from "$lib/stores/installMode.svelte";
+  import { messagesStore } from "$lib/stores/messages.svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
   import { infoStore } from "$lib/stores/info.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
@@ -21,6 +23,10 @@
   // counted so polling stops once nobody is listening.
   onMount(() => {
     installModeStore.ensurePoll();
+    // Pending-message counters for the badge on the Messages entry. Held
+    // for the session so the count stays live on every route, not just
+    // the message list.
+    messagesStore.ensureStream();
     // Probe Matter status once so the sidebar knows whether to show
     // the Bridges cluster. No polling — the store will refresh on
     // navigation to the Matter route.
@@ -28,7 +34,10 @@
     // Daemon version for the footer line; cached for the session.
     void infoStore.ensure();
   });
-  onDestroy(() => installModeStore.release());
+  onDestroy(() => {
+    installModeStore.release();
+    messagesStore.release();
+  });
 
   // HA-style left sidebar with 4 navigation clusters. Mirrors the
   // information-architecture proposal: Übersicht / Inbox /
@@ -36,33 +45,6 @@
   // burger toggle that overlays the main content; on ≥md screens it
   // sits permanently and the main pane shifts to its right.
 
-  type RouteKind =
-    | "list"
-    | "overview"
-    | "favorites"
-    | "detail"
-    | "backups"
-    | "sysvars"
-    | "programs"
-    | "groups"
-    | "links"
-    | "diagrams"
-    | "messages"
-    | "audit"
-    | "diagnostics"
-    | "energy"
-    | "fleet"
-    | "logs"
-    | "settings"
-    | "inbox"
-    | "firmware"
-    | "signal"
-    | "matter"
-    | "alarm"
-    | "visibility"
-    | "access"
-    | "about"
-    | "unknown";
 
   type Props = {
     activeKind: RouteKind;
@@ -105,18 +87,6 @@
     setNavCollapsed(!collapsed);
   }
 
-  type NavItem = {
-    href: string;
-    icon: IconName;
-    label: string;
-    matches: RouteKind[];
-  };
-
-  type NavCluster = {
-    label: string;
-    items: NavItem[];
-  };
-
   const matterEnabled = $derived(matterStore.status?.enabled === true);
   // The Diagrams view charts measurement history — only surface it when
   // the opt-in history-recording feature is enabled (SV03).
@@ -124,197 +94,13 @@
     infoStore.info?.capabilities?.includes("history.v1") ?? false,
   );
 
-  // Cluster-grouped navigation. Order is opinionated: top cluster
-  // surfaces day-to-day work, lowest cluster groups admin / system.
-  const clusters = $derived<NavCluster[]>([
-    {
-      label: t("sidebar.cluster.overview"),
-      items: [
-        {
-          href: "#/overview",
-          icon: "mdi:dots-grid",
-          label: t("nav.overview"),
-          matches: ["overview"],
-        },
-        {
-          href: "#/devices",
-          icon: "mdi:home",
-          label: t("nav.devices"),
-          matches: ["list", "detail"],
-        },
-        {
-          href: "#/favorites",
-          icon: "mdi:star",
-          label: t("nav.favorites"),
-          matches: ["favorites"],
-        },
-        {
-          href: "#/alarm",
-          icon: "mdi:shield-home",
-          label: t("nav.alarm"),
-          matches: ["alarm"],
-        },
-        {
-          href: "#/inbox",
-          icon: "mdi:list-checks",
-          label: t("nav.inbox"),
-          matches: ["inbox"],
-        },
-        {
-          href: "#/fleet",
-          icon: "mdi:server-network",
-          label: t("nav.fleet"),
-          matches: ["fleet"],
-        },
-      ],
-    },
-    {
-      label: t("sidebar.cluster.automation"),
-      items: [
-        {
-          href: "#/programs",
-          icon: "mdi:play",
-          label: t("nav.programs"),
-          matches: ["programs"],
-        },
-        {
-          href: "#/sysvars",
-          icon: "mdi:zap",
-          label: t("nav.sysvars"),
-          matches: ["sysvars"],
-        },
-        {
-          href: "#/groups",
-          icon: "mdi:home-group",
-          label: t("nav.groups"),
-          matches: ["groups"],
-        },
-        {
-          href: "#/links",
-          icon: "mdi:link",
-          label: t("nav.links"),
-          matches: ["links"],
-        },
-      ],
-    },
-    {
-      label: t("sidebar.cluster.diagnose"),
-      items: [
-        {
-          href: "#/messages",
-          icon: "mdi:bell",
-          label: t("nav.messages"),
-          matches: ["messages"],
-        },
-        {
-          href: "#/diagnostics",
-          icon: "mdi:gauge",
-          label: t("nav.diagnostics"),
-          matches: ["diagnostics"],
-        },
-        // Energy and Diagrams both chart measurement history — only surface
-        // them when the opt-in history-recording feature is enabled.
-        ...(historyEnabled
-          ? [
-              {
-                href: "#/energy",
-                icon: "mdi:zap" as const,
-                label: t("nav.energy"),
-                matches: ["energy"] as RouteKind[],
-              },
-              {
-                href: "#/diagrams",
-                icon: "mdi:chart-line-variant" as const,
-                label: t("nav.diagrams"),
-                matches: ["diagrams"] as RouteKind[],
-              },
-            ]
-          : []),
-        {
-          href: "#/signal",
-          icon: "mdi:signal",
-          label: t("nav.signal"),
-          matches: ["signal"],
-        },
-        {
-          href: "#/audit",
-          icon: "mdi:history",
-          label: t("nav.audit"),
-          matches: ["audit"],
-        },
-        ...(authStore.identity?.role === "admin"
-          ? [
-              {
-                href: "#/logs",
-                icon: "mdi:text-box-search-outline" as const,
-                label: t("nav.logs"),
-                matches: ["logs"] as RouteKind[],
-              },
-            ]
-          : []),
-      ],
-    },
-    ...(matterEnabled
-      ? [
-          {
-            label: t("sidebar.cluster.bridges"),
-            items: [
-              {
-                href: "#/matter",
-                icon: "mdi:link" as const,
-                label: t("nav.matter"),
-                matches: ["matter"] as RouteKind[],
-              },
-            ],
-          },
-        ]
-      : []),
-    {
-      label: t("sidebar.cluster.system"),
-      items: [
-        {
-          href: "#/firmware",
-          icon: "mdi:upload",
-          label: t("nav.firmware"),
-          matches: ["firmware"],
-        },
-        {
-          href: "#/backups",
-          icon: "mdi:server",
-          label: t("nav.backups"),
-          matches: ["backups"],
-        },
-        {
-          href: "#/visibility",
-          icon: "mdi:filter",
-          label: t("nav.visibility"),
-          matches: ["visibility"],
-        },
-        ...(authStore.identity?.role === "admin"
-          ? [
-              {
-                href: "#/access",
-                icon: "mdi:shield" as const,
-                label: t("nav.access"),
-                matches: ["access"] as RouteKind[],
-              },
-            ]
-          : []),
-        {
-          href: "#/settings",
-          icon: "mdi:settings",
-          label: t("nav.settings"),
-          matches: ["settings"],
-        },
-        {
-          href: "#/about",
-          icon: "mdi:information-outline",
-          label: t("nav.about"),
-          matches: ["about"],
-        },
-      ],
-    },
-  ]);
+  const clusters = $derived(
+    navClusters({
+      matterEnabled,
+      historyEnabled,
+      isAdmin: authStore.identity?.role === "admin",
+    }),
+  );
 
   function isActive(item: NavItem): boolean {
     return item.matches.includes(activeKind);
@@ -380,6 +166,7 @@
         {#each cluster.items as item (item.href)}
           {@const active = isActive(item)}
           {@const showInstallDot = item.matches.includes("inbox") && installModeStore.active}
+          {@const pendingMessages = item.matches.includes("messages") ? messagesStore.total : 0}
           <li>
             <a
               href={item.href}
@@ -390,7 +177,9 @@
               title={!expanded
                 ? showInstallDot
                   ? `${item.label} · ${t("sidebar.install_mode_active")}`
-                  : item.label
+                  : pendingMessages > 0
+                    ? `${item.label} · ${t("sidebar.pending_messages", { count: String(pendingMessages) })}`
+                    : item.label
                 : undefined}
             >
               <span class="relative inline-flex">
@@ -401,6 +190,12 @@
                     style="background-color: var(--ha-primary-color);"
                     aria-hidden="true"
                   ></span>
+                {:else if pendingMessages > 0 && !expanded}
+                  <span
+                    class="absolute -right-1 -top-1 inline-block h-2 w-2 rounded-full"
+                    style="background-color: var(--ha-error-color, #db4437);"
+                    aria-hidden="true"
+                  ></span>
                 {/if}
               </span>
               {#if expanded}
@@ -408,6 +203,14 @@
                 {#if showInstallDot}
                   <span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--ha-primary-color);">
                     {installModeStore.remainingSeconds ?? "…"}s
+                  </span>
+                {:else if pendingMessages > 0}
+                  <span
+                    class="inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                    style="background-color: var(--ha-error-color, #db4437);"
+                    aria-label={t("sidebar.pending_messages", { count: String(pendingMessages) })}
+                  >
+                    {pendingMessages > 99 ? "99+" : pendingMessages}
                   </span>
                 {/if}
               {/if}

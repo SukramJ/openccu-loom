@@ -4,6 +4,7 @@
 package ws
 
 import (
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -162,8 +163,13 @@ func programDeviceLink(reg *central.Registry, centralName, programID string) (ch
 // alongside it so each event type gets its own focused subscriber and
 // failure of one path cannot starve the other.
 type HubEventsSubscriber struct {
-	reg    *central.Registry
-	hub    *Hub
+	reg *central.Registry
+	hub *Hub
+
+	// mu guards unsubs against a Start/Stop overlap. StartCentral does not
+	// touch the slice at all - it hands its unwire back to the caller, so
+	// the runtime-adopt path owns its own detach.
+	mu     sync.Mutex
 	unsubs []func()
 }
 
@@ -173,21 +179,47 @@ func NewHubEventsSubscriber(reg *central.Registry, hub *Hub) *HubEventsSubscribe
 }
 
 // Start attaches subscriptions to every registered central's event bus.
+// A central adopted later must be attached with [HubEventsSubscriber.StartCentral].
 func (s *HubEventsSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
 	for _, u := range s.reg.List() {
+		if unwire := s.StartCentral(u); unwire != nil {
+			s.mu.Lock()
+			s.unsubs = append(s.unsubs, unwire)
+			s.mu.Unlock()
+		}
+	}
+}
+
+// StartCentral attaches this subscriber's hub-model and event-bus
+// subscriptions to a single central and returns an unwire func that
+// detaches them again (nil when there was nothing to attach).
+//
+// It exists because Start only ever walked the registry as it stood at
+// boot: a central adopted at runtime got no subscriptions at all, so none
+// of its hub singletons — alarm and service message counts, inbox,
+// connectivity — ever reached a WebSocket client. That was invisible while
+// nothing consumed the broadcasts; the sidebar's message badge made it a
+// visible defect, because the adopted central's counter would sit at its
+// seed value forever.
+func (s *HubEventsSubscriber) StartCentral(u *central.Unit) func() {
+	if s == nil || s.reg == nil || s.hub == nil || u == nil {
+		return nil
+	}
+	var unsubs []func()
+	{
 		centralName := u.Name()
 		// Hub singletons (alarm / service messages, inbox, metrics,
 		// connectivity) reach the WebSocket via the hub model's own change
 		// hooks — the same OnUpdate surface the MQTT publisher fans on — so
 		// clients can drop their hub-refresh poll loop. This path does not
 		// depend on the event bus, so it runs before the bus guard below.
-		s.subscribeHubModel(centralName, u.HubModel)
+		unsubs = append(unsubs, s.hubModelSubscriptions(centralName, u.HubModel)...)
 		bus := u.EventBus
 		if bus == nil {
-			continue
+			return unwireAll(unsubs)
 		}
 		hub := s.hub
 		reg := s.reg
@@ -257,7 +289,23 @@ func (s *HubEventsSubscriber) Start() {
 				},
 			})
 		})
-		s.unsubs = append(s.unsubs, unsubSv, unsubPg, unsubIM, unsubConn)
+		unsubs = append(unsubs, unsubSv, unsubPg, unsubIM, unsubConn)
+	}
+	return unwireAll(unsubs)
+}
+
+// unwireAll folds a slice of unsubscribe funcs into one, returning nil
+// when there is nothing to detach so callers can store a plain nil.
+func unwireAll(unsubs []func()) func() {
+	if len(unsubs) == 0 {
+		return nil
+	}
+	return func() {
+		for _, u := range unsubs {
+			if u != nil {
+				u()
+			}
+		}
 	}
 }
 
@@ -353,15 +401,17 @@ func SystemUpdateTopic(centralName string) string {
 	return "hub." + centralName + ".system_update"
 }
 
-// subscribeHubModel wires the hub model's change hooks to WebSocket broadcasts
-// so clients receive push updates for the singletons that otherwise force a
-// poll loop. No-op when the model is nil.
-func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel.Hub) {
+// hubModelSubscriptions wires the hub model's change hooks to WebSocket
+// broadcasts so clients receive push updates for the singletons that
+// otherwise force a poll loop, returning the unsubscribe funcs. Empty when
+// the model is nil.
+func (s *HubEventsSubscriber) hubModelSubscriptions(centralName string, hm *hubmodel.Hub) []func() {
 	if hm == nil {
-		return
+		return nil
 	}
+	var unsubs []func()
 	if hm.Messages != nil {
-		s.unsubs = append(s.unsubs, hm.Messages.OnUpdate(func(msgs []hubmodel.AlarmMessage) {
+		unsubs = append(unsubs, hm.Messages.OnUpdate(func(msgs []hubmodel.AlarmMessage) {
 			s.hub.Publish(Event{
 				Topic:   AlarmMessagesTopic(centralName),
 				Type:    string(hmevent.EventTypeAlarmMessage),
@@ -371,7 +421,7 @@ func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel
 		}))
 	}
 	if hm.ServiceMessages != nil {
-		s.unsubs = append(s.unsubs, hm.ServiceMessages.OnUpdate(func(msgs []hubmodel.ServiceMessage) {
+		unsubs = append(unsubs, hm.ServiceMessages.OnUpdate(func(msgs []hubmodel.ServiceMessage) {
 			s.hub.Publish(Event{
 				Topic:   ServiceMessagesTopic(centralName),
 				Type:    string(hmevent.EventTypeServiceMessage),
@@ -381,7 +431,7 @@ func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel
 		}))
 	}
 	if hm.Inbox != nil {
-		s.unsubs = append(s.unsubs, hm.Inbox.OnUpdate(func(devices []hubmodel.InboxDevice) {
+		unsubs = append(unsubs, hm.Inbox.OnUpdate(func(devices []hubmodel.InboxDevice) {
 			s.hub.Publish(Event{
 				Topic:   InboxTopic(centralName),
 				Type:    eventTypeInboxChanged,
@@ -391,7 +441,7 @@ func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel
 		}))
 	}
 	if hm.Metrics != nil {
-		s.unsubs = append(s.unsubs, hm.Metrics.OnAny(func(sample hubmodel.MetricSample) {
+		unsubs = append(unsubs, hm.Metrics.OnAny(func(sample hubmodel.MetricSample) {
 			s.hub.Publish(Event{
 				Topic: MetricsTopic(centralName),
 				Type:  eventTypeMetricsChanged,
@@ -406,7 +456,7 @@ func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel
 		}))
 	}
 	if hm.Update != nil {
-		s.unsubs = append(s.unsubs, hm.Update.OnUpdate(func(info hubmodel.UpdateInfo) {
+		unsubs = append(unsubs, hm.Update.OnUpdate(func(info hubmodel.UpdateInfo) {
 			s.hub.Publish(Event{
 				Topic: SystemUpdateTopic(centralName),
 				Type:  eventTypeSystemUpdateChanged,
@@ -426,13 +476,20 @@ func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel
 	// which can run after this subscriber has already started. Reading the
 	// tracker at wire-time would miss it. Connectivity broadcasts ride the
 	// event bus instead (see the ConnectivityChangedEvent subscription in
-	// Start), mirroring the MQTT publisher's choice.
+	// StartCentral), mirroring the MQTT publisher's choice.
+	return unsubs
 }
 
-// Stop drops all event-bus subscriptions.
+// Stop drops every subscription this subscriber attached from Start:
+// both the event-bus handlers and the hub-model change callbacks.
+// Subscriptions handed to a caller by StartCentral are that caller's to
+// detach.
 func (s *HubEventsSubscriber) Stop() {
-	for _, u := range s.unsubs {
+	s.mu.Lock()
+	unsubs := s.unsubs
+	s.unsubs = nil
+	s.mu.Unlock()
+	for _, u := range unsubs {
 		u()
 	}
-	s.unsubs = nil
 }

@@ -39,6 +39,12 @@ type centralHandle struct {
 	climate func()
 	matter  func()
 	alarm   func()
+	// hubEvents detaches the WebSocket hub-singleton subscriptions. Held
+	// here and not only in the adopt-time rollback list because the
+	// rollback list is discarded once the adopt succeeds: without this the
+	// hub-model callbacks would outlive a removed central and keep
+	// publishing on its topics.
+	hubEvents func()
 }
 
 // centralOrchestrator is the live-CCU-adopt composition seam: it drives one
@@ -74,6 +80,13 @@ type centralOrchestrator struct {
 	// event routing. Set via [centralOrchestrator.setAlarmCentralHook];
 	// nil while the alarm engine is disabled.
 	alarmHook func(u *central.Unit) (unwire func())
+	// hubEventsHook attaches an adopted central to the WebSocket
+	// hub-singleton broadcasts (alarm / service message counts, inbox,
+	// metrics, connectivity). Set via
+	// [centralOrchestrator.setHubEventsCentralHook]. Without it an adopted
+	// central would never push a hub change to any WS client, because the
+	// subscriber only walks the registry once at boot.
+	hubEventsHook func(u *central.Unit) (unwire func())
 	// hubReadyTrigger fires a debounced hub-publisher re-Start once a central's
 	// serial resolves. Set via [centralOrchestrator.setHubReadyTrigger] from the
 	// southbound wiring result so a runtime-adopted central publishes its
@@ -90,6 +103,17 @@ func (o *centralOrchestrator) setAlarmCentralHook(hook func(u *central.Unit) (un
 	}
 	o.mu.Lock()
 	o.alarmHook = hook
+	o.mu.Unlock()
+}
+
+// setHubEventsCentralHook installs the per-central WebSocket hub-events
+// wiring hook. Nil-safe on both sides, mirroring setAlarmCentralHook.
+func (o *centralOrchestrator) setHubEventsCentralHook(hook func(u *central.Unit) (unwire func())) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.hubEventsHook = hook
 	o.mu.Unlock()
 }
 
@@ -233,6 +257,7 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	o.mu.Lock()
 	matterHook := o.matterHook
 	alarmHook := o.alarmHook
+	hubEventsHook := o.hubEventsHook
 	hubReadyTrigger := o.hubReadyTrigger
 	o.mu.Unlock()
 	var matterUnwire func()
@@ -247,6 +272,16 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 		alarmUnwire = alarmHook(unit)
 		if alarmUnwire != nil {
 			undo = append(undo, alarmUnwire)
+		}
+	}
+	// Attach the WebSocket hub-singleton broadcasts. Before the southbound
+	// bring-up starts, so the first message/inbox change the central reports
+	// already has a listener.
+	var hubEventsUnwire func()
+	if hubEventsHook != nil {
+		hubEventsUnwire = hubEventsHook(unit)
+		if hubEventsUnwire != nil {
+			undo = append(undo, hubEventsUnwire)
 		}
 	}
 	// Subscribe the adopted central onto the hub-discovery ready pipeline so its
@@ -276,7 +311,10 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 	avail, climate := wireCentralNorthbound(o.sbDeps, unit)
 
 	o.mu.Lock()
-	o.handles[cc.Name] = &centralHandle{cc: cc, avail: avail, climate: climate, matter: matterUnwire, alarm: alarmUnwire}
+	o.handles[cc.Name] = &centralHandle{
+		cc: cc, avail: avail, climate: climate,
+		matter: matterUnwire, alarm: alarmUnwire, hubEvents: hubEventsUnwire,
+	}
 	o.mu.Unlock()
 
 	o.logger.Info("central.adopt.live", slog.String("central", cc.Name))
@@ -320,6 +358,11 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	}
 	if h.alarm != nil {
 		h.alarm()
+	}
+	// Before the model teardown below: a hub refresh still in flight must
+	// not land a broadcast on a central that is already going away.
+	if h.hubEvents != nil {
+		h.hubEvents()
 	}
 	// Climate before availability, mirroring wireSouthbound's teardown order
 	// (its LIFO defer runs climate closers before availability closers).
