@@ -100,6 +100,11 @@ const (
 	// later overwrite a CCU's entire configuration.
 	ActionBackupUpload Action = "backup_upload"
 
+	// ActionBackupPreUpdate records the safety backup taken before a CCU
+	// firmware update, so the archive can be tied to the update that
+	// prompted it.
+	ActionBackupPreUpdate Action = "backup_pre_update"
+
 	// ActionSystemCCUPoweroff, ActionSystemCCUSafeMode and
 	// ActionSystemCCURecoveryMode record the host-level power and
 	// boot-mode actions. All three take the CCU out of normal service,

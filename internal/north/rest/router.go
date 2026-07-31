@@ -317,6 +317,10 @@ type Deps struct {
 	// BackupUpload backs `POST /api/v1/backups/upload` — importing an
 	// externally-supplied .sbk. Nil serves the route as 503.
 	BackupUpload handlers.BackupUploader
+	// PreUpdateBackup backs the optional `backup_first` flag on
+	// `POST /api/v1/system/update/install`. Nil rejects that flag with
+	// 503 rather than silently updating without a backup.
+	PreUpdateBackup handlers.PreUpdateBackupPort
 	// FirmwareDownload backs `POST /api/v1/system/firmware/download` — an
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
@@ -1135,7 +1139,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Hub singletons for external clients: system-update info,
 				// hub metrics, per-interface install mode.
 				pr.Get("/system/update", handlers.GetSystemUpdate(d.Hub))
-				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub))
+				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub, d.PreUpdateBackup, d.AuditRecorder))
 				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
 				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
 				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub, d.AuditRecorder))

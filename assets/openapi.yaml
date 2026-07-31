@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.10.0
+  version: 3.11.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1546,11 +1546,34 @@ paths:
           required: false
           schema: { type: string }
           description: Target central (optional for single-CCU deployments).
+      description: >
+        Starts the CCU firmware update. With `backup_first` a full CCU
+        backup is taken first and the update starts only once it is
+        durably stored; a failed backup aborts and the update does not
+        run, because the point of asking for one is to have something to
+        return to. The call then blocks for as long as the backup takes —
+        minutes on a large configuration — since its response is what
+        tells the operator whether that safety net exists.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backup_first:
+                  type: boolean
+                  default: false
+                  description: >
+                    Take a full backup of the target central before
+                    starting the update.
       responses:
         "202":
           description: Accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /system/metrics:
     get:

@@ -1260,9 +1260,15 @@ export const api = {
   getSystemUpdate() {
     return request<SystemUpdateEntry[]>(`/system/update`);
   },
-  installSystemUpdate(central?: string) {
+  // backupFirst takes a full CCU backup before the update and aborts the
+  // update if it fails, so the call can block for minutes.
+  installSystemUpdate(central?: string, backupFirst = false) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
-    return request<void>(`/system/update/install${qs}`, { method: "POST" });
+    return request<void>(`/system/update/install${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ backup_first: backupFirst }),
+    });
   },
   // --- Add-on self-update (ADR 0057) ----------------------------
   // Capability-gated: `getAddonUpdateStatus` always answers (supported:

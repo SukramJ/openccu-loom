@@ -3179,6 +3179,12 @@ const EN: Catalog = {
   "ccu_update.available": "Update available",
   "ccu_update.confirm_body":
     "{central} will download and install its firmware update and reboot — the connection drops briefly. Continue?",
+  "ccu_update.backup_first": "Back up first",
+  "ccu_update.backup_first.help":
+    "Take a full CCU backup before the update. The update only starts once the backup is stored, and does not start at all if it fails. This can take several minutes.",
+  "ccu_update.backing_up": "Backing up…",
+  "ccu_update.confirm_body_with_backup":
+    "A full backup of {central} is taken first; the update starts only if it succeeds. This can take several minutes — leave the page open.",
   "ccu_update.confirm_title": "Install CCU update?",
   "ccu_update.empty": "No CCU update info available yet.",
   "ccu_update.in_progress": "Installing…",
@@ -6523,6 +6529,12 @@ const DE: Catalog = {
   "ccu_update.available": "Update verfügbar",
   "ccu_update.confirm_body":
     "{central} lädt und installiert sein Firmware-Update und startet neu — die Verbindung bricht kurz ab. Fortfahren?",
+  "ccu_update.backup_first": "Vorher sichern",
+  "ccu_update.backup_first.help":
+    "Vor dem Update ein vollständiges CCU-Backup anlegen. Das Update startet erst, wenn das Backup gespeichert ist, und gar nicht, wenn es fehlschlägt. Das kann mehrere Minuten dauern.",
+  "ccu_update.backing_up": "Sichere…",
+  "ccu_update.confirm_body_with_backup":
+    "Zuerst wird ein vollständiges Backup von {central} angelegt; das Update startet nur, wenn das gelingt. Das kann mehrere Minuten dauern — lass die Seite offen.",
   "ccu_update.confirm_title": "CCU-Update installieren?",
   "ccu_update.empty": "Noch keine CCU-Update-Informationen verfügbar.",
   "ccu_update.in_progress": "Wird installiert…",

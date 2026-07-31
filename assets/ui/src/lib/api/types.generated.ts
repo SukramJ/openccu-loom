@@ -1645,6 +1645,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Starts the CCU firmware update. With `backup_first` a full CCU backup is taken first and the update starts only once it is durably stored; a failed backup aborts and the update does not run, because the point of asking for one is to have something to return to. The call then blocks for as long as the backup takes — minutes on a large configuration — since its response is what tells the operator whether that safety net exists. */
         post: {
             parameters: {
                 query?: {
@@ -1655,7 +1656,17 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Take a full backup of the target central before starting the update.
+                         * @default false
+                         */
+                        backup_first?: boolean;
+                    };
+                };
+            };
             responses: {
                 /** @description Accepted */
                 202: {
@@ -1664,8 +1675,10 @@ export interface paths {
                     };
                     content?: never;
                 };
+                400: components["responses"]["BadRequest"];
                 404: components["responses"]["NotFound"];
                 502: components["responses"]["BadGateway"];
+                503: components["responses"]["ServiceUnavailable"];
             };
         };
         delete?: never;

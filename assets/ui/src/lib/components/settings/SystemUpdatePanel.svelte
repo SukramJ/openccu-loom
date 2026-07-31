@@ -97,18 +97,25 @@
     pollTimer = setTimeout(tick, 5000);
   }
 
+  // Off by default: a pre-update backup is the safer choice but makes the
+  // request block for minutes, so it stays an explicit decision rather
+  // than a surprise.
+  let backupFirst = $state(false);
+
   async function install(e: SystemUpdateEntry) {
     const central = e.central ?? "";
     const ok = await confirmStore.ask({
       title: t("ccu_update.confirm_title"),
-      body: t("ccu_update.confirm_body", { central }),
+      body: backupFirst
+        ? t("ccu_update.confirm_body_with_backup", { central })
+        : t("ccu_update.confirm_body", { central }),
       confirmLabel: t("ccu_update.install"),
       destructive: true,
     });
     if (!ok) return;
     busy = central;
     try {
-      await api.installSystemUpdate(e.central);
+      await api.installSystemUpdate(e.central, backupFirst);
       toastStore.success(t("ccu_update.triggered", { central }));
       await load();
       ensurePoll();
@@ -173,6 +180,12 @@
                 <Badge variant="muted">{t("firmware.up_to_date")}</Badge>
               {/if}
               {#if isAdmin}
+                {#if e.update_available && !e.in_progress}
+                  <label class="flex items-center gap-1.5 text-xs" title={t("ccu_update.backup_first.help")}>
+                    <input type="checkbox" bind:checked={backupFirst} />
+                    <span>{t("ccu_update.backup_first")}</span>
+                  </label>
+                {/if}
                 <Button
                   type="button"
                   variant="default"
@@ -180,7 +193,11 @@
                   disabled={!e.update_available || e.in_progress || busy === e.central}
                   onclick={() => void install(e)}
                 >
-                  {busy === e.central ? t("ccu_update.installing") : t("ccu_update.install")}
+                  {busy === e.central
+                    ? backupFirst
+                      ? t("ccu_update.backing_up")
+                      : t("ccu_update.installing")
+                    : t("ccu_update.install")}
                 </Button>
               {/if}
             </div>

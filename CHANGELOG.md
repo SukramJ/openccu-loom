@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Optional backup before a CCU firmware update (SY06).** The system
+  update card gains a "back up first" checkbox: with it,
+  `POST /api/v1/system/update/install` takes a full CCU backup and starts
+  the update only once that backup is durably stored. A failed backup
+  aborts and the update does not run — the whole point of asking for one
+  is to have something to return to. The call blocks while the backup
+  runs (minutes on a large configuration), because its response is what
+  tells the operator whether the safety net exists; the checkbox is off
+  by default so that wait is never a surprise (API 3.11.0, additive).
+  No changelog link is offered: the CCU's firmware check reports only
+  version numbers and no release-notes source, and a constructed URL
+  would be a guess that breaks differently on every firmware variant.
+
 - **Import an externally-supplied CCU backup (SY02).** `POST
   /api/v1/backups/upload` takes in a `.sbk` archive produced elsewhere —
   another CCU, an older daemon, the CCU WebUI — and stores it so it can

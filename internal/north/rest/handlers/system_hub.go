@@ -11,6 +11,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,15 +66,81 @@ func GetSystemUpdate(idx HubIndex) http.HandlerFunc {
 	}
 }
 
+// PreUpdateBackupPort takes a durable backup of one central and returns
+// only once it is stored. *adapter.BackupAdapter satisfies it via
+// CreateBackupForCentral - the synchronous sibling of the fire-and-forget
+// trigger, which is what makes it usable as a precondition.
+type PreUpdateBackupPort interface {
+	CreateBackupForCentral(ctx context.Context, centralName string) (string, error)
+}
+
+// systemUpdateInstallRequest is the optional body of the install call.
+type systemUpdateInstallRequest struct {
+	// BackupFirst takes a full CCU backup and only starts the update once
+	// it is durably stored.
+	BackupFirst bool `json:"backup_first,omitempty"`
+}
+
 // PostSystemUpdateInstall triggers the CCU system update on one central
 // (selected via the `central` query parameter; optional for single-CCU).
-func PostSystemUpdateInstall(idx HubIndex) http.HandlerFunc {
+//
+// With `{"backup_first": true}` a backup is taken first and the update
+// starts only if it succeeded. A failed backup aborts: the entire reason
+// to ask for one before a firmware update is to have something to go back
+// to, so proceeding without it would defeat the request. The call then
+// blocks for as long as the backup takes (minutes on a large
+// configuration) - the response is what tells the operator whether the
+// safety net exists, so it cannot be detached.
+func PostSystemUpdateInstall(idx HubIndex, backup PreUpdateBackupPort, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
+		centralName := r.URL.Query().Get("central")
+		h := resolveHubForMutation(idx, centralName)
 		if h == nil || h.Update == nil {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Central not found", "no matching central"))
 			return
+		}
+		var req systemUpdateInstallRequest
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON body", err.Error()))
+			return
+		}
+		if req.BackupFirst {
+			if backup == nil {
+				problem.Write(w, http.StatusServiceUnavailable,
+					problem.New(problem.TypeServiceUnready, r, "Backup unavailable",
+						"a pre-update backup was requested but backup storage is not wired"))
+				return
+			}
+			// resolveHubForMutation accepts an empty central on a
+			// single-CCU install; the backup needs the real name, so
+			// resolve it from the index rather than guessing.
+			target := centralName
+			if target == "" {
+				if hubs := idx.Hubs(); len(hubs) == 1 {
+					target = hubs[0].Central
+				}
+			}
+			if target == "" {
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeValidation, r, "Central required",
+						"a pre-update backup needs an explicit central on a multi-CCU install"))
+				return
+			}
+			id, err := backup.CreateBackupForCentral(r.Context(), target)
+			if err != nil {
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable,
+					"Pre-update backup failed; the update was not started", err)
+				return
+			}
+			if rec != nil {
+				rec.Record(audit.Entry{
+					User:   identityFromCtx(r.Context()),
+					Action: audit.ActionBackupPreUpdate,
+					Note:   target + " " + id,
+				})
+			}
 		}
 		if err := h.Update.Install(r.Context()); err != nil {
 			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "System update failed", err)
