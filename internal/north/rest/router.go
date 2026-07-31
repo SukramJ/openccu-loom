@@ -314,6 +314,9 @@ type Deps struct {
 	// CCUHostActions backs the admin-only host power and boot-mode routes
 	// under `/api/v1/system/ccu/{central}/`. Nil serves them as 503.
 	CCUHostActions handlers.CCUHostActionPort
+	// BackupUpload backs `POST /api/v1/backups/upload` — importing an
+	// externally-supplied .sbk. Nil serves the route as 503.
+	BackupUpload handlers.BackupUploader
 	// FirmwareDownload backs `POST /api/v1/system/firmware/download` — an
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
@@ -1083,6 +1086,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Backup != nil {
 				pr.With(admin).Post("/backups", handlers.TriggerBackup(d.Backup))
 				pr.Get("/backups", handlers.ListBackups(d.Backup))
+				// Importing an operator-supplied archive. Admin-gated like
+				// the trigger: what is imported here can later overwrite a
+				// CCU's entire configuration.
+				pr.With(admin).Post("/backups/upload", handlers.UploadBackup(d.BackupUpload, d.AuditRecorder))
 				pr.With(admin).Get("/backups/{id}/download", handlers.DownloadBackup(d.Backup))
 				pr.With(admin).Post("/backups/{id}/restore", handlers.RestoreBackup(d.Backup))
 			}

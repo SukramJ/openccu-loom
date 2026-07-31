@@ -3735,6 +3735,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backups/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an externally-supplied CCU backup
+         * @description Takes in a `.sbk` archive produced elsewhere — another CCU, an older daemon, the CCU WebUI — and stores it so it can be restored through `POST /backups/{id}/restore` like any locally-taken backup.
+         *
+         *     The archive is inspected before it is stored, so picking the wrong file fails here rather than at restore time when the CCU is already being wiped. The check is structural: a readable tar carrying `usr_local.tar.gz` and its `signature`. The signature itself cannot be verified without the CCU's key material, so it is not claimed to be. The firmware version the archive came from is read from its `firmware_version` member and returned, so the operator can compare it against the target CCU — the same fact the CCU's own restore consults.
+         *
+         *     Admin-gated and audited. The request body is streamed, not schema-validated, because a real archive is far larger than the validator's buffer.
+         */
+        post: operations["uploadBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/backups/{id}/download": {
         parameters: {
             query?: never;
@@ -12391,6 +12415,58 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    uploadBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description The `.sbk` archive.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Archive accepted and stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupEntry"] & {
+                        /** @description Firmware the archive was taken from, from its `firmware_version` member. Absent for CCU2-era archives, which predate it. */
+                        firmware_version?: string;
+                        /** @description Product label from the same member. */
+                        product?: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description The archive exceeds the accepted size. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a CCU system backup — unreadable as a tar, or missing the configuration archive or its signature. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

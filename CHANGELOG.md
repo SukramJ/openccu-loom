@@ -8,6 +8,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Import an externally-supplied CCU backup (SY02).** `POST
+  /api/v1/backups/upload` takes in a `.sbk` archive produced elsewhere —
+  another CCU, an older daemon, the CCU WebUI — and stores it so it can
+  be restored like a locally-taken backup. The archive is inspected
+  before it is stored, so picking the wrong file fails immediately rather
+  than at restore time, when the CCU is already being wiped: it must be a
+  readable tar carrying the configuration archive and its signature. The
+  signature itself is not verified — that needs the CCU's key material,
+  and claiming otherwise would be dishonest — but the firmware version
+  the archive came from is read and reported, which is the same fact the
+  CCU's own restore consults. Admin-gated and audited; the Backups view
+  gains an Import button (API 3.10.0, additive).
+
+### Fixed
+
+- **Backups work on a stock CCU3 again (SY01).** Creating a backup drove
+  `/bin/createBackup.sh`, which only OpenCCU and RaspberryMatic ship, and
+  failed outright when the script was absent. It turns out the download
+  step already did the whole job on its own: it posts to
+  `cp_security.cgi?action=create_backup`, and that CGI builds the archive
+  itself rather than reading what the script would have produced. A
+  failed start is therefore no longer fatal — it now means "this firmware
+  has no background-backup helper" and the synchronous CGI path is used
+  instead.
+
+### Added
+
 - **CCU host control: shutdown, safe mode and recovery (SY07, SY15,
   SY16).** The CCU maintenance card in Settings → System gains three
   actions next to the existing reboot: shut the CCU down, restart it into

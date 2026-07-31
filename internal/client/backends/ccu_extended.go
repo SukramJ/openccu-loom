@@ -668,16 +668,23 @@ func (b *CcuBackend) CreateBackupAndDownload(ctx context.Context, maxWaitTime, p
 	}
 
 	// 1. Start the backup process in the background.
+	//
+	// This prelude drives /bin/createBackup.sh, which only OpenCCU and
+	// RaspberryMatic ship. On a stock CCU3 the script is absent and the
+	// start reports failure - but the archive is still reachable, because
+	// the download step below posts to cp_security.cgi?action=create_backup,
+	// and that CGI builds the archive itself rather than reading the file
+	// the script would have produced (occu WebUI/www/config/backup.tcl,
+	// proc create_backup). So a failed start is not fatal: it means this
+	// firmware has no background-backup helper, and the synchronous CGI is
+	// the whole job. Falling back keeps stock CCU3 hosts working instead of
+	// failing them with a missing-script error.
 	var start backupStart
 	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptCreateBackupStart, nil, &start); err != nil {
 		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: start: %w", err)
 	}
 	if !start.Success {
-		msg := start.Message
-		if msg == "" {
-			msg = start.Status
-		}
-		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: start failed: %s", msg)
+		return b.downloadBackup(ctx)
 	}
 
 	// 2. Poll create_backup_status until completion, failure, or timeout.

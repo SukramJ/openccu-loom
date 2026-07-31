@@ -379,3 +379,30 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 	defer func() { _ = rc.Close() }()
 	return restorer.Restore(ctx, id, rc)
 }
+
+// uploadedBackupSaver is the narrow capability a storage backend exposes
+// when it can take in an externally-supplied archive. Kept as an optional
+// interface so a storage that is read-only (or absent) simply reports the
+// feature unavailable instead of forcing every backend to implement it.
+type uploadedBackupSaver interface {
+	SaveUploaded(ctx context.Context, filename string, data []byte) (hmapi.BackupEntry, error)
+}
+
+// ErrUploadUnsupported is returned when no storage is wired, or the wired
+// storage cannot take in externally-supplied archives.
+var ErrUploadUnsupported = errors.New("backup: storage does not accept uploads")
+
+// SaveUploaded stores an operator-supplied backup archive so it becomes
+// restorable through the ordinary restore path.
+func (a *BackupAdapter) SaveUploaded(
+	ctx context.Context, filename string, data []byte,
+) (hmapi.BackupEntry, error) {
+	if a == nil || a.storage == nil {
+		return hmapi.BackupEntry{}, ErrUploadUnsupported
+	}
+	saver, ok := a.storage.(uploadedBackupSaver)
+	if !ok {
+		return hmapi.BackupEntry{}, ErrUploadUnsupported
+	}
+	return saver.SaveUploaded(ctx, filename, data)
+}

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.9.0
+  version: 3.10.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4245,6 +4245,79 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/BackupEntry" }
         "502": { $ref: "#/components/responses/BadGateway" }
+  /backups/upload:
+    post:
+      operationId: uploadBackup
+      summary: Import an externally-supplied CCU backup
+      tags: [system]
+      description: >
+        Takes in a `.sbk` archive produced elsewhere — another CCU, an
+        older daemon, the CCU WebUI — and stores it so it can be restored
+        through `POST /backups/{id}/restore` like any locally-taken
+        backup.
+
+
+        The archive is inspected before it is stored, so picking the wrong
+        file fails here rather than at restore time when the CCU is
+        already being wiped. The check is structural: a readable tar
+        carrying `usr_local.tar.gz` and its `signature`. The signature
+        itself cannot be verified without the CCU's key material, so it is
+        not claimed to be. The firmware version the archive came from is
+        read from its `firmware_version` member and returned, so the
+        operator can compare it against the target CCU — the same fact the
+        CCU's own restore consults.
+
+
+        Admin-gated and audited. The request body is streamed, not
+        schema-validated, because a real archive is far larger than the
+        validator's buffer.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The `.sbk` archive.
+      responses:
+        "201":
+          description: Archive accepted and stored.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/BackupEntry"
+                  - type: object
+                    properties:
+                      firmware_version:
+                        type: string
+                        description: >
+                          Firmware the archive was taken from, from its
+                          `firmware_version` member. Absent for CCU2-era
+                          archives, which predate it.
+                      product:
+                        type: string
+                        description: Product label from the same member.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: The archive exceeds the accepted size.
+        "422":
+          description: >
+            Not a CCU system backup — unreadable as a tar, or missing the
+            configuration archive or its signature.
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
   /backups/{id}/download:
     get:
       operationId: downloadBackup

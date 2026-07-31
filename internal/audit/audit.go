@@ -95,6 +95,11 @@ const (
 	// time the CCU computes.
 	ActionSystemCCUPosition Action = "system_ccu_position"
 
+	// ActionBackupUpload records an externally-supplied CCU backup being
+	// taken into the daemon's store. Audited because that archive can
+	// later overwrite a CCU's entire configuration.
+	ActionBackupUpload Action = "backup_upload"
+
 	// ActionSystemCCUPoweroff, ActionSystemCCUSafeMode and
 	// ActionSystemCCURecoveryMode record the host-level power and
 	// boot-mode actions. All three take the CCU out of normal service,

@@ -907,6 +907,17 @@ export const api = {
       body: form,
     });
   },
+  // Imports an externally-supplied .sbk. The daemon inspects the archive
+  // before storing it and answers 422 when it is not a CCU backup, so the
+  // caller can surface a precise reason rather than a generic failure.
+  async uploadBackup(file: File | Blob) {
+    const form = new FormData();
+    form.append("file", file);
+    return request<BackupEntry & { firmware_version?: string; product?: string }>(
+      `/backups/upload`,
+      { method: "POST", body: form },
+    );
+  },
   // --- Refresh devices (CCU re-pull) ---------------------------
   refreshDevices() {
     return request<void>(`/devices/refresh`, { method: "POST" });

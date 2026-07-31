@@ -272,6 +272,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		},
 		LoginRateLimit: middleware.NewLoginRateLimiter(),
 		Backup:         d.backupAdapter,
+		BackupUpload:   d.backupAdapter,
 		CacheReset:     d.cacheResetSvc,
 		EditSessions:   d.editSessions,
 		WSHandler:      d.wsHandler,
