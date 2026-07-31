@@ -33,7 +33,7 @@ func wireSystemStatusSubscribers(
 	alarmSvc *alarm.Service,
 	alarmSink *alarmMQTTSink,
 	logger *slog.Logger,
-) (sysStatusBuf *handlers.SystemStatusBuffer, teardown func()) {
+) (sysStatusBuf *handlers.SystemStatusBuffer, hubEventsHook func(u *central.Unit) (unwire func()), teardown func()) {
 	sysStatusBuf = handlers.NewSystemStatusBuffer(100)
 	stopSysStatusBuf := sysStatusBuf.Subscribe(reg)
 
@@ -42,6 +42,10 @@ func wireSystemStatusSubscribers(
 
 	wsHubEvents := ws.NewHubEventsSubscriber(reg, wsHub)
 	wsHubEvents.Start()
+	// Start only walks the registry as it stands now; a central adopted at
+	// runtime needs the same subscriptions attached explicitly or none of
+	// its hub singletons ever reach a WebSocket client.
+	hubEventsHook = func(u *central.Unit) func() { return wsHubEvents.StartCentral(u) }
 
 	wsDeviceLifecycle := ws.NewDeviceLifecycleSubscriber(reg, wsHub)
 	wsDeviceLifecycle.Start()
@@ -106,5 +110,5 @@ func wireSystemStatusSubscribers(
 		stopSysStatusBuf()
 	}
 
-	return sysStatusBuf, teardown
+	return sysStatusBuf, hubEventsHook, teardown
 }
