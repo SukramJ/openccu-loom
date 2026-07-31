@@ -13,6 +13,7 @@
   import type { CustomDPSummary, DeviceDetail } from "$lib/api/types";
   import { isOverviewExcluded } from "$lib/quickcontrol/domain";
   import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
+  import ChannelPinButton from "./ChannelPinButton.svelte";
   import { cdpWidgetFor, hasCdpWidget } from "./dispatch";
 
   type Props = {
@@ -75,7 +76,24 @@
       {@const ch = detail.channels.find((c) => c.number === cdp.channel_no)}
       {@const title = ch?.name || ch?.type_label || `${detail.address}:${cdp.channel_no}`}
       {#if Widget}
-        <Widget address={detail.address} {cdp} {title} />
+        <!-- The pin sits in an overlay rather than inside the widget:
+             every CDP tile renders through the same ControlTile frame,
+             and threading a pin prop through all eight widgets would
+             couple each of them to the favourites feature for one
+             corner affordance. The tile's top-right is free — its header
+             row is icon + left-aligned text. -->
+        {#if pinnable}
+          <div class="relative">
+            <Widget address={detail.address} {cdp} {title} />
+            <ChannelPinButton
+              channelAddress={`${detail.address}:${cdp.channel_no}`}
+              label={title}
+              class="absolute right-1.5 top-1.5"
+            />
+          </div>
+        {:else}
+          <Widget address={detail.address} {cdp} {title} />
+        {/if}
       {/if}
     {/each}
     {#each autoTileChannels as ch (ch.address)}
