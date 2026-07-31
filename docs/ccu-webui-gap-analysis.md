@@ -1,7 +1,9 @@
 # CCU-WebUI-Ersatz: Gap-Analyse und offene Punkte
 
-Stand: 2026-07-23 · Basis: OpenCCU-Loom 0.47.0 (`main`), occu (CCU3-WebUI,
-`../occu/WebUI/www/`), OpenCCU (`../OpenCCU/buildroot-external/`).
+Erhebung: 2026-07-23 (Basis OpenCCU-Loom 0.47.0) · Umsetzungsstand
+nachgezogen: 2026-07-31 (OpenCCU-Loom 0.51.0, `main`) · Vergleichsbasis:
+occu (CCU3-WebUI, `../occu/WebUI/www/`), OpenCCU
+(`../OpenCCU/buildroot-external/`).
 `OpenCCU-Base` ist lokal nicht ausgecheckt; die Distributions-Ebene
 (Overlays, occu-Patches, Recovery, Add-on-Ökosystem) ist über das
 OpenCCU-Repo mit abgedeckt.
@@ -25,16 +27,36 @@ wird als Synonym für `ausschließen` gewertet.
 (u. a. der komplette Programmeditor-Block PR01–PR06, Favoriten/Benutzer
 O01–O05, Systemsteuerung SY01–SY20) · 3 × `abgelehnt` (E01, E03, E04).
 Der Umsetzungsplan in §7 enthält nur die beschlossenen Punkte.
+(Das `grep` findet heute nur noch die **unerledigten** Punkte — §4 wurde am
+2026-07-31 auf sie eingedampft, die 48 gelieferten Punkte stehen als
+Ein-Zeilen-Index in §8.)
 
-**Umsetzungsstand 2026-07-23 (Basis 0.47.0):** Von den beschlossenen
-Wellen (§7) sind **1–6 geliefert** — Wellen 1a–1h + GR01 bis 0.46.0,
-Wellen 3, 5, 6 sowie die Welle-4-Kernpunkte G11/G14 mit 0.47.0. **Offen
-bleiben** aus den beschlossenen Punkten nur noch der **Gruppen-Konfigurator
-GR02–GR05** (Welle 2, XL, Rekonstruktion abgeschlossen — siehe
-[groups-wave-status](./ccu-webui-groups-wave-status.md)) und die
-**Welle-4-Restposten** G08/G16 (Hardware-abhängig; G12 erledigt mit API 2.51.0,
-`docs/ccu-webui-gap-analysis.md`-§4.4). Der jeweils erledigte Einzelpunkt
-in §4 trägt einen `✅ erledigt (0.4x)`-Vermerk.
+**Umsetzungsstand 2026-07-31 (Basis 0.51.0):** Alle sechs beschlossenen
+Wellen (§7) sind **geliefert** — Wellen 1a–1h + GR01 bis 0.46.0, Wellen 3,
+5, 6 sowie die Welle-4-Kernpunkte G11/G14 mit 0.47.0, G12 mit API 2.51.0
+und die komplette **Welle 2 (GR02–GR05) mit 0.48.0** (jpages-Proxy,
+live gegen echte Hardware verifiziert — Wire-Wissen in der
+[jpages-Gruppenreferenz](./ccu-jpages-groups-reference.md)).
+
+Von den beschlossenen (`umsetzen`) Punkten bleiben genau **drei** offen:
+
+- **G08** und **G16** — bewusst zurückgestellt, beide durch fehlende
+  Hardware blockiert (Details am jeweiligen Punkt in §4.4).
+- **V06** (eigene LINK-Profilvorlagen) — als `umsetzen` beschlossen, aber
+  in **keiner** Welle des §7-Plans eingeplant und nie gebaut. Im Code
+  existiert nur der eingebaute Easymode-Katalog
+  (`internal/store/linkprofile`, datei-getrieben); ein Benutzer-Store und
+  ein `/link-profiles`-CRUD fehlen. Der Punkt braucht eine Wellen-Zuordnung
+  oder eine neue Entscheidung.
+
+Dazu kommen die **Restposten aus erledigten Punkten** (§4.11) — kleine
+Reste ohne eigene ID, keine eigenen Wellen.
+
+**Aufbau seit 2026-07-31:** §4 enthält nur noch Unerledigtes; §8 ist der
+Ein-Zeilen-Index der gelieferten Punkte (die IDs bleiben damit auflösbar,
+etwa für die `Ref: docs/ccu-webui-gap-analysis.md <ID>`-Zeilen in älteren
+Commits). Was ein gelieferter Punkt konkret gebracht hat, steht im
+`CHANGELOG.md` unter der im Index genannten Version.
 
 ---
 
@@ -55,9 +77,11 @@ Vollersatz heute im Weg stehen:
 1. **Programmeditor** (Wenn/Dann/Sonst-Regelbaum, Zeitmodule/Astro,
    Aktivitäten, Skript-Aktivitäten, Skript-Testfenster) — größte Einzellücke;
    nur über HM-Script-DOM-Manipulation via ReGa-Runner erreichbar.
-2. **Gruppenverwaltung** (HmIP-/BidCos-Heizungsgruppen) — komplette
+2. ~~**Gruppenverwaltung** (HmIP-/BidCos-Heizungsgruppen) — komplette
    CRUD-Orchestrierung fehlt; läuft CCU-seitig über die HMServer-Endpunkte
-   `/pages/jpages/group/*`, die Loom heute gar nicht anspricht.
+   `/pages/jpages/group/*`, die Loom heute gar nicht anspricht.~~
+   **Geschlossen mit 0.48.0** — Loom proxyt die jpages-Endpunkte mit der
+   eigenen JSON-RPC-Session (ADR 0055).
 3. **Diagramme & Favoriten-Editor** — Loom-native Features ohne
    CCU-Schnittstellenbedarf (Diagramm-Definitionen, Multi-Serien-Charts,
    benannte Favoritenseiten mit Layout).
@@ -186,41 +210,17 @@ per ADR zu entscheidende Antwort auf die OS-gebundenen Restfunktionen.
 
 ## 4. Offene Punkte — einzeln entscheidbar
 
+Dieser Abschnitt führt **nur noch die unerledigten Punkte**. Die 48
+gelieferten Punkte sind auf je eine Zeile in §8 eingedampft; ihre
+Beschreibung steht im `CHANGELOG.md` unter der dort genannten Version.
+Bereichsnummerierung und IDs bleiben stabil — die vollständig gelieferten
+Bereiche 4.1 (Quick Wins) und 4.3 (Gruppenverwaltung) sind entfallen, 4.11
+sammelt jetzt die Restposten aus erledigten Punkten.
+
 Legende: Status `partial`/`missing` · Priorität P1 (Kernfunktion für
 WebUI-Ersatz) / P2 (wichtig) / P3 (nice-to-have) · Aufwand S/M/L/XL.
 Empfohlene CCU-Schnittstelle jeweils am Ende der Empfehlung. Abgedeckte
 Funktionen je Bereich sind in §5 zusammengefasst.
-
-### 4.1 Quick Wins (alle P1, Aufwand S)
-
-- **K01 — Gerät/Kanäle umbenennen persistent zur CCU** (partial, P1 S)
-  Rename setzt heute nur `dev.Name` in-memory
-  (`internal/central/adapter/device_admin.go`); die JSON-RPC-Rename-Kette
-  existiert ungenutzt (`RenameDevice`/`RenameChannel` in
-  `internal/client/backends/ccu_extended.go`, `central.SetRenameDeviceFn`
-  nirgends verdrahtet). *Empfehlung:* verdrahten, Kanal-Rename als
-  `PATCH /devices/{addr}/channels/{no}` exponieren, „alle Kanäle
-  mitbenennen"-Option (OpenCCU 0099) anbieten. *JSON-RPC, vorhanden.*
-  **Entscheidung:** `umsetzen`
-- **K02 — Systemvariablen Logikwert/Alarm als Schalter bedienen** (partial, P1 S)
-  SPA prüft auf `BOOL`, der Daemon liefert die Wire-Typen `LOGIC`/`ALARM`
-  durch → der häufigste Sysvar-Typ ist nur per Freitext „true/false"
-  bedienbar (`SysvarList.svelte`, `Favorites.svelte`). *Empfehlung:*
-  Widget-Zweige um LOGIC/ALARM erweitern; reiner SPA-Fix.
-  **Entscheidung:** `umsetzen`
-- **K03 — CCU-Neustart** (missing, P1 S)
-  Eine der häufigsten Wartungsaktionen, nicht auslösbar. *Empfehlung:*
-  ReGa-Skript (`system.Save(); system.Exec("/sbin/reboot")`) als
-  `POST /system/ccu/{central}/reboot` (admin, Confirm); die
-  Readiness-Maschine (`ccu_readiness.go`) trägt den Reconnect bereits.
-  *HM-Script/ReGa.*
-  **Entscheidung:** `umsetzen`
-- **K04 — Sammelquittierung „Alle bestätigen"** (missing, P1 S)
-  Nach Stromausfall stehen dutzende Sticky-Unreach-Meldungen an; heute nur
-  Einzel-Ack. Gilt für Service- UND Alarmmeldungen. *Empfehlung:* Button pro
-  Tab in `MessageList.svelte` + optional Bulk-Endpoint (ein ReGa-Skript
-  quittiert alle in einem Roundtrip). *ReGa-Runner, vorhanden.*
-  **Entscheidung:** `umsetzen`
 
 ### 4.2 Programme, Zentralenverknüpfungen & HM-Script
 
@@ -267,18 +267,6 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   SPA-Editor mit lokal gebundeltem Syntax-Highlighting; SyntaxCheck per
   ReGa-Skript. Setzt PR02 voraus. *ReGa.*
   **Entscheidung:** `offen`
-- **PR07 — Programmliste: Regel-Zusammenfassung + letzte Ausführung** (partial, P2 M)
-  Die Bedingungs-/Aktivitäts-Spalten der WebUI fehlen (Regelbaum wird nie
-  gelesen); `last_executed` liegt im DTO, wird aber nicht angezeigt.
-  *Empfehlung:* `last_executed`-Spalte sofort (reine SPA-Arbeit);
-  Regel-Zusammenfassung per `oProgram.Rule()`-Traversierung als
-  summary-Feld. *ReGa (Zusammenfassung), SPA (Spalte).*
-  **Entscheidung:** `umsetzen`
-- **PR08 — Systeminterne Programme: Laufzeit-Toggle** (partial, P3 S)
-  Filter existiert nur als Experten-Config-Flag (`include_internal_programs`).
-  *Empfehlung:* Query-Parameter + Toggle in `ProgramList.svelte` (analog
-  OpenCCU 0134/0152). Rein Loom-seitig.
-  **Entscheidung:** `umsetzen`
 - **PR09 — Programm-Sichtbarkeitsflag** (missing, P3 S)
   ReGa-Visible-Flag wird weder gelesen noch geschrieben. Geringer Nutzen,
   da Loom ein eigenes Rollenmodell hat. *Empfehlung:* `visible` in
@@ -289,126 +277,9 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   anwendet. *Empfehlung:* erst nach PR02 sinnvoll; Button im ChannelPanel,
   Programm mit Skript-Aktivität generieren. *ReGa.*
   **Entscheidung:** `offen`
-- **PR11 — Programmausführung mit Bedingungsprüfung** (missing, P3 S)
-  OpenCCU-Erweiterung (Patch 0122): nur ausführen, wenn die Wenn-Bedingung
-  aktuell wahr ist. *Empfehlung:* optionaler Parameter `check_conditions`
-  an `POST /programs/{id}/execute`, als kuratiertes `.fn`-Skript. *ReGa.*
-  **Entscheidung:** `umsetzen`
-- **PR12 — Programm löschen (nordseitig)** (missing, P2 S)
-  Kein `DELETE /programs/{id}` (unabhängig vom Editor nützlich; auch
-  Voraussetzung für `Program.deleteProgramByName` in E01). *Empfehlung:*
-  ReGa-Programmlöschung als kleines `.fn`-Skript + REST/WS. *ReGa.*
-  **Entscheidung:** `umsetzen`
-
-### 4.3 Gruppenverwaltung (HmIP-/BidCos-Heizungsgruppen)
-
-- **GR01 — Gruppenliste** (missing, P1 M)
-  Keinerlei Gruppen-Sicht; virtuelle Gruppengeräte erscheinen nur als
-  gewöhnliche Geräte ohne Mitglieder-Kontext. *Empfehlung:* Read-only-
-  Einstieg: JSON-RPC `CCU.getHeatingGroupList` (liest `groups.gson`),
-  `GET /api/v1/groups` mit Join gegen das Loom-Gerätemodell, SPA-Liste mit
-  Links auf die vorhandenen Geräteseiten (Bedienen/Parametrieren der
-  virtuellen Geräte funktioniert heute schon). *JSON-RPC.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.42.0): `GET
-  /api/v1/groups` (+ `?central=`) und WS `groups.list`, typisierter
-  `groups.gson`-Parser, SPA-Ansicht „Heizungsgruppen".
-- **GR02 — Gruppen-Konfigurator: anlegen, Mitglieder, speichern, löschen** (missing, P1 XL)
-  Die Orchestrierung (virtuelles Gerät am VirtualDevices-Interface,
-  Direktverknüpfungs-Matrix je Gruppentyp, `groups.gson`-Pflege,
-  CONFIG_PENDING-Nachlauf) läuft CCU-seitig über die HMServer-Endpunkte
-  `/pages/jpages/group/{create,save,delete,suitableGroupMembers}`.
-  *Empfehlung:* diese Endpunkte als Southbound-Backend ansprechen (Proxy mit
-  CCU-Session) statt die Matrix nativ nachzubauen — Nachbau wäre
-  drift-gefährdet. Vorab Session-Frage klären (Hauptaufwandstreiber);
-  asynchron mit Progress-Broadcast; Fallback nativer Nachbau nur per ADR.
-  Vgl. Grundsatzentscheidung A3.
-  **Entscheidung:** `umsetzen`
-- **GR03 — Gruppe umbenennen inkl. Kanal-Namensschema** (partial, P2 S)
-  Loom kann nur das virtuelle Gerät generisch umbenennen; die CCU zieht
-  `groups.gson`, Gerät und alle Kanäle (`Gruppenname:Kanalnummer`) nach.
-  *Empfehlung:* im Konfigurator über den group/save-Pfad der CCU, danach
-  Geräte-Reload. Setzt GR02 voraus.
-  **Entscheidung:** `umsetzen`
-- **GR04 — „Bedienung nur über Gruppe" (`Device.setOperateGroupOnly`)** (missing, P3 S)
-  *Empfehlung:* kleiner JSON-RPC-Durchstich, Schalter pro Mitgliedsgerät in
-  der Gruppen-Detailansicht. Setzt GR02 voraus. *JSON-RPC.*
-  **Entscheidung:** `umsetzen`
-- **GR05 — Gruppenzuordnung beim Anlernen** (missing, P3 M)
-  „Zur Gruppe hinzufügen" direkt aus dem Posteingang (OpenCCU 0187 patcht
-  diesen Ablauf). *Empfehlung:* im Accept-Flow für gruppenfähige
-  Gerätetypen optional eine Zielgruppe anbieten. Setzt GR02 voraus.
-  **Entscheidung:** `umsetzen`
 
 ### 4.4 Geräteverwaltung & Bedienung
 
-- **G01 — Raum-/Gewerkezuordnung pro Kanal** (partial, P2 M)
-  CCU ordnet je Kanal zu, Loom nur je Gerät; `set_device_rooms.fn`
-  akzeptiert laut Kopf bereits Kanaladressen, nur Adapterpfad +
-  `PATCH /devices/{addr}/channels/{no}` fehlen. Zusatzbefund: openapi.yaml
-  dokumentiert bei `patchDevice` nur `name` — Spec-Drift, `rooms`/
-  `functions` nachziehen. *ReGa, vorhanden.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `PATCH
-  /devices/{addr}/channels/{no}` akzeptiert `rooms`/`functions`, WS
-  `device.set_channel_rooms` / `device.set_channel_functions`,
-  `ChannelSummary.rooms`, rename-sichere ReGa-Skript-Auflösung,
-  SPA-Kanal-Editoren, Audit `device_assignment`. (Der bei `patchDevice`
-  gemeldete Drift war bereits geschlossen.)
-- **G02 — Gerät löschen mit Optionen (RESET/FORCE + Abhängigkeits-Check)** (partial, P2 S)
-  `deleteDevice` wird fest mit `flags=0` gerufen; „ab Werk zurücksetzen"
-  (1) und „erzwingen" (2) plus Vorab-Warnung über abhängige Links/Programme
-  fehlen. *Empfehlung:* Flags durchreichen, Link-/Programm-Aggregat im
-  SPA-Confirm anzeigen. *XML-RPC.*
-  **Entscheidung:** `umsetzen`
-- **G03 — Gerät tauschen** (missing, P2 L)
-  Geführter Austausch (Links + Programm-/Sysvar-Referenzen migrieren,
-  Altgerät abmelden). Der CCU-seitige `replaceDevice`-Callback ist bereits
-  implementiert (`callback_handlers.go:572`) — es fehlt die northbound
-  Auslöse-Fläche + LINK-/ReGa-Migration als asynchroner Workflow.
-  *XML-RPC + ReGa kombiniert.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `GET
-  /devices/{addr}/replace-candidates` + `POST /devices/{addr}/replace`
-  (WS `device.replace_candidates` / `device.replace`), Southbound
-  `listReplaceableDevices`/`replaceDevice` (nur BidCos-RF/-Wired),
-  Eager-Modell-Swap + relaxierter Cross-Type-Guard, Inbox-Replace-Dialog,
-  Audit `device_replace`. Die CCU migriert Links/Teams/ReGa-Referenzen
-  selbst; die WebUI-seitige Energiezähler-Sysvar-Umbenennung ist eine
-  dokumentierte Restlücke (siehe `docs/parity/by_design.md`).
-- **G04 — Gerätekonfiguration wiederherstellen (`restoreConfigToDevice`)** (missing, P2 M)
-  Nach Geräte-Werksreset die zentralseitig gespeicherte Konfiguration
-  (MASTER aller Kanäle + Link-Peerings) komplett neu übertragen
-  (OpenCCU 0151). rfd + HMIPServer unterstützen es, hs485d/CUxD nicht →
-  Capability-Gating. *Empfehlung:* Backend-Op + `POST
-  /devices/{addr}/config/restore` + Button im Gerätedetail (CONFIG_PENDING-
-  Badge als Fortschritt existiert schon). *XML-RPC.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0): `POST
-  /devices/{addr}/config/restore` (WS `device.restore_config`, admin,
-  Audit), Southbound `restoreConfigToDevice` mit Per-Interface-Gate
-  (HmIP-RF/BidCos-RF), `DeviceSummary.config_restore_supported` +
-  Gerätedetail-Button.
-- **G05 — HmIP-Anlernen ohne Internet (SGTIN + Key)** (missing, P2 M)
-  `setInstallModeHMIP` wird fest mit `installMode:"ALL"` gesendet;
-  LOCAL-Modus mit SGTIN+Key (inkl. Base32→Base16) fehlt. *Empfehlung:*
-  Request erweitern + SPA-Formular im Inbox-Bereich. *JSON-RPC.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.43.0):
-  `POST /install-mode/interfaces` + `install_mode.enable` um `sgtin`/`key`
-  erweitert, serverseitige Normalisierung in `pkg/hmproto` (SGTIN +
-  Base32→Base16-Key), kein Broadcast-Fallback, Audit
-  `install_mode`/`install_mode_local`, SPA-Offline-Anlernformular.
-- **G06 — Virtuelle Fernbedienung / Tastensimulation** (partial, P2 S)
-  Modell kennt `IsVirtualRemote` bereits; die SPA rendert BUTTON-Kanäle
-  read-only. *Empfehlung:* Tastenraster mit Kurz/Lang-Buttons
-  (PRESS_SHORT/LONG via vorhandenem setValue) im Gerätedetail.
-  **Entscheidung:** `umsetzen` — **umgesetzt** (reine SPA, kein
-  API-Bump): `VirtualRemoteKeyGrid` im Gerätedetail + interaktives
-  `ButtonEvent`-Widget (Gate `operations.write && usage==data_point`),
-  Einzel-Bool-`setValue` mit `device.trigger`-Flash-Feedback.
-- **G07 — Servicemeldungen dauerhaft unterdrücken** (partial, P2 M)
-  Die komplette Client-Schicht (`SuppressServiceMessage`,
-  `GetSuppressedServiceMessages`, Koordinator-Naht) existiert
-  **unverdrahtet**; der heutige „disable"-Endpoint quittiert nur.
-  *Empfehlung:* verdrahten, Liste unterdrückter Meldungen + Aufheben,
-  SPA-Aktion „Dauerhaft ausblenden". *JSON-RPC, vorhanden.*
-  **Entscheidung:** `umsetzen`
 - **G08 — Anlernen per Seriennummer (BidCos `addDevice` + `setTempKey`)** (partial, P3 M)
   Gezieltes Anlernfenster existiert; es fehlen der aktive
   addDevice-Fetch-Pfad und der Geräte-AES-Key-Dialog bei Key-Mismatch.
@@ -419,53 +290,6 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   gegen echte BidCos-RF-Hardware sicher zu mappen, godevccu simuliert
   kein Anlernen. Reaktivieren, sobald ein BidCos-RF-Gerät + Live-Freigabe
   vorliegt.
-- **G09 — BidCos-Wired Gerätesuche (`searchDevices`)** (missing, P3 S)
-  Bus-Scan für Wired-Geräte in den Posteingang. *Empfehlung:*
-  `Operations.SearchDevices` + `POST /install-mode/search`. *XML-RPC an
-  hs485d.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0): `POST
-  /install-mode/search` + WS `install_mode.search`, `SearchDevices` nur
-  BidCos-Wired, Inbox-Refresh + SPA-Button.
-- **G10 — Posteingang: Erstkonfiguration beim Accept** (partial, P3 S)
-  Name/Raum/Gewerk direkt beim Übernehmen vergeben (heute erst danach im
-  Gerätedetail). *Empfehlung:* Accept-Body um `{name, rooms, functions}`
-  erweitern, vorhandene Setter nach dem ReadyConfig-Flip aufrufen. Setzt
-  K01 voraus.
-  **Entscheidung:** `umsetzen`
-- **G11 — Kommunikationstest / Funktionstest je Kanal** (missing, P3 M)
-  Aktiver Test mit OK-Quittung wie im CCU-Posteingang. *Empfehlung:*
-  `POST /devices/{addr}/test` (ping bzw. getParamset-Roundtrip, danach
-  STICKY_UNREACH zurücksetzen), Ergebnis-Badge. *XML-RPC.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0, geräteweit):
-  `POST /devices/{addr}/test` + WS `device.test` über die CCU-ReGa
-  `DevStartComTest` (Start+Poll), Radio-Interfaces + SPA-Badge.
-  STICKY_UNREACH-Reset und channel-level bleiben Follow-ups.
-- **G12 — Kanal-Sichtbarkeit und Bediensperre** ✅ erledigt (API 2.51.0)
-  Kanäle aus Bedienlisten ausblenden / Bedienung sperren (Gast-Ansichten).
-  Daemon-eigene Kanal-Flags (`channel_flags`-SQLite-Store + In-Memory-Overlay,
-  Schlüssel `(central, channel_address)`); Ingest re-appliziert nach Reconnect.
-  `GET/PUT …/channels/{no}/flags` (Operator, Audit), zwei SPA-Toggles im
-  DeviceDetail. `hidden` filtert Datenpunkt-Liste + MQTT + Matter-Exposition;
-  `locked` weist VALUES-Writes mit 423 ab (MASTER/Reads unberührt).
-  Folge-Schritte: ReGa-Sync (`oChannel.Visible`), Playwright-Baselines.
-  **Entscheidung:** `umsetzen`
-- **G13 — Übertragungsmodus Standard vs. gesichert (AES) je Kanal** (partial, P3 S)
-  Kein Umschalt-Dialog; AES_ACTIVE ist per Default durch Sichtbarkeitsfilter
-  verdeckt. *Empfehlung:* AES-Toggle als eigene Zeile im Kanal-Panel,
-  Schreiben via vorhandenem putParamset; ReGa-Modus-Sync per Mini-Skript.
-  **Entscheidung:** `umsetzen`
-- **G14 — Team-Zuordnung (`setTeam`, z. B. Rauchmelder)** (missing, P3 M)
-  TEAM wird nur gelesen. *Empfehlung:* `Operations.SetTeam` +
-  `PUT /devices/{addr}/channels/{no}/team` + Team-Picker. *XML-RPC.*
-  **Entscheidung:** `umsetzen` — **umgesetzt** (API 2.44.0): `setTeam` +
-  `listTeams` (BidCos-RF/HmIP-RF), `GET .../team-candidates` +
-  `PUT .../team` (WS `device.team_candidates`/`device.set_team`),
-  `team_supported` + SPA-Team-Picker.
-- **G15 — „Bestimmen"-Button (`determineParameter`)** (partial, P3 S)
-  WS-Kommando `paramset.determine` existiert, hat aber keinen Aufrufer in
-  der SPA. *Empfehlung:* determine-fähige Parameter im ui-schema markieren,
-  Button in `ParameterField.svelte`.
-  **Entscheidung:** `umsetzen`
 - **G16 — Gerätespezifische Spezialdialoge** (partial, P3 L)
   E-Paper-/Statusdisplay-Zeileneditor, Jalousie-Hex-Hilfe,
   HmW-IO-Typ-Umschaltung, gemeinsames Editieren von Kanalgruppen (häufigste
@@ -478,118 +302,22 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   HM-Dis-EP-WM55 verifizierbar ist (Gerät nicht verfügbar). Die HmIP-
   Display-Familie (HmIP-WRCD/SDV) ist bereits über die `textdisplay`-CDP
   abgedeckt. Reaktivieren nur mit realer HM-Dis-EP-WM55-Validierung.
-- **G17 — Geräte-Firmware: Duty-Cycle-Gate + Download-Trigger nordseitig** (partial, P3 S)
-  Übersicht, Update-Trigger und Verteilphasen-Anzeige sind vorhanden; das
-  Duty-Cycle-Gate vor dem Update fehlt, und der fertig verdrahtete
-  `DownloadFirmware`-Backend-Pfad hat keinen REST/WS/SPA-Auslöser.
-  *Empfehlung:* Gate im Handler (Warn-Confirm), Download-Endpoint ergänzen.
-  **Entscheidung:** `umsetzen`
 
 ### 4.5 Direkte Verknüpfungen & Zentralenverknüpfungen
 
-- **V01 — Globale Verknüpfungsübersicht** ✅ erledigt (0.47.0, API 2.45.0)
-  `GET /api/v1/links` (+ read-only WS `links.list_all`) aggregiert alle
-  Direktverknüpfungen über sämtliche Zentralen in einer flachen Liste;
-  jede Verknüpfung trägt jetzt `central_name` + `interface_id`. Kein
-  Wire-Change: `getLinks` mit leerer Adresse liefert pro (Zentrale,
-  Interface) den interfaceweiten Link-Bestand in einem Call
-  (`LinksDomain.ListAllLinks`, symmetrische Anreicherung, Dedup pro
-  Zentrale, Best-Effort-Skip offline/CUxD). Optionaler `?central=`-Scope
-  (404 bei unbekannter Zentrale). Neue SPA-Ansicht `#/links` mit Suche +
-  Zentral-Filter, jede Zeile verlinkt zum Gerätedetail zum Bearbeiten
-  (Anlegen/Ändern läuft weiter über den bestehenden Geräte-Tab).
-  Getestet: Domain- + Handler- + WS-Unit-Tests, LinkList-vitest,
-  Playwright light+dark-Baselines.
-  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** `getLinks("", 0)` liefert
-  auf HmIP-RF 8 Links mit voller Metadaten (SENDER/RECEIVER/NAME/FLAGS),
-  BidCos-RF leer ohne Fault — genau der interfaceweite Bestand, auf dem
-  `ListAllLinks` aufsetzt.
-  **Follow-up (optional):** ein zentralenübergreifender „Neue
-  Verknüpfung"-Einstieg mit Quell-Kanal-Picker direkt aus der Übersicht
-  (heute führt der Weg über das Gerätedetail).
-- **V02 — Rollen-Matching beim Verknüpfung-Anlegen** ✅ erledigt (0.47.0)
-  `channelMatchesRole` ignorierte den role-Parameter und rief pro Kandidat
-  ein `getLinkPeers` — jeder link-fähige Kanal wurde für beide Rollen
-  angeboten. Jetzt echte Token-Intersektion der rohen CCU
-  `LINK_SOURCE_ROLES` / `LINK_TARGET_ROLES` (wie `check_role_match` in
-  occu `devconfig.cgi`): `sender`-Quelle ∩ Kandidat-`LinkTargetRoles`,
-  `receiver`-Quelle ∩ Kandidat-`LinkSourceRoles`. Die Rollen werden beim
-  Ingest auf das Kanalmodell gestempelt (`Channel.SetLinkRoles`), also
-  kein CCU-Roundtrip mehr (entfernt einen `getLinkPeers`-Call pro
-  Kandidat). Leere Quell-Rollen: vorhandener Kanal ohne Richtungsrolle →
-  ausgeschlossen (CCU-strikt); nur der WS-Geräte-Probe (Quelle abwesend)
-  fällt auf die Präsenzprüfung zurück. Keine Schema-/API-Änderung.
-  Getestet: `intersects`, Richtungs-Divergenz, Ausschluss, Präsenz-Regel,
-  Model-Accessor + Pipeline-Population.
-  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** reales Token-Vokabular
-  bestätigt — Sender `JEQ0702833:1` (HM-Sen-MDIR-O) `LINK_SOURCE_ROLES =
-  "KEYMATIC SWITCH WINMATIC"` ∩ Empfänger `KEQ0843929:1` (HM-LC-Sw4-DR)
-  `LINK_TARGET_ROLES = "SWITCH WCS_TIPTRONIC_SENSOR WEATHER_CS"` = {SWITCH};
-  MAINTENANCE-Kanäle mit leeren Rollen werden korrekt ausgeschlossen.
-  **Follow-up (optional):** Kanalgruppen (HM-Tastenpaare) +
-  HmIP-RGBW-Sonderparameter — siehe W02.
-- **V03 — Verknüpfung am Gerät testen (`activateLinkParamset`)** ✅ erledigt
-  (0.47.0, API 2.49.0)
-  Neue Operations-Methode `ActivateLinkParamset` (XML-RPC
-  `activateLinkParamset(receiver, sender, longPress)`, CCU-only; CUxD/Homegear
-  → `ErrUnsupported`/501). `LinksDomain.ActivateLink` löst über den
-  **RECEIVER** auf (LINK-Paramset liegt am Empfänger), auditiert
-  `link_activate`. REST `POST /devices/{addr}/links/test` (op-gated, 202) +
-  operator-WS `links.activate_paramset`. SPA: „Test (kurz/langer
-  Tastendruck)"-Buttons im LINK-Profileditor mit **Bestätigungsdialog**
-  (löst den Aktor physisch aus). `links.test_profile` bleibt read-only
-  (unverändert). Getestet: Backend-Dispatch (beide Bool-Werte) +
-  ErrNotWired + CUxD/Homegear-Unsupported, Adapter (Receiver-Auflösung +
-  Audit), Handler (202/400/501/502/503), WS-Dispatch + Write-Klassifizierung.
-  **Live-CCU-validiert (2026-07-23, CCU 172.18.4.39, HM-LC-Sw4-DR
-  `KEQ0843929:1`, mit Freigabe):** temporäre Verknüpfung angelegt →
-  `activateLinkParamset(receiver, sender, longPress)` kurz+lang **fehlerfrei**,
-  Schalter-STATE physisch False→True → Cleanup (removeLink + STATE=false, CCU
-  im Ausgangszustand). Der Wire-Call ist damit gegen echte Hardware bestätigt
-  (godevccu kennt `activateLinkParamset` nicht → E2E-Skip bleibt). Optionaler
-  godevccu-No-op-Handler + SPA-Button-vitest/Playwright-Baseline zurückgestellt.
-- **V04 — Zentralenverknüpfung pro Kanal** (partial, P2 M)
-  Loom schaltet nur geräteweit (alle Press-Kanäle). *Empfehlung:*
-  optionalen `channel`-Parameter an den bestehenden Endpunkten + Pro-Kanal-
-  Schalter in der Kanalansicht (CCU-Verhalten: Patch 0171).
-  **Entscheidung:** `umsetzen`
-- **V05 — Verknüpfung umbenennen (`setLinkInfo`)** (partial, P3 S)
-  Wire-Methode existiert komplett (`InterfaceClient.SetLinkInfo`), ist aber
-  nirgends exponiert. *Empfehlung:* `PATCH /devices/{addr}/links` +
-  Umbenennen-Dialog. *XML-RPC, vorhanden.*
-  **Entscheidung:** `umsetzen`
 - **V06 — Eigene Profilvorlagen (Benutzer-Easymodes)** (missing, P3 M)
   Bewährte LINK-Parametrierung als wiederverwendbare Vorlage. *Empfehlung:*
   SQLite-Store + REST-CRUD `/link-profiles` + „Als Vorlage speichern" im
   ProfileSelector. Rein Loom-seitig.
-  **Entscheidung:** `umsetzen`
-- **V07 — Bewegungsmelder-Helligkeits-Helfer** (missing, P3 S)
-  Ist-Helligkeit des Senders per Klick als Schaltschwelle ins
-  LINK-Bedingungsfeld übernehmen (`ic_md.cgi`). *Empfehlung:* UI-Helfer auf
-  vorhandenen Endpunkten (BRIGHTNESS lesen → COND-Feld setzen).
-  **Entscheidung:** `umsetzen`
-- **V08 — Config-Pending-Hinweis nach Link-Operationen** (partial, P3 S)
-  Bei schlafenden Batteriegeräten fehlt der Hinweis „wird erst beim
-  nächsten Aufwachen übertragen". *Empfehlung:* RX_MODE des Zielgeräts
-  prüfen (im Modell vorhanden), Info-Toast/Banner.
-  **Entscheidung:** `umsetzen`
-- **V09 — Zentralenverknüpfung deaktivieren nullt auch PRESS_LONG** (partial, P3 S)
-  Loom nullt nur PRESS_SHORT (aiohomematic-Verhalten); die CCU setzt beide
-  Zähler, sonst bleibt die interne Verknüpfung im Gerät aktiv.
-  *Empfehlung:* zweiten `reportValueUsage(PRESS_LONG, 0)`-Aufruf ergänzen;
-  Abweichung in `docs/parity/by_design.md` dokumentieren.
-  **Entscheidung:** `umsetzen`
-- **V10 — Schutzlogik + Confirm beim Deaktivieren der Zentralenverknüpfung** (partial, P3 M)
-  Keine Prüfung auf CCU-Programm-Nutzung, kein Bestätigungsdialog (das
-  Panel nutzt zudem einen Inline-Banner statt confirmStore/toastStore —
-  Abweichung vom SPA-Betriebskonzept). *Empfehlung:* Confirm + Warnhinweis
-  minimal; Ausbaustufe: Programm-Referenzprüfung per ReGa.
-  **Entscheidung:** `umsetzen`
-- **V11 — DutyCycle-/Batterie-Hilfetext zur Zentralenverknüpfung** (partial, P3 S)
-  Der operativ wichtigste Erklärtext fehlt (ohne Verknüpfung keine
-  Tasterevents; Aktivieren erhöht DutyCycle/Batterieverbrauch).
-  *Empfehlung:* Hilfe-Hinweis im CentralLinksPanel, de+en.
-  **Entscheidung:** `umsetzen`
+  **Entscheidung:** `umsetzen` — ⚠️ **offen, ohne Wellen-Zuordnung**
+  (bemerkt 2026-07-31): Der Punkt ist beschlossen, taucht aber in keiner
+  Welle des §7-Plans auf und ist nie gebaut worden. Vorhanden ist nur der
+  eingebaute, datei-getriebene Easymode-Katalog
+  (`internal/store/linkprofile`, gelesen über `links.get_profiles` /
+  `links.test_profile`) — es fehlen der Benutzer-Store, das
+  `/link-profiles`-CRUD und der „Als Vorlage speichern"-Einstieg im
+  ProfileSelector.
+  Entweder einer künftigen Welle zuordnen oder neu entscheiden.
 
 ### 4.6 Organisation: Favoriten, Benutzer
 
@@ -622,83 +350,12 @@ Funktionen je Bereich sind in §5 zusammengefasst.
 
 ### 4.7 Systemvariablen & Diagramme
 
-- **SV01 — Sysvar-CRUD-Feinheiten** (partial, P2 S)
-  Umbenennen (`oSv.Name()` + `name` im PATCH), Beschreibung beim Anlegen,
-  Typwechsel in place; dazu ein realer Bug: der SPA-Edit-Dialog patcht
-  Wertelisten realer CCU-Variablen nie, weil er auf `ENUM` prüft, der
-  Daemon aber den Wire-Typ `LIST` liefert (auch e2e-Fixtures korrigieren).
-  *ReGa + SPA.*
-  **Entscheidung:** `umsetzen`
-- **SV02 — Alarm-Variable (virtuelle Alarmlinie) anlegen** (missing, P2 S)
-  Bestehende Alarm-Variablen werden korrekt gespiegelt/quittiert; nur das
-  Anlegen fehlt. *Empfehlung:* ALARM-Zweig in `create_system_variable.fn`
-  (`ivtBinary`/`istAlarm`), Enum in Request/openapi.yaml, SPA-Option.
-  *ReGa.*
-  **Entscheidung:** `umsetzen`
-- **SV03 — Diagramm-Definitionen (benannte Multi-Serien-Diagramme)** ✅ erledigt
-  (0.47.0, API 2.50.0)
-  Loom-natives Feature: Tabelle `diagram_configs` in der Haupt-DB (Migration
-  029, Owner+Visibility private/shared, config_json mit Serien-Liste,
-  Validierung: nicht-leere `central` je Serie, ≤8 Serien, ≤64 KB) +
-  `DiagramConfigStore` (List own+shared / Get / Create / Update / Delete,
-  Owner-or-Admin). REST-CRUD `/api/v1/diagrams` (Reads jede Rolle,
-  subject-scoped; Writes op-gated; Audit `diagram_config`) via cmd-Adapter
-  (Store-Sentinels → Handler-Sentinels). SPA: neue `MultiSeriesChart`
-  (N Avg-Linien, kategorische Palette, Legende, Per-Serie-Fallback,
-  Bereichs-Toolbar) + `Diagrams.svelte` (Liste + Editor mit Serien-Builder)
-  + `#/diagrams`-Route + Nav + i18n en+de.
-  **Gating (auf Wunsch):** die gesamte Diagramm-Fläche (Nav + Seite) ist an
-  die neue `history.v1`-Info-Capability gebunden und nur sichtbar, wenn die
-  Verlaufsaufzeichnung aktiv ist.
-  Getestet: Store-CRUD/Ownership/Validierung/Multi-CCU, Handler
-  (200/201/204/400/401/403/404/503 + Audit), Contract-Walk-Fake,
-  Diagrams-Gating-vitest.
-  **Follow-up (zurückgestellt):** gebündelter `GET /diagrams/{id}/data`,
-  WS-Commands, Editor-Datenpunkt-Picker statt Freitextfelder, Playwright-Baselines.
 - **SV04 — Diagramm-Anzeige: Langzeit, freier Zeitraum, Zoom, Vergleich** (partial, P2 M)
   `QueryBuckets` liest nur die Raw-Tabelle (Retention 30 d), obwohl
   Hourly-/Daily-Rollups existieren → Tier-Fallback einbauen (dann trägt
   `GET /history` 13+ Monate); von-bis-Picker (API kann es bereits),
   Drag-Zoom, Vergleichszeitraum. Rein Loom-seitig.
   **Entscheidung:** `offen`
-- **SV05 — Wertelabels (ValueName0/1) + Visible-/Logging-Flags** (missing, P3 M)
-  Logik-/Alarm-Variablen zeigen nacktes true/false statt z. B.
-  „anwesend/abwesend". *Empfehlung:* Felder in Fetch/DTO/PATCH durchreichen
-  (SysVar.getAll liefert sie bereits), Labels am Switch rendern. *JSON-RPC +
-  ReGa.*
-  **Entscheidung:** `umsetzen`
-- **SV06 — Kanalzuordnung einer Sysvar schreibbar** (partial, P3 S)
-  Lesen/Spiegeln vorhanden; Setzen/Ändern/Entfernen fehlt (`chn_id` ist
-  hartkodiert -1). *Empfehlung:* Parameter durchreichen + Kanal-Picker im
-  Edit-Dialog. *JSON-RPC + ReGa.*
-  **Entscheidung:** `umsetzen`
-- **SV07 — Sysvar-Verwendungsübersicht (Programme) + Lösch-Warnung** ✅ erledigt
-  (0.47.0, API 2.47.0)
-  `GET /api/v1/sysvars/{name}/usage` (+ read-only WS `sysvars.usage`) über
-  das neue ReGa-Skript `usage_by_sysvar.fn`, das die CCU-native
-  `DPEnumUsagePrograms()` der Variablen nutzt (wie das CCU-WebUI) — erfasst
-  ALLE Referenzen (Bedingungen + Aktivitäten), nicht nur die Root-Regel.
-  Anreicherung aus der Hub-Programmregistry (lokalisierter Name, Unique-ID,
-  `is_internal`, beobachteter Active-Status), ReGa-Name als Fallback. Neues
-  optionales `SysvarUsageReader`-Interface am Hub (via SetMutator
-  type-assert, ohne SysvarMutator zu brechen). SPA: Best-Effort-Warnung im
-  Lösch-Confirm (blockiert das Löschen nie). Getestet: Runner, Skript-Pin
-  (34→35) + Placeholder, Hub-Modell (Reader/no-reader/SetMutator-Wiring),
-  Handler-Anreicherung (200/404/503), WS-Dispatch, SysvarList-vitest.
-  godevccu kann `DPEnumUsagePrograms` nicht bedienen (Pattern-Engine) →
-  E2E-Skip; godevccu-Handler als späterer Folge-Fix.
-  **Live-CCU-validiert (2026-07-23, 172.18.4.39):** Empty-Pfad + Nicht-Leer-Pfad
-  gegen echte Hardware bestätigt. Nach Anlegen eines Programms `AAAb`, das die
-  Sysvar `bbb1_2` referenziert, liefert das unveränderte `usage_by_sysvar.fn`
-  exakt die vom Handler erwartete Form:
-  `[{"id":"6924","name":"AAAb","active":true}]` — `DPEnumUsagePrograms()`
-  findet die Referenz, ID/`UriEncode`-Name/`active`-Boolean stimmen, JSON-Framing
-  korrekt. Nach einem zweiten Programm `AAAc` auf derselben Sysvar feuert auch
-  der Inter-Element-Trenner (`WriteLine(',')`):
-  `[{"id":"6924",...,"active":true},\n{"id":"6949","name":"AAAc","active":true}]`
-  — valides JSON (Whitespace zwischen Array-Elementen ist bedeutungslos),
-  `json.Unmarshal` parst sauber zwei Einträge. Damit sind alle drei Fälle
-  (leer / ein Element / mehrere mit Trenner) gegen echte Hardware verifiziert.
 - **SV08 — CSV-Export der Diagrammdaten** (missing, P3 S)
   *Empfehlung:* clientseitig aus den geladenen Buckets (Blob-Download);
   optional `?format=csv` am `GET /history` für API-Nutzer.
@@ -709,19 +366,6 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   kanal-scoped Patterns (`ADDR:4/POWER`) im Recorder-Filter + einfache
   Aufnahme-Verwaltung in der SPA. Rein Loom-seitig.
   **Entscheidung:** `offen`
-- **SV10 — Protokoll-Toggle am einzelnen Datenpunkt** ✅ erledigt
-  (0.47.0, API 2.46.0)
-  „Aufzeichnen"-Switch im History-Tab des Gerätedetails, der die
-  Glob-Richtlinie (`Include`/`Exclude`) je Datenpunkt-Instanz überstimmt;
-  „auf Standard zurücksetzen" löscht die Übersteuerung. Persistenz: sparse
-  Tabelle `measurement_recording_overrides` in der History-DB (Migration
-  004), In-Memory-Overlay (`history.RecordingOverrides`) am Recorder-Hot-Path
-  (kein Platten-Read je Event). REST: `GET`/`PUT /api/v1/history/recording`
-  (REST-only wie History/Energy — kein WS). Numeric- + Live-Provenance-Guards
-  bleiben wirksam (Force-On kann keinen Nicht-Numerik-/Nicht-Live-Wert
-  aufzeichnen). Purge bei Geräte-/Zentral-Entfernung mit den Messwerten.
-  Getestet: Store-CRUD/Purge, Overlay + Recorder-Precedence, Handler,
-  RecordToggle-vitest. Gated hinter dem Opt-in-History-Feature (E2E-Skip).
 
 ### 4.8 Systemsteuerung
 
@@ -770,14 +414,19 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   *Empfehlung:* `CCU.getSSHState/setSSH/setSSHPassword/restartSSHDaemon`
   per JSON-RPC, Admin-Panel im System-Tab. *JSON-RPC.*
   **Entscheidung:** `offen`
-- **SY09 — Auth für CCU-Remote-APIs erzwingen (`CCU.setAuthEnabled`)** (missing, P3 S)
-  Sicherheitsrelevant (offene XML-RPC-API schwächt das Gesamtsystem); der
-  Getter existiert ungenutzt im Transport. *Empfehlung:* Setter + Toggle +
-  lighttpd-Neustart-Handling. *JSON-RPC.*
+- **SY09 — Auth für CCU-Remote-APIs erzwingen (`CCU.setAuthEnabled`)** (partial, P3 S)
+  Sicherheitsrelevant (offene XML-RPC-API schwächt das Gesamtsystem).
+  *Empfehlung:* Setter + Toggle + lighttpd-Neustart-Handling. *JSON-RPC.*
+  **Teilstand (0.51.0+, API 3.5.0):** Die **Leseseite** ist da — der zuvor
+  ungenutzte Getter ist verdrahtet, `GET /api/v1/system/ccu` meldet
+  `auth_enabled`, die Fleet-Karte zeigt es als Chip. Der **Setter** fehlt
+  weiterhin.
   **Entscheidung:** `offen`
-- **SY10 — Automatische HTTPS-Umleitung der CCU** (missing, P3 S)
-  Getter existiert ungenutzt. *Empfehlung:* Setter + Toggle; Wechselwirkung
-  mit der vom Daemon genutzten Basis-URL beachten. *JSON-RPC.*
+- **SY10 — Automatische HTTPS-Umleitung der CCU** (partial, P3 S)
+  *Empfehlung:* Setter + Toggle; Wechselwirkung mit der vom Daemon
+  genutzten Basis-URL beachten. *JSON-RPC.*
+  **Teilstand (0.51.0+, API 3.5.0):** analog SY09 — `https_redirect_enabled`
+  wird gelesen und in der Fleet-Karte angezeigt; der Setter fehlt.
   **Entscheidung:** `offen`
 - **SY11 — Session-Timeout der Loom-Sessions konfigurierbar** (partial, P3 S)
   TTL ist hart codiert (12 h). *Empfehlung:* cfg-Feld
@@ -835,12 +484,6 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   der Sidebar mit Direktsprung; MessageList bei Broadcast nachladen.
   Rein Loom-seitig.
   **Entscheidung:** `offen`
-- **D02 — DutyCycle/Carrier-Sense pro Interface (inkl. LAN-Gateways)** (partial, P2 M)
-  Heute nur gerätebasiert (HAP/DRAP/Funkmodul-Gerät); reine BidCos-Anlagen
-  haben gar keine Anzeige. *Empfehlung:* `Interface.listBidcosInterfaces`
-  periodisch pollen, als Felder an `GET /interfaces` + Spalte in
-  Diagnostics mit Warnschwellen; als Gate für G17 nutzen. *JSON-RPC.*
-  **Entscheidung:** `umsetzen`
 - **D03 — Systemprotokoll (chronologisches Ereignisprotokoll)** (partial, P2 L)
   Der Recorder verwirft bool/enum/string; Sysvar-Änderungen werden nicht
   aufgezeichnet; keine systemweite Ereignisliste/CSV/Löschen. *Empfehlung:*
@@ -900,52 +543,48 @@ Funktionen je Bereich sind in §5 zusammengefasst.
   Agent-Entscheidung (A1) koppeln.
   **Entscheidung:** `offen`
 
-### 4.11 Wochenprofile (Restlücken)
+### 4.11 Restposten aus erledigten Punkten
 
-Die Wochenprofil-/Heizprofil-Editoren (HmIP P1–P6, BidCos HM-TC-IT,
-Schalt-Wochenprogramme inkl. Astro/Kopierfunktionen, OpenCCU-0193-Felder)
-sind abgedeckt. Offen:
+Kleine Reste, die beim Liefern des jeweiligen Punkts bewusst offen blieben.
+Sie haben keine eigene ID und keinen Entscheidungsbedarf — sie sind hier
+gesammelt, weil sie sonst mit den eingedampften Einträgen verloren gingen.
 
-- **W01 — HM-CC-RT-DN-Temperaturprofil (präfixloses Schema)** ✅ erledigt
-  (0.47.0, Layer 1)
-  HM-CC-RT-DN / HM-CC-RT-DN-BoM tragen ihr einziges Wochenprofil als
-  präfixlose `ENDTIME_/TEMPERATURE_`-Keys direkt im geräteweiten
-  MASTER-Paramset (kein `P[1-6]_`-Präfix, kein dedizierter Schedule-Kanal).
-  Der Resolver (`FindScheduleChannel` Path 3 → `device.ChannelNumberDevice`),
-  der Parser (`slotPattern` mit optionalem Präfix → P1) und der Writer
-  (`serializeClimateScheduleBare` + `climateScheduleIsBare`-Erkennung aus
-  der MASTER-Beschreibung) behandeln das Bare-Schema jetzt bidirektional;
-  ein Präfix-Write würde auf der CCU still no-op'en. Keine
-  API-Kontraktänderung (Read `404`→`200`). Getestet: Unit-Tests der Helfer
-  + End-to-End-Round-Trip gegen godevccu
-  (`tests/integration/schedule_bare_e2e_test.go`).
-  **Layer 2 (Follow-up, nicht in 0.47.0):** Der Metadaten-DP
-  (`week_profile`) + MQTT-Wochenprofil-Discovery bleiben still, weil die
-  Normalisierung das Root-Profil ablöst (RT-DN hat `ScheduleChannelNo=nil`).
-  Der architektonisch saubere Fix ist zuerst upstream: HM-CC-RT-DN in
-  aiohomematic auf `schedule_channel_no=BIDCOS_DEVICE_CHANNEL_DUMMY`
-  registrieren, dann Profile regenerieren + Modell-Snapshot neu basieren.
-- **W02 — Universallicht-Wochenprogramm: Farbe/Effekt je Schaltpunkt** ✅ Slice 1
-  erledigt (0.47.0, API 2.48.0)
-  `WP_HUE_SATURATION_COLOR_TEMPERATURE_EFFECT_TYPE/VALUE` (HmIP-RGBW/DALI/LSC)
-  + `WP_OUTPUT_BEHAVIOUR` (HmIP-BSL) werden jetzt als **opake Ints** durch
-  DTO- und Model-Pfad getragen (`SimpleScheduleEntry.color_type/color_value/
-  output_behaviour`, `ScheduleField`-Enum + Filter erweitert). Emit nur bei
-  Vorhandensein (nil ≠ 0), an den aktuellen Slot des Eintrags geklebt →
-  deterministischer Erhalt über Reorder/Insert/Delete (vorher nicht-
-  deterministisch verwaist/vererbt). `ColorCapable`-Flag am Schedule; SPA
-  zeigt eine **read-only Farb-Kategorie-Badge** je Schaltpunkt (Slice-1-sicher,
-  kein Write). Getestet: Round-Trip/Reorder/0-Erhalt (DTO + Model), Filter,
-  Editor-vitest.
-  **Slice 2 (zurückgestellt, braucht Live-RGBW-Gerät + Freigabe):** die
-  20-Bit-`..._VALUE`-Packung (Hue/Sättigung|Kelvin|Effekt) decodieren/encodieren
-  + editierbares Farbwidget. Die Packung ist in occu/aiohomematic nicht
-  dokumentiert → Encode muss gegen ein echtes HmIP-RGBW (172.18.4.29,
-  benanntes Zielgerät + Schreibfreigabe) validiert werden.
+- **W02 Slice 2** — die 20-Bit-`..._VALUE`-Packung des Universallicht-
+  Wochenprogramms (Hue/Sättigung | Kelvin | Effekt) decodieren/encodieren
+  plus editierbares Farbwidget. Die Packung ist weder in occu noch in
+  aiohomematic dokumentiert; der Encode muss gegen ein echtes HmIP-RGBW
+  validiert werden (benanntes Zielgerät + Schreibfreigabe nötig).
+- **W01 Layer 2** — beim HM-CC-RT-DN bleiben Metadaten-Datenpunkt
+  (`week_profile`) und MQTT-Wochenprofil-Discovery still, weil die
+  Normalisierung das Root-Profil ablöst (`ScheduleChannelNo=nil`). Der
+  saubere Fix läuft zuerst upstream: HM-CC-RT-DN in aiohomematic auf
+  `schedule_channel_no=BIDCOS_DEVICE_CHANNEL_DUMMY` registrieren, dann
+  Profile regenerieren und den Modell-Snapshot neu basieren.
+- **G11** — der Kommunikationstest läuft geräteweit; STICKY_UNREACH-Reset
+  nach erfolgreichem Test und ein kanalgenauer Test fehlen.
+- **G12** — die Kanal-Flags sind daemon-eigen; ein ReGa-Sync auf
+  `oChannel.Visible` und Playwright-Baselines für die beiden Toggles stehen aus.
+- **SV03** — Diagramme laden je Serie einzeln; ein gebündelter
+  `GET /diagrams/{id}/data`, WS-Kommandos, ein Datenpunkt-Picker statt
+  Freitextfeldern im Editor und Playwright-Baselines sind zurückgestellt.
+- **SV07/V03** — godevccu kann weder `DPEnumUsagePrograms` noch
+  `activateLinkParamset`; solange fehlen E2E-Abdeckung und die
+  Playwright-Baseline der Link-Test-Buttons.
+- **V01** — die globale Verknüpfungsübersicht ist read-only; ein
+  zentralenübergreifender „Neue Verknüpfung"-Einstieg mit Quell-Kanal-Picker
+  fehlt (der Weg führt weiter über das Gerätedetail).
+- **V02** — Rollen-Matching deckt Kanalgruppen (HM-Tastenpaare) und die
+  HmIP-RGBW-Sonderparameter noch nicht ab.
+- **G03** — beim Gerätetausch migriert die CCU Links/Teams/ReGa-Referenzen
+  selbst; die WebUI-seitige Energiezähler-Sysvar-Umbenennung bleibt eine
+  dokumentierte Lücke (`docs/parity/by_design.md`).
 
 ---
 
 ## 5. Bereits abgedeckt (Kurzüberblick)
+
+Funktionale Sicht zum Zeitpunkt der Erhebung; die seither gelieferten Punkte
+kommen hinzu und sind einzeln in §8 aufgeführt.
 
 - **Bedienung:** Kanalliste mit Live-Widgets (Schalter/Dimmer/Rollladen/
   Thermostat/RGBW/Schloss/Sirene), Raum-/Gewerke-Sichten, Suche/Filter,
@@ -1012,11 +651,14 @@ Welle 1 besteht aus acht unabhängigen, klein geschnittenen Paketen
 Abhängigkeiten: K01 vor G10 (gleiches Paket), A3-ADR vor GR02,
 GR02 vor GR03–GR05.
 
-**Lieferstand 2026-07-23 (0.47.0):** Wellen **1a–1h ✅** und
-**GR01 ✅** (bis 0.46.0); Wellen **3 ✅, 5 ✅, 6 ✅** sowie die
-Welle-4-Kernpunkte **G11 ✅, G14 ✅** (0.47.0) sowie **G12 ✅** (Kanal-Sichtbarkeit/
-Sperre, API 2.51.0). **Offen:** Welle **2 GR02–GR05** (Konfigurator, XL) und die
-Welle-4-Restposten **G08, G16** (Hardware-abhängig).
+**Lieferstand 2026-07-31 (0.51.0) — der Wellenplan ist abgearbeitet:**
+Wellen **1a–1h ✅** und **GR01 ✅** (bis 0.46.0); Wellen **3 ✅, 5 ✅, 6 ✅**
+sowie die Welle-4-Kernpunkte **G11 ✅, G14 ✅** (0.47.0); **G12 ✅**
+(Kanal-Sichtbarkeit/Sperre, API 2.51.0); Welle **2 ✅ komplett**
+(GR02–GR05, 0.48.0, nachgeschärft bis 0.48.8).
+**Offen:** die Welle-4-Restposten **G08, G16** (beide Hardware-abhängig
+zurückgestellt) und — außerhalb jeder Welle — **V06** (siehe §4.5; als
+`umsetzen` beschlossen, aber nie eingeplant).
 
 | Welle | Punkte | Inhalt |
 |---|---|---|
@@ -1034,12 +676,85 @@ Welle-4-Restposten **G08, G16** (Hardware-abhängig).
 | 5 | V01, V02, V03 | Verknüpfungen: globale Übersicht, Rollen-Matching, Link-Test am Gerät |
 | 6 | SV03, SV07, SV10, W01, W02 | Diagramm-Definitionen, Sysvar-Verwendungsübersicht, Protokoll-Toggle, Wochenprofil-Restlücken |
 
+Nicht im Plan und weiterhin unerledigt: **V06** — beschlossen, aber keiner
+Welle zugeordnet (die Welle 1f deckt nur V05/V07/V08 ab). Beim nächsten
+Aufgreifen des Plans entweder anhängen oder neu entscheiden.
+
 Zurückgestellt (Status `offen`) bleiben insbesondere der
 Programmeditor-Block (PR01–PR06, PR09, PR10), Favoriten/Benutzer (O01–O05),
 Diagramm-Anzeige/Export (SV04, SV08, SV09), die gesamte Systemsteuerung
-(SY01–SY20), Diagnose-Ausbau (D01, D03–D05) und das Addon-Umfeld
-(E02, E05, E06) samt der ADR-Fragen A1/A2/A4. Abgelehnt: E01, E03, E04.
+(SY01–SY20, mit der Leseseite von SY09/SY10 als einzigem Teilstand),
+Diagnose-Ausbau (D01, D03–D05) und das Addon-Umfeld (E02, E05, E06) samt
+der ADR-Fragen A1/A2/A4. Abgelehnt: E01, E03, E04.
+
+Der operative Wellen-Runbook (Ausführungsschleife, CI-Fallen,
+Wieder-Aufsetzen) ist mit dem abgearbeiteten Plan aufgelöst worden: die
+dauerhaft nützlichen Teile — Contract-Fallen und das
+Playwright-Baseline-Rezept — stehen jetzt in
+[`CONTRIBUTING.md`](../CONTRIBUTING.md), der Rest in `CLAUDE.md`.
 
 Innerhalb jeder Welle gelten die bestehenden Regeln: openapi.yaml zuerst,
 Contract-Tests bei Protokollgrenzen, i18n de+en vollständig, vier
 Theme-Kombinationen, Playwright-Baselines für neue Views.
+
+---
+
+## 8. Erledigt (Index)
+
+Die 48 gelieferten Punkte, je eine Zeile. Der Index existiert, damit die IDs
+auflösbar bleiben — sie werden in Commit-Bodies (`Ref:
+docs/ccu-webui-gap-analysis.md <ID>`) und in älteren PRs zitiert. **Was ein
+Punkt konkret gebracht hat, steht im `CHANGELOG.md`** unter der genannten
+Version; die ausführlichen Einträge wurden am 2026-07-31 aus §4 entfernt.
+Verbleibende Reste einzelner Punkte stehen in §4.11.
+
+| ID | Punkt | geliefert |
+|---|---|---|
+| K01 | Gerät/Kanäle umbenennen persistent zur CCU | 0.46.0 |
+| K02 | Systemvariablen Logikwert/Alarm als Schalter bedienen | 0.46.0 |
+| K03 | CCU-Neustart | 0.46.0 |
+| K04 | Sammelquittierung „Alle bestätigen" | 0.46.0 |
+| PR07 | Programmliste: Regel-Zusammenfassung + letzte Ausführung | 0.46.0 |
+| PR08 | Systeminterne Programme: Laufzeit-Toggle | 0.46.0 |
+| PR11 | Programmausführung mit Bedingungsprüfung | 0.46.0 |
+| PR12 | Programm löschen (nordseitig) | 0.46.0 |
+| GR01 | Gruppenliste (read-only) | 0.46.0 · API 2.42.0 |
+| GR02 | Gruppen-Konfigurator: anlegen, Mitglieder, speichern, löschen | 0.48.0 · API 2.53.0 |
+| GR03 | Gruppe umbenennen inkl. Kanal-Namensschema | 0.48.0 |
+| GR04 | „Bedienung nur über Gruppe" (`Device.setOperateGroupOnly`) | 0.48.0 |
+| GR05 | Gruppenzuordnung beim Anlernen | 0.48.0 |
+| G01 | Raum-/Gewerkezuordnung pro Kanal | 0.47.0 · API 2.43.0 |
+| G02 | Gerät löschen mit Optionen (RESET/FORCE + Abhängigkeits-Check) | 0.46.0 |
+| G03 | Gerät tauschen | 0.47.0 · API 2.43.0 |
+| G04 | Gerätekonfiguration wiederherstellen (`restoreConfigToDevice`) | 0.47.0 · API 2.43.0 |
+| G05 | HmIP-Anlernen ohne Internet (SGTIN + Key) | 0.47.0 · API 2.43.0 |
+| G06 | Virtuelle Fernbedienung / Tastensimulation | 0.47.0 (SPA-only) |
+| G07 | Servicemeldungen dauerhaft unterdrücken | 0.46.0 |
+| G09 | BidCos-Wired Gerätesuche (`searchDevices`) | 0.47.0 · API 2.44.0 |
+| G10 | Posteingang: Erstkonfiguration beim Accept | 0.46.0 |
+| G11 | Kommunikationstest / Funktionstest (geräteweit) | 0.47.0 · API 2.44.0 |
+| G12 | Kanal-Sichtbarkeit und Bediensperre | 0.47.2 · API 2.51.0 |
+| G13 | Übertragungsmodus Standard vs. gesichert (AES) je Kanal | 0.46.0 |
+| G14 | Team-Zuordnung (`setTeam`) | 0.47.0 · API 2.44.0 |
+| G15 | „Bestimmen"-Button (`determineParameter`) | 0.46.0 |
+| G17 | Geräte-Firmware: Duty-Cycle-Gate + Download-Trigger | 0.46.0 |
+| V01 | Globale Verknüpfungsübersicht | 0.47.0 · API 2.45.0 |
+| V02 | Rollen-Matching beim Verknüpfung-Anlegen | 0.47.0 |
+| V03 | Verknüpfung am Gerät testen (`activateLinkParamset`) | 0.47.0 · API 2.49.0 |
+| V04 | Zentralenverknüpfung pro Kanal | 0.46.0 |
+| V05 | Verknüpfung umbenennen (`setLinkInfo`) | 0.46.0 |
+| V07 | Bewegungsmelder-Helligkeits-Helfer | 0.46.0 |
+| V08 | Config-Pending-Hinweis nach Link-Operationen | 0.46.0 |
+| V09 | Zentralenverknüpfung deaktivieren nullt auch PRESS_LONG | 0.46.0 |
+| V10 | Schutzlogik + Confirm beim Deaktivieren der Zentralenverknüpfung | 0.46.0 |
+| V11 | DutyCycle-/Batterie-Hilfetext zur Zentralenverknüpfung | 0.46.0 |
+| SV01 | Sysvar-CRUD-Feinheiten (inkl. LIST-Bug) | 0.46.0 |
+| SV02 | Alarm-Variable (virtuelle Alarmlinie) anlegen | 0.46.0 |
+| SV03 | Diagramm-Definitionen (Multi-Serien-Diagramme) | 0.47.0 · API 2.50.0 |
+| SV05 | Wertelabels (ValueName0/1) + Visible-/Logging-Flags | 0.46.0 |
+| SV06 | Kanalzuordnung einer Sysvar schreibbar | 0.46.0 |
+| SV07 | Sysvar-Verwendungsübersicht (Programme) + Lösch-Warnung | 0.47.0 · API 2.47.0 |
+| SV10 | Protokoll-Toggle am einzelnen Datenpunkt | 0.47.0 · API 2.46.0 |
+| D02 | DutyCycle/Carrier-Sense pro Interface | 0.46.0 |
+| W01 | HM-CC-RT-DN-Temperaturprofil (präfixloses Schema) | 0.47.0 |
+| W02 | Universallicht-Wochenprogramm: Farbe/Effekt (Slice 1) | 0.47.0 · API 2.48.0 |

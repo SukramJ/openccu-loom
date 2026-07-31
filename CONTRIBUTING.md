@@ -50,6 +50,42 @@ Prerequisites:
   // Copyright (C) 2026 OpenCCU-Loom authors.
   ```
 
+## Contract-surface traps
+
+The REST/WS/wire surfaces are guarded by tests and CI jobs that fail late
+and cryptically if a registration step is missed. Checklist when you touch
+one of them:
+
+- **OpenAPI changes must be additive.** The `oasdiff` guard rejects a
+  removed response status or a body field promoted to `required`.
+- **Bump the API version in two places.** `APIVersion` in
+  `internal/north/rest/handlers/info.go` and the `version:` field in
+  `assets/openapi.yaml` must match
+  (`TestOpenAPIInfoVersionMatchesAPIVersion`), and the schema digest has to
+  be regenerated with `make export-schemas`.
+- **New JSON-RPC methods** must be registered in
+  `tests/contract/wire_methods_canonical_test.go`.
+- **New WebSocket commands** go into `assets/wsapi.json`; a new *category*
+  additionally needs an entry in `knownWSCategories`
+  (`tests/contract/wsapi_schema_test.go`), and a read-only command needs one
+  in `readOnlyCommands` (`internal/north/rest/ws/commands.go`).
+- **Commands godevccu cannot serve** — anything reaching the ReGa
+  `runScript` surface or the CCU's jpages endpoints — must be listed in
+  `tests/e2e/wsapi_skip.txt`, or the black-box E2E run fails.
+- **`RegisterDefaultCommands` sits at the `funlen` limit.** Register new
+  commands through the `register*` helpers or in
+  `RegisterExtendedCommands`.
+- **The ReGa script count is pinned** in `pkg/hmenum/rega_script_test.go` —
+  adding a `.fn` script means updating the pin.
+
+Two local-environment traps that look like real failures:
+
+- The pre-commit hook runs vet/build/test/contract and **times out on a cold
+  cache**. Run the checks yourself first, then commit once with
+  `git commit --no-verify`.
+- `golangci-lint` caches go stale after a git worktree is deleted, producing
+  findings in files you never touched — `golangci-lint cache clean`.
+
 ## Style notes
 
 - Use MIT SPDX headers consistently — no stray GPL / Apache / BSD
@@ -163,6 +199,28 @@ npm run e2e        # Playwright browser-e2e + visual regression (mocked API)
 npm run typecheck  # tsc — must be green before a release merge
 npm run check      # svelte-check
 ```
+
+### Visual baselines
+
+Screenshot baselines are committed per platform. CI compares against the
+`*-chromium-linux.png` files, which are only reproducible inside the same
+container CI uses — a local macOS run produces `-darwin` baselines that
+coexist but do not satisfy CI. To (re)generate the Linux ones, run
+Playwright in the image pinned by `.github/workflows/spa-e2e.yml` and scope
+it with `-g` so you only rewrite the view you changed:
+
+```sh
+docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp \
+  -v "$PWD":/work -w /work/assets/ui \
+  mcr.microsoft.com/playwright:v1.62.0-noble \
+  npx playwright test --update-snapshots -g "<ViewName>"
+```
+
+Keep the image tag in step with the `@playwright/test` version in
+`package.json` — a mismatched renderer rewrites every baseline. Note that
+`--update-snapshots` only replaces snapshots that exceed the configured
+`maxDiffPixelRatio`; after a deliberate restyle use
+`--update-snapshots=all`.
 
 ## Commit style
 
