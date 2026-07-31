@@ -2,7 +2,32 @@
 
 ## 0.52.0
 
-- Placeholder — filled in as the release lands.
+- **Charts show more than the last 30 days again.** Measurement history is
+  kept for 13 months, but the charts only ever read the short-lived raw
+  data, so anything older rendered empty. They now fall back to the hourly
+  and daily summaries.
+- **The sidebar shows how many messages are waiting** — service and alarm
+  messages, updating live, so a pending message no longer has to be
+  discovered by opening the list.
+- **A start page per user.** Pick the view that opens after logging in
+  (Settings → Interface). Follows you to another browser.
+- **Electricity costs in the energy view.** Set a tariff under
+  `persistence.history.energy_price_per_kwh` and consumption is shown with
+  its cost. Without a tariff nothing changes.
+- **Favourites became operable.** A pinned device now shows its live
+  controls instead of a link; channels and programs can be pinned too.
+- **The CCU's astro position is visible and editable** (Settings → System).
+  Sunrise/sunset times for CCU programs and weekly profiles derive from it,
+  so a wrong location silently shifted every astro schedule.
+- **Shut down, safe mode and recovery for the CCU**, next to the existing
+  reboot. Recovery is offered only where the firmware supports it.
+- **Import a backup taken elsewhere.** A `.sbk` file can be uploaded and
+  restored like a local backup; it is checked before it is stored, so the
+  wrong file is refused immediately rather than mid-restore.
+- **Optionally back up before a CCU firmware update.** The update starts
+  only if the backup succeeded.
+- Backups work again on an original CCU3, where the background backup
+  helper does not exist.
 
 ## 0.51.0
 

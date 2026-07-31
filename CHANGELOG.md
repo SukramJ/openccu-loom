@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.52.0]
 
 ### Added
 
@@ -33,20 +33,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the archive came from is read and reported, which is the same fact the
   CCU's own restore consults. Admin-gated and audited; the Backups view
   gains an Import button (API 3.10.0, additive).
-
-### Fixed
-
-- **Backups work on a stock CCU3 again (SY01).** Creating a backup drove
-  `/bin/createBackup.sh`, which only OpenCCU and RaspberryMatic ship, and
-  failed outright when the script was absent. It turns out the download
-  step already did the whole job on its own: it posts to
-  `cp_security.cgi?action=create_backup`, and that CGI builds the archive
-  itself rather than reading what the script would have produced. A
-  failed start is therefore no longer fatal — it now means "this firmware
-  has no background-backup helper" and the synchronous CGI path is used
-  instead.
-
-### Added
 
 - **CCU host control: shutdown, safe mode and recovery (SY07, SY15,
   SY16).** The CCU maintenance card in Settings → System gains three
@@ -79,10 +65,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unresolved position is reported as absent, never as 0/0, which is a
   real place in the Atlantic. Verified against real firmware: write,
   independent read-back, and restoration of the original coordinates.
-
-## [0.52.0]
-
-### Added
 
 - **Favourites are operable, and channels and programs can be pinned
   (O01).** Pinned entries stop being bookmarks: a pinned device now
@@ -136,29 +118,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   debounced, so an acknowledge-all across several centrals triggers one
   refetch rather than one per central.
 
-### Fixed
-
-- **Charts beyond the raw retention are no longer empty (SV04).** The
-  recorder folds raw samples into an hourly and a daily rollup and keeps
-  those for 13 months, then purges the raw rows after their much shorter
-  retention — but `GET /api/v1/history` only ever read the raw table, so
-  any range reaching further back rendered as an empty chart on data that
-  was still there. History now picks its source the way the energy
-  endpoint already did: a bucket at least a day wide is served from the
-  daily rollup, at least an hour wide from the hourly rollup, anything
-  finer from raw samples, and each tier is completed by the tail that is
-  not folded up yet so the running hour and day are never missing. A
-  narrow-bucket query over a range older than the raw data is promoted to
-  the hourly tier instead of returning nothing. Rollup rows carry sum and
-  count, so the average stays exact across the re-fold rather than
-  becoming an average of averages, and min/max keep the peak contract.
-  The chosen resolution is reported in a new `X-History-Tier` response
-  header (`raw` / `hour` / `day`) — a header rather than a body field
-  because the response is a bare array and the OpenAPI contract is
-  additive-only. API version → 3.6.0.
-
-### Added
-
 - **A guide for placing OpenCCU-Loom next to Home Assistant**
   (`docs/user/home-assistant.md`). The daemon and HA overlap, and there
   are three ways devices can travel from the daemon into HA — MQTT
@@ -189,6 +148,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   payload changes.
 
 ### Fixed
+
+- **Backups work on a stock CCU3 again (SY01).** Creating a backup drove
+  `/bin/createBackup.sh`, which only OpenCCU and RaspberryMatic ship, and
+  failed outright when the script was absent. It turns out the download
+  step already did the whole job on its own: it posts to
+  `cp_security.cgi?action=create_backup`, and that CGI builds the archive
+  itself rather than reading what the script would have produced. A
+  failed start is therefore no longer fatal — it now means "this firmware
+  has no background-backup helper" and the synchronous CGI path is used
+  instead.
+
+- **Charts beyond the raw retention are no longer empty (SV04).** The
+  recorder folds raw samples into an hourly and a daily rollup and keeps
+  those for 13 months, then purges the raw rows after their much shorter
+  retention — but `GET /api/v1/history` only ever read the raw table, so
+  any range reaching further back rendered as an empty chart on data that
+  was still there. History now picks its source the way the energy
+  endpoint already did: a bucket at least a day wide is served from the
+  daily rollup, at least an hour wide from the hourly rollup, anything
+  finer from raw samples, and each tier is completed by the tail that is
+  not folded up yet so the running hour and day are never missing. A
+  narrow-bucket query over a range older than the raw data is promoted to
+  the hourly tier instead of returning nothing. Rollup rows carry sum and
+  count, so the average stays exact across the re-fold rather than
+  becoming an average of averages, and min/max keep the peak contract.
+  The chosen resolution is reported in a new `X-History-Tier` response
+  header (`raw` / `hour` / `day`) — a header rather than a body field
+  because the response is a bare array and the OpenAPI contract is
+  additive-only. API version → 3.6.0.
 
 - **The per-package coverage gate passes again.** `internal/client/transport/jsonrpc`
   had drifted to 95.9 % against its 96 % floor, failing every `integration`
