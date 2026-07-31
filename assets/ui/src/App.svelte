@@ -59,6 +59,7 @@
   import { t } from "$lib/i18n";
   import RestartBanner from "$lib/components/RestartBanner.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
+  import { startRouteStore } from "$lib/stores/startRoute.svelte";
 
   // Minimal hash-based router. The Go handler serves the SPA under
   // /app/ and rewrites unknown paths to index.html, so client-side
@@ -111,8 +112,26 @@
   }
   window.addEventListener("hashchange", () => void onHash());
 
+  // The configured start route (O03) is applied exactly once, and only
+  // when the user arrived without a deep link: an explicit #/... in the
+  // URL - a bookmark, a shared link, a reload of the view being worked on
+  // - always wins over the preference.
+  let startRouteApplied = false;
+
+  function applyStartRoute() {
+    if (startRouteApplied) return;
+    startRouteApplied = true;
+    const hash = location.hash.replace(/^#/, "");
+    if (hash && hash !== "/") return;
+    const target = startRouteStore.resolve();
+    if (target) location.hash = target;
+  }
+
   onMount(() => {
     authStore.probe();
+    // Seeded before the route is applied; a failed load resolves to the
+    // default rather than delaying the first paint.
+    void startRouteStore.load().then(applyStartRoute);
     // First-run probe: when the daemon has no auth source yet, render the
     // onboarding wizard instead of the login screen.
     void setupStore.probe();

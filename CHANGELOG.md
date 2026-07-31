@@ -8,6 +8,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A configurable start page per user (O03).** Settings → Interface gains
+  a "Start page" selector; the chosen view is what opens after logging in
+  or reloading. The preference is stored server-side per user, so it
+  follows the operator to another browser or device — unlike theme and
+  language, which stay device-local because they are device-shaped. A
+  direct link always wins: an explicit `#/…` in the URL is never
+  overridden. The selector offers exactly the views the operator can
+  currently reach (the Matter, history and admin views appear only when
+  their gate is open), because it is built from the same navigation table
+  the sidebar renders — previously that table lived inside the sidebar
+  component, and any second list would have drifted from it. A stored
+  route whose view no longer exists falls back to the default.
 - **The sidebar shows how many messages are waiting (D01).** The
   navigation's Messages entry carries a badge with the number of pending
   service and alarm messages — a count in the expanded sidebar, a dot in

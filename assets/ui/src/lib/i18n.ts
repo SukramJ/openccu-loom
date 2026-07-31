@@ -1544,6 +1544,11 @@ const EN: Catalog = {
     "XML-RPC and BIN-RPC callback listeners that the CCU pushes state-change events into. Defaults bind on 0.0.0.0 and let the OS pick ports; override only when the daemon sits behind NAT or a narrow firewall.",
   "settings.interface": "Interface",
   "settings.language": "Language",
+  "settings.start_route": "Start page",
+  "settings.start_route.default": "Device list (default)",
+  "settings.start_route.help":
+    "The view that opens after logging in. Opening a direct link always wins over this setting.",
+  "settings.start_route.saved": "Start page saved",
   "settings.theme": "Theme",
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
@@ -4845,6 +4850,11 @@ const DE: Catalog = {
     "XML-RPC- und BIN-RPC-Callback-Listener, in die die CCU State-Change-Events pusht. Defaults binden auf 0.0.0.0 mit OS-gewählten Ports; nur überschreiben wenn der Daemon hinter NAT oder einer engen Firewall sitzt.",
   "settings.interface": "Oberfläche",
   "settings.language": "Sprache",
+  "settings.start_route": "Startseite",
+  "settings.start_route.default": "Geräteliste (Standard)",
+  "settings.start_route.help":
+    "Die Ansicht, die nach dem Anmelden geöffnet wird. Ein direkt aufgerufener Link hat immer Vorrang vor dieser Einstellung.",
+  "settings.start_route.saved": "Startseite gespeichert",
   "settings.theme": "Design",
   "settings.theme.light": "Hell",
   "settings.theme.dark": "Dunkel",

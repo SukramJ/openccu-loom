@@ -32,6 +32,11 @@
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { startRouteStore } from "$lib/stores/startRoute.svelte";
+  import { authStore } from "$lib/stores/auth.svelte";
+  import { landingTargets } from "$lib/nav";
+  import { matterStore } from "$lib/stores/matter.svelte";
+  import { infoStore } from "$lib/stores/info.svelte";
 
   // Schema loaded once; passed down to all SectionEditors.
   let schemaFields = $state<ConfigSchemaField[]>([]);
@@ -94,7 +99,31 @@
     }
   }
 
-  onMount(() => void loadSchema());
+  // Landing-page candidates, gated exactly like the navigation so the
+  // operator is never offered a view they cannot reach.
+  const startRouteOptions = $derived(
+    landingTargets({
+      matterEnabled: matterStore.status?.enabled === true,
+      historyEnabled: infoStore.info?.capabilities?.includes("history.v1") ?? false,
+      isAdmin: authStore.identity?.role === "admin",
+    }),
+  );
+
+  async function saveStartRoute(next: string) {
+    try {
+      await startRouteStore.set(next);
+      toastStore.success(t("settings.start_route.saved"));
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? err.message : String(err),
+      );
+    }
+  }
+
+  onMount(() => {
+    void loadSchema();
+    void startRouteStore.load();
+  });
 
   async function saveStartupCapture() {
     startupCaptureSaving = true;
@@ -416,6 +445,24 @@
                   <option value="system">{t("settings.theme.system")}</option>
                 </select>
               </label>
+
+              <label class="flex items-center gap-3 text-sm">
+                <span class="min-w-24">{t("settings.start_route")}</span>
+                <select
+                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  value={startRouteStore.route}
+                  onchange={(e) =>
+                    void saveStartRoute((e.target as HTMLSelectElement).value)}
+                >
+                  <option value="">{t("settings.start_route.default")}</option>
+                  {#each startRouteOptions as opt (opt.href)}
+                    <option value={opt.href}>{opt.label}</option>
+                  {/each}
+                </select>
+              </label>
+              <p class="-mt-1 text-xs text-[var(--ha-secondary-text-color)]">
+                {t("settings.start_route.help")}
+              </p>
 
               <div class="flex items-start gap-3">
                 <label class="flex items-center gap-3 text-sm">

@@ -3,6 +3,7 @@
   import Icon from "./Icon.svelte";
   import BrandMark from "./BrandMark.svelte";
   import type { IconName } from "$lib/icons";
+  import { navClusters, type NavItem, type RouteKind } from "$lib/nav";
   import { t } from "$lib/i18n";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { messagesStore } from "$lib/stores/messages.svelte";
@@ -44,33 +45,6 @@
   // burger toggle that overlays the main content; on ≥md screens it
   // sits permanently and the main pane shifts to its right.
 
-  type RouteKind =
-    | "list"
-    | "overview"
-    | "favorites"
-    | "detail"
-    | "backups"
-    | "sysvars"
-    | "programs"
-    | "groups"
-    | "links"
-    | "diagrams"
-    | "messages"
-    | "audit"
-    | "diagnostics"
-    | "energy"
-    | "fleet"
-    | "logs"
-    | "settings"
-    | "inbox"
-    | "firmware"
-    | "signal"
-    | "matter"
-    | "alarm"
-    | "visibility"
-    | "access"
-    | "about"
-    | "unknown";
 
   type Props = {
     activeKind: RouteKind;
@@ -113,18 +87,6 @@
     setNavCollapsed(!collapsed);
   }
 
-  type NavItem = {
-    href: string;
-    icon: IconName;
-    label: string;
-    matches: RouteKind[];
-  };
-
-  type NavCluster = {
-    label: string;
-    items: NavItem[];
-  };
-
   const matterEnabled = $derived(matterStore.status?.enabled === true);
   // The Diagrams view charts measurement history — only surface it when
   // the opt-in history-recording feature is enabled (SV03).
@@ -132,197 +94,13 @@
     infoStore.info?.capabilities?.includes("history.v1") ?? false,
   );
 
-  // Cluster-grouped navigation. Order is opinionated: top cluster
-  // surfaces day-to-day work, lowest cluster groups admin / system.
-  const clusters = $derived<NavCluster[]>([
-    {
-      label: t("sidebar.cluster.overview"),
-      items: [
-        {
-          href: "#/overview",
-          icon: "mdi:dots-grid",
-          label: t("nav.overview"),
-          matches: ["overview"],
-        },
-        {
-          href: "#/devices",
-          icon: "mdi:home",
-          label: t("nav.devices"),
-          matches: ["list", "detail"],
-        },
-        {
-          href: "#/favorites",
-          icon: "mdi:star",
-          label: t("nav.favorites"),
-          matches: ["favorites"],
-        },
-        {
-          href: "#/alarm",
-          icon: "mdi:shield-home",
-          label: t("nav.alarm"),
-          matches: ["alarm"],
-        },
-        {
-          href: "#/inbox",
-          icon: "mdi:list-checks",
-          label: t("nav.inbox"),
-          matches: ["inbox"],
-        },
-        {
-          href: "#/fleet",
-          icon: "mdi:server-network",
-          label: t("nav.fleet"),
-          matches: ["fleet"],
-        },
-      ],
-    },
-    {
-      label: t("sidebar.cluster.automation"),
-      items: [
-        {
-          href: "#/programs",
-          icon: "mdi:play",
-          label: t("nav.programs"),
-          matches: ["programs"],
-        },
-        {
-          href: "#/sysvars",
-          icon: "mdi:zap",
-          label: t("nav.sysvars"),
-          matches: ["sysvars"],
-        },
-        {
-          href: "#/groups",
-          icon: "mdi:home-group",
-          label: t("nav.groups"),
-          matches: ["groups"],
-        },
-        {
-          href: "#/links",
-          icon: "mdi:link",
-          label: t("nav.links"),
-          matches: ["links"],
-        },
-      ],
-    },
-    {
-      label: t("sidebar.cluster.diagnose"),
-      items: [
-        {
-          href: "#/messages",
-          icon: "mdi:bell",
-          label: t("nav.messages"),
-          matches: ["messages"],
-        },
-        {
-          href: "#/diagnostics",
-          icon: "mdi:gauge",
-          label: t("nav.diagnostics"),
-          matches: ["diagnostics"],
-        },
-        // Energy and Diagrams both chart measurement history — only surface
-        // them when the opt-in history-recording feature is enabled.
-        ...(historyEnabled
-          ? [
-              {
-                href: "#/energy",
-                icon: "mdi:zap" as const,
-                label: t("nav.energy"),
-                matches: ["energy"] as RouteKind[],
-              },
-              {
-                href: "#/diagrams",
-                icon: "mdi:chart-line-variant" as const,
-                label: t("nav.diagrams"),
-                matches: ["diagrams"] as RouteKind[],
-              },
-            ]
-          : []),
-        {
-          href: "#/signal",
-          icon: "mdi:signal",
-          label: t("nav.signal"),
-          matches: ["signal"],
-        },
-        {
-          href: "#/audit",
-          icon: "mdi:history",
-          label: t("nav.audit"),
-          matches: ["audit"],
-        },
-        ...(authStore.identity?.role === "admin"
-          ? [
-              {
-                href: "#/logs",
-                icon: "mdi:text-box-search-outline" as const,
-                label: t("nav.logs"),
-                matches: ["logs"] as RouteKind[],
-              },
-            ]
-          : []),
-      ],
-    },
-    ...(matterEnabled
-      ? [
-          {
-            label: t("sidebar.cluster.bridges"),
-            items: [
-              {
-                href: "#/matter",
-                icon: "mdi:link" as const,
-                label: t("nav.matter"),
-                matches: ["matter"] as RouteKind[],
-              },
-            ],
-          },
-        ]
-      : []),
-    {
-      label: t("sidebar.cluster.system"),
-      items: [
-        {
-          href: "#/firmware",
-          icon: "mdi:upload",
-          label: t("nav.firmware"),
-          matches: ["firmware"],
-        },
-        {
-          href: "#/backups",
-          icon: "mdi:server",
-          label: t("nav.backups"),
-          matches: ["backups"],
-        },
-        {
-          href: "#/visibility",
-          icon: "mdi:filter",
-          label: t("nav.visibility"),
-          matches: ["visibility"],
-        },
-        ...(authStore.identity?.role === "admin"
-          ? [
-              {
-                href: "#/access",
-                icon: "mdi:shield" as const,
-                label: t("nav.access"),
-                matches: ["access"] as RouteKind[],
-              },
-            ]
-          : []),
-        {
-          href: "#/settings",
-          icon: "mdi:settings",
-          label: t("nav.settings"),
-          matches: ["settings"],
-        },
-        {
-          href: "#/about",
-          icon: "mdi:information-outline",
-          label: t("nav.about"),
-          matches: ["about"],
-        },
-      ],
-    },
-  ]);
+  const clusters = $derived(
+    navClusters({
+      matterEnabled,
+      historyEnabled,
+      isAdmin: authStore.identity?.role === "admin",
+    }),
+  );
 
   function isActive(item: NavItem): boolean {
     return item.matches.includes(activeKind);
