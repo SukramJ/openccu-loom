@@ -20,6 +20,10 @@ Single static binary, no CGo, no cloud, no Home Assistant required —
 though it integrates with Home Assistant through MQTT Discovery,
 Matter, and two ready-made add-ons.
 
+<p align="center">
+  <img src="assets/logo/overview.svg" alt="Your CCU on the left, the OpenCCU-Loom daemon in the middle, and on the right where your devices show up: Home Assistant over MQTT, Apple/Google/Alexa over Matter, a browser for the config UI, your own scripts over REST and WebSocket, and AI assistants over MCP." width="900">
+</p>
+
 ---
 
 ## Features
