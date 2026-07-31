@@ -31,12 +31,12 @@ func newHistoryHandlerAdapter(s *sqlite.MeasurementStore) handlers.HistoryServic
 
 func (a *historyHandlerAdapter) Query(
 	ctx context.Context, q handlers.HistoryQuery,
-) ([]handlers.HistoryBucket, error) {
-	rows, err := a.store.QueryBuckets(
+) ([]handlers.HistoryBucket, string, error) {
+	rows, tier, err := a.store.QueryBuckets(
 		ctx, q.Central, q.InterfaceID, q.ChannelAddress, q.Parameter, q.From, q.To, q.Buckets,
 	)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	out := make([]handlers.HistoryBucket, len(rows))
 	for i := range rows {
@@ -48,5 +48,5 @@ func (a *historyHandlerAdapter) Query(
 			Count: rows[i].Count,
 		}
 	}
-	return out, nil
+	return out, string(tier), nil
 }

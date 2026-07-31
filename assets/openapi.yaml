@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.5.0
+  version: 3.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4287,6 +4287,16 @@ paths:
         and returns 404 when disabled. The half-open range [from,to) is
         aggregated into at most `buckets` evenly spaced buckets, each
         carrying avg/min/max/count; empty buckets are omitted.
+
+
+        The source resolution is chosen from the resulting bucket width:
+        buckets at least a day wide are served from the daily rollup, at
+        least an hour wide from the hourly rollup, anything finer from raw
+        samples — each completed by the not-yet-rolled-up tail so the
+        running hour and day are never missing. A range that reaches
+        further back than the (short) raw retention is therefore answered
+        from the rollups instead of coming back empty. The chosen tier is
+        reported in the `X-History-Tier` response header.
       parameters:
         - in: query
           name: central
@@ -4327,6 +4337,13 @@ paths:
       responses:
         "200":
           description: Chronological list of non-empty buckets.
+          headers:
+            X-History-Tier:
+              description: >
+                Source resolution the answer was assembled from: `raw`
+                (raw samples), `hour` (hourly rollup + un-rolled tail) or
+                `day` (daily rollup + hourly and raw tails).
+              schema: { type: string, enum: [raw, hour, day] }
           content:
             application/json:
               schema:

@@ -6,6 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.52.0]
 
+### Fixed
+
+- **Charts beyond the raw retention are no longer empty (SV04).** The
+  recorder folds raw samples into an hourly and a daily rollup and keeps
+  those for 13 months, then purges the raw rows after their much shorter
+  retention — but `GET /api/v1/history` only ever read the raw table, so
+  any range reaching further back rendered as an empty chart on data that
+  was still there. History now picks its source the way the energy
+  endpoint already did: a bucket at least a day wide is served from the
+  daily rollup, at least an hour wide from the hourly rollup, anything
+  finer from raw samples, and each tier is completed by the tail that is
+  not folded up yet so the running hour and day are never missing. A
+  narrow-bucket query over a range older than the raw data is promoted to
+  the hourly tier instead of returning nothing. Rollup rows carry sum and
+  count, so the average stays exact across the re-fold rather than
+  becoming an average of averages, and min/max keep the peak contract.
+  The chosen resolution is reported in a new `X-History-Tier` response
+  header (`raw` / `hour` / `day`) — a header rather than a body field
+  because the response is a bare array and the OpenAPI contract is
+  additive-only. API version → 3.6.0.
+
 ### Added
 
 - **A guide for placing OpenCCU-Loom next to Home Assistant**

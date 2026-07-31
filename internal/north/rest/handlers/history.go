@@ -35,10 +35,17 @@ type HistoryQuery struct {
 
 // HistoryService is the read-side handle the SPA chart needs. The cmd
 // layer adapts the measurement store to this interface so handlers stay
-// decoupled from the store package.
+// decoupled from the store package. The second return value names the
+// source resolution the answer was assembled from ("raw", "hour", "day").
 type HistoryService interface {
-	Query(ctx context.Context, q HistoryQuery) ([]HistoryBucket, error)
+	Query(ctx context.Context, q HistoryQuery) ([]HistoryBucket, string, error)
 }
+
+// HistoryTierHeader reports the source resolution of a history response.
+// It rides as a header rather than a body field because the response is a
+// bare JSON array and the OpenAPI guard only accepts additive changes —
+// wrapping the array in an object would break every existing client.
+const HistoryTierHeader = "X-History-Tier"
 
 const (
 	historyDefaultBuckets = 200
@@ -73,13 +80,16 @@ func GetHistory(svc HistoryService) http.HandlerFunc {
 				problem.New(problem.TypeBadRequest, r, "Invalid query parameter", errMsg))
 			return
 		}
-		buckets, err := svc.Query(r.Context(), q)
+		buckets, tier, err := svc.Query(r.Context(), q)
 		if err != nil {
 			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "History query failed", err)
 			return
 		}
 		if buckets == nil {
 			buckets = []HistoryBucket{}
+		}
+		if tier != "" {
+			w.Header().Set(HistoryTierHeader, tier)
 		}
 		JSON(w, http.StatusOK, buckets)
 	}

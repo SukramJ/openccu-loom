@@ -3768,6 +3768,8 @@ export interface paths {
         /**
          * Bucketed measurement history for one data point
          * @description Server-side-bucketed view of one numeric data point's recorded measurement history, sized for charting. Requires the opt-in history feature (persistence.history.enabled); the route is absent and returns 404 when disabled. The half-open range [from,to) is aggregated into at most `buckets` evenly spaced buckets, each carrying avg/min/max/count; empty buckets are omitted.
+         *
+         *     The source resolution is chosen from the resulting bucket width: buckets at least a day wide are served from the daily rollup, at least an hour wide from the hourly rollup, anything finer from raw samples — each completed by the not-yet-rolled-up tail so the running hour and day are never missing. A range that reaches further back than the (short) raw retention is therefore answered from the rollups instead of coming back empty. The chosen tier is reported in the `X-History-Tier` response header.
          */
         get: operations["getHistory"];
         put?: never;
@@ -12369,6 +12371,8 @@ export interface operations {
             /** @description Chronological list of non-empty buckets. */
             200: {
                 headers: {
+                    /** @description Source resolution the answer was assembled from: `raw` (raw samples), `hour` (hourly rollup + un-rolled tail) or `day` (daily rollup + hourly and raw tails). */
+                    "X-History-Tier"?: "raw" | "hour" | "day";
                     [name: string]: unknown;
                 };
                 content: {
