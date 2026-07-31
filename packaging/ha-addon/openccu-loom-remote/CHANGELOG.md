@@ -4,6 +4,11 @@ Keep entries condensed; the full history lives in the repository's
 top-level CHANGELOG.md. Newest version first.
 -->
 
+# 0.52.1
+
+Version ride-along. No changes to the proxy itself; the fixes ship in the
+paired instance — update the instance to 0.52.1 too.
+
 # 0.52.0
 
 Version ride-along. No changes to the proxy itself; the features ship in the

@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.1
+
+- **The CCUs page opens again.** It stayed blank whenever the CCU reported
+  its interface list, because the daemon read fields that firmware does
+  not send — which also left every interface badge empty and marked every
+  interface as unmanaged. All three are fixed.
+- **Actuator channels can be pinned to favourites.** Until now only the
+  device and its button channels could be pinned; switches, dimmers,
+  blinds and thermostats could not. A pinned channel now shows its real
+  control in the favourites view.
+
 ## 0.52.0
 
 - **Charts show more than the last 30 days again.** Measurement history is

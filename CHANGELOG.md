@@ -4,6 +4,30 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.1]
+
+### Fixed
+
+- **The fleet page loads again, and its CCU-interface list is populated.**
+  `Interface.listInterfaces` reports `name`, `port` and `info` — not the
+  `type`, `address` and `url` the decoder read — so every entry came back
+  with empty strings. That blanked each interface badge, marked every
+  interface as unmanaged, and gave Svelte one duplicate key per
+  interface, which throws and took the whole `#/fleet` route down. The
+  decoder now reads `name` as the interface identifier (the same token
+  `configured_interfaces` is keyed on) while still preferring an explicit
+  `type`/`address` where a firmware supplies one, and the badge list no
+  longer keys on a field that can repeat — a display list rebuilt on
+  every load must not be able to break its route.
+
+- **Actuator channels can be pinned to favourites.** The pin star only
+  ever appeared on the generic fallback tile, so exactly the channels
+  worth quick access to — switches, dimmers, covers, thermostats, every
+  channel backed by a custom data point — were the ones that could not be
+  pinned. The star now sits on those tiles too, and a pinned channel
+  renders its real control tile in the favourites view instead of the
+  generic fallback, so pinning a switch no longer costs it its toggle.
+
 ## [0.52.0]
 
 ### Added
@@ -149,24 +173,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **Actuator channels can be pinned to favourites.** The pin star only
-  ever appeared on the generic fallback tile, so exactly the channels
-  worth quick access to — switches, dimmers, covers, thermostats, every
-  channel backed by a custom data point — were the ones that could not be
-  pinned. The star now sits on those tiles too, and a pinned channel
-  renders its real control tile in the favourites view instead of the
-  generic fallback, so pinning a switch no longer costs it its toggle.
-- **The fleet page loads again, and its CCU-interface list is populated.**
-  `Interface.listInterfaces` reports `name`, `port` and `info` — not the
-  `type`, `address` and `url` the decoder read — so every entry came back
-  with empty strings. That blanked each interface badge, marked every
-  interface as unmanaged, and gave Svelte one duplicate key per
-  interface, which throws and took the whole `#/fleet` route down. The
-  decoder now reads `name` as the interface identifier (the same token
-  `configured_interfaces` is keyed on) while still preferring an explicit
-  `type`/`address` where a firmware supplies one, and the badge list no
-  longer keys on a field that can repeat — a display list rebuilt on
-  every load must not be able to break its route.
 - **Backups work on a stock CCU3 again (SY01).** Creating a backup drove
   `/bin/createBackup.sh`, which only OpenCCU and RaspberryMatic ship, and
   failed outright when the script was absent. It turns out the download
