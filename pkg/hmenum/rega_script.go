@@ -50,6 +50,7 @@ const (
 	RegaScriptTriggerFirmwareUpdate RegaScript = "trigger_firmware_update"
 	RegaScriptRebootCCU             RegaScript = "reboot_ccu"
 	RegaScriptSetCCUPosition        RegaScript = "set_ccu_position"
+	RegaScriptPoweroffCCU           RegaScript = "poweroff_ccu"
 	RegaScriptCreateBackupStart     RegaScript = "create_backup_start"
 	RegaScriptCreateBackupStatus    RegaScript = "create_backup_status"
 	RegaScriptUsageBySysvar         RegaScript = "usage_by_sysvar"
@@ -94,6 +95,7 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptTriggerFirmwareUpdate,
 	RegaScriptRebootCCU,
 	RegaScriptSetCCUPosition,
+	RegaScriptPoweroffCCU,
 	RegaScriptCreateBackupStart,
 	RegaScriptCreateBackupStatus,
 	RegaScriptUsageBySysvar,

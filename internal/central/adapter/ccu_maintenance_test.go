@@ -114,6 +114,112 @@ func TestCCUMaintenanceRebootCCUNilRegistry(t *testing.T) {
 	}
 }
 
+// positionOps is a backends.Operations that also implements the
+// ccuPositionSetter capability. It records the position it was asked to
+// write and returns a configurable error.
+type positionOps struct {
+	fakeOperations
+
+	setCalls int
+	lastLon  float64
+	lastLat  float64
+	setErr   error
+}
+
+func (p *positionOps) SetCCUPosition(_ context.Context, longitude, latitude float64) error {
+	p.setCalls++
+	p.lastLon, p.lastLat = longitude, latitude
+	return p.setErr
+}
+
+func TestCCUMaintenanceSetCCUPositionSuccessPatchesSystemInfo(t *testing.T) {
+	t.Parallel()
+	ops := &positionOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	// An unrelated field must survive the patch untouched — PatchSystemPosition
+	// only touches Longitude/Latitude.
+	c.SetSystemInformation(central.SystemInfo{Hostname: "ccu-01.local"})
+	w := clientpkg.NewValueWriter()
+	w.Register("ccu-01", "HmIP-RF", ops)
+	ic := newTestInterfaceClient(t, "ccu-01", "HmIP-RF", 5)
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatalf("Clients.Register: %v", err)
+	}
+	reg := central.NewRegistry()
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	dom := NewCCUMaintenanceDomain(reg, w)
+
+	if err := dom.SetCCUPosition(context.Background(), "ccu-01", 10.222946, 53.551086); err != nil {
+		t.Fatalf("SetCCUPosition: %v", err)
+	}
+	if ops.setCalls != 1 || ops.lastLon != 10.222946 || ops.lastLat != 53.551086 {
+		t.Fatalf("backend not called with the expected position: calls=%d lon=%g lat=%g",
+			ops.setCalls, ops.lastLon, ops.lastLat)
+	}
+
+	info := c.SystemInformation()
+	if info.Longitude != 10.222946 || info.Latitude != 53.551086 {
+		t.Errorf("cached SystemInfo not patched: got %g/%g", info.Longitude, info.Latitude)
+	}
+	if info.Hostname != "ccu-01.local" {
+		t.Errorf("unrelated field Hostname changed by the patch: got %q", info.Hostname)
+	}
+}
+
+func TestCCUMaintenanceSetCCUPositionUnknownCentral(t *testing.T) {
+	t.Parallel()
+	ops := &positionOps{fakeOperations: fakeOperations{kind: backends.KindCCU}}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	err := dom.SetCCUPosition(context.Background(), "does-not-exist", 10, 50)
+	if !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+	if ops.setCalls != 0 {
+		t.Fatalf("backend must not be called for an unknown central")
+	}
+}
+
+func TestCCUMaintenanceSetCCUPositionUnsupportedBackend(t *testing.T) {
+	t.Parallel()
+	// A plain fakeOperations does not implement ccuPositionSetter.
+	ops := &fakeOperations{kind: backends.KindCUxD}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	err := dom.SetCCUPosition(context.Background(), "ccu-01", 10, 50)
+	if !errors.Is(err, backends.ErrUnsupported) {
+		t.Fatalf("want backends.ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCCUMaintenanceSetCCUPositionPropagatesBackendError(t *testing.T) {
+	t.Parallel()
+	ops := &positionOps{
+		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		setErr:         hmerr.ErrValidation,
+	}
+	dom := buildCCUMaintenanceFixture(t, "ccu-01", ops)
+	err := dom.SetCCUPosition(context.Background(), "ccu-01", 200, 50)
+	if !errors.Is(err, hmerr.ErrValidation) {
+		t.Fatalf("want the backend's validation error to propagate, got %v", err)
+	}
+}
+
+func TestCCUMaintenanceSetCCUPositionNilRegistry(t *testing.T) {
+	t.Parallel()
+	dom := NewCCUMaintenanceDomain(nil, nil)
+	if err := dom.SetCCUPosition(context.Background(), "ccu-01", 10, 50); !errors.Is(err, hmerr.ErrUnknownCentral) {
+		t.Fatalf("want hmerr.ErrUnknownCentral, got %v", err)
+	}
+}
+
 // downloadOps records the firmware-download URL passed to the primary
 // backend and returns a configurable error.
 type downloadOps struct {

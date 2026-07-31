@@ -63,6 +63,11 @@ func (a *systemCCUAdapter) List(ctx context.Context) []handlers.SystemCCUEntry {
 		entry.AuthEnabled = si.AuthEnabled
 		entry.HTTPSRedirectEnabled = si.HTTPSRedirectEnabled
 		entry.Timezone = si.Timezone
+		// get_backend_info classifies anything that is not a stock CCU or
+		// debmatic as "OpenCCU"; recovery mode exists exactly there. An
+		// empty model means bring-up has not resolved it yet, which must
+		// read as "not offered" rather than "offered".
+		entry.RecoveryModeSupported = si.Model != "" && si.Model != "CCU"
 		// Only report a position the CCU actually resolved. Exact 0/0 is
 		// the zero value of an unresolved read, and reporting it as a
 		// coordinate would tell the operator their CCU sits off the coast

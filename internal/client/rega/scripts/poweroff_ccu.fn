@@ -1,0 +1,26 @@
+!# name: poweroff_ccu.fn
+!#
+!# This script shuts the CCU down.
+!#
+!# Mirrors reboot_ccu.fn: it first persists the current runtime state
+!# (system.Save) so the shutdown is clean, then triggers the poweroff.
+!#
+!# The poweroff is started with nohup in the background so this script
+!# can return its JSON acknowledgement before the box goes down —
+!# otherwise the HTTP response carrying the result would be lost.
+!#
+!# Unlike a reboot, nothing brings the CCU back: the daemon's readiness
+!# gate will hold the central in "waiting for CCU" until someone powers
+!# it on again. That is the intended outcome, not a failure.
+!#
+
+string sResult = "";
+
+!# Persist runtime state before the shutdown.
+system.Save();
+
+!# Trigger the poweroff in the background so the acknowledgement below is
+!# flushed to the caller before the network stack shuts down.
+system.Exec("nohup /sbin/poweroff >/dev/null 2>&1 &", &sResult);
+
+Write('{"success":true,"message":"CCU poweroff triggered"}');

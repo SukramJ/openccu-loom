@@ -311,6 +311,9 @@ type Deps struct {
 	// admin-only write of a CCU's astro reference position. Nil serves
 	// the route as 503.
 	CCUPosition handlers.CCUPositionPort
+	// CCUHostActions backs the admin-only host power and boot-mode routes
+	// under `/api/v1/system/ccu/{central}/`. Nil serves them as 503.
+	CCUHostActions handlers.CCUHostActionPort
 	// FirmwareDownload backs `POST /api/v1/system/firmware/download` — an
 	// admin-only trigger that has one CCU fetch a firmware image onto the
 	// central. Nil serves the route as 503.
@@ -962,6 +965,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// sunrise/sunset time the CCU computes, for its own programs
 			// as well as the weekly profiles this daemon edits.
 			pr.With(admin).Put("/system/ccu/{central}/position", handlers.PutCCUPosition(d.CCUPosition, d.AuditRecorder))
+			// Host power and boot mode. All three take the CCU out of
+			// normal service, so they sit next to the reboot: admin-gated,
+			// audited, and confirmed in the UI before dispatch.
+			pr.With(admin).Post("/system/ccu/{central}/poweroff", handlers.PostCCUPoweroff(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin).Post("/system/ccu/{central}/safe-mode", handlers.PostCCUSafeMode(d.CCUHostActions, d.AuditRecorder))
+			pr.With(admin).Post("/system/ccu/{central}/recovery-mode", handlers.PostCCURecoveryMode(d.CCUHostActions, d.AuditRecorder))
 			pr.With(admin).Post("/system/firmware/download", handlers.PostSystemFirmwareDownload(d.FirmwareDownload, d.AuditRecorder))
 			// Add-on self-update (ADR 0057). GET always answers 200 (a nil
 			// d.AddonUpdate reports supported:false) — mounted unconditionally

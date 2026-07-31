@@ -19,8 +19,8 @@ func TestAllRegaScriptsUnique(t *testing.T) {
 	// alarm) + execute_program_conditional + delete_program.
 	// delete_system_variable was dropped in favor of the JSON-RPC
 	// SysVar.deleteSysVarByName call.
-	if len(AllRegaScripts) != 36 {
-		t.Errorf("AllRegaScripts has %d entries, want 36", len(AllRegaScripts))
+	if len(AllRegaScripts) != 37 {
+		t.Errorf("AllRegaScripts has %d entries, want 37", len(AllRegaScripts))
 	}
 }
 

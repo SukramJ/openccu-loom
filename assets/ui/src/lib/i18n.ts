@@ -3140,6 +3140,21 @@ const EN: Catalog = {
   "ccu_position.confirm_body":
     "This changes the sunrise and sunset times {central} computes — for its own programs and for the weekly profiles edited here.",
   "ccu_position.saved": "Astro position of {central} saved.",
+  "ccu_host.poweroff.action": "Shut down",
+  "ccu_host.poweroff.confirm_title": "Shut the CCU down?",
+  "ccu_host.poweroff.confirm_body":
+    "{central} will power off. Nothing brings it back on remotely — it has to be switched on at the device.",
+  "ccu_host.poweroff.triggered": "Shutdown of {central} triggered.",
+  "ccu_host.safe_mode.action": "Safe mode",
+  "ccu_host.safe_mode.confirm_title": "Restart into safe mode?",
+  "ccu_host.safe_mode.confirm_body":
+    "{central} restarts with its logic layer held down. Programs and system variables do not run until you leave safe mode again.",
+  "ccu_host.safe_mode.triggered": "{central} is restarting into safe mode.",
+  "ccu_host.recovery_mode.action": "Recovery",
+  "ccu_host.recovery_mode.confirm_title": "Restart into the recovery system?",
+  "ccu_host.recovery_mode.confirm_body":
+    "{central} restarts into its recovery system and stays out of service until you leave it there. The recovery interface is reachable at the CCU's own address.",
+  "ccu_host.recovery_mode.triggered": "{central} is restarting into the recovery system.",
   "ccu_maintenance.title": "CCU maintenance",
   "ccu_maintenance.subtitle":
     "Host-level actions for each connected CCU. Rebooting restarts the CCU and briefly drops its connection.",
@@ -6461,6 +6476,21 @@ const DE: Catalog = {
   "ccu_position.confirm_body":
     "Das ändert die Sonnenauf- und -untergangszeiten, die {central} berechnet — für die eigenen Programme ebenso wie für die hier bearbeiteten Wochenprofile.",
   "ccu_position.saved": "Astro-Position von {central} gespeichert.",
+  "ccu_host.poweroff.action": "Herunterfahren",
+  "ccu_host.poweroff.confirm_title": "CCU herunterfahren?",
+  "ccu_host.poweroff.confirm_body":
+    "{central} wird ausgeschaltet. Aus der Ferne lässt sie sich nicht wieder starten — das geht nur am Gerät.",
+  "ccu_host.poweroff.triggered": "Herunterfahren von {central} ausgelöst.",
+  "ccu_host.safe_mode.action": "Abgesicherter Modus",
+  "ccu_host.safe_mode.confirm_title": "In den abgesicherten Modus neu starten?",
+  "ccu_host.safe_mode.confirm_body":
+    "{central} startet ohne Logikschicht neu. Programme und Systemvariablen laufen erst wieder, wenn der abgesicherte Modus verlassen wird.",
+  "ccu_host.safe_mode.triggered": "{central} startet in den abgesicherten Modus.",
+  "ccu_host.recovery_mode.action": "Recovery",
+  "ccu_host.recovery_mode.confirm_title": "In das Recovery-System neu starten?",
+  "ccu_host.recovery_mode.confirm_body":
+    "{central} startet in das Recovery-System und bleibt außer Betrieb, bis es dort wieder verlassen wird. Die Recovery-Oberfläche ist unter der Adresse der CCU erreichbar.",
+  "ccu_host.recovery_mode.triggered": "{central} startet in das Recovery-System.",
   "ccu_maintenance.title": "CCU-Wartung",
   "ccu_maintenance.subtitle":
     "Aktionen auf Host-Ebene für jede verbundene CCU. Ein Neustart startet die CCU neu und unterbricht kurz ihre Verbindung.",

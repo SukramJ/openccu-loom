@@ -207,6 +207,7 @@ func TestScriptsWithoutPlaceholdersAreParamFree(t *testing.T) {
 	t.Parallel()
 
 	noParamScripts := []hmenum.RegaScript{
+		hmenum.RegaScriptPoweroffCCU,
 		hmenum.RegaScriptGetSerial,
 		hmenum.RegaScriptGetBackendInfo,
 		hmenum.RegaScriptGetAlarmMessages,

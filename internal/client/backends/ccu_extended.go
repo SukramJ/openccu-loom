@@ -882,6 +882,53 @@ func (b *CcuBackend) SetCCUPosition(ctx context.Context, longitude, latitude flo
 	return err
 }
 
+// PoweroffCCU shuts the CCU host down via the poweroff_ccu ReGa script.
+// Nothing brings it back: the readiness gate holds the central in
+// "waiting for CCU" until someone powers it on again.
+func (b *CcuBackend) PoweroffCCU(ctx context.Context) (bool, error) {
+	if b.rega == nil {
+		return false, ErrUnsupported
+	}
+	var resp struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := b.rega.RunJSON(ctx, hmenum.RegaScriptPoweroffCCU, nil, &resp); err != nil {
+		return false, err
+	}
+	return resp.Success, nil
+}
+
+// EnterSafeMode restarts the CCU into its safe mode, where the ReGa logic
+// layer stays down so a broken configuration can be repaired.
+//
+// EnterRecoveryMode restarts it into the separate recovery system.
+//
+// Both go through JSON-RPC and behave identically on the wire: the CCU
+// writes its flag file, persists the ReGa object model and schedules a
+// reboot two seconds out, then answers `true` — so the response arrives
+// normally and neither call needs a connection error treated as success
+// (occu api/methods/{safemode,recoverymode}/enter.tcl). Recovery mode is
+// an OpenCCU / RaspberryMatic feature; a stock CCU3 has no such method
+// and must fail loudly rather than silently doing nothing.
+func (b *CcuBackend) EnterSafeMode(ctx context.Context) error {
+	if b.json == nil {
+		return ErrUnsupported
+	}
+	_, err := b.json.Call(ctx, "SafeMode.enter")
+	return err
+}
+
+// EnterRecoveryMode restarts the CCU into its recovery system. See
+// [CcuBackend.EnterSafeMode] for the shared wire behaviour.
+func (b *CcuBackend) EnterRecoveryMode(ctx context.Context) error {
+	if b.json == nil {
+		return ErrUnsupported
+	}
+	_, err := b.json.Call(ctx, "RecoveryMode.enter")
+	return err
+}
+
 // --- system variable deletion ------------------------------------------
 
 // DeleteSystemVariable implements Operations. Deletes a CCU system variable

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.8.0
+  version: 3.9.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1729,6 +1729,102 @@ paths:
           description: >
             Coordinate out of range, or the central's backend has no ReGa
             path (CUxD, Homegear).
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/poweroff:
+    post:
+      operationId: postSystemCCUPoweroff
+      summary: Shut a CCU host down
+      tags: [system]
+      description: >
+        Powers the CCU off via ReGa. Nothing brings it back on: the central stays in the readiness gate's waiting state until it is switched on again, which is the intended outcome rather than a fault.
+        Admin-gated and audited. Answers 202 once the CCU accepted the
+        request; 422 when the central's backend cannot host the action
+        (CUxD, Homegear, or a firmware without the method).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Poweroff triggered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The central's backend cannot host this action.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/safe-mode:
+    post:
+      operationId: postSystemCCUSafeMode
+      summary: Restart a CCU into safe mode
+      tags: [system]
+      description: >
+        Restarts the CCU with its ReGa logic layer held down, so a configuration that breaks normal startup can be repaired.
+        Admin-gated and audited. Answers 202 once the CCU accepted the
+        request; 422 when the central's backend cannot host the action
+        (CUxD, Homegear, or a firmware without the method).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Safe-mode restart triggered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The central's backend cannot host this action.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu/{central}/recovery-mode:
+    post:
+      operationId: postSystemCCURecoveryMode
+      summary: Restart a CCU into its recovery system
+      tags: [system]
+      description: >
+        Restarts the CCU into the separate recovery system reachable on the CCU's own address. OpenCCU / RaspberryMatic only - a stock CCU3 has no such method and the error is reported rather than swallowed.
+        Admin-gated and audited. Answers 202 once the CCU accepted the
+        request; 422 when the central's backend cannot host the action
+        (CUxD, Homegear, or a firmware without the method).
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+          description: >
+            Target central name (matches `SystemCCUEntry.name`).
+      responses:
+        "202":
+          description: Recovery-mode restart triggered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The central's backend cannot host this action.
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -7472,6 +7568,14 @@ components:
             The CCU's configured IANA time zone (e.g. `Europe/Berlin`),
             read from its time configuration. Read-only here: it is set on
             the CCU itself.
+        recovery_mode_supported:
+          type: boolean
+          description: |
+            Whether this CCU offers a recovery system
+            (`POST .../recovery-mode`). True for OpenCCU / RaspberryMatic
+            firmware, false for a stock CCU3 and while the product is not
+            yet known — so a client hides the action rather than offering
+            one that cannot work.
         ccu_interfaces:
           type: array
           description: |

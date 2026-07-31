@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **CCU host control: shutdown, safe mode and recovery (SY07, SY15,
+  SY16).** The CCU maintenance card in Settings → System gains three
+  actions next to the existing reboot: shut the CCU down, restart it into
+  safe mode (logic layer held down, so a configuration that breaks normal
+  startup can be repaired), and restart it into its recovery system. All
+  three are admin-gated, audited and confirmed before dispatch
+  (`POST /api/v1/system/ccu/{central}/{poweroff,safe-mode,recovery-mode}`;
+  API 3.9.0, additive). Recovery is an OpenCCU / RaspberryMatic feature,
+  so `GET /api/v1/system/ccu` reports `recovery_mode_supported` and the
+  button is hidden — not disabled — where it cannot work: there is
+  nothing an operator could do to enable it on a stock CCU3. The
+  shutdown confirmation says plainly that nothing brings the CCU back
+  remotely.
+
 - **The CCU's astro position is visible and editable (SY05).** Every
   sunrise/sunset time a CCU computes — for its own programs and for the
   weekly profiles this daemon edits — derives from a latitude/longitude

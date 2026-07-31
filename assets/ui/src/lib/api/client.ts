@@ -1286,6 +1286,18 @@ export const api = {
       body: JSON.stringify({ longitude, latitude }),
     });
   },
+  // Host power and boot mode. Each answers 202 once the CCU accepted the
+  // request; the box goes down a moment later, so a client must not wait
+  // for the central to stay reachable.
+  poweroffCCU(central: string) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/poweroff`, { method: "POST" });
+  },
+  ccuSafeMode(central: string) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/safe-mode`, { method: "POST" });
+  },
+  ccuRecoveryMode(central: string) {
+    return request<void>(`/system/ccu/${encodeURIComponent(central)}/recovery-mode`, { method: "POST" });
+  },
   // --- Messages: ack / clear -----------------------------------
   ackAlarm(id: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";

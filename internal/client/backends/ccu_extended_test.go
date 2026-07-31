@@ -1016,6 +1016,88 @@ func TestCcuRebootCCUScriptError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// SetCCUPosition
+// ---------------------------------------------------------------------------
+
+// fakePositionScriptRunner is a ScriptRunner that also implements the
+// narrow position-setter capability CcuBackend.SetCCUPosition type-asserts
+// for. Run/RunJSON are never exercised by these tests — only the position
+// seam matters, so they are inherited unused from fakeScriptRunner.
+type fakePositionScriptRunner struct {
+	fakeScriptRunner
+
+	calls   int
+	lastLon float64
+	lastLat float64
+	gotLon  float64
+	gotLat  float64
+	err     error
+}
+
+func (f *fakePositionScriptRunner) SetPosition(_ context.Context, longitude, latitude float64) (float64, float64, error) {
+	f.calls++
+	f.lastLon, f.lastLat = longitude, latitude
+	if f.err != nil {
+		return 0, 0, f.err
+	}
+	return f.gotLon, f.gotLat, nil
+}
+
+func TestCcuSetCCUPositionNoRega(t *testing.T) {
+	t.Parallel()
+	// The position lives in ReGa, not on the wire — without a ScriptRunner
+	// there is no path to write it.
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	err := b.SetCCUPosition(context.Background(), 10, 50)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+// TestCcuSetCCUPositionRunnerWithoutPositionCapability verifies that a
+// ScriptRunner implementing only Run/RunJSON (no SetPosition) — the shape
+// every non-position ReGa call uses — also reports ErrUnsupported through
+// the narrow type assertion, rather than panicking on a failed cast.
+func TestCcuSetCCUPositionRunnerWithoutPositionCapability(t *testing.T) {
+	t.Parallel()
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(&fakeScriptRunner{})
+	err := b.SetCCUPosition(context.Background(), 10, 50)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("want ErrUnsupported, got %v", err)
+	}
+}
+
+func TestCcuSetCCUPositionForwardsToRunner(t *testing.T) {
+	t.Parallel()
+	runner := &fakePositionScriptRunner{gotLon: 10, gotLat: 50}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+	if err := b.SetCCUPosition(context.Background(), 10, 50); err != nil {
+		t.Fatalf("SetCCUPosition: %v", err)
+	}
+	if runner.calls != 1 || runner.lastLon != 10 || runner.lastLat != 50 {
+		t.Fatalf("runner not called with the expected position: calls=%d lon=%g lat=%g",
+			runner.calls, runner.lastLon, runner.lastLat)
+	}
+}
+
+// TestCcuSetCCUPositionPropagatesRunnerError verifies that a runner-side
+// failure (validation or read-back mismatch) surfaces to the caller
+// unchanged — SetCCUPosition adds no error translation of its own.
+func TestCcuSetCCUPositionPropagatesRunnerError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("ccu rejected the position")
+	runner := &fakePositionScriptRunner{err: sentinel}
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+	err := b.SetCCUPosition(context.Background(), 10, 50)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("want sentinel error, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DeleteSystemVariable
 // ---------------------------------------------------------------------------
 

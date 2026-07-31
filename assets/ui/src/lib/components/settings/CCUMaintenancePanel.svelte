@@ -99,6 +99,34 @@
     }
   }
 
+  // The three host actions differ only in confirm copy, endpoint and
+  // toast, so one driver covers them - the shape of the interaction
+  // (confirm, busy, toast, no reload because the CCU is going down) is
+  // identical.
+  type HostAction = "poweroff" | "safe_mode" | "recovery_mode";
+
+  async function hostAction(e: SystemCCUEntry, action: HostAction) {
+    const central = e.name;
+    const ok = await confirmStore.ask({
+      title: t(`ccu_host.${action}.confirm_title`),
+      body: t(`ccu_host.${action}.confirm_body`, { central }),
+      confirmLabel: t(`ccu_host.${action}.action`),
+      destructive: true,
+    });
+    if (!ok) return;
+    busy = central;
+    try {
+      if (action === "poweroff") await api.poweroffCCU(central);
+      else if (action === "safe_mode") await api.ccuSafeMode(central);
+      else await api.ccuRecoveryMode(central);
+      toastStore.success(t(`ccu_host.${action}.triggered`, { central }));
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      busy = null;
+    }
+  }
+
   async function reboot(e: SystemCCUEntry) {
     const central = e.name;
     const ok = await confirmStore.ask({
@@ -168,6 +196,38 @@
                   onclick={() => void reboot(e)}
                 >
                   {busy === e.name ? t("ccu_maintenance.rebooting") : t("ccu_maintenance.reboot")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy === e.name}
+                  onclick={() => void hostAction(e, "safe_mode")}
+                >
+                  {t("ccu_host.safe_mode.action")}
+                </Button>
+                <!-- Recovery lives on OpenCCU / RaspberryMatic only. The
+                     button is hidden rather than disabled on a stock CCU3:
+                     there is nothing the operator could do to enable it. -->
+                {#if e.recovery_mode_supported}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy === e.name}
+                    onclick={() => void hostAction(e, "recovery_mode")}
+                  >
+                    {t("ccu_host.recovery_mode.action")}
+                  </Button>
+                {/if}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={busy === e.name}
+                  onclick={() => void hostAction(e, "poweroff")}
+                >
+                  {t("ccu_host.poweroff.action")}
                 </Button>
               {/if}
             </div>

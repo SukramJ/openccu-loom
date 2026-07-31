@@ -95,6 +95,14 @@ const (
 	// time the CCU computes.
 	ActionSystemCCUPosition Action = "system_ccu_position"
 
+	// ActionSystemCCUPoweroff, ActionSystemCCUSafeMode and
+	// ActionSystemCCURecoveryMode record the host-level power and
+	// boot-mode actions. All three take the CCU out of normal service,
+	// so who triggered them matters.
+	ActionSystemCCUPoweroff     Action = "system_ccu_poweroff"
+	ActionSystemCCUSafeMode     Action = "system_ccu_safe_mode"
+	ActionSystemCCURecoveryMode Action = "system_ccu_recovery_mode"
+
 	// ActionSystemFirmwareDownload records an operator-triggered CCU
 	// firmware download: the CCU fetches a firmware image from a URL onto
 	// the central so it can be staged for installation. The Entry's Note
