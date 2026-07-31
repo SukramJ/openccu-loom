@@ -45,7 +45,18 @@ func TestStartReaper_EvictsIdleSessionGracefully(t *testing.T) {
 	if n := m.Active(); n != 0 {
 		t.Fatalf("Active() = %d, want 0 — reaper did not evict the idle session", n)
 	}
-	graceful, closed, _, _ := rec.snapshot()
+	// Active() dropping to zero and the notifiers having run are two
+	// different observables: the reaper removes the session from the count
+	// before it notifies, so asserting straight after the loop above races
+	// the reaper's own tail. Wait for what the assertions are about.
+	var graceful, closed []uint16
+	for deadline = time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		graceful, closed, _, _ = rec.snapshot()
+		if len(graceful) >= 1 && len(closed) >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	if len(graceful) != 1 || graceful[0] != entry.SessionID {
 		t.Errorf("graceful notifier calls = %v, want [%d]", graceful, entry.SessionID)
 	}
