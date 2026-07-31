@@ -103,6 +103,8 @@ exclude_docs: |
   contributor/goland-debugging.md
   contributor/matter-mdns-test-setup.md
   contributor/matter-smoke.md
+  ccu-webui-gap-analysis.md
+  ccu-jpages-groups-reference.md
   e2e-testplan.md
   testplan.md
   roadmap.md
