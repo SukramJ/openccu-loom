@@ -148,7 +148,14 @@
                 {t("fleet.field.ccu_interfaces")}
               </span>
               <div class="flex flex-wrap gap-1">
-                {#each ccu.ccu_interfaces as iface (iface.address)}
+                <!-- Keyed by index, not by address: a firmware that
+                     reports interfaces without a distinguishing address
+                     would otherwise hand Svelte duplicate keys, and a
+                     duplicate key throws and takes the whole page down.
+                     A display list that is replaced wholesale on every
+                     load gains nothing from identity-keyed diffing, and
+                     must never be able to break the route. -->
+                {#each ccu.ccu_interfaces as iface, i (i)}
                   <Badge
                     variant={unmanaged(ccu, iface.address) ? "warning" : "muted"}
                     class="font-mono"

@@ -1016,10 +1016,21 @@ func (c *Client) ListInterfaces(ctx context.Context) ([]InterfaceEntry, error) {
 	out := make([]InterfaceEntry, 0, len(raw))
 	for _, m := range raw {
 		entry := InterfaceEntry{}
-		if v, ok := m["type"].(string); ok {
+		// Real firmware answers with name/port/info and reports neither
+		// `type` nor `address` nor `url` (verified against OpenCCU
+		// 3.89.8, which returns e.g. {"name":"HmIP-RF","port":32010,
+		// "info":"HmIP-RF"}). `name` is the interface identifier - the
+		// same token configured_interfaces is keyed on - so it seeds both
+		// fields, and an explicit type/address still wins where a
+		// firmware does supply them.
+		if v, ok := m["name"].(string); ok {
+			entry.Type = v
+			entry.Address = v
+		}
+		if v, ok := m["type"].(string); ok && v != "" {
 			entry.Type = v
 		}
-		if v, ok := m["address"].(string); ok {
+		if v, ok := m["address"].(string); ok && v != "" {
 			entry.Address = v
 		}
 		if v, ok := m["port"].(float64); ok {
