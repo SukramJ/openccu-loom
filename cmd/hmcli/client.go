@@ -46,10 +46,20 @@ func newDaemonClient(cfg clientConfig) (*daemonClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	httpClient := &http.Client{Timeout: cfg.timeout}
+	// Always give the client its own transport rather than falling back to
+	// the process-wide http.DefaultTransport. A CLI invocation has no use
+	// for a global connection pool, and sharing one couples independent
+	// callers through it: closing idle connections on the default transport
+	// tears down requests other callers have in flight ("transport
+	// connection broken: http: CloseIdleConnections called"), which is how
+	// this surfaced — as a flaky parallel test. Cloning keeps the stdlib
+	// defaults (proxy handling, dial and TLS timeouts, HTTP/2).
+	transport, _ := http.DefaultTransport.(*http.Transport)
+	ownTransport := transport.Clone()
 	if tlsCfg != nil {
-		httpClient.Transport = &http.Transport{TLSClientConfig: tlsCfg}
+		ownTransport.TLSClientConfig = tlsCfg
 	}
+	httpClient := &http.Client{Timeout: cfg.timeout, Transport: ownTransport}
 	return &daemonClient{
 		baseURL:  strings.TrimRight(cfg.baseURL, "/"),
 		token:    cfg.token,
