@@ -79,8 +79,17 @@
     sysvarScanIntervalSec: number;
   };
 
-  const ALL_MARKERS: DescriptionMarker[] = ["HAHM", "HX", "INTERNAL", "MQTT"];
+  // Markers a system variable may carry. HAHM is sysvar-only: it makes the
+  // variable writable, and a program has no value to write — so the program
+  // list below deliberately omits it.
+  const SYSVAR_MARKERS: DescriptionMarker[] = ["HAHM", "HX", "INTERNAL", "MQTT"];
+  const PROGRAM_MARKERS: DescriptionMarker[] = ["HX", "INTERNAL", "MQTT"];
   const NS_PER_SEC = 1_000_000_000;
+
+  // i18n key carrying the per-marker explanation shown next to each checkbox.
+  function markerHelp(m: DescriptionMarker): string {
+    return t(`centrals.behavior.marker.${m.toLowerCase()}`);
+  }
 
   function freshBehaviorForm(): BehaviorForm {
     return {
@@ -113,7 +122,9 @@
         b.enable_device_firmware_check ?? d.enableDeviceFirmwareCheck,
       delayNewDeviceCreation: b.delay_new_device_creation ?? d.delayNewDeviceCreation,
       sysvarMarkers: b.sysvar_markers ?? [],
-      programMarkers: b.program_markers ?? [],
+      // Drop a marker the program list cannot offer, so what is shown is what
+      // gets saved rather than an invisible leftover.
+      programMarkers: (b.program_markers ?? []).filter((m) => PROGRAM_MARKERS.includes(m)),
       sysvarScanIntervalSec: b.sysvar_scan_interval
         ? Math.round(b.sysvar_scan_interval / NS_PER_SEC)
         : 0,
@@ -760,16 +771,27 @@
 
               <div class="flex flex-col gap-1">
                 <span>{t("centrals.behavior.sysvar_markers")}</span>
-                <div class="flex flex-wrap gap-3">
-                  {#each ALL_MARKERS as m (m)}
-                    <label class="flex items-center gap-1">
+                <p class="text-xs text-slate-600 dark:text-slate-400">
+                  {t("centrals.behavior.markers_hint")}
+                </p>
+                <div class="flex flex-col gap-1.5">
+                  {#each SYSVAR_MARKERS as m (m)}
+                    <label class="flex items-start gap-2">
                       <input
                         type="checkbox"
+                        class="mt-0.5"
                         checked={fBehavior.sysvarMarkers.includes(m)}
                         onchange={() =>
                           (fBehavior.sysvarMarkers = toggleMarker(fBehavior.sysvarMarkers, m))}
                       />
-                      <span>{m}</span>
+                      <span>
+                        <code
+                          class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
+                        >
+                        <span class="text-xs text-slate-600 dark:text-slate-400"
+                          >{markerHelp(m)}</span
+                        >
+                      </span>
                     </label>
                   {/each}
                 </div>
@@ -777,16 +799,27 @@
 
               <div class="flex flex-col gap-1">
                 <span>{t("centrals.behavior.program_markers")}</span>
-                <div class="flex flex-wrap gap-3">
-                  {#each ALL_MARKERS as m (m)}
-                    <label class="flex items-center gap-1">
+                <p class="text-xs text-slate-600 dark:text-slate-400">
+                  {t("centrals.behavior.markers_hint")}
+                </p>
+                <div class="flex flex-col gap-1.5">
+                  {#each PROGRAM_MARKERS as m (m)}
+                    <label class="flex items-start gap-2">
                       <input
                         type="checkbox"
+                        class="mt-0.5"
                         checked={fBehavior.programMarkers.includes(m)}
                         onchange={() =>
                           (fBehavior.programMarkers = toggleMarker(fBehavior.programMarkers, m))}
                       />
-                      <span>{m}</span>
+                      <span>
+                        <code
+                          class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
+                        >
+                        <span class="text-xs text-slate-600 dark:text-slate-400"
+                          >{markerHelp(m)}</span
+                        >
+                      </span>
                     </label>
                   {/each}
                 </div>

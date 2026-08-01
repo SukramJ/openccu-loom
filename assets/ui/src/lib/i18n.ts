@@ -615,7 +615,8 @@ const EN: Catalog = {
   "backup.upload.help":
     "Take in a .sbk archive from elsewhere so it can be restored like a local backup. The archive is checked before it is stored.",
   "backup.uploaded": "Backup {id} imported.",
-  "backup.uploaded_with_version": "Backup {id} imported (from firmware {version}).",
+  "backup.uploaded_with_version":
+    "Backup {id} imported (from firmware {version}).",
   "backup.trigger": "Trigger backup",
   "backup.trigger_central": "Target CCU",
   "backup.triggering": "Starting…",
@@ -1174,7 +1175,8 @@ const EN: Catalog = {
   "config.field.alarm.restart_loop_breaker": "Restart loop breaker (re-fires)",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
-  "config.field.persistence.history.energy_price_per_kwh": "Electricity tariff per kWh",
+  "config.field.persistence.history.energy_price_per_kwh":
+    "Electricity tariff per kWh",
   "config.field.persistence.history.energy_currency": "Currency label",
   "config.field.persistence.history.retention_hourly":
     "Hourly rollup retention",
@@ -1833,6 +1835,14 @@ const EN: Catalog = {
     "System-variable scan interval (seconds, 0 = default)",
   "centrals.behavior.sysvar_markers": "System-variable markers",
   "centrals.behavior.program_markers": "Program markers",
+  "centrals.behavior.markers_hint":
+    "Markers are text tokens you write into the entry's description in the CCU WebUI. They do not decide what is imported — everything the CCU exposes is imported. They decide how an entry arrives: an entry matching a marker you tick arrives enabled, everything else arrives disabled and is switched on individually.",
+  "centrals.behavior.marker.hahm":
+    "Makes the system variable writable — it arrives as a switch, select, number or text field instead of a read-only sensor.",
+  "centrals.behavior.marker.hx": "Free marker for your own filtering.",
+  "centrals.behavior.marker.internal":
+    "Additionally delivers the CCU's internal entries. This matters more than it sounds: the CCU flags most ordinary user programs as internal, so without this the program list stays almost empty.",
+  "centrals.behavior.marker.mqtt": "Marks the entry for push updates.",
   "centrals.field.username": "Username",
   "centrals.field.password": "Password",
   "centrals.field.password_hint":
@@ -3160,7 +3170,8 @@ const EN: Catalog = {
   "ccu_host.recovery_mode.confirm_title": "Restart into the recovery system?",
   "ccu_host.recovery_mode.confirm_body":
     "{central} restarts into its recovery system and stays out of service until you leave it there. The recovery interface is reachable at the CCU's own address.",
-  "ccu_host.recovery_mode.triggered": "{central} is restarting into the recovery system.",
+  "ccu_host.recovery_mode.triggered":
+    "{central} is restarting into the recovery system.",
   "ccu_maintenance.title": "CCU maintenance",
   "ccu_maintenance.subtitle":
     "Host-level actions for each connected CCU. Rebooting restarts the CCU and briefly drops its connection.",
@@ -3940,7 +3951,8 @@ const DE: Catalog = {
   "backup.upload.help":
     "Ein .sbk-Archiv von anderswo übernehmen, damit es wie ein lokales Backup zurückgespielt werden kann. Das Archiv wird vor dem Speichern geprüft.",
   "backup.uploaded": "Backup {id} importiert.",
-  "backup.uploaded_with_version": "Backup {id} importiert (von Firmware {version}).",
+  "backup.uploaded_with_version":
+    "Backup {id} importiert (von Firmware {version}).",
   "backup.trigger": "Backup anstoßen",
   "backup.trigger_central": "Ziel-CCU",
   "backup.triggering": "Erstelle…",
@@ -5196,6 +5208,15 @@ const DE: Catalog = {
     "Scan-Intervall für Systemvariablen (Sekunden, 0 = Standard)",
   "centrals.behavior.sysvar_markers": "Systemvariablen-Marker",
   "centrals.behavior.program_markers": "Programm-Marker",
+  "centrals.behavior.markers_hint":
+    "Marker sind Textkürzel, die Sie in der CCU-WebUI in die Beschreibung des Eintrags schreiben. Sie entscheiden nicht, was importiert wird — importiert wird alles, was die CCU anbietet. Sie entscheiden, wie ein Eintrag ankommt: Ein Eintrag, der zu einem hier angehakten Marker passt, kommt aktiviert an, alle anderen kommen deaktiviert an und werden einzeln eingeschaltet.",
+  "centrals.behavior.marker.hahm":
+    "Macht die Systemvariable schreibbar — sie kommt als Schalter, Auswahl, Zahl oder Textfeld an statt als reiner Sensor.",
+  "centrals.behavior.marker.hx": "Freier Marker für eigene Filterung.",
+  "centrals.behavior.marker.internal":
+    "Liefert zusätzlich die internen Einträge der CCU aus. Das wiegt schwerer, als es klingt: Die CCU kennzeichnet die meisten gewöhnlichen Benutzerprogramme als intern — ohne diesen Marker bleibt die Programmliste fast leer.",
+  "centrals.behavior.marker.mqtt":
+    "Kennzeichnet den Eintrag für Push-Aktualisierungen.",
   "centrals.field.username": "Benutzername",
   "centrals.field.password": "Passwort",
   "centrals.field.password_hint":
@@ -6503,12 +6524,14 @@ const DE: Catalog = {
   "ccu_host.safe_mode.confirm_title": "In den abgesicherten Modus neu starten?",
   "ccu_host.safe_mode.confirm_body":
     "{central} startet ohne Logikschicht neu. Programme und Systemvariablen laufen erst wieder, wenn der abgesicherte Modus verlassen wird.",
-  "ccu_host.safe_mode.triggered": "{central} startet in den abgesicherten Modus.",
+  "ccu_host.safe_mode.triggered":
+    "{central} startet in den abgesicherten Modus.",
   "ccu_host.recovery_mode.action": "Recovery",
   "ccu_host.recovery_mode.confirm_title": "In das Recovery-System neu starten?",
   "ccu_host.recovery_mode.confirm_body":
     "{central} startet in das Recovery-System und bleibt außer Betrieb, bis es dort wieder verlassen wird. Die Recovery-Oberfläche ist unter der Adresse der CCU erreichbar.",
-  "ccu_host.recovery_mode.triggered": "{central} startet in das Recovery-System.",
+  "ccu_host.recovery_mode.triggered":
+    "{central} startet in das Recovery-System.",
   "ccu_maintenance.title": "CCU-Wartung",
   "ccu_maintenance.subtitle":
     "Aktionen auf Host-Ebene für jede verbundene CCU. Ein Neustart startet die CCU neu und unterbricht kurz ihre Verbindung.",

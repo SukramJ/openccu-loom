@@ -587,7 +587,7 @@ arrives in a consumer such as Home Assistant:
 
 | Marker | Effect |
 |---|---|
-| `HAHM` | Makes a **system variable** writable (switch / select / number / text instead of a read-only sensor). No effect on programs — a program has no value to write. |
+| `HAHM` | Makes a **system variable** writable (switch / select / number / text instead of a read-only sensor). A program has no value to write, so the CCU editor does not offer this marker there. |
 | `MQTT` | Marks the entry for push updates. |
 | `HX` | Free marker for your own filtering. |
 | `INTERNAL` | Additionally includes the CCU's internal entries. This matters more than it sounds: the CCU flags most ordinary user programs as internal, so without it a program list can look almost empty. |

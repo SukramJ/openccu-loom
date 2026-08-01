@@ -17,6 +17,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was invisible for system variables (whose boolean was on) and hid 38 of
   40 programs, because the CCU flags most ordinary user programs as
   internal. Either the marker or the boolean now suffices.
+- **The marker checkboxes in the CCU editor now say what each marker does.**
+  They rendered as four bare codes with no explanation, and the descriptions
+  written for them landed on a config-schema field that is never shown —
+  the `centrals` section is edited in the CCUs tab, not in the generic
+  section editor. Each checkbox now carries its effect inline, above a note
+  that markers steer how an entry arrives rather than whether it is
+  imported.
+- **`HAHM` is no longer offered as a program marker.** It makes a *system
+  variable* writable, and a program has no value to write — offering it
+  promised an effect that does not exist. A stored value is dropped when the
+  editor opens, so what is shown is what gets saved.
 
 ## [0.52.2]
 
