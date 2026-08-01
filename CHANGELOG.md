@@ -4,6 +4,48 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.6]
+
+### Fixed
+
+- **The profile dropdown shows umlauts.** 0.52.5 decoded the CCU WebUI's
+  HTML references in the two profile stores, but the link editor does not
+  read them from there: it takes the profile document straight from the
+  embedded archive and hands it to the SPA verbatim, precisely so the UI
+  consumes the archive's exact shape without a Go schema mirror that would
+  drift on every upstream refresh. That path kept its `&auml;`. The
+  references are now decoded where the archive is loaded, which is the one
+  point every consumer passes — 164 display strings across 66 receiver
+  types.
+- **Every embedded-archive load is guarded against this class of defect.**
+  A standing test re-serialises what each loader hands the daemon and fails
+  on any HTML reference in it. It works on the loader's result, not the
+  archive, so a reference in a field nothing reads stays green — while an
+  archive refresh, or a new struct field that pulls such text in, fails the
+  build instead of surfacing in an operator's dropdown.
+
+- **The profile archives are now clean at the source** (go-openccu-data
+  0.1.3): the extractor decodes the references itself, so the daemon's own
+  decoding is a no-op against current data and stays only as cover for an
+  older module. That release also catches the archive up with OCCU 3.89.5,
+  where eQ-3 narrowed `LONG_PROFILE_ACTION_TYPE` from the two-element list
+  `{1 5}` to the scalar `1` on 26 profiles. **This shifts profile
+  detection**: a direct link whose `LONG_PROFILE_ACTION_TYPE` reads 5 no
+  longer matches those profiles and shows as *Expert*, and because a fixed
+  constraint scores as more specific than a list, an affected profile can
+  now win a match it previously lost. The archive agrees with the CCU's own
+  WebUI again.
+
+- **The profile archives exist once instead of three times.** Two stores
+  each embedded their own copy of the same 65 eQ-3 archives, beside the
+  shared module's. Nothing kept them in step, so the same profile answered
+  differently depending on which code path read it: the copies still carried
+  the CCU's HTML references *and* the pre-3.89.5 constraint set, and were
+  missing 45 range bounds the module has. Both stores now read through the
+  module, 130 duplicated files are gone, and a contract test fails the build
+  if a copy reappears.
+
+
 ## [0.52.5]
 
 ### Fixed

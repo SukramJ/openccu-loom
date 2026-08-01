@@ -30,7 +30,7 @@ require (
 
 require github.com/rogpeppe/go-internal v1.15.0
 
-require github.com/SukramJ/go-openccu-data v0.1.2
+require github.com/SukramJ/go-openccu-data v0.1.3
 
 require (
 	github.com/SukramJ/go-mqtt v1.2.0

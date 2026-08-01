@@ -1,7 +1,7 @@
 github.com/SukramJ/go-mqtt v1.2.0 h1:bYRR2Vpo2tyEt5IvFJMdMhPhDUCJpHD+Lhl2DRUfIMw=
 github.com/SukramJ/go-mqtt v1.2.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
-github.com/SukramJ/go-openccu-data v0.1.2 h1:L2MDdHiZIAj6V2HJ5ekhvYMP21x0whBO6hZ770srBm8=
-github.com/SukramJ/go-openccu-data v0.1.2/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
+github.com/SukramJ/go-openccu-data v0.1.3 h1:5nhTomKWT7rp2zFkT1GLpkhhf+fKQfmhRSsUnqOS4cE=
+github.com/SukramJ/go-openccu-data v0.1.3/go.mod h1:hDzB2WgqBuex/oNyfkCwB6mRKeJ2+TZDA8iSMkyPznQ=
 github.com/SukramJ/godevccu v0.1.9 h1:z7SzjEfzwL8sEOU3PIKZJPHPZA6gsXqaSejBxcf+XaQ=
 github.com/SukramJ/godevccu v0.1.9/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=

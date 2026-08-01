@@ -5,12 +5,12 @@ package masterprofile
 
 import (
 	"compress/gzip"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -18,8 +18,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 )
 
-//go:embed data/*.json.gz
-var embedded embed.FS
+// The archives are served from the shared metadata module rather than
+// a copy in this package. The copy used to age independently of the module,
+// so a data refresh reached one and not the other.
 
 // Profile is one master-profile entry: a numeric id, localised name
 // and description, and the MASTER-paramset values to apply.
@@ -93,7 +94,7 @@ type Store struct {
 
 // New constructs a [Store] backed by the package's embedded asset FS.
 func New() *Store {
-	return &Store{files: embedded, prefix: "data", cache: make(map[string]map[string][]Profile)}
+	return &Store{files: ccudata.ProfilesFS(), prefix: ".", cache: make(map[string]map[string][]Profile)}
 }
 
 // ErrNotFound is returned when no profile matches the requested
@@ -206,8 +207,8 @@ func (s *Store) load(deviceType string) (map[string][]Profile, error) {
 	if cached, ok := s.cache[deviceType]; ok {
 		return cached, nil
 	}
-	path := s.prefix + "/" + deviceType + ".json.gz"
-	f, err := s.files.Open(path)
+	name := path.Join(s.prefix, deviceType+".json.gz")
+	f, err := s.files.Open(name)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrNotFound, deviceType)
 	}

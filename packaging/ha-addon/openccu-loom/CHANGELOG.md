@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.6
+
+- **Profile detection follows the CCU again.** The bundled profile data was
+  older than the CCU firmware: since 3.89.5 eQ-3 allows only one value for
+  a long-press action where it previously allowed two. Affected direct
+  links may now show a different profile than before — the one the CCU's
+  own WebUI shows.
+
+- **The profile dropdown shows umlauts.** 0.52.5 fixed only part of the
+  path; the link editor reads its profiles from a different place, which
+  still displayed *Bew&auml;sserungsaktor*.
+
 ## 0.52.5
 
 - **Profile names and descriptions show umlauts again.** They came from the
