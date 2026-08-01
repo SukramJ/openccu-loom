@@ -543,7 +543,7 @@ modelled. All are hot-reloadable and default to sensible values:
 | `behavior.include_internal_programs` | bool | `false` | Surface CCU-internal programs |
 | `behavior.sysvar_markers` | list | — | Marker tokens steering how sysvars arrive (`HAHM`/`HX`/`INTERNAL`) |
 | `behavior.program_markers` | list | — | Marker tokens steering how programs arrive (`HX`/`INTERNAL`) |
-| `behavior.sysvar_scan_interval` | duration | compiled default | Per-central sysvar-refresh cadence |
+| `behavior.sysvar_scan_interval` | duration | `30s` | Per-central sysvar-refresh cadence; `0` selects the default, values below `3s` are rejected |
 | `behavior.enable_device_firmware_check` | bool | `true` | Expose per-device firmware-update entities |
 | `behavior.delay_new_device_creation` | bool | `false` | Defer a newly-paired device until its description is complete |
 

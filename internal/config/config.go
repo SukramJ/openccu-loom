@@ -1378,7 +1378,8 @@ type CentralBehavior struct {
 	ProgramMarkers []hmenum.DescriptionMarker `yaml:"program_markers,omitempty" json:"program_markers,omitempty" cfg:"expert"`
 
 	// SysvarScanInterval overrides the periodic sysvar-refresh cadence
-	// for this central. Zero uses the compiled-in default. Reference
+	// for this central. Zero uses the compiled-in default. Values below
+	// [MinHubScanInterval] are rejected by [Config.Validate]. Reference
 	// stack key: sysvar_scan_interval.
 	SysvarScanInterval time.Duration `yaml:"sysvar_scan_interval,omitempty" json:"sysvar_scan_interval,omitempty" cfg:"expert"`
 
@@ -1567,6 +1568,29 @@ func (n *NorthREST) CSRFIsEnabled() bool {
 	return orDefault(n.CSRFEnabled, true)
 }
 
+// MinHubScanInterval is the floor for an operator-set hub-scan cadence.
+//
+// Each cycle costs the CCU a JSON-RPC call plus a ReGa script run, and the
+// ReGa interpreter is single-threaded: a cadence short enough for cycles to
+// overlap starves the CCU's own automations rather than delivering fresher
+// data. Three seconds matches the tightest interval a comparable gateway
+// polls at, and leaves the compiled-in 30 s default an order of magnitude
+// of room.
+//
+// Zero is not a violation — it selects the compiled-in default.
+const MinHubScanInterval = 3 * time.Second
+
+// validateCentralBehavior checks the per-central behaviour block. It is a
+// function rather than inline code so [Config.Validate] stays within the
+// linter's cyclomatic budget as the block grows.
+func validateCentralBehavior(idx int, b *CentralBehavior) error {
+	if b.SysvarScanInterval != 0 && b.SysvarScanInterval < MinHubScanInterval {
+		return fmt.Errorf("config: centrals[%d].behavior.sysvar_scan_interval: %s is below the %s minimum (0 selects the default)",
+			idx, b.SysvarScanInterval, MinHubScanInterval)
+	}
+	return nil
+}
+
 // Validate returns an error when required invariants are violated.
 func (c *Config) Validate() error {
 	if c.Logging.Level != "debug" && c.Logging.Level != "info" &&
@@ -1606,6 +1630,9 @@ func (c *Config) Validate() error {
 		}
 		if cc.Port < 0 || cc.Port > 65535 {
 			return fmt.Errorf("config: centrals[%d].port: out of range 0-65535: %d", i, cc.Port)
+		}
+		if err := validateCentralBehavior(i, &cc.Behavior); err != nil {
+			return err
 		}
 		if len(cc.Interfaces) == 0 {
 			return fmt.Errorf("config: centrals[%d].interfaces: required (at least one interface must be listed)", i)

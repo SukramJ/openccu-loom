@@ -2,6 +2,9 @@
 
 ## 0.52.7
 
+- **New system variables and programs show up within 30 seconds.** They
+  previously took up to 5 minutes to appear after being created on the CCU.
+
 - **The `MQTT` marker is gone from the CCU editor.** It came from the Home
   Assistant integration, where it steers an MQTT hand-off; this daemon's own
   MQTT bridge publishes every system variable and program regardless, so the
