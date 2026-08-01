@@ -541,8 +541,8 @@ modelled. All are hot-reloadable and default to sensible values:
 | `behavior.enable_program_scan` | bool | `true` | Fetch programs as hub entities |
 | `behavior.include_internal_sysvars` | bool | `true` | Surface CCU-internal system variables |
 | `behavior.include_internal_programs` | bool | `false` | Surface CCU-internal programs |
-| `behavior.sysvar_markers` | list | — | Restrict sysvar scan to marker tokens (`HAHM`/`HX`/`INTERNAL`/`MQTT`) |
-| `behavior.program_markers` | list | — | Restrict program scan to marker tokens |
+| `behavior.sysvar_markers` | list | — | Marker tokens steering how sysvars arrive (`HAHM`/`HX`/`INTERNAL`/`MQTT`) |
+| `behavior.program_markers` | list | — | Marker tokens steering how programs arrive (`HX`/`INTERNAL`/`MQTT`) |
 | `behavior.sysvar_scan_interval` | duration | compiled default | Per-central sysvar-refresh cadence |
 | `behavior.enable_device_firmware_check` | bool | `true` | Expose per-device firmware-update entities |
 | `behavior.delay_new_device_creation` | bool | `false` | Defer a newly-paired device until its description is complete |
@@ -578,6 +578,27 @@ an external time-series store.
 | `persistence.history.export.org` | string | — | — | no |
 | `persistence.history.export.bucket` | string | — | — | no |
 | `persistence.history.export.token_env` | string | — | — | no |
+
+### Sysvar and program markers
+
+The marker lists do **not** decide whether a system variable or program is
+imported — everything the CCU exposes is imported. They decide how an entry
+arrives in a consumer such as Home Assistant:
+
+| Marker | Effect |
+|---|---|
+| `HAHM` | Makes a **system variable** writable (switch / select / number / text instead of a read-only sensor). No effect on programs — a program has no value to write. |
+| `MQTT` | Marks the entry for push updates. |
+| `HX` | Free marker for your own filtering. |
+| `INTERNAL` | Additionally includes the CCU's internal entries. This matters more than it sounds: the CCU flags most ordinary user programs as internal, so without it a program list can look almost empty. |
+
+An entry matching any configured marker arrives **enabled**; every other
+entry arrives **disabled** and is switched on per entity. With no markers
+configured, everything is imported and everything arrives disabled.
+
+`include_internal_sysvars` / `include_internal_programs` are the equivalent
+switch for operators who configure no markers at all; either they or the
+`INTERNAL` marker suffice.
 
 `history.retention` bounds raw samples (clamped up to a 1h floor);
 `retention_hourly` and `retention_daily` bound the two rollup tiers.

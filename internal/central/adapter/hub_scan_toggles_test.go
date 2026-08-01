@@ -237,3 +237,62 @@ func TestMarkerMatch(t *testing.T) {
 		}
 	}
 }
+
+// TestInternalMarkerOpensInternalDelivery pins the meaning the reference
+// gives the INTERNAL marker - "includes CCU-internal variables/programs" -
+// against the include_internal_* booleans.
+//
+// The two are independent requests, and either alone must suffice. This
+// matters because the CCU classifies most ordinary user programs as
+// internal: on a real install 38 of 40 carried the flag, so honouring
+// only the boolean hid them from an operator whose marker list contained
+// INTERNAL.
+func TestInternalMarkerOpensInternalDelivery(t *testing.T) {
+	t.Parallel()
+	internal := []hmenum.DescriptionMarker{hmenum.DescriptionMarkerInternal}
+	other := []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHX}
+	for _, tc := range []struct {
+		name    string
+		markers []hmenum.DescriptionMarker
+		want    bool
+	}{
+		{"INTERNAL configured", internal, true},
+		{"INTERNAL among others", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerMQTT, hmenum.DescriptionMarkerInternal}, true},
+		{"other marker only", other, false},
+		{"no markers", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := hasInternalMarker(tc.markers); got != tc.want {
+				t.Errorf("hasInternalMarker(%v) = %v, want %v", tc.markers, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLoadSysvarsInternalMarkerIncludesInternal covers the sysvar path
+// end to end: with the boolean off but INTERNAL configured, internal
+// sysvars still reach the model.
+func TestLoadSysvarsInternalMarkerIncludesInternal(t *testing.T) {
+	t.Parallel()
+	srv := hubScanServer(t)
+	defer srv.Close()
+
+	withBool := hub.NewHub("c")
+	if err := loadSysvars(context.Background(), newScanClient(t, srv), nil, withBool, nil,
+		hubScanOptions{enableSysvarScan: true, includeInternalSysvars: true}); err != nil {
+		t.Fatalf("loadSysvars (boolean): %v", err)
+	}
+	viaMarker := hub.NewHub("c")
+	if err := loadSysvars(context.Background(), newScanClient(t, srv), nil, viaMarker, nil,
+		hubScanOptions{
+			enableSysvarScan:       true,
+			includeInternalSysvars: false,
+			sysvarMarkers:          []hmenum.DescriptionMarker{hmenum.DescriptionMarkerInternal},
+		}); err != nil {
+		t.Fatalf("loadSysvars (marker): %v", err)
+	}
+	if got, want := len(viaMarker.Sysvars()), len(withBool.Sysvars()); got != want {
+		t.Errorf("INTERNAL marker admitted %d sysvars, the boolean admits %d — either alone must suffice", got, want)
+	}
+}

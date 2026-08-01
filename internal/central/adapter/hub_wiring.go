@@ -748,6 +748,25 @@ func markerMatch(desc string, markers []hmenum.DescriptionMarker) bool {
 // and it matched (internal entries require the INTERNAL marker). With no
 // markers configured every included entry is disabled by default, so the
 // operator opts in per entity.
+// hasInternalMarker reports whether the INTERNAL token is among the
+// configured markers.
+//
+// The reference contract gives INTERNAL a meaning the other markers do
+// not have: it "includes CCU-internal variables/programs". So configuring
+// it is itself the request to surface internal entries, independent of
+// the include_internal_* booleans - which exist for operators who
+// configure no markers at all. Keying inclusion on the boolean alone made
+// loom hide 38 of 40 programs on an install whose marker list contained
+// INTERNAL, because the CCU classifies most user programs as internal.
+func hasInternalMarker(markers []hmenum.DescriptionMarker) bool {
+	for _, m := range markers {
+		if m == hmenum.DescriptionMarkerInternal {
+			return true
+		}
+	}
+	return false
+}
+
 func hubEnabledDefault(isInternal bool, desc string, markers []hmenum.DescriptionMarker) bool {
 	if len(markers) == 0 {
 		return false
@@ -825,7 +844,14 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 	// include_internal_programs config only steers the *delivery* default,
 	// recorded here so northbound list responses that omit an explicit
 	// override reproduce the historical (hide-by-default) behaviour.
-	h.SetIncludeInternalProgramsDefault(opts.includeInternalPrograms)
+	//
+	// A configured INTERNAL marker also opens delivery: the marker means
+	// "include CCU-internal entries", and the CCU classifies most ordinary
+	// user programs as internal, so honouring only the boolean hid them
+	// from an operator who had asked for them via the marker.
+	h.SetIncludeInternalProgramsDefault(
+		opts.includeInternalPrograms || hasInternalMarker(opts.programMarkers),
+	)
 	var programs []programEntry
 	if err := jc.Call(ctx, "Program.getAll", nil, &programs); err != nil {
 		return err
@@ -1001,7 +1027,9 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		if v.Name == "" || sysvarIsExcluded(v.Name, v.ID) {
 			continue
 		}
-		if v.IsInternal && !opts.includeInternalSysvars {
+		// Same rule as for programs: the INTERNAL marker is itself a
+		// request to include internal entries.
+		if v.IsInternal && !opts.includeInternalSysvars && !hasInternalMarker(opts.sysvarMarkers) {
 			continue
 		}
 		valueType := inferSysvarType(v.Type, v.Value)
