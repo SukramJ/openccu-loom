@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/i18n"
+	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -408,7 +409,15 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// above: a calculated DP carries the `calculated` marker, so the MQTT
 	// key matches the REST and WS ones a consumer keys its registry on.
 	chAddr := ev.DeviceAddress + ":" + strconv.Itoa(ev.ChannelNo)
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), chAddr, ev.Parameter, "")
+	// A parameter forced to a read-only sensor (HmIP-eTRV / HmIP-HEATING
+	// LEVEL) carries the same "_sensor" disambiguation suffix the daemon's
+	// internal and REST identities use, so all three planes spell one
+	// identity. The classifier above already renders these as Sensor.
+	keyParameter := ev.Parameter
+	if generic.IsForceSensorParameter(ev.Model, hmenum.Parameter(ev.Parameter)) {
+		keyParameter += datapoint.ForcedSensorSuffix
+	}
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), chAddr, keyParameter, "")
 	if ev.Calculated {
 		uniqueID = routingkey.CalculatedUniqueID(d.serialSuffix(ev.Central), chAddr, ev.Parameter)
 	}

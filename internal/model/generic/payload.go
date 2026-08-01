@@ -4,6 +4,7 @@
 package generic
 
 import (
+	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
@@ -28,11 +29,26 @@ var (
 // wire parameter. Normal devices come out unprefixed
 // (loom_vcu1234567_1_state); internal / virtual-remote addresses carry
 // the serial suffix. See docs/external-clients/ha-unique-id-migration.md.
+//
+// A data point forced to a read-only sensor (the HmIP-eTRV / HmIP-HEATING
+// LEVEL surface, see [IsForceSensorParameter]) carries the same "_sensor"
+// disambiguation suffix the internal [datapoint.BaseDataPointFields.UniqueID]
+// applies, mirroring the reference's
+// `f"{unique_id}_{DataPointCategory.SENSOR}"` (model/data_point.py:1023).
+// Without it the external key collides with the writable surface the same
+// wire parameter would otherwise produce, and a consumer that keys its
+// entity registry on this string — the Home Assistant drop-in above all —
+// orphans the entity it migrated under the suffixed key and spawns a
+// duplicate beside it.
 func (d *DataPoint[T]) CanonicalUniqueID(serialSuffix string) string {
 	if d == nil {
 		return ""
 	}
-	return routingkey.CanonicalUniqueID(serialSuffix, d.Address(), string(d.Parameter()), "")
+	parameter := string(d.Parameter())
+	if d.IsForcedSensor() {
+		parameter += datapoint.ForcedSensorSuffix
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, d.Address(), parameter, "")
 }
 
 // Info returns identity-level fields that uniquely describe

@@ -185,7 +185,7 @@ func NewBaseDataPointFields(centralName, address, keyName string) BaseDataPointF
 // inventing its own.
 func (b *BaseDataPointFields) UniqueID() string {
 	var sb strings.Builder
-	// Pre-size: central + address + keyName + 2 separators (+ optional 7-byte "_sensor" suffix).
+	// Pre-size: central + address + keyName + 2 separators (+ optional ForcedSensorSuffix).
 	sb.Grow(len(b.centralName) + len(b.address) + len(b.keyName) + 9)
 	sb.WriteString(b.centralName)
 	sb.WriteByte(':')
@@ -193,7 +193,7 @@ func (b *BaseDataPointFields) UniqueID() string {
 	sb.WriteByte(':')
 	sb.WriteString(b.keyName)
 	if b.IsForcedSensor() {
-		sb.WriteString("_sensor")
+		sb.WriteString(ForcedSensorSuffix)
 	}
 	return sb.String()
 }
@@ -284,6 +284,13 @@ func (b *BaseDataPointFields) ForcedUsage() (hmenum.DataPointUsage, bool) {
 	}
 	return *b.forcedUsage, true
 }
+
+// ForcedSensorSuffix disambiguates the identifier of a data point forced to
+// a read-only sensor from the writable surface the same wire parameter would
+// otherwise produce. It is appended by [BaseDataPointFields.UniqueID] and by
+// the external, loom-namespaced key the north boundary emits, so both sides
+// of the boundary spell the identity the same way.
+const ForcedSensorSuffix = "_sensor"
 
 // MarkForcedSensor flips the data point into read-only sensor mode. Concrete
 // `IsWritable()` overrides on `*generic.DataPoint[T]` consult
