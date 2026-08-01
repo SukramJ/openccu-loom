@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.52.1]
+## [0.52.2]
 
 ### Fixed
 
@@ -32,6 +32,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   159 of them. REST, WebSocket and MQTT discovery now share one builder
   so the three planes cannot drift apart, and the shape is pinned by a
   contract test.
+
+## [0.52.1]
+
+### Fixed
 
 - **The fleet page loads again, and its CCU-interface list is populated.**
   `Interface.listInterfaces` reports `name`, `port` and `info` — not the
