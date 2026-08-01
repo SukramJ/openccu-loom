@@ -157,3 +157,43 @@ func TestDataPointPayloadMethods(t *testing.T) {
 		t.Fatal("StatePayload must not be nil")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// payload.go — CanonicalUniqueID
+// ---------------------------------------------------------------------------
+
+func TestCanonicalUniqueIDCarriesForcedSensorSuffix(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		forced bool
+		want   string
+	}{
+		{
+			name: "plain parameter keeps the bare routing key",
+			want: "loom_a_1_level",
+		},
+		{
+			// The HmIP-eTRV LEVEL surface is forced to a read-only sensor, and
+			// the reference disambiguates it with a "_sensor" suffix on the
+			// unique_id (model/data_point.py:1023). A consumer
+			// keying its entity registry on this string spawns a duplicate
+			// beside the migrated entity when the suffix goes missing.
+			name:   "forced sensor is disambiguated",
+			forced: true,
+			want:   "loom_a_1_level_sensor",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dp := NewDataPoint[float64](baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead|hmenum.OperationsWrite))
+			if tc.forced {
+				dp.MarkForcedSensor()
+			}
+			if got := dp.CanonicalUniqueID(""); got != tc.want {
+				t.Errorf("CanonicalUniqueID() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

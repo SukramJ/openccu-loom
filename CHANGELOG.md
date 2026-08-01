@@ -8,6 +8,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The valve-opening level of an HmIP-eTRV / HmIP-HEATING channel is
+  delivered once again, as a sensor.** The parameter is forced to a read-only
+  sensor, and the reference disambiguates that surface with a `_sensor`
+  suffix on the identifier. The daemon applied the suffix internally but
+  dropped it from the external key it publishes over REST, WS and MQTT — so
+  a consumer keying its registry on that string orphaned the entity it had
+  under the suffixed key and created a duplicate beside it. All three planes
+  now spell the identity the same way. Home Assistant users see the
+  duplicate `…_ventil_offnungsgrad_2` entity go stale; it can be deleted.
 - **The marker checkboxes in the CCU editor now say what each marker does.**
   They rendered as four bare codes with no explanation, and the descriptions
   written for them landed on a config-schema field that is never shown —
