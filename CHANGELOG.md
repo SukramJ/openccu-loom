@@ -4,6 +4,18 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.7]
+
+### Changed
+
+- **The `MQTT` marker is no longer offered for system variables or
+  programs.** It steers an MQTT hand-off the reference stack needs and this
+  daemon does not: its own bridge publishes every hub entity regardless, so
+  the marker only ever acted as a second free-text tag beside `HX`. The CCU
+  editor drops a stored value when it opens, so what is shown is what gets
+  saved. The token is still stripped from the CCU description, so a variable
+  whose description still carries it does not show it in its name.
+
 ## [0.52.6]
 
 ### Fixed

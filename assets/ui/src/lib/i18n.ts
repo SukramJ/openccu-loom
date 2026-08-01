@@ -1538,9 +1538,9 @@ const EN: Catalog = {
   "config.help.centrals.behavior.light_last_brightness":
     "When turning a light on, restore the last non-zero brightness the CCU reported rather than switching to full (100%); default true.",
   "config.help.centrals.behavior.program_markers":
-    "Tokens the CCU description of a program may carry. As for system variables, markers decide only how a program arrives, not whether it is imported: marker-matched programs arrive enabled in Home Assistant, everything else disabled. HX is a free marker for your own filtering, MQTT marks the program for push updates, and INTERNAL additionally includes the CCU's internal programs — which matters because the CCU flags most ordinary programs as internal. HAHM has no effect here; it makes system variables writable and programs have no value to write. Empty: everything is imported, everything disabled.",
+    "Tokens the CCU description of a program may carry. As for system variables, markers decide only how a program arrives, not whether it is imported: marker-matched programs arrive enabled in Home Assistant, everything else disabled. HX is a free marker for your own filtering, and INTERNAL additionally includes the CCU's internal programs — which matters because the CCU flags most ordinary programs as internal. HAHM has no effect here; it makes system variables writable and programs have no value to write. Empty: everything is imported, everything disabled.",
   "config.help.centrals.behavior.sysvar_markers":
-    "Tokens the CCU description of a system variable may carry. Markers do not decide whether a variable is imported — everything is imported — only how it arrives: marker-matched variables arrive enabled in Home Assistant, everything else arrives disabled for you to switch on per entity. HAHM makes a variable writable (switch, select, number, text instead of a read-only sensor). MQTT marks it for push updates. HX is a free marker for your own filtering. INTERNAL additionally includes the CCU's internal variables. Empty: everything is imported, everything disabled.",
+    "Tokens the CCU description of a system variable may carry. Markers do not decide whether a variable is imported — everything is imported — only how it arrives: marker-matched variables arrive enabled in Home Assistant, everything else arrives disabled for you to switch on per entity. HAHM makes a variable writable (switch, select, number, text instead of a read-only sensor). HX is a free marker for your own filtering. INTERNAL additionally includes the CCU's internal variables. Empty: everything is imported, everything disabled.",
   "config.help.centrals.behavior.sysvar_scan_interval":
     "How often the daemon refreshes system variables from the CCU; zero uses the compiled-in default.",
   "config.help.centrals.behavior.use_group_channel_for_cover_state":
@@ -1842,7 +1842,6 @@ const EN: Catalog = {
   "centrals.behavior.marker.hx": "Free marker for your own filtering.",
   "centrals.behavior.marker.internal":
     "Additionally delivers the CCU's internal entries. This matters more than it sounds: the CCU flags most ordinary user programs as internal, so without this the program list stays almost empty.",
-  "centrals.behavior.marker.mqtt": "Marks the entry for push updates.",
   "centrals.field.username": "Username",
   "centrals.field.password": "Password",
   "centrals.field.password_hint":
@@ -4905,9 +4904,9 @@ const DE: Catalog = {
   "config.help.centrals.behavior.light_last_brightness":
     "Beim Einschalten eines Lichts die zuletzt von der CCU gemeldete Helligkeit (≠ 0) wiederherstellen statt auf 100 % zu gehen. Standard: an.",
   "config.help.centrals.behavior.program_markers":
-    "Token, die die CCU-Beschreibung eines Programms tragen kann. Wie bei Systemvariablen entscheiden Marker nur, wie ein Programm ankommt, nicht ob es importiert wird: Programme mit Marker-Treffer kommen in Home Assistant aktiviert an, alle übrigen deaktiviert. HX ist ein freier Marker für eigene Filterung, MQTT kennzeichnet das Programm für Push-Aktualisierungen, und INTERNAL schließt zusätzlich die internen Programme der CCU ein — was hier ins Gewicht fällt, weil die CCU die meisten gewöhnlichen Programme als intern kennzeichnet. HAHM wirkt hier nicht; es macht Systemvariablen schreibbar, und Programme haben keinen Wert zum Schreiben. Leer: alles wird importiert, alles deaktiviert.",
+    "Token, die die CCU-Beschreibung eines Programms tragen kann. Wie bei Systemvariablen entscheiden Marker nur, wie ein Programm ankommt, nicht ob es importiert wird: Programme mit Marker-Treffer kommen in Home Assistant aktiviert an, alle übrigen deaktiviert. HX ist ein freier Marker für eigene Filterung, und INTERNAL schließt zusätzlich die internen Programme der CCU ein — was hier ins Gewicht fällt, weil die CCU die meisten gewöhnlichen Programme als intern kennzeichnet. HAHM wirkt hier nicht; es macht Systemvariablen schreibbar, und Programme haben keinen Wert zum Schreiben. Leer: alles wird importiert, alles deaktiviert.",
   "config.help.centrals.behavior.sysvar_markers":
-    "Token, die die CCU-Beschreibung einer Systemvariablen tragen kann. Marker entscheiden nicht, ob eine Variable importiert wird — importiert wird alles —, sondern nur wie sie ankommt: Variablen mit Marker-Treffer kommen in Home Assistant aktiviert an, alle übrigen deaktiviert und werden pro Entität eingeschaltet. HAHM macht eine Variable schreibbar (Schalter, Auswahl, Zahl, Text statt nur lesendem Sensor). MQTT kennzeichnet sie für Push-Aktualisierungen. HX ist ein freier Marker für eigene Filterung. INTERNAL schließt zusätzlich die internen Variablen der CCU ein. Leer: alles wird importiert, alles deaktiviert.",
+    "Token, die die CCU-Beschreibung einer Systemvariablen tragen kann. Marker entscheiden nicht, ob eine Variable importiert wird — importiert wird alles —, sondern nur wie sie ankommt: Variablen mit Marker-Treffer kommen in Home Assistant aktiviert an, alle übrigen deaktiviert und werden pro Entität eingeschaltet. HAHM macht eine Variable schreibbar (Schalter, Auswahl, Zahl, Text statt nur lesendem Sensor). HX ist ein freier Marker für eigene Filterung. INTERNAL schließt zusätzlich die internen Variablen der CCU ein. Leer: alles wird importiert, alles deaktiviert.",
   "config.help.centrals.behavior.sysvar_scan_interval":
     "Wie oft der Daemon Systemvariablen von der CCU aktualisiert; 0 = Daemon-Standard.",
   "config.help.centrals.behavior.use_group_channel_for_cover_state":
@@ -5215,8 +5214,6 @@ const DE: Catalog = {
   "centrals.behavior.marker.hx": "Freier Marker für eigene Filterung.",
   "centrals.behavior.marker.internal":
     "Liefert zusätzlich die internen Einträge der CCU aus. Das wiegt schwerer, als es klingt: Die CCU kennzeichnet die meisten gewöhnlichen Benutzerprogramme als intern — ohne diesen Marker bleibt die Programmliste fast leer.",
-  "centrals.behavior.marker.mqtt":
-    "Kennzeichnet den Eintrag für Push-Aktualisierungen.",
   "centrals.field.username": "Benutzername",
   "centrals.field.password": "Passwort",
   "centrals.field.password_hint":

@@ -541,8 +541,8 @@ modelled. All are hot-reloadable and default to sensible values:
 | `behavior.enable_program_scan` | bool | `true` | Fetch programs as hub entities |
 | `behavior.include_internal_sysvars` | bool | `true` | Surface CCU-internal system variables |
 | `behavior.include_internal_programs` | bool | `false` | Surface CCU-internal programs |
-| `behavior.sysvar_markers` | list | — | Marker tokens steering how sysvars arrive (`HAHM`/`HX`/`INTERNAL`/`MQTT`) |
-| `behavior.program_markers` | list | — | Marker tokens steering how programs arrive (`HX`/`INTERNAL`/`MQTT`) |
+| `behavior.sysvar_markers` | list | — | Marker tokens steering how sysvars arrive (`HAHM`/`HX`/`INTERNAL`) |
+| `behavior.program_markers` | list | — | Marker tokens steering how programs arrive (`HX`/`INTERNAL`) |
 | `behavior.sysvar_scan_interval` | duration | compiled default | Per-central sysvar-refresh cadence |
 | `behavior.enable_device_firmware_check` | bool | `true` | Expose per-device firmware-update entities |
 | `behavior.delay_new_device_creation` | bool | `false` | Defer a newly-paired device until its description is complete |
@@ -588,13 +588,18 @@ arrives in a consumer such as Home Assistant:
 | Marker | Effect |
 |---|---|
 | `HAHM` | Makes a **system variable** writable (switch / select / number / text instead of a read-only sensor). A program has no value to write, so the CCU editor does not offer this marker there. |
-| `MQTT` | Marks the entry for push updates. |
 | `HX` | Free marker for your own filtering. |
 | `INTERNAL` | Additionally includes the CCU's internal entries. This matters more than it sounds: the CCU flags most ordinary user programs as internal, so without it a program list can look almost empty. |
 
 An entry matching any configured marker arrives **enabled**; every other
 entry arrives **disabled** and is switched on per entity. With no markers
 configured, everything is imported and everything arrives disabled.
+
+The reference stack also recognises an `MQTT` marker, which steers a hand-off
+this daemon does not need — its MQTT bridge publishes every hub entity
+regardless — so the CCU editor does not offer it. A stored value is dropped
+when the editor opens; the token is still stripped from the CCU description
+so it never shows up in an entity name.
 
 `include_internal_sysvars` / `include_internal_programs` are the equivalent
 switch for operators who configure no markers at all; either they or the

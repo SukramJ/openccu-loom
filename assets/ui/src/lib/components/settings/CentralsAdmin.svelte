@@ -81,9 +81,11 @@
 
   // Markers a system variable may carry. HAHM is sysvar-only: it makes the
   // variable writable, and a program has no value to write — so the program
-  // list below deliberately omits it.
-  const SYSVAR_MARKERS: DescriptionMarker[] = ["HAHM", "HX", "INTERNAL", "MQTT"];
-  const PROGRAM_MARKERS: DescriptionMarker[] = ["HX", "INTERNAL", "MQTT"];
+  // list below deliberately omits it. MQTT is omitted from both: it steers
+  // an MQTT hand-off the reference stack needs and this daemon does not,
+  // since its own bridge publishes every hub entity regardless.
+  const SYSVAR_MARKERS: DescriptionMarker[] = ["HAHM", "HX", "INTERNAL"];
+  const PROGRAM_MARKERS: DescriptionMarker[] = ["HX", "INTERNAL"];
   const NS_PER_SEC = 1_000_000_000;
 
   // i18n key carrying the per-marker explanation shown next to each checkbox.
@@ -121,9 +123,9 @@
       enableDeviceFirmwareCheck:
         b.enable_device_firmware_check ?? d.enableDeviceFirmwareCheck,
       delayNewDeviceCreation: b.delay_new_device_creation ?? d.delayNewDeviceCreation,
-      sysvarMarkers: b.sysvar_markers ?? [],
-      // Drop a marker the program list cannot offer, so what is shown is what
-      // gets saved rather than an invisible leftover.
+      // Drop markers the lists no longer offer, so what is shown is what gets
+      // saved rather than an invisible leftover.
+      sysvarMarkers: (b.sysvar_markers ?? []).filter((m) => SYSVAR_MARKERS.includes(m)),
       programMarkers: (b.program_markers ?? []).filter((m) => PROGRAM_MARKERS.includes(m)),
       sysvarScanIntervalSec: b.sysvar_scan_interval
         ? Math.round(b.sysvar_scan_interval / NS_PER_SEC)

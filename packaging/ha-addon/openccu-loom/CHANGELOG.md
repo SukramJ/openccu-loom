@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.7
+
+- **The `MQTT` marker is gone from the CCU editor.** It came from the Home
+  Assistant integration, where it steers an MQTT hand-off; this daemon's own
+  MQTT bridge publishes every system variable and program regardless, so the
+  marker did nothing here. A stored value is dropped when the editor opens.
+
 ## 0.52.6
 
 - **Profile detection follows the CCU again.** The bundled profile data was
