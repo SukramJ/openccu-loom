@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.4
+
+- **The marker checkboxes in the CCU editor now say what each marker does.**
+  They showed four bare codes with no explanation. Each one now carries its
+  effect inline, above a note that markers steer *how* an entry arrives —
+  they do not decide whether it is imported.
+- `HAHM` is no longer offered for programs. It makes a system variable
+  writable, and a program has no value to write.
+
 ## 0.52.3
 
 - **Programs appear again.** The CCU marks most ordinary programs as
@@ -7,9 +16,6 @@
   delivered when the `include_internal_programs` switch was on, even if the
   `INTERNAL` marker was configured. Either now suffices. The same applies
   to internal system variables.
-- The marker help in Settings now explains what each marker (`HAHM`, `HX`,
-  `INTERNAL`, `MQTT`) actually does, and no longer offers `HAHM` for
-  programs, where it has no effect.
 
 ## 0.52.2
 
