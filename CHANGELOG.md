@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.5]
+
+### Fixed
+
+- **Profile names show umlauts instead of `&auml;`.** The profile archives
+  are lifted from the CCU WebUI, whose display strings are HTML fragments —
+  a profile named *Bewässerungsaktor* is stored as `Bew&auml;sserungsaktor`,
+  and `on/off &amp; louder` for the ampersand. Every north-bound surface
+  renders them as plain text (correctly — escaping them again is what stops
+  a device name from injecting markup), so the reference itself was shown to
+  the operator. Both profile stores now decode the references once on load:
+  127 affected display strings across link and master profiles.
+
 ## [0.52.4]
 
 ### Fixed

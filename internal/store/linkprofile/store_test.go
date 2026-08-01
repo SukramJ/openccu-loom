@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
@@ -717,4 +718,46 @@ func TestReceiverTypeAlias_OpticalSignalMappedToDimmerVirtualReceiver(t *testing
 	}
 	// We accept empty (no KEY sender in DIMMER_VIRTUAL_RECEIVER) but must not error.
 	_ = profs
+}
+
+// TestProfileNamesAreNotHTMLEscaped pins that display strings reach callers
+// as plain text. The extracts come from the CCU WebUI, whose texts are HTML
+// fragments — "Bew&auml;sserungsaktor" instead of "Bewässerungsaktor" — and
+// every north-bound surface renders them verbatim, so an undecoded reference
+// is shown to the operator as-is.
+func TestProfileNamesAreNotHTMLEscaped(t *testing.T) {
+	t.Parallel()
+	s := linkprofile.New()
+	// ACCELERATION_TRANSCEIVER carries "&Auml;nderungssignal", KEY_TRANSCEIVER
+	// the "&amp;" form — both reference classes in one receiver.
+	var profiles []linkprofile.Profile
+	for _, sender := range []string{"ACCELERATION_TRANSCEIVER", "KEY_TRANSCEIVER"} {
+		got, err := s.GetLinkProfiles(context.Background(), "ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER", sender, "de")
+		if err != nil {
+			t.Fatalf("GetLinkProfiles(%s): %v", sender, err)
+		}
+		profiles = append(profiles, got...)
+	}
+	if len(profiles) == 0 {
+		t.Fatal("no profiles returned for ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER")
+	}
+	var sawUmlaut bool
+	for _, p := range profiles {
+		for locale, name := range p.Name {
+			if strings.Contains(name, "&") && strings.Contains(name, ";") {
+				t.Errorf("profile %d name[%s] still carries an HTML reference: %q", p.ID, locale, name)
+			}
+			if strings.ContainsAny(name, "äöüÄÖÜß") {
+				sawUmlaut = true
+			}
+		}
+		for locale, desc := range p.Description {
+			if strings.Contains(desc, "&") && strings.Contains(desc, ";") {
+				t.Errorf("profile %d description[%s] still carries an HTML reference: %q", p.ID, locale, desc)
+			}
+		}
+	}
+	if !sawUmlaut {
+		t.Error("expected at least one decoded umlaut in this receiver's profile names")
+	}
 }

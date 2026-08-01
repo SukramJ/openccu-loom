@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/SukramJ/openccu-loom/internal/ccudata"
 )
 
 //go:embed data/*.json.gz
@@ -225,6 +227,12 @@ func (s *Store) load(deviceType string) (map[string][]Profile, error) {
 	}
 	bucket := make(map[string][]Profile, len(raw))
 	for k, v := range raw {
+		// Display strings arrive as the CCU WebUI's HTML fragments
+		// ("Bew&auml;sserungsaktor"); consumers render them as plain text.
+		for i := range v.Profiles {
+			ccudata.UnescapeUITextMap(v.Profiles[i].Name)
+			ccudata.UnescapeUITextMap(v.Profiles[i].Description)
+		}
 		bucket[k] = v.Profiles
 	}
 	s.cache[deviceType] = bucket
