@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.6
+
+- **The profile dropdown shows umlauts.** 0.52.5 fixed only part of the
+  path; the link editor reads its profiles from a different place, which
+  still displayed *Bew&auml;sserungsaktor*.
+
 ## 0.52.5
 
 - **Profile names and descriptions show umlauts again.** They came from the

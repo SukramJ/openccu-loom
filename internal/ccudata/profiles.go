@@ -128,8 +128,15 @@ func LoadProfilesEmbedded() (*ProfileStore, error) {
 		if err != nil {
 			return store, fmt.Errorf("ccudata: decode profile %s: %w", name, err)
 		}
+		// The archive stores display strings as the CCU WebUI's HTML
+		// fragments. This document is handed to the UI verbatim, so the
+		// references are decoded once here — see [unescapeUITextJSON].
+		plain, err := unescapeUITextJSON(raw)
+		if err != nil {
+			return store, fmt.Errorf("ccudata: unescape profile %s: %w", name, err)
+		}
 		key := strings.TrimSuffix(name, ".json.gz")
-		store.Receivers[key] = raw
+		store.Receivers[key] = plain
 	}
 	return store, nil
 }

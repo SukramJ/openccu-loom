@@ -4,6 +4,27 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.6]
+
+### Fixed
+
+- **The profile dropdown shows umlauts.** 0.52.5 decoded the CCU WebUI's
+  HTML references in the two profile stores, but the link editor does not
+  read them from there: it takes the profile document straight from the
+  embedded archive and hands it to the SPA verbatim, precisely so the UI
+  consumes the archive's exact shape without a Go schema mirror that would
+  drift on every upstream refresh. That path kept its `&auml;`. The
+  references are now decoded where the archive is loaded, which is the one
+  point every consumer passes — 164 display strings across 66 receiver
+  types.
+- **Every embedded-archive load is guarded against this class of defect.**
+  A standing test re-serialises what each loader hands the daemon and fails
+  on any HTML reference in it. It works on the loader's result, not the
+  archive, so a reference in a field nothing reads stays green — while an
+  archive refresh, or a new struct field that pulls such text in, fails the
+  build instead of surfacing in an operator's dropdown.
+
+
 ## [0.52.5]
 
 ### Fixed
