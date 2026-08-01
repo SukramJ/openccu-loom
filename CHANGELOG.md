@@ -8,6 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The `INTERNAL` marker now surfaces the CCU's internal entries.** It was
+  only honoured for the enabled-by-default decision, while whether internal
+  system variables and programs were delivered at all still hung on
+  `include_internal_sysvars` / `include_internal_programs` alone. The
+  reference gives the marker its own meaning — *"includes CCU-internal
+  variables/programs"* — so configuring it is itself the request. The gap
+  was invisible for system variables (whose boolean was on) and hid 38 of
+  40 programs, because the CCU flags most ordinary user programs as
+  internal. Either the marker or the boolean now suffices.
+
 - **System variables and programs are no longer hidden by markers.**
   Description markers (`HAHM`, `HX`, `INTERNAL`, `MQTT`) were treated as
   an import filter: an entry whose CCU description carried none of the
