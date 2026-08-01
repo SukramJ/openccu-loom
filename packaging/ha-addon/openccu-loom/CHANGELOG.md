@@ -1,6 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.5
+
+- **Profile names and descriptions show umlauts again.** They came from the
+  CCU WebUI as HTML fragments, so *Bewässerungsaktor* was displayed as
+  `Bew&auml;sserungsaktor`.
+
 ## 0.52.4
+
 
 - **The valve-opening level of a radiator thermostat no longer appears
   twice.** The read-only sensor lost part of its identifier on the way out

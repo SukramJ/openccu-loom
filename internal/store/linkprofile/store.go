@@ -47,6 +47,8 @@ import (
 	"math"
 	"slices"
 	"sync"
+
+	"github.com/SukramJ/openccu-loom/internal/ccudata"
 )
 
 //go:embed data/*.json.gz
@@ -367,6 +369,14 @@ func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 	}
 	bucket := make(map[string][]Profile, len(raw))
 	for senderType, v := range raw {
+		// The archive stores display strings as the CCU WebUI's HTML
+		// fragments ("Bew&auml;sserungsaktor"); consumers render them as
+		// plain text, so they are decoded once here rather than in each
+		// consumer. Constraint parameters are identifiers and stay untouched.
+		for i := range v.Profiles {
+			ccudata.UnescapeUITextMap(v.Profiles[i].Name)
+			ccudata.UnescapeUITextMap(v.Profiles[i].Description)
+		}
 		bucket[senderType] = v.Profiles
 	}
 	s.cache[effective] = bucket

@@ -135,3 +135,48 @@ func TestStoreCaching(t *testing.T) {
 		t.Fatalf("cached lookup err: %v", err)
 	}
 }
+
+// TestProfileTextIsNotHTMLEscaped is the masterprofile counterpart of the
+// linkprofile guard: the archive stores the CCU WebUI's HTML fragments
+// ("Bew&auml;sserungsaktor"), and every consumer renders them as plain text,
+// so the reference must be decoded on load.
+func TestProfileTextIsNotHTMLEscaped(t *testing.T) {
+	s := New()
+	types, err := s.DeviceTypes()
+	if err != nil {
+		t.Fatalf("DeviceTypes: %v", err)
+	}
+	var checked, withUmlaut int
+	for _, dt := range types {
+		chTypes, err := s.ChannelTypes(dt)
+		if err != nil {
+			continue
+		}
+		for _, ct := range chTypes {
+			profiles, err := s.Profiles(dt, ct)
+			if err != nil {
+				continue
+			}
+			for _, p := range profiles {
+				for _, m := range []map[string]string{p.Name, p.Description} {
+					for locale, text := range m {
+						checked++
+						if strings.Contains(text, "&") && strings.Contains(text, ";") {
+							t.Errorf("%s/%s profile %d [%s] still carries an HTML reference: %q", dt, ct, p.ID, locale, text)
+						}
+						if strings.ContainsAny(text, "äöüÄÖÜß") {
+							withUmlaut++
+						}
+					}
+				}
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no profile text inspected — the archive lookup returned nothing")
+	}
+	if withUmlaut == 0 {
+		t.Error("expected decoded umlauts somewhere in the archive")
+	}
+	t.Logf("inspected %d display strings, %d carry umlauts", checked, withUmlaut)
+}
