@@ -36,6 +36,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now win a match it previously lost. The archive agrees with the CCU's own
   WebUI again.
 
+- **The profile archives exist once instead of three times.** Two stores
+  each embedded their own copy of the same 65 eQ-3 archives, beside the
+  shared module's. Nothing kept them in step, so the same profile answered
+  differently depending on which code path read it: the copies still carried
+  the CCU's HTML references *and* the pre-3.89.5 constraint set, and were
+  missing 45 range bounds the module has. Both stores now read through the
+  module, 130 duplicated files are gone, and a contract test fails the build
+  if a copy reappears.
+
 
 ## [0.52.5]
 

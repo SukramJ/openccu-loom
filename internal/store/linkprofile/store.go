@@ -38,7 +38,6 @@ package linkprofile
 import (
 	"compress/gzip"
 	"context"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,11 +50,15 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 )
 
-//go:embed data/*.json.gz
-var embeddedProfiles embed.FS
+// profileFS serves the archives from the shared metadata module. The
+// files used to be duplicated into this package (and into masterprofile),
+// which meant a data refresh reached the module but not these copies: they
+// still carried the CCU's HTML references and the pre-3.89.5 constraint set
+// long after the module had moved on.
+var profileFS = ccudata.ProfilesFS()
 
-//go:embed data/_receiver_type_aliases.json
-var embeddedAliases []byte
+// aliasFile is the receiver-type alias table, alongside the archives.
+const aliasFile = "_receiver_type_aliases.json"
 
 // ErrUnsupported is returned when the link-profile store has no data for
 // the requested (receiverChannelType, senderChannelType) pair. This
@@ -165,7 +168,10 @@ func New() *Store {
 	}
 	// Load aliases once at construction time. Failure is non-fatal —
 	// aliasing is best-effort; the raw type will still be tried.
-	if err := json.Unmarshal(embeddedAliases, &s.aliases); err != nil {
+	raw, err := fs.ReadFile(profileFS, aliasFile)
+	if err != nil {
+		s.aliases = make(map[string]string)
+	} else if err := json.Unmarshal(raw, &s.aliases); err != nil {
 		s.aliases = make(map[string]string)
 	}
 	return s
@@ -319,7 +325,7 @@ func (s *Store) Register(receiverChannelType, senderChannelType string, profs []
 // ReceiverTypes returns all receiver channel types for which the embedded
 // archive contains profiles (the basenames of the .json.gz files).
 func (s *Store) ReceiverTypes() ([]string, error) {
-	entries, err := fs.ReadDir(embeddedProfiles, "data")
+	entries, err := fs.ReadDir(profileFS, ".")
 	if err != nil {
 		return nil, fmt.Errorf("linkprofile: read dir: %w", err)
 	}
@@ -346,8 +352,7 @@ func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 	if cached, ok := s.cache[effective]; ok {
 		return cached, nil
 	}
-	path := "data/" + effective + ".json.gz"
-	f, err := embeddedProfiles.Open(path)
+	f, err := profileFS.Open(effective + ".json.gz")
 	if err != nil {
 		// Cache a nil sentinel so we don't retry on every call.
 		s.cache[effective] = nil
