@@ -847,7 +847,13 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 	ch := lookupChannel(b.registry, deviceAddr, channelNo)
 	category, dpType := valueChangedClassification(ch, e.Key.Parameter)
 	serialSuffix := b.registry.SerialSuffix(centralName)
+	// A calculated data point carries the `calculated` family marker; the
+	// WS key has to match the REST and MQTT ones byte for byte, because a
+	// consumer keys one entity registry from all three.
 	uniqueID := routingkey.CanonicalUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter, "")
+	if isCalculatedParameter(ch, e.Key.Parameter) {
+		uniqueID = routingkey.CalculatedUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter)
+	}
 	b.wsHub.PublishDataPointValueChangedKind(
 		envKind,
 		centralName, iface, deviceAddr, channelNo,

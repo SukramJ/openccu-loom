@@ -115,11 +115,33 @@ func TestLoadSysvarsScanDisabledLoadsNothing(t *testing.T) {
 	}
 }
 
-func TestLoadSysvarsInternalAndMarkerFilter(t *testing.T) {
+// TestLoadSysvarsMarkersDriveEnabledNotImport pins the documented
+// contract: markers decide whether a sysvar arrives ENABLED, never
+// whether it is imported at all.
+//
+// The reference stack states it explicitly - "all variables are imported
+// as disabled entities. With markers configured ..., only marked
+// variables are imported as enabled entities". Treating the marker as an
+// import filter (which this code did) hid most of a CCU's catalogue and
+// made it unreachable: an entity that is never created cannot be enabled
+// by the operator afterwards. On a real install that left 23 of 83
+// sysvars and 2 of 40 programs visible.
+func TestLoadSysvarsMarkersDriveEnabledNotImport(t *testing.T) {
 	t.Parallel()
-	// Internal excluded by default; markers restrict to the HAHM-described one.
 	srv := hubScanServer(t)
 	defer srv.Close()
+
+	// Baseline: how many sysvars exist without any marker configured.
+	all := hub.NewHub("c")
+	if err := loadSysvars(context.Background(), newScanClient(t, srv), nil, all, nil,
+		hubScanOptions{enableSysvarScan: true, includeInternalSysvars: true}); err != nil {
+		t.Fatalf("loadSysvars (no markers): %v", err)
+	}
+	want := len(all.Sysvars())
+	if want < 2 {
+		t.Fatalf("fixture needs at least two sysvars to be meaningful, got %d", want)
+	}
+
 	h := hub.NewHub("c")
 	err := loadSysvars(context.Background(), newScanClient(t, srv), nil, h, nil,
 		hubScanOptions{
@@ -130,18 +152,26 @@ func TestLoadSysvarsInternalAndMarkerFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadSysvars: %v", err)
 	}
-	// Only the HAHM-described "Normal" sysvar passes the marker filter,
-	// even though internal inclusion is on.
-	if got := len(h.Sysvars()); got != 1 {
-		t.Fatalf("marker filter should keep 1 sysvar, got %d", got)
+	// Configuring a marker must not shrink the catalogue.
+	if got := len(h.Sysvars()); got != want {
+		t.Fatalf("markers changed the imported count: got %d, want %d (markers gate enabled-by-default, not import)", got, want)
 	}
 	sv, ok := h.Sysvar("Normal")
 	if !ok {
-		t.Fatal("HAHM-marked sysvar should survive the marker filter")
+		t.Fatal("HAHM-marked sysvar missing from the model")
 	}
-	// A configured marker matched → enabled by default.
 	if !sv.EnabledByDefault() {
-		t.Fatal("marker-matched sysvar should be enabled by default")
+		t.Error("marker-matched sysvar should be enabled by default")
+	}
+	// An unmarked sysvar is still imported - just disabled.
+	var sawUnmarkedDisabled bool
+	for _, other := range h.Sysvars() {
+		if other.Name != "Normal" && !other.EnabledByDefault() {
+			sawUnmarkedDisabled = true
+		}
+	}
+	if !sawUnmarkedDisabled {
+		t.Error("expected at least one unmarked sysvar to be imported but disabled")
 	}
 }
 

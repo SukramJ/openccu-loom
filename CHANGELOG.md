@@ -4,6 +4,35 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.2]
+
+### Fixed
+
+- **System variables and programs are no longer hidden by markers.**
+  Description markers (`HAHM`, `HX`, `INTERNAL`, `MQTT`) were treated as
+  an import filter: an entry whose CCU description carried none of the
+  configured markers never entered the model at all. The reference stack
+  documents the opposite — everything is imported, and markers decide
+  only whether an entry arrives *enabled*. The difference is not
+  cosmetic: an entity that is never created cannot be switched on by the
+  operator afterwards. On a real installation this left 23 of 83 system
+  variables and 2 of 40 programs visible. Markers now feed
+  enabled-by-default only; `include_internal_sysvars` /
+  `include_internal_programs` remain the switches that genuinely gate
+  import.
+
+- **Calculated data points carry the `calculated` family marker in their
+  `unique_id`.** They were keyed like a plain VALUES parameter
+  (`loom_<device>_<channel>_<parameter>`), omitting the marker the
+  reference scheme puts ahead of the address. Consumers that key their
+  entity registry on it migrate by exact string match, so every
+  calculated data point orphaned the entity the consumer had just
+  migrated — the one holding history, area and customisations — and got
+  an empty duplicate beside it. On a real installation that affected all
+  159 of them. REST, WebSocket and MQTT discovery now share one builder
+  so the three planes cannot drift apart, and the shape is pinned by a
+  contract test.
+
 ## [0.52.1]
 
 ### Fixed

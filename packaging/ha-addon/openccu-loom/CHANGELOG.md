@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.2
+
+- **System variables and programs are complete again.** Entries whose CCU
+  description carried no marker were dropped entirely instead of being
+  imported and left switched off — so they could not be enabled in Home
+  Assistant either. Everything is imported now; markers decide only what
+  arrives switched on.
+- **Calculated values keep their history after switching to this backend.**
+  Their identifiers were missing a marker, so each one appeared a second
+  time as an empty duplicate next to the entity holding your history. The
+  duplicates (the ones ending in `_2`) become orphans and can be deleted.
+
 ## 0.52.1
 
 - **The CCUs page opens again.** It stayed blank whenever the CCU reported

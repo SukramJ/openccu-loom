@@ -93,3 +93,71 @@ func TestCanonicalUniqueID(t *testing.T) {
 		}
 	}
 }
+
+// TestCalculatedUniqueIDMatchesConsumerMigration pins the calculated
+// data-point key against the rewrite the Home Assistant drop-in performs
+// when a config entry switches to this backend. Its migration maps the
+// legacy key `<domain>_calculated_<dev>_<ch>_<param>` to
+// `<domain>_loom_calculated_<dev>_<ch>_<param>`, so the key this package
+// produces has to carry the family marker in the same slot.
+//
+// Emitting the key without the family marker does not merely look
+// different - it orphans the entity the consumer just migrated (which
+// holds the user's history, area and customisations) and spawns an empty
+// duplicate beside it. That happened for every calculated data point on a
+// real install, so the shape is pinned here rather than left to the
+// call sites.
+func TestCalculatedUniqueIDMatchesConsumerMigration(t *testing.T) {
+	t.Parallel()
+	const serial = "5a4993d962"
+	cases := []struct {
+		name    string
+		address string
+		param   string
+		want    string
+	}{
+		{
+			// A normal device: globally unique serial, so no central slot.
+			name:    "device channel",
+			address: "000A5928583F0F:1",
+			param:   "SMOKE_ALARM",
+			want:    "loom_calculated_000a5928583f0f_1_smoke_alarm",
+		},
+		{
+			// An INT* virtual device repeats across CCUs, so the central
+			// slot precedes the family marker - the consumer's migration
+			// produces exactly this order.
+			name:    "internal device carries the central slot first",
+			address: "INT0000012:1",
+			param:   "DEW_POINT",
+			want:    "loom_5a4993d962_calculated_int0000012_1_dew_point",
+		},
+		{
+			name:    "maintenance channel",
+			address: "00109A49A51400:0",
+			param:   "OPERATING_VOLTAGE_LEVEL",
+			want:    "loom_calculated_00109a49a51400_0_operating_voltage_level",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := CalculatedUniqueID(serial, tc.address, tc.param); got != tc.want {
+				t.Errorf("CalculatedUniqueID(%q, %q) = %q, want %q", tc.address, tc.param, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCalculatedUniqueIDDiffersFromPlainKey guards the reason the marker
+// exists: a calculated data point and a VALUES parameter of the same name
+// on the same channel must not collide.
+func TestCalculatedUniqueIDDiffersFromPlainKey(t *testing.T) {
+	t.Parallel()
+	const serial = "5a4993d962"
+	plain := CanonicalUniqueID(serial, "000A5928583F0F:1", "SMOKE_ALARM", "")
+	calc := CalculatedUniqueID(serial, "000A5928583F0F:1", "SMOKE_ALARM")
+	if plain == calc {
+		t.Fatalf("calculated and plain keys collide: %q", plain)
+	}
+}
