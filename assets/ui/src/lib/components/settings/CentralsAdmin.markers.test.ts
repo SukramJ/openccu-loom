@@ -114,7 +114,7 @@ describe("CentralsAdmin — marker pickers", () => {
     mockUpdateCentral.mockResolvedValue(undefined);
   });
 
-  it("offers HAHM for system variables but not for programs", async () => {
+  it("offers HAHM for system variables but not for programs, and MQTT for neither", async () => {
     mockListCentrals.mockResolvedValue([{ ...baseRow }]);
     const { container } = render(CentralsAdmin);
     await openBehaviour(container);
@@ -123,14 +123,12 @@ describe("CentralsAdmin — marker pickers", () => {
       "HAHM",
       "HX",
       "INTERNAL",
-      "MQTT",
     ]);
     // HAHM makes a sysvar writable; a program has no value to write, so
     // offering it there would promise an effect that does not exist.
     expect(markersOf(container, "centrals.behavior.program_markers")).toEqual([
       "HX",
       "INTERNAL",
-      "MQTT",
     ]);
   });
 
@@ -139,15 +137,21 @@ describe("CentralsAdmin — marker pickers", () => {
     const { container } = render(CentralsAdmin);
     await openBehaviour(container);
 
-    for (const m of ["HAHM", "HX", "INTERNAL", "MQTT"]) {
+    for (const m of ["HAHM", "HX", "INTERNAL"]) {
       expect(container.textContent).toContain(`centrals.behavior.marker.${m.toLowerCase()}`);
     }
     expect(container.textContent).toContain("centrals.behavior.markers_hint");
   });
 
-  it("drops a stored HAHM program marker so what is shown is what gets saved", async () => {
+  it("drops stored markers the lists no longer offer, so what is shown is what gets saved", async () => {
     mockListCentrals.mockResolvedValue([
-      { ...baseRow, behavior: { program_markers: ["HAHM", "INTERNAL"] } },
+      {
+        ...baseRow,
+        behavior: {
+          program_markers: ["HAHM", "INTERNAL", "MQTT"],
+          sysvar_markers: ["HAHM", "MQTT"],
+        },
+      },
     ]);
     const { container } = render(CentralsAdmin);
     await openBehaviour(container);
@@ -159,9 +163,10 @@ describe("CentralsAdmin — marker pickers", () => {
 
     await waitFor(() => expect(mockUpdateCentral).toHaveBeenCalledOnce());
     const body = mockUpdateCentral.mock.calls[0]![1] as {
-      behavior: { program_markers: string[] };
+      behavior: { program_markers: string[]; sysvar_markers: string[] };
     };
     expect(body.behavior.program_markers).toEqual(["INTERNAL"]);
+    expect(body.behavior.sysvar_markers).toEqual(["HAHM"]);
   });
 });
 
@@ -178,7 +183,6 @@ describe("marker catalogue", () => {
       "centrals.behavior.marker.hahm",
       "centrals.behavior.marker.hx",
       "centrals.behavior.marker.internal",
-      "centrals.behavior.marker.mqtt",
     ];
     for (const k of keys) {
       const hits = src.split(`"${k}":`).length - 1;
