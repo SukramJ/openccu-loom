@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.52.2]
+## [0.52.3]
 
 ### Fixed
 
@@ -17,6 +17,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was invisible for system variables (whose boolean was on) and hid 38 of
   40 programs, because the CCU flags most ordinary user programs as
   internal. Either the marker or the boolean now suffices.
+
+## [0.52.2]
+
+### Fixed
 
 - **System variables and programs are no longer hidden by markers.**
   Description markers (`HAHM`, `HX`, `INTERNAL`, `MQTT`) were treated as

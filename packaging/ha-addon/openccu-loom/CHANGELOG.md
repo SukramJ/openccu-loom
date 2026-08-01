@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.3
+
+- **Programs appear again.** The CCU marks most ordinary programs as
+  "internal" — on a typical installation 38 of 40 — and those were only
+  delivered when the `include_internal_programs` switch was on, even if the
+  `INTERNAL` marker was configured. Either now suffices. The same applies
+  to internal system variables.
+- The marker help in Settings now explains what each marker (`HAHM`, `HX`,
+  `INTERNAL`, `MQTT`) actually does, and no longer offers `HAHM` for
+  programs, where it has no effect.
+
 ## 0.52.2
 
 - **System variables and programs are complete again.** Entries whose CCU
