@@ -404,7 +404,14 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	central := d.centralFor(ev)
 	nodeID = pd.DiscoveryNodeID(central)
 	objectID = pd.DiscoveryObjectID(ev.Parameter)
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")
+	// The unique_id follows the same family split as the state bucket
+	// above: a calculated DP carries the `calculated` marker, so the MQTT
+	// key matches the REST and WS ones a consumer keys its registry on.
+	chAddr := ev.DeviceAddress + ":" + strconv.Itoa(ev.ChannelNo)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), chAddr, ev.Parameter, "")
+	if ev.Calculated {
+		uniqueID = routingkey.CalculatedUniqueID(d.serialSuffix(ev.Central), chAddr, ev.Parameter)
+	}
 
 	stateTopic := pd.MQTTState(d.TopicBuilder.Base, central)
 	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, central)

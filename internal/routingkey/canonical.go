@@ -61,3 +61,26 @@ func SerialSuffix(serial string) string {
 func CanonicalUniqueID(serialSuffix, address, parameter, eventPrefix string) string {
 	return loomNamespace + "_" + GenerateUniqueID(serialSuffix, address, parameter, eventPrefix)
 }
+
+// CalculatedFamilyPrefix marks the synthetic / calculated data-point family
+// inside a routing key, ahead of the address:
+//
+//	loom_calculated_<device>_<channel>_<parameter>
+//
+// The marker is not decoration. A calculated data point and a real VALUES
+// parameter of the same name on the same channel would otherwise produce
+// the identical key, and consumers that key their entity registry on it -
+// the Home Assistant drop-in above all - migrate by exact string match.
+// Its migration rewrites the legacy key to `loom_calculated_…`, so a key
+// emitted without the marker orphans the migrated entity and spawns a
+// duplicate beside it.
+const CalculatedFamilyPrefix = "calculated"
+
+// CalculatedUniqueID builds the external unique_id for a calculated data
+// point. It is [CanonicalUniqueID] with [CalculatedFamilyPrefix] in the
+// family slot, and exists so every producer - REST, WebSocket and MQTT
+// discovery - spells the family the same way instead of each passing the
+// literal.
+func CalculatedUniqueID(serialSuffix, address, parameter string) string {
+	return CanonicalUniqueID(serialSuffix, address, parameter, CalculatedFamilyPrefix)
+}

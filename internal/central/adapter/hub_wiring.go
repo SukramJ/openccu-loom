@@ -721,8 +721,14 @@ func hubScanOptionsFromConfig(cc config.CentralConfig) hubScanOptions {
 
 // markerMatch reports whether desc carries one of the marker tokens
 // (prefix match on the trimmed description). An empty marker list
-// matches everything. Mirrors the reference stack's
-// description-marker hub filter.
+// matches everything.
+//
+// It feeds [hubEnabledDefault] only. Markers decide whether a sysvar or
+// program arrives ENABLED, never whether it is imported - the reference
+// stack imports everything and leaves unmarked entries disabled for the
+// operator to switch on. Using this as an import filter once hid most of
+// a CCU's catalogue and, worse, made it unreachable: an entity that is
+// never created cannot be enabled afterwards.
 func markerMatch(desc string, markers []hmenum.DescriptionMarker) bool {
 	if len(markers) == 0 {
 		return true
@@ -832,9 +838,15 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			continue
 		}
 		meta := metaByID[p.ID]
-		if !markerMatch(meta.description, opts.programMarkers) {
-			continue
-		}
+		// Markers do NOT gate import. Every program enters the model; the
+		// markers only decide whether it arrives enabled - see
+		// hubEnabledDefault below and the reference stack's documented
+		// contract ("all variables are imported as disabled entities. With
+		// markers configured ..., only marked variables are imported as
+		// enabled entities"). Dropping unmarked entries here made them
+		// unreachable: an entity that is never created cannot be enabled
+		// by the operator afterwards.
+		//
 		// The description field stays coupled to marker filtering: it is only
 		// exposed when program markers are configured (mirroring the prior
 		// behaviour), whereas the rule summaries below are surfaced
@@ -860,9 +872,9 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			h.PutProgram(prog)
 		}
 	}
-	// Remove programs that are no longer present on the CCU or no longer
-	// pass the marker filter. Internal programs are kept unconditionally;
-	// their visibility is a delivery-time concern, not a fetch one.
+	// Remove programs that are no longer present on the CCU. Internal
+	// programs are kept unconditionally; their visibility is a
+	// delivery-time concern, not a fetch one.
 	for _, existing := range h.Programs() {
 		if _, ok := freshIDs[existing.ID]; !ok {
 			h.RemoveProgram(existing.ID)
@@ -1001,9 +1013,9 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		if d, ok := descByID[v.ID]; ok && d != "" {
 			rawDesc = d
 		}
-		if !markerMatch(rawDesc, opts.sysvarMarkers) {
-			continue
-		}
+		// As for programs: markers steer enabled-by-default, not import.
+		// The only marker that genuinely gates inclusion is INTERNAL, and
+		// that is handled by the includeInternalSysvars check above.
 		freshNames[v.Name] = struct{}{}
 		upsertSysvar(h, v, writer, opts, rawDesc, valueType, valueList, chanByID[v.ID], haveDescs)
 	}

@@ -143,16 +143,17 @@ func supportedOperationsFor(cat hmenum.DataPointCategory) []string { //nolint:ex
 	}
 }
 
-// cdpUniqueID stamps the canonical parameter-level loom routing key — used
-// for calculated data points, which the reference stack keys per parameter.
-// Empty serial suffix (central serial not yet known) yields "" so the
-// omitempty field stays absent.
+// cdpUniqueID stamps the parameter-level loom routing key for a calculated
+// data point, carrying the `calculated` family marker the reference stack
+// uses — see [routingkey.CalculatedFamilyPrefix] for why omitting it
+// orphans the consumer's migrated entity. Empty serial suffix (central
+// serial not yet known) yields "" so the omitempty field stays absent.
 func cdpUniqueID(dp device.AttachableDataPoint, serialSuffix string) string {
 	if dp == nil || serialSuffix == "" {
 		return ""
 	}
 	k := dp.DataPointKey()
-	return routingkey.CanonicalUniqueID(serialSuffix, k.ChannelAddress, k.Parameter, "")
+	return routingkey.CalculatedUniqueID(serialSuffix, k.ChannelAddress, k.Parameter)
 }
 
 // customDPUniqueID stamps the canonical CHANNEL-level loom routing key for a
