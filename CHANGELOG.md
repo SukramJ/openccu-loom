@@ -4,6 +4,34 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.12]
+
+### Fixed
+
+- **Hub push events reach the bus again — the boot wiring was missing.**
+  0.52.10 and 0.52.11 taught the model to announce a program's activity
+  flip, a program's execution and a system variable's value change, and
+  `HubCoordinator.SetHubModel` to wire those announcements onto the event
+  bus — but nothing in a running daemon ever called `SetHubModel`. The
+  coordinator-level tests attach the model themselves, so they stayed
+  green while every real daemon ran with nil notifier hooks: the REST
+  surface answered correctly from the model, and `hub.program_changed`,
+  `hub.program_executed` and `hub.sysvar_changed` never fired. Verified
+  live: toggling a program returned 202 and flipped the model while zero
+  frames crossed the WebSocket.
+
+  Consequence for Home Assistant: switching a program off snapped back to
+  "on" in the UI (the confirming push never came) and the paired "run now"
+  button never went unavailable; system variables froze on their
+  bootstrap value over REST/WebSocket.
+
+  `central.New` now attaches the hub model to the hub coordinator at
+  construction, exactly as the `SetHubModel` contract ("call once at
+  daemon boot") always intended. The regression test drives the
+  production constructor alone — registering a program and a system
+  variable the way the hub scan does and asserting the bus events arrive —
+  so the wiring can no longer silently detach from the tests.
+
 ## [0.52.11]
 
 ### Fixed

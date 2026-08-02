@@ -1531,9 +1531,8 @@ func loadSystemUpdate(ctx context.Context, r *rega.Runner, h *hub.Hub) error {
 // fires events so north-bound adapters pick up the refreshed values.
 //
 // Data points are read directly from unit.HubModel (the domain model)
-// rather than through the coordinator, because HubCoordinator.SetHubModel
-// is not called during standard daemon wiring — the model is the
-// authoritative registry.
+// rather than through the coordinator — the model is the authoritative
+// registry; the coordinator only mirrors it for notifier wiring.
 func loadInstallMode(ctx context.Context, jc *jsonrpc.Client, unit *central.Unit) error {
 	if unit == nil || unit.HubModel == nil || unit.Hub == nil {
 		return nil
