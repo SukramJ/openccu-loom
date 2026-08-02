@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -22,7 +23,12 @@ import (
 // for the GC tests. Closed automatically via t.Cleanup.
 func openGCTestStore(t *testing.T) *sqlite.ValuesCacheStore {
 	t.Helper()
-	db, err := sqlite.Open(context.Background(), ":memory:")
+	// A file, not ":memory:": the pool opens more than one connection, and
+	// each in-memory connection gets its own empty database — a read that
+	// happens to land on a fresh connection fails with "no such table".
+	// "cache=shared" would fix that but shares the database across every
+	// test in the process, so the file is the isolated option.
+	db, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "gc.db"))
 	if err != nil {
 		t.Fatalf("sqlite.Open: %v", err)
 	}
