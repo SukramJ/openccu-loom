@@ -672,6 +672,42 @@ func MQTTHubProgramTrigger(base, centralName, id string) string {
 	)
 }
 
+// MQTTHubProgramSet returns the program-activation command topic
+// `<base>/<central>/hub/programs/<id>/set`.
+//
+// Distinct from the trigger topic: `set` decides whether the CCU lets the
+// program run at all, `trigger` runs it once. They are two controls
+// because the CCU treats them as two things — a deactivated program
+// ignores a trigger.
+func MQTTHubProgramSet(base, centralName, id string) string {
+	if id == "" {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%s/%s/hub/programs/%s/set",
+		strings.Trim(base, "/"),
+		TopicSafe(centralName),
+		TopicSafe(id),
+	)
+}
+
+// MQTTHubProgramExecuteAvailability returns the availability topic for a
+// program's execute action: `<base>/<central>/hub/programs/<id>/execute_available`.
+// The daemon publishes online/offline there so a consumer greys out the
+// execute control while the program is deactivated, without having to
+// derive that rule itself.
+func MQTTHubProgramExecuteAvailability(base, centralName, id string) string {
+	if id == "" {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%s/%s/hub/programs/%s/execute_available",
+		strings.Trim(base, "/"),
+		TopicSafe(centralName),
+		TopicSafe(id),
+	)
+}
+
 // MQTTHubProgramState returns the canonical ADR-0011 program-
 // state topic `<base>/<central>/hub/programs/<id>/state`. Mirrors
 // the sysvar `state`/`set` symmetry — HA's `switch` entity for a

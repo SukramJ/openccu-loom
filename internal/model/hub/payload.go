@@ -74,9 +74,15 @@ func (p *Program) State() payload.StatePayload {
 	}
 	out := &payload.ProgramState{
 		StateUncertain: p.StateUncertain(),
+		// Fail open: a program whose active flag has not been observed yet
+		// is treated as runnable, so a consumer never greys out an action
+		// on missing information. Once the CCU reports the flag — which the
+		// program scan does on every pass — the real answer takes over.
+		ExecuteAvailable: true,
 	}
 	if active, observed := p.Active(); observed {
 		out.IsActive = &active
+		out.ExecuteAvailable = active
 	}
 	if ts, ok := p.LastExecution(); ok {
 		out.LastExecuted = ts.Format("2006-01-02T15:04:05Z07:00")

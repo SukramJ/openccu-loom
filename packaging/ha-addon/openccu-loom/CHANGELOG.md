@@ -2,6 +2,14 @@
 
 ## 0.52.7
 
+- **A program's "run now" is greyed out while the program is deactivated.**
+  The CCU refuses to run a deactivated program, so offering the control
+  promised something that could not happen. Over MQTT a program now has
+  two controls — a switch for active/inactive and a button to run it —
+  where it previously had one switch that ran the program. **If an MQTT
+  automation used that switch to trigger a program, point it at the button
+  or the `…/trigger` topic.**
+
 - **New system variables and programs show up within 30 seconds.** They
   previously took up to 5 minutes to appear after being created on the CCU.
 

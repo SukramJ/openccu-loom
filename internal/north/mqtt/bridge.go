@@ -1046,6 +1046,33 @@ func (b *Bridge) PublishSysvar(ctx context.Context, centralName string, sv pload
 	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
 }
 
+// ProgramRoles returns a source's declared controls, resolved against the bridge's
+// runtime context (topic base, resolved central name), which the model
+// does not hold. Returns nil for a source that declares none — a single
+// control described by MQTTTopics.
+func (b *Bridge) ProgramRoles(centralName string, prog pload.MQTTAddressable) []pload.MQTTRole {
+	ra, ok := prog.(pload.MQTTRoleAddressable)
+	if !ok {
+		return nil
+	}
+	return ra.MQTTRoles(b.cfg.Base, b.resolvedCentral(centralName))
+}
+
+// PublishRoleAvailability reports whether one declared control is usable
+// right now, on the availability topic that role declared. Roles without
+// such a topic are skipped: their availability is fully covered by the
+// bridge- and device-level topics.
+func (b *Bridge) PublishRoleAvailability(ctx context.Context, role *pload.MQTTRole, available bool) error {
+	if !b.cfg.RawEnabled || role.Topics.Availability == "" {
+		return nil
+	}
+	body := []byte("offline")
+	if available {
+		body = []byte("online")
+	}
+	return b.client.Publish(ctx, role.Topics.Availability, body, b.cfg.QoS.State, true)
+}
+
 // PublishProgram emits the program state on the canonical ADR-0011
 // topics owned by the program model object. Active is mirrored to
 // both `…/state` and `…/trigger` so switch entities see it on either

@@ -28,6 +28,7 @@ type CommandSink interface {
 		parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error
 	SetSysvar(ctx context.Context, centralName, name string, payload any) error
 	TriggerProgram(ctx context.Context, centralName, id string) error
+	SetProgramEnabled(ctx context.Context, centralName, id string, enabled bool) error
 }
 
 // WeekProfileSink is the optional domain-facing contract for
@@ -376,6 +377,12 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 		return fmt.Errorf("subscribe hub_sysvar: %w", err)
 	}
 	// Canonical (ADR 0011): {base}/{central}/hub/programs/{id}/trigger.
+	// Activation is a separate control from execution — a deactivated
+	// program refuses to run — so it has its own topic (see
+	// hub.Program.MQTTRoles).
+	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/set", c.qos, LegacyHandler(c.handleProgramEnable)); err != nil {
+		return err
+	}
 	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", c.qos, LegacyHandler(c.handleProgram)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_program: %w", err)
@@ -771,6 +778,50 @@ func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool)
 				slog.String("topic", topic), slog.String("err", err.Error()))
 		}
 	})
+}
+
+// handleProgramEnable toggles a program's CCU-side activity flag from
+// `<base>/<central>/hub/programs/<id>/set`. While the flag is off the CCU
+// ignores the program's triggers and refuses a manual run, so this is the
+// control that decides whether the paired execute button does anything.
+func (c *CommandSubscriber) handleProgramEnable(topic string, body []byte, retained bool) {
+	if retained {
+		c.logger.Debug("mqtt.command.program_enable.retained_drop", slog.String("topic", topic))
+		return
+	}
+	parts := strings.Split(topic, "/")
+	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "programs" || parts[5] != "set" {
+		return
+	}
+	centralName, id := parts[1], parts[4]
+	enabled, ok := parseBoolPayload(body)
+	if !ok {
+		c.logger.Warn("mqtt.command.program_enable.bad_payload",
+			slog.String("topic", topic), slog.String("payload", string(body)))
+		return
+	}
+	c.incReceivedCommands()
+	c.dispatcher.Enqueue(topic, func() {
+		ctx, cancel := context.WithCancel(c.lifecycleCtx)
+		defer cancel()
+		if err := c.sink.SetProgramEnabled(ctx, centralName, id, enabled); err != nil {
+			c.logger.Warn("mqtt.command.program_enable",
+				slog.String("topic", topic), slog.String("err", err.Error()))
+		}
+	})
+}
+
+// parseBoolPayload accepts the on/off spellings HA and hand-written
+// clients publish. An unrecognised payload is rejected rather than
+// guessed, so a typo does not silently deactivate a program.
+func parseBoolPayload(body []byte) (value, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(string(body))) {
+	case "true", "on", "1", "yes":
+		return true, true
+	case "false", "off", "0", "no":
+		return false, true
+	}
+	return false, false
 }
 
 // handleInstallMode activates pairing/install mode on one interface from
