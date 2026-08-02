@@ -1,6 +1,6 @@
 {
-  "generated": "faeb6d1e",
-  "head": "faeb6d1e",
+  "generated": "97fcefd8",
+  "head": "97fcefd8",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -10,10 +10,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 27271,
-    "reachable": 4572,
-    "whitelisted": 19639,
-    "unreachable": 3060
+    "total_exported": 27293,
+    "reachable": 4579,
+    "whitelisted": 19651,
+    "unreachable": 3063
   },
   "by_package": [
     {
@@ -139,7 +139,7 @@
     {
       "package": "internal/model/hub",
       "unreachable_funcs": 2,
-      "unreachable_types": 59,
+      "unreachable_types": 61,
       "unreachable_other": 42
     },
     {
@@ -643,7 +643,7 @@
     {
       "package": "pkg/hmevent",
       "unreachable_funcs": 0,
-      "unreachable_types": 60,
+      "unreachable_types": 61,
       "unreachable_other": 0
     },
     {
@@ -4472,28 +4472,28 @@
       "package": "internal/central/coordinators",
       "identifier": "ProgramExecutor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 553,
+      "line": 605,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ProgramExecutor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 553,
+      "line": 605,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ProgramStateWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 537,
+      "line": 589,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ProgramStateWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 537,
+      "line": 589,
       "kind": "type"
     },
     {
@@ -4570,42 +4570,42 @@
       "package": "internal/central/coordinators",
       "identifier": "RefreshHooks",
       "file": "internal/central/coordinators/hub.go",
-      "line": 203,
+      "line": 233,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "RefreshHooks",
       "file": "internal/central/coordinators/hub.go",
-      "line": 203,
+      "line": 233,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageReader",
       "file": "internal/central/coordinators/hub.go",
-      "line": 637,
+      "line": 689,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageReader",
       "file": "internal/central/coordinators/hub.go",
-      "line": 637,
+      "line": 689,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageSuppressor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 319,
+      "line": 349,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "ServiceMessageSuppressor",
       "file": "internal/central/coordinators/hub.go",
-      "line": 319,
+      "line": 349,
       "kind": "type"
     },
     {
@@ -4640,28 +4640,28 @@
       "package": "internal/central/coordinators",
       "identifier": "SysvarCreator",
       "file": "internal/central/coordinators/hub.go",
-      "line": 756,
+      "line": 808,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarCreator",
       "file": "internal/central/coordinators/hub.go",
-      "line": 756,
+      "line": 808,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarGetter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 630,
+      "line": 682,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarGetter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 630,
+      "line": 682,
       "kind": "type"
     },
     {
@@ -4682,14 +4682,14 @@
       "package": "internal/central/coordinators",
       "identifier": "SysvarValueWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 599,
+      "line": 651,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "SysvarValueWriter",
       "file": "internal/central/coordinators/hub.go",
-      "line": 599,
+      "line": 651,
       "kind": "type"
     },
     {
@@ -7251,7 +7251,7 @@
       "package": "internal/model/calculated",
       "identifier": "DerivedBinaryMapping",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 130,
+      "line": 132,
       "kind": "type"
     },
     {
@@ -10268,14 +10268,28 @@
       "package": "internal/model/hub",
       "identifier": "ProgramEvent",
       "file": "internal/model/hub/program.go",
-      "line": 99,
+      "line": 120,
       "kind": "type"
     },
     {
       "package": "internal/model/hub",
       "identifier": "ProgramEvent",
       "file": "internal/model/hub/program.go",
-      "line": 99,
+      "line": 120,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "ProgramEventKind",
+      "file": "internal/model/hub/program.go",
+      "line": 109,
+      "kind": "type"
+    },
+    {
+      "package": "internal/model/hub",
+      "identifier": "ProgramEventKind",
+      "file": "internal/model/hub/program.go",
+      "line": 109,
       "kind": "type"
     },
     {
@@ -20915,154 +20929,154 @@
       "package": "pkg/hmevent",
       "identifier": "CacheInvalidatedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 770,
+      "line": 789,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "CentralReadinessChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 154,
+      "line": 155,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "CentralSouthboundReadyEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 168,
+      "line": 169,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "CentralStateChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 139,
+      "line": 140,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "CircuitBreakerStateChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 191,
+      "line": 192,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "CircuitBreakerTrippedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 215,
+      "line": 216,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "ClientStateChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 177,
+      "line": 178,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "ConnectionHealthChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 756,
+      "line": 775,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "ConnectionLostEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 203,
+      "line": 204,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "ConnectivityChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 596,
+      "line": 615,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DataFetchCompletedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 626,
+      "line": 645,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DataPointOptimisticRolledBackEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 283,
+      "line": 284,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DataPointSourceChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 397,
+      "line": 398,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DataPointValueChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 271,
+      "line": 272,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DataPointValueReceivedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 740,
+      "line": 759,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DataRefreshCompletedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 709,
+      "line": 728,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DataRefreshTriggeredEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 687,
+      "line": 706,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DeviceCreatedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 299,
+      "line": 300,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DeviceLifecycleEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 666,
+      "line": 685,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DeviceRemovedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 312,
+      "line": 313,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DeviceTriggerEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 337,
+      "line": 338,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "DriftCorrectedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 613,
+      "line": 632,
       "kind": "type"
     },
     {
@@ -21097,133 +21111,140 @@
       "package": "pkg/hmevent",
       "identifier": "HeartbeatTimerFiredEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 229,
+      "line": 230,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "HubChannelsAssignedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 327,
+      "line": 328,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "IncidentRecordedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 577,
+      "line": 596,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "InstallModeChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 477,
+      "line": 496,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "IntegrationIssue",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 804,
+      "line": 823,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "IntegrationIssue",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 804,
+      "line": 823,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "LinkPeerChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 352,
+      "line": 353,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "PingPongMismatchEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 255,
+      "line": 256,
+      "kind": "type"
+    },
+    {
+      "package": "pkg/hmevent",
+      "identifier": "ProgramChangedEvent",
+      "file": "pkg/hmevent/catalogue.go",
+      "line": 470,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "ProgramExecutedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 450,
+      "line": 451,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "RPCParameterReceivedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 646,
+      "line": 665,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "RecoveryAttemptedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 786,
+      "line": 805,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "RecoveryCompletedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 415,
+      "line": 416,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "RecoveryFailedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 427,
+      "line": 428,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "RecoveryStageChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 377,
+      "line": 378,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "RecoveryStartedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 366,
+      "line": 367,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "RequestCoalescedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 240,
+      "line": 241,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "SystemStatusChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 510,
+      "line": 529,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "SysvarChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 462,
+      "line": 481,
       "kind": "type"
     },
     {
       "package": "pkg/hmevent",
       "identifier": "WeekProfileChangedEvent",
       "file": "pkg/hmevent/catalogue.go",
-      "line": 492,
+      "line": 511,
       "kind": "type"
     },
     {
@@ -34495,6 +34516,13 @@
     },
     {
       "package": "internal/central/adapter",
+      "identifier": "TestCalculatedSlotStateGatedOnSourceValidity",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/adapter/eventbridge_calculated_availability_test.go",
+      "line": 98
+    },
+    {
+      "package": "internal/central/adapter",
       "identifier": "TestCallbackHandlersCombinedSkipsUnknownSubParam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/callback_combined_test.go",
@@ -39489,14 +39517,14 @@
       "identifier": "TestGCOnce_DeletesOrphanRowsKeepsAliveRows",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/values_cache_gc_test.go",
-      "line": 78
+      "line": 84
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestGCOnce_SkipsWhenAliveSetEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/values_cache_gc_test.go",
-      "line": 116
+      "line": 122
     },
     {
       "package": "internal/central/adapter",
@@ -49380,7 +49408,7 @@
       "identifier": "TestWireValuesCacheFlusher_RunsPeriodicGC",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/values_cache_gc_test.go",
-      "line": 151
+      "line": 157
     },
     {
       "package": "internal/central/adapter",
@@ -71031,28 +71059,28 @@
       "identifier": "IsRelevantForMapping",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 224
+      "line": 226
     },
     {
       "package": "internal/model/calculated",
       "identifier": "IsRelevantForMapping",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 224
+      "line": 226
     },
     {
       "package": "internal/model/calculated",
       "identifier": "IsRelevantForModel",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 230
+      "line": 232
     },
     {
       "package": "internal/model/calculated",
       "identifier": "IsRelevantForModel",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 230
+      "line": 232
     },
     {
       "package": "internal/model/calculated",
@@ -71101,70 +71129,70 @@
       "identifier": "LookupDerivedBinaryMappingByParam",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 213
+      "line": 215
     },
     {
       "package": "internal/model/calculated",
       "identifier": "LookupDerivedBinaryMappingByParam",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 213
+      "line": 215
     },
     {
       "package": "internal/model/calculated",
       "identifier": "LookupDerivedBinaryMappings",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 200
+      "line": 202
     },
     {
       "package": "internal/model/calculated",
       "identifier": "LookupDerivedBinaryMappings",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 200
+      "line": 202
     },
     {
       "package": "internal/model/calculated",
       "identifier": "MakeDerivedBinarySensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 241
+      "line": 243
     },
     {
       "package": "internal/model/calculated",
       "identifier": "MakeDerivedBinarySensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 241
+      "line": 243
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewApparentTemperatureSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 373
+      "line": 383
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewApparentTemperatureSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 373
+      "line": 383
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewApparentTemperatureSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 379
+      "line": 389
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewApparentTemperatureSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 379
+      "line": 389
     },
     {
       "package": "internal/model/calculated",
@@ -71227,98 +71255,98 @@
       "identifier": "NewDewPointSpreadSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 146
+      "line": 148
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewDewPointSpreadSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 146
+      "line": 148
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewDewPointSpreadSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 152
+      "line": 154
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewDewPointSpreadSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 152
+      "line": 154
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewEnthalpySensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 309
+      "line": 317
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewEnthalpySensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 309
+      "line": 317
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewEnthalpySensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 315
+      "line": 323
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewEnthalpySensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 315
+      "line": 323
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewFrostPointSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 200
+      "line": 204
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewFrostPointSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 200
+      "line": 204
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewFrostPointSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 206
+      "line": 210
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewFrostPointSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 206
+      "line": 210
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewIntrusionAlarmSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 121
+      "line": 123
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewIntrusionAlarmSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 121
+      "line": 123
     },
     {
       "package": "internal/model/calculated",
@@ -71353,32 +71381,25 @@
       "identifier": "NewSmokeAlarmSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 111
+      "line": 113
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewSmokeAlarmSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 111
+      "line": 113
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewVaporConcentrationSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 254
+      "line": 260
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewVaporConcentrationSensor",
-      "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
-      "file": "internal/model/calculated/climate.go",
-      "line": 254
-    },
-    {
-      "package": "internal/model/calculated",
-      "identifier": "NewVaporConcentrationSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
       "line": 260
@@ -71388,21 +71409,28 @@
       "identifier": "NewVaporConcentrationSensorWithIdentity",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/climate.go",
-      "line": 260
+      "line": 266
+    },
+    {
+      "package": "internal/model/calculated",
+      "identifier": "NewVaporConcentrationSensorWithIdentity",
+      "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
+      "file": "internal/model/calculated/climate.go",
+      "line": 266
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewWindowOpenSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 97
+      "line": 99
     },
     {
       "package": "internal/model/calculated",
       "identifier": "NewWindowOpenSensor",
       "reason": "auto-whitelist:pattern=calculated-dp-no-identity-wrapper",
       "file": "internal/model/calculated/derived_binary.go",
-      "line": 97
+      "line": 99
     },
     {
       "package": "internal/model/calculated",
@@ -71444,7 +71472,7 @@
       "identifier": "TestAllSensorsImplementStateUncertain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 261
+      "line": 266
     },
     {
       "package": "internal/model/calculated",
@@ -71619,7 +71647,7 @@
       "identifier": "TestCalculatedSuppressesPublishWhenSourcesRecentlyPublished",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 299
+      "line": 304
     },
     {
       "package": "internal/model/calculated",
@@ -71969,28 +71997,28 @@
       "identifier": "TestDewPointStateUncertainAfterManualSourceRegistration",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 169
+      "line": 174
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestDewPointStateUncertainAfterSourceCleared",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 229
+      "line": 234
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestDewPointStateUncertainBeforeAnyValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 158
+      "line": 163
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestDewPointStateUncertainOptimisticWrite",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 200
+      "line": 205
     },
     {
       "package": "internal/model/calculated",
@@ -72550,49 +72578,49 @@
       "identifier": "TestShouldPublishCalcUpdateOneSrcAlwaysTrue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 285
+      "line": 290
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestShouldPublishCalcUpdateThreeSources",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 326
+      "line": 331
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkAllSourcesObservedNotUncertain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 63
+      "line": 68
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkAllSourcesUnobservedIsUncertain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 38
+      "line": 43
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkIsRefreshedFromSourcesAll",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 140
+      "line": 145
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkIsRefreshedFromSourcesEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 119
+      "line": 124
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkIsRefreshedFromSourcesPartial",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 127
+      "line": 132
     },
     {
       "package": "internal/model/calculated",
@@ -72613,35 +72641,42 @@
       "identifier": "TestSourceSinkNilRegistrationIsIgnored",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 109
+      "line": 114
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkNoSourcesIsUncertain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 30
+      "line": 35
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkOneSourceUnobservedIsUncertain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 50
+      "line": 55
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkOptimisticWriteClearedNotUncertain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 93
+      "line": 98
     },
     {
       "package": "internal/model/calculated",
       "identifier": "TestSourceSinkOptimisticWriteIsUncertain",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/calculated/state_uncertain_test.go",
-      "line": 77
+      "line": 82
+    },
+    {
+      "package": "internal/model/calculated",
+      "identifier": "TestSourceSinkSourcesValid",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/calculated/state_uncertain_test.go",
+      "line": 350
     },
     {
       "package": "internal/model/calculated",
@@ -87936,14 +87971,14 @@
       "identifier": "AllowedInternalParameters",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2176
+      "line": 2218
     },
     {
       "package": "internal/model/generic",
       "identifier": "AllowedInternalParameters",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2176
+      "line": 2218
     },
     {
       "package": "internal/model/generic",
@@ -88146,14 +88181,14 @@
       "identifier": "DetectStatusParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 1964
+      "line": 2006
     },
     {
       "package": "internal/model/generic",
       "identifier": "DetectStatusParameter",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 1964
+      "line": 2006
     },
     {
       "package": "internal/model/generic",
@@ -88286,14 +88321,14 @@
       "identifier": "EventData",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2105
+      "line": 2147
     },
     {
       "package": "internal/model/generic",
       "identifier": "EventData",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2105
+      "line": 2147
     },
     {
       "package": "internal/model/generic",
@@ -88762,14 +88797,14 @@
       "identifier": "NewDataPoint",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 337
+      "line": 346
     },
     {
       "package": "internal/model/generic",
       "identifier": "NewDataPoint",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 337
+      "line": 346
     },
     {
       "package": "internal/model/generic",
@@ -89196,14 +89231,14 @@
       "identifier": "StateChangeOpt",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2018
+      "line": 2060
     },
     {
       "package": "internal/model/generic",
       "identifier": "StateChangeOpt",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2018
+      "line": 2060
     },
     {
       "package": "internal/model/generic",
@@ -92189,6 +92224,20 @@
     },
     {
       "package": "internal/model/generic",
+      "identifier": "TestValidityGateDoesNotRescueAnInvalidDataPoint",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/generic/datapoint_validity_test.go",
+      "line": 613
+    },
+    {
+      "package": "internal/model/generic",
+      "identifier": "TestValidityGateVetoesOtherwiseValidDataPoint",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/model/generic/datapoint_validity_test.go",
+      "line": 584
+    },
+    {
+      "package": "internal/model/generic",
       "identifier": "TestValueBehaviorChainDeviceOverride",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/generic/value_behavior_chain_test.go",
@@ -92409,14 +92458,14 @@
       "identifier": "WithValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2053
+      "line": 2095
     },
     {
       "package": "internal/model/generic",
       "identifier": "WithValue",
       "reason": "auto-whitelist:pattern=generic-model-helper",
       "file": "internal/model/generic/datapoint.go",
-      "line": 2053
+      "line": 2095
     },
     {
       "package": "internal/model/generic",
@@ -121561,17 +121610,31 @@
     },
     {
       "package": "internal/north/rest/handlers",
-      "identifier": "CalculatedDPDetail",
+      "identifier": "CalculatedDPAvailable",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 47
+      "line": 100
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CalculatedDPAvailable",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/calculated_data_points.go",
+      "line": 100
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CalculatedDPDetail",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 47
+      "line": 57
+    },
+    {
+      "package": "internal/north/rest/handlers",
+      "identifier": "CalculatedDPDetail",
+      "reason": "auto-whitelist:pattern=rest-handler-pkg",
+      "file": "internal/north/rest/handlers/calculated_data_points.go",
+      "line": 57
     },
     {
       "package": "internal/north/rest/handlers",
@@ -121592,14 +121655,14 @@
       "identifier": "CalculatedDPTranslatedName",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 94
+      "line": 122
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "CalculatedDPTranslatedName",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 94
+      "line": 122
     },
     {
       "package": "internal/north/rest/handlers",
@@ -124000,14 +124063,14 @@
       "identifier": "GetCalculatedDataPoint",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 181
+      "line": 209
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "GetCalculatedDataPoint",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 181
+      "line": 209
     },
     {
       "package": "internal/north/rest/handlers",
@@ -125358,14 +125421,14 @@
       "identifier": "ListCalculatedDataPoints",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 143
+      "line": 171
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "ListCalculatedDataPoints",
       "reason": "auto-whitelist:pattern=rest-handler-pkg",
       "file": "internal/north/rest/handlers/calculated_data_points.go",
-      "line": 143
+      "line": 171
     },
     {
       "package": "internal/north/rest/handlers",
@@ -129100,24 +129163,31 @@
     },
     {
       "package": "internal/north/rest/handlers",
+      "identifier": "TestCalculatedDPSummaryAvailabilityFollowsSources",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/handlers/calculated_data_points_test.go",
+      "line": 386
+    },
+    {
+      "package": "internal/north/rest/handlers",
       "identifier": "TestCalculatedDPTranslatedName_CombinedDuration",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 321
+      "line": 324
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestCalculatedDPTranslatedName_Fallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 272
+      "line": 275
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestCalculatedDPTranslatedName_LocaleLabelWins",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 296
+      "line": 299
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130258,21 +130328,21 @@
       "identifier": "TestDependsOnForKey_DefaultCase_ReturnsNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 240
+      "line": 243
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestDependsOnForKey_DewPoint",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 248
+      "line": 251
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestDependsOnForKey_OperatingVoltageLevel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 257
+      "line": 260
     },
     {
       "package": "internal/north/rest/handlers",
@@ -130846,35 +130916,35 @@
       "identifier": "TestGetCalculatedDataPoint_DependsOnPopulated",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 202
+      "line": 205
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetCalculatedDataPoint_DeviceNotFound_Returns404",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 188
+      "line": 191
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetCalculatedDataPoint_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 146
+      "line": 149
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetCalculatedDataPoint_InvalidChannelNo_Returns400",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 223
+      "line": 226
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestGetCalculatedDataPoint_NotFound_Returns404",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 172
+      "line": 175
     },
     {
       "package": "internal/north/rest/handlers",
@@ -132498,28 +132568,28 @@
       "identifier": "TestListCalculatedDataPoints_ChannelNotFound_Returns404",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 108
+      "line": 111
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestListCalculatedDataPoints_DeviceNotFound_Returns404",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 95
+      "line": 98
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestListCalculatedDataPoints_EmptyChannel_ReturnsEmptyList",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 123
+      "line": 126
     },
     {
       "package": "internal/north/rest/handlers",
       "identifier": "TestListCalculatedDataPoints_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 66
+      "line": 69
     },
     {
       "package": "internal/north/rest/handlers",
@@ -136376,7 +136446,7 @@
       "identifier": "TestToCalculatedDPSummary_UniqueID",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/handlers/calculated_data_points_test.go",
-      "line": 344
+      "line": 347
     },
     {
       "package": "internal/north/rest/handlers",
@@ -138980,14 +139050,14 @@
       "identifier": "AlarmMessagesTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 363
+      "line": 412
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "AlarmMessagesTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 363
+      "line": 412
     },
     {
       "package": "internal/north/rest/ws",
@@ -139190,56 +139260,56 @@
       "identifier": "CentralReadinessChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 189
+      "line": 210
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CentralReadinessChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 189
+      "line": 210
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CentralReadinessTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 249
+      "line": 270
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CentralReadinessTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 249
+      "line": 270
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CentralStateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 78
+      "line": 90
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CentralStateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 78
+      "line": 90
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CentralStateTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 243
+      "line": 264
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CentralStateTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 243
+      "line": 264
     },
     {
       "package": "internal/north/rest/ws",
@@ -139428,14 +139498,14 @@
       "identifier": "ConnectivityTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 392
+      "line": 441
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ConnectivityTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 392
+      "line": 441
     },
     {
       "package": "internal/north/rest/ws",
@@ -139498,42 +139568,42 @@
       "identifier": "CustomDataPointStateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 64
+      "line": 76
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CustomDataPointStateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 64
+      "line": 76
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CustomDataPointTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 237
+      "line": 258
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "CustomDataPointTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 237
+      "line": 258
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "DataPointTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 230
+      "line": 251
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "DataPointTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/payloads.go",
-      "line": 230
+      "line": 251
     },
     {
       "package": "internal/north/rest/ws",
@@ -139862,28 +139932,28 @@
       "identifier": "HubConnectivityChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 340
+      "line": 389
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "HubConnectivityChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 340
+      "line": 389
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "HubCountChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 324
+      "line": 373
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "HubCountChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 324
+      "line": 373
     },
     {
       "package": "internal/north/rest/ws",
@@ -139904,28 +139974,28 @@
       "identifier": "HubEventsSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 165
+      "line": 194
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "HubEventsSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 165
+      "line": 194
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "HubMetricChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 331
+      "line": 380
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "HubMetricChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 331
+      "line": 380
     },
     {
       "package": "internal/north/rest/ws",
@@ -139946,14 +140016,14 @@
       "identifier": "HubSystemUpdateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 352
+      "line": 401
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "HubSystemUpdateChangedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 352
+      "line": 401
     },
     {
       "package": "internal/north/rest/ws",
@@ -139974,14 +140044,14 @@
       "identifier": "InboxTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 377
+      "line": 426
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "InboxTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 377
+      "line": 426
     },
     {
       "package": "internal/north/rest/ws",
@@ -140128,14 +140198,14 @@
       "identifier": "MetricsTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 384
+      "line": 433
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "MetricsTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 384
+      "line": 433
     },
     {
       "package": "internal/north/rest/ws",
@@ -140226,14 +140296,14 @@
       "identifier": "NewHubEventsSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 177
+      "line": 206
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "NewHubEventsSubscriber",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 177
+      "line": 206
     },
     {
       "package": "internal/north/rest/ws",
@@ -140349,6 +140419,20 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "ProgramChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/hub_events.go",
+      "line": 98
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "ProgramChangedPayload",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/hub_events.go",
+      "line": 98
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "ProgramExecutedPayload",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
@@ -140366,14 +140450,14 @@
       "identifier": "ProgramTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 98
+      "line": 127
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ProgramTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 98
+      "line": 127
     },
     {
       "package": "internal/north/rest/ws",
@@ -140548,14 +140632,14 @@
       "identifier": "ServiceMessagesTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 370
+      "line": 419
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "ServiceMessagesTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 370
+      "line": 419
     },
     {
       "package": "internal/north/rest/ws",
@@ -140646,14 +140730,14 @@
       "identifier": "SystemUpdateTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 400
+      "line": 449
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "SystemUpdateTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 400
+      "line": 449
     },
     {
       "package": "internal/north/rest/ws",
@@ -140674,14 +140758,14 @@
       "identifier": "SysvarTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 91
+      "line": 120
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "SysvarTopic",
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/hub_events.go",
-      "line": 91
+      "line": 120
     },
     {
       "package": "internal/north/rest/ws",
@@ -141056,52 +141140,59 @@
     },
     {
       "package": "internal/north/rest/ws",
+      "identifier": "TestCalculatedDPEntryCarriesSourceGatedAvailability",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/north/rest/ws/custom_data_points_test.go",
+      "line": 495
+    },
+    {
+      "package": "internal/north/rest/ws",
       "identifier": "TestCalculatedDPGet_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 370
+      "line": 373
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCalculatedDPGet_MissingDeviceParam_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 406
+      "line": 409
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCalculatedDPGet_NotFound_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 392
+      "line": 395
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCalculatedDPGet_TranslatedNameLocaleWins",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 465
+      "line": 468
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCalculatedDPList_AllDevices_ReturnsMap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 347
+      "line": 350
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCalculatedDPList_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 323
+      "line": 326
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCalculatedDPList_TranslatedName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 442
+      "line": 445
     },
     {
       "package": "internal/north/rest/ws",
@@ -141206,7 +141297,7 @@
       "identifier": "TestClassifyNoCrossTalk_TwoClients",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/classify_subscribe_test.go",
-      "line": 105
+      "line": 107
     },
     {
       "package": "internal/north/rest/ws",
@@ -141220,7 +141311,7 @@
       "identifier": "TestClassifyOptOut_WithoutClassify_StripsClassificationFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/classify_subscribe_test.go",
-      "line": 61
+      "line": 62
     },
     {
       "package": "internal/north/rest/ws",
@@ -141304,63 +141395,63 @@
       "identifier": "TestCustomDPGet_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 221
+      "line": 224
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPGet_MissingDeviceParam_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 254
+      "line": 257
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPGet_MissingDevice_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 242
+      "line": 245
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPList_DeviceNotFound_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 207
+      "line": 210
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPList_NoParams_ReturnsAllDevices",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 165
+      "line": 168
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPList_WithDeviceParam_ReturnsOneDevice",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 186
+      "line": 189
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPSet_HappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 268
+      "line": 271
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPSet_MissingOperation_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 306
+      "line": 309
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestCustomDPSet_UnknownOperation_ReturnsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 290
+      "line": 293
     },
     {
       "package": "internal/north/rest/ws",
@@ -143180,21 +143271,21 @@
       "identifier": "TestPublishCentralStateChangedShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/payloads_test.go",
-      "line": 66
+      "line": 69
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestPublishCustomDataPointStateChangedKind_DefaultViaWrapper",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/payloads_kind_test.go",
-      "line": 45
+      "line": 53
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestPublishCustomDataPointStateChangedKind_RefreshPropagates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/payloads_kind_test.go",
-      "line": 34
+      "line": 42
     },
     {
       "package": "internal/north/rest/ws",
@@ -143222,7 +143313,7 @@
       "identifier": "TestPublishDataPointValueChangedKind_InitialPropagates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/payloads_kind_test.go",
-      "line": 21
+      "line": 25
     },
     {
       "package": "internal/north/rest/ws",
@@ -143341,21 +143432,21 @@
       "identifier": "TestRegisterCustomDPCommands_AllFiveCommandsRegistered",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 141
+      "line": 144
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestRegisterCustomDPCommands_NilIndex_SkipsRegistration",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 131
+      "line": 134
     },
     {
       "package": "internal/north/rest/ws",
       "identifier": "TestRegisterCustomDPCommands_NilRouter_NoPanic",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/custom_data_points_test.go",
-      "line": 126
+      "line": 129
     },
     {
       "package": "internal/north/rest/ws",
@@ -143761,7 +143852,7 @@
       "identifier": "TestSystemStatusSubscriberNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/rest/ws/ws_extra_test.go",
-      "line": 59
+      "line": 63
     },
     {
       "package": "internal/north/rest/ws",
@@ -144021,6 +144112,20 @@
       "reason": "auto-whitelist:pattern=ws-command-pkg",
       "file": "internal/north/rest/ws/commands_missing.go",
       "line": 110
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "ValueChange",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/payloads.go",
+      "line": 104
+    },
+    {
+      "package": "internal/north/rest/ws",
+      "identifier": "ValueChange",
+      "reason": "auto-whitelist:pattern=ws-command-pkg",
+      "file": "internal/north/rest/ws/payloads.go",
+      "line": 104
     },
     {
       "package": "internal/north/ui",
@@ -158825,7 +158930,7 @@
       "identifier": "TestWSBroadcastsHaveProductionEmitter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "tests/contract/ws_broadcast_emitter_test.go",
-      "line": 290
+      "line": 295
     },
     {
       "package": "tests/contract",

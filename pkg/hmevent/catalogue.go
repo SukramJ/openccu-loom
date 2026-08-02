@@ -51,6 +51,7 @@ const (
 	EventTypeRecoveryCompleted           EventType = "recovery.completed"
 	EventTypeRecoveryFailed              EventType = "recovery.failed"
 	EventTypeProgramExecuted             EventType = "hub.program_executed"
+	EventTypeProgramChanged              EventType = "hub.program_changed"
 	EventTypeSysvarChanged               EventType = "hub.sysvar_changed"
 	// EventTypeHubChannelsAssigned fires when the device-association pass
 	// (assignHubChannels) changes which physical device one or more system
@@ -457,6 +458,24 @@ type ProgramExecutedEvent struct {
 
 // Type implements Event.
 func (ProgramExecutedEvent) Type() EventType { return EventTypeProgramExecuted }
+
+// ProgramChangedEvent fires when a CCU program's activity flag changes —
+// the operator toggled it in the CCU WebUI, or a north-bound client wrote
+// it. A CCU program is two controls: the activity flag decides whether it
+// reacts at all, and the execution runs it once. A deactivated program
+// refuses the execution, so a consumer offering "run now" has to learn
+// about the transition to render that control unavailable.
+//
+// Distinct from [ProgramExecutedEvent], which reports a run.
+type ProgramChangedEvent struct {
+	Base
+	CentralName string
+	ProgramID   string
+	Active      bool
+}
+
+// Type implements Event.
+func (ProgramChangedEvent) Type() EventType { return EventTypeProgramChanged }
 
 // SysvarChangedEvent fires when a sysvar's value changes.
 type SysvarChangedEvent struct {

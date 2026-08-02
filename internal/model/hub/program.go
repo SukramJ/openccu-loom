@@ -44,6 +44,12 @@ type Program struct {
 	// Nil means no notification is sent (default until wired).
 	ExecuteNotifier func(ctx context.Context, id string, trigger hmenum.ProgramTrigger, success bool)
 
+	// ActiveNotifier is called by [OnActive] whenever the observed activity
+	// flag changes. The hub coordinator wires this to publish a
+	// ProgramChangedEvent on the internal bus. Nil means no notification is
+	// sent (default until wired).
+	ActiveNotifier func(id string, active bool)
+
 	mu               sync.RWMutex
 	active           bool
 	hasActive        bool
@@ -95,8 +101,24 @@ func (p *Program) registerProgramServices() {
 	})
 }
 
+// ProgramEventKind distinguishes the two things that can happen to a CCU
+// program. They are separate controls, so a subscriber that only cares
+// about one must be able to tell them apart: Success and Trigger are
+// meaningless on an activity change, and the execution timestamp does not
+// advance.
+type ProgramEventKind string
+
+const (
+	// ProgramEventKindExecution reports a run of the program.
+	ProgramEventKindExecution ProgramEventKind = "execution"
+	// ProgramEventKindActivity reports a change of the activity flag —
+	// the control that decides whether the program reacts at all.
+	ProgramEventKindActivity ProgramEventKind = "activity"
+)
+
 // ProgramEvent describes an observable program state change.
 type ProgramEvent struct {
+	Kind    ProgramEventKind
 	When    time.Time
 	Active  bool
 	Success bool
@@ -238,12 +260,38 @@ func (p *Program) UpdateMetadata(name string, isInternal bool, writer ProgramWri
 	}
 }
 
-// OnActive records an observed active/inactive state.
+// OnActive records an observed active/inactive state and notifies
+// subscribers when the flag actually changed (a first observation counts as
+// a change). Re-observing the same value on every hub scan is silent.
+//
+// The notification matters because the activity flag gates the program's
+// other control: a deactivated program refuses to run, so a consumer
+// offering "run now" has to be told when the answer flips. Without it, the
+// only path that ever fired was [OnExecution] — leaving every consumer's
+// view of execute-availability stale until the program next ran.
 func (p *Program) OnActive(active bool) {
 	p.mu.Lock()
+	if p.hasActive && p.active == active {
+		p.mu.Unlock()
+		return
+	}
 	p.active = active
 	p.hasActive = true
+	cbs := make([]func(event ProgramEvent), len(p.callbacks))
+	copy(cbs, p.callbacks)
+	notifier := p.ActiveNotifier
+	id := p.ID
 	p.mu.Unlock()
+
+	ev := ProgramEvent{Kind: ProgramEventKindActivity, When: time.Now(), Active: active}
+	for _, cb := range cbs {
+		if cb != nil {
+			cb(ev)
+		}
+	}
+	if notifier != nil {
+		notifier(id, active)
+	}
 }
 
 // OnExecution records an execution event emitted by the hub
@@ -259,7 +307,7 @@ func (p *Program) OnExecution(success bool, trigger hmenum.ProgramTrigger) {
 	active := p.active
 	p.mu.Unlock()
 	p.markCertain()
-	ev := ProgramEvent{When: now, Active: active, Success: success, Trigger: trigger}
+	ev := ProgramEvent{Kind: ProgramEventKindExecution, When: now, Active: active, Success: success, Trigger: trigger}
 	for _, cb := range cbs {
 		if cb != nil {
 			cb(ev)

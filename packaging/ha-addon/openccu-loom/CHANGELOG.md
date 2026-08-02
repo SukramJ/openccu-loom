@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.10
+
+- **A deactivated program now greys out its "run now" button.** The CCU
+  refuses to run a deactivated program, and the daemon knew that — but it
+  never told anyone when the flag changed, so the button stayed pressable
+  until the program next ran. Toggling a program, in Home Assistant or in
+  the CCU WebUI, now updates both of its controls.
+- Sensor values that the CCU has flagged as faulty are reported as
+  unavailable on the push that carries them, instead of only when a client
+  re-reads its catalogue.
+
 ## 0.52.9
 
 - **A dew point derived from a broken thermometer now goes unavailable

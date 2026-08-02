@@ -847,21 +847,35 @@ func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmeve
 	ch := lookupChannel(b.registry, deviceAddr, channelNo)
 	category, dpType := valueChangedClassification(ch, e.Key.Parameter)
 	serialSuffix := b.registry.SerialSuffix(centralName)
+	bucket := slotBucket(ch, e.Key)
 	// A calculated data point carries the `calculated` family marker; the
 	// WS key has to match the REST and MQTT ones byte for byte, because a
 	// consumer keys one entity registry from all three.
 	uniqueID := routingkey.CanonicalUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter, "")
-	if isCalculatedParameter(ch, e.Key.Parameter) {
+	if bucket == payload.BucketCalculated {
 		uniqueID = routingkey.CalculatedUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter)
 	}
-	b.wsHub.PublishDataPointValueChangedKind(
-		envKind,
-		centralName, iface, deviceAddr, channelNo,
-		e.Key.Parameter, string(e.Key.ParamsetKey),
-		e.NewValue.Unwrap(), e.OldValue.Unwrap(),
-		e.Timestamp(),
-		category, dpType, uniqueID,
-	)
+	// Availability rides the push: it can flip without the value moving, and
+	// the transition into a fault usually arrives *as* a value change. The
+	// same helper answers for the MQTT slot state, so the two planes cannot
+	// disagree about one data point.
+	_, availDP := lookupDPSource(ch, e.Key.Parameter, bucket)
+	b.wsHub.PublishDataPointValueChanged(ws.ValueChange{
+		EnvelopeKind:  envKind,
+		Central:       centralName,
+		Interface:     iface,
+		DeviceAddress: deviceAddr,
+		Channel:       channelNo,
+		Parameter:     e.Key.Parameter,
+		ParamsetKey:   string(e.Key.ParamsetKey),
+		Value:         e.NewValue.Unwrap(),
+		Previous:      e.OldValue.Unwrap(),
+		When:          e.Timestamp(),
+		Category:      category,
+		DataPointType: dpType,
+		UniqueID:      uniqueID,
+		Available:     dpAvailability(availDP, bucket),
+	})
 	// CDP-state aggregate: when the affected channel hosts a
 	// Custom-DP, also emit a state snapshot on
 	// `device.<addr>.cdps.<name>` so SPA tiles can subscribe
@@ -1305,13 +1319,7 @@ func (b *EventBridge) publishSlotState(
 		return
 	}
 
-	bucket := payload.BucketValues
-	switch {
-	case e.Key.ParamsetKey == hmenum.ParamsetKeyMaster:
-		bucket = payload.BucketMaster
-	case ch != nil && isCalculatedParameter(ch, e.Key.Parameter):
-		bucket = payload.BucketCalculated
-	}
+	bucket := slotBucket(ch, e.Key)
 	slot := payload.TopicSlot{
 		Address:   deviceAddr,
 		Channel:   channelNo,
@@ -1334,20 +1342,7 @@ func (b *EventBridge) publishSlotState(
 	// on the retained /config companion topic, ADR 0011.
 	src, dp := lookupDPSource(ch, e.Key.Parameter, bucket)
 	if dp != nil {
-		// Gate availability on the data point's full validity, mirroring
-		// the reference is_valid north-bound gate (model/data_point.py
-		// is_valid): refreshed + acceptable STATUS + value type + range. An
-		// unobserved, out-of-range or OVERFLOW/UNDERFLOW reading publishes as
-		// unavailable so HA never records it as a confirmed value.
-		//
-		// CALCULATED slots are gated too: a derived value is only as good as
-		// the sources it was computed from, and the calculated sensor answers
-		// that through its source-validity gate. MASTER stays exempt —
-		// configuration values are not runtime readings, and a sleeping
-		// battery device may never deliver a fresh MASTER read.
-		if bucket != payload.BucketMaster {
-			state.Available = dpValid(dp)
-		}
+		state.Available = dpAvailability(dp, bucket)
 		pd := dp.ParameterData()
 		// ENUM wire values come off the wire as int indices; HA's
 		// MQTT discovery declares `options: [...]` from the same
@@ -1405,6 +1400,40 @@ func dpValid(dp device.ParameterDataPoint) bool {
 		return v.IsValid()
 	}
 	return true
+}
+
+// slotBucket selects the paramset bucket a value-changed event belongs to.
+// It steers the MQTT topic segment and, through [dpAvailability], the
+// availability rule — so both planes classify one data point identically.
+func slotBucket(ch *device.Channel, key hmtypes.DataPointKey) payload.Bucket {
+	switch {
+	case key.ParamsetKey == hmenum.ParamsetKeyMaster:
+		return payload.BucketMaster
+	case ch != nil && isCalculatedParameter(ch, key.Parameter):
+		return payload.BucketCalculated
+	default:
+		return payload.BucketValues
+	}
+}
+
+// dpAvailability is the single north-bound answer to "is this value a
+// confirmed reading?", shared by the MQTT slot state and the WebSocket
+// value-changed push so the two can never disagree about one data point.
+//
+// Mirrors the reference is_valid gate (model/data_point.py): refreshed +
+// acceptable STATUS + value type + range. CALCULATED is gated too — a
+// derived value is only as good as the sources it was computed from, which
+// the calculated sensor answers through its source-validity gate. MASTER is
+// exempt: configuration is not a runtime reading, and a sleeping battery
+// device may never deliver a fresh MASTER read.
+//
+// An unresolvable data point reports available: an unclassifiable entry must
+// not be greyed out on missing information.
+func dpAvailability(dp device.ParameterDataPoint, bucket payload.Bucket) bool {
+	if dp == nil || bucket == payload.BucketMaster {
+		return true
+	}
+	return dpValid(dp)
 }
 
 // republishBaseForStatusPair re-publishes the base parameter's slot state

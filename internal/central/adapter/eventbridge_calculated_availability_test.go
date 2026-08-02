@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -103,5 +104,88 @@ func TestCalculatedSlotStateGatedOnSourceValidity(t *testing.T) {
 	}
 	if calcSlotAvailability(t, hmenum.ParameterStatusOverflow) {
 		t.Fatal("calculated slot must publish available=false when a source reports OVERFLOW")
+	}
+}
+
+// wsAvailability drives an initial snapshot and returns the `available` flag
+// of the WebSocket value-changed push for the named parameter.
+func wsAvailability(t *testing.T, param string, tempStatus hmenum.ParameterStatus) bool {
+	t.Helper()
+
+	reg, dev := registryWithDevice(t)
+	ch := dev.AddChannel("0001ABCD:1", 1, "WEATHER_TRANSCEIVER", hmenum.ParamsetKeyValues)
+
+	temp := generic.NewFloatSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterActualTemperature),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	hum := generic.NewFloatSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterHumidity),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	ch.Put(temp)
+	ch.Put(hum)
+
+	sensor := calculated.NewDewPointSensorWithIdentity("ccu-01", ch.Address)
+	ch.AttachCalculatedDataPoint(sensor)
+
+	temp.OnEvent(20.0)
+	hum.OnEvent(50.0)
+	if tempStatus != "" {
+		temp.UpdateStatus(tempStatus)
+	}
+
+	wsHub := ws.NewHub()
+	eb := NewEventBridge(reg, wsHub, nil)
+	eb.Start(context.Background())
+	defer eb.Stop()
+
+	eb.PublishInitialSnapshot(context.Background())
+
+	res := wsHub.Replay(0, nil)
+	for _, e := range res.Events {
+		p, ok := e.Payload.(ws.DataPointValueChangedPayload)
+		if !ok || p.Parameter != param {
+			continue
+		}
+		return p.Available
+	}
+	t.Fatalf("no value-changed push for %s", param)
+	return false
+}
+
+// TestValueChangedPushCarriesAvailability pins that the WebSocket push says
+// whether the value it carries is a confirmed reading. A consumer cannot
+// derive this: `observed` stays true through a fault, and the transition into
+// a fault usually arrives as a value change — so availability read only at
+// catalogue-refresh time renders the faulted value as confirmed.
+func TestValueChangedPushCarriesAvailability(t *testing.T) {
+	t.Parallel()
+
+	if !wsAvailability(t, "ACTUAL_TEMPERATURE", "") {
+		t.Fatal("a healthy reading must push available=true")
+	}
+	if wsAvailability(t, "ACTUAL_TEMPERATURE", hmenum.ParameterStatusOverflow) {
+		t.Fatal("an OVERFLOW reading must push available=false")
+	}
+	// The derived sensor follows its source over the same plane.
+	if wsAvailability(t, "DEW_POINT", hmenum.ParameterStatusOverflow) {
+		t.Fatal("a calculated value off a faulted source must push available=false")
 	}
 }
