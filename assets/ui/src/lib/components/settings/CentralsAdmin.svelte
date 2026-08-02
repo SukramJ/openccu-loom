@@ -88,9 +88,18 @@
   const PROGRAM_MARKERS: DescriptionMarker[] = ["HX", "INTERNAL"];
   const NS_PER_SEC = 1_000_000_000;
 
-  // i18n key carrying the per-marker explanation shown next to each checkbox.
-  function markerHelp(m: DescriptionMarker): string {
-    return t(`centrals.behavior.marker.${m.toLowerCase()}`);
+  // Per-marker explanation shown next to each checkbox. INTERNAL means the
+  // same thing for both lists but lands very differently — the CCU flags
+  // most ordinary programs as internal and hardly any variables — so a
+  // scoped text wins over the shared one where it exists.
+  // Markers whose effect reads differently per list. Listing them beats
+  // probing for a scoped key: a lookup miss is indistinguishable from a
+  // key that echoes itself.
+  const SCOPED_MARKERS: DescriptionMarker[] = ["INTERNAL"];
+
+  function markerHelp(m: DescriptionMarker, scope: "sysvar" | "program"): string {
+    const base = `centrals.behavior.marker.${m.toLowerCase()}`;
+    return t(SCOPED_MARKERS.includes(m) ? `${base}.${scope}` : base);
   }
 
   function freshBehaviorForm(): BehaviorForm {
@@ -791,7 +800,7 @@
                           class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
                         >
                         <span class="text-xs text-slate-600 dark:text-slate-400"
-                          >{markerHelp(m)}</span
+                          >{markerHelp(m, "sysvar")}</span
                         >
                       </span>
                     </label>
@@ -819,7 +828,7 @@
                           class="rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">{m}</code
                         >
                         <span class="text-xs text-slate-600 dark:text-slate-400"
-                          >{markerHelp(m)}</span
+                          >{markerHelp(m, "program")}</span
                         >
                       </span>
                     </label>

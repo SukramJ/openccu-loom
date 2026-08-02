@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.8
+
+- The `INTERNAL` marker's description in the CCU editor no longer talks
+  about programs when you are looking at the system-variable list.
+
 ## 0.52.7
 
 - **A program's "run now" is greyed out while the program is deactivated.**
