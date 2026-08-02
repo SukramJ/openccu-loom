@@ -35,6 +35,12 @@ type Sysvar struct {
 	ValueType    hmenum.HubValueType
 	Writer       SysvarWriter
 
+	// ValueNotifier is called by [OnValue] whenever the confirmed value
+	// actually changes. The hub coordinator wires this to publish a
+	// SysvarChangedEvent on the internal bus. Nil means no notification is
+	// sent (default until wired).
+	ValueNotifier func(name string, old, next hmtypes.ParamValue)
+
 	// Min / Max hold the declared lower and upper bound of the sysvar value
 	// range as provided by the CCU's Rega `getSystemVariables` response. The
 	// bounds are optional — the CCU may omit them for boolean or list variables.
@@ -346,6 +352,8 @@ func (s *Sysvar) OnValue(v hmtypes.ParamValue) {
 	s.unconfirmedValue = nil // confirmed value clears optimistic write
 	cbs := make([]func(old, next hmtypes.ParamValue), len(s.callbacks))
 	copy(cbs, s.callbacks)
+	notifier := s.ValueNotifier
+	name := s.Name
 	s.mu.Unlock()
 	s.markCertain()
 	if was && prev.Equal(v) {
@@ -355,6 +363,9 @@ func (s *Sysvar) OnValue(v hmtypes.ParamValue) {
 		if cb != nil {
 			cb(prev, v)
 		}
+	}
+	if notifier != nil {
+		notifier(name, prev, v)
 	}
 }
 

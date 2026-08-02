@@ -10,6 +10,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // TestProgramNotifiersReachScanRegisteredPrograms is the regression tripwire
@@ -108,5 +109,55 @@ func TestSetHubModelDetachesPreviousProgramHook(t *testing.T) {
 	live.OnActive(true)
 	if len(changed) != 1 {
 		t.Fatalf("expected exactly one event from the live model, got %d", len(changed))
+	}
+}
+
+// TestSysvarNotifiersReachScanRegisteredSysvars is the same tripwire for
+// system variables. The hub scan registers them through [hub.Hub.PutSysvar],
+// and only the MQTT publisher subscribed to the model directly — so
+// `hub.sysvar_changed` never fired for any bus-driven consumer, and a
+// WebSocket client's sysvar values froze at whatever the bootstrap read.
+func TestSysvarNotifiersReachScanRegisteredSysvars(t *testing.T) {
+	t.Parallel()
+
+	bus := events.NewBus()
+	hc := NewHubCoordinator("test-central", bus)
+	m := hub.NewHub("test-central")
+
+	early := hub.NewSysvar("test-central", "Early", "", hmenum.HubValueTypeFloat, nil)
+	m.PutSysvar(early)
+
+	hc.SetHubModel(m)
+
+	late := hub.NewSysvar("test-central", "Late", "", hmenum.HubValueTypeFloat, nil)
+	m.PutSysvar(late)
+
+	var changed []hmevent.SysvarChangedEvent
+	unsub := events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) {
+		changed = append(changed, e)
+	})
+	defer unsub()
+
+	early.OnValue(hmtypes.FloatValue(1))
+	late.OnValue(hmtypes.FloatValue(2))
+	late.OnValue(hmtypes.FloatValue(2)) // unchanged — the scan re-observes every cycle
+	late.OnValue(hmtypes.FloatValue(3))
+
+	if len(changed) != 3 {
+		t.Fatalf("expected 3 sysvar-changed events, got %d: %+v", len(changed), changed)
+	}
+	if changed[0].Name != "Early" {
+		t.Fatalf("first event = %+v, want Early", changed[0])
+	}
+	if changed[2].Name != "Late" || changed[2].ValueType != hmenum.HubValueTypeFloat {
+		t.Fatalf("third event = %+v, want Late as FLOAT", changed[2])
+	}
+	if v := changed[2].NewValue.Unwrap(); v != 3.0 {
+		t.Fatalf("third event value = %v, want 3", v)
+	}
+	for _, e := range changed {
+		if e.CentralName != "test-central" {
+			t.Fatalf("event not scoped to the central: %+v", e)
+		}
 	}
 }
