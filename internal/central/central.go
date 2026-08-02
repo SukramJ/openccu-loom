@@ -333,6 +333,17 @@ func New(cfg Config) (*Unit, error) {
 	}
 	c.registerCentralServices()
 
+	// Attach the hub domain model to the hub coordinator. This wires the
+	// notifier hooks of every program and system variable the hub scan
+	// registers (PutProgram / PutSysvar), so activity flips, executions and
+	// value changes reach the event bus — and through it the WebSocket
+	// broadcasts (hub.program_changed / hub.program_executed /
+	// hub.sysvar_changed). Without this call the hooks stay nil: the model
+	// answers REST reads correctly while every bus-driven consumer is
+	// silent, and a client that toggles a program never sees the flip
+	// confirmed.
+	c.Hub.SetHubModel(c.HubModel)
+
 	// Feed the RPC session recorder: the cache coordinator forwards every
 	// CCU call/response to it, but only when a recorder is wired AND active.
 	// Without this line CacheCoordinator.RecordSession is a no-op and the

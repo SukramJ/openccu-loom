@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.12
+
+- **Program switches and system variables now update live.** The 0.52.10 /
+  0.52.11 push fixes were wired up to a hook the daemon never armed at
+  boot, so the announced events still never left the daemon: switching a
+  program off in Home Assistant snapped back to "on", its "run now" button
+  stayed pressable, and system variables kept their startup value until a
+  reload. The hook is now armed at boot; toggles and value changes are
+  confirmed immediately.
+
 ## 0.52.11
 
 - **Button presses trigger automations again.** Pressing a remote or wall
