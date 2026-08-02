@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 4d2461e5
-HEAD: 4d2461e5
+Generated: 5bd66ac4
+HEAD: 5bd66ac4
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 27302 |
+| Total Exported | 27307 |
 | Reachable | 4737 |
-| Whitelisted | 19660 |
+| Whitelisted | 19665 |
 | **Unreachable** | **2905** |
 
 ## Top-20 Packages by Dead Code
