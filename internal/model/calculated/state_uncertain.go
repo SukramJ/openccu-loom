@@ -34,6 +34,13 @@ type SourceDP interface {
 	// suppress redundant calculated-sensor callbacks when all source DPs already
 	// published moments ago.
 	PublishedEventRecently() bool
+	// IsValid reports whether the source carries a usable reading: refreshed,
+	// paired STATUS acceptable, value type as declared, and within the
+	// descriptor's bounds. Observation alone is not enough — a source read at
+	// startup that returned an out-of-range value, or one the CCU flagged
+	// OVERFLOW, is observed but has nothing to calculate from. Feeds
+	// [sourceSink.SourcesValid].
+	IsValid() bool
 }
 
 // sourceTimestampProvider is the optional interface that source DPs
@@ -110,6 +117,56 @@ func (ss *sourceSink) StateUncertain() bool {
 		}
 	}
 	return false
+}
+
+// SourcesValid reports whether every registered source carries a usable
+// reading. It is the validity gate a calculated sensor installs on its inner
+// data point (see [generic.DataPoint.SetValidityGate]).
+//
+// A derived value can only be as good as the inputs it was computed from, so
+// each state-carrying source must be valid itself. Checking observation alone
+// is not enough: a source read at boot that returned an unusable value is
+// observed, yet there is nothing to calculate from — the calculated sensor
+// would keep publishing a number the CCU has already disowned.
+//
+// Returns false when no sources are registered: without a state carrier there
+// is nothing to derive a value from.
+//
+// Only VALUES sources are registered by the Subscribe methods. MASTER entries
+// such as LOW_BAT_LIMIT are configuration inputs a sleeping battery device may
+// never deliver; they are read into a field instead of registered, so they
+// cannot gate validity.
+func (ss *sourceSink) SourcesValid() bool {
+	ss.mu.RLock()
+	srcs := ss.sources
+	ss.mu.RUnlock()
+
+	if len(srcs) == 0 {
+		return false
+	}
+	for _, dp := range srcs {
+		if !dp.IsValid() {
+			return false
+		}
+	}
+	return true
+}
+
+// validityGated is the seam every calculated sensor's inner data point
+// exposes for [installSourceValidityGate]. Satisfied by
+// [generic.Sensor] and [generic.BinarySensor] through the promoted
+// [generic.DataPoint.SetValidityGate].
+type validityGated interface {
+	SetValidityGate(gate func() bool)
+}
+
+// installSourceValidityGate ties a calculated sensor's north-bound
+// availability to the validity of the sources it derives from. Every
+// calculated-sensor constructor calls it, because a derived data point has
+// no descriptor of its own to validate against and would otherwise report
+// a value computed from an unusable input as a confirmed reading.
+func installSourceValidityGate(inner validityGated, sources *sourceSink) {
+	inner.SetValidityGate(sources.SourcesValid)
 }
 
 // dataPointKeyProvider is the internal interface used by

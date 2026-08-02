@@ -309,11 +309,18 @@ func toCalculatedDPEntry(dp device.AttachableDataPoint, ch *device.Channel, labe
 	type rawValuer interface {
 		RawValue() (any, bool)
 	}
+	observed := false
 	if rv, ok := dp.(rawValuer); ok {
-		v, observed := rv.RawValue()
+		var v any
+		v, observed = rv.RawValue()
 		entry["value"] = v
 		entry["observed"] = observed
 	}
+	// `available` carries the same rule as the REST calc-dps record: observed
+	// AND valid, where validity folds in every source the value derives from.
+	// A client that restores a previous state for unavailable entities cannot
+	// use `observed` for that — it stays true while a source is faulted.
+	entry["available"] = handlers.CalculatedDPAvailable(dp, observed)
 	return entry
 }
 

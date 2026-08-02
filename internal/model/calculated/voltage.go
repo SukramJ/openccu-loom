@@ -57,9 +57,11 @@ func NewOperatingVoltageLevelSensor() *OperatingVoltageLevelSensor {
 // rooted at
 // `<central>:<channelAddress>:CALCULATED/OPERATING_VOLTAGE_LEVEL`.
 func NewOperatingVoltageLevelSensorWithIdentity(centralName, channelAddress string) *OperatingVoltageLevelSensor {
-	return &OperatingVoltageLevelSensor{
+	s := &OperatingVoltageLevelSensor{
 		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterOperatingVoltageLevel, centralName, channelAddress),
 	}
+	installSourceValidityGate(s.Sensor, &s.sourceSink)
+	return s
 }
 
 // SetReferences stores the (lowBatLimit, voltageMax) reference pair

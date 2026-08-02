@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 3.12.0
+  version: 3.13.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -10813,13 +10813,25 @@ components:
     # ---- Calculated data points ----
     CalculatedDPSummary:
       type: object
-      required: [name, unique_id, value, observed]
+      required: [name, unique_id, value, observed, available]
       description: A derived/calculated data point on a channel.
       properties:
         name: { type: string }
         category: { type: string }
         value: {}
         observed: { type: boolean }
+        available:
+          type: boolean
+          description: |
+            Whether the value is a confirmed reading — observed AND valid,
+            the same rule the generic data-point state payload applies.
+            For a calculated data point validity folds in the validity of
+            every source it derives from: a source the CCU flagged (bad
+            paired STATUS, reading outside the declared bounds) makes the
+            calculated data point unavailable even though the derived
+            number keeps updating. Clients that restore a previous state
+            for unavailable entities must read this flag; `observed` stays
+            true across a source fault.
         translated_name:
           type: string
           description: |

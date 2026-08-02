@@ -573,3 +573,50 @@ func TestAllowedInternalParametersContainsCOP(t *testing.T) {
 		t.Fatal("AllowedInternalParameters must contain CHANNEL_OPERATION_MODE")
 	}
 }
+
+// ─── SetValidityGate ─────────────────────────────────────────────────────────
+
+// TestValidityGateVetoesOtherwiseValidDataPoint verifies that an installed
+// gate can invalidate a data point whose four intrinsic checks all pass. The
+// seam exists for derived data points: a calculated sensor's own value has no
+// descriptor to validate against, so its validity is decided by the sources it
+// was computed from.
+func TestValidityGateVetoesOtherwiseValidDataPoint(t *testing.T) {
+	t.Parallel()
+
+	dp := NewDataPoint[float64](baseCfg(hmenum.ParameterActualTemperature, hmenum.ParameterTypeFloat, hmenum.OperationsRead))
+	dp.OnEvent(20.0)
+	if !dp.IsValid() {
+		t.Fatal("precondition: an observed in-range value must be valid")
+	}
+
+	sourcesUsable := false
+	dp.SetValidityGate(func() bool { return sourcesUsable })
+	if dp.IsValid() {
+		t.Fatal("a gate returning false must invalidate the data point")
+	}
+
+	sourcesUsable = true
+	if !dp.IsValid() {
+		t.Fatal("a gate returning true must leave the intrinsic checks in charge")
+	}
+
+	dp.SetValidityGate(nil)
+	if !dp.IsValid() {
+		t.Fatal("clearing the gate must restore the ungated verdict")
+	}
+}
+
+// TestValidityGateDoesNotRescueAnInvalidDataPoint verifies the gate is an
+// additional condition, not an override: a passing gate cannot make an
+// unobserved data point valid.
+func TestValidityGateDoesNotRescueAnInvalidDataPoint(t *testing.T) {
+	t.Parallel()
+
+	dp := NewDataPoint[float64](baseCfg(hmenum.ParameterActualTemperature, hmenum.ParameterTypeFloat, hmenum.OperationsRead))
+	dp.SetValidityGate(func() bool { return true })
+
+	if dp.IsValid() {
+		t.Fatal("an unobserved data point must stay invalid regardless of the gate")
+	}
+}

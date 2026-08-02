@@ -11,8 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -373,4 +376,45 @@ func TestToCalculatedDPSummary_UniqueID(t *testing.T) {
 			t.Errorf("UniqueID = %q, want empty string when serialSuffix is empty", s.UniqueID)
 		}
 	})
+}
+
+// TestCalculatedDPSummaryAvailabilityFollowsSources pins the `available` flag
+// on the REST record. `observed` stays true while a source is faulted, so a
+// client that restores a previous state for unavailable entities has to read
+// `available` — which folds in the validity of every source the value derives
+// from.
+func TestCalculatedDPSummaryAvailabilityFollowsSources(t *testing.T) {
+	t.Parallel()
+
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "CALCAV01"})
+	ch := d.AddChannel("CALCAV01:1", 1, "WEATHER_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	temp := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterActualTemperature)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	hum := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterHumidity)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	ch.Put(temp)
+	ch.Put(hum)
+
+	sensor := calculated.NewDewPointSensor()
+	ch.AttachCalculatedDataPoint(sensor)
+	temp.OnEvent(20.0)
+	hum.OnEvent(50.0)
+
+	if s := toCalculatedDPSummary(sensor, ch, nil, "vccu0000000"); !s.Available {
+		t.Fatal("expected available=true while both sources are healthy")
+	}
+
+	temp.UpdateStatus(hmenum.ParameterStatusOverflow)
+
+	s := toCalculatedDPSummary(sensor, ch, nil, "vccu0000000")
+	if s.Available {
+		t.Fatal("expected available=false once the temperature source reports OVERFLOW")
+	}
+	if !s.Observed {
+		t.Fatal("observed must stay true — it is why `available` has to be carried separately")
+	}
 }

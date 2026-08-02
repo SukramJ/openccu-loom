@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.52.9
+
+- **A dew point derived from a broken thermometer now goes unavailable
+  instead of showing a number.** Calculated sensors — dew point, frost
+  point, enthalpy, apparent temperature, vapour concentration, battery
+  level — are only available while the readings they are computed from are
+  usable. A measurement the CCU has flagged, or one outside the range the
+  device declares, takes the derived entity with it and releases it again
+  once the reading recovers. The battery level is unaffected by a missing
+  `LOW_BAT_LIMIT`; a sleeping device may never send one.
+
 ## 0.52.8
 
 - The `INTERNAL` marker's description in the CCU editor no longer talks

@@ -32,6 +32,16 @@ type CalculatedDPSummary struct {
 	Category string `json:"category,omitempty"`
 	Value    any    `json:"value"`
 	Observed bool   `json:"observed"`
+	// Available reports whether the value is a confirmed reading, using the
+	// same rule as the generic data-point state payload: observed AND valid.
+	// For a calculated data point validity folds in the validity of every
+	// source it derives from — a derived value is only as good as its inputs,
+	// so a source the CCU flagged (bad paired STATUS, reading outside the
+	// declared bounds) takes the calculated data point down with it even
+	// though the derived number itself keeps updating. Clients that restore a
+	// previous state for unavailable entities need this flag; `observed`
+	// alone stays true across a source fault.
+	Available bool `json:"available"`
 	// TranslatedName is the locale-aware per-entity name, resolved
 	// through the same chain as generic data points (channel-typed
 	// OCCU translation → bare-parameter translation → title-cased
@@ -76,7 +86,25 @@ func toCalculatedDPSummary(dp device.AttachableDataPoint, ch *device.Channel, la
 			s.ModifiedAt = t.UTC().Format("2006-01-02T15:04:05.000Z")
 		}
 	}
+	s.Available = CalculatedDPAvailable(dp, s.Observed)
 	return s
+}
+
+// CalculatedDPAvailable mirrors the `available` flag the generic data-point
+// state payload computes (observed AND IsValid). A data point that does not
+// expose IsValid falls back to plain observation, matching the north-bound
+// convention that an unclassifiable data point is treated as available.
+//
+// Exported so the WebSocket calc-dp renderer emits the identical flag —
+// REST and WS consumers must not disagree about a data point's availability.
+func CalculatedDPAvailable(dp device.AttachableDataPoint, observed bool) bool {
+	if !observed {
+		return false
+	}
+	if v, ok := dp.(interface{ IsValid() bool }); ok {
+		return v.IsValid()
+	}
+	return true
 }
 
 // CalculatedDPTranslatedName resolves the locale-aware entity name for

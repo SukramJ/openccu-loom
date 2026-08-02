@@ -7,9 +7,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/model/calculated"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -482,5 +485,45 @@ func TestCalculatedDPGet_TranslatedNameLocaleWins(t *testing.T) {
 	}
 	if m["translated_name"] != "Taupunkt" {
 		t.Fatalf("translated_name = %v, want Taupunkt", m["translated_name"])
+	}
+}
+
+// TestCalculatedDPEntryCarriesSourceGatedAvailability pins that the WS record
+// ships the same `available` flag as the REST calc-dps record, gated on the
+// validity of the sources the value derives from. REST and WS consumers must
+// not disagree about whether a calculated reading is confirmed.
+func TestCalculatedDPEntryCarriesSourceGatedAvailability(t *testing.T) {
+	t.Parallel()
+
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "DEV0040"})
+	ch := d.AddChannel("DEV0040:1", 1, "WEATHER_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	temp := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterActualTemperature)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	hum := generic.NewFloatSensor(generic.Spec{
+		Key:        hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: string(hmenum.ParameterHumidity)},
+		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat, Operations: hmenum.OperationsRead | hmenum.OperationsEvent},
+	})
+	ch.Put(temp)
+	ch.Put(hum)
+
+	sensor := calculated.NewDewPointSensor()
+	ch.AttachCalculatedDataPoint(sensor)
+	temp.OnEvent(20.0)
+	hum.OnEvent(50.0)
+
+	if entry := toCalculatedDPEntry(sensor, ch, nil); entry["available"] != true {
+		t.Fatalf("expected available=true while both sources are healthy, got %v", entry["available"])
+	}
+
+	temp.UpdateStatus(hmenum.ParameterStatusOverflow)
+
+	entry := toCalculatedDPEntry(sensor, ch, nil)
+	if entry["available"] != false {
+		t.Fatalf("expected available=false once the temperature source reports OVERFLOW, got %v", entry["available"])
+	}
+	if entry["observed"] != true {
+		t.Fatal("observed must stay true — it is why `available` has to be carried separately")
 	}
 }
