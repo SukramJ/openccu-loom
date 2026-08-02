@@ -1840,8 +1840,10 @@ const EN: Catalog = {
   "centrals.behavior.marker.hahm":
     "Makes the system variable writable — it arrives as a switch, select, number or text field instead of a read-only sensor.",
   "centrals.behavior.marker.hx": "Free marker for your own filtering.",
-  "centrals.behavior.marker.internal":
-    "Additionally delivers the CCU's internal entries. This matters more than it sounds: the CCU flags most ordinary user programs as internal, so without this the program list stays almost empty.",
+  "centrals.behavior.marker.internal.sysvar":
+    "Additionally delivers the CCU's internal variables — the ones it maintains for itself rather than ones you created.",
+  "centrals.behavior.marker.internal.program":
+    "Additionally delivers the CCU's internal programs. This matters more than it sounds: the CCU flags most ordinary user programs as internal, so without this the program list stays almost empty.",
   "centrals.field.username": "Username",
   "centrals.field.password": "Password",
   "centrals.field.password_hint":
@@ -5212,8 +5214,10 @@ const DE: Catalog = {
   "centrals.behavior.marker.hahm":
     "Macht die Systemvariable schreibbar — sie kommt als Schalter, Auswahl, Zahl oder Textfeld an statt als reiner Sensor.",
   "centrals.behavior.marker.hx": "Freier Marker für eigene Filterung.",
-  "centrals.behavior.marker.internal":
-    "Liefert zusätzlich die internen Einträge der CCU aus. Das wiegt schwerer, als es klingt: Die CCU kennzeichnet die meisten gewöhnlichen Benutzerprogramme als intern — ohne diesen Marker bleibt die Programmliste fast leer.",
+  "centrals.behavior.marker.internal.sysvar":
+    "Liefert zusätzlich die internen Variablen der CCU aus — jene, die sie für sich selbst führt, nicht die von Ihnen angelegten.",
+  "centrals.behavior.marker.internal.program":
+    "Liefert zusätzlich die internen Programme der CCU aus. Das wiegt schwerer, als es klingt: Die CCU kennzeichnet die meisten gewöhnlichen Benutzerprogramme als intern — ohne diesen Marker bleibt die Programmliste fast leer.",
   "centrals.field.username": "Benutzername",
   "centrals.field.password": "Passwort",
   "centrals.field.password_hint":

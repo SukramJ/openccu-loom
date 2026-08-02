@@ -137,9 +137,13 @@ describe("CentralsAdmin — marker pickers", () => {
     const { container } = render(CentralsAdmin);
     await openBehaviour(container);
 
-    for (const m of ["HAHM", "HX", "INTERNAL"]) {
+    for (const m of ["HAHM", "HX"]) {
       expect(container.textContent).toContain(`centrals.behavior.marker.${m.toLowerCase()}`);
     }
+    // INTERNAL reads differently per list: the CCU flags most programs as
+    // internal but hardly any variables, so each list explains its own case.
+    expect(container.textContent).toContain("centrals.behavior.marker.internal.sysvar");
+    expect(container.textContent).toContain("centrals.behavior.marker.internal.program");
     expect(container.textContent).toContain("centrals.behavior.markers_hint");
   });
 
@@ -182,7 +186,8 @@ describe("marker catalogue", () => {
       "centrals.behavior.markers_hint",
       "centrals.behavior.marker.hahm",
       "centrals.behavior.marker.hx",
-      "centrals.behavior.marker.internal",
+      "centrals.behavior.marker.internal.sysvar",
+      "centrals.behavior.marker.internal.program",
     ];
     for (const k of keys) {
       const hits = src.split(`"${k}":`).length - 1;

@@ -4,6 +4,18 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.8]
+
+### Fixed
+
+- **The `INTERNAL` marker explains itself per list.** Both the
+  system-variable and the program picker showed one shared text, and that
+  text described programs — a variable list telling you that "the CCU flags
+  most ordinary user programs as internal" answers a question nobody asked
+  there. Each list now carries its own wording; the program one keeps the
+  warning that matters, since without the marker its list stays nearly
+  empty.
+
 ## [0.52.7]
 
 ### Changed
