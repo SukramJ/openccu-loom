@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/tests/e2e/harness"
 )
@@ -141,27 +142,35 @@ func TestVisibilityUnIgnoreE2E(t *testing.T) {
 		// PUT a new set to ensure an audit entry is created.
 		e2ePutPatterns(t, rest, centralName, []string{"RSSI_PEER"})
 
-		resp := e2eGET(t, rest, "/api/v1/audit")
-		body := e2eReadBody(t, resp)
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("GET /audit status=%d body=%s", resp.StatusCode, body)
-		}
-		// Audit endpoint returns a flat JSON array of entries.
-		var entries []struct {
-			Action string `json:"action"`
-		}
-		if err := json.Unmarshal(body, &entries); err != nil {
-			t.Fatalf("decode /audit: %v\nbody=%s", err, body)
-		}
-		var found bool
-		for _, e := range entries {
-			if e.Action == "un_ignore_update" {
-				found = true
-				break
+		// The audit entry is persisted off the request path, so poll for it
+		// rather than reading once: the assertion is that the write is
+		// recorded, not that it lands before the next HTTP round-trip.
+		var seen int
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			resp := e2eGET(t, rest, "/api/v1/audit")
+			body := e2eReadBody(t, resp)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("GET /audit status=%d body=%s", resp.StatusCode, body)
 			}
-		}
-		if !found {
-			t.Errorf("un_ignore_update not found in audit log (entries=%d)", len(entries))
+			// Audit endpoint returns a flat JSON array of entries.
+			var entries []struct {
+				Action string `json:"action"`
+			}
+			if err := json.Unmarshal(body, &entries); err != nil {
+				t.Fatalf("decode /audit: %v\nbody=%s", err, body)
+			}
+			seen = len(entries)
+			for _, e := range entries {
+				if e.Action == "un_ignore_update" {
+					return
+				}
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("un_ignore_update not found in audit log after 10s (entries=%d)", seen)
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
 	})
 }
