@@ -128,3 +128,113 @@ func TestOptionPresetAllowCustom(t *testing.T) {
 		t.Fatal("AllowCustom not preserved after round-trip")
 	}
 }
+
+// TestMaterializeSubsetGroupIDs covers the derivation that runs on every
+// easymode load: a sender type that defines subsets but ships no
+// pre-computed group ids gets one group per subset, keyed by member
+// parameter. Archives that already carry the ids are left alone, because
+// overwriting them would discard whatever the extractor decided.
+func TestMaterializeSubsetGroupIDs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("derives ids from subsets", func(t *testing.T) {
+		t.Parallel()
+		e := &Easymode{ChannelMetadata: map[string]ChannelMetadata{
+			"SWITCH_VIRTUAL_RECEIVER": {SenderTypes: map[string]SenderTypeMetadata{
+				"KEY_TRANSCEIVER": {Subsets: []SubsetDef{
+					{ID: 1, MemberParams: []string{"SHORT_ON_TIME", "SHORT_OFF_TIME"}},
+					{ID: 7, MemberParams: []string{"LONG_ON_TIME"}},
+				}},
+			}},
+		}}
+		materializeSubsetGroupIDs(e)
+
+		got := e.ChannelMetadata["SWITCH_VIRTUAL_RECEIVER"].SenderTypes["KEY_TRANSCEIVER"].SubsetGroupIDs
+		want := map[string]string{
+			"SHORT_ON_TIME":  "subset_1",
+			"SHORT_OFF_TIME": "subset_1",
+			"LONG_ON_TIME":   "subset_7",
+		}
+		if len(got) != len(want) {
+			t.Fatalf("got %d group ids, want %d: %v", len(got), len(want), got)
+		}
+		for param, group := range want {
+			if got[param] != group {
+				t.Errorf("%s = %q, want %q", param, got[param], group)
+			}
+		}
+	})
+
+	t.Run("keeps ids the archive already carries", func(t *testing.T) {
+		t.Parallel()
+		e := &Easymode{ChannelMetadata: map[string]ChannelMetadata{
+			"DIMMER": {SenderTypes: map[string]SenderTypeMetadata{
+				"KEY_TRANSCEIVER": {
+					Subsets:        []SubsetDef{{ID: 1, MemberParams: []string{"LEVEL"}}},
+					SubsetGroupIDs: map[string]string{"LEVEL": "curated"},
+				},
+			}},
+		}}
+		materializeSubsetGroupIDs(e)
+
+		if got := e.ChannelMetadata["DIMMER"].SenderTypes["KEY_TRANSCEIVER"].SubsetGroupIDs["LEVEL"]; got != "curated" {
+			t.Errorf("LEVEL = %q, want the archive's own %q", got, "curated")
+		}
+	})
+
+	t.Run("leaves a sender type without subsets untouched", func(t *testing.T) {
+		t.Parallel()
+		e := &Easymode{ChannelMetadata: map[string]ChannelMetadata{
+			"SWITCH": {SenderTypes: map[string]SenderTypeMetadata{
+				"KEY_TRANSCEIVER": {ParameterOrder: []string{"STATE"}},
+			}},
+		}}
+		materializeSubsetGroupIDs(e)
+
+		if ids := e.ChannelMetadata["SWITCH"].SenderTypes["KEY_TRANSCEIVER"].SubsetGroupIDs; ids != nil {
+			t.Errorf("SubsetGroupIDs = %v, want nil", ids)
+		}
+	})
+}
+
+// TestLoadEasymodeRejectsUnusableInput covers the failure paths of the
+// on-disk loader: the operator-supplied path is not trusted to exist, to be
+// gzip, or to hold the expected JSON.
+func TestLoadEasymodeRejectsUnusableInput(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	notGzip := filepath.Join(dir, "plain.json.gz")
+	if err := os.WriteFile(notGzip, []byte(`{"channel_metadata":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	badJSON := filepath.Join(dir, "bad.json.gz")
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write([]byte("not json at all")); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(badJSON, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{"empty path", ""},
+		{"missing file", filepath.Join(dir, "absent.json.gz")},
+		{"not gzip", notGzip},
+		{"gzip holding non-JSON", badJSON},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := LoadEasymode(tc.path); err == nil {
+				t.Errorf("LoadEasymode(%q) succeeded, want an error", tc.path)
+			}
+		})
+	}
+}
