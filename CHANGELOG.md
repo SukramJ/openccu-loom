@@ -28,6 +28,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   offending central, and the scheduler floors the value independently in
   case it arrives another way. `0` still selects the default.
 
+- **The profile filesystem now satisfies the `fs.FS` contract.** The adapter
+  added in 0.52.6 refused to open its root and reported a stale size after a
+  read, because `bytes.Reader.Len()` counts the bytes still unread. Neither
+  reached an operator — the profile stores open archives by name — but any
+  generic traversal (`fs.WalkDir`) would have failed. Found by running the
+  standard library's own conformance suite over it, which now guards it.
+
 
 ## [0.52.6]
 
